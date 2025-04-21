@@ -87,21 +87,6 @@ int ObMemtableBlockReader::get_row(const int64_t index, ObDatumRow &row)
   return ret;
 }
 
-int ObMemtableBlockReader::get_row_delete_version(const int64_t index, int64_t &delete_version)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 > index || row_count_ <= index)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(index), K_(row_count));
-  } else if (OB_UNLIKELY(!rows_[index].row_flag_.is_delete())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected row", K(ret), K(rows_[index]));
-  } else {
-    delete_version = rows_[index].snapshot_version_;
-  }
-  return ret;
-}
-
 int ObMemtableBlockReader::prefetch_rows()
 {
   int ret = OB_SUCCESS;
@@ -246,6 +231,37 @@ int ObMemtableBlockReader::filter_pushdown_filter(
     }
     LOG_TRACE("[PUSHDOWN] memtable block pushdown filter row", K(ret), K(has_lob_out_row),
               K(pd_filter_info), K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap));
+  }
+  return ret;
+}
+
+int ObMemtableBlockReader::get_next_di_row(const ObFilterResult &filter_res,
+                                           int64_t& current,
+                                           ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_row(current, row))) {
+    LOG_WARN("Fail to get current row", K(ret), K(current));
+  } else if (row.row_flag_.is_delete()) {
+    row.delete_version_ = rows_[current].snapshot_version_;
+    row.is_delete_filtered_ = !filter_res.test(current);
+  } else {
+    row.insert_version_ = rows_[current].snapshot_version_;
+    row.is_insert_filtered_ = !filter_res.test(current);
+  }
+
+  if (OB_SUCC(ret)) {
+    current++;
+    if (!row.is_last_multi_version_row()) {
+      if (OB_UNLIKELY(!rows_[current].row_flag_.is_delete())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected datum row", K(ret), K(current), K(rows_[current]));
+      } else {
+        row.delete_version_ = rows_[current].snapshot_version_;
+        row.is_delete_filtered_ = !filter_res.test(current);
+        current++;
+      }
+    }
   }
   return ret;
 }

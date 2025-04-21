@@ -365,26 +365,26 @@ TEST(ObRowFuseTest, test_delete_version)
   // 1.insert_with_delete fuse insert
   row1.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
   row1.delete_version_ = 100;
-  ASSERT_EQ(true, row1.is_with_delete());
+  ASSERT_EQ(true, row1.is_di_delete());
   row2.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
   row2.delete_version_ = 0;
-  ASSERT_EQ(false, row2.is_with_delete());
+  ASSERT_EQ(false, row2.is_di_delete());
 
   nop_pos.count_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObRowFuse::fuse_row(row2, row1, nop_pos, final_result, NULL));
-  ASSERT_EQ(false, row1.is_with_delete());
+  ASSERT_EQ(false, row1.is_di_delete());
 
   // 2.insert fuse delete
   row1.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
   row1.delete_version_ = 0;
-  ASSERT_EQ(false, row1.is_with_delete());
+  ASSERT_EQ(false, row1.is_di_delete());
   row2.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
   row2.delete_version_ = 100;
-  ASSERT_EQ(true, row2.is_with_delete());
+  ASSERT_EQ(true, row2.is_di_delete());
 
   nop_pos.count_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObRowFuse::fuse_row(row2, row1, nop_pos, final_result, NULL));
-  ASSERT_EQ(true, row1.is_with_delete());
+  ASSERT_EQ(true, row1.is_di_delete());
 }
 
 } // namespace unittest

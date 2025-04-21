@@ -20,6 +20,11 @@ namespace oceanbase {
 using namespace storage;
 using namespace blocksstable;
 
+namespace storage
+{
+  struct ObFilterResult;
+}
+
 namespace memtable {
 class ObMemtableSingleRowReader;
 
@@ -49,7 +54,9 @@ public:
   int get_row_count() const
   { return row_count_; }
   int prefetch_rows();
-  int get_row_delete_version(const int64_t index, int64_t &delete_version);
+  int get_next_di_row(const ObFilterResult &filter_res,
+                      int64_t &current,
+                      ObDatumRow &row);
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,

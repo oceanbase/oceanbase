@@ -196,12 +196,11 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
                         ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!former.is_valid() || !result.is_valid() || !nop_pos.is_valid() ||
-                  (result.delete_version_ > 0 &&
-                   ((result.delete_version_ < former.delete_version_) ||
-                    (former.row_flag_.is_delete() && former.delete_version_ <= 0))))) {
+  if (OB_UNLIKELY(!former.is_valid() || !result.is_valid() || !nop_pos.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments, ", K(former), K(result), K(nop_pos.count()), K(nop_pos.capacity()), K(ret));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(former), K(result), K(nop_pos.count()), K(nop_pos.capacity()));
+  } else if (OB_FAIL(result.fuse_delete_insert(former))) {
+    STORAGE_LOG(WARN, "Fail to fuse delete_insert info", K(ret), K(former), K(result));
   } else if (result.row_flag_.is_delete() || former.row_flag_.is_not_exist()) {
     // do nothing
   } else {
@@ -271,12 +270,8 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
       STORAGE_LOG(WARN, "wrong row flag", K(ret), K(former));
     }
   }
-  if (OB_SUCC(ret) && !former.row_flag_.is_not_exist()) {
-    result.delete_version_ = former.delete_version_;
-  }
   return ret;
 }
-
 
 } // namespace storage
 } // namespace oceanbase

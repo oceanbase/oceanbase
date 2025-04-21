@@ -127,28 +127,13 @@ int ObMemtableBlockRowScanner::fetch_row(const ObDatumRow *&row)
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to judge end of block or not", K(ret));
         }
-      } else if (res.test(current_)) {
-        if (OB_FAIL(reader_->get_row(current_, row_))) {
-          LOG_WARN("block reader fail to get row.", K(ret), K_(current));
-        } else if (!row_.is_last_multi_version_row()) {
-          current_ += step_;
-          if (!param_->is_delete_insert_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected not last row", K(ret), K_(param), K_(row));
-          } else if (res.test(current_) &&
-                     OB_FAIL(memtable_reader_->get_row_delete_version(current_, row_.delete_version_))) {
-            LOG_WARN("fail to get delete version of row", K(ret), K_(current));
-          }
-        } else if (row_.row_flag_.is_delete()) {
-          if (OB_FAIL(memtable_reader_->get_row_delete_version(current_, row_.delete_version_))) {
-            LOG_WARN("fail to get delete version of row", K(ret), K_(current));
-          }
-        }
+      } else if (OB_FAIL(memtable_reader_->get_next_di_row(res, current_, row_))) {
+        LOG_WARN("Fail to get next di row", K(ret), K_(current));
+      } else {
         readed = true;
         row_.fast_filter_skipped_ = is_filter_applied_;
         row = &row_;
       }
-      current_ += step_;
     }
   }
   return ret;

@@ -473,7 +473,9 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
       need_supply_consume = true;
       row.count_ = 0;
       row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+      row.read_flag_ = 0;
       row.delete_version_ = 0;
+      row.insert_version_ = 0;
 
       if (access_param_->iter_param_.enable_pd_blockscan() &&
           1 == consumer_cnt_) {
@@ -561,7 +563,9 @@ int ObMultipleScanMerge::inner_merge_row(ObDatumRow &row)
 
   row.count_ = 0;
   row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+  row.read_flag_ = 0;
   row.delete_version_ = 0;
+  row.insert_version_ = 0;
   while (OB_SUCC(ret) && !rows_merger_->empty() && (has_same_rowkey || first_row)) {
     has_same_rowkey = !rows_merger_->is_unique_champion();
     if (OB_FAIL(rows_merger_->top(top_item))) {
@@ -582,8 +586,9 @@ int ObMultipleScanMerge::inner_merge_row(ObDatumRow &row)
           STORAGE_LOG(WARN, "failed to merge rows", K(ret), "first_row", *(top_item->row_),
                       "second_row", row);
         }
-      } else if (access_param_->iter_param_.is_delete_insert_) {
-        row.delete_version_ = top_item->row_->delete_version_;
+      } else if (access_param_->iter_param_.is_delete_insert_ &&
+                 OB_FAIL(row.fuse_delete_insert(*top_item->row_))) {
+        STORAGE_LOG(WARN, "fail to fuse delete_insert info", K(ret));
       }
 
       if (OB_SUCC(ret)) {

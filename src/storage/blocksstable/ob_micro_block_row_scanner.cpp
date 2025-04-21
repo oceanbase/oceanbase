@@ -1534,6 +1534,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&ro
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to inner get next row", K(ret), K_(start), K_(last), K_(current));
       }
+    } else if (OB_NOT_NULL(row)) {
+      const_cast<ObDatumRow *>(row)->fast_filter_skipped_ = is_filter_applied_;
     }
   }
   return ret;
@@ -2259,6 +2261,7 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumR
   int64_t filtered_idx = -1;
   const ObRowHeader *row_header = nullptr;
   bool need_check_next_rowkey = is_prev_micro_row_valid_;
+  // TODO: @zhanghuidong.zhd set insert/delete version for datum row
   while (OB_SUCC(ret) && !meet_next_rowkey) {
     if (OB_FAIL(end_of_block())) {
       // meet iter end

@@ -1064,7 +1064,8 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   }
   if (OB_SUCC(ret) && !need_skip) {
     if (in_row.fast_filter_skipped_ || (access_param_->iter_param_.is_delete_insert_ && block_row_store_->filter_pushdown())) {
-      in_row.fast_filter_skipped_ = false;
+      is_filter_filtered = in_row.is_insert_filtered_;
+      in_row.read_flag_ = 0;
     } else if (OB_FAIL(check_filtered(cur_row_, is_filter_filtered))) {
       LOG_WARN("fail to check row filtered", K(ret));
     }
