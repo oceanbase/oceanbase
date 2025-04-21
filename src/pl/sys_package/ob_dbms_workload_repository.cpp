@@ -6902,7 +6902,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
         LOG_WARN("Failed to append top io time sql");
       } else if (sql_string.append_fmt(
         "sql_event_data AS ( "
-          "SELECT svr_ip, svr_port, NULL AS program, NULL AS module, NULL AS action, sql_id, plan_hash, event_id, "
+          "SELECT svr_ip, svr_port, NULL AS program, NULL AS module, NULL AS action, "
+                 "sql_id, plan_hash, sd.event_id AS event_id, "
                  "SUM(p1) AS  event_sum_p1, "
                  "SUM(p2) AS  event_sum_p2, "
                  "SUM(p3) AS  event_sum_p3, "
@@ -6910,9 +6911,10 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
                  "SUM(count_weight) AS event_count, "
                  "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, sql_id, plan_hash "
                                     "ORDER BY SUM(count_weight) DESC) AS event_rank "
-          "FROM session_data "
-          "WHERE sql_id IS NOT NULL AND plan_hash IS NOT NULL "
-          "GROUP BY svr_ip, svr_port, sql_id, plan_hash, event_id "
+          "FROM session_data sd "
+          "LEFT JOIN event_name en ON sd.event_id = en.event_id "
+          "WHERE sql_id IS NOT NULL AND plan_hash IS NOT NULL AND (type='USER_IO' or type='SYSTEM_IO') "
+          "GROUP BY svr_ip, svr_port, sql_id, plan_hash, sd.event_id "
         "), "
       )) {
         LOG_WARN("Failed to append top io sql");
@@ -6949,7 +6951,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
         LOG_WARN("Failed to append top io sql");
       } else if (sql_string.append_fmt(
         "module_event_data AS ( "
-          "SELECT svr_ip, svr_port, program, module, action, NULL AS sql_id, NULL AS plan_hash, event_id, "
+          "SELECT svr_ip, svr_port, program, module, action, "
+                 "NULL AS sql_id, NULL AS plan_hash, sd.event_id as event_id, "
                  "SUM(p1) AS  event_sum_p1, "
                  "SUM(p2) AS  event_sum_p2, "
                  "SUM(p3) AS  event_sum_p3, "
@@ -6957,12 +6960,14 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
                  "SUM(count_weight) AS event_count, "
                  "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, program, module, action "
                                      "ORDER BY SUM(count_weight) DESC) AS event_rank "
-          "FROM session_data "
+          "FROM session_data sd "
+          "LEFT JOIN event_name en ON sd.event_id = en.event_id "
           "WHERE sql_id IS NULL "
                 "AND plan_hash IS NULL "
                 "AND program IS NOT NULL "
                 "AND module IS NOT NULL "
-          "GROUP BY svr_ip, svr_port, program, module, action, event_id "
+                "AND (type='USER_IO' or type='SYSTEM_IO') "
+          "GROUP BY svr_ip, svr_port, program, module, action, sd.event_id "
          "),"
       )) {
         LOG_WARN("Failed to append top io sql");
