@@ -339,6 +339,7 @@ ObResourceGroup::ObResourceGroup(uint64_t group_id, ObTenant* tenant, share::ObC
   ObResourceGroupNode(group_id),
   workers_lock_(tenant->workers_lock_),
   inited_(false),
+  deleted_(false),
   recv_req_cnt_(0),
   shrink_(false),
   token_change_ts_(0),
@@ -464,7 +465,8 @@ void ObResourceGroup::check_worker_count()
     }
 
     int64_t token = 0;
-    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_) || is_resource_manager_group(group_id_);
+    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_) ||
+                             (is_resource_manager_group(group_id_) && !is_deleted());
     int64_t unit_min_cpu = std::max((int64_t)ceil(tenant_->unit_min_cpu()), 1L);
     const int64_t quick_expand_limit = 8 * unit_min_cpu;
     bool need_quick_expand = share::ObCgSet::instance().is_group_quick_expand(group_id_) && (unit_min_cpu + blocking_cnt <= quick_expand_limit);
@@ -1821,6 +1823,27 @@ void ObTenant::check_group_worker_count()
     group = static_cast<ObResourceGroup*>(iter);
     group->check_worker_count();
   }
+}
+
+int ObTenant::mark_group_deleted(uint64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  omt::ObResourceGroup* group = nullptr;
+  omt::ObResourceGroupNode* node = nullptr;
+  omt::ObResourceGroupNode key(group_id);
+
+  if (OB_FAIL(GroupMap::err_code_map(group_map_.get(&key, node)))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // do nothiing
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to mark group deleted", K(id_), K(group_id));
+    }
+  } else {
+    group = static_cast<omt::ObResourceGroup*>(node);
+    group->set_deleted(true);
+  }
+  return ret;
 }
 
 void ObTenant::check_worker_count(ObThWorker &w)
