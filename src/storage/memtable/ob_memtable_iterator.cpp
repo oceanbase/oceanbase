@@ -70,6 +70,7 @@ int ObMemtableGetIterator::init(
     reset();
   }
   const ObITableReadInfo *read_info = param.get_read_info(context.use_fuse_row_cache_);
+  context_ = &context;
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
     if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
@@ -86,7 +87,6 @@ int ObMemtableGetIterator::init(
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     param_ = &param;
-    context_ = &context;
     memtable_ = &memtable;
     rowkey_ = nullptr;
     is_inited_ = true;
@@ -205,6 +205,7 @@ int ObMemtableScanIterator::base_init_(const ObTableIterParam &param,
                                        const void *query_range)
 {
   int ret = OB_SUCCESS;
+  context_ = &context;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "try to init memtable scan iterator twice", KR(ret), K(param));
@@ -218,7 +219,6 @@ int ObMemtableScanIterator::base_init_(const ObTableIterParam &param,
   } else {
     // base init finish
     param_ = &param;
-    context_ = &context;
   }
   return ret;
 }
@@ -345,6 +345,7 @@ int ObMemtableMGetIterator::init(
 
   char *trans_info_ptr = nullptr;
   const ObITableReadInfo *read_info = param.get_read_info();
+  context_ = &context;
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
     if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
@@ -377,7 +378,6 @@ int ObMemtableMGetIterator::init(
 
     if (OB_SUCC(ret)) {
       param_ = &param;
-      context_ = &context;
       memtable_ = static_cast<ObMemtable *>(table);
       rowkeys_ = static_cast<const ObIArray<ObDatumRowkey> *>(query_range);
       rowkey_iter_ = 0;
@@ -554,6 +554,7 @@ int ObMemtableMultiVersionScanIterator::init(
   const ObColDescIArray *rowkey_columns;
   const ObDatumRange *range = static_cast<const ObDatumRange *>(query_range);
   ObMemtable *memtable = static_cast<ObMemtable *>(table);
+  context_ = &context;
   if (OB_ISNULL(table) || OB_ISNULL(query_range) || !context.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "table and query range can not be null", KP(table), KP(query_range), K(ret));
@@ -592,7 +593,6 @@ int ObMemtableMultiVersionScanIterator::init(
       enable_delete_insert_ = param.is_delete_insert_;
       trans_version_col_idx_ = param.get_schema_rowkey_count();
       sql_sequence_col_idx_ = param.get_schema_rowkey_count() + 1;
-      context_ = &context;
       is_inited_ = true;
     }
   }
