@@ -22,6 +22,7 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
@@ -1989,6 +1990,7 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
     create_index_arg.tenant_id_ = task.get_tenant_id();
     if (index_schema->is_fts_index()) {
       create_index_arg.index_option_.parser_name_ = index_schema->get_parser_name_str();
+      create_index_arg.index_key_ = ObDDLResolver::INDEX_KEYNAME::FTS_KEY;
     }
   }
   return ret;
