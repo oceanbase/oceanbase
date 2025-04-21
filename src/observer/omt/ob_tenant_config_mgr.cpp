@@ -252,8 +252,10 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
     }
   }
   // 删 config
+  // use timeout to avoid holding the write lock of ObTenantConfigMgr::rwlock_ for too long
+  int64_t delete_abs_timeout_us = ObTimeUtility::current_time() + 500 * 1000;
   for (int i = 0; i < del_tenants.count(); ++i) {
-    if (OB_TMP_FAIL(del_tenant_config(del_tenants.at(i)))) {
+    if (OB_TMP_FAIL(del_tenant_config(del_tenants.at(i), delete_abs_timeout_us))) {
       LOG_WARN("fail del tenant config, will try later", K(i), K(del_tenants.at(i)), K(ret), K(tmp_ret));
     } else {
       LOG_INFO("del dropped tenant config succ.", K(i), K(del_tenants.at(i)));
@@ -321,7 +323,7 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
   return ret;
 }
 
-int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
+int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *config = nullptr;
@@ -345,7 +347,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
     LOG_WARN("local tenant resource still exist, try to delete tenant config later", K(tenant_id));
   } else {
     config->set_deleting();
-    if (OB_FAIL(wait(config->get_update_task()))) {
+    if (OB_FAIL(wait(config->get_update_task(), abs_timeout_us))) {
       LOG_WARN("wait tenant config update task failed", K(ret), K(tenant_id));
     } else if (OB_FAIL(config_map_.erase_refactored(ObTenantID(tenant_id)))) {
       LOG_WARN("delete tenant config failed", K(ret), K(tenant_id));
@@ -722,23 +724,27 @@ int ObTenantConfigMgr::cancel(const ObTenantConfig::TenantConfigUpdateTask &task
   return ret;
 }
 
-int ObTenantConfigMgr::wait(const ObTenantConfig::TenantConfigUpdateTask &task)
+int ObTenantConfigMgr::wait(const ObTenantConfig::TenantConfigUpdateTask &task, const int64_t abs_timeout_us)
 {
   int ret = OB_EAGAIN;
-  const int try_times = 300;
+  const int try_times = 30;
   const int64_t period = 10000;
   ret = OB_EAGAIN;
-  for (int i = 0; i < try_times; ++i) {
+  bool has_timeout = false;
+  for (int i = 0; i < try_times && !has_timeout; ++i) {
     if (ATOMIC_LOAD(&task.running_task_count_) > 0) {
       // wait running task finish
     } else {
       ret = OB_SUCCESS;
       break;
     }
+    if (ObTimeUtility::current_time() >= abs_timeout_us) {
+      has_timeout = true;
+    }
     ob_usleep(period);
   }  // for
   if (OB_EAGAIN == ret) {
-    LOG_WARN("wait running update task failed, try later", K(ret), K(ATOMIC_LOAD(&task.running_task_count_)));
+    LOG_WARN("wait running update task failed, try later", K(ret), K(ATOMIC_LOAD(&task.running_task_count_)), K(abs_timeout_us));
   }
   return ret;
 }

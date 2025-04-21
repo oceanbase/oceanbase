@@ -117,7 +117,7 @@ public:
            const UpdateTenantConfigCb &update_tenant_config_cb);
   int refresh_tenants(const common::ObIArray<uint64_t> &tenants);
   int add_tenant_config(uint64_t tenant_id);
-  int del_tenant_config(uint64_t tenant_id);
+  int del_tenant_config(uint64_t tenant_id, const int64_t abs_timeout_us);
   int init_tenant_config(const obrpc::ObTenantConfigArg &arg);
 
   ObTenantConfig *get_tenant_config(uint64_t tenant_id) const;
@@ -154,7 +154,7 @@ public:
   int add_extra_config(const obrpc::ObTenantConfigArg &arg);
   int schedule(ObTenantConfig::TenantConfigUpdateTask &task, const int64_t delay);
   int cancel(const ObTenantConfig::TenantConfigUpdateTask &task);
-  int wait(const ObTenantConfig::TenantConfigUpdateTask &task);
+  int wait(const ObTenantConfig::TenantConfigUpdateTask &task, const int64_t abs_timeout_us);
   bool inited() { return inited_; }
 
   static uint64_t default_fallback_tenant_id()
