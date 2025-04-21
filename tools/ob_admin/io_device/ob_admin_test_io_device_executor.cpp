@@ -598,10 +598,10 @@ int ObAdminTestIODeviceExecutor::test_archive_log_() {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tenant holder ptr is null", K(ret));
   } else {
-    ObTenantIOConfig io_config(tenant_holder.get_ptr()->get_io_config());
-    io_config.object_storage_io_timeout_ms_ = MAX_OB_ADMIN_TIMEOUT;
-    if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_config(io_config))) {
-      STORAGE_LOG(WARN, "update tenant io config failed", K(ret), K(io_config));
+    ObTenantIOConfig::ParamConfig io_param_config(tenant_holder.get_ptr()->get_io_config().param_config_);
+    io_param_config.object_storage_io_timeout_ms_ = MAX_OB_ADMIN_TIMEOUT;
+    if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_param_config(io_param_config))) {
+      STORAGE_LOG(WARN, "update tenant io config failed", K(ret), K(io_param_config));
     }
   }
   if (OB_FAIL(ret)) {

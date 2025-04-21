@@ -170,7 +170,6 @@ ObTenantIOClock::ObTenantIOClock()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     group_clocks_(),
-    io_config_(),
     io_usage_(nullptr)
 {
 
@@ -194,8 +193,6 @@ int ObTenantIOClock::init(const uint64_t tenant_id, const ObTenantIOConfig &io_c
   } else if (OB_UNLIKELY(!io_config.is_valid() || nullptr == io_usage)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(io_config), KP(io_usage));
-  } else if (OB_FAIL(io_config_.deep_copy(io_config))) {
-    LOG_WARN("get io config failed", K(ret), K(io_config));
   } else if (OB_FAIL(group_clocks_.reserve(io_config.group_configs_.count()))) {
     LOG_WARN("reserver group failed", K(ret), K(io_config.group_configs_.count()));
   } else {
@@ -430,30 +427,26 @@ int ObTenantIOClock::adjust_proportion_clock(const int64_t delta_us)
 int ObTenantIOClock::update_io_clocks(const ObTenantIOConfig &io_config)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(io_config_.deep_copy(io_config))) {
-    LOG_WARN("get io config failed", K(ret), K(io_config));
-  } else {
-    if (group_clocks_.count() < io_config.group_configs_.count()) {
-      DRWLock::WRLockGuard guard(group_clocks_lock_);
-      if (OB_FAIL(group_clocks_.reserve(io_config.group_configs_.count()))) {
-        LOG_WARN("reserve group config failed", K(ret), K(group_clocks_), K(io_config.group_configs_.count()));
+  if (group_clocks_.count() < io_config.group_configs_.count()) {
+    DRWLock::WRLockGuard guard(group_clocks_lock_);
+    if (OB_FAIL(group_clocks_.reserve(io_config.group_configs_.count()))) {
+      LOG_WARN("reserve group config failed", K(ret), K(group_clocks_), K(io_config.group_configs_.count()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t all_group_num = io_config.group_configs_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_group_num; ++i) {
+      if (OB_FAIL(update_io_clock(i, io_config))) {
+        LOG_WARN("update cur clock failed", K(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {
-      const int64_t all_group_num = io_config.group_configs_.count();
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_group_num; ++i) {
-        if (OB_FAIL(update_io_clock(i, io_config))) {
-          LOG_WARN("update cur clock failed", K(ret), K(i));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        unit_clocks_[static_cast<int>(ObIOMode::READ)].iops_ = io_config.unit_config_.max_net_bandwidth_;
-        unit_clocks_[static_cast<int>(ObIOMode::WRITE)].iops_ = io_config.unit_config_.max_net_bandwidth_;
-        unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE)].iops_ = io_config.unit_config_.max_iops_;
-        is_inited_ = true;
-      }
-      LOG_INFO("update io unit and group clock success", K(tenant_id_), K(*this));
+      unit_clocks_[static_cast<int>(ObIOMode::READ)].iops_ = io_config.unit_config_.max_net_bandwidth_;
+      unit_clocks_[static_cast<int>(ObIOMode::WRITE)].iops_ = io_config.unit_config_.max_net_bandwidth_;
+      unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE)].iops_ = io_config.unit_config_.max_iops_;
+      is_inited_ = true;
     }
+    LOG_INFO("update io unit and group clock success", K(tenant_id_), K(*this));
   }
   return ret;
 }

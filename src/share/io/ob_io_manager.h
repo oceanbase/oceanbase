@@ -366,7 +366,9 @@ public:
   int get_device_channel(const ObIORequest &req, ObDeviceChannel *&device_channel);
 
   // tenant management
-  int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
+  int refresh_tenant_io_unit_config(const uint64_t tenant_id, const ObTenantIOConfig::UnitConfig &tenant_io_unit_config);
+  // tenant management
+  int refresh_tenant_io_param_config(const uint64_t tenant_id, const ObTenantIOConfig::ParamConfig &tenant_io_param_config);
   int get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder) const;
   OB_INLINE bool is_inited()
   {
@@ -449,7 +451,8 @@ public:
   {
     return io_sys_usage_;
   }
-  int update_basic_io_config(const ObTenantIOConfig &io_config);
+  int update_basic_io_unit_config(const ObTenantIOConfig::UnitConfig &io_unit_config);
+  int update_basic_io_param_config(const ObTenantIOConfig::ParamConfig &io_param_config);
   int try_alloc_req_until_timeout(const int64_t timeout_ts, ObIORequest *&req);
   int try_alloc_result_until_timeout(const int64_t timeout_ts, ObIOResult *&result);
   int alloc_io_request(ObIORequest *&req);
@@ -495,7 +498,7 @@ public:
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
   const ObIOFuncUsages& get_io_func_infos();
-  OB_INLINE int64_t get_object_storage_io_timeout_ms() const { return io_config_.object_storage_io_timeout_ms_; }
+  OB_INLINE int64_t get_object_storage_io_timeout_ms() const { return io_config_.param_config_.object_storage_io_timeout_ms_; }
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
        K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),

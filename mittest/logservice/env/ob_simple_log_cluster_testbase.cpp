@@ -173,11 +173,11 @@ int ObSimpleLogClusterTestBase::start()
   } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
     SERVER_LOG(ERROR, "LOG_IO_DEVICE_WRAPPER init failed", K(ret));
   } else {
-    ObTenantIOConfig io_config;
-    io_config.unit_config_.max_iops_ = 10000000;
-    io_config.unit_config_.min_iops_ = 10000000;
-    io_config.unit_config_.weight_ = 10000000;
-    tio_manager_->update_basic_io_config(io_config);
+    ObTenantIOConfig::UnitConfig io_unit_config;
+    io_unit_config.max_iops_ = 10000000;
+    io_unit_config.min_iops_ = 10000000;
+    io_unit_config.weight_ = 10000000;
+    tio_manager_->update_basic_io_unit_config(io_unit_config);
     // 如果需要新增arb server，将其作为memberlist最后一项
     // TODO by runlin, 这个是暂时的解决方法，以后可以走加减成员的流程
     const int64_t arb_idx = member_cnt_ - 1;

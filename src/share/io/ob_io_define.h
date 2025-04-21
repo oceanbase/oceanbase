@@ -723,6 +723,7 @@ public:
   struct UnitConfig
   {
     UnitConfig();
+    UnitConfig(const share::ObUnitConfig &unit_config);
     bool is_valid() const;
     TO_STRING_KV(K_(min_iops), K_(max_iops), K_(weight), K_(max_net_bandwidth), K_(net_bandwidth_weight));
     int64_t min_iops_;
@@ -751,9 +752,23 @@ public:
     ObIOMode mode_;
   };
 
+  struct ParamConfig
+  {
+  public:
+    ParamConfig();
+    ~ParamConfig();
+    bool is_valid() const;
+    TO_STRING_KV(K_(memory_limit), K_(callback_thread_count), K_(enable_io_tracer), K_(object_storage_io_timeout_ms));
+
+  public:
+    int64_t memory_limit_;
+    int64_t callback_thread_count_;
+    bool enable_io_tracer_;
+    int64_t object_storage_io_timeout_ms_;
+  };
+
 public:
   ObTenantIOConfig();
-  explicit ObTenantIOConfig(const share::ObUnitConfig &unit_config);
   ~ObTenantIOConfig();
   void destroy();
   static const ObTenantIOConfig &default_instance();
@@ -767,14 +782,11 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
 public:
-  int64_t memory_limit_;
-  int64_t callback_thread_count_;
   UnitConfig unit_config_;
   typedef ObSEArray<GroupConfig, GROUP_START_NUM * (static_cast<uint64_t>(ObIOMode::MAX_MODE) + 1)> ObIOGroupConfigArray;
   ObIOGroupConfigArray group_configs_;
   bool group_config_change_;
-  bool enable_io_tracer_;
-  int64_t object_storage_io_timeout_ms_;
+  ParamConfig param_config_;
 };
 
 struct ObAtomIOClock final

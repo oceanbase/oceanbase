@@ -1305,7 +1305,8 @@ int ObIOManager::get_device_channel(const ObIORequest &req, ObDeviceChannel *&de
   return ret;
 }
 
-int ObIOManager::refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config)
+int ObIOManager::refresh_tenant_io_unit_config(const uint64_t tenant_id,
+    const ObTenantIOConfig::UnitConfig &tenant_io_unit_config)
 {
   int ret = OB_SUCCESS;
   ObRefHolder<ObTenantIOManager> tenant_holder;
@@ -1313,15 +1314,33 @@ int ObIOManager::refresh_tenant_io_config(const uint64_t tenant_id, const ObTena
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                         tenant_io_config.memory_limit_ <= 0 ||
-                         tenant_io_config.callback_thread_count_ < 0 ||
-                         !tenant_io_config.unit_config_.is_valid())) {
+                         !tenant_io_unit_config.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_config));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_unit_config));
   } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
     LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
-  } else if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_config(tenant_io_config))) {
-    LOG_WARN("update tenant io config failed", K(ret), K(tenant_id), K(tenant_io_config));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_unit_config(tenant_io_unit_config))) {
+    LOG_WARN("update tenant io config failed", K(ret), K(tenant_id), K(tenant_io_unit_config));
+  }
+  return ret;
+}
+
+int ObIOManager::refresh_tenant_io_param_config(const uint64_t tenant_id,
+    const ObTenantIOConfig::ParamConfig &tenant_io_param_config)
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+                         !tenant_io_param_config.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_param_config));
+  } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
+    LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_param_config(tenant_io_param_config))) {
+    LOG_WARN("update tenant io config failed", K(ret), K(tenant_id), K(tenant_io_param_config));
   }
   return ret;
 }
@@ -1575,7 +1594,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
         || nullptr == io_scheduler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(io_config), KP(io_scheduler));
-  } else if (OB_FAIL(init_memory_pool(tenant_id, io_config.memory_limit_))) {
+  } else if (OB_FAIL(init_memory_pool(tenant_id, io_config.param_config_.memory_limit_))) {
     LOG_WARN("init tenant io memory pool failed", K(ret), K(io_config), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_tracer_.init(tenant_id))) {
     LOG_WARN("init io tracer failed", K(ret));
@@ -1958,7 +1977,7 @@ int ObTenantIOManager::retry_io(ObIORequest &req)
   return ret;
 }
 
-int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
+int ObTenantIOManager::update_basic_io_unit_config(const ObTenantIOConfig::UnitConfig &io_unit_config)
 {
   int ret = OB_SUCCESS;
   bool need_adjust_callback = false;
@@ -1970,57 +1989,72 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
   } else {
     // update basic io config
-    if (io_config_.unit_config_.weight_ != io_config.unit_config_.weight_
-        || io_config_.unit_config_.max_iops_ != io_config.unit_config_.max_iops_
-        || io_config_.unit_config_.min_iops_ != io_config.unit_config_.min_iops_
-        || io_config_.unit_config_.max_net_bandwidth_ != io_config.unit_config_.max_net_bandwidth_
-        || io_config_.unit_config_.net_bandwidth_weight_ != io_config.unit_config_.net_bandwidth_weight_) {
-      LOG_INFO("update io unit config", K(tenant_id_), K(io_config.unit_config_), K(io_config_.unit_config_));
-      io_config_.unit_config_ = io_config.unit_config_;
+    if (io_config_.unit_config_.weight_ != io_unit_config.weight_
+        || io_config_.unit_config_.max_iops_ != io_unit_config.max_iops_
+        || io_config_.unit_config_.min_iops_ != io_unit_config.min_iops_
+        || io_config_.unit_config_.max_net_bandwidth_ != io_unit_config.max_net_bandwidth_
+        || io_config_.unit_config_.net_bandwidth_weight_ != io_unit_config.net_bandwidth_weight_) {
+      LOG_INFO("update io unit config", K(tenant_id_), K(io_config_.unit_config_), K(io_unit_config));
+      io_config_.unit_config_ =io_unit_config;
       if (OB_FAIL(io_clock_.update_io_clocks(io_config_))) {
-        LOG_WARN("update io clock unit config failed", K(ret), K(tenant_id_), K(io_config_), K(io_config), K(io_clock_));
+        LOG_WARN("update io clock unit config failed", K(ret), K(tenant_id_), K(io_config_), K(io_unit_config), K(io_clock_));
       } else if (OB_FAIL(qsched_.update_config(io_config_))) {
         LOG_WARN("refresh tenant io config failed", K(ret), K(io_config_));
       }
     }
+  }
+  return ret;
+}
+
+int ObTenantIOManager::update_basic_io_param_config(const ObTenantIOConfig::ParamConfig &io_param_config)
+{
+  int ret = OB_SUCCESS;
+  bool need_adjust_callback = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_working())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tenant not working", K(ret), K(tenant_id_));
+  } else {
     if (OB_FAIL(ret)) {
-    } else if (io_config_.enable_io_tracer_ != io_config.enable_io_tracer_) {
-      LOG_INFO("update io tracer", K(tenant_id_), K(io_config.enable_io_tracer_), K(io_config_.enable_io_tracer_));
-      ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
-      if (!io_config.enable_io_tracer_) {
+    } else if (io_config_.param_config_.enable_io_tracer_ != io_param_config.enable_io_tracer_) {
+      LOG_INFO("update io tracer", K(tenant_id_), K(io_param_config.enable_io_tracer_), K(io_config_.param_config_.enable_io_tracer_));
+      ATOMIC_SET(&io_config_.param_config_.enable_io_tracer_, io_param_config.enable_io_tracer_);
+      if (!io_param_config.enable_io_tracer_) {
         io_tracer_.reuse();
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (io_config_.memory_limit_ != io_config.memory_limit_) {
-      LOG_INFO("update io memory limit", K(tenant_id_), K(io_config.memory_limit_), K(io_config_.memory_limit_));
-      if (OB_FAIL(update_memory_pool(io_config.memory_limit_))) {
-        LOG_WARN("fail to update tenant io manager memory pool", K(ret), K(io_memory_limit_), K(io_config.memory_limit_));
+    } else if (io_config_.param_config_.memory_limit_ != io_param_config.memory_limit_) {
+      LOG_INFO("update io memory limit", K(tenant_id_), K(io_param_config.memory_limit_), K(io_config_.param_config_.memory_limit_));
+      if (OB_FAIL(update_memory_pool(io_param_config.memory_limit_))) {
+        LOG_WARN("fail to update tenant io manager memory pool", K(ret), K(io_memory_limit_), K(io_param_config.memory_limit_));
       } else {
-        io_config_.memory_limit_ = io_config.memory_limit_;
+        io_config_.param_config_.memory_limit_ = io_param_config.memory_limit_;
         need_adjust_callback = true;
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (io_config_.callback_thread_count_ != io_config.callback_thread_count_) {
-      LOG_INFO("update io callback thread count", K(tenant_id_), K(io_config.callback_thread_count_), K(io_config_.callback_thread_count_));
-      io_config_.callback_thread_count_ = io_config.callback_thread_count_;
+    } else if (io_config_.param_config_.callback_thread_count_ != io_param_config.callback_thread_count_) {
+      LOG_INFO("update io callback thread count", K(tenant_id_), K(io_param_config.callback_thread_count_), K(io_config_.param_config_.callback_thread_count_));
+      io_config_.param_config_.callback_thread_count_ = io_param_config.callback_thread_count_;
       need_adjust_callback = true;
     }
     if (OB_SUCC(ret) && need_adjust_callback) {
       int64_t callback_thread_count = io_config_.get_callback_thread_count();
       MTL_SWITCH(tenant_id_) {
         if (OB_FAIL(callback_mgr_.update_thread_count(callback_thread_count))) {
-          LOG_WARN("callback manager adjust thread failed", K(ret), K(io_config));
+          LOG_WARN("callback manager adjust thread failed", K(ret), K(io_param_config));
         }
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (io_config_.object_storage_io_timeout_ms_ != io_config.object_storage_io_timeout_ms_) {
+    } else if (io_config_.param_config_.object_storage_io_timeout_ms_ != io_param_config.object_storage_io_timeout_ms_) {
       LOG_INFO("update object storage io timeout ms", K_(tenant_id), "ori_object_storage_io_timeout_ms",
-               io_config_.object_storage_io_timeout_ms_, "new_object_storage_io_timeout_ms",
-               io_config.object_storage_io_timeout_ms_);
-      io_config_.object_storage_io_timeout_ms_ = io_config.object_storage_io_timeout_ms_;
+               io_config_.param_config_.object_storage_io_timeout_ms_, "new_object_storage_io_timeout_ms",
+               io_param_config.object_storage_io_timeout_ms_);
+      io_config_.param_config_.object_storage_io_timeout_ms_ = io_param_config.object_storage_io_timeout_ms_;
     }
   }
   return ret;
@@ -2448,7 +2482,7 @@ int ObTenantIOManager::trace_request_if_need(const ObIORequest *req, const char*
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_LIKELY(!ATOMIC_LOAD(&io_config_.enable_io_tracer_))) {
+  } else if (OB_LIKELY(!ATOMIC_LOAD(&io_config_.param_config_.enable_io_tracer_))) {
     // do nothing
   } else if (OB_FAIL(io_tracer_.trace_request(req, msg, trace_type))) {
     LOG_WARN("trace io request failed", K(ret), KP(req), KCSTRING(msg), K(trace_type));
@@ -2721,7 +2755,7 @@ int ObTenantIOManager::print_io_status()
           "ibw_limit", io_clock_.get_unit_limit(ObIOMode::READ),
           "obw_limit", io_clock_.get_unit_limit(ObIOMode::WRITE));
     }
-    if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {
+    if (ATOMIC_LOAD(&io_config_.param_config_.enable_io_tracer_)) {
       io_tracer_.print_status();
     }
 

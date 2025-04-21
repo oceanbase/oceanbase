@@ -2078,6 +2078,15 @@ ObTenantIOConfig::UnitConfig::UnitConfig()
 
 }
 
+ObTenantIOConfig::UnitConfig::UnitConfig(const share::ObUnitConfig &unit_config)
+{
+  min_iops_ = unit_config.min_iops();
+  max_iops_ = unit_config.max_iops();
+  weight_ = unit_config.iops_weight();
+  max_net_bandwidth_ =unit_config.max_net_bandwidth();
+  net_bandwidth_weight_ = unit_config.net_bandwidth_weight();
+}
+
 bool ObTenantIOConfig::UnitConfig::is_valid() const
 {
   return min_iops_ > 0 && max_iops_ >= min_iops_ && weight_ >= 0 && max_net_bandwidth_ > 0 && net_bandwidth_weight_ >= 0;
@@ -2108,10 +2117,31 @@ bool ObTenantIOConfig::GroupConfig::is_valid() const
          max_percent_ >= min_percent_;
 }
 
+ObTenantIOConfig::ParamConfig::ParamConfig()
+    : memory_limit_(0),
+      callback_thread_count_(0),
+      enable_io_tracer_(false),
+      object_storage_io_timeout_ms_(DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS)
+{
+
+}
+
+ObTenantIOConfig::ParamConfig::~ParamConfig()
+{
+
+}
+
+bool ObTenantIOConfig::ParamConfig::is_valid() const
+{
+  return memory_limit_ > 0
+          && callback_thread_count_ >= 0;
+}
+
 ObTenantIOConfig::ObTenantIOConfig()
-  : memory_limit_(0), callback_thread_count_(0), group_configs_(),
-    group_config_change_(false), enable_io_tracer_(false),
-    object_storage_io_timeout_ms_(DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS)
+  : unit_config_(),
+    group_configs_(),
+    group_config_change_(false),
+    param_config_()
 {
   int ret = OB_SUCCESS;
   GroupConfig tmp_group_config;
@@ -2128,17 +2158,6 @@ ObTenantIOConfig::ObTenantIOConfig()
   }
 }
 
-ObTenantIOConfig::ObTenantIOConfig(const share::ObUnitConfig &unit_config) : ObTenantIOConfig()
-{
-  memory_limit_ = unit_config.memory_size();
-  unit_config_.min_iops_ = unit_config.min_iops();
-  unit_config_.max_iops_ = unit_config.max_iops();
-  unit_config_.weight_ = unit_config.iops_weight();
-  unit_config_.max_net_bandwidth_ =unit_config.max_net_bandwidth();
-  unit_config_.net_bandwidth_weight_ = unit_config.net_bandwidth_weight();
-  object_storage_io_timeout_ms_ = DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS;
-}
-
 ObTenantIOConfig::~ObTenantIOConfig()
 {
   destroy();
@@ -2152,23 +2171,22 @@ void ObTenantIOConfig::destroy()
 const ObTenantIOConfig &ObTenantIOConfig::default_instance()
 {
   static ObTenantIOConfig instance;
-  instance.memory_limit_ = 512L * 1024L * 1024L; // min_tenant_memory: 512M
-  instance.callback_thread_count_ = 0;
+  instance.param_config_.memory_limit_ = 512L * 1024L * 1024L; // min_tenant_memory: 512M
+  instance.param_config_.callback_thread_count_ = 0;
   instance.unit_config_.min_iops_ = 10000;
   instance.unit_config_.max_iops_ = 50000;
   instance.unit_config_.weight_ = 10000;
   instance.unit_config_.max_net_bandwidth_ = INT64_MAX;
   instance.unit_config_.net_bandwidth_weight_ = 100;
   instance.group_config_change_ = false;
-  instance.enable_io_tracer_ = false;
-  instance.object_storage_io_timeout_ms_ = DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS;
+  instance.param_config_.enable_io_tracer_ = false;
+  instance.param_config_.object_storage_io_timeout_ms_ = DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS;
   return instance;
 }
 
 bool ObTenantIOConfig::is_valid() const
 {
-  bool bret = memory_limit_ > 0
-              && callback_thread_count_ >= 0
+  bool bret = param_config_.is_valid()
               && unit_config_.is_valid();
   for (uint8_t i = (uint8_t)ObIOMode::READ; i <= (uint8_t)ObIOMode::MAX_MODE; ++i) {
     int64_t sum_min_percent = 0;
@@ -2196,12 +2214,9 @@ int ObTenantIOConfig::deep_copy(const ObTenantIOConfig &other_config)
   }
 
   if (OB_SUCC(ret)) {
-    memory_limit_ = other_config.memory_limit_;
-    callback_thread_count_ = other_config.callback_thread_count_;
     unit_config_ = other_config.unit_config_;
     group_config_change_ = other_config.group_config_change_;
-    enable_io_tracer_ = other_config.enable_io_tracer_;
-    object_storage_io_timeout_ms_ = other_config.object_storage_io_timeout_ms_;
+    param_config_ = other_config.param_config_;
   }
   return ret;
 }
@@ -2342,8 +2357,8 @@ int64_t ObTenantIOConfig::get_callback_thread_count() const
 {
   int64_t memory_benchmark = 4L * 1024L * 1024L * 1024L; //4G memory
   //Based on 4G memory, one thread will be added for each additional 4G of memory, and the maximum number of callback_thread_count is 16
-  int64_t callback_thread_num = 0 == callback_thread_count_? min(16, (memory_limit_ / memory_benchmark) + 1) : callback_thread_count_;
-  LOG_INFO("get callback thread by memory success", K(memory_limit_), K(callback_thread_num));
+  int64_t callback_thread_num = 0 == param_config_.callback_thread_count_? min(16, (param_config_.memory_limit_ / memory_benchmark) + 1) : param_config_.callback_thread_count_;
+  LOG_INFO("get callback thread by memory success", K(param_config_.memory_limit_), K(callback_thread_num));
   return callback_thread_num;
 }
 
@@ -2358,8 +2373,7 @@ int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
       group_configs_cnt++;
     }
   }
-  J_KV(K(group_configs_cnt), K(memory_limit_), K(callback_thread_count_), K(unit_config_),
-       K_(enable_io_tracer), K_(object_storage_io_timeout_ms));
+  J_KV(K(group_configs_cnt), K(unit_config_), K(param_config_));
   // if self invalid, print all group configs, otherwise, only print valid group configs
   const bool self_valid = is_valid();
   BUF_PRINTF(", group_configs:[");

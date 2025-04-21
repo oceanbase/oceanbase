@@ -1877,18 +1877,22 @@ int ObMultiTenant::modify_tenant_io(const uint64_t tenant_id, const ObUnitConfig
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected condition, tenant is NULL", K(tenant));
   } else {
-    ObTenantIOConfig io_config(unit_config);
+    ObTenantIOConfig::UnitConfig io_unit_config(unit_config);
+    ObTenantIOConfig::ParamConfig io_param_config;
     ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (!tenant_config.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
     } else {
-      io_config.callback_thread_count_ = tenant_config->_io_callback_thread_count;
+      io_param_config.memory_limit_ = unit_config.memory_size();
+      io_param_config.callback_thread_count_ = tenant_config->_io_callback_thread_count;
       static const char *trace_mod_name = "io_tracer";
-      io_config.enable_io_tracer_ = 0 == strncasecmp(trace_mod_name, GCONF.leak_mod_to_check.get_value(), strlen(trace_mod_name));
-      io_config.object_storage_io_timeout_ms_ = tenant_config->_object_storage_io_timeout / 1000L;
-      if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(tenant_id, io_config))) {
-        LOG_WARN("refresh tenant io config failed", K(ret), K(tenant_id), K(io_config));
+      io_param_config.enable_io_tracer_ = 0 == strncasecmp(trace_mod_name, GCONF.leak_mod_to_check.get_value(), strlen(trace_mod_name));
+      io_param_config.object_storage_io_timeout_ms_ = tenant_config->_object_storage_io_timeout / 1000L;
+      if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_unit_config(tenant_id, io_unit_config))) {
+        LOG_WARN("refresh tenant io unit config failed", K(ret), K(tenant_id), K(io_unit_config));
+      } else if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_param_config(tenant_id, io_param_config))) {
+        LOG_WARN("refresh tenant io param config failed", K(ret), K(tenant_id), K(io_param_config));
       }
     }
   }
