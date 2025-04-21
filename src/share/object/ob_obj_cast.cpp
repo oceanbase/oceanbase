@@ -10117,7 +10117,12 @@ static int json_year(const ObObjType expect_type, ObObjCastParams &params,
         LOG_WARN("fail to cast json int to year type", K(ret), K(int_value), K(expect_type));
       } else {
         if (lib::is_mysql_mode() && (params.warning_ == OB_DATA_OUT_OF_RANGE)) {
-          out.set_null(); // not change the behavior of int_year
+          if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+            value = 0;
+            SET_RES_YEAR(out);
+          } else {
+            out.set_null(); // not change the behavior of int_year
+          }
         } else {
           SET_RES_YEAR(out);
         }

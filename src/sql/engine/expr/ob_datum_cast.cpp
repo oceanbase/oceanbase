@@ -8848,7 +8848,12 @@ CAST_FUNC_NAME(json, year)
         LOG_WARN("fail to cast json int to year type", K(ret), K(int_val));
       } else {
         if (lib::is_mysql_mode() && (warning == OB_DATA_OUT_OF_RANGE)) {
-          res_datum.set_null(); // not change the behavior of int_year
+          if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+            out_val = 0;
+            SET_RES_YEAR(out_val);
+          } else {
+            res_datum.set_null(); // not change the behavior of int_year
+          }
         } else {
           SET_RES_YEAR(out_val);
         }
