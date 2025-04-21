@@ -1465,8 +1465,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       LOG_WARN("open slice failed", K(ret), K(macro_start_seq), K(slice_info));
     } else if (OB_FAIL(context_->ddl_agent_.fill_sstable_slice(slice_info, &row_iter, affected_rows, &insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), K(slice_info));
-    } else if (OB_FALSE_IT(slice_info.is_task_finish_ =
-      ObDDLUtil::use_idempotent_mode(param_->data_format_version_) ? false : true)) { /* sn set write task finish */
     } else if (OB_FAIL(context_->ddl_agent_.close_sstable_slice(slice_info, &insert_monitor, unused_seq))) {
       LOG_WARN("close sstable slice failed", K(ret));
     } else { /* do nothing.*/ }
