@@ -16750,8 +16750,10 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         }
       }
       // table constraints
-      if (OB_SUCC(ret) &&  alter_table_arg.alter_constraint_type_ !=
-          obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION) {
+      // in offline ddl, alter_table_constraints(DROP_CONSTRAINT) has no effect but bug.
+      if (OB_SUCC(ret)
+          && alter_table_arg.alter_constraint_type_ != obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION
+          && alter_table_arg.alter_constraint_type_ != obrpc::ObAlterTableArg::DROP_CONSTRAINT) {
         if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
             || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
           HEAP_VAR(AlterTableSchema, tmp_alter_table_schema) {
