@@ -889,29 +889,8 @@ int ObTableLSExecuteP::before_process()
   if (OB_ISNULL(ls_op = arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
-  } else if (FALSE_IT(is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(ls_op->get_table_name(), arg_.entity_type_))) {
-  } else if (!is_new_try_process()) {
-    ObTableLSExecuteEndTransCb *cb = nullptr;
-    if (OB_SUCC(ret) && OB_FAIL(cb_functor_.init(req_))) {
-      LOG_WARN("fail to init create ls callback functor", K(ret));
-    } else if (OB_ISNULL(cb = static_cast<ObTableLSExecuteEndTransCb *>(cb_functor_.new_callback()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ls execute end trans callback", K(ret));
-    } else {
-      cb_ = cb;
-      ObTableLSOpResult &cb_result = cb_->get_result();
-      const ObIArray<ObString>& all_rowkey_names = ls_op->get_all_rowkey_names();
-      const ObIArray<ObString>& all_properties_names = ls_op->get_all_properties_names();
-      bool need_all_prop = ls_op->need_all_prop_bitmap();
-      if (OB_FAIL(cb_result.assign_rowkey_names(all_rowkey_names))) {
-        LOG_WARN("fail to assign rowkey names", K(ret), K(all_rowkey_names));
-      } else if (!need_all_prop && OB_FAIL(cb_result.assign_properties_names(all_properties_names))) {
-        LOG_WARN("fail to assign properties names", K(ret), K(all_properties_names));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
+    is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(ls_op->get_table_name(), arg_.entity_type_);
     ret = ParentType::before_process();
   }
 
@@ -1027,26 +1006,30 @@ int ObTableLSExecuteP::get_ls_id(ObLSID &ls_id, const ObSimpleTableSchemaV2 *sim
   return ret;
 }
 
-int ObTableLSExecuteP::create_cb_result(ObTableLSOpResult *&cb_result)
+int ObTableLSExecuteP::create_cb_result()
 {
   int ret = OB_SUCCESS;
+  ObTableLSExecuteEndTransCb *cb = nullptr;
   bool need_all_prop = false;
-
-  if (OB_ISNULL(cb_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null callback", K(ret));
-  } else if (OB_ISNULL(arg_.ls_op_)) {
+  ObTableLSOp *ls_op = nullptr;
+  if (OB_ISNULL(ls_op = arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
-  } else if (FALSE_IT(cb_result = &cb_->get_result())) {
-  } else if (FALSE_IT(need_all_prop = arg_.ls_op_->need_all_prop_bitmap())) {
-  } else if (need_all_prop) {
-    ObSEArray<ObString, 8> all_prop_name;
-    const ObIArray<ObTableColumnInfo *>&column_info_array = schema_cache_guard_.get_column_info_array();
-    if (OB_FAIL(ObTableApiUtil::expand_all_columns(column_info_array, all_prop_name))) {
-      LOG_WARN("fail to expand all columns", K(ret));
-    } else if (OB_FAIL(cb_result->assign_properties_names(all_prop_name))) {
-      LOG_WARN("fail to assign property names to result", K(ret));
+  } else if (OB_FAIL(cb_functor_.init(req_))) {
+    LOG_WARN("fail to init create ls callback functor", K(ret));
+  } else if (OB_ISNULL(cb = static_cast<ObTableLSExecuteEndTransCb *>(cb_functor_.new_callback()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ls execute end trans callback", K(ret));
+  } else {
+    cb_ = cb;
+    ObTableLSOpResult &cb_result = cb_->get_result();
+    const ObIArray<ObString>& all_rowkey_names = ls_op->get_all_rowkey_names();
+    const ObIArray<ObString>& all_properties_names = ls_op->get_all_properties_names();
+    bool need_all_prop = ls_op->need_all_prop_bitmap();
+    if (OB_FAIL(cb_result.assign_rowkey_names(all_rowkey_names))) {
+      LOG_WARN("fail to assign rowkey names", K(ret), K(all_rowkey_names));
+    } else if (!need_all_prop && OB_FAIL(cb_result.assign_properties_names(all_properties_names))) {
+      LOG_WARN("fail to assign properties names", K(ret), K(all_properties_names));
     }
   }
 
@@ -1066,7 +1049,9 @@ int ObTableLSExecuteP::old_try_process()
   ObTableLSOpResult *cb_result = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   bool is_hkv = ObTableEntityType::ET_HKV == arg_.entity_type_;
-  if (OB_ISNULL(cb_)) {
+  if (OB_FAIL(create_cb_result())) {
+    LOG_WARN("fail to create cb result", K(ret));
+  } else if (OB_ISNULL(cb_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null callback", K(ret));
   } else if (FALSE_IT(cb_result = &cb_->get_result())) {

@@ -133,7 +133,7 @@ private:
                                 ObTableLSExecuteP::HTableLSExecuteIter &htable_ls_iter,
                                 table::ObTableTabletOpResult &tmp_tablet_result,
                                 table::ObTableTabletOpResult &tablet_result);
-  int create_cb_result(table::ObTableLSOpResult *&cb_result);
+  int create_cb_result();
   int old_try_process();
   int new_try_process();
   virtual bool is_new_try_process() override;
