@@ -1050,6 +1050,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSqlModeConvert);
     REG_OP(ObExprCanAccessTrigger);
     REG_OP(ObExprMysqlProcInfo);
+    REG_OP(ObExprInnerTypeToEnumSet);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
@@ -1282,6 +1283,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsColumnTypePrinter);
     REG_OP(ObExprCurrentCatalog);
     REG_OP(ObExprCheckCatalogAccess);
+    REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

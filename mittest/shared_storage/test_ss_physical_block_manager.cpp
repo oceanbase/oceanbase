@@ -306,8 +306,8 @@ int TestSSPhysicalBlockManager::deserialize_super_block(
   } else if (OB_UNLIKELY(!tmp_super_blk.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deserialized super_block is invalid", KR(ret), K(tmp_super_blk), K(pos));
-  } else {
-    super_block = tmp_super_blk;
+  } else if (OB_FAIL(super_block.assign(tmp_super_blk))) {
+    LOG_WARN("fail to assign ss_super_block", KR(ret), K(tmp_super_blk));
   }
   return ret;
 }
@@ -342,7 +342,7 @@ TEST_F(TestSSPhysicalBlockManager, physical_block)
                                          blk_cnt_info.phy_ckpt_blk_cnt_);
   const int64_t data_blk_min_cnt =
       MAX(blk_cnt_info.reorgan_blk_cnt_, blk_cnt_info.shared_blk_cnt_ * MIN_CACHE_DATA_BLOCK_CNT_PCT / 100);
-  const int64_t micro_blk_min_cnt = MAX(2, blk_cnt_info.shared_blk_cnt_ * MIN_MICRO_CKPT_BLOCK_CNT_PCT / 100);
+  const int64_t micro_blk_min_cnt = MAX(2, blk_cnt_info.shared_blk_cnt_ * MIN_CACHE_META_BLOCK_CNT_PCT / 100);
   ASSERT_EQ(data_blk_min_cnt, blk_cnt_info.data_blk_.min_cnt_);
   ASSERT_EQ(data_blk_min_cnt, blk_cnt_info.data_blk_.hold_cnt_);
   ASSERT_EQ(micro_blk_min_cnt, blk_cnt_info.meta_blk_.min_cnt_);
@@ -732,7 +732,7 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block)
 
   const int64_t max_reorgan_blk_cnt = blk_cnt_info.reorgan_blk_cnt_ * 2;
   const int64_t max_data_blk_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_CACHE_DATA_BLOCK_CNT_PCT + 5) / 100 - max_reorgan_blk_cnt;    // 85%
-  const int64_t max_micro_ckpt_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_MICRO_CKPT_BLOCK_CNT_PCT + 5) / 100;  // 9%
+  const int64_t max_micro_ckpt_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_CACHE_META_BLOCK_CNT_PCT + 5) / 100;  // 9%
   const int64_t data_blk_thread_num = 5;
   const int64_t micro_ckpt_blk_thread_num = 5;
   const int64_t phy_ckpt_blk_thread_num = 1;
@@ -856,6 +856,7 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_resize)
 TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
   ObMemAttr attr(OB_SERVER_TENANT_ID, "test");
@@ -866,8 +867,8 @@ TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
   // Scenario 1
   const int64_t old_cache_file_size = phy_blk_mgr.total_file_size_ * 2;
   const int64_t new_cache_file_size = phy_blk_mgr.total_file_size_ * 4;
-  ObSSMicroCacheSuperBlock old_super_blk(old_cache_file_size);
-  ObSSMicroCacheSuperBlock new_super_blk(new_cache_file_size);
+  ObSSMicroCacheSuperBlock old_super_blk(tenant_id, old_cache_file_size);
+  ObSSMicroCacheSuperBlock new_super_blk(tenant_id, new_cache_file_size);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(old_super_blk));
 
   new_super_blk.modify_time_us_ = old_super_blk.modify_time_us_ + 888888;
@@ -883,7 +884,7 @@ TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(new_super_blk));
 
   const int64_t fake_cache_file_size = phy_blk_mgr.total_file_size_ * 8;
-  ObSSMicroCacheSuperBlock fake_super_blk(new_cache_file_size);
+  ObSSMicroCacheSuperBlock fake_super_blk(tenant_id, new_cache_file_size);
   fake_super_blk.modify_time_us_ = new_super_blk.modify_time_us_ + 888888;
   ASSERT_EQ(OB_SUCCESS, serialize_super_block(buf, align_size, fake_super_blk));
   buf[fake_super_blk.get_serialize_size() - 3] = '#'; // simulate data error

@@ -857,7 +857,10 @@ int ObFtsIndexBuildTask::load_dictionary()
   } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));
-  } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
   } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id_, trans))) {
     LOG_WARN("fail to load dictionary", K(ret), K(tenant_id_), K(dic_loader_handle));
@@ -2105,13 +2108,13 @@ int ObFtsIndexBuildTask::wait_schema_refresh_and_trans_end()
     ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
-    } else if (!fts_index_aux_is_trans_end_ && OB_FAIL(check_schema_and_trans_end(domain_index_aux_task_id_,
+    } else if (!fts_index_aux_is_trans_end_ && OB_FAIL(check_schema_and_trans_end(task_id_,
                                                                                   domain_index_aux_table_id_,
                                                                                   schema_guard,
                                                                                   fts_index_aux_is_trans_end_))) {
       LOG_WARN("fail to check fts index aux schema and trans end", K(ret), K(domain_index_aux_task_id_),
           K(domain_index_aux_table_id_));
-    } else if (!fts_doc_word_aux_is_trans_end_ && OB_FAIL(check_schema_and_trans_end(fts_doc_word_task_id_,
+    } else if (!fts_doc_word_aux_is_trans_end_ && OB_FAIL(check_schema_and_trans_end(task_id_,
                                                                                      fts_doc_word_aux_table_id_,
                                                                                      schema_guard,
                                                                                      fts_doc_word_aux_is_trans_end_))) {
@@ -2156,7 +2159,7 @@ int ObFtsIndexBuildTask::check_schema_and_trans_end(
   } else if (OB_UNLIKELY(!index_schema->can_read_index())) {
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("index schema cann't read index", K(ret), KPC(index_schema));
-  } else if (OB_FAIL(wait_trans_end.init(tenant_id_, ddl_task_id, index_tid,
+  } else if (OB_FAIL(wait_trans_end.init(tenant_id_, ddl_task_id, task_status_, index_tid,
           ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, index_schema->get_schema_version()))) {
     LOG_WARN("fail to init wait trans end ctx", K(ret), K(tenant_id_), K(ddl_task_id), K(index_tid));
   } else if (OB_FAIL(wait_trans_end.try_wait(is_trans_end, snapshot_version))) {

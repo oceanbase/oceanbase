@@ -22,8 +22,8 @@ using namespace oceanbase::share;
 
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
-    forward_iterator_(),
     reverse_iterator_(),
+    forward_iterator_(),
     iterator_(&forward_iterator_),
     addr_(),
     ipstr_(),
@@ -77,8 +77,8 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   if (is_first_get_) {
     is_first_get_ = false;
-    forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
-    iterator_ = &forward_iterator_;
+    reverse_iterator_ = ObActiveSessHistList::get_instance().create_reverse_iterator();
+    iterator_ = &reverse_iterator_;
   }
 
   do {
@@ -541,7 +541,7 @@ int ObVirtualASHI1::init_next_query_range()
         iterator_ = &reverse_iterator_;
       } else {
         // we treat every thing else as forward order.
-        forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+        forward_iterator_ = ObActiveSessHistList::get_instance().create_forward_iterator();
         iterator_ = &forward_iterator_;
       }
       iterator_->init_with_sample_time_index(left, right);

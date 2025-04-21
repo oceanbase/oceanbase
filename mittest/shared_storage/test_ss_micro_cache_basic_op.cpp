@@ -363,6 +363,39 @@ TEST_F(TestSSMicroCacheBasicOp, deleted_invalid_micro_func)
   ASSERT_EQ(0, SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
 }
 
+TEST_F(TestSSMicroCacheBasicOp, deleted_expired_micro_func)
+{
+  const uint32_t ori_micro_ref_cnt = ORI_MICRO_REF_CNT;
+  ObSSMicroMetaManager::SSMicroMap &micro_map = MTL(ObSSMicroCache *)->micro_meta_mgr_.micro_meta_map_;
+  const ObSSMicroBlockCacheKey &micro_key = micro_meta_->micro_key();
+  ObSSMicroBlockMetaHandle tmp_micro_meta_handle;
+  tmp_micro_meta_handle.set_ptr(micro_meta_);
+  ASSERT_EQ(OB_SUCCESS, micro_map.insert(&micro_key, tmp_micro_meta_handle));
+  tmp_micro_meta_handle.reset();
+
+  ObSSMicroBlockMetaHandle micro_handle;
+  micro_handle.set_ptr(micro_meta_);
+  ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta_->ref_cnt_);
+
+  // 1. fail to delete un_expired micro_meta
+  ObSSMicroBaseInfo micro_info;
+  SSMicroMapDeleteExpiredMicroFunc func1(SS_DEF_CACHE_EXPIRATION_TIME, micro_info);
+  ASSERT_EQ(OB_EAGAIN, micro_map.erase_if(&micro_key, func1));
+
+  // 2. succeed to delete expired micro_meta
+  micro_meta_->access_time_ -= SS_DEF_CACHE_EXPIRATION_TIME;
+  micro_info.reset();
+  SSMicroMapDeleteExpiredMicroFunc func2(SS_DEF_CACHE_EXPIRATION_TIME, micro_info);
+  ASSERT_EQ(OB_SUCCESS, micro_map.erase_if(&micro_key, func2));
+  ASSERT_EQ(ori_micro_ref_cnt + 1, micro_meta_->ref_cnt_);
+  ASSERT_EQ(micro_meta_->length_, micro_info.size_);
+  ASSERT_EQ(micro_meta_->is_in_l1_, micro_info.is_in_l1_);
+  ASSERT_EQ(micro_meta_->is_in_ghost_, micro_info.is_in_ghost_);
+
+  micro_handle.reset();
+  ASSERT_EQ(0, SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
+}
+
 TEST_F(TestSSMicroCacheBasicOp, invalidate_micro_func)
 {
   int ret = OB_SUCCESS;
@@ -378,7 +411,8 @@ TEST_F(TestSSMicroCacheBasicOp, invalidate_micro_func)
   ASSERT_EQ(false, micro_meta_->is_in_ghost_);
 
   micro_meta_->is_reorganizing_ = true;
-  SSMicroMapInvalidateMicroFunc invalidate_func;
+  ObSSMicroBaseInfo micro_info;
+  SSMicroMapInvalidateMicroFunc invalidate_func(micro_info);
   ret = micro_map.operate(&micro_key, invalidate_func);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ((OB_EAGAIN == ret) ? invalidate_func.ret_ : ret);
@@ -386,7 +420,8 @@ TEST_F(TestSSMicroCacheBasicOp, invalidate_micro_func)
   ASSERT_EQ(false, invalidate_func.succ_invalidate_);
 
   micro_meta_->is_reorganizing_ = false;
-  SSMicroMapInvalidateMicroFunc invalidate_func1;
+  ObSSMicroBaseInfo micro_info1;
+  SSMicroMapInvalidateMicroFunc invalidate_func1(micro_info1);
   ret = micro_map.operate(&micro_key, invalidate_func1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ((OB_EAGAIN == ret) ? invalidate_func1.ret_ : ret);
@@ -396,7 +431,8 @@ TEST_F(TestSSMicroCacheBasicOp, invalidate_micro_func)
   ASSERT_EQ(true, micro_meta_->is_in_l1_);
   ASSERT_EQ(true, micro_meta_->is_in_ghost_);
 
-  SSMicroMapInvalidateMicroFunc invalidate_func2;
+  ObSSMicroBaseInfo micro_info2;
+  SSMicroMapInvalidateMicroFunc invalidate_func2(micro_info2);
   ret = micro_map.operate(&micro_key, invalidate_func2);
   ASSERT_NE(OB_SUCCESS, ret);
   ret = ((OB_EAGAIN == ret) ? invalidate_func2.ret_ : ret);
@@ -713,26 +749,22 @@ TEST_F(TestSSMicroCacheBasicOp, micro_map_func)
 
   // evict this micro_block meta
   ASSERT_EQ(ori_micro_ref_cnt + 2, micro_meta->ref_cnt_);
-  ObSSMicroBlockMetaHandle evict_micro_handle;
-  evict_micro_handle.set_ptr(micro_meta);
-  SSMicroMapEvictMicroFunc evict_func(evict_micro_handle);
+  ObSSMicroMetaSnapshot evict_micro;
+  evict_micro.micro_meta_ = *micro_meta;
+  SSMicroMapEvictMicroFunc evict_func(evict_micro);
   ret = micro_map.operate(&micro_key, evict_func);
   ret = ((OB_EAGAIN == ret) ? evict_func.ret_ : ret);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, micro_meta->is_valid());
   ASSERT_EQ(true, micro_meta->is_in_ghost_);
-  evict_micro_handle.reset();
 
   // delete this micro_block meta
-  ObSSMicroBlockMeta delete_micro_meta = *micro_meta;
-  delete_micro_meta.ref_cnt_ = 10;
-  ObSSMicroBlockMetaHandle delete_micro_handle;
-  delete_micro_handle.set_ptr(&delete_micro_meta);
-  SSMicroMapDeleteMicroFunc delete_func(delete_micro_handle);
+  ObSSMicroMetaSnapshot delete_micro;
+  delete_micro.micro_meta_ = *micro_meta;
+  SSMicroMapDeleteMicroFunc delete_func(delete_micro);
   micro_handle.reset();
   ASSERT_EQ(ori_micro_ref_cnt + 1, micro_meta->ref_cnt_);
   ASSERT_EQ(OB_SUCCESS, micro_map.erase_if(&micro_key, delete_func));
-  delete_micro_handle.reset();
 
   // get this micro_block meta, not exist now.
   ret = micro_map.get(&micro_key, tmp_micro_handle);

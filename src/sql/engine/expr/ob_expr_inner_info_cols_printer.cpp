@@ -75,6 +75,8 @@ int ObExprInnerInfoColsColumnDefPrinter::eval_column_def(const ObExpr &expr, ObE
   ObDatum *column_id = nullptr;
   if (OB_FAIL(expr.eval_param_value(ctx, tenant_id, table_id, column_id))) {
     LOG_WARN("failed to eval tenant id", K(ret));
+  } else if (tenant_id->is_null() || table_id->is_null() || column_id->is_null()) {
+    expr_datum.set_null();
   } else {
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = NULL;
@@ -197,6 +199,8 @@ int ObExprInnerInfoColsCharLenPrinter::eval_column_char_len(const ObExpr &expr, 
   ObDatum *data_length = nullptr;
   if (OB_FAIL(expr.eval_param_value(ctx, data_type, collation_type, data_length))) {
     LOG_WARN("failed to eval data type", K(ret));
+  } else if (data_type->is_null() || collation_type->is_null() || data_length->is_null()) {
+    expr_datum.set_null();
   } else {
     if (ob_is_string_tc(static_cast<ObObjType> (data_type->get_int()))) {
       ObCollationType coll = static_cast<ObCollationType> (collation_type->get_int());
@@ -271,6 +275,8 @@ int ObExprInnerInfoColsCharNamePrinter::eval_column_char_name(const ObExpr &expr
     LOG_WARN("failed to eval data type", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, collation_type))) {
     LOG_WARN("failed to eval collation type", K(ret));
+  } else if (data_type->is_null() || collation_type->is_null()) {
+    expr_datum.set_null();
   } else {
     ObCharsetType charset = ObCharset::charset_type_by_coll(static_cast<ObCollationType> (collation_type->get_int()));
     if(ob_is_varchar_char_type(static_cast<ObObjType> (data_type->get_int()),
@@ -344,6 +350,8 @@ int ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name(const ObExpr 
     LOG_WARN("failed to eval data type", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, collation_type))) {
     LOG_WARN("failed to eval collation type", K(ret));
+  } else if (data_type->is_null() || collation_type->is_null()) {
+    expr_datum.set_null();
   } else {
     ObCharsetType charset = ObCharset::charset_type_by_coll(static_cast<ObCollationType> (collation_type->get_int()));
     if(ob_is_varchar_char_type(static_cast<ObObjType> (data_type->get_int()),
@@ -417,6 +425,8 @@ int ObExprInnerInfoColsPrivPrinter::eval_column_priv(const ObExpr &expr, ObEvalC
     LOG_WARN("failed to eval data type", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, table_name))) {
     LOG_WARN("failed to eval data type", K(ret));
+  } else if (database_name->is_null() || table_name->is_null()) {
+    expr_datum.set_null();
   } else {
     char *buf = NULL;
     int64_t buf_len = 200;
@@ -543,6 +553,9 @@ int ObExprInnerInfoColsExtraPrinter::eval_column_extra(const ObExpr &expr, ObEva
   ObDatum *column_flag = nullptr;
   if (OB_FAIL(expr.eval_param_value(ctx, auto_inc, on_update_current_timestamp, data_scale, column_flag))) {
     LOG_WARN("failed to eval data type", K(ret));
+  } else if (auto_inc->is_null() || on_update_current_timestamp->is_null()
+             || data_scale->is_null() || column_flag->is_null()) {
+    expr_datum.set_null();
   } else {
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ObIAllocator &calc_alloc = alloc_guard.get_allocator();
@@ -659,6 +672,8 @@ int ObExprInnerInfoColsDataTypePrinter::eval_column_data_type(const ObExpr &expr
   ObDatum *srs_id = nullptr;
   if (OB_FAIL(expr.eval_param_value(ctx, data_type, collation_type, extended_type_info, srs_id))) {
     LOG_WARN("failed to eval data type", K(ret));
+  } else if (data_type->is_null() || collation_type->is_null() || srs_id->is_null()) {
+    expr_datum.set_null();
   } else {
     static const int64_t SRS_ID_MASK = UINT64_MAX >> (64 - 5);
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -671,7 +686,7 @@ int ObExprInnerInfoColsDataTypePrinter::eval_column_data_type(const ObExpr &expr
                             OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret));
-    } else if (0 != extended_type_info->get_string().length()
+    } else if (!extended_type_info->is_null() && 0 != extended_type_info->get_string().length()
                && OB_FAIL(ObSchema::deserialize_string_array(extended_type_info->get_string().ptr(),
                                                              extended_type_info->get_string().length(),
                                                              pos, extended_infos, &calc_alloc))) {
@@ -759,6 +774,10 @@ int ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type(const ObExpr &
                                     data_length, data_precision, zero_fill,
                                     extended_type_info, is_string_lob))) {
     LOG_WARN("failed to eval data type", K(ret));
+  } else if (data_type->is_null() || sub_data_type->is_null() || srs_id->is_null()
+             || collation_type->is_null() || data_scale->is_null() || data_length->is_null()
+             || data_precision->is_null() || zero_fill->is_null() || is_string_lob->is_null()) {
+    expr_datum.set_null();
   } else {
     static const int64_t SRS_ID_MASK = UINT64_MAX >> (64 - 5);
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
@@ -780,7 +799,7 @@ int ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type(const ObExpr &
                             OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret));
-    } else if (0 != extended_type_info->get_string().length()
+    } else if (!extended_type_info->is_null() && 0 != extended_type_info->get_string().length()
                && OB_FAIL(ObSchema::deserialize_string_array(extended_type_info->get_string().ptr(),
                                                              extended_type_info->get_string().length(),
                                                              pos, extended_infos, &calc_alloc))) {
@@ -846,6 +865,124 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprInnerInfoColsColumnTypePrinter, raw_expr) {
   return ret;
 }
 
+
+ObExprInnerInfoColsColumnKeyPrinter::ObExprInnerInfoColsColumnKeyPrinter(ObIAllocator &alloc)
+    : ObExprOperator(alloc, T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER, N_INNER_INFO_COLS_COLUMN_KEY_PRINTER, 3,
+                           VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
+
+ObExprInnerInfoColsColumnKeyPrinter::~ObExprInnerInfoColsColumnKeyPrinter()
+{
+}
+
+inline int ObExprInnerInfoColsColumnKeyPrinter::calc_result_type3(ObExprResType &type,
+                                                                  ObExprResType &type1,
+                                                                  ObExprResType &type2,
+                                                                  ObExprResType &type3,
+                                                                  common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type_ctx);
+  type1.set_calc_type(ObIntType);
+  type2.set_calc_type(ObIntType);
+  type3.set_calc_type(ObIntType);
+  type.set_varchar();
+  type.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  type.set_collation_level(ObCollationLevel::CS_LEVEL_IMPLICIT);
+  const ObLengthSemantics def_ls = type_ctx.get_session()->get_actual_nls_length_semantics();
+  type.set_length_semantics(def_ls);
+  type.set_length(MAX_COLUMN_KEY_LENGTH);
+  return ret;
+}
+
+int ObExprInnerInfoColsColumnKeyPrinter::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  CK(3 == rt_expr.arg_cnt_);
+  rt_expr.eval_func_ = &ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key;
+  return ret;
+}
+
+int ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *tenant_id = nullptr;
+  ObDatum *table_id = nullptr;
+  ObDatum *column_id = nullptr;
+  if (OB_FAIL(expr.eval_param_value(ctx, tenant_id, table_id, column_id))) {
+    LOG_WARN("failed to eval data type", K(ret));
+  } else if (tenant_id->is_null() || table_id->is_null() || column_id->is_null()) {
+    expr_datum.set_null();
+  } else {
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get schema_service", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id->get_int(), schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id->get_int(), table_id->get_int(), table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      expr_datum.set_string("");
+    } else {
+      const ObColumnSchemaV2 *column_schema = NULL;
+      bool is_unique = false;
+      bool is_multiple = false;
+      bool is_first_not_null_unique = true;
+      bool has_primary_key = false;
+      const common::ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+      if (rowkey_info.get_size() > 0) {
+        // if rowkey_info[0] is pk_increment, means there is no primary key
+        uint64_t cid = OB_INVALID_ID;
+        if (OB_FAIL(rowkey_info.get_column_id(0, cid))) {
+          LOG_WARN("failed to column id");
+        } else {
+          if (cid != OB_HIDDEN_PK_INCREMENT_COLUMN_ID &&
+              cid >= OB_APP_MIN_COLUMN_ID) {
+            has_primary_key = true;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id->get_int()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(ret), K(table_schema->get_table_id()), K(column_id->get_int()));
+      } else if (column_schema->is_original_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
+        expr_datum.set_string("PRI");
+      } else if (OB_FAIL(table_schema->
+        is_unique_key_column(schema_guard, column_schema->get_column_id(),
+                              is_unique, is_first_not_null_unique))) {
+        LOG_WARN("failed to check unique key", K(ret));
+      } else if (is_unique) {
+        if (column_schema->is_nullable() || has_primary_key || !is_first_not_null_unique) {
+          expr_datum.set_string("UNI");
+        } else {
+          // is mysql mode && is unique key && no_primary_key && is_first_not_null_unique, set as PRI
+          expr_datum.set_string("PRI");
+        }
+      } else if (OB_FAIL(table_schema->
+          is_multiple_key_column(schema_guard, column_schema->get_column_id(), is_multiple))) {
+        LOG_WARN("judge multiple key fail", K(ret));
+      } else if (is_multiple) {
+        expr_datum.set_string("MUL");
+      } else {
+        expr_datum.set_string("");
+      }
+    }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprInnerInfoColsColumnKeyPrinter, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+  }
+  return ret;
+}
 
 }
 }

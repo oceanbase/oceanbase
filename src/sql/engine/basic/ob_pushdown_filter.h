@@ -1496,7 +1496,7 @@ struct PushdownFilterInfo
 
   TO_STRING_KV(K_(is_pd_filter), K_(is_pd_to_cg), K_(orig_filter_is_null), K_(start), K_(count), K_(col_capacity), K_(batch_size),
                KP_(datum_buf), KP_(filter), KP_(cell_data_ptrs), KP_(row_ids), KP_(ref_bitmap),
-               K_(col_datum_buf), KP_(param), KP_(context), KP_(skip_bit));
+               KP_(param), KP_(context), KP_(skip_bit));
 
   bool is_inited_;
   bool is_pd_filter_;

@@ -150,7 +150,7 @@ public:
 
 private:
   int fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset);
-  virtual int inner_fetch_rows(const int64_t row_cap, const int64_t datum_offset);
+  virtual int inner_fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset);
 
 protected:
   int32_t *row_ids_;

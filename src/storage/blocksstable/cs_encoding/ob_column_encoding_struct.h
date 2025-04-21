@@ -511,7 +511,7 @@ struct ObSemiStructColumnDecoderCtx : public ObBaseColumnDecoderCtx
 };
 
 
-struct ObColumnCSDecoderCtx
+struct ObColumnCSDecoderCtx final
 {
   ObColumnCSDecoderCtx() { reset(); }
   ObCSColumnHeader::Type type_;

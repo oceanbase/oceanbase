@@ -437,6 +437,8 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write ttl_definition to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_kv_attributes(kv_attributes_))) {
       SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
+    } else if (OB_FAIL(alter_table_schema.set_storage_cache_policy(storage_cache_policy_))) {
+      SQL_RESV_LOG(WARN, "Write storage_cache_policy to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
       SQL_RESV_LOG(WARN, "Write dynamic_partition_policy to alter_table_schema failed!", K(ret));
     } else {
@@ -2081,6 +2083,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 }
               }
             }
+
             if (OB_SUCC(ret)) {
               if (NULL != table_option_node) {
                 has_index_using_type_ = false;
@@ -2088,6 +2091,17 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                   SQL_RESV_LOG(WARN, "failed to resolve table options!", K(ret));
                 } else if (has_index_using_type_) {
                   create_index_arg->index_using_type_ = index_using_type_;
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (GCTX.is_shared_storage_mode() && is_mysql_mode() && storage_cache_policy_.empty()) {
+                uint64_t tenant_data_version = 0;
+                if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+                  LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
+                } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+                  if (OB_FAIL(set_default_storage_cache_policy(true/*is_alter_add_index*/))) {
+                    SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
+                  }
                 }
               }
             }
@@ -2694,6 +2708,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.store_format_ = store_format_;
     index_arg.index_option_.storage_format_version_ = storage_format_version_;
     index_arg.index_option_.comment_ = comment_;
+    index_arg.index_option_.storage_cache_policy_ = storage_cache_policy_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
     index_arg.index_option_.parser_properties_ = parser_properties_;
@@ -4226,6 +4241,19 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
         }
         break;
       }
+    case T_INDEX_ALTER_STORAGE_CACHE_POLICY: {
+      if (!GCTX.is_shared_storage_mode()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
+      } else {
+        ParseNode *index_node = node.children_[0];
+        if (OB_FAIL(resolve_alter_index_storage_cache_policy(*index_node))) {
+          SQL_RESV_LOG(WARN, "Resolve alter index storage cache policy error!", K(ret));
+        }
+      }
+      break;
+    }
     case T_INDEX_RENAME: {
         ParseNode *index_node = node.children_[0];
         if (OB_FAIL(resolve_rename_index(*index_node))) {
@@ -5023,6 +5051,36 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
             LOG_WARN("Resolve rename subpartition error!", KR(ret));
           } else {
             alter_table_stmt->get_alter_table_arg().alter_part_type_=ObAlterTableArg::RENAME_SUB_PARTITION;
+          }
+          break;
+        }
+        case T_ALTER_PARTITION_STORAGE_CACHE_POLICY: {
+          if (!GCTX.is_shared_storage_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
+          } else {
+            if (OB_FAIL(resolve_alter_partition_storage_cache_policy(*partition_node, *table_schema_))) {
+              SQL_RESV_LOG(WARN, "Resolve alter partition storage cache policy error!", K(ret));
+            } else {
+            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
+                ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY;
+            }
+          }
+          break;
+        }
+        case T_ALTER_SUBPARTITION_STORAGE_CACHE_POLICY: {
+          if (!GCTX.is_shared_storage_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
+          } else {
+            if (OB_FAIL(resolve_alter_subpartition_storage_cache_policy(*partition_node, *table_schema_))) {
+              SQL_RESV_LOG(WARN, "Resolve alter subpartition storage cache policy error!", K(ret));
+            } else {
+            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
+                ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY;
+            }
           }
           break;
         }

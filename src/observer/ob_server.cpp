@@ -15,6 +15,7 @@
 #include "observer/ob_server.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/oblog/ob_log_compressor.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 #include "lib/task/ob_timer_monitor.h"
 #include "lib/task/ob_timer_service.h" // ObTimerService
 #include "observer/ob_server_utils.h"
@@ -331,6 +332,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {
       LOG_ERROR("init pre setting failed", KR(ret));
+    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init())) {
+      LOG_ERROR("init affinity ctrl topology failed", KR(ret));
     } else if (OB_FAIL(init_global_context())) {
       LOG_ERROR("init global context failed", KR(ret));
     } else if (OB_FAIL(init_version())) {
@@ -1539,10 +1542,6 @@ int ObServer::stop()
 
     FLOG_INFO("begin to stop ctas clean up timer");
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
-    FLOG_INFO("ctas clean up timer stopped");
-
-    FLOG_INFO("begin to stop ctas clean up timer");
-    TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
     FLOG_INFO("ctas clean up timer stopped");
 
     FLOG_INFO("begin to stop sql conn pool");

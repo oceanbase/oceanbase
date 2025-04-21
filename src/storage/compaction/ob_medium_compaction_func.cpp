@@ -446,6 +446,7 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
       const int64_t interval = MIN(MAX(1, tablet_handle_.get_obj()->get_last_major_total_macro_block_count() / 10), 30) * RECYCLE_TRUNCATE_INFO_INTERVAL; // [2min, 1hour]
       if (medium_info.medium_snapshot_ < last_major_snapshot_version + interval) {
         ret = OB_NO_NEED_MERGE;
+        LOG_TRACE("exist truncate info, but not reach schedule interval", KR(ret), K(interval), K(last_major_snapshot_version), K(medium_info.medium_snapshot_));
       }
     }
     if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(*tablet, medium_info.medium_snapshot_, result))) {

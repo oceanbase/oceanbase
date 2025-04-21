@@ -403,6 +403,10 @@ public:
                                      const ObIArray<ObString> &enum_set_values,
                                      ObObjParam &src,
                                      ObObj &result);
+  static int spi_cast_enum_set_to_string(pl::ObPLExecCtx *ctx,
+                                     uint64_t type_info_id,
+                                     ObObj &src,
+                                     ObObj &result);
   static int spi_calc_raw_expr(ObSQLSessionInfo *session_info,
                                ObIAllocator *allocator,
                                const ObRawExpr *rawexpr,
@@ -437,33 +441,29 @@ public:
                          bool ignore_fail = false,
                          const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert(ObSQLSessionInfo *session, ObIAllocator *allocator,
-                         ObObjParam &src, const ObExprResType &result_type, ObObjParam &result);
+                         ObObjParam &src, const ObExprResType &result_type, ObObjParam &result,
+                         const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert_objparam(pl::ObPLExecCtx *ctx, ObObjParam *src, const int64_t result_idx, ObObjParam *result, bool need_set);
   static int spi_set_package_variable(pl::ObPLExecCtx *ctx,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value,
-                             bool need_deep_copy = false);
+                             const ObObj &value);
   static int spi_set_package_variable(ObExecContext *exec_ctx,
                              pl::ObPLPackageGuard *guard,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value,
-                             ObIAllocator *allocator = NULL,
-                             bool need_deep_copy = false);
+                             const ObObj &value);
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);
   static int spi_set_variable_to_expr(pl::ObPLExecCtx *ctx,
                                       const int64_t expr_idx,
                                       const ObObjParam *value,
-                                      bool is_default = false,
-                                      bool need_copy = false);
+                                      bool is_default = false);
   static int spi_set_variable(pl::ObPLExecCtx *ctx,
                               const ObSqlExpression* expr,
                               const ObObjParam *value,
-                              bool is_default = false,
-                              bool need_copy = false);
+                              bool is_default = false);
   static int spi_query_into_expr_idx(pl::ObPLExecCtx *ctx,
                                      const char* sql,
                                      int64_t type,
@@ -562,12 +562,25 @@ public:
                                      int64_t &exec_param_cnt,
                                      common::ObIArray<ObObjParam*> &out_using_params);
 
+  static int deep_copy_dynamic_param(pl::ObPLExecCtx *ctx,
+                                      ObSPIResultSet &spi_result,
+                                      common::ObIAllocator &allocator,
+                                      ObObjParam *param,
+                                      ParamStore *&exec_params);
+
   static int prepare_dynamic_sql_params(pl::ObPLExecCtx *ctx,
                                         ObSPIResultSet &spi_result,
                                         common::ObIAllocator &allocator,
                                         int64_t exec_param_cnt,
                                         ObObjParam **params,
                                         ParamStore *&exec_params);
+
+  static int prepare_dbms_sql_params(pl::ObPLExecCtx *ctx,
+                                    ObSPIResultSet &spi_result,
+                                    common::ObIAllocator &allocator,
+                                    int64_t exec_param_cnt,
+                                    ParamStore *params,
+                                    ParamStore *&exec_params);
 
   static int convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session);
 
@@ -730,7 +743,6 @@ public:
 
   static int spi_set_collection(int64_t tenant_id,
                                   const pl::ObPLINS *ns,
-                                  ObIAllocator &allocator,
                                   pl::ObPLCollection &coll,
                                   int64_t n,
                                   bool extend_mode = false);
@@ -784,7 +796,8 @@ public:
                             ObObj *src,
                             ObObj *dest,
                             ObDataType *dest_type,
-                            uint64_t package_id = OB_INVALID_ID);
+                            uint64_t package_id = OB_INVALID_ID,
+                            uint64_t type_info_id = OB_INVALID_ID);
 
   static int spi_destruct_obj(pl::ObPLExecCtx *ctx,
                               ObObj *obj);
@@ -1264,12 +1277,6 @@ private:
                                      const ObDataType *return_types = nullptr,
                                      int64_t return_type_count = 0,
                                      bool is_type_record = false);
-
-
-  static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
-                                    const ObSqlExpression &expr,
-                                    ObIArray<ObObj> &src_array,
-                                    ObIArray<ObObj> &dst_array);
 
   static int prepare_cursor_parameters(pl::ObPLExecCtx *ctx,
                                     ObSQLSessionInfo &session_info,

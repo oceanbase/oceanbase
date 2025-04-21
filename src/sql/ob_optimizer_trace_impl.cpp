@@ -597,6 +597,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
         new_line();
         append("unprecise range filters:", ap.est_cost_info_.unprecise_range_filters_);
       }
+      new_line();
+      append("output row count before revising:", ap.get_output_row_count());
     }
     new_line();
     append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),

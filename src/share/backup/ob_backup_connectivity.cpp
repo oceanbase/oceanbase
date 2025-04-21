@@ -911,7 +911,7 @@ int ObBackupStorageInfoOperator::update_backup_authorization(
     LOG_WARN("failed to splice insert update sql", K(ret), K(backup_dest));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
-  } else if (1 != affected_rows) {
+  } else if (0 != affected_rows && 1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, invalid affected rows", K(ret), K(sql), K(tenant_id), K(affected_rows));
   } else {

@@ -78,14 +78,15 @@ private:
                          int64_t &coord_session_count,
                          int64_t &min_session_count,
                          int64_t &write_session_count);
-  int cal_memory_size(const bool need_check_need_sort,
-                      const int64_t store_server_count,
-                      const int64_t write_session_count,
-                      const int64_t memory_limit,
-                      const ObArray<int64_t> &partitions,
-                      ObDirectLoadResourceApplyArg &apply_arg,
-                      bool &main_need_sort,
-                      bool &task_need_sort);
+  int calc_memory_size(const int64_t store_server_count,
+                       const int64_t write_session_count,
+                       const int64_t memory_limit,
+                       const int64_t part_unsort_memory,
+                       const int64_t min_part_memory,
+                       const ObArray<int64_t> &partitions,
+                       ObDirectLoadResourceApplyArg &apply_arg,
+                       bool &main_need_sort,
+                       bool &task_need_sort);
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();

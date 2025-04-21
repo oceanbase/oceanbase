@@ -15,7 +15,7 @@
 #include "share/schema/ob_udf_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_locality_util.h"
-#include "share/storage/ob_storage_cache_common.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
 
 
 #include "pl/ob_pl_stmt.h"
@@ -1959,6 +1959,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_LOCK_TABLE) != 0 ? OB_PRIV_LOCK_TABLE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ENCRYPT) != 0 ? OB_PRIV_ENCRYPT : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_DECRYPT) != 0 ? OB_PRIV_DECRYPT : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_EVENT) != 0 ? OB_PRIV_EVENT : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_CATALOG) != 0 ? OB_PRIV_CREATE_CATALOG : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_USE_CATALOG) != 0 ? OB_PRIV_USE_CATALOG : 0);
     if (OB_SUCC(ret)) {
@@ -2283,6 +2284,7 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_EVENT) != 0 ? OB_PRIV_EVENT : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_LOCK_TABLE) != 0 ? OB_PRIV_LOCK_TABLE: 0);
     }
   }
@@ -4637,8 +4639,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ObString tmp_storage_cache_policy;
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
       result, "storage_cache_policy", tmp_storage_cache_policy, true/*skip null*/, true/*ignore column error*/, OB_DEFAULT_STORAGE_CACHE_POLICY_STR);
-
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
       ObStorageCachePolicyType policy_type = ObStorageCachePolicyType::MAX_POLICY;
       if (OB_FAIL(get_storage_cache_policy_type_from_str(tmp_storage_cache_policy, policy_type))) {
         SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type", K(ret), K(tmp_storage_cache_policy));
@@ -5112,7 +5113,7 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
         result, "storage_cache_policy", tmp_part_storage_cache_policy, true, /* skip null error*/ true,/*skip column error*/ OB_DEFAULT_PART_STORAGE_CACHE_POLICY_STR);
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
         if (OB_FAIL(storage::get_storage_cache_policy_type_from_part_str(tmp_part_storage_cache_policy, part_storage_cache_policy_type))) {
           SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type from str", K(ret));
         } else {

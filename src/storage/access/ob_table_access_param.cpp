@@ -137,7 +137,7 @@ int ObTableIterParam::refresh_lob_column_out_status()
 
 bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const
 {
-  bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
+  bool bret = query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
               nullptr != rowkey_read_info_ && (!need_scn_ || is_mview_table_scan(scan_type)) &&
               is_same_schema_column_ && !has_virtual_columns_ && !has_lob_column_out_;
   return bret;

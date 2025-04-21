@@ -189,7 +189,9 @@ int ObTruncateInfoKVCache::put_truncate_info_array(const ObTruncateInfoCacheKey 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key), K(value));
   } else if (OB_FAIL(put(key, value, false/*overwrite*/))) {
-    LOG_WARN("fail to put truncate into cache", K(ret), K(key), K(value));
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("fail to put truncate into cache", K(ret), K(key), K(value));
+    }
   } else {
     LOG_INFO("success to put truncate info cache", KR(ret), K(key), K(value));
   }

@@ -29,6 +29,7 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_diff.h"
 #include "lib/timezone/ob_timezone_info.h"
+#include "lib/string/ob_hex_utils_base.h"
 #include "share/datum/ob_datum.h"
 #include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 #include "sql/engine/expr/ob_json_param_type.h"
@@ -1252,7 +1253,7 @@ TEST_F(TestSemiStructEncoding, test_bug1)
     row.storage_datums_[1].set_string(json_datum.get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
   ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
@@ -1298,7 +1299,7 @@ TEST_F(TestSemiStructEncoding, test_bug2)
     row.storage_datums_[1].set_string(json_datum.get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
   ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
@@ -1346,7 +1347,7 @@ TEST_F(TestSemiStructEncoding, test_bug3)
     // obj.update_serialize_size();
     add_json_datum(allocator, datums, &obj);
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 2;
@@ -1810,7 +1811,7 @@ TEST_F(TestSemiStructEncoding, test_flat_json)
     json_datum.set_string(raw_binary);
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 2;
@@ -1995,7 +1996,7 @@ TEST_F(TestSemiStructEncoding, test_without_null_row)
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
   {
-    for (int i = 3; i < row_cnt; ++i) {
+    for (int i = 3; i < row_cnt - 3; ++i) {
       ObJsonObject obj(&allocator);
 
       ObString name_key("name");
@@ -2075,7 +2076,7 @@ TEST_F(TestSemiStructEncoding, test_without_null_row)
     json_datum.set_string(raw_binary);
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 2;
@@ -2154,7 +2155,7 @@ TEST_F(TestSemiStructEncoding, test_spare_null_row)
     json_datum.set_string(raw_binary);
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 2;
@@ -3585,7 +3586,7 @@ TEST_F(TestSemiStructEncoding, test_mix)
       add_json_datum(allocator, datums, &obj);
     }
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
@@ -3638,7 +3639,7 @@ TEST_F(TestSemiStructEncoding, test_mix2)
       add_json_datum(allocator, datums, &obj);
     }
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
@@ -3688,7 +3689,7 @@ TEST_F(TestSemiStructEncoding, test_mix3)
       add_json_datum(allocator, datums, &obj);
     }
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
@@ -3743,7 +3744,7 @@ TEST_F(TestSemiStructEncoding, test_mix4)
       add_json_datum(allocator, datums, &obj);
     }
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockCSEncoder encoder;
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
@@ -4024,23 +4025,26 @@ TEST_F(TestSemiStructEncoding, test_deep_json)
   ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
 }
 
-// TEST_F(TestSemiStructEncoding, test_read_file)
-// {
-//   ObArenaAllocator allocator(ObModIds::TEST);
-//   const char* data_file = "/data/aozeliu.azl/obdev/task-2025022800107363404/build_debug/unittest/storage/blocksstable/cs_encoding/src_data.bin";
-//   // run tests
-//   std::ifstream if_tests(data_file);
-//   ASSERT_TRUE(if_tests.is_open());
-//   std::string content((std::istreambuf_iterator<char>(if_tests)),
-//                         (std::istreambuf_iterator<char>()));
-//   ObString bin_data(content.length(), content.c_str() + 4);
-//   LOG_INFO("data info", K(bin_data));
-//   ObJsonBin j_bin(bin_data.ptr(), bin_data.length(), &allocator);
-//   ASSERT_EQ(OB_SUCCESS, j_bin.reset_iter());
-//   ObJsonBuffer j_buf(&allocator);
-//   ASSERT_EQ(OB_SUCCESS, j_bin.print(j_buf, true));
-//   LOG_INFO("result json", K(j_buf.string()));
-// }
+TEST_F(TestSemiStructEncoding, test_read_file)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  // const char* data_file = "/data/aozeliu.azl/obdev/task-2025022800107363404/build_debug/unittest/storage/blocksstable/cs_encoding/src_data.bin";
+  // // run tests
+  // std::ifstream if_tests(data_file);
+  // ASSERT_TRUE(if_tests.is_open());
+  // std::string content((std::istreambuf_iterator<char>(if_tests)),
+  //                       (std::istreambuf_iterator<char>()));
+  ObString hex_str("1E00801A000000000640056218021A021C021E022002018222012E013E014E0163316332633363346335FFFF0000C0000001292FED01FFFF0002C0000002292FED0169F92613FFFF0002C0000002292FED0169F92613FFFF001EC0000003292FED0169F9261340122213");
+  char *unhex_buf = nullptr;
+  int64_t unhex_buf_len = 0;
+  ASSERT_EQ(OB_SUCCESS, ObHexUtilsBase::unhex(hex_str, allocator, unhex_buf, unhex_buf_len));
+  ObString bin_data(unhex_buf_len, unhex_buf);
+  ObJsonBin j_bin(bin_data.ptr(), bin_data.length(), &allocator);
+  ASSERT_EQ(OB_SUCCESS, j_bin.reset_iter());
+  ObJsonBuffer j_buf(&allocator);
+  ASSERT_EQ(OB_SUCCESS, j_bin.print(j_buf, true));
+  LOG_INFO("result json", K(j_buf.string()));
+}
 
 TEST_F(TestSemiStructEncoding, test_bug_var_size)
 {
@@ -4057,11 +4061,11 @@ TEST_F(TestSemiStructEncoding, test_bug_var_size)
 
   const int64_t row_cnt = 5;
   const char* json_texts[row_cnt] = {
-    "[1, 1385, {\"id\":215968269,\"name\":\"WJShengD/Micro-Expression-Classification-using-Local-Binary-Pattern-from-Five-Intersecting-Planes\",\"url\":\"xaau;||api$github$com/repos/WJShengD/Micro-Expression-Classification-using\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
-    "[2, 1385, {\"id\":36473389,\"name\":\"EVEIPH/EVE-IPH\",\"url\":\"xaau;||api$github$com/repos/EVEIPH/EVE-IPH\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
-    "[3, 1385, {\"id\":252649085,\"name\":\"mdmintz/pytest\",\"url\":\"xaau;||api$github$com/repos/mdmintz/pytest\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
-    "[4, 1385, {\"id\":553937707,\"name\":\"sumonece15/New-ChatBot\",\"url\":\"xaau;||api$github$com/repos/sumonece15/New-ChatBot\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
-    "[5, 1385, {\"id\":460137687,\"name\":\"jvkassi/filament-modal\",\"url\":\"xaau;||api$github$com/repos/jvkassi/filament-modal\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]"
+    "[1, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":215968269,\"name\":\"WJShengD/Micro-Expression-Classification-using-Local-Binary-Pattern-from-Five-Intersecting-Planes\",\"url\":\"xaau;||api$github$com/repos/WJShengD/Micro-Expression-Classification-using\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
+    "[2, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":36473389,\"name\":\"EVEIPH/EVE-IPH\",\"url\":\"xaau;||api$github$com/repos/EVEIPH/EVE-IPH\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
+    "[3, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":252649085,\"name\":\"mdmintz/pytest\",\"url\":\"xaau;||api$github$com/repos/mdmintz/pytest\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
+    "[4, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":553937707,\"name\":\"sumonece15/New-ChatBot\",\"url\":\"xaau;||api$github$com/repos/sumonece15/New-ChatBot\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]",
+    "[5, 1385, {\"empty_array\":[], \"empty_object\":{}}, {\"id\":460137687,\"name\":\"jvkassi/filament-modal\",\"url\":\"xaau;||api$github$com/repos/jvkassi/filament-modal\"}, \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", 1385, 1385]"
   };
 
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
@@ -4078,12 +4082,106 @@ TEST_F(TestSemiStructEncoding, test_bug_var_size)
     row.storage_datums_[1].set_string(json_datum.get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-
+  ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
   ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+
+  ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
+  ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
+}
+
+TEST_F(TestSemiStructEncoding, test_empty_array)
+{
+  share::ObTenantEnv::get_tenant_local()->id_ = 500;
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  ObColDatums datums(allocator);
+  ObMicroBlockCSEncoder encoder;
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObIntType, ObJsonType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.semistruct_encoding_type_.mode_ = 1;
+
+  const int64_t row_cnt = 5;
+  const char* json_texts[row_cnt] = {
+    "{\"id\":215968269, \"empty_array\":[], \"empty_object\":{}}",
+    "{\"id\":36473389, \"empty_array\":[], \"empty_object\":{}}",
+    "{\"id\":252649085, \"empty_array\":[], \"empty_object\":{}}",
+    "{\"id\":553937707, \"empty_array\":[], \"empty_object\":{}}",
+    "{\"id\":460137687, \"empty_array\":[], \"empty_object\":{}}"
+  };
+
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
+
+  for (int i = 0; i < row_cnt; ++i) {
+    row.storage_datums_[0].set_int(i + 1);
+    ObString j_text(STRLEN(json_texts[i]), json_texts[i]);
+    ObDatum json_datum;
+    ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+    ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+    // LOG_INFO("json_datum", K(json_datum));
+    row.storage_datums_[1].set_string(json_datum.get_string());
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(row_cnt, datums.count());
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
+  ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+
+  ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
+  ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
+}
+
+TEST_F(TestSemiStructEncoding, test_empty_array_v2)
+{
+  share::ObTenantEnv::get_tenant_local()->id_ = 500;
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  ObColDatums datums(allocator);
+  ObMicroBlockCSEncoder encoder;
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObIntType, ObJsonType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.semistruct_encoding_type_.mode_ = 1;
+
+  const int64_t row_cnt = 5;
+  const char* json_texts[row_cnt] = {
+    "{\"id\":215968269, \"empty_array\":[], \"empty_object\":{}}",
+    "{\"id\":36473389, \"empty_array\":[1], \"empty_object\":{}}",
+    "{\"id\":252649085, \"empty_array\":[], \"empty_object\":{\"k1\": 1}}",
+    "{\"id\":553937707, \"empty_array\":[3, \"4\"], \"empty_object\":{}}",
+    "{\"id\":460137687, \"empty_array\":[], \"empty_object\":{}}"
+  };
+
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
+
+  for (int i = 0; i < row_cnt; ++i) {
+    row.storage_datums_[0].set_int(i + 1);
+    ObString j_text(STRLEN(json_texts[i]), json_texts[i]);
+    ObDatum json_datum;
+    ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+    ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+    // LOG_INFO("json_datum", K(json_datum));
+    row.storage_datums_[1].set_string(json_datum.get_string());
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(row_cnt, datums.count());
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
+  ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::STRING);
 
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
   ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
@@ -4159,6 +4257,102 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_re_scan_fail)
     ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
   }
   reuse();
+}
+
+
+TEST_F(TestSemiStructEncoding, test_decimal)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  const int64_t row_cnt = 20;
+  ObColDatums datums(allocator);
+  {
+      ObJsonObject obj(&allocator);
+
+      // J_DECIMAL
+      ObScale scale = 2;
+      ObPrecision prec = 10;
+      char buf[128] = {0};
+      number::ObNumber num;
+      sprintf(buf, "%f", 1.333333);
+      ASSERT_EQ(OB_SUCCESS, num.from(buf, allocator));
+      ObJsonDecimal j_decimal(num, -1, 0);
+      ObString decimal_key("decimal");
+      ASSERT_EQ(OB_SUCCESS, obj.add(decimal_key, &j_decimal));
+
+      // J_INT
+      ObString int_key("int");
+      ObJsonInt int_value(20);
+      ASSERT_EQ(OB_SUCCESS, obj.add(int_key, &int_value));
+
+      add_json_datum(allocator, datums, &obj);
+  }
+  {
+    for (int i = 1; i < row_cnt; ++i) {
+      ObJsonObject obj(&allocator);
+
+      ObScale scale = 10;
+      ObPrecision prec = 8;
+      char buf[128] = {0};
+      number::ObNumber num;
+      sprintf(buf, "%f", i + 1.333333);
+      ASSERT_EQ(OB_SUCCESS, num.from(buf, allocator));
+      ObJsonDecimal j_decimal(num, prec, scale);
+      ObString decimal_key("decimal");
+      ASSERT_EQ(OB_SUCCESS, obj.add(decimal_key, &j_decimal));
+
+      ObScale scale2 = 2;
+      ObPrecision prec2 = 10;
+      char buf2[128] = {0};
+      number::ObNumber num2;
+      sprintf(buf2, "%f", i + 1.333333);
+      ASSERT_EQ(OB_SUCCESS, num2.from(buf2, allocator));
+      ObJsonDecimal j_decimal2(num2, prec2, scale2);
+      ObString decimal2_key("decimal2");
+      ASSERT_EQ(OB_SUCCESS, obj.add(decimal2_key, &j_decimal2));
+
+      ObScale scale3 = 10;
+      ObPrecision prec3 = -1;
+      char buf3[128] = {0};
+      number::ObNumber num3;
+      sprintf(buf3, "%f", i + 222222.444444);
+      ASSERT_EQ(OB_SUCCESS, num3.from(buf3, allocator));
+      ObJsonDecimal j_decimal3(num3, prec3, scale3);
+      ObString decimal3_key("decimal3");
+      ASSERT_EQ(OB_SUCCESS, obj.add(decimal3_key, &j_decimal3));
+
+      ObScale scale4 = i%3 + 10;
+      ObPrecision prec4 = -1;
+      char buf4[128] = {0};
+      number::ObNumber num4;
+      sprintf(buf4, "%f", i + 5.444444);
+      ASSERT_EQ(OB_SUCCESS, num4.from(buf4, allocator));
+      ObJsonDecimal j_decimal4(num4, prec4, scale4);
+      ObString decimal4_key("decimal4");
+      ASSERT_EQ(OB_SUCCESS, obj.add(decimal4_key, &j_decimal4));
+
+      // J_INT
+      ObString int_key("int");
+      ObJsonInt int_value(i + 20);
+      ASSERT_EQ(OB_SUCCESS, obj.add(int_key, &int_value));
+
+      {
+          ObJsonBuffer j_buf(&allocator);
+          ASSERT_EQ(OB_SUCCESS, obj.print(j_buf, true));
+          LOG_INFO("result json", K(i), K(j_buf.string()));
+      }
+      add_json_datum(allocator, datums, &obj);
+    }
+  }
+  ASSERT_EQ(row_cnt, datums.count());
+  ObMicroBlockCSEncoder encoder;
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, do_encode(allocator, encoder, row_cnt, row, header, micro_block_desc, datums));
+  ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
+  ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
 }
 
 }  // namespace blocksstable

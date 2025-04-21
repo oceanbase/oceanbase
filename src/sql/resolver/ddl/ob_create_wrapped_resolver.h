@@ -33,13 +33,14 @@ public:
   virtual ~ObCreateWrappedResolver() {}
   DISABLE_COPY_ASSIGN(ObCreateWrappedResolver);
 
+  static int resolve_base64_cipher(ObIAllocator &allocator,
+                                   const ObSQLSessionInfo &session,
+                                   const ParseNode &base64_cipher_node,
+                                   const bool is_or_replace,
+                                   const bool is_noneditionable,
+                                   ParseResult &plain_parse_result);
+
 protected:
- int resolve_base64_cipher(ObIAllocator &allocator,
-                           const ObSQLSessionInfo &session,
-                           const ParseNode &base64_cipher_node,
-                           const bool is_or_replace,
-                           const bool is_noneditionable,
-                           ParseResult &plain_parse_result);
  int check_object_name_match(const ParseNode *n1, const ParseNode *n2);
  int check_plwrap_version_compatible();
 

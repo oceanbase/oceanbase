@@ -872,7 +872,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case NLJ_BATCHING_ENABLED:
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_TOPN_RUNTIME_FILTER:
-    case DISABLE_GTT_SESSION_ISOLATION: {
+    case DISABLE_GTT_SESSION_ISOLATION:
+    case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;

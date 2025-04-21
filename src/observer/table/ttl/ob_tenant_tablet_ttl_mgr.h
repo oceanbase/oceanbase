@@ -139,7 +139,7 @@ public:
   void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
   void dec_dag_ref() { ATOMIC_DEC(&dag_ref_cnt_); }
   int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
-  int safe_to_destroy(bool &is_safe);
+  virtual int safe_to_destroy(bool &is_safe);
   int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
   void run_task();
 
@@ -167,7 +167,7 @@ public:
 
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
   {
-    return ObTTLUtil::check_is_ttl_table(table_schema, is_ttl_table);
+    return ObTTLUtil::check_is_normal_ttl_table(table_schema, is_ttl_table);
   }
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
@@ -322,6 +322,7 @@ public:
   virtual int64_t get_tenant_task_table_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLE_ID; }
   virtual int64_t get_tenant_task_tablet_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLET_ID; }
   virtual int do_after_leader_switch() override;
+  virtual int safe_to_destroy(bool &is_safe) override;
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table) override;
 
 private:

@@ -34,6 +34,7 @@ public:
   virtual ~ObTableCreateCbFunctor() = default;
 public:
   virtual ObTableAPITransCb* new_callback() = 0;
+  virtual ObTableAPITransCb* get_callback() { return nullptr; }
 protected:
   bool is_inited_;
 };
@@ -83,12 +84,19 @@ public:
         cb_(nullptr)
   {}
   virtual ~ObTableLSExecuteCreateCbFunctor() = default;
+  void reset()
+  {
+    req_ = nullptr;
+    cb_ = nullptr;
+    is_inited_ = false;
+  }
 public:
   int init(rpc::ObRequest *req);
   virtual ObTableAPITransCb* new_callback() override;
+  virtual ObTableAPITransCb* get_callback() override { return cb_; }
 private:
   rpc::ObRequest *req_;
-  ObTableLSExecuteEndTransCb *cb_;
+  ObTableAPITransCb *cb_;
 };
 
 class ObTableAPITransCb: public sql::ObExclusiveEndTransCallback
@@ -97,6 +105,7 @@ public:
   ObTableAPITransCb();
   virtual ~ObTableAPITransCb();
   void destroy_cb_if_no_ref();
+  void destroy_cb();
   void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
   void set_lock_handle(ObHTableLockHandle *lock_handle);
 protected:
@@ -176,6 +185,7 @@ public:
       response_sender_(req, &result_)
   {
     dependent_results_.set_attr(ObMemAttr(MTL_ID(), "LsCbDepRes"));
+    is_alloc_from_pool_ = true;
   }
   virtual ~ObTableLSExecuteEndTransCb() = default;
 
@@ -186,8 +196,9 @@ public:
   OB_INLINE ObTableLSOpResult &get_result() { return result_; }
   OB_INLINE ObTableEntityFactory<ObTableSingleOpEntity> &get_entity_factory() { return entity_factory_; }
   OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
-  OB_INLINE int assign_dependent_results(common::ObIArray<ObTableLSOpResult*> &results)
+  OB_INLINE int assign_dependent_results(common::ObIArray<ObTableLSOpResult*> &results, bool is_alloc_from_pool)
   {
+    is_alloc_from_pool_ = is_alloc_from_pool;
     return dependent_results_.assign(results);
   }
   void free_dependent_results();
@@ -201,6 +212,7 @@ private:
   ObTableLSOpResult result_;
   common::ObSEArray<ObTableLSOpResult*, 3> dependent_results_;
   obrpc::ObTableRpcResponseSender response_sender_;
+  bool is_alloc_from_pool_;
 };
 
 } // end namespace table

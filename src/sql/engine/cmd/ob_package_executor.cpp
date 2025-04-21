@@ -16,6 +16,7 @@
 #include "sql/resolver/ddl/ob_alter_package_stmt.h"
 #include "sql/resolver/ddl/ob_drop_package_stmt.h"
 #include "pl/ob_pl_resolver.h"
+#include "pl/ob_pl_compile_utils.h"
 
 namespace oceanbase
 {
@@ -23,53 +24,6 @@ namespace sql
 {
 using namespace common;
 using namespace share::schema;
-
-int ObCompilePackageInf::compile_package(sql::ObExecContext &ctx,
-                                          uint64_t tenant_id,
-                                          const ObString &db_name,
-                                          schema::ObPackageType type,
-                                          const ObString &package_name,
-                                          int64_t schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaChecker schema_checker;
-  const ObPackageInfo *package_info = nullptr;
-  int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
-                                                  : COMPATIBLE_MYSQL_MODE;
-  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  OZ (schema_checker.init(*ctx.get_sql_ctx()->schema_guard_, ctx.get_my_session()->get_server_sid()));
-  OZ (schema_checker.get_package_info(tenant_id, db_name, package_name, type, compatible_mode, package_info));
-  CK (OB_NOT_NULL(package_info));
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
-  CK (OB_NOT_NULL(ctx.get_pl_engine()));
-  if (OB_SUCC(ret) && schema_version == package_info->get_schema_version()) {
-    const ObPackageInfo *package_spec_info = NULL;
-    const ObPackageInfo *package_body_info = NULL;
-    pl::ObPLPackage *package_spec = nullptr;
-    pl::ObPLPackage *package_body = nullptr;
-    pl::ObPLPackageGuard package_guard(ctx.get_my_session()->get_effective_tenant_id());
-    pl::ObPLResolveCtx resolve_ctx(ctx.get_allocator(),
-                                    *ctx.get_my_session(),
-                                    *ctx.get_sql_ctx()->schema_guard_,
-                                    package_guard,
-                                    *ctx.get_sql_proxy(),
-                                    false, false, false, NULL, NULL, TgTimingEvent::TG_TIMING_EVENT_INVALID,
-                                    false, false/*no need add pl cache*/);
-
-    OZ (package_guard.init());
-    OZ (ctx.get_pl_engine()->get_package_manager().get_package_schema_info(resolve_ctx.schema_guard_,
-                                                                           package_info->get_package_id(),
-                                                                           package_spec_info,
-                                                                           package_body_info));
-    // trigger compile package & add to disk & add to pl cache only has package body
-    if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info)) {
-      OZ (ctx.get_pl_engine()->get_package_manager().get_cached_package(resolve_ctx, package_info->get_package_id(), package_spec, package_body));
-      CK (OB_NOT_NULL(package_spec));
-    }
-  }
-
-  return ret;
-}
 
 int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &stmt)
 {
@@ -110,21 +64,20 @@ int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &st
     LOG_WARN("rpc proxy create package failed", K(ret),
              "dst", common_rpc_proxy->get_server());
   }
-  if (OB_SUCC(ret) && !has_error && with_res &&
-      tenant_config.is_valid() &&
-      tenant_config->plsql_v2_compatibility) {
+  if (OB_SUCC(ret)
+      && !has_error
+      && with_res
+      && tenant_config.is_valid()
+      && tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
       get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
-    OZ (compile_package(ctx, tenant_id, db_name, type, package_name, res.store_routine_schema_version_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("fail to persitent package", K(ret));
-      common::ob_reset_tsi_warning_buffer();
-      ret = OB_SUCCESS;
-      if (NULL != ctx.get_my_session()) {
-        ctx.get_my_session()->reset_warnings_buf();
-      }
-    }
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       tenant_id,
+                                       db_name,
+                                       package_name,
+                                       pl::ObPLCompilerUtils::get_compile_type(type),
+                                       res.store_routine_schema_version_));
   }
   return ret;
 }
@@ -172,12 +125,13 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
       tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
-    get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
-    OZ (compile_package(ctx, tenant_id, db_name, type, package_name, res.store_routine_schema_version_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("fail to persitent package", K(ret));
-      ret = OB_SUCCESS;
-    }
+      get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       tenant_id,
+                                       db_name,
+                                       package_name,
+                                       pl::ObPLCompilerUtils::get_compile_type(type),
+                                       res.store_routine_schema_version_));
   }
 
   return ret;

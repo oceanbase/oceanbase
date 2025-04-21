@@ -1153,9 +1153,10 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       OB_SUCCESS != (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS)) {
     if (OB_UNLIKELY(!std::isfinite(cost_)) || OB_UNLIKELY(cost_ < 0) ||
         OB_UNLIKELY(!std::isfinite(op_cost_)) || OB_UNLIKELY(op_cost_ < 0) ||
-        OB_UNLIKELY(!std::isfinite(card_)) || OB_UNLIKELY(card_ < 0)) {
+        OB_UNLIKELY(!std::isfinite(card_)) || OB_UNLIKELY(card_ < 0) ||
+        OB_UNLIKELY(!std::isfinite(width_)) || OB_UNLIKELY(width_ < 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected cost/cardinality", K_(cost), K_(op_cost), K_(card), K(get_name()));
+      LOG_WARN("unexpected cost/cardinality", K_(cost), K_(op_cost), K_(card), K_(width), K(get_name()));
     }
   }
   return ret;
@@ -5320,6 +5321,9 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
       }
 
       case LOG_DISTINCT:
+      case LOG_JOIN_FILTER:
+      case LOG_GRANULE_ITERATOR:
+      case LOG_MONITORING_DUMP:
       case LOG_EXCHANGE: {
         ObLogicalOperator *child = op->get_child(first_child);
         if (op->is_block_input(first_child)) {
@@ -5335,11 +5339,11 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
         if (scan->get_table_id() == table_id) {
           bool has_exec_param = false;
           if (scan->use_das()) {
-            LOG_TRACE("[TopN Filter]can not pushdown to das table scan");
+            OPT_TRACE("[TopN Filter] can not pushdown to das table scan");
           } else if (OB_FAIL(scan->has_exec_param(has_exec_param))) {
             LOG_WARN("failed to has_exec_param");
           } else if (has_exec_param) {
-            LOG_TRACE("[TopN Filter]can not pushdown to tsc with exec param");
+            OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
           } else {
             scan_op = op;
             find_table_scan = true;
@@ -5357,10 +5361,11 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
       }
       case LOG_SORT:
       case LOG_MATERIAL: {
-        LOG_TRACE("[TopN Filter]can not pushdown across sort or material");
+        OPT_TRACE("[TopN Filter] can not pushdown across sort or material");
         break;
       }
       default: {
+        OPT_TRACE("[TopN Filter] can not pushdown this op", int64_t(op->get_type()));
         break;
       }
     }
@@ -5423,9 +5428,9 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_winfunc(
   }
   if (OB_FAIL(ret)) {
   } else if (candidate_sk_expr->has_flag(CNT_WINDOW_FUNC)) {
-    LOG_TRACE("[TopN Filter]countain win func, can not pushdown");
+    OPT_TRACE("[TopN Filter] countain win func, can not pushdown");
   } else if (!is_contain(partition_exprs, candidate_sk_expr)) {
-    LOG_TRACE("[TopN Filter]contain none partition by expr, can not pushdown");
+    OPT_TRACE("[TopN Filter] contain none partition by expr, can not pushdown");
   } else {
     ObLogicalOperator *child = log_win_func->get_child(first_child);
     if (log_win_func->is_block_input(first_child)) {
@@ -5448,13 +5453,13 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_join(
   ObJoinType join_type = log_join->get_join_type();
   if (FULL_OUTER_JOIN == join_type || CONNECT_BY_JOIN == join_type) {
     // can not pushdown
-    LOG_TRACE("[TopN Filter]can not pushdown across full outer join and connnect by join");
+    OPT_TRACE("[TopN Filter] can not pushdown across full outer join and connnect by join");
   } else if (LEFT_OUTER_JOIN == join_type || LEFT_SEMI_JOIN == join_type
              || LEFT_ANTI_JOIN == join_type) {
     // output in left
     ObLogicalOperator *child = log_join->get_child(first_child);
     if (log_join->is_block_input(first_child)) {
-      LOG_TRACE("[TopN Filter]can not pushdown across left join but block left");
+      OPT_TRACE("[TopN Filter] can not pushdown across left join but block left");
     } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
                    child, candidate_sk_expr, table_id, scan_op, find_table_scan,
                    table_scan_has_exchange, has_px_coord)))) {
@@ -5465,15 +5470,14 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_join(
     // output in right
     ObLogicalOperator *child = log_join->get_child(second_child);
     if (log_join->is_block_input(second_child)) {
-      LOG_TRACE("[TopN Filter]can not pushdown across right join but block right");
+      OPT_TRACE("[TopN Filter] can not pushdown across right join but block right");
     } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
                    child, candidate_sk_expr, table_id, scan_op, find_table_scan,
                    table_scan_has_exchange, has_px_coord)))) {
       LOG_WARN("failed to check", K(ret));
     }
   } else if (INNER_JOIN == join_type) {
-    for (int64_t i = 0; OB_SUCC(ret) && nullptr == scan_op && i < log_join->get_num_of_child();
-         ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !find_table_scan && i < log_join->get_num_of_child(); ++i) {
       ObLogicalOperator *child = log_join->get_child(i);
       if (log_join->is_block_input(i)) {
         continue;

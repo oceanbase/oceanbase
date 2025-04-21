@@ -96,6 +96,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     is_external_table_(false),
     ttl_definition_(),
     kv_attributes_(),
+    storage_cache_policy_(),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     have_generate_fts_arg_(false),
     is_set_lob_inrow_threshold_(false),
@@ -1129,7 +1130,6 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
     } else {
       num = node->num_child_;
     }
-
     for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
       if (OB_ISNULL(option_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
@@ -1173,6 +1173,16 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       }
     } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
+    }
+    if (OB_SUCC(ret) && storage_cache_policy_.empty()) {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+        LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
+      } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+        if (OB_FAIL(check_and_set_default_storage_cache_policy())) {
+          SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -1419,21 +1429,20 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
 
     if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
       LOG_WARN("failed to get data version", K(ret));
-    } else if (OB_LIKELY(is_hdfs_type) && data_version < DATA_VERSION_4_3_5_1) {
+    } else if (is_hdfs_type && data_version < DATA_VERSION_4_3_5_1) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
+    } else if (url.prefix_match(OB_COS_PREFIX) && data_version > DATA_VERSION_4_3_5_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create external table on cos");
+      LOG_WARN("create external table on cos is no longer supported");
     }
     ObHDFSStorageInfo hdfs_storage_info;
     ObBackupStorageInfo backup_storage_info;
-
-    ObObjectStorageInfo *storage_info = nullptr;
-    if (OB_LIKELY(is_hdfs_type)) {
-      storage_info = &hdfs_storage_info;
-    } else {
-      storage_info = &backup_storage_info;
-    }
+    ObObjectStorageInfo *storage_info = is_hdfs_type
+                                        ? static_cast<ObObjectStorageInfo *>(&hdfs_storage_info)
+                                        : static_cast<ObObjectStorageInfo *>(&backup_storage_info);
     char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-
     ObString path = url.split_on('?');
     if (OB_FAIL(ret)) {
       /* do nothing */
@@ -2003,6 +2012,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         } else {
           int32_t str_len = static_cast<int32_t>(option_node->children_[0]->str_len_);
           parser_name_.assign_ptr(option_node->children_[0]->str_value_, str_len);
+          uint64_t tenant_data_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+            if (0 == parser_name_.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM2)) {
+              ret = OB_NOT_SUPPORTED;
+              ObSqlString message;
+              message.append_fmt("%s isn't supported before version 4.3.5.2",
+                                 ObFTSLiteral::PARSER_NAME_NGRAM2);
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, message.ptr());
+              LOG_WARN("ngram2 is not supported befor 4.3.5.2", K(ret));
+            }
+          }
         }
         break;
       }
@@ -2015,7 +2037,9 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
-        } else if (OB_FAIL(ObFTParserResolverHelper::resolve_parser_properties(*option_node, *allocator_, parser_properties_))) {
+        } else if (OB_FAIL(ObFTParserResolverHelper::resolve_parser_properties(*option_node,
+                                                                               *allocator_,
+                                                                               parser_properties_))) {
           LOG_WARN("fail to resolve parser properties", K(ret));
         }
         break;
@@ -2928,6 +2952,20 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else if (OB_FAIL(arg.schema_.set_external_file_pattern(pattern))) {
             LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
           }
+        }
+        break;
+      }
+      case T_STORAGE_CACHE_POLICY_ATTRIBUTE_LIST: {
+        if (!GCTX.is_shared_storage_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
+        } else if (OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "the children of option_node for storage_cache_policy is null",
+              K(option_node->children_[0]), K(ret));
+        } else if (OB_FAIL(resolve_storage_cache_attribute(option_node->children_[0], params_))) {
+          LOG_WARN("fail to resolve storage cache policy attribute", K(ret));
         }
         break;
       }
@@ -5738,6 +5776,7 @@ void ObDDLResolver::reset() {
   hash_subpart_num_ = -1;
   ttl_definition_.reset();
   kv_attributes_.reset();
+  storage_cache_policy_.reset();
   is_set_lob_inrow_threshold_ = false;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
@@ -12294,8 +12333,8 @@ int ObDDLResolver::resolve_partition_list(ObPartitionedStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "get unexpected null", K(ret), K(stmt), K(node));
   } else if (!table_schema.is_external_table() && OB_ISNULL(node->children_[LIST_ELEMENTS_NODE])) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "get unexpected null", K(ret), K(stmt), K(node));
+    ret = OB_ERR_PARSER_SYNTAX;
+    SQL_RESV_LOG(WARN, "if using 'PARTITION BY', table should be external", K(ret), K(stmt), K(node));
   } else if (!is_list_type_partition(node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "get unexpected partition type", K(ret), K(node->type_));
@@ -13801,6 +13840,19 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
     }
   }
 
+  return ret;
+}
+
+int ObDDLResolver::check_column_is_first_part_key(const ObPartitionKeyInfo &part_key_info, const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t pkey_col_id = OB_INVALID_ID;
+  if (OB_FAIL(part_key_info.get_column_id(0, pkey_col_id))) {
+    LOG_WARN("get_column_id failed", "index", 0, K(ret));
+  } else if (pkey_col_id != column_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage cache policy column is not the partition key column", K(ret), K(column_id));
+  }
   return ret;
 }
 

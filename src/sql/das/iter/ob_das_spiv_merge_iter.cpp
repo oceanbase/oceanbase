@@ -26,20 +26,18 @@ namespace oceanbase
 namespace sql
 {
 
-int ObDASSPIVMergeIter::get_ob_spiv_drop_ratio_search(double &drop_ratio)
+int ObDASSPIVMergeIter::get_ob_sparse_drop_ratio_search(uint64_t &drop_ratio)
 {
   int ret = OB_SUCCESS;
-  const double OB_SPIV_DROP_RATIO_SEARCH_DEFAULT = 0.0;
-  drop_ratio = OB_SPIV_DROP_RATIO_SEARCH_DEFAULT;
+  const uint64_t OB_SPARSE_DROP_RATIO_SEARCH_DEFAULT = 0;
 
-  // 获取系统变量，因系统变量部分代码还未合入，先保留注释
-  // ObSQLSessionInfo *session = nullptr;
-  // if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
-  //   drop_ratio = OB_SPIV_DROP_RATIO_SEARCH_DEFAULT;
-  //   LOG_WARN("session is null", K(ret), KP(exec_ctx_));
-  // } else if (OB_FAIL(session->get_ob_spiv_drop_ratio_search(drop_ratio))) {
-  //   LOG_WARN("failed to get ob spiv drop ratio search", K(ret));
-  // }
+  ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
+    drop_ratio = OB_SPARSE_DROP_RATIO_SEARCH_DEFAULT;
+    LOG_WARN("session is null", K(ret), KP(exec_ctx_));
+  } else if (OB_FAIL(session->get_ob_sparse_drop_ratio_search(drop_ratio))) {
+    LOG_WARN("failed to get ob spiv drop ratio search", K(ret));
+  }
 
   return ret;
 }
@@ -56,9 +54,10 @@ int ObDASSPIVMergeIter::init_query_vector(const ObDASVecAuxScanCtDef *ir_ctdef,
 
   ObDatum *qvec_datum;
   ObString qvec_data;
-  double drop_ratio;
-  if (OB_FAIL(get_ob_spiv_drop_ratio_search(drop_ratio))) {
-      LOG_WARN("failed to get spiv drop ratio", K(ret));
+  uint64_t drop_ratio;
+  if (OB_FAIL(get_ob_sparse_drop_ratio_search(drop_ratio))) {
+      LOG_WARN("failed to get sparse drop ratio search", K(ret));
+  } else if (drop_ratio == 100) {
   } else if (OB_FAIL(ObDasVecScanUtils::init_sort(vec_aux_ctdef_, vec_aux_rtdef_, sort_ctdef_,
                                           sort_rtdef_, limit_param_, qvec_expr_, distance_calc_))) {
     LOG_WARN("failed to init sort", K(ret));
@@ -82,7 +81,7 @@ int ObDASSPIVMergeIter::init_query_vector(const ObDASVecAuxScanCtDef *ir_ctdef,
     } else if (OB_FALSE_IT(qvec_ = static_cast<ObMapType *>(qvec_ptr))) {
     } else {
       int size = qvec_->cardinality();
-      int drop_count = size * drop_ratio;
+      int drop_count = size * drop_ratio / 100;
       if (drop_count != 0) {
         ObArrayFixedSize<uint32_t> *keys_arr = dynamic_cast<ObArrayFixedSize<uint32_t> *>(qvec_->get_key_array());
         ObArrayFixedSize<float> *values_arr = dynamic_cast<ObArrayFixedSize<float> *>(qvec_->get_value_array());
@@ -92,17 +91,19 @@ int ObDASSPIVMergeIter::init_query_vector(const ObDASVecAuxScanCtDef *ir_ctdef,
         } else {
           uint32_t *keys = reinterpret_cast<uint32_t *>(keys_arr->get_data());
           float *values = reinterpret_cast<float *>(values_arr->get_data());
-
-          if (OB_FAIL(quick_selection(keys, values, 0, size - 1, drop_count))) {
-            LOG_WARN("failed to do quick selection", K(ret));
-          } else {
-            uint32_t *new_keys = keys + drop_count;
-            float *new_values = values + drop_count;
-
-            sort_by_key(new_keys, new_values, 0, size - 1 - drop_count);
-            keys_arr->set_data(new_keys, size - drop_count);
-            values_arr->set_data(new_values, size - drop_count);
+          sort_by_value(keys, values, 0, size - 1);
+          float threshold = values[drop_count];
+          int real_drop_count = drop_count;
+          for(; real_drop_count >= 1; real_drop_count--) {
+            if (values[real_drop_count - 1] != threshold) {
+              break;
+            }
           }
+          uint32_t *new_keys = keys + real_drop_count;
+          float *new_values = values + real_drop_count;
+          sort_by_key(new_keys, new_values, 0, size - 1 - real_drop_count);
+          keys_arr->set_data(new_keys, size - real_drop_count);
+          values_arr->set_data(new_values, size - real_drop_count);
         }
       }
     }
@@ -169,27 +170,13 @@ int ObDASSPIVMergeIter::random_partition_by_key(uint32_t *keys, float *values, i
   return i;
 }
 
-int ObDASSPIVMergeIter::quick_selection(uint32_t *keys, float *values, int l, int r, int k)
+void ObDASSPIVMergeIter::sort_by_value(uint32_t *keys, float *values, int l, int r)
 {
-  int ret = OB_SUCCESS;
   if (l < r) {
-    bool found = false;
-    while (l < r && !found) {
-      int pos = random_partition_by_value(keys, values, l, r);
-      if (pos == k - 1) {
-        found = true;
-      } else if (pos > k - 1) {
-        r = pos - 1;
-      } else {
-        l = pos + 1;
-      }
-    }
-    if (!found){
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("quick selection failed", K(ret));
-    }
+    int pos = random_partition_by_value(keys, values, l, r);
+    sort_by_value(keys, values, l, pos - 1);
+    sort_by_value(keys, values, pos + 1, r);
   }
-  return ret;
 }
 
 void ObDASSPIVMergeIter::set_algo()
@@ -275,6 +262,7 @@ int ObDASSPIVMergeIter::inner_init(ObDASIterParam &param)
       LOG_WARN("failed to init limit", K(ret), KPC(vec_aux_ctdef_), KPC(vec_aux_rtdef_));
     } else if (OB_FAIL(init_query_vector(vec_aux_ctdef_, vec_aux_rtdef_, sort_ctdef_, sort_rtdef_, limit_param_, qvec_expr_, distance_calc_))) {
       LOG_WARN("failed to init query vector", K(ret));
+    } else if (OB_ISNULL(qvec_)) {
     } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0], *sort_rtdef_->eval_ctx_, dis_type_))) {
         LOG_WARN("failed to get distance type.", K(ret));
     } else if (dis_type_ != ObExprVectorDistance::ObVecDisType::DOT) {
@@ -397,7 +385,7 @@ int ObDASSPIVMergeIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
 
-  if (limit_param_.limit_ + limit_param_.offset_ == 0) {
+  if (OB_ISNULL(qvec_) || limit_param_.limit_ + limit_param_.offset_ == 0) {
     ret = OB_ITER_END;
   } else if (OB_INVALID_INDEX_INT64 == result_docids_curr_iter_) {
     if (OB_FAIL(process(false))) {
@@ -426,7 +414,7 @@ int ObDASSPIVMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
 
-  if (limit_param_.limit_ + limit_param_.offset_ == 0) {
+  if (OB_ISNULL(qvec_) || limit_param_.limit_ + limit_param_.offset_ == 0) {
     ret = OB_ITER_END;
   } else if (OB_INVALID_INDEX_INT64 == result_docids_curr_iter_) {
     if (OB_FAIL(process(true))) {
@@ -607,7 +595,7 @@ int ObDASSPIVMergeIter::get_rowkey_and_set_docids(ObIAllocator &allocator, bool 
           LOG_WARN("failed to insert valid docid set", K(ret));
         }
       }
-      if (OB_FAIL(reuse_rowkey_docid_iter())) {
+      if (OB_SUCC(ret) && OB_FAIL(reuse_rowkey_docid_iter())) {
         LOG_WARN("failed to reuse rowkey docid iter", K(ret));
       }
     }
@@ -716,7 +704,7 @@ int ObDASSPIVMergeIter::do_brute_force(ObIAllocator &allocator, bool is_vectoriz
           LOG_WARN("failed to push back docid", K(ret));
         }
       }
-      if (OB_FAIL(reuse_rowkey_docid_iter())) {
+      if (OB_SUCC(ret) && OB_FAIL(reuse_rowkey_docid_iter())) {
         LOG_WARN("failed to reuse rowkey docid iter", K(ret));
       }
     }
@@ -762,10 +750,8 @@ int ObDASSPIVMergeIter::set_valid_docids_with_rowkeys(ObIAllocator &allocator, i
         LOG_WARN("failed to insert valid docid set", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(reuse_rowkey_docid_iter())) {
-        LOG_WARN("failed to reuse rowkey docid iter", K(ret));
-      }
+    if (OB_SUCC(ret) && OB_FAIL(reuse_rowkey_docid_iter())) {
+      LOG_WARN("failed to reuse rowkey docid iter", K(ret));
     }
   }
 

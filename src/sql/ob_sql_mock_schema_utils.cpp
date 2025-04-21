@@ -23,8 +23,7 @@
 
 #define GET_MOCKED_TBLS(mocked_tables)                                \
   ObSQLMockedTables *mocked_tables = GET_TSI_MULT(                    \
-      ObSQLMockedTables, ObSQLMockedTables::MOCKED_TABLE_IDENTIFIER); \
-  OB_ASSERT(NULL != mocked_tables)
+      ObSQLMockedTables, ObSQLMockedTables::MOCKED_TABLE_IDENTIFIER);
 
 namespace oceanbase
 {
@@ -35,19 +34,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::lib;
 
-
-const ObIArray<uint64_t> &ObSQLMockSchemaUtils::get_all_mocked_tables()
-{
-  GET_MOCKED_TBLS(mocked_tables);
-  return mocked_tables->get_table_ids();
-}
-
 int ObSQLMockSchemaUtils::add_mock_table(const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   GET_MOCKED_TBLS(mocked_tables);
-  LOG_TRACE("add mock table", K(table_id), K(mocked_tables->get_table_ids().count()));
-  if (OB_FAIL(mocked_tables->add_table(table_id))) {
+  if (OB_ISNULL(mocked_tables)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory for mocked_tables", K(ret));
+  } else if (OB_FAIL(mocked_tables->add_table(table_id))) {
     LOG_WARN("failed to mock rowid column", K(ret));
   }
   return ret;
@@ -57,11 +51,13 @@ bool ObSQLMockSchemaUtils::is_mock_table(const uint64_t table_id)
 {
   GET_MOCKED_TBLS(mocked_tables);
   bool is_found = false;
-  for (int i = 0; !is_found && i < mocked_tables->get_table_ids().count(); i++) {
-    if (table_id == mocked_tables->get_table_ids().at(i)) {
-      is_found = true;
-    }
-  } // for end
+  if (mocked_tables != nullptr) {
+    for (int i = 0; !is_found && i < mocked_tables->get_table_ids().count(); i++) {
+      if (table_id == mocked_tables->get_table_ids().at(i)) {
+        is_found = true;
+      }
+    } // for end
+  }
   return is_found;
 }
 
@@ -69,7 +65,12 @@ int ObSQLMockSchemaUtils::reset_mock_table()
 {
   int ret = OB_SUCCESS;
   GET_MOCKED_TBLS(mocked_tables);
-  mocked_tables->reset();
+  if (OB_ISNULL(mocked_tables)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory for mocked_tables", K(ret));
+  } else {
+    mocked_tables->reset();
+  }
   return ret;
 }
 

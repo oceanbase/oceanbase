@@ -16,7 +16,6 @@
 #include "lib/net/ob_net_util.h"
 #include "share/ob_device_manager.h"
 #include "share/io/ob_io_manager.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/ob_file_system_router.h"
 
@@ -35,7 +34,6 @@ ObAdminExecutor::ObAdminExecutor()
   // 设置MTL上下文
   IGNORE_RETURN ObTimerService::get_instance().start();
   mock_server_tenant_.set(&ObTimerService::get_instance());
-  mock_server_tenant_.set(&blocksstable::ObDecodeResourcePool::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
   omt::ObTenantConfigMgr::get_instance().add_tenant_config(OB_SYS_TENANT_ID);
   storage_env_.data_dir_ = data_dir_;
@@ -69,7 +67,6 @@ ObAdminExecutor::ObAdminExecutor()
 
 ObAdminExecutor::~ObAdminExecutor()
 {
-  blocksstable::ObDecodeResourcePool::get_instance().destroy();
   ObIOManager::get_instance().stop();
   ObIOManager::get_instance().destroy();
   OB_STORAGE_OBJECT_MGR.stop();
@@ -134,9 +131,6 @@ int ObAdminExecutor::prepare_io()
 int ObAdminExecutor::prepare_decoder()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(blocksstable::ObDecodeResourcePool::get_instance().init())) {
-    LOG_WARN("fail to init decoder resource pool");
-  }
   return ret;
 }
 

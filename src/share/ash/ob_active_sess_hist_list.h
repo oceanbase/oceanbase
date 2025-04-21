@@ -227,18 +227,18 @@ public:
     }
   };
 
-  class ReverseIterator : public ObAshBaseIterator
+  class ForwardIterator : public ObAshBaseIterator
   {
   public:
-    ReverseIterator() : ObAshBaseIterator(0, 0) {}
-    explicit ReverseIterator(const common::ObSharedGuard<common::ObAshBuffer> &ash_buffer,
+    ForwardIterator() : ObAshBaseIterator(0, 0) {}
+    explicit ForwardIterator(const common::ObSharedGuard<common::ObAshBuffer> &ash_buffer,
               int64_t start,
               int64_t end)
         : ObAshBaseIterator(start, end)
     {
       ash_buffer_ = ash_buffer;
     }
-    ReverseIterator(const ReverseIterator &other)
+    ForwardIterator(const ForwardIterator &other)
        : ObAshBaseIterator(other.curr_, other.end_)
     {
       curr_ = other.curr_;
@@ -284,7 +284,7 @@ public:
     TO_STRING_KV(K_(ash_buffer), K(ash_buffer_->write_pos()), K_(curr), K_(end));
   };
 
-  Iterator create_iterator()
+  Iterator create_reverse_iterator()
   {
     // get hold of ash buffer.
     LockGuard lock(mutex_);
@@ -303,7 +303,7 @@ public:
   }
 
   // Only used for ash buffer resize.
-  ReverseIterator create_reverse_iterator_no_lock()
+  ForwardIterator create_forward_iterator_no_lock()
   {
     // get hold of ash buffer.
     common::ObSharedGuard<ObAshBuffer> ash_buffer = ash_buffer_;
@@ -317,13 +317,13 @@ public:
       read_start = ash_buffer->write_pos() - ash_buffer->size();
       read_end = ash_buffer->write_pos() - 1;
     }
-    return ReverseIterator(ash_buffer, read_start, read_end);
+    return ForwardIterator(ash_buffer, read_start, read_end);
   }
-  ReverseIterator create_reverse_iterator()
+  ForwardIterator create_forward_iterator()
   {
     // get hold of ash buffer.
     LockGuard lock(mutex_);
-    return create_reverse_iterator_no_lock();
+    return create_forward_iterator_no_lock();
   }
   void lock() { mutex_.lock(); };
   void unlock() { mutex_.unlock(); };

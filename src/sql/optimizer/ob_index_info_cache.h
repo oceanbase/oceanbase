@@ -87,7 +87,7 @@ public:
   }
   bool equal_prefix_all_null() const
   {
-    return is_valid_ && equal_prefix_null_count_ == equal_prefix_count_;
+    return is_valid_ && equal_prefix_null_count_ == index_column_count_;
   }
   void set_equal_prefix_count(const int64_t equal_prefix_count)
   { equal_prefix_count_ = equal_prefix_count; }
@@ -188,7 +188,9 @@ public:
   bool is_unique_index() const { return is_unique_index_; }
   bool is_valid_unique_index() const //唯一索引在query range中能否保持唯一
   {
-    return is_unique_index_ && range_info_.is_get();
+    return is_unique_index_ && range_info_.is_index_column_get()
+           && !((lib::is_oracle_mode() && range_info_.equal_prefix_all_null())
+                || (lib::is_mysql_mode() && range_info_.equal_prefix_has_null()));
   }
   void set_is_unique_index(const bool is_unique_index) { is_unique_index_ = is_unique_index; }
   bool is_index_back() const { return is_index_back_; }

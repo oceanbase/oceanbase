@@ -25,7 +25,7 @@ public:
   static constexpr const char *PARSER_NAME_BENG = "beng";
   static constexpr const char *PARSER_NAME_SPACE = "space";
   static constexpr const char *PARSER_NAME_NGRAM = "ngram";
-  static constexpr const char *PARSER_NAME_RANGE_NGRAM = "ngram2";
+  static constexpr const char *PARSER_NAME_NGRAM2 = "ngram2";
 
   static constexpr const char *CONFIG_NAME_MIN_TOKEN_SIZE = "min_token_size";
   static constexpr const char *CONFIG_NAME_MAX_TOKEN_SIZE = "max_token_size";

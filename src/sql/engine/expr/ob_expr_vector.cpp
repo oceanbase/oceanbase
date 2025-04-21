@@ -61,7 +61,7 @@ int ObExprVector::calc_result_type1(
     common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type1, type_ctx))) {
+  if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type_, type1, type_ctx))) {
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
     type.set_type(ObDoubleType);
@@ -293,7 +293,7 @@ int ObExprVectorDims::calc_result_type1(
     common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type1, type_ctx))) {
+  if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type_, type1, type_ctx))) {
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
     type.set_type(ObIntType);

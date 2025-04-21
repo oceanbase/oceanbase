@@ -763,3 +763,39 @@ select * from parent;
 id	name
 select * from child;
 id	name	parent_id
+drop table if exists A, B;
+create table A (c1 string primary key, c2 string);
+create table B (c1 string, foreign key (c1) references A(c1) on update cascade on delete cascade);
+insert into A values ("pk", "xxx");
+insert into B values ("pk");
+insert into B values ("pk");
+select * from A order by c1;
+c1	c2
+pk	xxx
+select * from B order by c1;
+c1
+pk
+pk
+insert into B values ("error");
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+update B set c1 = "error" where c1 = "pk";
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+insert into A values("pk", "insert up stmt") on duplicate key update c2 = values(c2);
+select * from A order by c1;
+c1	c2
+pk	insert up stmt
+select * from B order by c1;
+c1
+pk
+pk
+replace into A values("pk", "replace stmt");
+select * from A order by c1;
+c1	c2
+pk	replace stmt
+select * from B order by c1;
+c1
+insert into B values ("pk");
+select * from B order by c1;
+c1
+pk
+drop table if exists A, B;

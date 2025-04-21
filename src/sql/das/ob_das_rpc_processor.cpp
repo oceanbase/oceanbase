@@ -50,6 +50,7 @@ int ObDASBaseAccessP<pcode>::before_process()
   // ash stat should be setted already in rpc thread.
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_sql_execution_ = true;
     di->get_ash_stat().in_das_remote_exec_ = true;
     di->get_ash_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
     di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
@@ -281,6 +282,7 @@ template<obrpc::ObRpcPacketCode pcode>
 void ObDASBaseAccessP<pcode>::cleanup()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
   if (das_remote_info_.trans_desc_ != nullptr) {
@@ -382,6 +384,7 @@ int ObDASSyncFetchP::before_process()
   ObDASDataFetchReq &req = arg_;
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_sql_execution_ = true;
     di->get_ash_stat().in_das_remote_exec_ = true;
     di->get_ash_stat().tenant_id_ = req.get_tenant_id();
     di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
@@ -444,6 +447,7 @@ int ObDASSyncFetchP::after_process(int error_code)
 void ObDASSyncFetchP::cleanup()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   ObDASSyncFetchResRpcProcessor::cleanup();
 }
 

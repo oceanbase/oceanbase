@@ -170,6 +170,9 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
         // skip const null
       } else if (expr->get_expr_type() == T_FUN_SYS_CAST && i == 1) {
         // skip exec var and question mark
+      } else if (expr->get_expr_type() == T_FUN_INNER_TYPE_TO_ENUMSET) {
+        // skip spi enum set param
+        disable_share_expr = true;
       } else if (OB_FAIL(SMART_CALL(get_shared_instance(old_param_expr,
                                                         new_param_expr,
                                                         is_param_new,

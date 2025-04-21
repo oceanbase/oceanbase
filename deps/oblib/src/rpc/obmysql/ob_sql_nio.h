@@ -17,7 +17,7 @@
 #include "lib/thread/threads.h"
 #include "lib/ssl/ob_ssl_config.h"
 
-#define MAX_THREAD_CNT 64
+#define MAX_THREAD_CNT 128
 
 namespace oceanbase
 {

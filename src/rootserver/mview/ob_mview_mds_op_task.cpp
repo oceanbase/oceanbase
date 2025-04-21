@@ -126,7 +126,7 @@ int ObMViewMdsOpTask::update_mview_mds_op()
     if (OB_FAIL(tx_set.exist_refactored(it->first))) {
       if (OB_HASH_EXIST == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("mview_mds_op", "txid", it->first, "mds", it->second, "cost", start_ts - it->second.read_snapshot_/1000);
+        LOG_INFO("mview_mds_op", "txid", it->first, "mds", it->second, "cost", start_ts - it->second.start_ts_);
       } else if (OB_HASH_NOT_EXIST) {
         if (OB_FAIL(del_tx_id.push_back(it->first))) {
           LOG_WARN("del_tx_id push failed", KR(ret), K(it->first));

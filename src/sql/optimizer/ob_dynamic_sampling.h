@@ -347,12 +347,16 @@ private:
                                 sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
                                 int64_t &nested_count,
                                 bool &is_no_backslash_escapes,
-                                transaction::ObTxDesc *&tx_desc);
+                                transaction::ObTxDesc *&tx_desc,
+                                bool &is_sess_in_retry,
+                                int &last_query_retry_err);
   int restore_session(ObSQLSessionInfo *session,
                       sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                       int64_t nested_count,
                       bool is_no_backslash_escapes,
-                      transaction::ObTxDesc *tx_desc);
+                      transaction::ObTxDesc *tx_desc,
+                      bool &is_sess_in_retry,
+                      int &last_query_retry_err);
   int add_table_clause(ObSqlString &table_str);
   bool allow_cache_ds_result_to_sql_ctx () const;
 

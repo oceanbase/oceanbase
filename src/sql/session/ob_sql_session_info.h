@@ -932,7 +932,7 @@ public:
   {
     global_sessid_ = global_sessid;
   }
-  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { return dblink_context_; }
+  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { dblink_ctx_acc_cnt_++; return dblink_context_; }
   void set_sql_request_level(int64_t sql_req_level) { sql_req_level_ = sql_req_level; }
   int64_t get_sql_request_level() { return sql_req_level_; }
   int64_t get_next_sql_request_level() { return sql_req_level_ + 1; }
@@ -1404,6 +1404,7 @@ public:
   bool is_spf_mlj_group_rescan_enabled() const;
   bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
+  int is_preserve_order_for_groupby_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
   bool is_sqlstat_enabled();
@@ -1944,6 +1945,7 @@ private:
   ObExecContext *cur_exec_ctx_;
   bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
   oceanbase::sql::ObDblinkCtxInSession dblink_context_;
+  int64_t dblink_ctx_acc_cnt_;
   int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock
   int64_t expect_group_id_;
   // When try packet retry failed, set this flag true and retry at current thread.

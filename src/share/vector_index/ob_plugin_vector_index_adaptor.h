@@ -133,62 +133,89 @@ class ObHnswBitmapFilter : public obvectorlib::FilterInterface
 {
 public:
   static const uint64_t NORMAL_BITMAP_MAX_SIZE = 10000000;
+  enum FilterType {
+    BYTE_ARRAY = 0,
+    ROARING_BITMAP = 1,
+    SIMPLE_RANGE = 2,
+  };
 public:
   ObHnswBitmapFilter(uint64_t tenant_id,
-               bool is_roaring_bitmap = false,
+               FilterType type = FilterType::BYTE_ARRAY,
                uint64_t capacity = 0,
                ObIAllocator *allocator = nullptr,
                uint8_t *bitmap = nullptr) :
                tenant_id_(tenant_id),
-               is_roaring_bitmap_(is_roaring_bitmap),
+               type_(type),
                capacity_(capacity),
                base_(0),
                valid_cnt_(0),
                allocator_(allocator),
-               bitmap_(bitmap) {}
+               bitmap_(bitmap),
+               rk_range_(),
+               selectivity_(0),
+               is_snap_(false),
+               tmp_alloc_("extmpalloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+               extra_buffer_(nullptr),
+               tmp_objs_(nullptr) {}
   ~ObHnswBitmapFilter() {}
   void reset();
   int init(const int64_t &min, const int64_t &max);
+  int init(void *adaptor,
+           double selectivity,
+           const ObIArray<const ObNewRange*> &range);
   bool is_valid() { return OB_NOT_NULL(bitmap_); }
+  bool is_range_filter() { return type_ == FilterType::SIMPLE_RANGE; }
   bool test(int64_t id) override;
+  bool test(const char* data) override;
   int add(int64_t id);
   int get_valid_cnt();
+  float get_valid_ratio(int64_t total_cnt);
   bool is_subset(roaring::api::roaring64_bitmap_t *bitmap);
   void operator=(ObHnswBitmapFilter &filter) {
     tenant_id_ = filter.tenant_id_;
-    is_roaring_bitmap_ = filter.is_roaring_bitmap_;
+    type_ = filter.type_;
     capacity_ = filter.capacity_;
     base_ = filter.base_;
     valid_cnt_ = filter.valid_cnt_;
     allocator_ = filter.allocator_;
     bitmap_ = filter.bitmap_;
+    rk_range_.assign(filter.rk_range_);
+    selectivity_ = filter.selectivity_;
+    is_snap_ = filter.is_snap_;
+    extra_buffer_ = filter.extra_buffer_;
+    tmp_objs_ = filter.tmp_objs_;
   }
   void set_roaring_bitmap(roaring::api::roaring64_bitmap_t *bitmap) {
-    is_roaring_bitmap_ = true;
+    type_ = FilterType::ROARING_BITMAP;
     roaring_bitmap_ = bitmap;
   }
   bool is_empty() {
-    return is_roaring_bitmap_ &&
+    return type_ == FilterType::ROARING_BITMAP &&
            OB_NOT_NULL(roaring_bitmap_) &&
            (roaring64_bitmap_get_cardinality(roaring_bitmap_) == 0);
   }
-  TO_STRING_KV(K(tenant_id_), K_(is_roaring_bitmap), K_(capacity), K_(base), K_(valid_cnt), KP_(allocator), KP_(bitmap));
+  TO_STRING_KV(K(tenant_id_), K_(type), K_(capacity), K_(base), K_(valid_cnt), KP_(allocator), KP_(bitmap));
 private:
   int upgrade_to_roaring_bitmap();
   uint8_t mask(int64_t low, int64_t high) const { return ((0xFF >> (7 - high)) & (0xFF << low)); }
 public:
   uint64_t tenant_id_;
-  bool is_roaring_bitmap_;
+  FilterType type_;
   uint64_t capacity_;
   uint64_t base_;
   uint64_t valid_cnt_;
   ObIAllocator *allocator_;
   union {
-    uint8_t *bitmap_;
+    uint8_t *bitmap_; // byte_array
     roaring::api::roaring64_bitmap_t *roaring_bitmap_;
+    void *adaptor_; // ObPluginVectorIndexAdaptor
   };
-  ObArray<int64_t> range_st_;
-  ObArray<int64_t> range_ed_;
+  ObArray<const ObNewRange *> rk_range_;
+  double selectivity_;
+  bool is_snap_;
+  ObArenaAllocator tmp_alloc_;
+  char *extra_buffer_;
+  ObObj *tmp_objs_;
 };
 
 class ObVectorQueryAdaptorResultContext {
@@ -198,7 +225,8 @@ public:
     : status_(PVQ_START),
       flag_(PVQP_MAX),
       tenant_id_(tenant_id),
-      iter_ctx_(nullptr),
+      incr_iter_ctx_(nullptr),
+      snap_iter_ctx_(nullptr),
       bitmaps_(nullptr),
       pre_filter_(nullptr),
       vec_data_(),
@@ -208,8 +236,10 @@ public:
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
+  int init_prefilter( void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range);
   bool is_bitmaps_valid();
   bool is_prefilter_valid();
+  bool is_range_prefilter();
   ObObj *get_vids() { return vec_data_.vids_; }
   ObObj *get_vectors() { return vec_data_.vectors_; }
   int64_t get_curr_idx() { return vec_data_.curr_idx_; }
@@ -241,7 +271,8 @@ private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
   uint64_t tenant_id_;
-  vsag::IteratorContext *iter_ctx_;
+  void *incr_iter_ctx_;
+  void *snap_iter_ctx_;
   ObVectorIndexRoaringBitMap *bitmaps_;
   ObHnswBitmapFilter *pre_filter_;  // pre filter only
   ObVectorParamData vec_data_;
@@ -425,6 +456,16 @@ struct ObVectorIndexSharedTableInfo
   uint64_t data_table_id_;
   ObTabletID rowkey_vid_tablet_id_;
   ObTabletID vid_rowkey_tablet_id_;
+};
+
+struct ObVectorIndexAcquireCtx
+{
+  ObTabletID inc_tablet_id_;
+  ObTabletID vbitmap_tablet_id_;
+  ObTabletID snapshot_tablet_id_;
+  ObTabletID data_tablet_id_;
+
+  TO_STRING_KV(K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), K_(data_tablet_id));
 };
 
 class ObPluginVectorIndexAdaptor
@@ -636,6 +677,13 @@ public:
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
   int get_vid_bound(ObVidBound &bound);
+
+  bool validate_tablet_ids(const ObVectorIndexAcquireCtx& ctx) {
+    return inc_tablet_id_ == ctx.inc_tablet_id_
+           && vbitmap_tablet_id_ == ctx.vbitmap_tablet_id_
+           && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
+           && data_tablet_id_ == ctx.data_tablet_id_;
+  }
 
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),

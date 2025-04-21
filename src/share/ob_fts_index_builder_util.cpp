@@ -618,7 +618,7 @@ int ObFtsIndexBuilderUtil::set_fts_doc_rowkey_table_columns(
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
-        } else if (ob_is_text_tc(rowkey_column->get_data_type())) {
+        } else if (rowkey_column->is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Lob column should not appear in rowkey position",
                    "rowkey_column", *rowkey_column, "order_in_rowkey",
@@ -1786,9 +1786,6 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_property(
       } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      } else if (col_schema->is_string_lob()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on string type column is");
       } else if (CS_TYPE_INVALID == collation_type) {
         collation_type = col_schema->get_collation_type();
       } else if (collation_type != col_schema->get_collation_type()) {
@@ -2016,7 +2013,7 @@ int ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(
 {
   INIT_SUCC(ret);
   col_names.reset();
-  if (!index_table_schema.is_fts_index_aux() && !index_table_schema.is_multivalue_index_aux()) {
+  if (!index_table_schema.is_fts_index() && !index_table_schema.is_multivalue_index()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(index_table_schema));
   } else if (index_table_schema.is_multivalue_index_aux()) {
@@ -2074,9 +2071,9 @@ int ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
     ObSEArray<ObString, 1> &domain_store_columns)
 {
   int ret = OB_SUCCESS;
-  if (new_index_schema.is_fts_index_aux() || new_index_schema.is_multivalue_index_aux() || new_index_schema.is_rowkey_doc_id()) {
+  if (new_index_schema.is_fts_index() || new_index_schema.is_multivalue_index()) {
     ObSEArray<ObString, 1> col_names;
-    if (!new_index_schema.is_rowkey_doc_id() && OB_FAIL(ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(orig_table_schema, index_table_schema, col_names))) {
+    if (!new_index_schema.is_rowkey_doc_id() && !new_index_schema.is_doc_id_rowkey() && OB_FAIL(ObFtsIndexBuilderUtil::get_fts_multivalue_index_column_name(orig_table_schema, index_table_schema, col_names))) {
       LOG_WARN("failed to get fulltext/multivalue index column name", K(ret));
     } else {
       HEAP_VAR(obrpc::ObCreateIndexArg, index_arg) {
@@ -2096,10 +2093,10 @@ int ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(tmp_table_schema.assign(new_table_schema))) {
             LOG_WARN("fail to assign schema", K(ret));
-          } else if ((new_index_schema.is_fts_index_aux() || new_index_schema.is_rowkey_doc_id()) && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(index_arg, new_table_schema, allocator, gen_columns))) {
-            LOG_WARN("failed to adjust vector args");
+          } else if (new_index_schema.is_fts_index() && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(index_arg, new_table_schema, allocator, gen_columns))) {
+            LOG_WARN("failed to adjust fts args");
           } else if (new_index_schema.is_multivalue_index_aux() && OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(index_arg, new_table_schema, allocator, gen_columns, true))) {
-            LOG_WARN("failed to adjust vector args");
+            LOG_WARN("failed to adjust multivalue args");
           }
           tmp_table_schema.set_in_offline_ddl_white_list(true);
           FOREACH_X(it, gen_columns, OB_SUCC(ret)) {

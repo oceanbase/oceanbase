@@ -351,6 +351,18 @@ int64_t ObTabletInfoTrailer::get_serialize_size_() const
   return sizeof(file_id_) + sizeof(tablet_cnt_) + sizeof(offset_) + sizeof(length_);
 }
 
+ObExternTabletMetaWriter::~ObExternTabletMetaWriter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
+    LOG_ERROR("device handle and fd is not closed!", KPC_(dev_handle), K_(io_fd));
+    ObBackupIoAdapter util;
+    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+      LOG_WARN("fail to close device and fd", K(ret), KPC_(dev_handle), K_(io_fd));
+    }
+  }
+}
+
 int ObExternTabletMetaWriter::init(
     const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
     const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,

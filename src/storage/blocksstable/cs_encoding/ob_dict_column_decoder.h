@@ -50,8 +50,7 @@ public:
 
   virtual int get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int32_t *row_ids,
-    const int64_t row_cap,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
     storage::ObAggCellBase &agg_cell) const override;
 
   bool fast_decode_valid(const ObColumnCSDecoderCtx &ctx) const;

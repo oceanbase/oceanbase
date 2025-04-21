@@ -16,6 +16,8 @@
 #include "observer/virtual_table/ob_tenant_all_tables.h"
 #include "storage/tx/ob_xa_define.h"
 #include "share/schema/ob_schema_printer.h"
+#include "share/catalog/ob_catalog_utils.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -696,10 +698,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       case T_SHOW_CREATE_PROCEDURE:
       case T_SHOW_CREATE_FUNCTION: {
         [&] {
-          if (is_external_catalog_id(catalog_id)) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show check procedure/function in catalog is");
-          } else if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+          if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
           } else {
@@ -709,9 +708,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_routine_id = OB_INVALID_ID;
             int64_t proc_type = -1;
             bool allow_show = false;
-            if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], NULL, database_name.empty(),
-                                                    parse_tree.type_, real_tenant_id, show_db_name,
-                                                    show_db_id, show_routine_name, show_routine_id, proc_type))) {
+            if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], database_name.empty(),
+                                                  parse_tree.type_, real_tenant_id, show_db_name,
+                                                  show_db_id, show_routine_name, show_routine_id, proc_type))) {
               LOG_WARN("fail to resolve show from routine", K(ret));
             }
             if (OB_FAIL(ret)) {
@@ -742,10 +741,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       case T_SHOW_PROCEDURE_CODE:
       case T_SHOW_FUNCTION_CODE: {
         [&] {
-          if (is_external_catalog_id(catalog_id)) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show check procedure/function code in catalog is");
-          } else if (is_oracle_mode) {
+          if (is_oracle_mode) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "show procedure/function code in oracle mode is");
           } else if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
@@ -758,9 +754,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_routine_id = OB_INVALID_ID;
             int64_t proc_type = -1;
             bool allow_show = false;
-            if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], NULL, database_name.empty(),
-                                                    parse_tree.type_, real_tenant_id, show_db_name,
-                                                    show_db_id, show_routine_name, show_routine_id, proc_type))) {
+            if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], database_name.empty(),
+                                                  parse_tree.type_, real_tenant_id, show_db_name,
+                                                  show_db_id, show_routine_name, show_routine_id, proc_type))) {
               LOG_WARN("fail to resolve show from routine", K(ret));
             }
             if (OB_FAIL(ret)) {
@@ -806,7 +802,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_tg_id = OB_INVALID_ID;
             ObString show_table_name;
             bool allow_show = false;
-            if (OB_FAIL(resolve_show_from_trigger(parse_tree.children_[0], NULL, 
+            if (OB_FAIL(resolve_show_from_trigger(parse_tree.children_[0],
                                                   database_name.empty(),
                                                   real_tenant_id, show_db_name,
                                                   show_db_id, show_tg_name, show_tg_id, show_table_name))) {
@@ -2694,7 +2690,6 @@ int ObShowResolver::resolve_show_from_database(const ParseNode &from_db_node,
 }
 
 int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node,
-                                              const ParseNode *from_database_clause_node,
                                               bool is_database_unselected,
                                               ObItemType node_type,
                                               uint64_t real_tenant_id,
@@ -2705,9 +2700,9 @@ int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node
                                               int64_t &routine_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == schema_checker_)) {
+  if (OB_UNLIKELY(NULL == schema_checker_ || NULL == session_info_)) {
     ret = OB_ERR_SCHEMA_UNSET;
-    LOG_WARN("some data member is not init", K(ret), K(schema_checker_));
+    LOG_WARN("some data member is not init", K(ret), K(schema_checker_), K(session_info_));
   } else if (OB_UNLIKELY(T_RELATION_FACTOR != from_routine_node->type_
             // add opt dblink_node
              || from_routine_node->num_child_ < 2
@@ -2723,13 +2718,39 @@ int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node
     LOG_WARN("parser tree child is NULL", K(ret), K(from_routine_node->children_[1]));
   } else {
     const ObRoutineInfo *routine_info = NULL;
-    if (NULL == from_database_clause_node) {
-      if(OB_UNLIKELY(is_database_unselected && NULL == from_routine_node->children_[0])) {
-        ret = OB_ERR_NO_DB_SELECTED;
-        LOG_WARN("no database selected");
-      } else {      // database从procedure子句中取
-        show_routine_name.assign_ptr(from_routine_node->children_[1]->str_value_, static_cast<int32_t>(from_routine_node->children_[1]->str_len_));
-        const ParseNode *db_node = NULL;
+    if(OB_UNLIKELY(is_database_unselected && NULL == from_routine_node->children_[0])) {
+      ret = OB_ERR_NO_DB_SELECTED;
+      LOG_WARN("no database selected");
+    } else {      // database从procedure子句中取
+      show_routine_name.assign_ptr(from_routine_node->children_[1]->str_value_, static_cast<int32_t>(from_routine_node->children_[1]->str_len_));
+
+      // handle catalog name
+      ObNameCaseMode case_mode = ObNameCaseMode::OB_NAME_CASE_INVALID;
+      ObString catalog_name;
+      if (from_routine_node->num_child_ >= 4 && from_routine_node->children_[3] != NULL) {
+        const ParseNode * catalog_node = from_routine_node->children_[3];
+        catalog_name = ObString(catalog_node->str_len_, catalog_node->str_value_);
+      }
+      if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+        LOG_WARN("failed to get case mode", K(ret));
+      } else {
+        bool is_internal_catalog = true;
+        if (catalog_name.empty()) {
+          // catalog name not explicit, judge by session's catalog id
+          is_internal_catalog = is_internal_catalog_id(session_info_->get_current_default_catalog());
+        } else {
+          is_internal_catalog = ObCatalogUtils::is_internal_catalog_name(catalog_name, case_mode);
+        }
+
+        if (!is_internal_catalog) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show procedure/function in catalog is");
+        }
+      }
+
+      // handle db name
+      const ParseNode *db_node = NULL;
+      if (OB_SUCC(ret)) {
         if (NULL == (db_node = from_routine_node->children_[0])) {
           show_database_name = session_info_->get_database_name();
         } else if (OB_UNLIKELY(db_node->type_ != T_IDENT)) {
@@ -2738,42 +2759,10 @@ int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node
         } else {
           show_database_name.assign_ptr(db_node->str_value_, static_cast<int32_t>(db_node->str_len_));
         }
-        if (OB_SUCC(ret) && OB_FAIL(schema_checker_->get_database_id(real_tenant_id, show_database_name, show_database_id))) {
-          LOG_WARN("failed to get procedure id", K(real_tenant_id), K(show_database_name), K(ret));
-        } else { /*do nothing*/ }
       }
-    } else if (NULL == from_database_clause_node->children_[0]) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("from_database_clause_node->children_[0] is NULL", K(ret));
-    } else {
-      // database从from database子句中取
-      if (OB_UNLIKELY(T_FROM_LIST != from_database_clause_node->type_
-                      || from_database_clause_node->num_child_ != 1
-                      || NULL == from_routine_node->children_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parse tree is invalid",
-                 K(ret),
-                 K(from_database_clause_node->type_),
-                 K(from_database_clause_node->num_child_),
-                 K(from_database_clause_node->children_));
-      } else if (OB_UNLIKELY(NULL == from_database_clause_node->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parser tree child is NULL", K(ret), K(from_database_clause_node->children_[0]));
-      } else {
-        ParseNode *routine_node = from_routine_node->children_[1];
-        show_routine_name.assign_ptr(const_cast<char *>(routine_node->str_value_),
-                                   static_cast<int32_t>(routine_node->str_len_));
-        if (show_routine_name.empty()) {
-          ret = OB_WRONG_TABLE_NAME;
-          LOG_WARN("table name is empty", K(ret));
-        } else if (OB_FAIL(resolve_show_from_database(*from_database_clause_node->children_[0],
-                                                      real_tenant_id,
-                                                      OB_INTERNAL_CATALOG_ID, // use internal_catalog instead, external catalog will not go here
-                                                      show_database_id,
-                                                      show_database_name))) {
-          LOG_WARN("fail to resolve show from database", K(ret), K(real_tenant_id));
-        }
-      }
+      if (OB_SUCC(ret) && OB_FAIL(schema_checker_->get_database_id(real_tenant_id, show_database_name, show_database_id))) {
+        LOG_WARN("failed to get procedure id", K(real_tenant_id), K(show_database_name), K(ret));
+      } else { /*do nothing*/ }
     }
     if (OB_FAIL(ret)) {
       // do nothing
@@ -2806,7 +2795,6 @@ int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node
 }
 
 int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
-                                              const ParseNode *from_database_clause_node,
                                               bool is_database_unselected,
                                               uint64_t real_tenant_id,
                                               ObString &show_database_name,
@@ -2817,9 +2805,9 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table = NULL;
-  if (OB_UNLIKELY(NULL == schema_checker_)) {
+  if (OB_UNLIKELY(NULL == schema_checker_ || NULL == session_info_)) {
     ret = OB_ERR_SCHEMA_UNSET;
-    LOG_WARN("some data member is not init", K(ret), K(schema_checker_));
+    LOG_WARN("some data member is not init", K(ret), K(schema_checker_), K(session_info_));
   } else if (OB_UNLIKELY(T_RELATION_FACTOR != from_tg_node->type_
              || from_tg_node->num_child_ < 2
              || NULL == from_tg_node->children_)) {
@@ -2831,7 +2819,31 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
     LOG_WARN("parser tree child is NULL", K(ret), K(from_tg_node->children_[1]));
   } else {
     const ObTriggerInfo *tg_info = NULL;
-    if (NULL == from_database_clause_node) {
+    // handle catalog name
+    ObNameCaseMode case_mode = ObNameCaseMode::OB_NAME_CASE_INVALID;
+    ObString catalog_name;
+    if (from_tg_node->num_child_ >= 4 && from_tg_node->children_[3] != NULL) {
+      const ParseNode * catalog_node = from_tg_node->children_[3];
+      catalog_name = ObString(catalog_node->str_len_, catalog_node->str_value_);
+    }
+    if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+      LOG_WARN("failed to get case mode", K(ret));
+    } else {
+      bool is_internal_catalog = true;
+      if (catalog_name.empty()) {
+        // catalog name not explicit, judge by session's catalog id
+        is_internal_catalog = is_internal_catalog_id(session_info_->get_current_default_catalog());
+      } else {
+        is_internal_catalog = ObCatalogUtils::is_internal_catalog_name(catalog_name, case_mode);
+      }
+
+      if (!is_internal_catalog) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "show create trigger in catalog is");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(is_database_unselected && NULL == from_tg_node->children_[0])) {
         ret = OB_ERR_NO_DB_SELECTED;
         LOG_WARN("no database selected", K(ret));
@@ -2853,35 +2865,6 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
            real_tenant_id,
            show_database_name,
            show_database_id);
-      }
-    } else if (NULL == from_database_clause_node->children_[0]) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("from database clause node is NULL", K(ret));
-    } else {
-      // database从from database子句中取
-      if (OB_UNLIKELY(T_FROM_LIST != from_database_clause_node->type_
-                      || from_database_clause_node->num_child_ != 1
-                      || NULL == from_tg_node->children_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parse tree is invalid",
-                 K(ret),
-                 K(from_database_clause_node->type_),
-                 K(from_database_clause_node->num_child_),
-                 K(from_database_clause_node->children_));
-      } else if (OB_UNLIKELY(NULL == from_database_clause_node->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parser tree child is NULL", K(ret), K(from_database_clause_node->children_[0]));
-      } else {
-        ParseNode *tg_node = from_tg_node->children_[1];
-        show_tg_name.assign_ptr(const_cast<char *>(tg_node->str_value_),
-                                static_cast<int32_t>(tg_node->str_len_));
-        // use internal_catalog instead, external catalog will not go here
-        OZ(resolve_show_from_database(*from_database_clause_node->children_[0],
-                                      OB_INTERNAL_CATALOG_ID,
-                                      real_tenant_id,
-                                      show_database_id,
-                                      show_database_name),
-           real_tenant_id);
       }
     }
     OZ (schema_checker_->get_trigger_info(real_tenant_id, show_database_name,

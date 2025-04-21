@@ -1,4 +1,4 @@
-set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
+ob_define(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
@@ -31,6 +31,9 @@ if (OB_BUILD_OPENSOURCE)
                 @ONLY)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh
+                @ONLY)
+                configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service
                 @ONLY)
 endif()
 

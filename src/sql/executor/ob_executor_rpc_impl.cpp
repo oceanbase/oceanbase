@@ -22,6 +22,15 @@ namespace oceanbase
 namespace sql
 {
 
+RemoteExecuteStreamHandle::~RemoteExecuteStreamHandle()
+{
+  if (!dm_detectable_id_.is_invalid()) {
+    RemoteExecutionDMUtils::unregister_detectable_id(dm_detectable_id_);
+    dm_detectable_id_.reset();
+  }
+}
+
+
 int ObExecutorRpcImpl::init(obrpc::ObExecutorRpcProxy *rpc_proxy, obrpc::ObBatchRpc *batch_rpc)
 {
   int ret = OB_SUCCESS;
@@ -69,6 +78,8 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
     } else if (OB_FAIL(RemoteExecutionDMUtils::register_detectable_id(
         task.get_detectable_id(), has_reg_dm, tenant_id))) {
       LOG_WARN("failed to register detectable id into dm");
+    } else if (has_reg_dm && OB_FAIL(handler.set_dm_detectable_id(task.get_detectable_id()))) {
+      LOG_WARN("failed to set dm detectable id");
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)
@@ -100,9 +111,6 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
     }
   }
   handler.set_result_code(ret);
-  if (has_reg_dm) {
-    RemoteExecutionDMUtils::unregister_detectable_id(task.get_detectable_id());
-  }
   return ret;
 }
 
@@ -142,6 +150,8 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx &rpc_ctx,
     } else if (OB_FAIL(RemoteExecutionDMUtils::register_detectable_id(
         task.get_detectable_id(), has_reg_dm, tenant_id))) {
       LOG_WARN("failed to register detectable id into dm");
+    } else if (has_reg_dm && OB_FAIL(handler.set_dm_detectable_id(task.get_detectable_id()))) {
+      LOG_WARN("failed to set dm detectable id");
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)
@@ -162,9 +172,6 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx &rpc_ctx,
         has_transfer_err = true;
       }
       deal_with_rpc_timeout_err(rpc_ctx, ret, svr);
-    }
-    if (has_reg_dm) {
-      RemoteExecutionDMUtils::unregister_detectable_id(task.get_detectable_id());
     }
   }
   handler.set_result_code(ret);

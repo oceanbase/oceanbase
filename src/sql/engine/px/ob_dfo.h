@@ -566,7 +566,7 @@ public:
   inline void set_phy_plan(const ObPhysicalPlan *phy_plan) { phy_plan_ = phy_plan; }
   inline const ObPhysicalPlan *get_phy_plan() const { return phy_plan_; }
   inline void set_root_op_spec(const ObOpSpec *op_spec) {root_op_spec_ = op_spec;}
-  inline const ObOpSpec *get_root_op_spec() { return root_op_spec_; }
+  inline const ObOpSpec *get_root_op_spec() const { return root_op_spec_; }
   inline void get_root(const ObOpSpec *&root) const { root = root_op_spec_; }
   inline void set_scan(bool has_scan) { has_scan_ = has_scan; }
   inline bool has_scan_op() const { return has_scan_; }

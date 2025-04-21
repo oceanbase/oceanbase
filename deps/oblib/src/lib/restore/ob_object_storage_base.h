@@ -60,8 +60,9 @@ public:
   virtual uint32_t calc_delay_time_us(
       const RetType &outcome, const int64_t attempted_retries) const
   {
-    static const uint32_t base_delay_us = 25 * 1000; // 25ms
-    return base_delay_us * (1 << attempted_retries);
+    static const uint32_t base_delay_us = 25 * 1000;        // 25ms
+    static const uint32_t MAX_DELAY_US = 5 * 1000 * 1000LL; // 5s
+    return MIN(base_delay_us * (1 << attempted_retries), MAX_DELAY_US);
   }
 
   virtual void log_error(

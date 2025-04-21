@@ -1462,6 +1462,18 @@ bool ObAdaptiveMergePolicy::take_extrem_policy(const share::schema::ObTableModeF
   return share::schema::ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == mode;
 }
 
+bool ObAdaptiveMergePolicy::need_schedule_meta(const AdaptiveCompactionEvent& event)
+{
+  return AdaptiveCompactionEvent::SCHEDULE_META == event
+      || AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event;
+}
+
+bool ObAdaptiveMergePolicy::need_schedule_medium(const AdaptiveCompactionEvent& event)
+{
+  return AdaptiveCompactionEvent::SCHEDULE_MEDIUM == event
+      || AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event;
+}
+
 int ObAdaptiveMergePolicy::get_meta_merge_tables(
     const ObGetMergeTablesParam &param,
     ObLS &ls,
@@ -1683,15 +1695,8 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
 
-#ifdef ENABLE_DEBUG_LOG
-  crazy_medium_flag = GCONF.enable_crazy_medium_compaction;
-#endif
-
   if (tablet_id.is_special_merge_tablet()) {
     // do nothing
-  } else if (crazy_medium_flag) {
-    reason = AdaptiveMergeReason::CRAZY_MEDIUM_FOR_TEST;
-    LOG_DEBUG("check crazy medium situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(crazy_medium_flag));
   } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(ls_id, tablet_id, tablet_analyzer))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet analyzer stat", K(ret), K(ls_id), K(tablet_id));
@@ -1700,19 +1705,8 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
     } else {
       ret = OB_SUCCESS;
     }
-  } else {
-    if (OB_TMP_FAIL(check_tombstone_situation(tablet_analyzer, reason))) {
-      LOG_WARN("failed to check tombstone scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
-    }
-    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_load_data_situation(tablet_analyzer, reason))) {
-      LOG_WARN("failed to check load data scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
-    }
-    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_inc_sstable_row_cnt_percentage(tablet, reason))) {
-      LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
-    }
-    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_analyzer, reason))) {
-      LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
-    }
+  } else if (OB_TMP_FAIL(check_adaptive_merge_reason(tablet, tablet_analyzer, reason))) {
+    LOG_WARN("failed to check adaptive merge reason", K(tmp_ret), K(ls_id), K(tablet_id));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_TMP_FAIL(tablet.get_truncate_info_newest_version(truncate_newest_commit_version, truncate_info_count))) {
@@ -1736,7 +1730,7 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
 #endif
 
   if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
-    LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer), K(crazy_medium_flag));
+    LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer));
   }
   return ret;
 }
@@ -1855,6 +1849,77 @@ int ObAdaptiveMergePolicy::check_ineffecient_read(
   return ret;
 }
 
+int ObAdaptiveMergePolicy::check_adaptive_merge_reason(
+    const storage::ObTablet &tablet,
+    const ObTabletStatAnalyzer &tablet_analyzer,
+    AdaptiveMergeReason &reason)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObLSID &ls_id = tablet.get_ls_id();
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
+  if (OB_TMP_FAIL(check_tombstone_situation(tablet_analyzer, reason))) {
+    LOG_WARN("failed to check tombstone scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
+  }
+  if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_load_data_situation(tablet_analyzer, reason))) {
+    LOG_WARN("failed to check load data scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
+  }
+  if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_analyzer, reason))) {
+    LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
+  }
+  if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_inc_sstable_row_cnt_percentage(tablet, reason))) {
+    LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
+  }
+
+  return ret;
+}
+
+int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
+    const storage::ObLS &ls,
+    const storage::ObTablet &tablet,
+    const AdaptiveCompactionEvent &event,
+    const int64_t update_row_cnt,
+    const int64_t delete_row_cnt,
+    ObTableModeFlag &mode,
+    AdaptiveMergeReason &reason)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls.get_ls_id();
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  mode = ObTableModeFlag::TABLE_MODE_NORMAL;
+  reason = AdaptiveMergeReason::NONE;
+  ObTabletStatAnalyzer tablet_analyzer;
+
+  if (OB_UNLIKELY(!need_schedule_meta(event))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid compaction event", K(ret), K(event));
+  } else if (tablet_id.is_special_merge_tablet()) {
+    // do nothing
+  } else if (SCHEDULE_META == event && (ls.is_cs_replica() || !tablet.is_row_store())) {
+    // column store tablet not suppoert meta compaction
+  } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(ls_id, tablet_id, tablet_analyzer))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get tablet analyzer stat", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else if (FALSE_IT(mode = tablet_analyzer.mode_)) {
+  } else if (SCHEDULE_META == event && mode != TABLE_MODE_QUEUING_EXTREME) {
+    // backgroud meta only scheduled for extreme table
+  } else {
+    const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode);
+    const int64_t adaptive_threshold = TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+    if ((update_row_cnt + delete_row_cnt) >= adaptive_threshold  || delete_row_cnt > queuing_cfg.total_delete_row_cnt_) {
+      reason = AdaptiveMergeReason::TOMBSTONE_SCENE;
+    } else if (queuing_cfg.is_queuing_mode()) {
+      if (OB_TMP_FAIL(check_adaptive_merge_reason(tablet, tablet_analyzer, reason))) {
+        LOG_WARN("failed to check adaptive merge reason", K(tmp_ret), K(ls_id), K(tablet_id));
+      }
+    }
+  }
+  return ret;
+}
 
 /*************************************** ObCOMajorMergePolicy ***************************************/
 const char * ObCOMajorMergeTypeStr[] = {

@@ -324,6 +324,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStorageCachePolicyChecker);
 };
 
+class ObConfigEnableManualSCPChecker : public ObConfigChecker
+{
+public:
+  ObConfigEnableManualSCPChecker() {}
+  virtual ~ObConfigEnableManualSCPChecker() {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEnableManualSCPChecker);
+};
+
+class ObConfigSuspendStorageCacheTaskChecker : public ObConfigChecker
+{
+public:
+  ObConfigSuspendStorageCacheTaskChecker() {}
+  virtual ~ObConfigSuspendStorageCacheTaskChecker() {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSuspendStorageCacheTaskChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {

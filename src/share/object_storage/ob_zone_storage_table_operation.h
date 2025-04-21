@@ -106,6 +106,13 @@ public:
   static int parse_storage_path(const char *storage_path, char *root_path, int64_t path_len,
                                 char *endpoint, int64_t endpoint_len);
   static int select_for_update(common::ObMySQLTransaction &trans, const common::ObZone &zone);
+  static int get_total_shared_data_size(int64_t &total_size);
+  static int get_total_disk_size(int64_t &total_size);
+  static int get_ls_total_disk_size(const uint64_t tenant_id, const int64_t ls_id, const common::ObAddr &server, int64_t &total_size);
+  static int get_unit_data_disk_size(const uint64_t tenant_id, const common::ObAddr &server, int64_t &total_size);
+  static int get_table_total_data_size(const uint64_t tenant_id, const common::ObAddr &server, int64_t &total_size);
+  static int get_tmp_file_data_size(const uint64_t tenant_id, const common::ObAddr &server, int64_t &total_size);
+  static int get_ls_leader_addr(const uint64_t tenant_id, const int64_t ls_id, common::ObAddr &server);
 private:
   static int extract_storage_table_info(const sqlclient::ObMySQLResult &result,
       share::ObZoneStorageTableInfo &storage_table_info);

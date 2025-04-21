@@ -18,6 +18,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 
 namespace oceanbase
@@ -1157,6 +1158,7 @@ int ObVectorIndexUtil::get_vector_index_tid(
   return ret;
 }
 
+// Notice: only used in ivf dml
 int ObVectorIndexUtil::get_vector_index_tids(share::schema::ObSchemaGetterGuard *schema_guard,
                                             const ObTableSchema &data_table_schema,
                                             const ObIndexType index_type,
@@ -1272,6 +1274,189 @@ int ObVectorIndexUtil::check_extra_info_size(const ObTableSchema &tbl_schema,
         if (extra_info_actual_size > session_extra_info_max_size) {
           LOG_INFO("extra_info_actual_size larger than session_extra_info_max_size", K(extra_info_actual_size), K(rowkey_size), K(session_extra_info_max_size));
           extra_info_actual_size = 0;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// get hnsw index tables
+typedef common::ObBinaryHeap<ObVecTidCandidate, ObVecTidCandidateMaxCompare, 4> ObVecTidMaxHeap;
+
+int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const int64_t col_id,
+    uint64_t &inc_tid,
+    uint64_t &vbitmap_tid,
+    uint64_t &snapshot_tid)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+
+  inc_tid = OB_INVALID_ID;
+  vbitmap_tid = OB_INVALID_ID;
+  snapshot_tid = OB_INVALID_ID;
+
+  ObVecTidCandidateMaxCompare cmp;
+  ObVecTidMaxHeap inc_tid_heap(cmp);
+
+  if (OB_ISNULL(schema_guard) || !data_table_schema.is_user_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(schema_guard), K(data_table_schema));
+  } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  } else {
+
+    // 1. get all delta buffer table tid by column id, need to modify if support multiple hnsw index on the same column.
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (index_table_schema->get_index_type() == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
+        bool has_same_col_id = false;
+        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+          const ObColumnSchemaV2 *col_schema = nullptr;
+          if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
+          } else if (!col_schema->is_vec_hnsw_vector_column()) {
+            // only need vec_vector column, here skip other column
+          } else if (OB_FAIL(has_same_cascaded_col_id(data_table_schema, *col_schema, col_id, has_same_col_id))) {
+            LOG_WARN("fail to check same cascaded col id", K(ret), K(col_id));
+          } else if (has_same_col_id) {
+            ObString index_prefix;
+            if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
+              LOG_WARN("failed to get index prefix", K(ret));
+            } else {
+              ObVecTidCandidate candidate(index_table_schema->ObMergeSchema::get_schema_version(),
+                                          simple_index_infos.at(i).table_id_,
+                                          index_prefix);
+              if (OB_FAIL(inc_tid_heap.push(candidate))) {
+                LOG_WARN("failed to push candidate to inc table id heap", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. get latest table id groups
+    for (int64_t idx = 0;
+         idx < inc_tid_heap.count() && OB_SUCC(ret) &&  (vbitmap_tid == OB_INVALID_ID || snapshot_tid == OB_INVALID_ID);
+         idx++ ) {
+      // check index prefix by schema version order.
+      ObString &current_index_prefix = inc_tid_heap.at(idx).index_prefix_;
+      inc_tid = inc_tid_heap.at(idx).inc_tid_;
+      vbitmap_tid = OB_INVALID_ID;
+      snapshot_tid = OB_INVALID_ID;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        const ObTableSchema *index_table_schema = nullptr;
+        if (OB_FAIL(schema_guard->get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+          LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+        } else if (OB_ISNULL(index_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+        } else if (!(index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_ID_LOCAL
+                   || index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL)) {
+        // skip 4, 5 index table
+        } else {
+          ObString index_prefix;
+          if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
+            LOG_WARN("failed to get index prefix", K(ret));
+          } else if (index_prefix == current_index_prefix) {
+            bool has_same_col_id = false;
+            for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+              const ObColumnSchemaV2 *col_schema = nullptr;
+              if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected col schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
+              } else if (!col_schema->is_vec_hnsw_vector_column()) {
+                // only need vec_vector column, here skip other column
+              } else if (OB_FAIL(has_same_cascaded_col_id(data_table_schema, *col_schema, col_id, has_same_col_id))) {
+                LOG_WARN("fail to check same cascaded col id", K(ret), K(col_id));
+              } else if (has_same_col_id) {
+                if (index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_ID_LOCAL) {
+                  vbitmap_tid = simple_index_infos.at(i).table_id_;
+                } else if (index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL) {
+                  snapshot_tid = simple_index_infos.at(i).table_id_;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (inc_tid == OB_INVALID_ID || vbitmap_tid == OB_INVALID_ID || snapshot_tid == OB_INVALID_ID) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("failed to get latest avaliable index tids for hnsw", K(ret), K(inc_tid_heap.count()));
+    } else {
+      LOG_DEBUG("get latest avaliable index tids for hnsw", K(inc_tid), K(vbitmap_tid), K(snapshot_tid));
+    }
+  }
+
+  return ret;
+}
+
+int ObVectorIndexUtil::get_vector_index_tid_with_index_prefix(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const ObIndexType index_type,
+    const int64_t col_id,
+    ObString &index_prefix,
+    uint64_t &tid)
+{
+  int ret = OB_SUCCESS;
+
+  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  tid = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_guard) || !share::schema::is_vec_index(index_type) || !data_table_schema.is_user_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(schema_guard), K(index_type), K(data_table_schema));
+  } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (index_table_schema->get_index_type() != index_type) {
+        // skip not spec index type
+      } else if (index_table_schema->is_vec_rowkey_vid_type() || index_table_schema->is_vec_vid_rowkey_type()) {
+        // rowkey_vid and vid_rowkey is shared, only one, just return
+        tid = simple_index_infos.at(i).table_id_;
+      } else { // delta buffer, index id, index snapshot, check index prefix and cascaded_column by vec_vector col
+        ObString current_index_prefix;
+        if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, current_index_prefix))) {
+          LOG_WARN("failed to get index prefix", K(ret));
+        } else if (index_prefix == current_index_prefix) {
+          bool has_same_col_id = false;
+          for (int64_t j = 0; OB_SUCC(ret) && tid == OB_INVALID_ID && j < index_table_schema->get_column_count(); j++) {
+            const ObColumnSchemaV2 *col_schema = nullptr;
+            if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
+            } else if (!col_schema->is_vec_hnsw_vector_column()) {
+              // only need vec_vector column, here skip other column
+            } else if (OB_FAIL(has_same_cascaded_col_id(data_table_schema, *col_schema, col_id, has_same_col_id))) {
+              LOG_WARN("fail to do has_same_cascaded_col_id", K(ret), K(col_id));
+            } else if (has_same_col_id) {
+              tid = simple_index_infos.at(i).table_id_;
+            }
+          }
         }
       }
     }
@@ -3626,8 +3811,7 @@ int ObVecExtraInfo::extra_infos_to_buf(ObIAllocator &allocator, const ObVecExtra
       if (OB_ISNULL(extra_info_i)) {
         ret = OB_INVALID_DATA;
         LOG_WARN("extra_info_i is null", K(ret), KP(extra_info_i), K(i));
-      } else if (OB_FAIL(
-                     extra_info_to_buf(extra_info_i, extra_column_count, begin_buf, extra_info_actual_size, pos))) {
+      } else if (OB_FAIL(extra_info_to_buf(extra_info_i, extra_column_count, begin_buf, extra_info_actual_size, pos))) {
         LOG_WARN("fail to serialize value", K(ret), K(extra_info_actual_size), K(count));
       }
     }

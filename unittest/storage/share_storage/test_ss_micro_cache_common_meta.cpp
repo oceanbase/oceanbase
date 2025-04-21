@@ -17,6 +17,7 @@
 #define protected public
 
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_struct.h"
+#include "storage/shared_storage/micro_cache/task/op/ob_ss_reorganize_micro_op.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 
 namespace oceanbase
@@ -377,14 +378,28 @@ TEST_F(TestSSMicroCacheCommonMeta, ls_cache_info)
 
 TEST_F(TestSSMicroCacheCommonMeta, super_block)
 {
+  const uint64_t tenant_id = 1;
   const int64_t file_size = 1 << 30;
-  ObSSMicroCacheSuperBlock super_block(file_size);
+  ObSSMicroCacheSuperBlock super_block(tenant_id, file_size);
+  super_block.micro_ckpt_time_us_ = 10001;
+  ASSERT_EQ(true, super_block.is_valid());
   ASSERT_EQ(file_size, super_block.cache_file_size_);
   ASSERT_EQ(OB_SUCCESS, super_block.blk_ckpt_entry_list_.push_back(5));
   ASSERT_EQ(OB_SUCCESS, super_block.blk_ckpt_entry_list_.push_back(15));
   ASSERT_EQ(OB_SUCCESS, super_block.blk_ckpt_entry_list_.push_back(25));
   ASSERT_EQ(OB_SUCCESS, super_block.micro_ckpt_entry_list_.push_back(35));
   ASSERT_EQ(OB_SUCCESS, super_block.micro_ckpt_entry_list_.push_back(45));
+
+  ObSSMicroCacheSuperBlock tmp_super_block;
+  ASSERT_EQ(OB_SUCCESS, tmp_super_block.blk_ckpt_entry_list_.push_back(6));
+  ASSERT_EQ(OB_SUCCESS, tmp_super_block.micro_ckpt_entry_list_.push_back(36));
+
+  ASSERT_EQ(OB_SUCCESS, tmp_super_block.assign(super_block));
+  ASSERT_EQ(true, tmp_super_block.is_valid());
+  ASSERT_EQ(3, tmp_super_block.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(2, tmp_super_block.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(super_block.micro_ckpt_time_us_, tmp_super_block.micro_ckpt_time_us_);
+  ASSERT_EQ(super_block.cache_file_size_, tmp_super_block.cache_file_size_);
 
   // serialize & deserialize
   const int64_t buf_len = 1024;
@@ -396,8 +411,9 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   const int64_t data_len = super_block.get_serialize_size();
 
   int64_t tmp_pos = 0;
-  ObSSMicroCacheSuperBlock tmp_super_block;
   ASSERT_EQ(OB_SUCCESS, tmp_super_block.deserialize(buf, data_len, tmp_pos));
+  tmp_super_block.tenant_id_ = tenant_id;
+  ASSERT_EQ(true, tmp_super_block.is_valid());
   ASSERT_EQ(file_size, tmp_super_block.cache_file_size_);
   ASSERT_EQ(pos, tmp_pos);
   ASSERT_EQ(3, tmp_super_block.blk_ckpt_entry_list_.count());
@@ -408,6 +424,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   tmp_super_block.clear_ckpt_entry_list();
   ASSERT_EQ(0, tmp_super_block.blk_ckpt_entry_list_.count());
   ASSERT_EQ(0, tmp_super_block.micro_ckpt_entry_list_.count());
+
 }
 
 TEST_F(TestSSMicroCacheCommonMeta, micro_cache_key)
@@ -838,6 +855,27 @@ TEST_F(TestSSMicroCacheCommonMeta, mem_pool_destroy_free_list)
   const int64_t end_us = ObTimeUtility::current_time();
   t.join();
   ASSERT_LE(sleep_us + start_us, end_us);
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, test_phy_blk_entry)
+{
+  ObSSPhysicalBlock phy_blk;
+  phy_blk.ref_cnt_ = 3;
+  phy_blk.valid_len_ = 200;
+
+  ObSSPhysicalBlockHandle phy_blk_handle;
+  phy_blk_handle.set_ptr(&phy_blk);
+  ASSERT_EQ(true, phy_blk_handle.is_valid());
+
+  phy_blk_handle.reset();
+  ASSERT_EQ(3, phy_blk.ref_cnt_);
+  ObSSPhyBlockEntry phy_blk_entry(11, &phy_blk);
+  ASSERT_EQ(4, phy_blk.ref_cnt_);
+  ObArray<ObSSPhyBlockEntry> phy_blk_entry_arr;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_entry_arr.push_back(phy_blk_entry));
+  ASSERT_EQ(5, phy_blk.ref_cnt_);
+  phy_blk_entry_arr.reset();
+  ASSERT_EQ(4, phy_blk.ref_cnt_);
 }
 
 }  // namespace storage

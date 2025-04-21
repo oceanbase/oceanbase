@@ -250,6 +250,13 @@ public:
     INVALID_POLICY
   };
 
+  enum AdaptiveCompactionEvent : uint8_t {
+    SCHEDULE_MEDIUM = 0,
+    SCHEDULE_META = 1,
+    SCHEDULE_AFTER_MINI = 2,
+    INVALID_EVENT
+  };
+
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
@@ -261,6 +268,8 @@ public:
   static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_advanced_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
+  static bool need_schedule_meta(const AdaptiveCompactionEvent& event);
+  static bool need_schedule_medium(const AdaptiveCompactionEvent& event);
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -272,6 +281,18 @@ public:
       storage::ObTablet &tablet,
       AdaptiveMergeReason &reason,
       int64_t &least_medium_snapshot);
+  static int check_adaptive_merge_reason(
+      const storage::ObTablet &tablet,
+      const ObTabletStatAnalyzer &tablet_analyzer,
+      AdaptiveMergeReason &reason);
+  static int check_adaptive_merge_reason_for_event(
+      const storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      const AdaptiveCompactionEvent &event,
+      const int64_t update_row_cnt,
+      const int64_t delete_row_cnt,
+      ObTableModeFlag &mode,
+      AdaptiveMergeReason &reason);
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);

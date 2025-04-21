@@ -1087,7 +1087,7 @@ int ObPxCoordOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
   if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
     LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret));
     return OB_SUCCESS;

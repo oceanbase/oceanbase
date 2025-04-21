@@ -364,8 +364,8 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
       LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
     } else if (OB_FAIL(ctx_.get_result(result))) {
       LOG_WARN("failed to get ls complate migration ctx result", K(ret), K(ctx_));
-    } else if (OB_FAIL(ls_migration_handler->switch_next_stage(result))) {
-      LOG_WARN("failed to report result", K(ret), K(result), K(ctx_));
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
+      LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
     }
 
     if (is_shared_storage) {

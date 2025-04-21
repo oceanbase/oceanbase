@@ -95,10 +95,6 @@ TEST_F(TestObKvConfig, test_parse)
 
   MEMSET(arr, 0, 32);
   ASSERT_EQ(false, parser.parse("ttl=on, ttt=off, ", arr, 32));
-
-  MEMSET(arr, 0, 32);
-  ASSERT_EQ(true, parser.parse("ttl=on, distributed_execute=on", arr, 32));
-  ASSERT_EQ(arr[0], 0b01000001);
 }
 
 TEST_F(TestObKvConfig, test_obkv_feature_mode)

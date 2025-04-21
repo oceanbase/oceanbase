@@ -709,6 +709,7 @@ private:
 
   int get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
                              const ObOpRawExpr *r_expr,
+                             const ObExprResType &cmp_type,
                              ObKeyPart *&out_key_part,
                              const ObDataTypeCastParams &dtc_params);
   int get_rowid_in_key_part(const ObRawExpr *l_expr,

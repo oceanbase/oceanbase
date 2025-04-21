@@ -85,9 +85,10 @@ void TestSSReorganizePhyBlock::SetUp()
 
 void TestSSReorganizePhyBlock::TearDown()
 {
+  const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
   // clear micro_meta_ckpt
-  ObSSMicroCacheSuperBlock new_super_blk(micro_cache->cache_file_size_);
+  ObSSMicroCacheSuperBlock new_super_blk(tenant_id, micro_cache->cache_file_size_);
   ASSERT_EQ(OB_SUCCESS, micro_cache->phy_blk_mgr_.update_ss_super_block(new_super_blk));
   micro_cache->stop();
   micro_cache->wait();
@@ -255,7 +256,9 @@ TEST_F(TestSSReorganizePhyBlock, test_reorganize_phy_block_task)
       *tmp_micro_meta = *micro_meta;
       ObSSMicroBlockMetaHandle evict_micro_handle;
       evict_micro_handle.set_ptr(tmp_micro_meta);
-      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro_handle));
+      ObSSMicroMetaSnapshot evict_micro;
+      evict_micro.micro_meta_ = *evict_micro_handle.get_ptr();
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro));
 
       ASSERT_EQ(ORI_MICRO_REF_CNT + 1, micro_meta->ref_cnt_);
       ASSERT_EQ(true, micro_meta->is_in_l1_);

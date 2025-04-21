@@ -7,7 +7,6 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_bloom_filter_data_reader.cpp
   blocksstable/ob_bloom_filter_data_writer.cpp
   blocksstable/ob_data_buffer.cpp
-  blocksstable/ob_decode_resource_pool.cpp
   blocksstable/ob_fuse_row_cache.cpp
   blocksstable/ob_imicro_block_reader.cpp
   blocksstable/ob_imicro_block_writer.cpp
@@ -161,6 +160,7 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_sstable_meta_info.cpp
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
   blocksstable/index_block/ob_clustered_index_block_writer.cpp
+  blocksstable/index_block/ob_index_block_bare_iterator.cpp
 )
 
 ob_set_subtarget(ob_storage meta_store

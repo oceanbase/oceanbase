@@ -4303,6 +4303,59 @@ int ObTableSchema::is_unique_key_column(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
+int ObTableSchema::is_unique_key_column(ObSchemaGetterGuard &schema_guard,
+                                        uint64_t column_id,
+                                        bool &is_uni,
+                                        bool &is_first_not_null_unique) const
+{
+  int ret = OB_SUCCESS;
+  is_uni = false;
+  is_first_not_null_unique = true;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_schema = NULL;
+      const ObColumnSchemaV2 *tmp_column = NULL;
+      if (OB_FAIL(schema_guard.get_table_schema(get_tenant_id(),
+                                                simple_index_infos.at(i).table_id_,
+                                                index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_UNLIKELY(NULL == index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
+      } else if (index_schema->is_unique_index() && 1 == index_schema->get_index_column_num()
+              && share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY !=
+                 index_schema->get_index_type()) {
+        const ObIndexInfo &index_info = index_schema->get_index_info();
+        uint64_t idx_col_id = OB_INVALID_ID;
+        if (OB_FAIL(index_info.get_column_id(0, idx_col_id))) {
+          LOG_WARN("get index column id fail", K(ret));
+        } else if (NULL == (tmp_column = get_column_schema(idx_col_id))) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_WARN("The column does not exist", K(ret), K(idx_col_id));
+        } else if (!tmp_column->is_nullable()) {
+          // may be can become "PRI"
+          if (column_id == idx_col_id) {
+            is_uni = true;
+            break;
+          } else if (is_first_not_null_unique) {
+            is_first_not_null_unique = false;
+          }
+        } else {
+          if (column_id == idx_col_id) {
+            is_uni = true;
+            is_first_not_null_unique = false;
+            break;
+          } else {/*do nothing*/}
+        }
+      } else {/*do nothing*/}
+    } // for
+  }
+  return ret;
+}
+
 int ObTableSchema::is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
                                           uint64_t column_id,
                                           bool &is_mul) const

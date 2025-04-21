@@ -16,6 +16,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "storage/fts/utils/ob_ft_char_utils.h"
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -68,7 +69,6 @@ void ObFTNgramImpl::reset()
   is_inited_ = false;
 }
 
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
 
 int ObFTNgramImpl::get_next_token(const char *&word,
                                   int64_t &word_len,
@@ -83,7 +83,7 @@ int ObFTNgramImpl::get_next_token(const char *&word,
     bool found = false;
 
     while (OB_SUCC(ret) && !found) {
-      if (window_.meet_splitter_) {
+      if (window_.meet_delimiter_) {
         if (window_.cnt_ < window_.min_ngram_size_) {
           if (window_.is_last_batch_) {
             ret = OB_ITER_END;
@@ -98,20 +98,20 @@ int ObFTNgramImpl::get_next_token(const char *&word,
         if (window_.cnt_ < window_.max_ngram_size_) {
           if (cur_ >= fulltext_end_) {
             // meet end and end it.
-            window_.meet_splitter_ = true;
+            window_.meet_delimiter_ = true;
             window_.is_last_batch_ = true;
           } else {
             const int64_t c_len = ob_mbcharlen_ptr(cs_, cur_, fulltext_end_);
             if (cur_ + c_len > fulltext_end_ || 0 == c_len) {
               // if invalid char, end it
-              window_.meet_splitter_ = true;
+              window_.meet_delimiter_ = true;
               window_.is_last_batch_ = true;
             } else {
               int type = 0;
               cs_->cset->ctype(cs_, &type, (uchar *)cur_, (uchar *)fulltext_end_);
-              bool spliter = (1 == c_len && (' ' == *cur_ || !true_word_char(type, *cur_)));
-              if (spliter) {
-                window_.meet_splitter_ = true;
+              bool delimiter = !true_word_char(type, *cur_);
+              if (delimiter) {
+                window_.meet_delimiter_ = true;
               } else {
                 Word word;
                 word.len = c_len;

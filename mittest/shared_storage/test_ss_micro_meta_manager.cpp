@@ -119,7 +119,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_and_get_micro
 {
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
-  ObSSMicroSnapshotInfo micro_snapshot_info;
+  ObSSMicroBaseInfo micro_info;
   ObSSMemBlockHandle mem_blk_handle;
   ObSSPhysicalBlockHandle phy_blk_handle;
   bool is_persisted = false;
@@ -156,7 +156,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_and_get_micro
     }
 
     ObSSMicroBlockMetaHandle micro_handle;
-    if (FAILEDx(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_snapshot_info, micro_handle,
+    if (FAILEDx(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info, micro_handle,
         mem_blk_handle, phy_blk_handle, true))) {
       LOG_WARN("fail to get micro block meta handle", KR(ret), K(micro_key));
     }
@@ -175,7 +175,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_same_micro_me
   MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100);
   int32_t offset = 100;
   ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-  ObSSMicroSnapshotInfo micro_snapshot_info;
+  ObSSMicroBaseInfo micro_info;
   ObSSMemBlockHandle mem_blk_handle;
   ObSSPhysicalBlockHandle phy_blk_handle;
   bool is_persisted = false;
@@ -197,7 +197,7 @@ int TestSSMicroMetaManager::TestSSMicroMetaMgrThread::parallel_add_same_micro_me
 
   ObSSMicroBlockMetaHandle micro_handle;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_snapshot_info,
+  } else if (OB_FAIL(micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_info,
              micro_handle, mem_blk_handle, phy_blk_handle, true))) {
     LOG_WARN("fail to get micro block meta handle", KR(ret), K(micro_key));
   }
@@ -412,20 +412,21 @@ TEST_F(TestSSMicroMetaManager, test_random_acquire_cold_micro_blocks)
   ASSERT_LT(0, arc_iter_info.t1_micro_heap_.count());
   ASSERT_LE(arc_iter_info.t1_micro_heap_.count(), arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
 
+  const int64_t expect_micro_cnt = arc_iter_info.t1_micro_heap_.count();
   int64_t cold_micro_cnt = 0;
   int ret = OB_SUCCESS;
   bool exist = true;
   do {
-    ObSSMicroBlockMetaHandle cold_micro_handle;
-    ret = arc_iter_info.pop_cold_micro(ARC_T1, cold_micro_handle);
+    ObSSMicroMetaSnapshot cold_micro;
+    ret = arc_iter_info.pop_cold_micro(ARC_T1, cold_micro);
     ASSERT_EQ(OB_SUCCESS, ret);
-    if (cold_micro_handle.is_valid()) {
+    if (cold_micro.micro_key().is_valid()) {
       ++cold_micro_cnt;
     } else {
       exist = false;
     }
   } while (exist);
-  ASSERT_LT(0, cold_micro_cnt);
+  ASSERT_EQ(expect_micro_cnt, cold_micro_cnt);
 }
 
 TEST_F(TestSSMicroMetaManager, test_evict_and_delete_micro_meta)
@@ -487,10 +488,11 @@ TEST_F(TestSSMicroMetaManager, test_evict_and_delete_micro_meta)
   *tmp_micro_meta = *micro_meta;
   ObSSMicroBlockMetaHandle evict_micro_handle;
   evict_micro_handle.set_ptr(tmp_micro_meta);
-  ASSERT_EQ(true, evict_micro_handle.is_valid());
+  ObSSMicroMetaSnapshot evict_micro;
+  evict_micro.micro_meta_ = *evict_micro_handle.get_ptr();
   ASSERT_EQ(false, micro_meta->is_in_l1_);
   ASSERT_EQ(false, micro_meta->is_in_ghost_);
-  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(evict_micro_handle));
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(evict_micro));
   ASSERT_EQ(false, micro_meta->is_in_l1_);
   ASSERT_EQ(true, micro_meta->is_in_ghost_);
   ASSERT_EQ(0, arc_info.seg_info_arr_[ARC_T2].cnt_);
@@ -508,9 +510,10 @@ TEST_F(TestSSMicroMetaManager, test_evict_and_delete_micro_meta)
   *tmp_micro_meta = *micro_meta;
   ObSSMicroBlockMetaHandle delete_micro_handle;
   delete_micro_handle.set_ptr(tmp_micro_meta);
+  ObSSMicroMetaSnapshot delete_micro;
+  delete_micro.micro_meta_ = *delete_micro_handle.get_ptr();
   ASSERT_EQ(1, tmp_micro_meta->ref_cnt_);
-  ASSERT_EQ(true, delete_micro_handle.is_valid());
-  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(delete_micro_handle));
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(delete_micro));
   ASSERT_EQ(0, arc_info.seg_info_arr_[ARC_B2].cnt_);
   ASSERT_EQ(0, arc_info.seg_info_arr_[ARC_B2].size_);
   delete_micro_handle.reset();
@@ -525,12 +528,12 @@ TEST_F(TestSSMicroMetaManager, test_evict_and_delete_micro_meta)
   ObSSMemBlockHandle mem_blk_handle2;
   mem_blk_handle2.set_ptr(mem_blk_ptr);
   micro_meta_mgr.set_mem_limited(true);
-  const int64_t origin_total_mem_size = cache_stat.micro_stat().micro_total_mem_size_;
-  cache_stat.micro_stat().micro_total_mem_size_ = micro_meta_mgr.get_cache_mem_limit();
+  const int64_t origin_total_micro_cnt = cache_stat.micro_stat().total_micro_cnt_;
+  cache_stat.micro_stat().total_micro_cnt_ = micro_meta_mgr.get_micro_cnt_limit();
   real_add = false;
   ASSERT_EQ(OB_SS_CACHE_REACH_MEM_LIMIT,
       micro_meta_mgr.add_or_update_micro_block_meta(micro_key2, micro_size, micro_crc, mem_blk_handle2, real_add));
-  cache_stat.micro_stat().micro_total_mem_size_ = origin_total_mem_size;
+  cache_stat.micro_stat().total_micro_cnt_ = origin_total_micro_cnt;
   ASSERT_EQ(false, micro_meta_mgr.check_cache_mem_limit());
   ASSERT_EQ(OB_SUCCESS,
       micro_meta_mgr.add_or_update_micro_block_meta(micro_key2, micro_size, micro_crc, mem_blk_handle2, real_add));
@@ -626,12 +629,12 @@ TEST_F(TestSSMicroMetaManager, test_reach_mem_limit_when_add_micro)
     ASSERT_EQ(true, mem_blk_handle.is_valid());
     bool real_add = false;
     if (j == micro_cnt / 2) {
-      const int64_t ori_mem_size = cache_stat.micro_stat().micro_total_mem_size_;
-      cache_stat.micro_stat().micro_total_mem_size_ = micro_meta_mgr.get_cache_mem_limit();
+      const int64_t origin_micro_cnt = cache_stat.micro_stat().total_micro_cnt_;
+      cache_stat.micro_stat().total_micro_cnt_ = micro_meta_mgr.get_micro_cnt_limit();
       ASSERT_EQ(OB_SS_CACHE_REACH_MEM_LIMIT,
           micro_meta_mgr.add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, real_add));
       ASSERT_EQ(false, real_add);
-      cache_stat.micro_stat().micro_total_mem_size_ = ori_mem_size;
+      cache_stat.micro_stat().total_micro_cnt_ = origin_micro_cnt;
       micro_meta_mgr.set_mem_limited(false);
     } else {
       ASSERT_EQ(OB_SUCCESS,
@@ -712,20 +715,20 @@ TEST_F(TestSSMicroMetaManager, micro_meta_manager)
 
   ObSSMicroBlockMeta *tmp_micro_meta = nullptr;
   {
-    ObSSMicroSnapshotInfo tmp_micro_snapshot_info;
+    ObSSMicroBaseInfo tmp_micro_info;
     ObSSMicroBlockMetaHandle tmp_micro_handle;
     ObSSMemBlockHandle tmp_mem_blk_handle;
     ObSSPhysicalBlockHandle tmp_phy_blk_handle;
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(tmp_micro_key, tmp_micro_snapshot_info,
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(tmp_micro_key, tmp_micro_info,
               tmp_micro_handle, tmp_mem_blk_handle, tmp_phy_blk_handle, true));
     ASSERT_EQ(true, tmp_micro_handle.is_valid());
     ASSERT_EQ(false, tmp_micro_handle.get_ptr()->is_persisted_);
     ASSERT_EQ(false, tmp_micro_handle.get_ptr()->is_in_l1_);
-    ASSERT_EQ(true, tmp_micro_snapshot_info.is_valid());
-    ASSERT_EQ(true, tmp_micro_snapshot_info.is_in_l1_);
-    ASSERT_EQ(false, tmp_micro_snapshot_info.is_in_ghost_);
-    ASSERT_EQ(micro_size, tmp_micro_snapshot_info.size_);
-    ASSERT_EQ(false, tmp_micro_snapshot_info.is_persisted_);
+    ASSERT_EQ(true, tmp_micro_info.is_valid());
+    ASSERT_EQ(true, tmp_micro_info.is_in_l1_);
+    ASSERT_EQ(false, tmp_micro_info.is_in_ghost_);
+    ASSERT_EQ(micro_size, tmp_micro_info.size_);
+    ASSERT_EQ(false, tmp_micro_info.is_persisted_);
     tmp_micro_meta = tmp_micro_handle.get_ptr();
     tmp_micro_meta->is_reorganizing_ = 1;
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.force_unmark_reorganizing(tmp_micro_key));
@@ -741,11 +744,11 @@ TEST_F(TestSSMicroMetaManager, micro_meta_manager)
 
   // fail to get it, cuz ghost micro_meta should be invalid_field.
   {
-    ObSSMicroSnapshotInfo tmp_micro_snapshot_info;
+    ObSSMicroBaseInfo tmp_micro_info;
     ObSSMicroBlockMetaHandle tmp_micro_handle;
     ObSSMemBlockHandle tmp_mem_blk_handle;
     ObSSPhysicalBlockHandle tmp_phy_blk_handle;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, micro_meta_mgr.get_micro_block_meta_handle(tmp_micro_key, tmp_micro_snapshot_info,
+    ASSERT_EQ(OB_ERR_UNEXPECTED, micro_meta_mgr.get_micro_block_meta_handle(tmp_micro_key, tmp_micro_info,
               tmp_micro_handle, tmp_mem_blk_handle, tmp_phy_blk_handle, true));
   }
 }
@@ -892,6 +895,109 @@ TEST_F(TestSSMicroMetaManager, test_clear_micro_meta_by_tablet_id)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.clear_tablet_micro_meta(tablet_id3, remain_micro_cnt));
   ASSERT_EQ(micro_cnt / 2, remain_micro_cnt);
   ASSERT_EQ((macro_cnt - 3) * micro_cnt + micro_cnt / 2, cache_stat.micro_stat().valid_micro_cnt_);
+}
+
+/* Test after call clear_tablet_micro_meta(), phy_blk's valid_len will decrease. */
+TEST_F(TestSSMicroMetaManager, test_clear_tablet_micro_meta_and_update_valid_len)
+{
+  LOG_INFO("TEST_CASE: start test_clear_tablet_micro_meta_and_update_valid_len");
+  ObSSMicroMetaManager &micro_meta_mgr = MTL(ObSSMicroCache *)->micro_meta_mgr_;
+  ObSSMemDataManager &mem_data_mgr = MTL(ObSSMicroCache *)->mem_data_mgr_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache *)->cache_stat_;
+  const int64_t micro_cnt = 20;
+  const int64_t micro_size = 4 * 1024;
+
+  ObArenaAllocator allocator;
+  char *write_buf = nullptr;
+  write_buf = static_cast<char*>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, write_buf);
+  MEMSET(write_buf, 'a', micro_size);
+
+  const int64_t id1 = 1000;
+  const int64_t id2 = 2000;
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    const int64_t tablet_id = (i == 0 ? id1 : id2);
+    MacroBlockId macro_id(0, tablet_id, 0);
+    uint32_t micro_crc = 0;
+    int32_t offset = (i + 1) * micro_size;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ObSSMemBlockHandle mem_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, mem_data_mgr.add_micro_block_data(micro_key, write_buf, micro_size, mem_blk_handle, micro_crc));
+    ASSERT_EQ(true, mem_blk_handle.is_valid());
+    bool real_add = false;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, real_add));
+  }
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.inner_seal_and_alloc_fg_mem_block());
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+  ASSERT_EQ(micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
+  const int64_t phy_blk_idx = 2;
+  ObSSPhysicalBlockHandle phy_blk_handle;
+  phy_blk_mgr.get_block_handle(phy_blk_idx, phy_blk_handle);
+  ASSERT_EQ(micro_cnt * micro_size, phy_blk_handle()->get_valid_len());
+
+  int64_t remain_micro_cnt = 0;
+  ObTabletID tablet_id2(id2);
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.clear_tablet_micro_meta(tablet_id2, remain_micro_cnt));
+  ASSERT_EQ(0, remain_micro_cnt);
+  ASSERT_EQ(1 * micro_size, phy_blk_handle()->get_valid_len());
+}
+
+/* Test unpersisted micro_block is deleted for TTL expired */
+TEST_F(TestSSMicroMetaManager, test_delete_unpersisted_and_expired_micro_block)
+{
+  LOG_INFO("TEST_CASE: start test_delete_unpersisted_and_expired_micro_block");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMemDataManager &mem_data_mgr = micro_cache->mem_data_mgr_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  const int64_t micro_cnt = 20;
+  const int64_t micro_size = 4 * 1024;
+
+  ObArenaAllocator allocator;
+  char *write_buf = nullptr;
+  write_buf = static_cast<char*>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, write_buf);
+  MEMSET(write_buf, 'a', micro_size);
+
+  ObArray<ObSSMicroBlockCacheKey> expired_micro_keys;
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    MacroBlockId macro_id(0, 1000, 0);
+    uint32_t micro_crc = 0;
+    int32_t offset = (i + 1) * micro_size;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ObSSMemBlockHandle mem_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, mem_data_mgr.add_micro_block_data(micro_key, write_buf, micro_size, mem_blk_handle, micro_crc));
+    ASSERT_EQ(true, mem_blk_handle.is_valid());
+    bool real_add = false;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, real_add));
+
+    if (i < micro_cnt / 2) {
+      ObSSMicroBlockMetaHandle micro_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_handle, false));
+      micro_handle()->access_time_ = 1; // mock micro_meta expired
+      ASSERT_EQ(OB_SUCCESS, expired_micro_keys.push_back(micro_key));
+    }
+  }
+
+  // delete expired micro_block which is unpersisted
+  ObSSExecuteMicroCheckpointOp &micro_ckpt_op = micro_cache->task_runner_.micro_ckpt_task_.ckpt_op_;
+  ASSERT_EQ(OB_SUCCESS, micro_ckpt_op.delete_expired_micro_metas(expired_micro_keys));
+
+  // persist mem_block
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.inner_seal_and_alloc_fg_mem_block());
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  ASSERT_EQ(1, cache_stat.mem_blk_stat().mem_blk_fg_used_cnt_);
+
+  ASSERT_EQ(micro_cnt / 2, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(micro_cnt / 2 * micro_size, cache_stat.micro_stat().total_micro_size_);
+  const int64_t phy_blk_idx = 2;
+  ObSSPhysicalBlockHandle phy_blk_handle;
+  phy_blk_mgr.get_block_handle(phy_blk_idx, phy_blk_handle);
+  ASSERT_EQ(micro_cnt / 2 * micro_size, phy_blk_handle()->get_valid_len());
 }
 
 // check that arc_info.p_ does not exceed arc_info.max_p_

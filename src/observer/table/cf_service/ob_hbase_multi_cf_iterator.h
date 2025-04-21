@@ -55,6 +55,12 @@ public:
       merge_iter_->~ResultMergeIterator();
       merge_iter_ = nullptr;
     }
+    for (int64_t i = 0; i < cf_iters_.count(); i++) {
+      if (OB_NOT_NULL(cf_iters_.at(i))) {
+        cf_iters_.at(i)->~ObHbaseCFIterator();
+        cf_iters_.at(i) = nullptr;
+      }
+    }
     cf_iters_.reset();
     for (int64_t i = 0; i < cf_queries_.count(); i++) {
       if (OB_NOT_NULL(cf_queries_.at(i))) {

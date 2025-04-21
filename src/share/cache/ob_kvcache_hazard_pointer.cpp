@@ -9,14 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "lib/alloc/alloc_struct.h"
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/ob_define.h"
 #include "share/cache/ob_kvcache_struct.h"
 #include "share/cache/ob_kvcache_hazard_pointer.h"
-#include "share/cache/ob_kvcache_store.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 
 namespace oceanbase {
 namespace common {
@@ -27,8 +25,7 @@ bool HazardPointer::protect(ObKVMemBlockHandle* mb_handle, int32_t seq_num)
   if (seq_num != mb_handle->get_seq_num()) {
     b_ret = false;
   } else {
-    reset_protect(mb_handle);
-    MEM_BARRIER();
+    reset_protect_seq_cst(mb_handle);
     if (seq_num != ATOMIC_LOAD_RLX(&mb_handle->seq_num_)) {
       release();
       b_ret = false;
@@ -43,8 +40,7 @@ bool HazardPointer::protect(ObKVMemBlockHandle* mb_handle)
   if (ObKVMBHandleStatus::FREE == mb_handle->get_status()) {
     b_ret = false;
   } else {
-    reset_protect(mb_handle);
-    MEM_BARRIER();
+    reset_protect_seq_cst(mb_handle);
     if (ObKVMBHandleStatus::FREE == ATOMIC_LOAD_RLX(&mb_handle->status_)) {
       release();
       b_ret = false;
@@ -62,6 +58,12 @@ void HazardPointer::reset_protect(ObKVMemBlockHandle* mb_handle)
 {
   ObKVMemBlockHandle** addr = &this->mb_handle_;
   ATOMIC_STORE_RLX(addr, mb_handle);
+}
+
+void HazardPointer::reset_protect_seq_cst(ObKVMemBlockHandle* mb_handle)
+{
+  ObKVMemBlockHandle** addr = &this->mb_handle_;
+  ATOMIC_STORE(addr, mb_handle);
 }
 
 void HazardPointer::release()
@@ -90,6 +92,67 @@ void HazardPointer::set_next_atomic(HazardPointer* next)
 {
   HazardPointer** addr = &next_;
   ATOMIC_STORE_RLX(&this->next_, next);
+}
+
+ObMemAttr SharedHazptr::attr_ = SET_USE_500("shr_hazptr");
+
+int SharedHazptr::make(HazardPointer& hazptr, SharedHazptr& shared_hazptr)
+{
+  INIT_SUCC(ret);
+  shared_hazptr.reset();
+  if (OB_ISNULL(shared_hazptr.ctrl_ptr_ =
+                           (typeof(shared_hazptr.ctrl_ptr_))ob_malloc(sizeof(*shared_hazptr.ctrl_ptr_), attr_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "failed to allocate memory for ctrl_ptr");
+  } else {
+    new (shared_hazptr.ctrl_ptr_) ControlPointer(hazptr);
+  }
+  return ret;
+}
+
+SharedHazptr::SharedHazptr(const SharedHazptr& other)
+{
+  *this = other;
+}
+
+SharedHazptr::~SharedHazptr()
+{
+  reset();
+}
+
+SharedHazptr& SharedHazptr::operator=(const SharedHazptr& other)
+{
+  reset();
+  ctrl_ptr_ = other.ctrl_ptr_;
+  ATOMIC_INC(&ctrl_ptr_->refcnt_);
+  return *this;
+}
+
+void SharedHazptr::reset()
+{
+  if (nullptr != ctrl_ptr_) {
+    uint64_t refcnt = ATOMIC_SAF(&ctrl_ptr_->refcnt_, 1);
+    if (0 == refcnt) {
+      ctrl_ptr_->~ControlPointer();
+      ob_free(ctrl_ptr_);
+    }
+    ctrl_ptr_ = nullptr;
+  }
+}
+
+ObKVMemBlockHandle* SharedHazptr::get_mb_handle() const
+{
+  ObKVMemBlockHandle* mb_handle = nullptr;
+  if (nullptr != ctrl_ptr_) {
+    mb_handle = ctrl_ptr_->hazptr_->get_mb_handle();
+  }
+  return mb_handle;
+}
+
+SharedHazptr::ControlPointer::~ControlPointer()
+{
+  hazptr_->release();
+  HazptrTLCache::get_instance().release_hazptr(hazptr_);
 }
 
 };  // namespace common

@@ -1391,7 +1391,9 @@ int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t , 1> col_ids;
   uint64_t with_param_table_tid;
+  // for hnsw, table_schema here is snapshot table, need to get related delta buffer table.
   ObIndexType index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
+
   // ivf param is saved in centroid table's schema
   if (table_schema->is_vec_ivfflat_index()) {
     index_type = INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL;
@@ -1412,12 +1414,31 @@ int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
   } else if (col_ids.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid col id array", K(ret), K(col_ids));
-  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(&schema_guard,
-                                                            *data_table_schema,
-                                                            index_type,
-                                                            col_ids.at(0),
-                                                            with_param_table_tid))) {
-    LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
+  } else {
+    if (index_type == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
+      ObString index_prefix;
+      if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*table_schema, index_prefix))) {
+        LOG_WARN("failed to get index prefix", K(ret));
+      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_with_index_prefix(&schema_guard,
+                                                                                   *data_table_schema,
+                                                                                   index_type,
+                                                                                   col_ids.at(0),
+                                                                                   index_prefix,
+                                                                                   with_param_table_tid))) {
+        LOG_WARN("failed to get index prefix", K(ret), K(index_prefix));
+      }
+    } else { // ivf centroid tables
+      if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(&schema_guard,
+                                                          *data_table_schema,
+                                                          index_type,
+                                                          col_ids.at(0),
+                                                          with_param_table_tid))) {
+        LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, with_param_table_tid, with_param_table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(with_param_table_tid));
   } else if (OB_ISNULL(with_param_table_schema)) {

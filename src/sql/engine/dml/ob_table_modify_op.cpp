@@ -32,6 +32,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
 {
   int ret = OB_SUCCESS;
   if (op.need_foreign_key_checks()) {
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_foreign_key_cascading);
     const ObExprPtrIArray &old_row = dml_ctdef.old_row_;
     const ObExprPtrIArray &new_row = dml_ctdef.new_row_;
     const bool save_in_ignore_cascading = op.get_exec_ctx().get_das_ctx().in_ignore_cascading_;
@@ -1291,6 +1292,7 @@ int ObTableModifyOp::perform_batch_fk_check()
 {
   DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_foreign_key_cascading);
   for (int64_t i = 0; OB_SUCC(ret) && i < fk_checkers_.count(); ++i) {
     bool all_has_result = false;
     ObForeignKeyChecker *fk_checker = fk_checkers_.at(i);

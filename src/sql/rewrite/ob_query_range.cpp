@@ -1383,10 +1383,10 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
   // 对于 cast(column) op cast(const) 这种形式的条件，如果两个cast都是lossless的，各个输入参数的对应关系如下
   // cmp_type: op->get_expr_type()
   // col_type: column->get_result_type()
-  // calc_type: cast(const)->get_result_meta()
+  // calc_type: cast(column)->get_result_meta()
   // data_type: const->get_data_type()
   // 除了涉及 enum/set 的场景，calc_type 使用 op 任意一个参数的类型都不影响 is_cast_monotonic 的判断
-  // 对于 col_int op exec_param(enum) 的场景，calc_type 是 enum，需要将其改为 int 做特殊处理
+  // 对于 col_enum op const_int 的场景，calc_type 是 enum，需要将其改为 int 做特殊处理
   ObObjMeta calc_type = calc_meta;
   if (calc_type.is_enum_or_set()) {
     calc_type.set_int();
@@ -2225,7 +2225,7 @@ int ObQueryRange::get_basic_query_range(const ObRawExpr *l_expr,
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
   } else if (IS_BASIC_CMP_OP(cmp_type)) {
     if (T_OP_ROW != l_expr->get_expr_type()) {// 1. unary compare
-      const ObRawExprResType &calc_type = l_expr->is_const_expr() ?
+      const ObRawExprResType &calc_type = l_expr->has_flag(CNT_COLUMN) ?
                                           l_expr->get_result_type() : r_expr->get_result_type();
       if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
         LOG_WARN("failed to get expr without lossless cast", K(ret));
@@ -2879,6 +2879,7 @@ int ObQueryRange::pre_extract_in_op_with_opt(const ObOpRawExpr *b_expr,
   } else {
     const ObRawExpr *l_expr = b_expr->get_param_expr(0);
     const ObOpRawExpr *r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1));
+    const ObRawExpr *l_ori_expr = l_expr;
     // set to be true at the very begining
     query_range_ctx_->cur_expr_is_precise_ = true;
     if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) ||
@@ -2893,8 +2894,9 @@ int ObQueryRange::pre_extract_in_op_with_opt(const ObOpRawExpr *b_expr,
         LOG_WARN("failed to create in key part that contains rows", K(ret));
       }
     } else if (l_expr->is_column_ref_expr()) {
+      const ObRawExprResType &cmp_type = l_ori_expr->get_result_type();
       if (OB_FAIL(get_single_in_key_part(static_cast<const ObColumnRefRawExpr *>(l_expr),
-                                         r_expr, out_key_part, dtc_params))) {
+                                         r_expr, cmp_type, out_key_part, dtc_params))) {
         LOG_WARN("failed to create single column in key part", K(ret));
       }
     } else if (l_expr->has_flag(IS_ROWID)) {
@@ -2955,12 +2957,13 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
         for (int64_t j = 0; OB_SUCC(ret) && j < r_param->get_param_count(); ++j) {
           if (!is_contain(invalid_expr_idx, j) && !is_contain(not_key_idx, j)) {
             const ObRawExpr *const_expr = r_param->get_param_expr(j);
+            const ObRawExpr *l_ori_expr = l_expr->get_param_expr(j);
             InParamMeta *param_meta = NULL;
             ObKeyPartPos *cur_key_pos = nullptr;
             bool can_be_extract = true;
             bool always_true = true;
             bool is_val_valid = true;
-            if (OB_ISNULL(const_expr)) {
+            if (OB_ISNULL(const_expr) || OB_ISNULL(l_ori_expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected null", K(ret));
             } else if (OB_FAIL(idx_pos_map.get_refactored(j, cur_key_pos))) {
@@ -2989,7 +2992,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
               LOG_WARN("failed to get param meta", K(ret));
             } else if (!can_be_extract_range(T_OP_EQ,
                                              cur_key_pos->column_type_,
-                                             const_expr->get_result_type(),
+                                             l_ori_expr->get_result_type(),
                                              const_expr->get_result_type().get_type(),
                                              always_true)) {
               can_be_extract = false;
@@ -3004,7 +3007,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
               // do nothing
             } else if (OB_FAIL(check_expr_precise(tmp_key_part,
                                                   const_expr,
-                                                  const_expr->get_result_type(),
+                                                  l_ori_expr->get_result_type(),
                                                   *cur_key_pos))) {
               LOG_WARN("failed to check expr precise", K(ret));
             }
@@ -3237,6 +3240,7 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
 
 int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
                                          const ObOpRawExpr *r_expr,
+                                         const ObExprResType &cmp_type,
                                          ObKeyPart *&out_key_part,
                                          const ObDataTypeCastParams &dtc_params)
 {
@@ -3291,7 +3295,7 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
           cur_always_true = true;
         } else if (!can_be_extract_range(T_OP_EQ,
                                         key_pos->column_type_,
-                                        const_expr->get_result_type(),
+                                        cmp_type,
                                         const_expr->get_result_type().get_type(),
                                         cur_always_true)) {
           cur_can_be_extract = false;

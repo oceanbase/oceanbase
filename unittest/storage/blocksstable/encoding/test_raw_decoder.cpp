@@ -231,13 +231,10 @@ public:
 
   TestRawDecoder() : tenant_ctx_(OB_SERVER_TENANT_ID)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.encoding_meta_allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   virtual ~TestRawDecoder() {}
 
@@ -283,7 +280,6 @@ protected:
   ObMicroBlockRawEncoder encoder_;
   MockObTableReadInfo read_info_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   int64_t full_column_cnt_;
   ObArenaAllocator allocator_;
 };

@@ -2251,6 +2251,16 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
   return ret;
 }
 
+int ObTableQueryResult::add_one_row_for_exist_only(const common::ObNewRow &row, ObString family_name) {
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(add_row(row))) {
+    LOG_WARN("failed to add row", K(ret));
+  }
+  UNUSED(family_name);
+  return ret;
+}
+
 int ObTableQueryResult::add_all_property(const ObTableQueryResult &other)
 {
   int ret = OB_SUCCESS;
@@ -2424,7 +2434,7 @@ ObTableQueryIterableResult::ObTableQueryIterableResult()
   }
 
 
-void ObTableQueryIterableResult::reset_except_property()
+void ObTableQueryIterableResult::reset()
 {
   row_count_ = 0;
   allocator_.reset();
@@ -2454,6 +2464,15 @@ int ObTableQueryIterableResult::add_all_row(ObTableQueryDListResult &other)
     ret = OB_SUCCESS;
   }
 
+  return ret;
+}
+
+int ObTableQueryIterableResult::add_one_row_for_exist_only(const common::ObNewRow &row, ObString family_name) {
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(add_row(row, family_name))) {
+    LOG_WARN("failed to add row", K(ret), K(family_name));
+  }
   return ret;
 }
 

@@ -2177,7 +2177,8 @@ struct NullAwareAntiJoinInfo {
     // generate physical property for each subquery path, including ordering, sharding
     int compute_subquery_path_property(const uint64_t table_id,
                                        ObLogicalOperator *root,
-                                       Path *path);
+                                       Path *path,
+                                       bool is_temp_table_path = false);
 
     // generate logical property for each subquery, including const exprs, fd item sets
     int compute_subquery_property(const uint64_t table_id,
@@ -2276,6 +2277,7 @@ struct NullAwareAntiJoinInfo {
 
     int check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_conditions,
                                    const ValidPathInfo &path_info,
+                                   const bool has_equal_cond,
                                    const ObJoinOrder &right_tree,
                                    bool &is_valid);
 
@@ -2888,6 +2890,12 @@ struct NullAwareAntiJoinInfo {
                                 const bool has_aggr,
                                 uint64_t *index_tid_array,
                                 int64_t &size);
+    int add_valid_vec_index_ids(const ObDMLStmt &stmt,
+                                ObSqlSchemaGuard *schema_guard,
+                                const uint64_t table_id,
+                                const uint64_t ref_table_id,
+                                const bool has_aggr,
+                                ObIArray<uint64_t> &valid_index_ids);
     int check_vec_hint_index_id(const ObDMLStmt &stmt,
                                 ObSqlSchemaGuard *schema_guard,
                                 const uint64_t table_id,

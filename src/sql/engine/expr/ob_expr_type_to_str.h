@@ -175,6 +175,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprEnumToInnerType) const;
 };
 
+class ObExprInnerTypeToEnumSet : public ObExprOperator
+{
+public:
+  explicit ObExprInnerTypeToEnumSet(common::ObIAllocator &alloc);
+  virtual ~ObExprInnerTypeToEnumSet();
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+
+  static int eval_inner_type_to_enumset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprInnerTypeToEnumSet);
+};
+
 } // sql
 } // oceanbase
 #endif

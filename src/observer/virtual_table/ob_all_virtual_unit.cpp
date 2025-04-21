@@ -256,7 +256,7 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         }
         case DATA_DISK_SIZE: {
           if (GCTX.is_shared_storage_mode()) {
-            cur_row_.cells_[i].set_int(tenant_meta.unit_.config_.data_disk_size());
+            cur_row_.cells_[i].set_int(tenant_meta.unit_.get_effective_actual_data_disk_size());
           } else {
             cur_row_.cells_[i].set_null();
           }

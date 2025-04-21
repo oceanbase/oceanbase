@@ -465,6 +465,7 @@ struct ObMicroBlockEncodingCtx
   bool need_calc_column_chksum_;
   ObCompressorType compressor_type_;
   uint64_t encoding_granularity_;
+  uint64_t minimum_rows_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
 
   ObMicroBlockEncodingCtx() : macro_block_size_(0), micro_block_size_(0),
@@ -475,6 +476,7 @@ struct ObMicroBlockEncodingCtx
     column_encodings_(nullptr), major_working_cluster_version_(0),
     row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false),
     compressor_type_(INVALID_COMPRESSOR), encoding_granularity_(UINT64_MAX),
+    minimum_rows_(1),
     semistruct_encoding_type_()
   {
     previous_encodings_.set_attr(ObMemAttr(MTL_ID(), "MicroEncodeCtx"));
@@ -485,7 +487,7 @@ struct ObMicroBlockEncodingCtx
       K_(column_cnt), KP_(col_descs), K_(estimate_block_size), K_(real_block_size),
       K_(micro_block_cnt), K_(encoder_opt), K_(previous_encodings), KP_(column_encodings),
       K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum),
-      K_(compressor_type), K_(encoding_granularity), K_(semistruct_encoding_type));
+      K_(compressor_type), K_(encoding_granularity), K_(minimum_rows), K_(semistruct_encoding_type));
 };
 
 template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>

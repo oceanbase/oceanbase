@@ -89,7 +89,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
                                                     default_auth_plugin))) {
           LOG_WARN("fail to get block encryption variable", K(ret));
-        } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+        } else if (OB_UNLIKELY(0 != auth_plugin.case_compare(default_auth_plugin))) {
           ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
           LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
         } else {/* do nothing */}
@@ -177,12 +177,19 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 != password.length()) {//set password
-            bool need_enc = (1 == node->children_[2]->value_) ? true : false;
-            if (!need_enc && (!is_valid_mysql41_passwd(password))) {
-              ret = OB_ERR_PASSWORD_FORMAT;
-              LOG_WARN("Wrong password hash format");
+            bool plain_password;
+            if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
+              LOG_WARN("failed to check feature enable", K(ret));
+            } else if (lib::is_oracle_mode() || !plain_password) {
+              bool need_enc = (1 == node->children_[2]->value_) ? true : false;
+              if (OB_UNLIKELY(!need_enc && (!is_valid_mysql41_passwd(password)))) {
+                ret = OB_ERR_PASSWORD_FORMAT;
+                LOG_WARN("Wrong password hash format", K(ret));
+              } else {
+                set_pwd_stmt->set_need_enc(need_enc);
+              }
             } else {
-              set_pwd_stmt->set_need_enc(need_enc);
+              set_pwd_stmt->set_need_enc(true);
             }
           } else {
             set_pwd_stmt->set_need_enc(false); //clear password

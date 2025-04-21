@@ -122,8 +122,8 @@ int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("request is null", K(ret));
     } else {
-      ObTableLSExecuteEndTransCb * cb = OB_NEW(ObTableLSExecuteEndTransCb,
-                                               ObMemAttr(MTL_ID(), "TbLsExuTnCb"), req);
+      ObTableLSExecuteEndTransCb *cb = OB_NEW(ObTableLSExecuteEndTransCb,
+                                              ObMemAttr(MTL_ID(), "TbLsExuTnCb"), req);
       if (OB_ISNULL(cb)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memroy for ls execute callback", K(ret));
@@ -139,7 +139,7 @@ int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
 
 ObTableAPITransCb* ObTableLSExecuteCreateCbFunctor::new_callback()
 {
-  ObTableLSExecuteEndTransCb *cb = nullptr;
+  ObTableAPITransCb *cb = nullptr;
   if (is_inited_) {
     cb = cb_;
   }
@@ -167,9 +167,14 @@ void ObTableAPITransCb::destroy_cb_if_no_ref()
   int32_t new_ref = ATOMIC_SAF(&ref_count_, 1);
   if (0 >= new_ref) {
     // @caution !!!
-    this->~ObTableAPITransCb();
-    ob_free(this);
+    destroy_cb();
   }
+}
+
+void ObTableAPITransCb::destroy_cb()
+{
+  this->~ObTableAPITransCb();
+  ob_free(this);
 }
 
 void ObTableAPITransCb::set_lock_handle(ObHTableLockHandle *lock_handle)
@@ -363,7 +368,11 @@ void ObTableLSExecuteEndTransCb::free_dependent_results()
 {
   for (int64_t i = 0; i < dependent_results_.count(); i++) {
     if (OB_NOT_NULL(dependent_results_.at(i))) {
-      TABLEAPI_OBJECT_POOL_MGR->free_res(dependent_results_.at(i));
+      if (is_alloc_from_pool_) {
+        TABLEAPI_OBJECT_POOL_MGR->free_res(dependent_results_.at(i));
+      } else {
+        dependent_results_.at(i)->~ObTableLSOpResult();
+      }
       dependent_results_.at(i) = nullptr;
     }
   }

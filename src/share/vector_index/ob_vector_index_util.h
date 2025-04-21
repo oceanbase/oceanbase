@@ -261,6 +261,10 @@ public:
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
       ObIArray<ObString> &col_names);
+  static bool is_match_index_column_name(
+      const schema::ObTableSchema &table_schema,
+      const schema::ObTableSchema &index_schema,
+      const ObString &index_column_name);
   static int get_vector_index_column_id(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
@@ -282,6 +286,20 @@ public:
       const ObIndexType index_type,
       const int64_t col_id, // index col id
       uint64_t &tid);
+  static int get_latest_avaliable_index_tids_for_hnsw(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const int64_t col_id,
+    uint64_t &inc_tid,
+    uint64_t &vbitmap_tid,
+    uint64_t &snapshot_tid);
+  static int get_vector_index_tid_with_index_prefix(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const ObIndexType index_type,
+    const int64_t col_id,
+    ObString &index_prefix,
+    uint64_t &tid);
   static int get_vector_index_tid(
       sql::ObSqlSchemaGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -470,10 +488,6 @@ private:
       ObIArray<ObString> &new_table_names);
   static bool is_expr_type_and_distance_algorithm_match(
       const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);
-  static bool is_match_index_column_name(
-      const schema::ObTableSchema &table_schema,
-      const schema::ObTableSchema &index_schema,
-      const ObString &index_column_name);
   static int has_same_cascaded_col_id(
       const ObTableSchema &data_table_schema,
       const ObColumnSchemaV2 &col_schema,
@@ -637,6 +651,27 @@ public:
   const static int64_t VARIABLE_LENGTH_TYPE_SUPPROT = int64_t(1) << common::ObObjType::ObVarcharType;
   const static int64_t FIXED_TYPE_LENGTH = 8;
   const static int64_t EXTRA_INFO_PARAM_MAX_VALUE = 16384;
+};
+
+
+struct ObVecTidCandidate
+{
+  ObVecTidCandidate() : version_(OB_INVALID_ID), inc_tid_(OB_INVALID_ID) {}
+  ObVecTidCandidate(int64_t version, uint64_t inc_tid, ObString &index_prefix)
+    : version_(version), inc_tid_(inc_tid), index_prefix_(index_prefix) {}
+  int64_t version_;
+  uint64_t inc_tid_;
+  ObString index_prefix_;
+  TO_STRING_KV(K_(version), K_(inc_tid), K_(index_prefix));
+};
+
+struct ObVecTidCandidateMaxCompare
+{
+  bool operator()(const ObVecTidCandidate &lhs, const ObVecTidCandidate &rhs)
+  {
+    return lhs.version_ < rhs.version_ ? true : false;
+  }
+  int get_error_code() const { return OB_SUCCESS; }
 };
 
 }  // namespace share

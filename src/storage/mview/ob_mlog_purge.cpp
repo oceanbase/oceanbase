@@ -58,7 +58,7 @@ int ObMLogPurger::purge()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogPurger not init", KR(ret), KP(this));
-  } else if (OB_ISNULL(ctx_)) {
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_my_session())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ctx can not be NULL", KR(ret));
   } else {
@@ -78,6 +78,8 @@ int ObMLogPurger::purge()
       arg.table_id_ =  mlog_info_.get_mlog_id();
       arg.mview_op_type_ = MVIEW_OP_TYPE::PURGE_MLOG;
       arg.parallel_ = purge_param_.purge_log_parallel_;
+      arg.session_id_ = ctx_->get_my_session()->get_server_sid();
+      arg.start_ts_ = ObTimeUtil::current_time();
       share::SCN curr_scn;
       if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(curr_scn))) {
         LOG_WARN("get current_scn failed", KR(ret));

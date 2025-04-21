@@ -65,6 +65,7 @@ public:
   int update_for_enddate(ObDBMSSchedJobInfo &job_info);
   int update_for_rollback(ObDBMSSchedJobInfo &job_info);
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);
+  int update_for_mysql_event_database_not_exist(ObDBMSSchedJobInfo &job_info);
   int update_for_lost(ObDBMSSchedJobInfo &job_info);
   int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
   int update_for_kill(ObDBMSSchedJobInfo &job_info);

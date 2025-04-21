@@ -915,7 +915,7 @@ TEST_F(TestFileManager, test_tenant_disk_space_meta)
   ObTenantDiskSpaceMeta disk_space_meta(MTL_ID());
   disk_space_meta.body_.tmp_file_write_cache_alloc_size_ = tenant_disk_space_mgr->get_tmp_file_write_cache_alloc_size();
   ASSERT_EQ(OB_SUCCESS, disk_space_meta.header_.construct_header(disk_space_meta.body_));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->write_tenant_disk_space_meta(disk_space_meta));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->do_write_tenant_disk_space_meta(disk_space_meta));
   // step 3: read tenant disk space meta
   disk_space_meta.reset();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->read_tenant_disk_space_meta(disk_space_meta));
@@ -1088,6 +1088,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(false, is_exist);
   tenant_ids.reset();
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_shared_tenant_ids(MTL_ID(), tenant_ids));
+  // NOTICE: if object_storage opens multi_version mode, here 'tenant_ids.count()=1'
   ASSERT_EQ(0, tenant_ids.count());
 
   // test7: list shared tablet meta macro
@@ -1361,6 +1362,62 @@ TEST_F(TestFileManager, test_delete_tenant)
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.delete_remote_tenant_dir(MTL_ID(), MTL_EPOCH_ID()));
 }
 
+TEST_F(TestFileManager, test_file_manager_restart)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tnt_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tnt_file_mgr);
+  const uint64_t tenant_id = MTL_ID();
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+
+  ObTenantDiskSpaceMeta disk_space_meta_v1;
+  ASSERT_EQ(false, disk_space_meta_v1.is_valid());
+  disk_space_meta_v1.body_.tenant_id_ = tenant_id;
+  disk_space_meta_v1.body_.version_ = 1;
+  disk_space_meta_v1.body_.meta_file_alloc_size_ = 1001;
+  disk_space_meta_v1.body_.private_macro_alloc_size_ = 20002;
+  disk_space_meta_v1.body_.tmp_file_write_cache_alloc_size_ = 300003;
+  disk_space_meta_v1.body_.tmp_file_read_cache_alloc_size_ = 4000004;
+  disk_space_meta_v1.body_.major_macro_read_cache_alloc_size_ = 50000005;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->do_build_tenant_disk_space_meta(disk_space_meta_v1));
+
+  ObTenantDiskSpaceMeta disk_space_meta_v2;
+  ASSERT_EQ(false, disk_space_meta_v2.is_valid());
+  disk_space_meta_v2.body_.tenant_id_ = tenant_id;
+  disk_space_meta_v2.body_.version_ = 2;
+  disk_space_meta_v2.body_.meta_file_alloc_size_ = 1001;
+  disk_space_meta_v2.body_.private_macro_alloc_size_ = 20002;
+  disk_space_meta_v2.body_.tmp_file_write_cache_alloc_size_ = 300003;
+  disk_space_meta_v2.body_.tmp_file_read_cache_alloc_size_ = 4000004;
+  disk_space_meta_v2.body_.major_macro_read_cache_alloc_size_ = 50000005;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->do_build_tenant_disk_space_meta(disk_space_meta_v2));
+
+  ObTenantDiskCacheRatioInfo ratio_info;
+  ASSERT_EQ(disk_space_meta_v1.get_serialize_size() + ratio_info.get_serialize_size(), disk_space_meta_v2.get_serialize_size());
+
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->do_write_tenant_disk_space_meta(disk_space_meta_v1));
+
+  // destroy tenant_file_manager
+  tnt_file_mgr->stop();
+  tnt_file_mgr->wait();
+  tnt_file_mgr->destroy();
+  ASSERT_EQ(false, tnt_file_mgr->is_inited_);
+
+  // restart tenant_file_manager
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
+
+  ObTenantDiskSpaceMeta cur_disk_space_meta;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->read_tenant_disk_space_meta(cur_disk_space_meta));
+  ASSERT_EQ(tenant_id, cur_disk_space_meta.body_.tenant_id_);
+  ASSERT_EQ(disk_space_meta_v1.body_.version_, cur_disk_space_meta.body_.version_);
+  ASSERT_EQ(disk_space_meta_v1.body_.meta_file_alloc_size_, cur_disk_space_meta.body_.meta_file_alloc_size_);
+  ASSERT_EQ(disk_space_meta_v1.body_.private_macro_alloc_size_, cur_disk_space_meta.body_.private_macro_alloc_size_);
+  ASSERT_EQ(disk_space_meta_v1.body_.tmp_file_write_cache_alloc_size_, cur_disk_space_meta.body_.tmp_file_write_cache_alloc_size_);
+  ASSERT_EQ(disk_space_meta_v1.body_.tmp_file_read_cache_alloc_size_, cur_disk_space_meta.body_.tmp_file_read_cache_alloc_size_);
+  ASSERT_EQ(disk_space_meta_v1.body_.major_macro_read_cache_alloc_size_, cur_disk_space_meta.body_.major_macro_read_cache_alloc_size_);
+}
 
 } // namespace storage
 } // namespace oceanbase

@@ -787,11 +787,11 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
         K_(cg_idxs),
         K_(cols_extend),
         K_(has_all_column_group),
-        K_(need_truncate_filter),
-        K_(datum_utils),
-        "cols_param",
-        ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),
-                                      cols_param_.count()));
+        K_(need_truncate_filter));
+        //K_(datum_utils),
+        //"cols_param",
+        //ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),
+        //                              cols_param_.count()));
     J_OBJ_END();
   }
   return pos;

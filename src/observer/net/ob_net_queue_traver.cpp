@@ -69,13 +69,15 @@ int ObNetQueueTraver::traverse_one_tenant_queue(oceanbase::omt::ReqQueue &tenant
   int ret = OB_SUCCESS;
   // normal queue
   int64_t prio_cnt = tenant_req_queue.get_prio_cnt();
-  for (int64_t i = 0; OB_SUCC(ret) && i < prio_cnt; i++) {
-    ObLinkQueue *link_queue = tenant_req_queue.get_queue(i);
-    if (OB_ISNULL(link_queue)) {
-      ret = OB_NULL_CHECK_ERROR;
-      LOG_ERROR("link_queue is nullptr", K(ret));
-    } else if (OB_FAIL(traverse_one_tenant_one_link_queue(link_queue, group_id, process))) {
-      LOG_ERROR("traverse one tenant one queue failed", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_req_queue.get_queue_num(); i++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < prio_cnt; j++) {
+      ObLinkQueue *link_queue = tenant_req_queue.get_queue(i, j);
+      if (OB_ISNULL(link_queue)) {
+        ret = OB_NULL_CHECK_ERROR;
+        LOG_ERROR("link_queue is nullptr", K(ret));
+      } else if (OB_FAIL(traverse_one_tenant_one_link_queue(link_queue, group_id, process))) {
+        LOG_ERROR("traverse one tenant one queue failed", K(ret));
+      }
     }
   }
   // multi level queue
@@ -109,13 +111,15 @@ int ObNetQueueTraver::traverse_one_tenant_group_queue(TenantReqQueue &tenant_gro
   int ret = OB_SUCCESS;
   // normal queue
   int64_t prio_cnt = tenant_group_queue.get_prio_cnt();
-  for (int64_t i = 0; OB_SUCC(ret) && i < prio_cnt; i++) {
-    ObLinkQueue *link_queue = tenant_group_queue.get_queue(i);
-    if (OB_ISNULL(link_queue)) {
-      ret = OB_NULL_CHECK_ERROR;
-      LOG_ERROR("link_queue is nullptr", K(ret));
-    } else if (OB_FAIL(traverse_one_tenant_one_link_queue(link_queue, group_id, process))) {
-      LOG_ERROR("traverse one tenant one queue failed", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_group_queue.get_queue_num(); i++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < prio_cnt; j++) {
+      ObLinkQueue *link_queue = tenant_group_queue.get_queue(i, j);
+      if (OB_ISNULL(link_queue)) {
+        ret = OB_NULL_CHECK_ERROR;
+        LOG_ERROR("link_queue is nullptr", K(ret));
+      } else if (OB_FAIL(traverse_one_tenant_one_link_queue(link_queue, group_id, process))) {
+        LOG_ERROR("traverse one tenant one queue failed", K(ret));
+      }
     }
   }
   // multi level queue

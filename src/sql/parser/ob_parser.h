@@ -157,6 +157,7 @@ enum State {
   S_SUBMIT,
   S_CANCEL,
   S_JOB,
+  S_EVENT,
   // add new states above me
   S_MAX
 };

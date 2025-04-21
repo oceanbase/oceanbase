@@ -7704,6 +7704,9 @@ def_table_schema(
       ('evo_plan_cpu_time', 'int', 'true'),
       ('baseline_exec_count', 'int', 'true'),
       ('baseline_cpu_time', 'int', 'true'),
+      ('evo_plan_hash', 'uint', 'true'),
+      ('baseline_plan_hash', 'uint', 'true'),
+      ('evo_exec_info', 'varbinary:2048', 'true')
   ],
 )
 def_table_schema(
@@ -7953,6 +7956,7 @@ all_ncomp_dll_v2 = dict(
   normal_columns = [
     ('merge_version', 'int'),
     ('dll', 'longblob', 'false'),
+    ('stack_size', 'longblob', 'true'),
   ],
 )
 def_table_schema(**all_ncomp_dll_v2)
@@ -8765,6 +8769,8 @@ def_table_schema(
       ('pl_evict_version', 'int'),
       ('plan_status', 'int'),
       ('adaptive_feedback_times', 'int'),
+      ('first_get_plan_time', 'int'),
+      ('first_exe_usec', 'int'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -16130,8 +16136,56 @@ def_table_schema(
 )
 # 12528: __tenant_virtual_show_catalog_tables
 
-# 12529: __all_virtual_storage_cache_task
-# 12530: __all_virtual_tablet_local_cache
+def_table_schema(
+  owner             = 'baonian.wcx',
+  table_name        = '__all_virtual_storage_cache_task',
+  table_id          = '12529',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('tablet_id', 'int'),
+  ],
+  normal_columns    = [
+    ('status',        'varchar:64'),
+    ('speed',         'varchar:29'),
+    ('start_time',    'timestamp'),
+    ('complete_time', 'timestamp'),
+    ('result',        'int'),
+    ('comment',       'varchar:4096'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner             = 'baonian.wcx',
+  table_name        = '__all_virtual_tablet_local_cache',
+  table_id          = '12530',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('tablet_id', 'int'),
+  ],
+  normal_columns    = [
+    ('storage_cache_policy', 'varchar:64'),
+    ('cached_data_size',     'int'),
+    ('cache_hit_count',      'int'),
+    ('cache_miss_count',     'int'),
+    ('cache_hit_size',       'int'),
+    ('cache_miss_size',      'int'),
+    ('info',                 'varchar:4096'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 12531: __tenant_virtual_catalog_table_column
 # 12532: __tenant_virtual_show_create_catalog_table
@@ -16139,7 +16193,29 @@ def_table_schema(
 # 12533: __all_virtual_ccl_rule
 # 12534: __all_virtual_ccl_status
 
-# 12535: __all_virtual_mview_running_job
+def_table_schema(
+  owner = 'zg410411',
+  table_name     = '__all_virtual_mview_running_job',
+  table_id       = '12535',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('table_id', 'int'),
+  ('job_type', 'uint'),
+  ('session_id', 'uint'),
+  ('read_snapshot', 'int'),
+  ('parallel', 'int'),
+  ('job_start_time', 'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner             = 'zhaoziqian.zzq',
@@ -16164,6 +16240,10 @@ def_table_schema(
     ('bigint_precision', 'varchar:1024'),
   ],
 )
+
+# 12537: __all_virtual_ls_migration_task
+# 12538 __all_virtual_ss_notify_tasks_stat
+# 12539 __all_virtual_ss_notify_tablets_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16710,8 +16790,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15504', all_def_keyword
 
 # 15505: __all_ccl_rule
 # 15506: __all_virtual_ccl_status
-# 15507: __all_virtual_mview_running_job
-# 15508: __all_mview_dep
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keywords['__all_virtual_mview_running_job']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -16794,7 +16874,7 @@ def_table_schema(
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
     IS_BATCHED_MULTI_STMT, RULE_NAME,
     (CASE PLAN_STATUS WHEN 0 THEN 'ACTIVE' ELSE 'INACTIVE' END) AS PLAN_STATUS,
-    ADAPTIVE_FEEDBACK_TIMES
+    ADAPTIVE_FEEDBACK_TIMES, FIRST_GET_PLAN_TIME, FIRST_EXE_USEC
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND is_in_pc=true
 """.replace("\n", " "),
 
@@ -18543,7 +18623,8 @@ def_table_schema(
     DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,
     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
-    IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES
+    IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES,
+    FIRST_GET_PLAN_TIME, FIRST_EXE_USEC
   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -19471,7 +19552,7 @@ UNION ALL
        inner_info_cols_char_name_printer(C.DATA_TYPE, C.COLLATION_TYPE) AS CHARACTER_SET_NAME,
        inner_info_cols_coll_name_printer(C.DATA_TYPE, C.COLLATION_TYPE) AS COLLATION_NAME,
        inner_info_cols_column_type_printer(C.DATA_TYPE, C.SUB_DATA_TYPE, C.SRS_ID, C.COLLATION_TYPE, C.DATA_SCALE, C.DATA_LENGTH, C.DATA_PRECISION, C.ZERO_FILL, C.EXTENDED_TYPE_INFO, C.COLUMN_FLAGS & (0x1 << 29)) AS COLUMN_TYPE,
-       CASE WHEN (C.ROWKEY_POSITION > 0 AND (C.COLUMN_FLAGS & (0x1 << 8) = 0)) OR (C.COLUMN_FLAGS & (0x1 << 30)) THEN "PRI" ELSE "" END AS COLUMN_KEY,
+       inner_info_cols_column_key_printer(effective_tenant_id(), T.TABLE_ID, C.COLUMN_ID) AS COLUMN_KEY,
        inner_info_cols_extra_printer(C.AUTOINCREMENT, C.ON_UPDATE_CURRENT_TIMESTAMP, C.DATA_SCALE, C.COLUMN_FLAGS) AS EXTRA,
        inner_info_cols_priv_printer(D.DATABASE_NAME, T.TABLE_NAME) AS PRIVILEGES,
        C.COMMENT AS COLUMN_COMMENT,
@@ -26054,7 +26135,9 @@ SELECT
   (CASE
       WHEN ssl_cert_expired_time > 0 THEN usec_to_time(ssl_cert_expired_time)
       ELSE NULL
-   END) AS SSL_CERT_EXPIRED_TIME
+   END) AS SSL_CERT_EXPIRED_TIME,
+  SS_DATA_DISK_OPERATION_SUGGESTED,
+  SS_DATA_DISK_SIZE_SUGGESTED
 FROM oceanbase.__all_virtual_server
 """.replace("\n", " ")
 )
@@ -26089,7 +26172,9 @@ def_table_schema(
   MEMORY_LIMIT,
   DATA_DISK_ALLOCATED,
   DATA_DISK_ABNORMAL_TIME,
-  SSL_CERT_EXPIRED_TIME
+  SSL_CERT_EXPIRED_TIME,
+  SS_DATA_DISK_OPERATION_SUGGESTED,
+  SS_DATA_DISK_SIZE_SUGGESTED
     FROM oceanbase.GV$OB_SERVERS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -31471,6 +31556,7 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
           (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
   FROM OCEANBASE.__all_user;
@@ -31540,6 +31626,7 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
           (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
   FROM OCEANBASE.__all_virtual_user;
@@ -31601,7 +31688,8 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_user B
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " ")
@@ -31661,7 +31749,8 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_virtual_user B
         ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
   """.replace("\n", " ")
@@ -32228,6 +32317,8 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 11) != 0) THEN 'ENCRYPT'
                 WHEN V1.C1 = 47
                      AND (U.PRIV_OTHERS & (1 << 12) != 0) THEN 'DECRYPT'
+                WHEN V1.C1 = 49
+                     AND (U.PRIV_OTHERS & (1 << 13) != 0) THEN 'EVENT'
                 WHEN V1.C1 = 50
                      AND (U.PRIV_OTHERS & (1 << 14) != 0) THEN 'CREATE CATALOG'
                 WHEN V1.C1 = 51
@@ -32327,6 +32418,7 @@ def_table_schema(
         UNION ALL SELECT 45 AS C1
         UNION ALL SELECT 46 AS C1
         UNION ALL SELECT 47 AS C1
+        UNION ALL SELECT 49 AS C1
         UNION ALL SELECT 50 AS C1
         UNION ALL SELECT 51 AS C1) V1,
        (SELECT USER_ID
@@ -32423,6 +32515,8 @@ def_table_schema(
                      AND (DP.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
                 WHEN V1.C1 = 45
                      AND (DP.PRIV_OTHERS & (1 << 10)) != 0 THEN 'LOCK TABLES'
+                WHEN V1.C1 = 49
+                     AND (DP.PRIV_OTHERS & (1 << 13)) != 0 THEN 'EVENT'
                 ELSE NULL
             END PRIVILEGE_TYPE ,
             CASE
@@ -32446,7 +32540,8 @@ def_table_schema(
         UNION ALL SELECT 37 AS C1
         UNION ALL SELECT 38 AS C1
         UNION ALL SELECT 44 AS C1
-        UNION ALL SELECT 45 AS C1) V1,
+        UNION ALL SELECT 45 AS C1
+        UNION ALL SELECT 49 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID= 0
@@ -37800,7 +37895,9 @@ def_table_schema(
       CAST(0 AS SIGNED) AS LAST_PURGE_STATUS,
       C.LAST_PURGE_ROWS AS NUM_ROWS_PURGED,
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
-      CAST('NO' AS CHAR(3)) AS STAGING_LOG
+      CAST('NO' AS CHAR(3)) AS STAGING_LOG,
+      B.DOP AS PURGE_DOP,
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -37859,7 +37956,9 @@ def_table_schema(
       CAST(0 AS SIGNED) AS LAST_PURGE_STATUS,
       C.LAST_PURGE_ROWS AS NUM_ROWS_PURGED,
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
-      CAST('NO' AS CHAR(3)) AS STAGING_LOG
+      CAST('NO' AS CHAR(3)) AS STAGING_LOG,
+      B.DOP AS PURGE_DOP,
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -37966,7 +38065,14 @@ def_table_schema(
           ELSE NULL
         END AS CHAR(1)
       ) AS ON_QUERY_COMPUTATION,
-      C.REFRESH_DOP AS REFRESH_DOP
+      C.REFRESH_DOP AS REFRESH_DOP,
+      C.data_sync_scn AS DATA_SYNC_SCN,
+      CAST(
+        CASE C.data_sync_scn
+          WHEN 0 THEN 'NOT AVAILABLE'
+          ELSE TIMESTAMPDIFF(SECOND, SCN_TO_TIMESTAMP(C.data_sync_scn), NOW())
+        END AS CHAR(128)
+      ) AS DATA_SYNC_DELAY
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -38070,7 +38176,14 @@ def_table_schema(
           ELSE NULL
         END AS CHAR(1)
       ) AS ON_QUERY_COMPUTATION,
-      C.REFRESH_DOP AS REFRESH_DOP
+      C.REFRESH_DOP AS REFRESH_DOP,
+      C.data_sync_scn AS DATA_SYNC_SCN,
+      CAST(
+        CASE C.data_sync_scn
+          WHEN 0 THEN 'NOT AVAILABLE'
+          ELSE TIMESTAMPDIFF(SECOND, SCN_TO_TIMESTAMP(C.data_sync_scn), NOW())
+        END AS CHAR(128)
+      ) AS DATA_SYNC_DELAY
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -38342,7 +38455,6 @@ def_table_schema(
           oceanbase.__all_virtual_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
-          AND C1.RESULT = 0
         GROUP BY TENANT_ID, REFRESH_ID
       ) C
     WHERE A.TENANT_ID = B.TENANT_ID
@@ -38397,7 +38509,6 @@ def_table_schema(
           oceanbase.__all_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
-          AND C1.RESULT = 0
         GROUP BY TENANT_ID, REFRESH_ID
       ) C
     WHERE A.TENANT_ID = B.TENANT_ID
@@ -38436,7 +38547,8 @@ def_table_schema(
       CAST(0 AS SIGNED) AS LOG_SETUP_TIME,
       C.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
-      C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS
+      C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS,
+      C.RESULT AS RESULT
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -38446,7 +38558,6 @@ def_table_schema(
       AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
-      AND C.RESULT = 0
 """.replace("\n", " ")
 )
 
@@ -38479,7 +38590,8 @@ def_table_schema(
       CAST(0 AS SIGNED) AS LOG_SETUP_TIME,
       C.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
-      C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS
+      C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS,
+      C.RESULT AS RESULT
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -38489,7 +38601,6 @@ def_table_schema(
       AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
-      AND C.RESULT = 0
 """.replace("\n", " ")
 )
 
@@ -39761,32 +39872,32 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """
-    SELECT CAST(NULL AS CHARACTER(64)) AS EVENT_CATALOG,
-           CAST(NULL AS CHARACTER(64)) AS EVENT_SCHEMA,
-           CAST(NULL AS CHARACTER(64)) AS EVENT_NAME,
-           CAST(NULL AS CHARACTER(93)) AS DEFINER,
-           CAST(NULL AS CHARACTER(64)) AS TIME_ZONE,
-           CAST(NULL AS CHARACTER(8)) AS EVENT_BODY,
-           CAST(NULL AS CHARACTER(512)) AS EVENT_DEFINITION,
-           CAST(NULL AS CHARACTER(9)) AS EVENT_TYPE,
-           CAST(NULL AS TIME)  AS EXECUTE_AT,
-           CAST(NULL AS CHARACTER(256)) AS INTERVAL_VALUE,
-           CAST(NULL AS CHARACTER(18))  AS INTERVAL_FIELD,
-           CAST(NULL AS CHARACTER(8192))  AS SQL_MODE,
-           CAST(NULL AS TIME) AS STARTS,
-           CAST(NULL AS TIME) AS ENDS,
-           CAST(NULL AS CHARACTER(18)) AS STATUS,
-           CAST(NULL AS CHARACTER(12)) AS ON_COMPLETION,
-           CAST(NULL AS TIME) AS CREATED,
-           CAST(NULL AS TIME) AS LAST_ALTERED,
-           CAST(NULL AS TIME) AS LAST_EXECUTED,
-           CAST(NULL AS CHARACTER(64)) AS EVENT_COMMENT,
-           CAST(NULL AS UNSIGNED) AS ORIGINATOR,
-           CAST(NULL AS CHARACTER(32)) AS CHARACTER_SET_CLIENT,
-           CAST(NULL AS CHARACTER(32)) AS COLLATION_CONNECTION,
-           CAST(NULL AS CHARACTER(32)) AS DATABASE_COLLATION
-    FROM DUAL WHERE 1 = 0
+  view_definition = """SELECT
+      CAST("def" AS CHARACTER(64)) AS EVENT_CATALOG,
+      CAST(T.cowner AS CHARACTER(128)) AS EVENT_SCHEMA,
+      CAST(SUBSTRING_INDEX(T.job_name, '.', -1) AS CHARACTER(64)) AS EVENT_NAME,
+      CAST(T.powner AS CHARACTER(93)) AS DEFINER,
+      CAST("SYSTEM" AS CHARACTER(64)) AS TIME_ZONE,
+      CAST("SQL" AS CHARACTER(8)) AS EVENT_BODY,
+      CAST(T.what AS CHARACTER(65536)) AS EVENT_DEFINITION,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL THEN "RECURRING" ELSE "ONE TIME" END AS CHARACTER(9)) AS EVENT_TYPE,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL THEN "NULL" ELSE T.start_date END AS DATETIME)  AS EXECUTE_AT,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'INTERVAL=', -1), ';', 1) ELSE NULL END AS CHARACTER(256)) AS INTERVAL_VALUE,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'FREQ=', -1),'LY', 1) ELSE NULL END AS CHARACTER(18))  AS INTERVAL_FIELD,
+      CAST("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION" AS CHARACTER(8192))  AS SQL_MODE,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL THEN T.start_date ELSE NULL END AS DATETIME) AS STARTS,
+      CAST(CASE WHEN T.repeat_interval IS NOT NULL AND T.end_date != '4000-01-01 00:00:00' THEN T.end_date ELSE NULL END AS DATETIME) AS ENDS,
+      CAST(CASE WHEN T.enabled = 1 THEN "ENABLED" ELSE "DISABLED" END AS CHARACTER(18)) AS STATUS,
+      CAST(CASE WHEN T.auto_drop = 1 THEN "NOT PRESERVE" ELSE "PRESERVE" END AS CHARACTER(12)) AS ON_COMPLETION,
+      CAST(T.gmt_create AS DATETIME) AS CREATED,
+      CAST(T.gmt_modified AS DATETIME) AS LAST_ALTERED,
+      CAST(T.last_date AS DATETIME) AS LAST_EXECUTED,
+      CAST(T.comments AS CHARACTER(4096)) AS EVENT_COMMENT,
+      CAST(NULL AS UNSIGNED) AS ORIGINATOR,
+      CAST(NULL AS CHARACTER(32)) AS CHARACTER_SET_CLIENT,
+      CAST(NULL AS CHARACTER(32)) AS COLLATION_CONNECTION,
+      CAST(NULL AS CHARACTER(32)) AS DATABASE_COLLATION
+    FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0 AND T.JOB_CLASS = 'MYSQL_EVENT_JOB_CLASS'
 """.replace("\n", " ")
 )
 
@@ -41052,7 +41163,10 @@ def_table_schema(
          EVO_PLAN_EXEC_COUNT,
          EVO_PLAN_CPU_TIME,
          BASELINE_EXEC_COUNT,
-         BASELINE_CPU_TIME
+         BASELINE_CPU_TIME,
+         EVO_PLAN_HASH,
+         BASELINE_PLAN_HASH,
+         EVO_EXEC_INFO
   FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
        OCEANBASE.__ALL_DATABASE D
   WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41088,7 +41202,10 @@ def_table_schema(
          EVO_PLAN_EXEC_COUNT,
          EVO_PLAN_CPU_TIME,
          BASELINE_EXEC_COUNT,
-         BASELINE_CPU_TIME
+         BASELINE_CPU_TIME,
+         EVO_PLAN_HASH,
+         BASELINE_PLAN_HASH,
+         EVO_EXEC_INFO
   FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
        OCEANBASE.__ALL_VIRTUAL_DATABASE D
   WHERE R.TENANT_ID = D.TENANT_ID
@@ -41567,19 +41684,220 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21644: GV$OB_STORAGE_CACHE_TASKS
-# 21645: V$OB_STORAGE_CACHE_TASKS
-# 21646: GV$OB_TABLET_LOCAL_CACHE
-# 21647: V$OB_TABLET_LOCAL_CACHE
+def_table_schema(
+  owner           = 'baonian.wcx',
+  table_name      = 'GV$OB_STORAGE_CACHE_TASKS',
+  table_id        = '21644',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TABLET_ID,
+    STATUS,
+    SPEED,
+    START_TIME,
+    COMPLETE_TIME,
+    RESULT,
+    COMMENT
+  FROM oceanbase.__all_virtual_storage_cache_task
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'baonian.wcx',
+  table_name      = 'V$OB_STORAGE_CACHE_TASKS',
+  table_id        = '21645',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TABLET_ID,
+    STATUS,
+    SPEED,
+    START_TIME,
+    COMPLETE_TIME,
+    RESULT,
+    COMMENT
+  FROM oceanbase.GV$OB_STORAGE_CACHE_TASKS
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'baonian.wcx',
+  table_name      = 'GV$OB_TABLET_LOCAL_CACHE',
+  table_id        = '21646',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TABLET_ID,
+    STORAGE_CACHE_POLICY,
+    CACHED_DATA_SIZE,
+    CACHE_HIT_COUNT,
+    CACHE_MISS_COUNT,
+    CACHE_HIT_SIZE,
+    CACHE_MISS_SIZE,
+    INFO
+  FROM oceanbase.__all_virtual_tablet_local_cache
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'baonian.wcx',
+  table_name      = 'V$OB_TABLET_LOCAL_CACHE',
+  table_id        = '21647',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TABLET_ID,
+    STORAGE_CACHE_POLICY,
+    CACHED_DATA_SIZE,
+    CACHE_HIT_COUNT,
+    CACHE_MISS_COUNT,
+    CACHE_HIT_SIZE,
+    CACHE_MISS_SIZE,
+    INFO
+  FROM oceanbase.GV$OB_TABLET_LOCAL_CACHE
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
 
 # 21648: DBA_OB_CCL_RULE
 # 21649: CDB_OB_CCL_RULE
 # 21650: GV$OB_SQL_CCL_STATUS
 # 21651: V$OB_SQL_CCL_STATUS
 
-# 21652: DBA_MVIEW_RUNNING_JOBS
-# 21653: CDB_MVIEW_RUNNING_JOBS
-# 21654: DBA_MVIEW_DEPS
+
+def_table_schema(
+    owner           = 'zg410411',
+    table_name      = 'DBA_MVIEW_RUNNING_JOBS',
+    table_id        = '21652',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT
+      A.SVR_IP AS SVR_IP,
+      A.SVR_PORT AS SVR_PORT,
+      B.TABLE_NAME AS TABLE_NAME,
+      CAST (
+       CASE A.JOB_TYPE
+        WHEN 0 THEN 'INVALID'
+        WHEN 1 THEN 'COMPLETE REFRESH'
+        WHEN 2 THEN 'FAST REFRESH'
+        WHEN 3 THEN 'PURGE MLOG'
+        ELSE NULL
+       END AS CHAR(64)
+      ) AS JOB_TYPE,
+      A.SESSION_ID AS SESSION_ID,
+      A.READ_SNAPSHOT AS READ_SNAPSHOT,
+      A.PARALLEL AS PARALLEL,
+      A.JOB_START_TIME AS JOB_START_TIME
+    FROM oceanbase.__all_virtual_mview_running_job A,
+         oceanbase.__all_table B
+    WHERE A.table_id = B.table_id
+    AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner           = 'zg410411',
+    table_name      = 'CDB_MVIEW_RUNNING_JOBS',
+    table_id        = '21653',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    view_definition = """
+    SELECT
+      A.SVR_IP,
+      A.SVR_PORT,
+      A.TENANT_ID,
+      B.TABLE_NAME,
+      CAST (
+       CASE A.JOB_TYPE
+        WHEN 0 THEN 'INVALID'
+        WHEN 1 THEN 'COMPLETE REFRESH'
+        WHEN 2 THEN 'FAST REFRESH'
+        WHEN 3 THEN 'PURGE MLOG'
+        ELSE NULL
+       END AS CHAR(64)
+      ) AS JOB_TYPE,
+      A.SESSION_ID,
+      A.READ_SNAPSHOT,
+      A.PARALLEL,
+      A.JOB_START_TIME
+    FROM oceanbase.__all_virtual_mview_running_job A,
+         oceanbase.__all_virtual_table B
+    WHERE A.table_id = B.table_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner           = 'zg410411',
+    table_name      = 'DBA_MVIEW_DEPS',
+    table_id        = '21654',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT
+      D.DATABASE_NAME AS MVIEW_OWNER,
+      B.TABLE_NAME AS MVIEW_NAME,
+      E.DATABASE_NAME AS DEP_OWNER,
+      C.TABLE_NAME AS DEP_NAME,
+      CAST (
+       CASE C.TABLE_TYPE
+        WHEN 3 THEN 'TABLE'
+        WHEN 4 THEN 'VIEW'
+        WHEN 7 THEN 'MV'
+        WHEN 14 THEN 'EXTERNAL TABLE'
+        ELSE 'INVALID TYPE'
+       END AS CHAR(64)
+      ) AS DEP_TYPE
+    FROM oceanbase.__all_mview_dep A,
+         oceanbase.__all_table B,
+         oceanbase.__all_table C,
+         oceanbase.__all_database D,
+         oceanbase.__all_database E
+    WHERE A.mview_id = B.table_id
+    AND   A.p_obj = C.table_id
+    AND   B.database_id = D.database_id
+    AND   C.database_id = E.database_id
+    AND   (C.table_mode >> 24 & 1 ) = 0
+""".replace("\n", " ")
+)
+
 
 def_table_schema(
   owner           = 'zhaoziqian.zzq',
@@ -61457,7 +61775,7 @@ def_table_schema(
                         CODE,
                         CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS REQ_START_DATE,
                         CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS ACTUAL_START_DATE,
-                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS INTERVAL DAY(3) TO SECOND(0)) AS RUN_DURATION,
                         CAST(NULL AS VARCHAR(128)) AS INSTANCE_ID,
                         CAST(NULL AS NUMBER) AS SESSION_ID,
                         CAST(NULL AS VARCHAR(128)) AS SLAVE_PID,
@@ -61486,7 +61804,7 @@ SELECT
                         CODE,
                         REQ_START_DATE,
                         ACTUAL_START_DATE,
-                        RUN_DURATION,
+                        CAST((TIMESTAMP'1970-01-01 08:00:00' + RUN_DURATION / (60 * 60 * 24) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(3) TO SECOND(0)) AS RUN_DURATION,
                         INSTANCE_ID,
                         SESSION_ID,
                         SLAVE_PID,
@@ -62243,7 +62561,9 @@ def_table_schema(
       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,
       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,
       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,
-      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG
+      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG,
+      B.DOP AS PURGE_DOP,
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -62305,7 +62625,9 @@ def_table_schema(
       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,
       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,
       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,
-      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG
+      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG,
+      B.DOP AS PURGE_DOP,
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -62369,7 +62691,9 @@ def_table_schema(
       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,
       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,
       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,
-      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG
+      CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG,
+      B.DOP AS PURGE_DOP,
+      C.LAST_PURGE_TIME AS LAST_PURGE_TIME
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -62477,7 +62801,14 @@ def_table_schema(
           ELSE NULL
         END AS CHAR(1)
       ) AS ON_QUERY_COMPUTATION,
-      C.REFRESH_DOP AS REFRESH_DOP
+      C.REFRESH_DOP AS REFRESH_DOP,
+      C.data_sync_scn AS DATA_SYNC_SCN,
+      CAST(
+        CASE C.data_sync_scn
+          WHEN 0 THEN 'NOT AVAILABLE'
+          ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
+        END AS VARCHAR(128)
+      ) AS DATA_SYNC_DELAY
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -62581,7 +62912,14 @@ def_table_schema(
           ELSE NULL
         END AS CHAR(1)
       ) AS ON_QUERY_COMPUTATION,
-      C.REFRESH_DOP AS REFRESH_DOP
+      C.REFRESH_DOP AS REFRESH_DOP,
+      C.data_sync_scn AS DATA_SYNC_SCN,
+      CAST(
+        CASE C.data_sync_scn
+          WHEN 0 THEN 'NOT AVAILABLE'
+          ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
+        END AS VARCHAR(128)
+      ) AS DATA_SYNC_DELAY
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -62687,7 +63025,14 @@ def_table_schema(
           ELSE NULL
         END AS CHAR(1)
       ) AS ON_QUERY_COMPUTATION,
-      C.REFRESH_DOP AS REFRESH_DOP
+      C.REFRESH_DOP AS REFRESH_DOP,
+      C.data_sync_scn AS DATA_SYNC_SCN,
+      CAST(
+        CASE C.data_sync_scn
+          WHEN 0 THEN 'NOT AVAILABLE'
+          ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
+        END AS VARCHAR(128)
+      ) AS DATA_SYNC_DELAY
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -63061,7 +63406,8 @@ def_table_schema(
       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,
       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,
-      CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS
+      CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS,
+      CAST(C.RESULT AS NUMBER) AS RESULT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -63104,7 +63450,8 @@ def_table_schema(
       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,
       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,
-      CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS
+      CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS,
+      CAST(C.RESULT AS NUMBER) AS RESULT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -63479,8 +63826,79 @@ def_table_schema(
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 25307: DBA_OB_CCL_RULE
 
-# 25308: DBA_MVIEW_RUNNING_JOBS
-# 25309: DBA_MVIEW_DEPS
+def_table_schema(
+    owner           = 'zg410411',
+    table_name      = 'DBA_MVIEW_RUNNING_JOBS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '25308',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT
+      A.SVR_IP AS SVR_IP,
+      A.SVR_PORT AS SVR_PORT,
+      B.TABLE_NAME AS TABLE_NAME,
+      CAST (
+       CASE A.JOB_TYPE
+        WHEN 0 THEN 'INVALID'
+        WHEN 1 THEN 'COMPLETE REFRESH'
+        WHEN 2 THEN 'FAST REFRESH'
+        WHEN 3 THEN 'PURGE MLOG'
+        ELSE NULL
+       END AS CHAR(64)
+      ) AS JOB_TYPE,
+      A.SESSION_ID AS SESSION_ID,
+      A.READ_SNAPSHOT AS READ_SNAPSHOT,
+      A.PARALLEL AS PARALLEL,
+      A.JOB_START_TIME AS JOB_START_TIME
+    FROM SYS.ALL_VIRTUAL_MVIEW_RUNNING_JOB A,
+         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B
+    WHERE A.TABLE_ID = B.TABLE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner           = 'zg410411',
+    table_name      = 'DBA_MVIEW_DEPS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '25309',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT
+      D.DATABASE_NAME AS MVIEW_OWNER,
+      B.TABLE_NAME AS MVIEW_NAME,
+      E.DATABASE_NAME AS DEP_OWNER,
+      C.TABLE_NAME AS DEP_NAME,
+      CAST (
+       CASE C.TABLE_TYPE
+        WHEN 3 THEN 'TABLE'
+        WHEN 4 THEN 'VIEW'
+        WHEN 7 THEN 'MV'
+        WHEN 14 THEN 'EXTERNAL TABLE'
+        ELSE 'INVALID TYPE'
+       END AS CHAR(64)
+      ) AS DEP_TYPE
+    FROM SYS.ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
+         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C,
+         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D,
+         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
+    WHERE A.mview_id = B.table_id
+    AND   A.p_obj = C.table_id
+    AND   B.database_id = D.database_id
+    AND   C.database_id = E.database_id
+    AND   bitand((C.table_mode / 16777216), 1) = 0
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'zhaoziqian.zzq',
@@ -63985,7 +64403,9 @@ def_table_schema(
       IS_BATCHED_MULTI_STMT AS IS_BATCHED_MULTI_STMT,
       RULE_NAME AS RULE_NAME,
       (CASE PLAN_STATUS WHEN 0 THEN 'ACTIVE' ELSE 'INACTIVE' END) AS PLAN_STATUS,
-      ADAPTIVE_FEEDBACK_TIMES AS ADAPTIVE_FEEDBACK_TIMES
+      ADAPTIVE_FEEDBACK_TIMES AS ADAPTIVE_FEEDBACK_TIMES,
+      FIRST_GET_PLAN_TIME AS FIRST_GET_PLAN_TIME,
+      FIRST_EXE_USEC AS FIRST_EXE_USEC
       FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND IS_IN_PC='1'
 """.replace("\n", " ")
 )
@@ -64059,7 +64479,9 @@ PL_SCHEMA_ID,
 IS_BATCHED_MULTI_STMT,
 RULE_NAME,
 PLAN_STATUS,
-ADAPTIVE_FEEDBACK_TIMES FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+ADAPTIVE_FEEDBACK_TIMES,
+FIRST_GET_PLAN_TIME,
+FIRST_EXE_USEC FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -74748,7 +75170,10 @@ def_table_schema(
          EVO_PLAN_EXEC_COUNT,
          EVO_PLAN_CPU_TIME,
          BASELINE_EXEC_COUNT,
-         BASELINE_CPU_TIME
+         BASELINE_CPU_TIME,
+         EVO_PLAN_HASH,
+         BASELINE_PLAN_HASH,
+         EVO_EXEC_INFO
   FROM SYS.ALL_VIRTUAL_SPM_EVO_RESULT R,
        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -74920,6 +75345,9 @@ def_table_schema(
   FROM SYS.ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE;
 """.replace("\n", " "),
 )
+
+# 28275: GV$OB_RESULT_CACHE_OBJECTS
+# 28276: V$OB_RESULT_CACHE_OBJECTS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

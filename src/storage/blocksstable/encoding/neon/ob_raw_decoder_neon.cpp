@@ -183,7 +183,7 @@ struct RawFixFilterNeonArrayInit
 
 bool init_raw_fix_neon_simd_filter_funcs()
 {
-  return ObNDArrayIniter<RawFixFilterNeonArrayInit, 2, 4, 6>::apply();
+  return ObNDArrayIniter<RawFixFilterNeonArrayInit, 2, 2, 6>::apply();
 }
 
 } // namespace blocksstable

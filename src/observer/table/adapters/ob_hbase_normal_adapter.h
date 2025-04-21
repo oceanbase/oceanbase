@@ -28,7 +28,7 @@ public:
 
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) override;
-  virtual int del(ObTableExecCtx &ctx, const common::ObTabletID &tablet_id, const ObNewRow &cell) override;
+  virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) override;
 
 private:

@@ -15,6 +15,7 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -67,7 +68,15 @@ int Threads::do_set_thread_count(int64_t n_threads, bool async_recycle)
         MEMCPY(new_threads, threads_, sizeof (Thread*) * n_threads_);
         for (auto i = n_threads_; i < n_threads; i++) {
           Thread *thread = nullptr;
-          ret = create_thread(thread, i);
+          int32_t numa_node = OB_NUMA_SHARED_INDEX;
+          if (OB_NUMA_SHARED_INDEX != numa_info_.numa_node_) {
+            if (numa_info_.interleave_) {
+              numa_node = i % numa_info_.num_nodes_;
+            } else {
+              numa_node = numa_info_.numa_node_;
+            }
+          }
+          ret = create_thread(thread, i, numa_node);
           if (OB_FAIL(ret)) {
             n_threads = i;
             break;
@@ -204,7 +213,15 @@ int Threads::start()
     MEMSET(threads_, 0, sizeof (Thread*) * n_threads_);
     for (int i = 0; i < n_threads_; i++) {
       Thread *thread = nullptr;
-      ret = create_thread(thread, i);
+      int32_t numa_node = OB_NUMA_SHARED_INDEX;
+      if (OB_NUMA_SHARED_INDEX != numa_info_.numa_node_) {
+        if (numa_info_.interleave_) {
+          numa_node = i % numa_info_.num_nodes_;
+        } else {
+          numa_node = numa_info_.numa_node_;
+        }
+      }
+      ret = create_thread(thread, i, numa_node);
       if (OB_FAIL(ret)) {
         break;
       } else {
@@ -230,7 +247,7 @@ void Threads::run(int64_t idx)
   run1();
 }
 
-int Threads::create_thread(Thread *&thread, int64_t idx)
+int Threads::create_thread(Thread *&thread, int64_t idx, int32_t numa_node)
 {
   int ret = OB_SUCCESS;
   thread = nullptr;
@@ -238,7 +255,7 @@ int Threads::create_thread(Thread *&thread, int64_t idx)
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    thread = new (buf) Thread(this, idx, stack_size_);
+    thread = new (buf) Thread(this, idx, stack_size_, numa_node);
     if (OB_FAIL(thread->start())) {
       thread->~Thread();
       ob_free(thread);
@@ -294,6 +311,29 @@ void Threads::destroy()
     }
     ob_free(threads_);
     threads_ = nullptr;
+  }
+}
+
+
+void Threads::set_numa_info(uint64_t tenant_id, bool enable_numa_aware, int32_t group_index)
+{
+  UNUSED(tenant_id);
+  if (false == enable_numa_aware) {
+  } else {
+    int num_nodes = AFFINITY_CTRL.get_num_nodes();
+    if (num_nodes > 0) {
+      if (group_index != -1) {
+        if (group_index >= 0 && group_index < INT32_MAX) {
+          numa_info_.numa_node_ = group_index % num_nodes;
+          numa_info_.num_nodes_ = num_nodes;
+          numa_info_.interleave_ = false;
+        } else {
+          numa_info_.num_nodes_ = num_nodes;
+          numa_info_.numa_node_ = INT32_MAX;
+          numa_info_.interleave_ = true;
+        }
+      }
+    }
   }
 }
 

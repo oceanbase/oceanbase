@@ -239,17 +239,14 @@ int ObCOPrefetcher::reset_each_levels(uint32_t start_level)
 
 void ObCOPrefetcher::check_leaf_level_without_more_prefetch_data(const int64_t start_micro_idx)
 {
-  int32_t cur_block_scan_level = get_cur_level_of_block_scan();
   const bool is_reverse = access_ctx_->query_flag_.is_reverse_scan();
-  if (INVALID_LEVEL != cur_block_scan_level && !is_reverse) {
-    // In this case, there are no more blocks prefetched in leaf level.
-    // We should skip prefetch from cur_block_scan_level in columnar store scan mode later.
-    int64_t start_idx = (start_micro_idx - 1) % max_micro_handle_cnt_;
-    block_scan_border_row_id_ = is_reverse ? micro_data_infos_[start_idx].cs_row_range_.begin()
-                                             : micro_data_infos_[start_idx].cs_row_range_.end();
-    ++cur_micro_data_fetch_idx_;
-    block_scan_state_ = PENDING_BLOCK_SCAN;
-  }
+  // In this case, there are no more blocks prefetched in leaf level.
+  // We should skip prefetch from cur_block_scan_level in columnar store scan mode later.
+  int64_t start_idx = (start_micro_idx - 1) % max_micro_handle_cnt_;
+  block_scan_border_row_id_ = is_reverse ? micro_data_infos_[start_idx].cs_row_range_.begin()
+      : micro_data_infos_[start_idx].cs_row_range_.end();
+  ++cur_micro_data_fetch_idx_;
+  block_scan_state_ = PENDING_BLOCK_SCAN;
 }
 
 int ObCOPrefetcher::refresh_blockscan_checker_in_leaf_level(
@@ -542,6 +539,45 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::forward(
           index_block_read_handles_[(fetch_idx_ - 1) % INDEX_TREE_PREFETCH_DEPTH].end_prefetched_row_idx_;
     }
   }
+  return ret;
+}
+
+int ObCOPrefetcher::update_start_and_end_rowid_for_column_store(
+    const int64_t start_offset,
+    const int64_t end_offset)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObMicroIndexInfo &micro_info = current_micro_info();
+  const ObCSRowId start_row_id = micro_info.get_row_range().begin();
+  const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
+  if (is_reverse_scan) {
+    block_scan_start_row_id_ = start_row_id + end_offset - 1;
+    block_scan_border_row_id_ = start_row_id + start_offset;
+  } else {
+    block_scan_start_row_id_ = start_row_id + start_offset;
+    block_scan_border_row_id_ = start_row_id + end_offset - 1;
+  }
+  LOG_DEBUG("update_start_and_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
+            K(start_row_id), K(start_offset), K(end_offset));
+  return ret;
+}
+
+int ObCOPrefetcher::update_end_rowid_for_column_store(
+    const int64_t start_offset,
+    const int64_t end_offset)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObMicroIndexInfo &micro_info = current_micro_info();
+  const ObCSRowId start_row_id = micro_info.get_row_range().begin();
+  const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
+  if (is_reverse_scan) {
+    block_scan_border_row_id_ = start_row_id + start_offset;
+  } else {
+    block_scan_border_row_id_ = start_row_id + end_offset - 1;
+  }
+  LOG_DEBUG("update_start_and_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
+            K(start_row_id), K(start_offset), K(end_offset));
+
   return ret;
 }
 

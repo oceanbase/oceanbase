@@ -238,6 +238,7 @@ public:
   void reset();
   void reuse();
   void reset_private();
+  inline void reset_dbms_info() {ObDbmsInfo::reset();};
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   int64_t get_affected_rows() const { return affected_rows_; }
   int prepare_entity(sql::ObSQLSessionInfo &session);
@@ -322,6 +323,11 @@ public:
   static int to_cursor_number(sql::ObExecContext &exec_ctx,
                               ParamStore &params,
                               ObObj &result);
+
+  static int to_refcursor(sql::ObExecContext &exec_ctx,
+                          ParamStore &params,
+                          ObObj &result);
+
   static int define_column_long(sql::ObExecContext &exec_ctx,
                                 ParamStore &params,
                                 ObObj &result);

@@ -47,4 +47,8 @@ DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
 DEF_COMPAT_CONTROL_FEATURE(INVOKER_RIGHT_COMPILE,
     "Use the definer's database during compile, regardless of whether is definer or invoker right",
     CLUSTER_VERSION_4_3_5_2)
+
+DEF_COMPAT_CONTROL_FEATURE(RECV_PLAIN_PASSWORD,
+    "The set password command is different in different OceanBase versions",
+    CLUSTER_VERSION_4_3_5_2)
 #endif

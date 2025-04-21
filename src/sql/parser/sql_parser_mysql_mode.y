@@ -275,7 +275,7 @@ END_P SET_VAR DELIMITER
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
-        BADFILE BUFFER_SIZE BIGINT_PRECISION
+        BADFILE BOUNDARY_COLUMN BOUNDARY_COLUMN_UNIT BUFFER_SIZE BIGINT_PRECISION
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
@@ -297,10 +297,10 @@ END_P SET_VAR DELIMITER
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
-        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GROUPING_ID GTS
+        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID HYBRID_HIST
+        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -356,7 +356,7 @@ END_P SET_VAR DELIMITER
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
-        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STOPWORD_TABLE STRONG STSTOKEN
+        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STOPWORD_TABLE STORAGE_CACHE_POLICY STORAGE_CACHE_POLICY_EXECUTOR STRONG STSTOKEN
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
@@ -453,7 +453,7 @@ END_P SET_VAR DELIMITER
 %type <node> deallocate_prepare_stmt deallocate_or_drop
 %type <ival> opt_scope opt_drop_behavior opt_integer scope_or_scope_alias global_or_session_alias
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i cast_datetime_type_i text_type_i blob_type_i
-%type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name opt_auth_plugin
+%type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name opt_auth_plugin opt_auth_plugin_with
 %type <node> drop_user_stmt user_list user_specification_without_password user_specification_with_password
 %type <node> create_role_stmt drop_role_stmt role_list role_with_host role user_specification_without_password_list
 %type <node> set_password_stmt opt_for_user
@@ -548,6 +548,7 @@ END_P SET_VAR DELIMITER
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr
+%type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit
 %type <node> opt_path_info opt_access_info opt_storage_use_for opt_attribute opt_scope_type
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
 %type <node> external_table_partitions external_table_partition
@@ -561,7 +562,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tenant_snapshot_stmt snapshot_name drop_tenant_snapshot_stmt clone_tenant_stmt clone_snapshot_option clone_tenant_option clone_tenant_option_list
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> geometry_collection
-%type <node> mock_stmt check_table_options check_table_option user_host_or_current_user install_plugin_stmt plugin_name uninstall_plugin_stmt flush_stmt flush_options flush_options_list flush_option opt_no_write_to_binlog handler_stmt handler_read_or_scan handler_scan_function handler_rkey_function handler_rkey_mode
+%type <node> mock_stmt check_table_options check_table_option user_host_or_current_user install_plugin_stmt plugin_name uninstall_plugin_stmt flush_stmt flush_options flush_options_list flush_option opt_no_write_to_binlog opt_flush_lock handler_stmt handler_read_or_scan handler_scan_function handler_rkey_function handler_rkey_mode
 %type <node> show_plugin_stmt merge_insert_types opt_table_list
 %type <node> create_server_stmt server_options_list server_option alter_server_stmt drop_server_stmt create_logfile_group_stmt logfile_group_info add_log_file lg_undofile lg_redofile logfile_group_options  opt_ts_initial_size opt_ts_undo_buffer_size opt_ts_redo_buffer_size opt_ts_engine opt_ts_comment
 %type <node> alter_logfile_group_stmt alter_logfile_group_info alter_logfile_group_option_list alter_logfile_group_options alter_logfile_group_option drop_logfile_group_stmt drop_ts_options_list drop_ts_options drop_ts_option opt_ts_nodegroup logfile_group_option logfile_group_option_list
@@ -7930,6 +7931,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_DUPLICATE_READ_CONSISTENCY, 1, $3);
 }
+| STORAGE_CACHE_POLICY opt_equal_mark '(' storage_cache_policy_attribute_list ')'
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STORAGE_CACHE_POLICY_ATTRIBUTE_LIST, 1, $4);
+}
 | MAX_ROWS opt_equal_mark INTNUM
 {
   (void)($2);
@@ -8100,6 +8106,91 @@ LOCATION opt_equal_mark STRING_VALUE
   $$->str_len_ = $3->str_len_;
   $$->str_value_ = $3->str_value_;
 };
+storage_cache_policy_attribute_list:
+GLOBAL COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GLOBAL_OPTION, 1, $3);
+}
+| storage_cache_time_policy_attribute_list
+{
+  merge_nodes($$, result, T_STORAGE_CACHE_TIME_POLICY_OPTIONS, $1);
+}
+;
+
+storage_cache_time_policy_attribute_list:
+storage_cache_time_policy_attribute
+{
+  $$ = $1;
+}
+| storage_cache_time_policy_attribute_list ',' storage_cache_time_policy_attribute
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+storage_cache_time_policy_attribute:
+BOUNDARY_COLUMN COMP_EQ column_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BOUNDARY_COLUMN, 1, $3);
+}
+| BOUNDARY_COLUMN_UNIT COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BOUNDARY_COLUMN_UNIT, 1, $3);
+}
+| GRANULARITY COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GRANULARITY, 1, $3);
+}
+| HOT_RETENTION COMP_EQ INTNUM retention_time_unit
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HOT_RETENTION, 2, $3, $4);
+}
+;
+
+retention_time_unit:
+YEAR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MONTH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| WEEK
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_WEEK;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| DAY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| HOUR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MINUTE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SECOND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+;
 
 merge_insert_types:
 NO { $$ = NULL; }
@@ -10416,6 +10507,11 @@ GLOBAL
 | parallel_option
 {
   $$ = $1;
+}
+| STORAGE_CACHE_POLICY opt_equal_mark '(' storage_cache_policy_attribute_list ')'
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STORAGE_CACHE_POLICY_ATTRIBUTE_LIST, 1, $4);
 }
 ;
 
@@ -16603,6 +16699,17 @@ WITH STRING_VALUE
 }
 ;
 
+opt_auth_plugin_with:
+WITH STRING_VALUE
+{
+  $$ = $2;
+}
+| WITH NAME_OB
+{
+  $$ = $2;
+}
+;
+
 user_specification:
 user_specification_without_password
 {
@@ -16656,6 +16763,13 @@ user opt_host_name IDENTIFIED opt_auth_plugin BY password
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $7, need_enc_node, $2, $4);
+}
+| user opt_host_name IDENTIFIED opt_auth_plugin_with AS password
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $6, need_enc_node, $2, $4);
 }
 | CURRENT_USER IDENTIFIED opt_auth_plugin BY password
 {
@@ -16973,6 +17087,14 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
+}
+| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password
+{
+  (void)($1);
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
 }
 | alter_with_opt_hint USER user_with_host_name require_specification
@@ -17959,6 +18081,11 @@ role_with_host
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_DECRYPT;
+}
+| EVENT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_EVENT;
 }
 | CREATE CATALOG
 {
@@ -19069,6 +19196,20 @@ ADD PARTITION opt_partition_range_or_list
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_PARTITION_PARTITIONED, 1, $1);
 }
+| alter_with_opt_hint PARTITION name_list STORAGE_CACHE_POLICY COMP_EQ STRING_VALUE
+{
+  (void)($1);            /* unused */
+  ParseNode *partition_names = NULL;
+  merge_nodes(partition_names, result, T_NAME_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_PARTITION_STORAGE_CACHE_POLICY, 2, partition_names, $6);
+}
+| alter_with_opt_hint SUBPARTITION name_list STORAGE_CACHE_POLICY COMP_EQ STRING_VALUE
+{
+  (void)($1);               /* unused */
+  ParseNode *subpartition_names = NULL;
+  merge_nodes(subpartition_names, result, T_NAME_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SUBPARTITION_STORAGE_CACHE_POLICY, 2, subpartition_names, $6);
+}
 | REORGANIZE PARTITION name_list INTO opt_partition_range_or_list
 {
   ParseNode *partition_names = NULL;
@@ -19253,6 +19394,12 @@ ADD add_key_or_index_opt
 {
   (void)($1); // TODO
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ALTER, 2, $3, $4);
+}
+| alter_with_opt_hint INDEX index_name STORAGE_CACHE_POLICY opt_equal_mark '(' storage_cache_policy_attribute_list ')'
+{
+  (void)($1);
+  (void)($5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ALTER_STORAGE_CACHE_POLICY, 2, $3, $7);
 }
 | RENAME key_or_index index_name TO index_name
 {
@@ -20873,6 +21020,15 @@ alter_with_opt_hint SYSTEM info_type MODULE DATA module_name tenant_name opt_inf
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_MODULE_DATA, 4, $3, $6, $7, $8);
+}
+|
+alter_with_opt_hint SYSTEM TRIGGER STORAGE_CACHE_POLICY_EXECUTOR opt_tenant_name
+{
+  (void)($1);
+  ParseNode *action_type = NULL;
+  malloc_terminal_node(action_type, result->malloc_pool_, T_INT);
+  action_type->value_ = 0; /* 0:trigger */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRIGGER_STORAGE_CACHE, 2, action_type, $5);
 }
 |
 SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
@@ -22678,16 +22834,24 @@ flush_options_list
 {
   merge_nodes($$, result, T_FLUSH_MOCK_LIST, $1);
 }
-/*
+| table_or_tables
+{
+  (void) ($1);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
+}
+| table_or_tables WITH READ LOCK_
+{
+  (void) ($1);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
+}
 |
 table_or_tables opt_table_list opt_flush_lock
 {
   (void) ($1);
   (void) ($2);
   (void) ($3);
-  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_MOCK);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
 }
-*/
 ;
 
 opt_no_write_to_binlog:
@@ -22706,20 +22870,20 @@ opt_no_write_to_binlog:
 ;
 
 /* In mysql the will give a flag to the table */
-// opt_flush_lock:
-// /* empty */
-// {
-//   (void) ($$);
-// }
-// | WITH READ LOCK_
-// {
-//   (void) ($$);
-// }
-// | FOR EXPORT
-// {
-//   (void) ($$);
-// }
-// ;
+opt_flush_lock:
+/* empty */
+{
+  (void) ($$);
+}
+| WITH READ LOCK_
+{
+  (void) ($$);
+}
+| FOR EXPORT
+{
+  (void) ($$);
+}
+;
 
 
 flush_options_list:
@@ -25174,6 +25338,8 @@ ACCESS_INFO
 |       BOOL
 |       BOOLEAN
 |       BOOTSTRAP
+|       BOUNDARY_COLUMN
+|       BOUNDARY_COLUMN_UNIT
 |       BTREE
 |       BYTE
 |       BREADTH
@@ -25376,6 +25542,7 @@ ACCESS_INFO
 |       GLOBAL %prec LOWER_PARENS
 |       GLOBAL_NAME
 |       GRANTS
+|       GRANULARITY
 |       GROUPING
 |       GROUPING_ID
 |       GROUP_CONCAT
@@ -25388,6 +25555,7 @@ ACCESS_INFO
 |       HOST
 |       HOSTS
 |       HOUR
+|       HOT_RETENTION
 |       HYBRID
 |       HYBRID_HIST
 |       ID
@@ -25801,6 +25969,8 @@ ACCESS_INFO
 |       STOP
 |       STOPWORD_TABLE
 |       STORAGE
+|       STORAGE_CACHE_POLICY
+|       STORAGE_CACHE_POLICY_EXECUTOR
 |       STORAGE_FORMAT_VERSION
 |       STORE
 |       STORING

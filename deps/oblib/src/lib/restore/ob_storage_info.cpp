@@ -156,22 +156,26 @@ int ObObjectStorageCredential::assign(const ObObjectStorageCredential &credentia
   return ret;
 }
 
+/*-------------------------------- ObStorageAccount --------------------------------*/
+ObStorageAccount::ObStorageAccount()
+{
+  reset();
+}
+
+void ObStorageAccount::reset()
+{
+  is_valid_ = false;
+  MEMSET(endpoint_, 0, sizeof(endpoint_));
+  MEMSET(access_id_, 0, sizeof(access_id_));
+  MEMSET(access_key_, 0, sizeof(access_key_));
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  sts_token_.reset();
+}
+
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE),
-    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
-    checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO),
-    is_assume_role_mode_(false),
-    enable_worm_(false)
 {
-  endpoint_[0] = '\0';
-  access_id_[0] = '\0';
-  access_key_[0] = '\0';
-  extension_[0] = '\0';
-  max_iops_ = 0;
-  max_bandwidth_ = 0;
-  role_arn_[0] = '\0';
-  external_id_[0] = '\0';
+  reset();
 }
 
 ObObjectStorageInfo::~ObObjectStorageInfo()
@@ -181,13 +185,17 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
-  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  region_[0] = '\0';
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
   extension_[0] = '\0';
+  max_iops_ = 0;
+  max_bandwidth_ = 0;
   role_arn_[0] = '\0';
   external_id_[0] = '\0';
   is_assume_role_mode_ = false;
@@ -315,6 +323,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
 {
   bool has_needed_extension = false;
   int ret = OB_SUCCESS;
+  reset();
   if (is_valid()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage info init twice", K(ret));
@@ -378,11 +387,17 @@ int ObObjectStorageInfo::validate_arguments() const
           K_(device_type), K_(endpoint), K_(access_id), KP_(access_key), KP_(role_arn), KP_(external_id));
     }
   }
-  if (OB_SUCC(ret) && enable_worm_ && !(OB_MD5_ALGO == checksum_type_ && OB_STORAGE_OSS == device_type_)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("device or checksum type don't support enable_worm", K(ret), KPC(this));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-        "Only OSS and checksum_type=md5 support setting enable_worm, other devices or checksum types are");
+  if (OB_SUCC(ret) && enable_worm_) {
+    if (OB_UNLIKELY(!(OB_MD5_ALGO == checksum_type_ && OB_STORAGE_OSS == device_type_))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("device or checksum type don't support enable_worm", K(ret), KPC(this));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          "Only OSS and checksum_type=md5 support setting enable_worm, other devices or checksum types are");
+    } else if (OB_UNLIKELY(is_use_obdal())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("using obdal mode don't support enable_worm", K(ret), KPC(this));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting enable_worm=true when using obdal is");
+    }
   }
 
   return ret;
@@ -424,6 +439,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_UNLIKELY(OB_STORAGE_S3 != device_type_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("only s3 protocol can set s3_region", K(ret), K(token), K(device_type_));
+        } else if (OB_FAIL(set_storage_info_field_(token, region_, sizeof(region_)))) {
+          LOG_WARN("faield to set region", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set region", K(ret), K(token));
         }
@@ -482,13 +499,13 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           ret = OB_INVALID_BACKUP_DEST;
           OB_LOG(WARN, "OB_STORAGE_FILE don't support delete mode yet",
             K(ret), K_(device_type), K(token));
-        } else if (OB_FAIL(check_delete_mode_(token + strlen(DELETE_MODE)))) {
+        } else if (OB_FAIL(set_delete_mode_(token + strlen(DELETE_MODE)))) {
           OB_LOG(WARN, "failed to check delete mode", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set delete mode", K(ret), K(token));
         }
       } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
-        if (OB_FAIL(check_addressing_model_(token + strlen(ADDRESSING_MODEL)))) {
+        if (OB_FAIL(set_addressing_model_(token + strlen(ADDRESSING_MODEL)))) {
           OB_LOG(WARN, "failed to check addressing model", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set addressing model", K(ret), K(token));
@@ -501,7 +518,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
       } else if (0 == strncmp(ENABLE_WORM, token, strlen(ENABLE_WORM))) {
-        if (OB_FAIL(check_enable_worm_(token + strlen(ENABLE_WORM)))) {
+        if (OB_FAIL(set_enable_worm_(token + strlen(ENABLE_WORM)))) {
           LOG_WARN("failed to check enable worm", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set enable worm", K(ret), K(token));
@@ -548,7 +565,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
   return ret;
 }
 
-int ObObjectStorageInfo::check_enable_worm_(const char *enable_worm)
+int ObObjectStorageInfo::set_enable_worm_(const char *enable_worm)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cluster_version_mgr_)) {
@@ -572,8 +589,7 @@ int ObObjectStorageInfo::check_enable_worm_(const char *enable_worm)
   return ret;
 }
 
-//TODO(shifagndan): define delete mode as enum
-int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
+int ObObjectStorageInfo::set_delete_mode_(const char *delete_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(delete_mode)) {
@@ -590,14 +606,17 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
   return ret;
 }
 
-int ObObjectStorageInfo::check_addressing_model_(const char *addressing_model) const
+int ObObjectStorageInfo::set_addressing_model_(const char *addressing_model)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(addressing_model)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), KP(addressing_model));
-  } else if (0 != strcmp(addressing_model, ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE)
-      && 0 != strcmp(addressing_model, ADDRESSING_MODEL_PATH_STYLE)) {
+  } else if (0 == strcmp(addressing_model, ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE)) {
+    addressing_model_ = OB_VIRTUAL_HOSTED_STYLE;
+  } else if (0 == strcmp(addressing_model, ADDRESSING_MODEL_PATH_STYLE)) {
+    addressing_model_ = OB_PATH_STYLE;
+  } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "addressing model is invalid", K(ret), K(addressing_model));
   }
@@ -695,6 +714,7 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   delete_mode_ = storage_info.delete_mode_;
   device_type_ = storage_info.device_type_;
   checksum_type_ = storage_info.checksum_type_;
+  MEMCPY(region_, storage_info.region_, sizeof(region_));
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
@@ -782,8 +802,6 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   return ret;
 }
 
-// This function is used to obtain storage_info_str containing ak/sk,
-// regardless of whether the access_mode is assume_role mode or access_id mode
 int ObObjectStorageInfo::get_authorization_str(
     char *authorization_str, const int64_t authorization_str_len, ObSTSToken &sts_token) const
 {
@@ -818,8 +836,42 @@ int ObObjectStorageInfo::get_authorization_str(
   return ret;
 }
 
-// Note: delete_mode_ redundantly stores a copy in extension. thus, device map key
-// includes extension_ is enough, and has no need to include delete_mode_.
+int ObObjectStorageInfo::to_account(ObStorageAccount &account) const
+{
+  int ret = OB_SUCCESS;
+  account.reset();
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("storage info is invalid", K(ret), K(device_type_), KPC(this));
+  } else if (OB_FAIL(ob_set_field(endpoint_ + strlen(HOST), account.endpoint_, sizeof(account.endpoint_)))) {
+    OB_LOG(WARN, "failed to set endpoint", K(ret), K(endpoint_));
+  } else if (is_assume_role_mode_) {
+    // access by assume role
+    ObObjectStorageCredential credential;
+    if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
+      OB_LOG(WARN, "failed to get credential", K(ret), KPC(this), K(credential));
+    } else if (OB_FAIL(ob_set_field(credential.access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
+      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+    } else if (OB_FAIL(ob_set_field(credential.access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
+      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+    } else if (OB_FAIL(account.sts_token_.assign(credential.sts_token_))) {
+      OB_LOG(WARN, "failed to set sts_token_", K(ret), K(account.sts_token_), K(credential.sts_token_));
+    }
+  } else {
+    if (OB_FAIL(ob_set_field(access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
+      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+    } else if (OB_FAIL(ob_set_field(access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
+      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    account.delete_mode_ = delete_mode_;
+    account.is_valid_ = true;
+  }
+  return ret;
+}
+
 int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len) const
 {
   int ret = OB_SUCCESS;

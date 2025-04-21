@@ -47,7 +47,7 @@ enum
 template<typename BtreeKey, typename BtreeVal>
 struct CompHelper
 {
-  OB_INLINE int compare(const BtreeKey search_key, const BtreeKey idx_key, int &cmp) const
+  OB_INLINE int compare(const BtreeKey &search_key, const BtreeKey &idx_key, int &cmp) const
   {
     return search_key.compare(idx_key, cmp);
   }
@@ -293,11 +293,11 @@ protected:
     is_equal = false;
     while (OB_SUCC(ret) && start < end && !is_equal) {
       int mid = start + (end - start) / 2;
-      __builtin_prefetch(get_key(start + (mid - start) / 2, index).get_ptr(), 0, 3);
-      __builtin_prefetch(get_key(start + (end - mid - 1) / 2, index).get_ptr(), 0, 3);
+      BtreeKey &mid_key = get_key(mid, index);
+      __builtin_prefetch(mid_key.get_ptr(), 0, 3);
       int cmp_ret = 0;
-      if (OB_FAIL(nh.compare(key, get_key(mid, index), cmp_ret))) {
-        OB_LOG(ERROR, "failed to compare", K(key), K(get_key(mid, index)));
+      if (OB_FAIL(nh.compare(key, mid_key, cmp_ret))) {
+        OB_LOG(ERROR, "failed to compare", K(key), K(mid_key));
       } else if (0 == cmp_ret) {
         is_equal = true;
         end = mid + 1;
@@ -590,7 +590,7 @@ public:
   ~Iterator() { scan_handle_.reset(); }
   void reset();
   bool is_reverse_scan() const { return scan_backward_; }
-  CompHelper& get_comp() { return comp_; }
+  OB_INLINE CompHelper& get_comp() { return comp_; }
   int set_key_range(const BtreeKey min_key,
                     const bool start_exclude,
                     const BtreeKey max_key,

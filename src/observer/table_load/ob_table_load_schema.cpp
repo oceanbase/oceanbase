@@ -138,29 +138,6 @@ int ObTableLoadSchema::get_table_schema(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
-int ObTableLoadSchema::get_table_schema_version(const uint64_t tenant_id,
-                                                const int64_t tenant_schema_version,
-                                                const uint64_t table_id,
-                                                int64_t &schema_version)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id,
-                                                  schema_guard,
-                                                  tenant_schema_version))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id), K(tenant_schema_version));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema is nullptr", KR(ret));
-  } else {
-    schema_version = table_schema->get_schema_version();
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema,
                                                ObIArray<const ObColumnSchemaV2 *> &column_schemas,
                                                bool contain_invisible_column)

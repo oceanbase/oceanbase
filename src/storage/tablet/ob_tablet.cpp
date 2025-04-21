@@ -1335,6 +1335,7 @@ int ObTablet::read_truncate_info_array(
   const int64_t last_major_snapshot = get_last_major_snapshot_version();
   int64_t replay_seq = -1;
   int64_t newest_schema_version = 0;
+  int64_t newest_commit_version = 0;
   // TODO change INFO log to TRACE log later
   if (OB_UNLIKELY(INT64_MAX == read_version_range.snapshot_version_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1349,6 +1350,7 @@ int ObTablet::read_truncate_info_array(
         LOG_INFO("[TRUNCATE INFO] no truncate info in exsit version_range", KR(ret), K(tablet_id), K(read_version_range), K_(truncate_info_cache));
       } else {
         newest_schema_version = truncate_info_cache_.newest_schema_version();
+        newest_commit_version = truncate_info_cache_.newest_commit_version();
       }
     } else {
       replay_seq = truncate_info_cache_.replay_seq();
@@ -1357,9 +1359,12 @@ int ObTablet::read_truncate_info_array(
   if (OB_SUCC(ret) && need_read_truncate_info) {
     // step1. try to get from kv cache
     const ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, newest_schema_version, last_major_snapshot);
-    const bool read_kv_cache = read_version_range.base_version_ >= last_major_snapshot && newest_schema_version > 0;
+    const bool read_kv_cache = (read_version_range.base_version_ >= last_major_snapshot)
+        && newest_schema_version > 0
+        // if exist new version truncate_info, cache is incomplete for old_snapshot_query
+        && (read_version_range.snapshot_version_ >= newest_commit_version);
     if (read_kv_cache && OB_SUCC(ObTruncateInfoKVCacheUtil::get_truncate_info_array(allocator, cache_key, truncate_info_array))) {
-      LOG_INFO("[TRUNCATE INFO] read truncate info from kv cache", KR(ret), K(tablet_id), K(truncate_info_array), K_(truncate_info_cache));
+      LOG_INFO("[TRUNCATE INFO] read truncate info from kv cache", KR(ret), K(tablet_id), K(read_version_range), K(truncate_info_array), K_(truncate_info_cache));
     } else if (OB_UNLIKELY(read_kv_cache && OB_ENTRY_NOT_EXIST != ret)) {
       LOG_WARN("unexpected errno when get truncate info from kv cache", KR(ret), K(cache_key));
     } else if (OB_FAIL(inner_read_truncate_info_array_from_mds(allocator, read_version_range, truncate_info_array, collector))) {
@@ -4574,8 +4579,10 @@ int ObTablet::get_split_dst_read_table(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid meta handle", K(ret));
         } else if (OB_FALSE_IT(dst_tablet = dst_tablet_handle.get_obj())) {
+        } else if (OB_UNLIKELY(snapshot_version < dst_tablet->get_multi_version_start())) {
+          ret = OB_SNAPSHOT_DISCARDED;
+          LOG_WARN("snapshot not readable in split dst", K(ret), K(tablet_meta_.tablet_id_), K(dst_tablet_id));
         } else if (dst_tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          ObTabletCreateDeleteMdsUserData user_data;
           if (get_last_major_snapshot_version() != dst_tablet->get_last_major_snapshot_version()) {
             ret = OB_SCHEMA_EAGAIN;
             LOG_WARN("dst lastest major not same as src", K(ret), K(tablet_meta_.tablet_id_), K(dst_tablet_id),
@@ -6697,14 +6704,16 @@ int ObTablet::get_tablet_report_info_by_ckm_info(
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> column_checksums;
+  share::ObFreezeInfo freeze_info;
+  uint64_t compaction_data_version = 0;
   column_checksums.set_attr(ObMemAttr(MTL_ID(), "tmpCkmArr"));
-  const int64_t report_major_snaphot = major_ckm_info.get_compaction_scn();
+  const int64_t report_major_snapshot = major_ckm_info.get_compaction_scn();
   if (OB_FAIL(tablet_replica.init(
         MTL_ID(),
         get_tablet_id(),
         get_ls_id(),
         addr,
-        report_major_snaphot,
+        report_major_snapshot,
         0/*data_size*/,
         0/*required_size*/,
         0/*report_scn*/,
@@ -6718,14 +6727,22 @@ int ObTablet::get_tablet_report_info_by_ckm_info(
     LOG_WARN("failed to set tenant id", KR(ret));
   } else if (OB_FAIL(tablet_checksum.column_meta_.init(column_checksums))) {
     LOG_WARN("fail to init report column meta with column_checksums", KR(ret), K(column_checksums));
-  } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(report_major_snaphot))) {
+  } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(report_major_snapshot))) {
     LOG_WARN("failed to convert scn", KR(ret), K(major_ckm_info));
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(report_major_snapshot, freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_WARN("failed to get freeze info", K(ret), K(report_major_snapshot));
+    }
+  } else if (FALSE_IT(compaction_data_version = freeze_info.data_version_)) {
   } else {
     tablet_checksum.ls_id_ = get_ls_id();
     tablet_checksum.tablet_id_ = get_tablet_id();
     tablet_checksum.server_ = addr;
     tablet_checksum.row_count_ = major_ckm_info.get_row_count();
     tablet_checksum.data_checksum_ = major_ckm_info.get_data_checksum();
+    tablet_checksum.set_data_checksum_type(false/*is_cs_replica*/, compaction_data_version);
     LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), K(major_ckm_info), "report_status",
       tablet_meta_.report_status_, K(tablet_checksum));
   }
@@ -6746,6 +6763,8 @@ int ObTablet::get_tablet_report_info_by_sstable(
   const int64_t report_major_snapshot = tablet_meta_.report_status_.merge_snapshot_version_;
   int64_t data_size = 0;
   int64_t required_size = 0;
+  share::ObFreezeInfo freeze_info;
+  uint64_t compaction_data_version = 0;
   ObArray<int64_t> column_checksums;
   column_checksums.set_attr(ObMemAttr(MTL_ID(), "tmpCkmArr"));
   ObSSTable *table = nullptr;
@@ -6800,13 +6819,20 @@ int ObTablet::get_tablet_report_info_by_sstable(
     LOG_WARN("fail to init report column meta with column_checksums", KR(ret), K(column_checksums));
   } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(report_major_snapshot))) {
     LOG_WARN("failed to convert scn", KR(ret), K(report_major_snapshot));
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(report_major_snapshot, freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_WARN("failed to get freeze info", K(ret), K(report_major_snapshot));
+    }
+  } else if (FALSE_IT(compaction_data_version = freeze_info.data_version_)) {
   } else {
     tablet_checksum.ls_id_ = get_ls_id();
     tablet_checksum.tablet_id_ = get_tablet_id();
     tablet_checksum.server_ = addr;
     tablet_checksum.row_count_ = get_tablet_meta().report_status_.row_count_;
     tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_;
-    tablet_checksum.data_checksum_type_ = is_cs_replica ? ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE : ObDataChecksumType::DATA_CHECKSUM_NORMAL;
+    tablet_checksum.set_data_checksum_type(is_cs_replica, compaction_data_version);
 #ifdef ERRSIM
     const ObTabletID errsim_tablet_id(-EN_COMPACTION_DATA_CHECKSUM_ERROR);
     if (get_tablet_id() == errsim_tablet_id) {

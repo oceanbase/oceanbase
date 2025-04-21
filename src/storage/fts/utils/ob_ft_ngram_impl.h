@@ -55,7 +55,7 @@ private:
     int start_;
     int cnt_;
     int ngram_n_;
-    bool meet_splitter_;
+    bool meet_delimiter_;
     bool is_last_batch_;
 
     void reset()
@@ -63,7 +63,7 @@ private:
       start_ = 0;
       cnt_ = 0;
       ngram_n_ = 0;
-      meet_splitter_ = false;
+      meet_delimiter_ = false;
       is_last_batch_ = false;
     }
 

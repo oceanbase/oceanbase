@@ -329,7 +329,7 @@ private:
   // If there also exists 'SIMULATE_APPEND' type object in this uri, this function will just list
   // this 'appendable-dir' name, not include its children objects' name.
   //
-  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_S3_APPENDABLE_FRAGMENT_PREFIX).
+  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIXT_PREFIX).
   //         If there exists some children objects not have this prefix, these objects will also be listed.
   //         Cuz we think these objects are just some common objects.
   //

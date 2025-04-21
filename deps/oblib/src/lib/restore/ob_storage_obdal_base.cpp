@@ -112,11 +112,20 @@ void *obdal_malloc(std::size_t size, std::size_t align)
 {
   // Since there are some global static variables in obdal that cannot be cleaned up
   // at fin_obdal_env and vslice alloc has memory_leak checks, ob_malloc replacement is used first
-
-  // return ObDalMemoryManager::get_instance().allocate(size, align);
+  void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
-  return ob_malloc_align(align, size, attr);
+  do {
+    // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
+    ptr = ob_malloc_align(align, size, attr);
+    if (OB_ISNULL(ptr)) {
+      ::usleep(10000);   // 10ms
+      if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align));
+      }
+    }
+  } while (OB_ISNULL(ptr));
+  return ptr;
 }
 
 void obdal_free(void *ptr)
@@ -163,6 +172,7 @@ int ObDalEnvIniter::global_init()
                                          POOL_MAX_IDLE_TIME_S))) {
     OB_LOG(WARN, "failed init obdal env", K(ret));
   } else {
+    signal(SIGPIPE, SIG_IGN);
     OB_LOG(INFO, "obdal env init success", K(ret));
     is_global_inited_ = true;
   }
@@ -195,97 +205,24 @@ ObDalAccount::~ObDalAccount()
 
 void ObDalAccount::reset()
 {
-  is_valid_ = false;
-  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  ObStorageAccount::reset();
   MEMSET(region_, 0, sizeof(region_));
-  MEMSET(endpoint_, 0, sizeof(endpoint_));
-  MEMSET(access_id_, 0, sizeof(access_id_));
-  MEMSET(secret_key_, 0, sizeof(secret_key_));
-  sts_token_.reset();
   addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
 }
 
-int64_t ObDalAccount::hash() const
-{
-  int64_t hash_value = 0;
-  hash_value = murmurhash(region_, static_cast<int32_t>(strlen(region_)), hash_value);
-  hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
-  hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
-  hash_value = murmurhash(secret_key_, static_cast<int32_t>(strlen(secret_key_)), hash_value);
-  hash_value = murmurhash(&addressing_model_, sizeof(addressing_model_), hash_value);
-  return hash_value;
-}
-
-// TODO This logic is similar to other object stores and can be abstracted away to reduce code
-int ObDalAccount::parse_from(const char *storage_info_str, const int64_t size)
+int ObDalAccount::assign(const ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(storage_info_str) || size >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
+  reset();
+  if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "failed to init s3 account, invalid argument", K(ret), KP(storage_info_str), K(size));
+    OB_LOG(WARN, "storage info is invalid", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(storage_info->to_account(*this))) {
+    OB_LOG(WARN, "failed from storage_info to account", K(ret), KPC(storage_info));
+  } else if (STRLEN(storage_info->region_) != 0 && OB_FAIL(ob_set_field(storage_info->region_ + strlen(REGION), region_, sizeof(region_)))) {
+    OB_LOG(WARN, "failed set region", K(ret), K(storage_info->region_), KPC(storage_info));
   } else {
-    char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
-    char *token = nullptr;
-    char *saved_ptr = nullptr;
-
-    uint8_t bitmap = 0;
-    MEMCPY(tmp, storage_info_str, size);
-    tmp[size] = '\0';
-    token = tmp;
-    for (char *str = token; OB_SUCC(ret); str = nullptr) {
-      token = ::strtok_r(str, "&", &saved_ptr);
-      if (OB_ISNULL(token)) {
-        break;
-      } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        if (OB_FAIL(ob_set_field(token + strlen(REGION), region_, sizeof(region_)))) {
-          OB_LOG(WARN, "failed to set obdal region", K(ret), KCSTRING(token));
-        }
-      } else if (0 == strncmp(HOST, token, strlen(HOST))) {
-        if (OB_FAIL(ob_set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
-          OB_LOG(WARN, "failed to set obdal endpoint", K(ret), KCSTRING(token));
-        } else {
-          bitmap |= 1;
-        }
-      } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
-        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
-          OB_LOG(WARN, "failed to set obdal access id", K(ret), KCSTRING(token));
-        } else {
-          bitmap |= (1 << 1);
-        }
-      } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
-        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
-          OB_LOG(WARN, "failed to set obdal secret key", K(ret), KP(token));
-        } else {
-          bitmap |= (1 << 2);
-        }
-      } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
-        if (0 == strcmp(token + strlen(DELETE_MODE), "delete")) {
-          delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
-        } else if (0 == strcmp(token + strlen(DELETE_MODE), "tagging")) {
-          delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          OB_LOG(WARN, "delete mode is invalid", K(ret), KCSTRING(token));
-        }
-      } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
-        if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_VIRTUAL_HOSTED_STYLE)) {
-          addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
-        } else if (0 == strcmp(token + strlen(ADDRESSING_MODEL), ADDRESSING_MODEL_PATH_STYLE)) {
-          addressing_model_ = ObStorageAddressingModel::OB_PATH_STYLE;
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          OB_LOG(WARN, "addressing model is invalid", K(ret), KCSTRING(token));
-        }
-      } else {
-        OB_LOG(DEBUG, "unknown obdal info", K(*token));
-      }
-    }
-
-    if (OB_SUCC(ret) && bitmap != 0x07) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "failed to init obdal account", K(ret), KCSTRING(region_),
-          KCSTRING(endpoint_), KCSTRING(access_id_), K(bitmap));
-    }
+    addressing_model_ = storage_info->addressing_model_;
   }
 
   if (OB_SUCC(ret)) {
@@ -382,8 +319,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "failed to set region", K(ret), K(obdal_account.region_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
-      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "secret_access_key", obdal_account.secret_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.secret_key_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "secret_access_key", obdal_account.access_key_))) {
+        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_config_load", "true"))) {
         OB_LOG(WARN, "failed to set disable config load", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_ec2_metadata", "true"))) {
@@ -402,8 +339,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "failed to set endpoint", K(ret), K(obdal_account.endpoint_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
-      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_secret", obdal_account.secret_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.secret_key_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_secret", obdal_account.access_key_))) {
+        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
       }
@@ -442,8 +379,6 @@ int set_options_checksum_algorithm(
 int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  char info_str[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "obdal base alreagy inited", K(ret));
@@ -454,9 +389,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
     OB_LOG(WARN, "failed to get storage type from path", K(ret), K(uri), K(storage_type_));
   } else if (OB_FAIL(build_bucket_and_object_name(allocator_, uri, bucket_, object_))) {
     OB_LOG(WARN, "failed to parse uri", K(ret), K(uri));
-  } else if (OB_FAIL(storage_info->get_authorization_str(info_str, sizeof(info_str), obdal_account_.sts_token_))) {
-    OB_LOG(WARN, "failed to get authorization str", K(ret), KPC(storage_info));
-  } else if (OB_FAIL(obdal_account_.parse_from(info_str, strlen(info_str)))) {
+  } else if (OB_FAIL(obdal_account_.assign(storage_info))) {
     OB_LOG(WARN, "failed to build obdal account", K(ret));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
@@ -1421,12 +1354,13 @@ int ObStorageObDalAppendWriter::pwrite(const char *buf, const int64_t size, cons
       // write the format file when writing the first fragment because the appender may open multiple times
       if (offset == 0) {
         // obdal employs the same format-meta as S3
-        if (OB_FAIL(construct_fragment_full_name(object_, OB_S3_APPENDABLE_FORMAT_META,
+        if (OB_FAIL(construct_fragment_full_name(object_, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                 fragment_name, sizeof(fragment_name)))) {
           OB_LOG(WARN, "failed to construct obdal mock append object foramt name",
               K(ret), K_(bucket), K_(object));
-        } else if (OB_FAIL(ObDalAccessor::obdal_operator_write(op_, fragment_name, OB_S3_APPENDABLE_FORMAT_CONTENT_V1,
-                                                    strlen(OB_S3_APPENDABLE_FORMAT_CONTENT_V1)))) {
+        } else if (OB_FAIL(ObDalAccessor::obdal_operator_write(op_, fragment_name,
+                                              OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                                              strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)))) {
           OB_LOG(WARN, "fail to write obdal mock append object format file", K(ret), K(fragment_name));
         }
       }

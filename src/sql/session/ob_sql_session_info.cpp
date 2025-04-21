@@ -166,6 +166,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       cur_exec_ctx_(nullptr),
       restore_auto_commit_(false),
       dblink_context_(this),
+      dblink_ctx_acc_cnt_(0),
       sql_req_level_(0),
       expect_group_id_(OB_INVALID_ID),
       group_id_not_expected_(false),
@@ -368,7 +369,10 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     flt_control_info_.reset();
     group_id_not_expected_ = false;
     //call at last time
-    dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
+    if (dblink_ctx_acc_cnt_ > 0) {
+      dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
+      dblink_ctx_acc_cnt_ = 0;
+    }
     ObBasicSessionInfo::reset(skip_sys_var);
     txn_free_route_ctx_.reset();
     client_non_standard_ = false;
@@ -531,6 +535,18 @@ int ObSQLSessionInfo::is_preserve_order_for_pagination_enabled(bool &enabled) co
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
     enabled = tenant_config->_preserve_order_for_pagination;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::is_preserve_order_for_groupby_enabled(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_preserve_order_for_groupby;
   }
   return ret;
 }
@@ -1523,6 +1539,8 @@ ObDbmsCursorInfo *ObSQLSessionInfo::get_dbms_cursor(int64_t cursor_id)
   ObDbmsCursorInfo *dbms_cursor = NULL;
   OV (OB_NOT_NULL(cursor = get_cursor(cursor_id)),
       OB_INVALID_ARGUMENT, cursor_id);
+  OV (cursor->is_dbms_sql_cursor(),
+      OB_INVALID_ARGUMENT, cursor_id);
   OV (OB_NOT_NULL(dbms_cursor = dynamic_cast<ObDbmsCursorInfo *>(cursor)),
       OB_INVALID_ARGUMENT, cursor_id);
   return dbms_cursor;
@@ -1553,15 +1571,6 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       // mysql ps模式时，会提前将cursor id设置为 stmt_id
       id = pl_cursor_cache_.gen_cursor_id();
       // ps cursor: proxy will record server ip, other ops of ps cursor will route by record ip.
-
-      // server cursor(not ps cursor) has same logic with temporary table,
-      // because we can not sync server cursor status to other server,
-      // so after open server cursor, other modify of this cursor need to do on same server.
-      bool is_already_set = false;
-      OZ (get_session_temp_table_used(is_already_set));
-      if (OB_SUCC(ret) && !is_already_set) {
-        OZ (set_session_temp_table_used(true));
-      }
     }
     if (OB_FAIL(ret)) {
     } else {
@@ -1764,6 +1773,7 @@ int ObSQLSessionInfo::make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
   OV (OB_NOT_NULL(cursor = new (buf) ObDbmsCursorInfo(get_cursor_allocator())));
   OZ (cursor->init());
   OX (cursor->set_id(id));
+  OX (cursor->set_dbms_sql_cursor());
   OZ (add_cursor(cursor));
   /*
    * 一个dbms cursor可以在open之后反复parse，每次都可以切换为不同语句，所以内部不同对象需要使用不同allocator：

@@ -1422,26 +1422,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       audit_record.exec_timestamp_.update_stage_time();
 
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_end();
-        record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret, result);
-        audit_record.stmt_type_ = result.get_stmt_type();
-        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.update_event_stage_state();
-      }
-      if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
-        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
-        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
-        sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
-        ObString sql_id = ObString::make_string(ctx_.sql_id_);
-        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
-                                                   ctx_.cur_sql_,
-                                                   result.get_physical_plan());
-      }
-
       if (enable_perf_event && !THIS_THWORKER.need_retry()
         && OB_NOT_NULL(result.get_physical_plan())) {
         const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
@@ -1465,6 +1445,26 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
           LOG_WARN("send error packet failed", K(ret), K(err));
         }
       }
+    }
+
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret, result);
+      audit_record.stmt_type_ = result.get_stmt_type();
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+      sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+      sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+      ObString sql_id = ObString::make_string(ctx_.sql_id_);
+      sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                 ctx_.cur_sql_,
+                                                 result.get_physical_plan());
     }
 
     audit_record.status_ =

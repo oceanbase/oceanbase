@@ -72,6 +72,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(query_ctx));
         } else if (OB_FALSE_IT(query_ctx->sql_schema_guard_.set_schema_guard(schema_guard))) {
+        } else if (OB_FALSE_IT(expr_factory.set_query_ctx(query_ctx))) {
         } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_, (session_info->get_session_type() != ObSQLSessionInfo::INNER_SESSION
                                                                               ? session_info->get_sessid_for_table() : OB_INVALID_ID)))) {
           LOG_WARN("init schema checker failed", K(ret));

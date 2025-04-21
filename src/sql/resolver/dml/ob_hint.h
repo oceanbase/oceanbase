@@ -214,6 +214,7 @@ struct ObOptParamHint
     DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
     DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
     DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
+    DEF(PRESERVE_ORDER_FOR_GROUPBY,)             \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

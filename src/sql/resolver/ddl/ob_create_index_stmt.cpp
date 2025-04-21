@@ -70,6 +70,11 @@ void ObCreateIndexStmt::set_comment(const ObString &comment)
   create_index_arg_.index_option_.comment_ = comment;
 }
 
+void ObCreateIndexStmt::set_storage_cache_policy(const ObString &storage_cache_policy)
+{
+  create_index_arg_.index_option_.storage_cache_policy_ = storage_cache_policy;
+}
+
 void ObCreateIndexStmt::set_index_name(const ObString &index_name)
 {
   create_index_arg_.index_name_ = index_name;

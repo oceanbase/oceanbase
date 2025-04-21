@@ -71,8 +71,8 @@ void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &a
 void ObActiveSessionStat::set_sess_active()
 {
   if (!is_active_session_) {
-    is_active_session_ = true;
     accumulate_tm_idle_time();
+    is_active_session_ = true;
     if (trace_id_.is_invalid()) {
       trace_id_ = *common::ObCurTraceId::get_trace_id();
     }
@@ -114,7 +114,7 @@ void ObActiveSessionStat::accumulate_tm_idle_time()
     // When set_sess_inactive() is called, there is some time left after last_ts_. So we mark it as
     // extra time to calculat in next round of calc_db_time when session is active again.
     const int64_t cur = rdtsc();
-    tm_idle_cpu_cycles_  += (cur - last_inactive_ts_) * 1000 / lib_get_cpu_khz();
+    tm_idle_cpu_cycles_ += cur - last_inactive_ts_;
   }
 }
 
@@ -387,7 +387,7 @@ void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
       last_stat.p1_ = desc.p1_;
       last_stat.p2_ = desc.p2_;
       last_stat.p3_ = desc.p3_;
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
       const char *bt = lbt();
       int64_t size = std::min(sizeof(last_stat.bt_) - 1, STRLEN(bt));
       MEMCPY(last_stat.bt_, bt, size);

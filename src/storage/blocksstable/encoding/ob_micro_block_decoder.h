@@ -15,7 +15,6 @@
 
 #include "ob_imicro_block_decoder.h"
 #include "storage/blocksstable/ob_row_reader.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/ob_i_store.h"
 #include "ob_integer_array.h"
 #include "ob_icolumn_decoder.h"
@@ -33,7 +32,7 @@ class ObIColumnDecoder;
 struct ObBlockCachedDecoderHeader;
 class ObIRowIndex;
 
-struct ObColumnDecoder
+struct ObColumnDecoder final
 {
 public:
   ObColumnDecoder() : decoder_(nullptr), ctx_(nullptr) {}
@@ -85,32 +84,6 @@ public:
   ObColumnDecoderCtx *ctx_;
 };
 
-class ObDecoderCtxArray final
-{
-public:
-  typedef ObColumnDecoderCtx ObDecoderCtx;
-  ObDecoderCtxArray(): ctxs_(), ctx_blocks_()
-  {
-    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
-    SET_IGNORE_MEM_VERSION(attr);
-    ctxs_.set_attr(attr);
-    ctx_blocks_.set_attr(attr);
-  };
-  ~ObDecoderCtxArray()
-  {
-    reset();
-  }
-
-  TO_STRING_KV(K_(ctxs));
-  void reset();
-  int get_ctx_array(ObDecoderCtx **&ctxs, int64_t size);
-private:
-  ObSEArray<ObDecoderCtx *, ObColumnDecoderCtxBlock::CTX_NUMS> ctxs_;
-  ObSEArray<ObColumnDecoderCtxBlock *, 1> ctx_blocks_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObDecoderCtxArray);
-};
-
 template <class Decoder>
 int new_decoder_with_allocated_buf(char *buf,
                                    const ObMicroBlockHeader &header,
@@ -138,7 +111,7 @@ protected:
                   int64_t &decoders_buf_pos, ObColumnDecoder &dest);
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
   int setup_row(const uint64_t row_id, int64_t &row_len, const char *&row_data);
-  int alloc_decoders_buf();
+  int alloc_decoders_buf(int64_t &decoders_buf_pos);
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
 
@@ -153,8 +126,7 @@ protected:
   ObIRowIndex *row_index_;
   ObColumnDecoder *decoders_;
   ObColumnDecoder default_decoders_[DEFAULT_DECODER_CNT];
-  ObDecoderCtxArray ctx_array_;
-  ObColumnDecoderCtx **ctxs_;
+  ObColumnDecoderCtx *ctxs_;
   common::ObArenaAllocator decoder_allocator_;
   // For highly concurrently get row on wide tables(eg: more then 100 columns),
   // frequently allocate from MTL(ObDecodeResourcePool*), resulting in a bottleneck
@@ -431,7 +403,7 @@ private:
       const char *meta_data,
       const ObIColumnDecoder *&decoder);
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
-  int alloc_decoders_buf(const bool by_read_info);
+  int alloc_decoders_buf(const bool by_read_info, int64_t &decoders_buf_pos);
   int filter_pushdown_retro(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObWhiteFilterExecutor &filter,
@@ -454,8 +426,7 @@ private:
   ObIRowIndex *row_index_;
   ObColumnDecoder *decoders_;
   ObRowReader flat_row_reader_;
-  ObDecoderCtxArray ctx_array_;
-  ObColumnDecoderCtx **ctxs_;
+  ObColumnDecoderCtx *ctxs_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;
   static ObNewColumnDecoder new_column_decoder_;

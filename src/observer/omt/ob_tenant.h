@@ -49,7 +49,7 @@ class ObAllVirtualDumpTenantInfo;
 }
 namespace omt
 {
-typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> ReqQueue;
+typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO, OB_MAX_NUMA_NUM> ReqQueue;
 class ObPxPool
     : public share::ObThreadPool
 {
@@ -371,7 +371,7 @@ class ObTenant : public share::ObTenantBase
   friend class ObResourceGroup;
   friend int ::select_dump_tenant_info(lua_State*);
   friend int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
-                           int32_t level, bool force, ObResourceGroup *group);
+                           int32_t level, bool force, ObResourceGroup *group, int32_t group_index);
   friend int destroy_worker(ObThWorker *worker);
   using WListNode = common::ObDLinkNode<lib::Worker*>;
   using WList = common::ObDList<WListNode>;
@@ -564,7 +564,7 @@ protected:
 
   /// tenant task queue,
   // 'hp' for high priority and 'np' for normal priority
-  common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> req_queue_;
+  ReqQueue req_queue_;
 
   //Create a request queue for each level of nested requests
   ObMultiLevelQueue *multi_level_queue_;

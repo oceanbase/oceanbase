@@ -44,19 +44,8 @@ int ObIHbaseAdapter::init_table_ctx(ObTableExecCtx &exec_ctx,
     tb_ctx.set_audit_ctx(exec_ctx.get_audit_ctx());
     if (tb_ctx.is_init()) {
       LOG_INFO("tb ctx has been inited", K(tb_ctx));
-    } else {
-      if (op_type == ObTableOperationType::DEL) {
-        if (OB_FAIL(tb_ctx.init_common_without_check(exec_ctx.get_credential(), exec_ctx.get_timeout_ts()))) {
-          LOG_WARN("fail to init table ctx common part for delete", K(ret), K(cell.get_tablet_id()));
-        }
-      } else {
-        if (OB_FAIL(tb_ctx.init_common(exec_ctx.get_credential(), cell.get_tablet_id(), exec_ctx.get_timeout_ts()))) {
-          LOG_WARN("fail to init table ctx common part for non-delete", K(ret), K(cell.get_tablet_id()));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
+    } else if (OB_FAIL(tb_ctx.init_common(exec_ctx.get_credential(), cell.get_tablet_id(), exec_ctx.get_timeout_ts()))) {
+      LOG_WARN("fail to init table ctx common", K(ret), K(cell.get_tablet_id()));
     } else if (op_type == ObTableOperationType::INSERT_OR_UPDATE && OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
         LOG_WARN("fail to check htable put can use table api put", K(ret));
     } else {

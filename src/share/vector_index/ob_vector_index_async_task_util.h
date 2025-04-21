@@ -192,6 +192,11 @@ public:
   void destroy();
   int push_task(const uint64_t tenant_id, const ObLSID &ls_id, ObVecIndexAsyncTaskCtx *ctx);
   int get_tg_id() { return tg_id_; }
+
+  void inc_async_task_ref() { ATOMIC_INC(&async_task_ref_cnt_); }
+  void dec_async_task_ref() { ATOMIC_DEC(&async_task_ref_cnt_); }
+  int64_t get_async_task_ref() const { return ATOMIC_LOAD(&async_task_ref_cnt_); }
+
   virtual void handle(void *task) override;
   virtual void handle_drop(void *task) override;
 
@@ -203,6 +208,7 @@ private:
   static const int64_t INVALID_TG_ID = -1;
   bool is_inited_;
   int tg_id_;
+  volatile int64_t async_task_ref_cnt_;
   ObIAllocator *allocator_;
 };
 
@@ -214,11 +220,13 @@ public:
                           task_type_(ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_TASK_TYPE_INVALID),
                           tenant_id_(OB_INVALID_TENANT_ID),
                           ls_id_(ObLSID::INVALID_LS_ID),
-                          ctx_(nullptr)
+                          ctx_(nullptr),
+                          vec_idx_mgr_(nullptr),
+                          allocator_(ObMemAttr(MTL_ID(), "VecIdxASyTask"))
   {
   }
   virtual ~ObVecIndexAsyncTask() {}
-  int init(const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx, ObIAllocator *allocator);
+  int init(const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx);
   int get_task_type() { return task_type_; }
   ObVecIndexAsyncTaskCtx *get_task_ctx() { return ctx_; }
   int do_work();
@@ -247,9 +255,9 @@ private:
   int task_type_; // 0. built; 1. opt
   uint64_t tenant_id_;
   ObLSID ls_id_;
-  ObIAllocator *allocator_;
   ObVecIndexAsyncTaskCtx *ctx_;
   ObPluginVectorIndexMgr *vec_idx_mgr_;
+  common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexAsyncTask);
 };
 

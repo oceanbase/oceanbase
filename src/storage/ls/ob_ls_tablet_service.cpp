@@ -4568,7 +4568,7 @@ int ObLSTabletService::insert_tablet_rows(
 #else
   const bool check_exists = !table.is_storage_index_table() ||
     table.is_unique_index() ||
-    table.is_fts_index() ||
+    // table.is_fts_index() ||  /* uncomment to check exist on fulltext index for data consistency error debugging */
     run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
 #endif
   const int64_t row_count = rows_info.get_rowkey_cnt();

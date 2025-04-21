@@ -4661,6 +4661,10 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
         ddl_type = ObDDLType::DDL_RENAME_PARTITION;
       } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == nonconst_arg.alter_part_type_) {
         ddl_type = ObDDLType::DDL_RENAME_SUB_PARTITION;
+      } else if (obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_ALTER_PARTITION_POLICY;
+      } else if (obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_ALTER_SUBPARTITION_POLICY;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected ddl type", K(ret), K(nonconst_arg.alter_part_type_), K(nonconst_arg));
@@ -11450,6 +11454,7 @@ int ObRootService::set_config_after_bootstrap_()
     {"_enable_dbms_job_package", "false"},
     {"_bloom_filter_ratio", "3"},
     {"_enable_mysql_compatible_dates", "true"},
+    {"_ob_enable_pl_dynamic_stack_check", "true"},
   };
   if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
     LOG_WARN("failed to assign sql string", KR(ret));

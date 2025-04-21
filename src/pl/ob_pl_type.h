@@ -378,7 +378,7 @@ public:
   void reset_charset() { charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI; }
   ObCollationType get_charset() const { return charsetnr_; }
 
-  uint64_t get_type_info_id() const { return type_info_id_; }
+  uint64_t get_type_info_id() const { return is_enum_or_set_type() ? type_info_id_ : OB_INVALID_ID; }
   int set_type_info(const ObIArray<common::ObString> &type_info);
   pl::ObPLEnumSetCtx* get_enum_set_ctx() { return enum_set_ctx_; }
   void set_enum_set_ctx(pl::ObPLEnumSetCtx *enum_set_ctx) { enum_set_ctx_ = enum_set_ctx; }
@@ -761,32 +761,35 @@ class ObObjAccessIdx
 public:
   enum AccessType //必须与enum ExternalType的定义保持一致
   {
-    IS_INVALID = -1,
-    IS_LOCAL = 0,      //本地变量：PL内部定义的变量
-    IS_DB_NS = 1,          //外部变量：包变量所属的DB
-    IS_PKG_NS = 2,         //外部变量：包变量所属的PKG
-    IS_PKG = 3,            //外部变量：包变量
-    IS_USER = 4,           //外部变量：用户变量
-    IS_SESSION = 5,        //外部变量：SESSION系统变量
-    IS_GLOBAL = 6,         //外部变量：GLOBAL系统变量
-    IS_TABLE_NS = 7,       //外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
-    IS_TABLE_COL = 8,      //外部变量: 用户列,用于实现 %TYPE
-    IS_LABEL_NS = 9,       //Label
-    IS_SUBPROGRAM_VAR = 10, //Subprogram Var
-    IS_EXPR = 11,           //for table type access index
-    IS_CONST = 12,          //常量 special case for is_expr
-    IS_PROPERTY = 13,       //固有属性，如count
-    IS_INTERNAL_PROC = 14,  //Package中的Procedure
-    IS_EXTERNAL_PROC = 15, //Standalone的Procedure
-    IS_NESTED_PROC = 16,
-    IS_TYPE_METHOD = 17,    //自定义类型的方法
-    IS_SYSTEM_PROC = 18,    //系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
-    IS_UDT_NS = 19,
-    IS_UDF_NS = 20,
-    IS_LOCAL_TYPE = 21,     // 本地的自定义类型
-    IS_PKG_TYPE = 22,       // 包中的自定义类型
-    IS_SELF_ATTRIBUTE = 23, // self attribute for udt
-    IS_DBLINK_PKG_NS = 24,  // dblink package
+    IS_INVALID            = -1,
+    IS_LOCAL              = 0,//本地变量：PL内部定义的变量
+    IS_DB_NS              = 1,//外部变量：包变量所属的DB
+    IS_PKG_NS             = 2,//外部变量：包变量所属的PKG
+    IS_PKG                = 3,//外部变量：包变量
+    IS_USER               = 4,//外部变量：用户变量
+    IS_SESSION            = 5,//外部变量：SESSION系统变量
+    IS_GLOBAL             = 6,//外部变量：GLOBAL系统变量
+    IS_TABLE_NS           = 7,//外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
+    IS_TABLE_COL          = 8,//外部变量: 用户列,用于实现 %TYPE
+    IS_LABEL_NS           = 9,//Label
+    IS_SUBPROGRAM_VAR     = 10,//Subprogram Var
+    IS_EXPR               = 11,//for table type access index
+    IS_CONST              = 12,//常量 special case for is_expr
+    IS_PROPERTY           = 13,//固有属性，如count
+    IS_INTERNAL_PROC      = 14,//Package中的Procedure
+    IS_EXTERNAL_PROC      = 15,//Standalone的Procedure
+    IS_NESTED_PROC        = 16,//
+    IS_TYPE_METHOD        = 17,//自定义类型的方法
+    IS_SYSTEM_PROC        = 18,//系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
+    IS_UDT_NS             = 19,
+    IS_UDF_NS             = 20,
+    IS_LOCAL_TYPE         = 21,// 本地的自定义类型
+    IS_PKG_TYPE           = 22,// 包中的自定义类型
+    IS_SELF_ATTRIBUTE     = 23,// self attribute for udt
+    IS_DBLINK_PKG_NS      = 24,// dblink package
+    IS_UDT_MEMBER_ROUTINE = 25,// UDT member routine
+    IS_TRIGGER            = 26,// Trigger
+    IS_SEQUENCE           = 27,// Sequence
   };
 
   ObObjAccessIdx()
@@ -849,6 +852,10 @@ public:
   bool is_pkg_type() const { return IS_PKG_TYPE == access_type_; }
   bool is_udt_type() const { return IS_UDT_NS == access_type_; }
   bool is_udf_type() const { return IS_UDF_NS == access_type_; }
+  bool is_pkg_ns() const { return IS_PKG_NS == access_type_; }
+  bool is_database() const { return IS_DB_NS == access_type_; }
+  bool is_trigger() const { return IS_TRIGGER == access_type_; }
+  bool is_sequence() const { return IS_SEQUENCE == access_type_; }
 
   static bool is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
@@ -909,6 +916,7 @@ enum ObPLCursorFlag {
   TRANSFERING_RESOURCE = 4, // this cursor is returned by a udf
   SYNC_CURSOR = 8, // this cursor from package cursor sync, can not used by this server.
   INVALID_CURSOR = 16, // this cursor is convert to a dbms cursor, invalid for dynamic cursor op.
+  DBMS_SQL_CURSOR = 32, // this is a dbms_sql cursor
 };
 class ObPLCursorInfo
 {
@@ -985,7 +993,9 @@ public:
     forall_rollback_ = false;
     if (is_session_cursor()) {
       cursor_flag_ = SESSION_CURSOR;
-    } else {
+    } else if (is_dbms_sql_cursor()) {
+      cursor_flag_ = DBMS_SQL_CURSOR;
+    }else {
       cursor_flag_ = CURSOR_FLAG_UNDEF;
     }
     // ref_count_ = 0; // 这个不要清零，因为oracle在close之后，它的ref count还是保留的
@@ -1117,8 +1127,16 @@ public:
 
   inline ObIAllocator *get_allocator() { return NULL == entity_ ? allocator_ : &entity_->get_arena_allocator(); }
 
-  inline void set_ref_by_refcursor() { set_flag_bit(REF_BY_REFCURSOR); }
+  inline void set_ref_by_refcursor() {
+    set_flag_bit(REF_BY_REFCURSOR);
+    clear_flag_bit(DBMS_SQL_CURSOR);
+  }
   inline bool is_ref_by_refcursor() const { return test_flag_bit(REF_BY_REFCURSOR); }
+  inline void set_dbms_sql_cursor() {
+    set_flag_bit(DBMS_SQL_CURSOR);
+    clear_flag_bit(REF_BY_REFCURSOR);
+  }
+  inline bool is_dbms_sql_cursor() const { return test_flag_bit(DBMS_SQL_CURSOR); }
 
   inline void set_is_session_cursor() { set_flag_bit(SESSION_CURSOR); }
   inline bool is_session_cursor() const { return test_flag_bit(SESSION_CURSOR); }

@@ -24,6 +24,7 @@ using namespace oceanbase::lib;
 static bool g_malloc_hook_inited = false;
 typedef void* (*MemsetPtr)(void*, int, size_t);
 MemsetPtr memset_ptr = nullptr;
+ObMallocHook &global_malloc_hook = ObMallocHook::get_instance();
 void init_malloc_hook()
 {
   g_malloc_hook_inited = true;
@@ -51,24 +52,27 @@ struct Header
   uint32_t data_size_;
   uint32_t offset_;
   uint8_t from_mmap_;
-  char padding_[3];
+  uint8_t from_malloc_hook_;
+  char padding_[2];
   char data_[0];
 } __attribute__((aligned (16)));
 
 const uint32_t Header::SIZE = offsetof(Header, data_);
 
-void *ob_malloc_retry(size_t size)
+void *ob_malloc_retry(size_t size, bool &from_malloc_hook)
 {
   void *ptr = nullptr;
   do {
-    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
     bool use_500 = ObMallocHookAttrGuard::get_tl_use_500();
-    SET_USE_500(attr);
-    if (use_500 && is_malloc_v2_enabled()) {
-      attr.tenant_id_ = OB_SERVER_TENANT_ID;
+    if (OB_LIKELY(use_500 && is_malloc_v2_enabled())) {
+      ptr = global_malloc_hook.alloc(size);
+      from_malloc_hook = true;
+    } else {
+      ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
+      SET_USE_500(attr);
+      ptr = ob_malloc(size, attr);
+      from_malloc_hook = false;
     }
-    attr.ctx_id_ = ObCtxIds::GLIBC;
-    ptr = ob_malloc(size, attr);
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
@@ -107,6 +111,7 @@ malloc(size_t size)
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
+  bool from_malloc_hook = false;
   if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
     if (MAP_FAILED == (tmp_ptr = ob_mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
       tmp_ptr = nullptr;
@@ -115,12 +120,13 @@ malloc(size_t size)
   } else {
     bool in_hook_bak = in_hook();
     in_hook()= true;
-    tmp_ptr = ob_malloc_retry(real_size);
+    tmp_ptr = ob_malloc_retry(real_size, from_malloc_hook);
     in_hook()= in_hook_bak;
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
     Header *header = new (tmp_ptr) Header((uint32_t)size, from_mmap);
     ptr = header->data_;
+    header->from_malloc_hook_ = from_malloc_hook;
   }
   return ptr;
 }
@@ -138,7 +144,11 @@ free(void *ptr)
     } else {
       bool in_hook_bak = in_hook();
       in_hook()= true;
-      ob_free(orig_ptr);
+      if (OB_LIKELY(header->from_malloc_hook_)) {
+        global_malloc_hook.free(orig_ptr);
+      } else {
+        ob_free(orig_ptr);
+      }
       in_hook()= in_hook_bak;
     }
   }
@@ -158,6 +168,7 @@ realloc(void *ptr, size_t size)
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
+  bool from_malloc_hook = false;
   if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
     if (MAP_FAILED == (tmp_ptr = ob_mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
       tmp_ptr = nullptr;
@@ -167,11 +178,12 @@ realloc(void *ptr, size_t size)
     bool in_hook_bak = in_hook();
     in_hook()= true;
     DEFER(in_hook()= in_hook_bak);
-    tmp_ptr = ob_malloc_retry(real_size);
+    tmp_ptr = ob_malloc_retry(real_size, from_malloc_hook);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
     Header *header = new (tmp_ptr) Header((uint32_t)size, from_mmap);
     nptr = header->data_;
+    header->from_malloc_hook_ = from_malloc_hook;
     if (ptr != nullptr) {
       Header *old_header = Header::ptr2header(ptr);
       abort_unless(old_header->check_magic_code());
@@ -201,6 +213,7 @@ memalign(size_t alignment, size_t size)
   size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
+  bool from_malloc_hook = false;
   if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
     if (MAP_FAILED == (tmp_ptr = ob_mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
       tmp_ptr = nullptr;
@@ -210,7 +223,7 @@ memalign(size_t alignment, size_t size)
     bool in_hook_bak = in_hook();
     in_hook()= true;
     DEFER(in_hook()= in_hook_bak);
-    tmp_ptr = ob_malloc_retry(real_size);
+    tmp_ptr = ob_malloc_retry(real_size, from_malloc_hook);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
     char *start = (char *)tmp_ptr + Header::SIZE;
@@ -220,6 +233,7 @@ memalign(size_t alignment, size_t size)
     Header *header = new (pheader) Header((uint32_t)size, from_mmap);
     header->offset_ = (uint32_t)offset;
     ptr = header->data_;
+    header->from_malloc_hook_ = from_malloc_hook;
   }
   return ptr;
 }

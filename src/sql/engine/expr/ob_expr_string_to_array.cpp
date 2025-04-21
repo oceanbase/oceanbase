@@ -55,6 +55,8 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
   for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
     if (ob_is_null(types[i].get_type())) {
       // do nothing
+    } else if (i == 0 && ob_is_text(types[i].get_type(), types[i].get_collation_type())) {
+      types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_varchar_char_type(types[i].get_type(), types[i].get_collation_type())) {
       types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else {
@@ -64,9 +66,10 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
   }
 
   if (OB_SUCC(ret)) {
-    res_data_type.set_meta_type(types[0].get_obj_meta());
-    res_data_type.set_accuracy(types[0].get_accuracy());
-    res_data_type.set_length(types[0].get_length());
+    ObObjMeta meta;
+    meta.set_varchar();
+    res_data_type.set_meta_type(meta);
+    res_data_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
     if (OB_FAIL(exec_ctx->get_subschema_id_by_collection_elem_type(ObNestedType::OB_ARRAY_TYPE, res_data_type, subschema_id))) {
       LOG_WARN("failed to get collection subschema id", K(ret));
     } else {
@@ -103,7 +106,16 @@ int ObExprStringToArray::eval_string_to_array(const ObExpr &expr, ObEvalCtx &ctx
     ObArrayBinary *binary_array = NULL;
     if (!arr_str_datum->is_null()) {
       has_arr_str = true;
-      arr_str.assign(arr_str_datum->get_string().ptr(), arr_str_datum->get_string().length());
+      ObString get_arr_str;
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator,
+                                                            *arr_str_datum,
+                                                            expr.args_[0]->datum_meta_,
+                                                            expr.args_[0]->obj_meta_.has_lob_header(),
+                                                            get_arr_str))) {
+        LOG_WARN("failed to get real string data", K(ret), K(get_arr_str));
+      } else {
+        arr_str.assign(get_arr_str.ptr(), get_arr_str.length());
+      }
     }
     if (!delimiter_datum->is_null()) {
       has_delimiter = true;
@@ -171,7 +183,16 @@ int ObExprStringToArray::eval_string_to_array_batch(const ObExpr &expr, ObEvalCt
       eval_flags.set(j);
       if (!arr_str_array.at(j)->is_null()) {
         has_arr_str = true;
-        arr_str.assign(arr_str_array.at(j)->get_string().ptr(), arr_str_array.at(j)->get_string().length());
+        ObString get_arr_str;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator,
+                                                              *arr_str_array.at(j),
+                                                              expr.args_[0]->datum_meta_,
+                                                              expr.args_[0]->obj_meta_.has_lob_header(),
+                                                              get_arr_str))) {
+          LOG_WARN("failed to get real string data", K(ret), K(get_arr_str));
+        } else {
+          arr_str.assign(get_arr_str.ptr(), get_arr_str.length());
+        }
       }
       if (!delimiter_array.at(j)->is_null()) {
         has_delimiter = true;
@@ -256,7 +277,18 @@ int ObExprStringToArray::eval_string_to_array_vector(const ObExpr &expr, ObEvalC
       eval_flags.set(idx);
       if (!arr_str_vec->is_null(idx)) {
         has_arr_str = true;
-        arr_str.assign(arr_str_vec->get_string(idx).ptr(), arr_str_vec->get_string(idx).length());
+        ObString get_arr_str;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+              tmp_allocator,
+              arr_str_vec,
+              expr.args_[0]->datum_meta_,
+              expr.args_[0]->obj_meta_.has_lob_header(),
+              get_arr_str,
+              idx))){
+          LOG_WARN("fail to get real string data", K(ret), K(get_arr_str));
+        } else {
+          arr_str.assign(get_arr_str.ptr(), get_arr_str.length());
+        }
       }
       if (!delimiter_vec->is_null(idx)) {
         has_delimiter = true;
@@ -350,7 +382,10 @@ int ObExprStringToArray::add_value_str_to_array(ObArrayBinary *binary_array, std
       LOG_WARN("failed to push back null value", K(ret));
     }
   } else {
-    if (OB_FAIL(binary_array->push_back(ObString(value_str.length(), value_str.data())))) {
+    if (value_str.length() > OB_MAX_VARCHAR_LENGTH / 4) {
+      ret = OB_ERR_DATA_TOO_LONG;
+      LOG_WARN("value string length is too long", K(ret), K(value_str.length()));
+    } else if (OB_FAIL(binary_array->push_back(ObString(value_str.length(), value_str.data())))) {
       LOG_WARN("failed to push back value string", K(ret));
     }
   }

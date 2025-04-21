@@ -12,7 +12,7 @@
 
 #define MAX_PN_LISTEN 256
 #define MAX_PN_GRP (1<<17)
-#define MAX_PN_PER_GRP 64
+#define MAX_PN_PER_GRP 128
 #define CHUNK_SIZE (1<<14) - 128
 
 typedef struct pn_listen_t

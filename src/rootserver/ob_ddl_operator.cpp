@@ -2785,6 +2785,59 @@ int ObDDLOperator::rename_table_subpartitions(const ObTableSchema &orig_table_sc
   return ret;
 }
 
+int ObDDLOperator::alter_policy_table_partitions(const ObTableSchema &orig_table_schema,
+                                                 ObTableSchema &inc_table_schema,
+                                                 ObTableSchema &new_table_schema,
+                                                 ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  FLOG_INFO("alter policy table partitions", K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().alter_inc_part_policy(trans,
+                                                                          orig_table_schema,
+                                                                          inc_table_schema,
+                                                                          new_schema_version))) {
+    LOG_WARN("alter policy inc part info failed", KR(ret));
+  }
+  FLOG_INFO("alter policy table partitions success", K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
+  return ret;
+}
+
+int ObDDLOperator::alter_policy_table_subpartitions(const ObTableSchema &orig_table_schema,
+                                                    ObTableSchema &inc_table_schema,
+                                                    ObTableSchema &new_table_schema,
+                                                    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  FLOG_INFO("alter policy table subpartitions", K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().alter_inc_subpart_policy(trans,
+                                                                          orig_table_schema,
+                                                                          inc_table_schema,
+                                                                          new_schema_version))) {
+    LOG_WARN("alter policy inc subpart info failed", KR(ret));
+  }
+  FLOG_INFO("alter policy table subpartitions success", K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
+  return ret;
+}
+
+
+
+
 int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
                                          ObTableSchema &inc_table_schema,
                                          ObTableSchema &new_table_schema,
@@ -3275,6 +3328,7 @@ int ObDDLOperator::alter_table_alter_index(
       } else {
         new_index_table_schema.set_index_visibility(alter_index_arg.index_visibility_);
         new_index_table_schema.set_schema_version(new_schema_version);
+        new_index_table_schema.set_storage_cache_policy(alter_index_arg.storage_cache_policy_);
         if(OB_FAIL(schema_service->get_table_sql_service().update_table_options(
                     trans,
                     *index_table_schema,

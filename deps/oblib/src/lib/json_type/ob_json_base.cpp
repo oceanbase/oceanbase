@@ -4054,6 +4054,10 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
   INIT_SUCC(ret);
   ObJsonHashValue hash_value(val, hash_func);
   ObJsonNodeType j_type = json_type();
+  const int64_t MAX_BUF_SIZE = 256;
+  char buf_alloc[MAX_BUF_SIZE];
+  ObDataBuffer allocator(buf_alloc, MAX_BUF_SIZE);
+  number::ObNumber num_b;
 
   switch (j_type) {
     case ObJsonNodeType::J_ARRAY: {
@@ -4117,23 +4121,41 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
 
     case ObJsonNodeType::J_INT:
     case ObJsonNodeType::J_OINT: {
-      hash_value.calc_int64(get_int());
+      if (OB_FAIL(num_b.from(get_int(), allocator))) {
+        LOG_WARN("fail to cast number from b", K(ret), K(get_int()));
+      } else {
+        hash_value.calc_num(num_b);
+      }
       break;
     }
 
     case ObJsonNodeType::J_UINT:
     case ObJsonNodeType::J_OLONG: {
-      hash_value.calc_uint64(get_uint());
+      if (OB_FAIL(num_b.from(get_uint(), allocator))) {
+        LOG_WARN("fail to cast number from b", K(ret), K(get_uint()));
+      } else {
+        hash_value.calc_num(num_b);
+      }
       break;
     }
 
     case ObJsonNodeType::J_OFLOAT: {
-      hash_value.calc_double(get_float());
+      double val = get_float();
+      if (OB_FAIL(ObJsonBaseUtil::double_to_number(val, allocator, num_b))) {
+        LOG_WARN("fail to cast double to number", K(ret), K(val));
+      } else {
+        hash_value.calc_num(num_b);
+      }
       break;
     }
     case ObJsonNodeType::J_DOUBLE:
     case ObJsonNodeType::J_ODOUBLE: {
-      hash_value.calc_double(get_double());
+      double val = get_double();
+      if (OB_FAIL(ObJsonBaseUtil::double_to_number(val, allocator, num_b))) {
+        LOG_WARN("fail to cast double to number", K(ret), K(val));
+      } else {
+        hash_value.calc_num(num_b);
+      }
       break;
     }
 

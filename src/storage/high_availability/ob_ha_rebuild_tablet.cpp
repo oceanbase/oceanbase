@@ -410,7 +410,7 @@ int ObRebuildTabletDagNet::clear_dag_net_ctx()
   } else {
     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->switch_next_stage(result))) {
+    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
@@ -631,6 +631,8 @@ int ObInitialRebuildTabletTask::process()
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
   } else if (OB_FAIL(check_tablet_status_())) {
     LOG_WARN("failed to check tablet status", K(ret));
+  } else if (tablet_id_array_.empty()) {
+    //do nothing
   } else if (OB_FAIL(build_tablet_group_ctx_())) {
     LOG_WARN("failed to build tablet group ctx", K(ret));
   } else if (OB_FAIL(generate_rebuild_tablet_dags_())) {

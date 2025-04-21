@@ -2210,9 +2210,14 @@ int ObRawExprPrinter::print_dot_notation(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
   const ObString db_str(0, "");
-  ObColumnRefRawExpr *bin_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-  bin_expr->set_database_name(db_str);
-  PRINT_EXPR(bin_expr); // table_name.col_name  not print db_name
+  ObRawExpr* col_ref = expr->get_param_expr(0);
+  if (col_ref->is_column_ref_expr()) {
+    ObColumnRefRawExpr *bin_expr = static_cast<ObColumnRefRawExpr*>(col_ref);
+    bin_expr->set_database_name(db_str);
+    // original column has not dependant expr
+    bin_expr->set_dependant_expr(nullptr);
+  }
+  PRINT_EXPR(col_ref); // table_name.col_name  not print db_name
   ObObj path_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value();
   ObItemType expr_type = expr->get_param_expr(1)->get_expr_type();
   if (T_VARCHAR != expr_type && T_CHAR != expr_type) {
@@ -3229,6 +3234,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_PL_SEQ_NEXT_VALUE:
       case T_FUN_SYS_SEQ_NEXTVAL: {
         ObSequenceRawExpr *seq_expr= static_cast<ObSequenceRawExpr*>(expr);
         if (1 != seq_expr->get_param_count()) {

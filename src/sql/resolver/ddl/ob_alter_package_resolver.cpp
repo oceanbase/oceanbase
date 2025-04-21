@@ -53,14 +53,14 @@ int ObAlterPackageResolver::resolve(const ParseNode &parse_tree)
   OV (OB_NOT_NULL(alter_package_stmt = create_stmt<ObAlterPackageStmt>()), OB_ALLOCATE_MEMORY_FAILED);
   OX (alter_package_stmt->get_alter_package_arg().db_name_ = db_name);
   OX (alter_package_stmt->get_alter_package_arg().package_name_ = package_name);
-  OZ (resolve_alter_clause(*alter_clause, db_name, package_name, alter_package_stmt->get_alter_package_arg()));
+  OZ (resolve_alter_clause(*alter_clause, db_name, package_name, *alter_package_stmt));
   return ret;
 }
 
 int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
                                                  const ObString &db_name,
                                                  const ObString &package_name,
-                                                 obrpc::ObAlterPackageArg &pkg_arg)
+                                                 ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   CK (OB_LIKELY(T_PACKAGE_ALTER_OPTIONS == alter_clause.type_));
@@ -71,7 +71,7 @@ int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
     LOG_WARN("alter editionable is not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter editionable");
   } else {
-    OZ (resolve_alter_compile_clause(alter_clause, db_name, package_name, pkg_arg));
+    OZ (resolve_alter_compile_clause(alter_clause, db_name, package_name, alter_stmt));
   }
   return ret;
 }
@@ -79,7 +79,7 @@ int ObAlterPackageResolver::resolve_alter_clause(const ParseNode &alter_clause,
 int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_clause,
                                                          const ObString &db_name,
                                                          const ObString &package_name,
-                                                         obrpc::ObAlterPackageArg &pkg_arg)
+                                                         ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   CK (OB_LIKELY(T_PACKAGE_ALTER_OPTIONS == alter_clause.type_));
@@ -90,7 +90,7 @@ int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_
     LOG_WARN("alter package with reuse_setting not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter package with reuse setting");
   }
-  OZ (compile_package(db_name, package_name, alter_clause.int16_values_[2], pkg_arg));
+  OZ (compile_package(db_name, package_name, alter_clause.int16_values_[2], alter_stmt));
   return ret;
 }
 
@@ -150,11 +150,12 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
 int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                             const ObString &package_name,
                                             int16_t compile_flag,
-                                            obrpc::ObAlterPackageArg &pkg_arg)
+                                            ObAlterPackageStmt &alter_stmt)
 {
   int ret = OB_SUCCESS;
   const ObPackageInfo *package_spec_info = nullptr;
   const ObPackageInfo *package_body_info = nullptr;
+  obrpc::ObAlterPackageArg &pkg_arg = alter_stmt.get_alter_package_arg();
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
   share::schema::ObErrorInfo &error_info = pkg_arg.error_info_;

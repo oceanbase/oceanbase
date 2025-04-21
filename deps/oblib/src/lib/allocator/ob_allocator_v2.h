@@ -84,19 +84,15 @@ private:
     virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
     {
       ABlock *block = NULL;
-      auto ta =
-        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
-      if (OB_NOT_NULL(ta)) {
-        block = ta->get_block_mgr().alloc_block(size, attr);
+      if (OB_NOT_NULL(ta_)) {
+        block = ta_->get_block_mgr().alloc_block(size, attr);
       }
       return block;
     }
     virtual void free_block(ABlock *block) override
     {
-      auto ta =
-        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
-      if (OB_NOT_NULL(ta)) {
-        ta->get_block_mgr().free_block(block);
+      if (OB_NOT_NULL(ta_)) {
+        ta_->get_block_mgr().free_block(block);
       } else {
         OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tenant ctx allocator is null", K(tenant_id_), K(ctx_id_));
       }
@@ -104,13 +100,20 @@ private:
     virtual int64_t sync_wash(int64_t wash_size) override
     {
       int64_t washed_size = 0;
-      auto ta =
-        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
-      if (OB_NOT_NULL(ta)) {
-        washed_size = ta->get_block_mgr().sync_wash(wash_size);
+      if (OB_NOT_NULL(ta_)) {
+        washed_size = ta_->sync_wash(wash_size);
       }
       return washed_size;
     }
+    void set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id, const int32_t numa_id)
+    {
+      tenant_id_ = tenant_id;
+      ctx_id_ = ctx_id;
+      numa_id_ = numa_id;
+      ta_ = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_, numa_id_);
+    }
+  private:
+    lib::ObTenantCtxAllocatorGuard ta_;
   } blk_mgr_, nblk_mgr_;
   ObjectSet os_;
   ObjectSet nos_;
@@ -148,15 +151,15 @@ inline int ObAllocator::init()
              attr_.ctx_id_ == pm->get_ctx_id()) {
     blk_mgr = pm;
     pm_ = pm;
+    attr_.numa_id_ = pm->get_numa_id();
   } else {
-    blk_mgr_.set_tenant_id(attr_.tenant_id_);
-    blk_mgr_.set_ctx_id(attr_.ctx_id_);
+    attr_.numa_id_ = AFFINITY_CTRL.get_numa_id();
+    blk_mgr_.set_tenant_ctx(attr_.tenant_id_, attr_.ctx_id_, attr_.numa_id_);
     blk_mgr = &blk_mgr_;
   }
 
   if (OB_SUCC(ret)) {
-    nblk_mgr_.set_tenant_id(OB_SERVER_TENANT_ID);
-    nblk_mgr_.set_ctx_id(attr_.ctx_id_);
+    nblk_mgr_.set_tenant_ctx(OB_SERVER_TENANT_ID, attr_.ctx_id_, attr_.numa_id_);
     nblk_mgr = &nblk_mgr_;
     os_.set_block_mgr(blk_mgr);
     os_.set_locker(locker_);

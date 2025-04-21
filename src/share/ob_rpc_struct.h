@@ -11753,6 +11753,30 @@ public:
   common::ObCompressorType compressor_type_;
 };
 
+struct ObSetSSCacheSizeRatioArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSetSSCacheSizeRatioArg()
+      : tenant_id_(OB_INVALID_TENANT_ID),
+        micro_cache_size_ratio_(0),
+        macro_cache_size_ratio_(0)
+  {}
+  ~ObSetSSCacheSizeRatioArg()
+  {}
+  bool is_valid() const
+  {
+    return (OB_INVALID_TENANT_ID != tenant_id_) &&
+           (micro_cache_size_ratio_ > 0 && micro_cache_size_ratio_ < 100) &&
+           (macro_cache_size_ratio_ > 0 && macro_cache_size_ratio_ < 100);
+  }
+  TO_STRING_KV(K_(tenant_id), K_(micro_cache_size_ratio), K_(macro_cache_size_ratio));
+public:
+  int64_t tenant_id_;
+  int64_t micro_cache_size_ratio_;
+  int64_t macro_cache_size_ratio_;
+};
+
 struct ObCalibrateSSDiskSpaceArg final
 {
   OB_UNIS_VERSION(1);
@@ -13783,6 +13807,31 @@ private:
   // each server may have multiple shared_storage dest, because data and clog
   // can use separate shared_storage.
   common::ObSArray<ObAdminStorageArg> shared_storage_infos_;
+};
+
+struct ObTriggerStorageCacheArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum ObStorageCacheOp
+  {
+    TRIGGER = 0,
+    MAX_OP,
+  };
+  ObTriggerStorageCacheArg() : op_(MAX_OP), tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObTriggerStorageCacheArg() {}
+  bool is_valid() const
+  {
+    return op_ < MAX_OP && is_valid_tenant_id(tenant_id_);
+  }
+  ObStorageCacheOp get_op() const { return op_; }
+  int get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
+  void set_op(ObStorageCacheOp op) { op_ = op; }
+  TO_STRING_KV(K_(op), K_(tenant_id));
+public:
+  ObStorageCacheOp op_;
+  int64_t tenant_id_;
 };
 
 struct ObNotifySharedStorageInfoResult final

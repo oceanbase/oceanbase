@@ -51,6 +51,7 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/cmd/ob_event_stmt.h"
 
 namespace oceanbase {
 using namespace share;
@@ -2562,6 +2563,52 @@ int get_trigger_stmt_need_privs(
   return ret;
 }
 
+int get_event_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  bool need_check = false;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_EVENT_JOB_CREATE != basic_stmt->get_stmt_type()
+                        && stmt::T_EVENT_JOB_ALTER != basic_stmt->get_stmt_type()
+                        && stmt::T_EVENT_JOB_DROP != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be event stmt",
+             K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                     ObCompatFeatureType::MYSQL_EVENT_PRIV_CHECK, need_check))) {
+    LOG_WARN("failed to get priv need check", K(ret));
+  } else if (lib::is_mysql_mode() && need_check) {
+    if (stmt::T_EVENT_JOB_CREATE == basic_stmt->get_stmt_type()) {
+      const ObCreateEventStmt *stmt = static_cast<const ObCreateEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
+    } else if (stmt::T_EVENT_JOB_ALTER == basic_stmt->get_stmt_type()) {
+      const ObAlterEventStmt *stmt = static_cast<const ObAlterEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
+    } else if (stmt::T_EVENT_JOB_DROP == basic_stmt->get_stmt_type()) {
+      const ObDropEventStmt *stmt = static_cast<const ObDropEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
+    }
+  }
+  return ret;
+}
+
 int get_drop_tenant_stmt_need_privs(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,
@@ -2764,7 +2811,8 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_ALTER_SYSTEM_RESET_PARAMETER != basic_stmt->get_stmt_type() &&
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
-             stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type()) {
+             stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
+             stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());

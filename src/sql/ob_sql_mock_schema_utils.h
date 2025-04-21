@@ -35,8 +35,6 @@ static int mock_pseudo_columns_schema(share::schema::ObTableSchema &table_schema
 static int mock_partid_column(share::schema::ObTableSchema &table_schema,
                               ObString column_name);
 
-static const common::ObIArray<uint64_t> &get_all_mocked_tables();
-
 static int add_mock_table(const uint64_t table_id);
 
 static bool is_mock_table(const uint64_t table_id);

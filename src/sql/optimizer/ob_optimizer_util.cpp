@@ -2856,7 +2856,6 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
   } else {
     int64_t rowkey_count = -1;
     int64_t equal_prefix_count = -1;
-    int64_t equal_prefix_null_count = 0;
     int64_t range_prefix_count = -1;
     bool contain_always_false = false;
     if (OB_ISNULL(ranges.at(0)) ||
@@ -2865,7 +2864,6 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
       LOG_WARN("unexpected error", K(rowkey_count), K(ranges.at(0)), K(ret));
     } else if (OB_FAIL(check_prefix_ranges_count(ranges,
                                                  equal_prefix_count,
-                                                 equal_prefix_null_count,
                                                  range_prefix_count,
                                                  contain_always_false))) {
       LOG_WARN("failed to check ranges prefix count", K(ret));
@@ -2883,13 +2881,11 @@ int ObOptimizerUtil::check_equal_query_ranges(const ObIArray<ObNewRange*> &range
 
 int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange*> &ranges,
                                                int64_t &equal_prefix_count,
-                                               int64_t &equal_prefix_null_count,
                                                int64_t &range_prefix_count,
                                                bool &contain_always_false)
 {
   int ret = OB_SUCCESS;
   equal_prefix_count = 0;
-  equal_prefix_null_count = 0;
   range_prefix_count = 0;
   contain_always_false = false;
   if (ranges.count() > 0) {
@@ -2919,58 +2915,24 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
         range_prefix_count = std::min(range_prefix_count, temp_range_prefix_count);
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange *range = ranges.at(i);
-      int64_t temp_equal_prefix_null_count = 0;
-      if (OB_FAIL(check_equal_prefix_null_count(range, equal_prefix_count,
-                                                temp_equal_prefix_null_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
-      }
-    }
   }
   return ret;
 }
 
-int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange> &ranges,
-                                               int64_t &equal_prefix_count,
-                                               int64_t &equal_prefix_null_count,
-                                               int64_t &range_prefix_count)
+int ObOptimizerUtil::check_equal_prefix_null_count(const ObIArray<common::ObNewRange*> &ranges,
+                                                   const int64_t equal_prefix_count,
+                                                   int64_t &equal_prefix_null_count)
 {
   int ret = OB_SUCCESS;
-  equal_prefix_count = 0;
   equal_prefix_null_count = 0;
-  range_prefix_count = 0;
-  if (ranges.count() > 0) {
-    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange &range = ranges.at(i);
-      int64_t temp_equal_prefix_count = 0;
-      int64_t temp_range_prefix_count = 0;
-      if (range.start_key_.length() != range.end_key_.length()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid start and end range key", K(range.start_key_.length()),
-                    K(range.end_key_.length()), K(ret));
-      } else if (OB_FAIL(check_prefix_range_count(&range,
-                                                  temp_equal_prefix_count,
-                                                  temp_range_prefix_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_count = std::min(equal_prefix_count, temp_equal_prefix_count);
-        range_prefix_count = std::min(range_prefix_count, temp_range_prefix_count);
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-      const ObNewRange &range = ranges.at(i);
-      int64_t temp_equal_prefix_null_count = 0;
-      if (OB_FAIL(check_equal_prefix_null_count(&range, equal_prefix_count,
-                                                temp_equal_prefix_null_count))) {
-        LOG_WARN("failed to check range prefix", K(ret));
-      } else {
-        equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
+    const ObNewRange *range = ranges.at(i);
+    int64_t temp_equal_prefix_null_count = 0;
+    if (OB_FAIL(check_equal_prefix_null_count(range, equal_prefix_count,
+                                              temp_equal_prefix_null_count))) {
+      LOG_WARN("failed to check range prefix", K(ret));
+    } else {
+      equal_prefix_null_count = std::max(equal_prefix_null_count, temp_equal_prefix_null_count);
     }
   }
   return ret;
@@ -4208,21 +4170,18 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
       // if expected_order_expr = cast(col as dst_type), input_order_expr = col
       // and cast is lossless, no need to add sort for `cast(col as dst_type)`
       ObRawExpr *expected_order_expr = expected_order_exprs.at(r_idx);
-      bool is_lossless_cast = false;
+      ObRawExpr *input_ordering_expr = NULL;
       if (OB_ISNULL(expected_order_expr)) {
         // do nothing
-      } else if (OB_FAIL(is_lossless_column_cast(expected_order_expr, is_lossless_cast))) {
-        LOG_WARN("check lossless column cast failed", K(ret));
-      } else if (is_lossless_cast) {
-        expected_order_expr = expected_order_expr->get_param_expr(0);
+      } else if (OB_FAIL(get_expr_without_lossless_cast(expected_order_expr, expected_order_expr))) {
+        LOG_WARN("failed to get expr without lossless cast", K(ret));
       }
 
       if (OB_SUCC(ret) && (l_idx < left_count)) {
-        is_lossless_cast = false;
         if (OB_ISNULL(input_ordering.at(l_idx).expr_)) {
           // do nothing
-        } else if (OB_FAIL(is_lossless_column_cast(input_ordering.at(l_idx).expr_, is_lossless_cast))) {
-          LOG_WARN("check lossless column cast failed", K(ret), KPC(input_ordering.at(l_idx).expr_));
+        } else if (OB_FAIL(get_expr_without_lossless_cast(input_ordering.at(l_idx).expr_, input_ordering_expr))) {
+          LOG_WARN("failed to get expr without lossless cast", K(ret), KPC(input_ordering.at(l_idx).expr_));
         }
       }
       if (OB_FAIL(ret)) {
@@ -4232,9 +4191,7 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
                      || input_ordering.at(l_idx).order_type_ == expected_order_directions->at(r_idx))
                  && is_expr_equivalent(
                      expected_order_expr,
-                     is_lossless_cast ?
-                         input_ordering.at(l_idx).expr_->get_param_expr(0) :
-                         input_ordering.at(l_idx).expr_,
+                     input_ordering_expr,
                      equal_sets)) {
         ret = extend_exprs.push_back(expected_order_exprs.at(r_idx));
         ++l_idx;
@@ -4630,7 +4587,7 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
       LOG_WARN("failed to floor number as offset value", K(ret));
     }
   } else if (T_OP_GE == filter_type) {
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT,
                                                                     0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
@@ -6377,7 +6334,10 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObRawExprResType &child_type, 
   return is_lossless;
 }
 
-int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range)
+int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
+                                             bool &is_lossless,
+                                             bool is_query_range, /* = false */
+                                             bool allow_imprecise_column_cast /* = false */ )
 {
   int ret = OB_SUCCESS;
   is_lossless = false;
@@ -6393,7 +6353,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
     // do nothing
   } else if (OB_ISNULL(child_expr = expr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), KPC(expr));
   } else {
     ObRawExprResType child_type = child_expr->get_result_type();
     ObObjTypeClass child_tc = child_type.get_type_class();
@@ -6565,6 +6525,28 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (!allow_imprecise_column_cast || is_lossless
+               || expr->is_const_expr() || is_oracle_mode()) {
+      // do nothing
+    } else if (ObIntTC == child_tc) {
+      if (dst_tc == ObDoubleTC && dst_acc.get_precision() == -1 &&
+          dst_acc.get_scale() == -1) {
+        is_lossless = true;
+      }
+    } else if (ObYearTC == child_tc) {
+      if (ObNumberTC == dst_tc) {
+        is_lossless = true;
+      } else if (ObDoubleTC == dst_tc) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+          is_lossless = true;
+        }
+      }
+    } else if (ObNumberTC == child_tc) {
+      if (ObDoubleTC == dst_tc || ObFloatTC == dst_tc) {
+        is_lossless = true;
+      }
+    }
     LOG_DEBUG("lossless column cast", K(child_type), K(child_tc), K(dst_type), K(dst_tc),
               K(is_lossless));
   }
@@ -6573,40 +6555,63 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
 
 int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
                                                     const ObRawExpr*& expr,
-                                                    bool is_query_range)
+                                                    bool is_query_range, /* = false */
+                                                    bool allow_imprecise_column_cast /* = false */ )
 {
   int ret = OB_SUCCESS;
-  bool is_lossless = false;
+  bool is_lossless = true;
   expr = ori_expr;
-  if (OB_ISNULL(ori_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (ori_expr->get_expr_type() == T_FUN_SYS_INNER_ROW_CMP_VALUE) {
-    if (OB_FAIL(get_expr_without_lossless_cast(ori_expr->get_param_expr(2), expr))) {
-      LOG_WARN("failed to check is lossless column cast", K(ret));
+  while (OB_SUCC(ret) && is_lossless) {
+    is_lossless = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KPC(ori_expr));
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+      if (OB_FAIL(is_lossless_column_cast(expr,
+                                          is_lossless,
+                                          is_query_range,
+                                          allow_imprecise_column_cast))) {
+        LOG_WARN("failed to check is lossless column cast", K(ret), KPC(expr));
+      } else if (is_lossless) {
+        if (OB_UNLIKELY(1 > expr->get_param_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected cast expr", K(ret), KPC(expr));
+        } else {
+          expr = expr->get_param_expr(0);
+        }
+      } else {
+        break;
+      }
+    } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == expr->get_expr_type()) {
+      if (OB_UNLIKELY(3 > expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected inner row cmp value expr", K(ret), KPC(expr));
+      } else {
+        expr = expr->get_param_expr(2);
+        is_lossless = true;
+      }
+    } else {
+      is_lossless = false;
+      break;
     }
-  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless, is_query_range))) {
-    LOG_WARN("failed to check is lossless column cast", K(ret));
-  } else if (is_lossless) {
-    expr = ori_expr->get_param_expr(0);
   }
   return ret;
 }
 
 int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
                                                     ObRawExpr*& expr,
-                                                    bool is_query_range)
+                                                    bool is_query_range, /* = false */
+                                                    bool allow_imprecise_column_cast /* = false */ )
 {
   int ret = OB_SUCCESS;
-  bool is_lossless = false;
-  expr = ori_expr;
-  if (OB_ISNULL(ori_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless, is_query_range))) {
-    LOG_WARN("failed to check is lossless column cast", K(ret));
-  } else if (is_lossless) {
-    expr = ori_expr->get_param_expr(0);
+  const ObRawExpr *tmp_expr = NULL;
+  if (OB_FAIL(get_expr_without_lossless_cast(ori_expr,
+                                             tmp_expr,
+                                             is_query_range,
+                                             allow_imprecise_column_cast))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else {
+    expr = const_cast<ObRawExpr*>(tmp_expr);
   }
   return ret;
 }
@@ -6631,70 +6636,6 @@ int ObOptimizerUtil::get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*
     LOG_WARN("get expr without lossless cast", K(ret));
   } else if (l_expr->is_column_ref_expr()) {
     expr = l_expr;
-  }
-  return ret;
-}
-
-int ObOptimizerUtil::is_lossless_or_unprecise_column_cast(const ObRawExpr *expr, bool &is_lossless)
-{
-  int ret = OB_SUCCESS;
-  const ObRawExpr *child_expr = NULL;
-  is_lossless = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (T_FUN_SYS_CAST != expr->get_expr_type()) {
-    // do nothing
-  } else if (OB_FAIL(is_lossless_column_cast(expr, is_lossless, true))) {
-    LOG_WARN("failed to check is lossless column cast", K(ret));
-  } else if (is_lossless ||
-             expr->is_const_expr()) {
-    // do nothing
-  } else if (OB_ISNULL(child_expr = expr->get_param_expr(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else {
-    ObRawExprResType child_type = child_expr->get_result_type();
-    ObObjTypeClass child_tc = child_type.get_type_class();
-    ObRawExprResType dst_type = expr->get_result_type();
-    ObObjTypeClass dst_tc = dst_type.get_type_class();
-    ObAccuracy dst_acc = dst_type.get_accuracy();
-    if (!is_oracle_mode()) {
-      if (ObIntTC == child_tc ) {
-        if (dst_tc == ObDoubleTC && dst_acc.get_precision() == -1 &&
-            dst_acc.get_scale() == -1) {
-          is_lossless = true;
-        }
-      } else if (ObYearTC == child_tc) {
-        if (ObNumberTC == dst_tc) {
-          is_lossless = true;
-        } else if (ObDoubleTC == dst_tc) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObNumberTC == child_tc) {
-        if (ObDoubleTC == dst_tc || ObFloatTC == dst_tc) {
-          is_lossless = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr)
-{
-  int ret = OB_SUCCESS;
-  bool is_lossless = false;
-  expr = ori_expr;
-  if (OB_ISNULL(ori_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(is_lossless_or_unprecise_column_cast(ori_expr, is_lossless))) {
-    LOG_WARN("failed to check is lossless column cast", K(ret));
-  } else if (is_lossless) {
-    expr = ori_expr->get_param_expr(0);
   }
   return ret;
 }

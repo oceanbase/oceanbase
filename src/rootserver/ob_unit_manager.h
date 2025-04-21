@@ -426,6 +426,9 @@ private:
       bool &is_allowed);
   int check_expand_zone_resource_allowed_by_new_unit_stat_(
       const common::ObIArray<share::ObResourcePoolName> &pool_names);
+  int check_expand_zone_resource_allowed_by_data_disk_size_(
+      const uint64_t tenant_id,
+      const common::ObIArray<share::ObResourcePoolName> &pool_names);
   int check_tenant_pools_unit_num_legal_(
       const uint64_t tenant_id,
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
@@ -1009,6 +1012,10 @@ private:
       const share::ObUnitResource &expand_resource,
       bool &can_expand,
       AlterResourceErr &err_index) const;
+  int check_data_disk_size_mode_change_(
+      const common::ObIArray<share::ObResourcePool *> &pools,
+      const share::ObUnitResource &old_ur,
+      const share::ObUnitResource &new_ur) const;
   int get_pool_unit_group_id_(
       const share::ObResourcePool &pool,
       common::ObIArray<uint64_t> &new_unit_group_id_array);

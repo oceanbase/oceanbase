@@ -914,9 +914,12 @@ int ObAddIncSubPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDML
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   PartitionType partition_type = part_info.partition_type_;
   int64_t subpart_idx = part_info.sub_part_idx_;
+  uint64_t data_version = 0;
   if (subpart_idx < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("subpart_idx is invalid", KR(ret), K(part_info));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -940,6 +943,22 @@ int ObAddIncSubPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDML
       || OB_FAIL(dml.add_column("partition_type", partition_type))
       || OB_FAIL(dml.add_column("tablet_id", part_info.tablet_id_.id()))) {
     LOG_WARN("dml add part info failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    const char *part_policy = nullptr;
+    if (data_version < DATA_VERSION_4_3_5_2) {
+      if (!is_part_storage_cache_policy_type_default(part_info.part_storage_cache_policy_type_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("part storage cache policy is not supported", K(ret));
+      }
+    } else if (OB_FAIL(ObStorageCacheGlobalPolicy::safely_get_str(part_info.part_storage_cache_policy_type_, part_policy))) {
+      LOG_WARN("get part policy failed", K(ret), K(part_info.part_storage_cache_policy_type_));
+    } else if (OB_ISNULL(part_policy)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part policy is null", K(ret));
+    } else if (OB_FAIL(dml.add_column("storage_cache_policy", part_policy))) {
+      LOG_WARN("add part info column failed", K(ret));
+    }
   }
   if (OB_FAIL(ret)) {
     //nothing todo
@@ -968,7 +987,12 @@ int ObAddIncSubPartDMLGenerator::extract_part_info(PartInfo &part_info)
     part_info.sub_part_idx_ = sub_part_.get_sub_part_idx();
     part_info.partition_type_ = sub_part_.get_partition_type();
     part_info.tablet_id_ = sub_part_.get_tablet_id();
+    part_info.part_storage_cache_policy_type_ = ObStorageCacheGlobalPolicy::NONE_POLICY;
 
+    if (OB_FAIL(ret)) {
+    } else if (ObStorageCacheGlobalPolicy::is_valid(sub_part_.get_part_storage_cache_policy_type())) {
+      part_info.part_storage_cache_policy_type_ = sub_part_.get_part_storage_cache_policy_type();
+    }
     bool is_oracle_mode = false;
     if (FAILEDx(ori_table_->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to check oracle compat mode", KR(ret), KPC_(ori_table));
@@ -1046,6 +1070,22 @@ int ObAddIncPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDMLSql
       LOG_WARN("add part info column failed", K(ret));
     }
   }
+ if (OB_SUCC(ret)) {
+    const char *part_policy = nullptr;
+    if (data_version < DATA_VERSION_4_3_5_2) {
+      if (!is_part_storage_cache_policy_type_default(part_info.part_storage_cache_policy_type_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("part storage cache policy is not supported", K(ret));
+      }
+    } else if (OB_FAIL(ObStorageCacheGlobalPolicy::safely_get_str(part_info.part_storage_cache_policy_type_, part_policy))) {
+      LOG_WARN("get part policy failed", K(ret), K(part_info.part_storage_cache_policy_type_));
+    } else if (OB_ISNULL(part_policy)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part policy is null", K(ret), K(part_policy));
+    } else if (OB_FAIL(dml.add_column("storage_cache_policy", part_policy))) {
+      LOG_WARN("add part info column failed", K(ret));
+    }
+  }
   if (OB_FAIL(ret)) {
     //nothing todo
   }
@@ -1073,6 +1113,7 @@ int ObAddIncPartDMLGenerator::extract_part_info(PartInfo &part_info)
     part_info.part_idx_ = part_.get_part_idx();
     part_info.partition_type_ = part_.get_partition_type();
     part_info.tablet_id_ = part_.get_tablet_id();
+    part_info.part_storage_cache_policy_type_ = ObStorageCacheGlobalPolicy::NONE_POLICY;
 
     bool is_oracle_mode = false;
     if (FAILEDx(ori_table_->check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -1090,7 +1131,10 @@ int ObAddIncPartDMLGenerator::extract_part_info(PartInfo &part_info)
     } else if (!part_.get_external_location().empty()) {
       part_info.external_location_ = part_.get_external_location();
     }
-
+    if (OB_FAIL(ret)) {
+    } else if (ObStorageCacheGlobalPolicy::is_valid(part_.get_part_storage_cache_policy_type())) {
+      part_info.part_storage_cache_policy_type_ = part_.get_part_storage_cache_policy_type();
+    }
     if (OB_FAIL(ret)) {
     } else if (ori_table_->is_range_part()) {
       if (OB_FAIL(gen_high_bound_val_str(is_oracle_mode,

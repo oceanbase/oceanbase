@@ -1155,6 +1155,14 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::FIRST_GET_PLAN_TIME:  {
+      cells[i].set_null();
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::FIRST_EXE_USEC:  {
+      cells[i].set_null();
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,

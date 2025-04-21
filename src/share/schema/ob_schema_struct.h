@@ -38,7 +38,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "sql/session/ob_local_session_var.h"
 #include "share/schema/ob_list_row_values.h" // ObListRowValues
-#include "share/storage/ob_storage_cache_common.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
 
 #ifdef __cplusplus
 extern "C" {

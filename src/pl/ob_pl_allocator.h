@@ -87,7 +87,8 @@ public:
     is_inited_(false),
     memattr_(ObMemAttr(MTL_ID(), "PlTemp", ObCtxIds::DEFAULT_CTX_ID)),
     parent_allocator_(parent_alloc),
-    allocator_(nullptr) {}
+    allocator_(nullptr),
+    use_malloc_(false) {}
 
   virtual ~ObPLAllocator1() {
     destroy();
@@ -135,6 +136,7 @@ private:
   common::ObIAllocator *parent_allocator_;
   common::ObBlockAllocMgr alloc_mgr_;
   common::ObIAllocator *allocator_;
+  bool use_malloc_;
 };
 
 }

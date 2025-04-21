@@ -163,6 +163,8 @@ int ObDBMSSchedJobUtils::check_is_valid_log_history(const int64_t log_history)
   const int64_t MAX_LOG_HISTORY = 1000000;
   if (log_history < 0 || log_history > MAX_LOG_HISTORY) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "log_history value is invalid");
   }
   return ret;
 }
@@ -708,11 +710,27 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("job_name", job_info.job_name_)) || OB_FAIL(dml.add_gmt_modified(now))) {
       LOG_WARN("add column failed", KR(ret));
+  } else if (0 == job_attribute_name.case_compare("job_name") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_column("job_name", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("powner") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_column("powner", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("user_id") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_column("user_id", job_attribute_value.get_int()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_int()));
+    }
   } else if (0 == job_attribute_name.case_compare("state") && !from_pl_set_attr) {
     if (OB_FAIL(check_is_valid_state(job_attribute_value.get_string()))) {
       LOG_WARN("invalid state", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("state", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("auto_drop") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_column("auto_drop", job_attribute_value.get_bool()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
     }
   } else if (0 == job_attribute_name.case_compare("enabled") && !from_pl_set_attr) {
     if (OB_FAIL(dml.add_column("enabled", job_attribute_value.get_bool()))) {
@@ -726,13 +744,17 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
     }
   } else if (0 == job_attribute_name.case_compare("repeat_interval") && !from_pl_set_attr) {
     int64_t next_date = 0;
+    ObDBMSSchedJobInfo calc_job_info;
+    calc_job_info.start_date_ = job_info.start_date_;
+    calc_job_info.repeat_interval_ = job_attribute_value.get_string();
+    calc_job_info.interval_ts_ = 0;
     if (OB_FAIL(check_is_valid_repeat_interval(job_attribute_value.get_string()))) {
       LOG_WARN("invalid repeat_interval", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(calc_dbms_sched_repeat_expr(job_info, next_date))) {
+    } else if (OB_FAIL(calc_dbms_sched_repeat_expr(calc_job_info, next_date))) {
       LOG_WARN("invalid next_date", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("repeat_interval", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(dml.add_column("`interval#`", job_attribute_value.get_string()))) {
+    } else if (OB_FAIL(dml.add_column("`interval#`", "null"))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_raw_time_column("next_date", next_date))) {
       LOG_WARN("add next_date column failed", KR(ret), K(next_date));
@@ -753,6 +775,20 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
     max_run_duration = max_run_duration < 0 ? INT64_MAX : max_run_duration;
     if (OB_FAIL(dml.add_column("max_run_duration", max_run_duration))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()), K(max_run_duration));
+    }
+  } else if (0 == job_attribute_name.case_compare("start_date") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_raw_time_column("start_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    } else if (OB_FAIL(dml.add_raw_time_column("next_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    }
+  } else if (0 == job_attribute_name.case_compare("end_date") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_raw_time_column("end_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    }
+  } else if (0 == job_attribute_name.case_compare("comments") && !from_pl_set_attr) {
+    if (OB_FAIL(dml.add_column("comments", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else if (0 ==  job_attribute_name.case_compare("instance_id")) {
     if (0 != job_attribute_value.get_string().compare("RANDOM") && OB_FAIL(zone_check_impl(tenant_id, job_attribute_value.get_string()))) {

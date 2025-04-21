@@ -366,90 +366,64 @@ int ObTableLoadCoordinator::calc_session_count(
   return ret;
 }
 
-int ObTableLoadCoordinator::cal_memory_size(
-    const bool need_check_need_sort,
+int ObTableLoadCoordinator::calc_memory_size(
     const int64_t store_server_count,
     const int64_t write_session_count,
     const int64_t memory_limit,
+    const int64_t part_unsort_memory,
+    const int64_t min_part_memory,
     const ObArray<int64_t> &partitions,
     ObDirectLoadResourceApplyArg &apply_arg,
     bool &main_need_sort,
     bool &task_need_sort)
 {
   int ret = OB_SUCCESS;
-  int64_t part_unsort_memory = 0; // 一个分区写入阶段不排序需要的内存, 用于判断是否排序
-  int64_t min_part_memory = 0; // 一个分区在整个导入过程中至少需要的内存, 用于计算分配的内存大小
-  if (ctx_->schema_.is_table_without_pk_) {
-    // 直接写宏块需要的内存
-    if (!ctx_->schema_.is_column_store() ||
-        ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
-      // 行存
-      part_unsort_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
-      min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
-    } else {
-      // 列存
-      part_unsort_memory = ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10; // DDL多cg同时写临时文件的内存
-      min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
+  /*
+  先确定主表是否要走排序，对于堆表，sql指定need_sort=true时，如果内存满足不排序，就走不排序流程，只要有一个节点内存不足，整体都要走排序
+  如果主表要走排序，则整个任务按排序方式分配内存，否则再确定是否要做lob_id排序和索引排序，需要的话就按照MAX(主表不排序内存，索引排序内存)来分配内存，否则分配主表不排序需要的内存
+  */
+  for (int64_t i = 0; !main_need_sort && i < store_server_count; i++) {
+    ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+    int64_t min_sort_memory = unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4;
+    int64_t min_unsort_memory = 0;
+    int64_t thread_count = write_session_count;
+    // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
+    if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
+      thread_count = unit.thread_count_;
     }
-  } else {
-    if (!ctx_->schema_.is_column_store() ||
-        ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
-      // 行存
-      part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
-      min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
-    } else {
-      // 列存
-      part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
-      min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
-    }
-  }
-  if (need_check_need_sort) {
-    /*
-    先确定主表是否要走排序，对于堆表，sql指定need_sort=true时，如果内存满足不排序，就走不排序流程，只要有一个节点内存不足，整体都要走排序
-    如果主表要走排序，则整个任务按排序方式分配内存，否则再确定是否要做lob_id排序和索引排序，需要的话就按照MAX(主表不排序内存，索引排序内存)来分配内存，否则分配主表不排序需要的内存
-    */
-    for (int64_t i = 0; !main_need_sort && i < store_server_count; i++) {
-      ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-      int64_t min_sort_memory = unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4;
-      int64_t min_unsort_memory = 0;
-      int64_t thread_count = write_session_count;
-      // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
-      if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
-        thread_count = unit.thread_count_;
-      }
-      if (ctx_->schema_.is_table_without_pk_) {
-        if (!ctx_->param_.need_sort_) {
-          // sql指定need_sort=false，强制不排序
-        } else if (partitions[i] == 1) {
-          // 单分区排序与不排序需要的内存是一样的, 不走排序
-        } else {
-          // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
-          min_unsort_memory = part_unsort_memory * partitions[i] * thread_count;
-          if (min_unsort_memory > memory_limit) {
-            main_need_sort = true;
-          }
-        }
+    if (ctx_->schema_.is_table_without_pk_) {
+      if (!ctx_->param_.need_sort_) {
+        // sql指定need_sort=false，强制不排序
+      } else if (partitions[i] == 1) {
+        // 单分区排序与不排序需要的内存是一样的, 不走排序
       } else {
-        // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
+        // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
         min_unsort_memory = part_unsort_memory * partitions[i] * thread_count;
-        if (ctx_->param_.need_sort_) {
-          // sql指定need_sort=true，强制走排序
+        if (min_unsort_memory > memory_limit) {
           main_need_sort = true;
-        } else {
-          if (min_unsort_memory > memory_limit) {
-            main_need_sort = true;
-          }
+        }
+      }
+    } else {
+      // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
+      min_unsort_memory = part_unsort_memory * partitions[i] * thread_count;
+      if (ctx_->param_.need_sort_) {
+        // sql指定need_sort=true，强制走排序
+        main_need_sort = true;
+      } else {
+        if (min_unsort_memory > memory_limit) {
+          main_need_sort = true;
         }
       }
     }
+  }
 
-    task_need_sort = main_need_sort;
-    if (!task_need_sort) {
-      if (OB_FAIL(check_need_sort_for_lob_or_index(task_need_sort))) {
-        LOG_WARN("fail to check need sort for lob or index", KR(ret));
-      }
+  task_need_sort = main_need_sort;
+  if (!task_need_sort) {
+    if (OB_FAIL(check_need_sort_for_lob_or_index(task_need_sort))) {
+      LOG_WARN("fail to check need sort for lob or index", KR(ret));
     }
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
     ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
     int64_t min_memory = MIN(min_part_memory *  unit.thread_count_, memory_limit); // 至少需要分配的内存
@@ -499,6 +473,33 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
     apply_arg.task_key_ = ObTableLoadUniqueKey(ctx_->param_.table_id_, ctx_->ddl_param_.task_id_);
     int64_t retry_count = 0;
     ObAddr coordinator_addr = ObServer::get_instance().get_self();
+    int64_t part_unsort_memory = 0; // 一个分区写入阶段不排序需要的内存, 用于判断是否排序
+    int64_t min_part_memory = 0; // 一个分区在整个导入过程中至少需要的内存, 用于计算分配的内存大小
+    int64_t parallel_servers_target = 0;
+    if (ctx_->schema_.is_table_without_pk_) {
+      // 直接写宏块需要的内存
+      if (!ctx_->schema_.is_column_store() ||
+          ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+        // 行存
+        part_unsort_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+        min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+      } else {
+        // 列存
+        part_unsort_memory = ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10; // DDL多cg同时写临时文件的内存
+        min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
+      }
+    } else {
+      if (!ctx_->schema_.is_column_store() ||
+          ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+        // 行存
+        part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
+        min_part_memory = MACROBLOCK_BUFFER_SIZE; // DDL构造宏块的内存
+      } else {
+        // 列存
+        part_unsort_memory = SSTABLE_BUFFER_SIZE; // 按行写临时文件的内存
+        min_part_memory = MAX(ctx_->schema_.cg_cnt_ * CG_BUFFER_SIZE * 10, MACROBLOCK_BUFFER_SIZE); // DDL多cg同时写临时文件的内存, rescan按cg构造宏块内存
+      }
+    }
     while (OB_SUCC(ret)) {
       apply_arg.apply_array_.reset();
       int64_t memory_limit = 0;
@@ -516,6 +517,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         LOG_WARN("fail to get all leader info", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
         LOG_WARN("fail to get memory_limit", K(ret));
+      } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(tenant_id, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
+        LOG_WARN("fail read tenant variable", KR(ret), K(tenant_id));
       } else {
         bool include_cur_addr = false;
         bool task_need_sort = false;  // 表示整个导入任务是否会走排序的流程
@@ -528,96 +531,55 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         int64_t write_session_count = 0;
         int64_t min_session_count = ctx_->param_.parallel_;
         int64_t max_session_count = 0;
-        int64_t limit_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
-        int64_t total_limit_session_count = limit_session_count * store_server_count; // 所有节点加起来不能超过这个并行度
+        int64_t limit_session_count = MIN(memory_limit / min_part_memory, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
+        int64_t total_limit_session_count = MIN(limit_session_count * store_server_count, parallel_servers_target); // 所有节点加起来不能超过这个并行度
         int64_t total_session_count = MIN(ctx_->param_.parallel_, total_limit_session_count);
-        bool need_recalculate = false;
-        int64_t parallel_servers_target = 0;
+        ObDirectLoadResourceOpRes apply_res;
 
-        // 数据写入阶段，导入内部无法控制并发，由pdml控制，所以并行度需要根据pdml的规则来调整
-        // 影响了快速堆表路径，pdml的并发可能比limit_session_count大
-        if (ctx_->schema_.is_table_without_pk_ && (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_))) {
-          if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(tenant_id, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
-            LOG_WARN("fail read tenant variable", KR(ret), K(tenant_id));
-          } else if (ctx_->param_.parallel_ > limit_session_count && limit_session_count < parallel_servers_target) {
-            limit_session_count = MIN(parallel_servers_target, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
-            total_session_count = MIN(ctx_->param_.parallel_, parallel_servers_target);
-            need_recalculate = true;
+        if (OB_FAIL(calc_session_count(total_session_count,
+                                        limit_session_count,
+                                        all_leader_info_array,
+                                        partitions,
+                                        apply_arg,
+                                        coord_session_count,
+                                        min_session_count,
+                                        write_session_count))) {
+          LOG_WARN("fail to calc session count", KR(ret));
+        } else if (OB_FAIL(calc_memory_size(store_server_count,
+                                            write_session_count,
+                                            memory_limit,
+                                            part_unsort_memory,
+                                            min_part_memory,
+                                            partitions,
+                                            apply_arg,
+                                            main_need_sort,
+                                            task_need_sort))) {
+          LOG_WARN("fail to calc memory size", KR(ret));
+        } else if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
+          if (retry_count % 100 == 0) {
+            LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count), K(param_.exe_mode_), K(main_need_sort), K(task_need_sort), K(partitions), K(coordinator_addr), K(apply_arg));
           }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(calc_session_count(total_session_count,
-                                         limit_session_count,
-                                         all_leader_info_array,
-                                         partitions,
-                                         apply_arg,
-                                         coord_session_count,
-                                         min_session_count,
-                                         write_session_count))) {
-            LOG_WARN("fail to calc session count", KR(ret));
-          } else if (OB_FAIL(cal_memory_size(true/*need_check_need_sort*/,
-                                             store_server_count,
-                                             write_session_count,
-                                             memory_limit,
-                                             partitions,
-                                             apply_arg,
-                                             main_need_sort,
-                                             task_need_sort))) {
-            LOG_WARN("fail to calc memory size", KR(ret));
-          } else if (need_recalculate) {
-            limit_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
-            total_session_count = MIN(ctx_->param_.parallel_, total_limit_session_count);
-            apply_arg.apply_array_.reset();
-            partitions.reset();
-            if (OB_FAIL(calc_session_count(total_session_count,
-                                           limit_session_count,
-                                           all_leader_info_array,
-                                           partitions,
-                                           apply_arg,
-                                           coord_session_count,
-                                           min_session_count,
-                                           write_session_count))) {
-              LOG_WARN("fail to calc session count", KR(ret));
-            } else if (OB_FAIL(cal_memory_size(false/*need_check_need_sort*/,
-                                               store_server_count,
-                                               write_session_count,
-                                               memory_limit,
-                                               partitions,
-                                               apply_arg,
-                                               main_need_sort,
-                                               task_need_sort))) {
-              LOG_WARN("fail to calc memory size", KR(ret));
-            }
+          if (ret == OB_EAGAIN) {
+            retry_count++;
+            ret = OB_SUCCESS;
+            ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
           }
-        }
-        if (OB_SUCC(ret)) {
-          ObDirectLoadResourceOpRes apply_res;
-          if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
-            if (retry_count % 100 == 0) {
-              LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count), K(param_.exe_mode_), K(main_need_sort), K(task_need_sort), K(partitions), K(coordinator_addr), K(apply_arg));
-            }
-            if (ret == OB_EAGAIN) {
-              retry_count++;
-              ret = OB_SUCCESS;
-              ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
-            }
+        } else {
+          ctx_->param_.need_sort_ = main_need_sort;
+          ctx_->param_.task_need_sort_ = task_need_sort;
+          ctx_->param_.session_count_ = coord_session_count;
+          ctx_->param_.write_session_count_ = write_session_count;
+          ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ?
+              (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
+              (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
+          ctx_->job_stat_->parallel_ = coord_session_count;
+          if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
+            LOG_WARN("fail to add_assigned_task", KR(ret));
           } else {
-            ctx_->param_.need_sort_ = main_need_sort;
-            ctx_->param_.task_need_sort_ = task_need_sort;
-            ctx_->param_.session_count_ = coord_session_count;
-            ctx_->param_.write_session_count_ = write_session_count;
-            ctx_->param_.exe_mode_ = (ctx_->schema_.is_table_without_pk_ ?
-                (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
-                (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
-            ctx_->job_stat_->parallel_ = coord_session_count;
-            if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
-              LOG_WARN("fail to add_assigned_task", KR(ret));
-            } else {
-              ctx_->set_assigned_resource();
-              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(ctx_->param_), K(main_need_sort), K(need_recalculate),
-                  K(parallel_servers_target), K(task_need_sort), K(partitions), K(coordinator_addr), K(apply_arg));
-              break;
-            }
+            ctx_->set_assigned_resource();
+            FLOG_INFO("gen_apply_arg", K(retry_count), K(ctx_->param_), K(parallel_servers_target), K(limit_session_count), K(total_session_count),
+                K(memory_limit), K(part_unsort_memory), K(min_part_memory), K(partitions), K(main_need_sort), K(task_need_sort), K(apply_arg));
+            break;
           }
         }
       }

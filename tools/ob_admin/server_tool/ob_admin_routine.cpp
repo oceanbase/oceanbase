@@ -1738,4 +1738,38 @@ DEF_COMMAND(SERVER, set_ss_ckpt_compressor, 1, "tenant_id:ckpt_type:compressor_n
   COMMON_LOG(INFO, "set_ss_ckpt_compressor", K(arg));
   return ret;
 }
+
+DEF_COMMAND(SERVER, set_ss_cache_size_ratio, 1, "tenant_id:new_micro_size_ratio:new_macro_size_ratio")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObSetSSCacheSizeRatioArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (3 != sscanf(arg_str.c_str(), "%ld:%ld:%ld", &arg.tenant_id_, &arg.micro_cache_size_ratio_,
+                         &arg.macro_cache_size_ratio_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+  } else if (OB_FAIL(client_->set_ss_cache_size_ratio(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret));
+  } else {
+    fprintf(stdout, "Successfully set_ss_cache_size_ratio [tenant_id:%ld, micro_ratio:%ld, macro_ratio:%ld]",
+        arg.tenant_id_, arg.micro_cache_size_ratio_, arg.macro_cache_size_ratio_);
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to set_ss_cache_size_ratio, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "set_ss_cache_size_ratio", K(arg));
+  return ret;
+}
 #endif

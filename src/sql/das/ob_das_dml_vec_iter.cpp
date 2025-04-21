@@ -422,7 +422,6 @@ int ObSparseVecIndexDMLIterator::generate_sparse_vec_index_row(
       for (int64_t i = 0; OB_SUCC(ret) && i < dim_count; ++i) {
         uint32_t dim = (*keys)[i];
         float value = (*values)[i];
-        LOG_INFO("spiv debug", K(dim_count), K(i), K(dim), K(value));
 
         if (OB_FAIL(rows[i].init(allocator, SPIV_DIM_DOCID_VALUE_CNT))) {
           LOG_WARN("init datum row failed", K(ret), K(SPIV_DIM_DOCID_VALUE_CNT));
@@ -430,7 +429,7 @@ int ObSparseVecIndexDMLIterator::generate_sparse_vec_index_row(
           rows[i].storage_datums_[dim_idx].set_uint32(dim);
           rows[i].storage_datums_[docid_idx].set_string(docid);
           rows[i].storage_datums_[value_idx].set_float(value);
-          rows[i].storage_datums_[vec_idx].set_null();
+          rows[i].storage_datums_[vec_idx].set_nop();
           if (OB_FAIL(spiv_rows.push_back(&rows[i]))) {
             LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
           }

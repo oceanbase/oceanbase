@@ -327,26 +327,32 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   return ret;
 }
 
-int ObShardingInfo::is_lossless_column_cast(const ObRawExpr *expr,
-                                            const ObShardingInfo &sharding_info, bool &is_lossless)
+int ObShardingInfo::remove_lossless_cast_for_sharding_key(ObRawExpr *&expr,
+                                                          const ObShardingInfo &sharding_info)
 {
   int ret = OB_SUCCESS;
-  is_lossless = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null raw expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
-    LOG_WARN("check lossless column cast failed", K(ret));
-  } else if (is_lossless) {
-    if (expr->get_result_type().is_decimal_int()
-        && expr->get_param_expr(0)->get_result_type().is_decimal_int()
-        && is_part_func_scale_sensitive(sharding_info, ObDecimalIntType)) {
-      is_lossless = (expr->get_scale() == expr->get_param_expr(0)->get_scale());
+  bool is_lossless = true;
+  while (OB_SUCC(ret) && is_lossless) {
+    is_lossless = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null raw expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
+      LOG_WARN("check lossless column cast failed", K(ret));
+    } else if (!is_lossless) {
+      // do nothing
+    } else if (expr->get_result_type().is_decimal_int()
+               && is_part_func_scale_sensitive(sharding_info, ObDecimalIntType)
+               && (!expr->get_param_expr(0)->get_result_type().is_decimal_int()
+                   || expr->get_scale() != expr->get_param_expr(0)->get_scale())) {
+      is_lossless = false;
+    } else {
+      expr = expr->get_param_expr(0);
     }
   }
-  LOG_DEBUG("sharding info, is_lossless column_cast", K(*expr), K(is_lossless), K(sharding_info));
   return ret;
 }
+
 int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
                                        const ObShardingInfo &first_sharding,
                                        const ObIArray<ObRawExpr*> &first_part_keys,
@@ -357,24 +363,13 @@ int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   is_equal = false;
-  bool first_key_lossless = false, second_key_lossless = false;
   if (OB_ISNULL(first_key) || OB_ISNULL(second_key)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(first_key), K(second_key), K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(first_key, first_sharding, first_key_lossless))) {
-    LOG_WARN("check lossless cast failed", K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(second_key, first_sharding, second_key_lossless))) {
-    LOG_WARN("check lossless cast failed", K(ret));
-  } else {
-    if (first_key_lossless) {
-      first_key = first_key->get_param_expr(0);
-    }
-    if (second_key_lossless) {
-      second_key = second_key->get_param_expr(0);
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
+  } else if (OB_FAIL(remove_lossless_cast_for_sharding_key(first_key, first_sharding))) {
+    LOG_WARN("remove lossless cast failed", K(ret));
+  } else if (OB_FAIL(remove_lossless_cast_for_sharding_key(second_key, first_sharding))) {
+    LOG_WARN("remove lossless cast failed", K(ret));
   } else {
     bool left_is_equal = false;
     bool right_is_equal = false;

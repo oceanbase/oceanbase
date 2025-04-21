@@ -166,8 +166,10 @@ struct DictCmpRefAVX512ArrayInit
 {
   bool operator()()
   {
-    dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
-        = &(DictCmpRefAVX512Func_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    if (REF_LEN != 0) {
+      dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
+          = &(DictCmpRefAVX512Func_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    }
     return true;
   }
 };

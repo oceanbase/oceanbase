@@ -24,7 +24,6 @@
 #include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/ob_i_store.h"
 #include <gtest/gtest.h>
 #include "sql/engine/basic/ob_pushdown_filter.h"
@@ -45,10 +44,7 @@ class ObCSEncodingTestBase
 public:
   ObCSEncodingTestBase(): tenant_ctx_(500)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
-    decode_res_pool_->init();
   }
   virtual ~ObCSEncodingTestBase() {}
   int prepare(const ObObjType *col_types, const int64_t rowkey_cnt, const int64_t column_cnt,
@@ -90,7 +86,6 @@ protected:
   common::ObArray<share::schema::ObColDesc> col_descs_;
   int64_t column_cnt_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
 };
 
 int ObCSEncodingTestBase::prepare(const ObObjType *col_types, const int64_t rowkey_cnt,

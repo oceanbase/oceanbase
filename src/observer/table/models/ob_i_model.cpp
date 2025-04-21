@@ -367,6 +367,53 @@ int ObIModel::alloc_requests_and_results(ObIAllocator &allocator,
   return ret;
 }
 
+int ObIModel::alloc_requests_and_results_for_mix_batch(ObTableExecCtx &ctx,
+                                                       const int64_t count,
+                                                       ObIArray<ObTableLSOpRequest*> &reqs,
+                                                       ObIArray<ObTableLSOpResult*> &results)
+{
+  int ret = OB_SUCCESS;
+  char *req_buf = nullptr;
+  ObIAllocator *cb_allocator = ctx.get_cb_allocator();
+
+  if (OB_FAIL(reqs.prepare_allocate(count))) {
+    LOG_WARN("fail to prepare allocate requests", K(ret), K(count));
+  } else if (OB_FAIL(results.prepare_allocate(count))) {
+    LOG_WARN("fail to prepare allocate results", K(ret), K(count));
+  } else if (OB_ISNULL(req_buf = static_cast<char *>(allocator_.alloc(sizeof(ObTableLSOpRequest) * count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObTableLSOpRequest", K(ret), K(sizeof(ObTableLSOpRequest)), K(count));
+  } else {
+    for (int64_t i = 0; i < count && OB_SUCC(ret); i++) {
+      reqs.at(i) = new (req_buf + sizeof(ObTableLSOpRequest) * i) ObTableLSOpRequest();
+      ObTableLSOp *ls_op = nullptr;
+      ObTableLSOpResult *ls_result = nullptr;
+      if (OB_ISNULL(ls_op = OB_NEWx(ObTableLSOp, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc ls op", K(ret));
+      } else if (OB_ISNULL(cb_allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cb_allocator is NULL", K(ret));
+      } else if (OB_ISNULL(ls_result = OB_NEWx(ObTableLSOpResult, cb_allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc ls result", K(ret));
+      } else {
+        reqs.at(i)->ls_op_ = ls_op;
+        results.at(i) = ls_result;
+      }
+      if (OB_FAIL(ret)) {
+        if (OB_NOT_NULL(ls_op)) {
+          ls_op->~ObTableLSOp();
+        }
+        if (OB_NOT_NULL(ls_result)) {
+          ls_result->~ObTableLSOpResult();
+        }
+      }
+    } // end for
+  }
+  return ret;
+}
+
 int ObIModel::pre_init_results(ObTableExecCtx &ctx,
                                const ObTableLSOpRequest &src_req,
                                ObTableLSOpResult &src_res,
@@ -441,6 +488,8 @@ int ObIModel::alloc_and_init_request_result_for_mix_batch(ObTableExecCtx &ctx,
                                                           ObTableLSOpResult &res)
 {
   int ret = OB_SUCCESS;
+  // use allocator to alloc reuqests and results
+  is_alloc_from_pool_ = false;
   if (OB_ISNULL(src_req.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
@@ -450,7 +499,7 @@ int ObIModel::alloc_and_init_request_result_for_mix_batch(ObTableExecCtx &ctx,
   } else {
     const ObTableTabletOp &tablet_op = src_req.ls_op_->at(0);
     const int64_t op_count = tablet_op.count();
-    if (OB_FAIL(alloc_requests_and_results(ctx.get_allocator(), op_count, new_reqs_, new_results_))) {
+    if (OB_FAIL(alloc_requests_and_results_for_mix_batch(ctx, op_count, new_reqs_, new_results_))) {
       LOG_WARN("fail to alloc request and results", K(ret), K(op_count));
     } else if (OB_FAIL(init_request_result_for_mix_batch(ctx, src_req, res, new_reqs_, new_results_))) {
       LOG_WARN("fail to alloc request and results for hyper batch", K(ret), K(src_req), K(op_count));
@@ -629,13 +678,24 @@ int ObIModel::init_result(const ObTableLSOpRequest &src_req,
 void ObIModel::free_requests_and_results(ObTableExecCtx &ctx)
 {
   for (int64_t i = 0; i < new_reqs_.count() && i < new_results_.count(); i++) {
-    if (OB_NOT_NULL(new_reqs_.at(i))) {
-      TABLEAPI_OBJECT_POOL_MGR->free_ls_op(new_reqs_.at(i)->ls_op_);
-      new_reqs_.at(i)->ls_op_ = nullptr;
-    }
-    if (!ctx.is_async_commit()) { // async commit free in async callback
-      TABLEAPI_OBJECT_POOL_MGR->free_res(new_results_.at(i));
-      new_results_.at(i) = nullptr;
+    if (is_alloc_from_pool_) {
+      if (OB_NOT_NULL(new_reqs_.at(i))) {
+        TABLEAPI_OBJECT_POOL_MGR->free_ls_op(new_reqs_.at(i)->ls_op_);
+        new_reqs_.at(i)->ls_op_ = nullptr;
+      }
+      if (!ctx.is_async_commit()) { // async commit free in async callback
+        TABLEAPI_OBJECT_POOL_MGR->free_res(new_results_.at(i));
+        new_results_.at(i) = nullptr;
+      }
+    } else {
+      if (OB_NOT_NULL(new_reqs_.at(i)) && OB_NOT_NULL(new_reqs_.at(i)->ls_op_)) {
+        new_reqs_.at(i)->ls_op_->~ObTableLSOp();
+        new_reqs_.at(i)->ls_op_ = nullptr;
+      }
+      if (!ctx.is_async_commit() && OB_NOT_NULL(new_results_.at(i))) { // async commit free in async callback
+        new_results_.at(i)->~ObTableLSOpResult();
+        new_results_.at(i) = nullptr;
+      }
     }
   }
 }
@@ -689,7 +749,6 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
     } else if (OB_ISNULL(arg_ctx.get_audit_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("audit ctx is null", K(ret));
-    } else if (FALSE_IT(arg_ctx.get_audit_ctx()->need_audit_ = false)) {
     } else if (FALSE_IT(ctx->set_audit_ctx(*arg_ctx.get_audit_ctx()))) {
     } else if (ObQueryOperationType::QUERY_START == query_type) {
       ObString tmp_table_name;
@@ -739,10 +798,10 @@ int ObIModel::work(ObTableExecCtx &ctx,
     res.query_session_id_ = session_id;
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
       if (ObQueryOperationType::QUERY_START == query_type) {
-        query_session_->set_req_start_time(common::ObTimeUtility::current_monotonic_time());
+        query_session_->set_req_start_time(ObTimeUtility::current_monotonic_time());
         ret = query_iter->start(req, ctx, res);
       } else if (ObQueryOperationType::QUERY_NEXT == query_type) {
-        ret = query_iter->next(res);
+        ret = query_iter->next(ctx, res);
       } else if (ObQueryOperationType::QUERY_RENEW == query_type) {
         ret = query_iter->renew(res);
       } else if (ObQueryOperationType::QUERY_END == query_type) {

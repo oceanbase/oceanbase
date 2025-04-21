@@ -217,6 +217,15 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     tsc_ctdef.is_das_keep_order_ = true;
   }
 
+  if (OB_SUCC(ret)) {
+    bool ordering_used_by_parent = false;
+    if (OB_FAIL(op.check_op_orderding_used_by_parent(ordering_used_by_parent))) {
+      LOG_WARN("failed to check tsc ordering used by parent", K(ret));
+    } else {
+      tsc_ctdef.ordering_used_by_parent_ = ordering_used_by_parent;
+    }
+  }
+
   //to generate dynamic tsc partition pruning info
   if (OB_SUCC(ret)) {
     ObTablePartitionInfo *info = op.get_table_partition_info();

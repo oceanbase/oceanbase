@@ -187,6 +187,26 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInnerInfoColsColumnTypePrinter);
 };
 
+class ObExprInnerInfoColsColumnKeyPrinter : public ObExprOperator
+{
+public:
+  explicit ObExprInnerInfoColsColumnKeyPrinter(common::ObIAllocator &alloc);
+  virtual ~ObExprInnerInfoColsColumnKeyPrinter();
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                ObExprResType &type3,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_column_column_key(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprInnerInfoColsColumnKeyPrinter);
+};
+
 }
 }
 #endif /* _OB_SQL_EXPR_INNER_INFO_COLS_PRINTER_H_ */

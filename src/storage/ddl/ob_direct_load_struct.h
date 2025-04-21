@@ -22,6 +22,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_vector_kmeans_ctx.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/ob_ddl_common.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/basic/ob_temp_column_store.h"

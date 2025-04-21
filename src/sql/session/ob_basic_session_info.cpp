@@ -4037,6 +4037,11 @@ int ObBasicSessionInfo::is_push_join_predicate_enabled(bool &push_join_predicate
 {
   return get_bool_sys_var(SYS_VAR__PUSH_JOIN_PREDICATE, push_join_predicate_enabled);
 }
+
+int ObBasicSessionInfo::get_ob_sparse_drop_ratio_search(uint64_t &ob_sparse_drop_ratio_search) const
+{
+  return get_uint64_sys_var(SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH, ob_sparse_drop_ratio_search);
+}
 ////////////////////////////////////////////////////////////////
 int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_map)
 {
@@ -6633,6 +6638,9 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
     OX (sys_vars_cache_.get_autocommit_info(saved_value.inc_autocommit_));
     OX (sys_vars_cache_.set_autocommit_info(false));
   }
+  if (OB_SUCC(ret)) {
+    saved_value.force_rich_format_status_ = force_rich_vector_format_;
+  }
   return ret;
 }
 
@@ -6675,6 +6683,9 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
     thread_data_.cur_query_[len] = '\0';
   }
   OX (cur_phy_plan_ = saved_value.cur_phy_plan_);
+  if (OB_SUCC(ret)) {
+    force_rich_vector_format_ = saved_value.force_rich_format_status_;
+  }
   return ret;
 }
 

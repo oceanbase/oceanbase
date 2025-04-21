@@ -26,6 +26,8 @@
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
+
 namespace oceanbase
 {
 namespace common
@@ -144,7 +146,8 @@ public:
     PARTITION_ELEMENT_NODE = 1,
     PART_ID_NODE = 2,
     ELEMENT_ATTRIBUTE_NODE = 3,
-    ELEMENT_SUBPARTITION_NODE = 4
+    ELEMENT_SUBPARTITION_NODE = 4,
+    ELEMENT_STORAGE_CACHE_POLICY = 5,
   };
   enum ListNode {
     LIST_FUN_EXPR_NODE = 0,
@@ -1056,9 +1059,19 @@ protected:
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
+  int check_column_is_first_part_key(const ObPartitionKeyInfo &part_key_info, const uint64_t column_id);
+
   int add_new_indexkey_for_oracle_temp_table();
   int check_index_param(const ParseNode *option_node, ObString &index_params, const int64_t vector_dim);
 
+
+  // for storage cache policy
+  int check_storage_cache_policy(ObStorageCachePolicy &storage_cache_policy, const bool has_partition_info = false);
+  int check_and_set_default_storage_cache_policy();
+  int set_default_storage_cache_policy(const bool is_alter_add_index = false);
+  int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params);
+  int resolve_storage_cache_time_attribute(const ParseNode *node, ObResolverParams &params, ObStorageCachePolicy &cache_policy);
+  int get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema);
   void reset();
 
   // for alter table: there may be some index_arg.
@@ -1147,6 +1160,7 @@ protected:
   bool is_external_table_;
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
+  common::ObString storage_cache_policy_;
   ObNameGeneratedType name_generated_type_;
   bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;

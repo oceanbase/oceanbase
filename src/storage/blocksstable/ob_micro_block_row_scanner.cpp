@@ -311,7 +311,7 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to judge end of block or not", K(ret));
     }
-  } else if (can_blockscan_) {
+  } else if (can_blockscan_ || param_->is_delete_insert_) {
     if (OB_FAIL(inner_get_next_row_blockscan(row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("[PUSHDOWN] failed to get next row pushdown", K(ret), K_(macro_id));
@@ -392,14 +392,14 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
         context_->reuse_lob_locator_helper();
       }
       EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, get_access_cnt());
-      LOG_DEBUG("[PUSHDOWN] apply blockscan succ", K(get_access_cnt()),
-                KPC(block_row_store_->get_pd_filter()), KPC_(block_row_store));
     }
   }
 
   if (OB_SUCC(ret) && OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("query interrupt", K(ret));
   }
+  LOG_DEBUG("micro scanner apply filter", K(ret), K(can_blockscan), K(get_access_cnt()), K_(param_->is_delete_insert),
+            K_(can_ignore_multi_version), K_(can_blockscan), K_(is_filter_applied), KPC_(block_row_store));
   return ret;
 }
 
@@ -634,7 +634,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   }
   LOG_TRACE("[PUSHDOWN] apply black filter batch", K(ret), K(filter_applied_directly),
             K(pd_filter_info.start_), K(pd_filter_info.count_),
-            K(result_bitmap.popcnt()), K(result_bitmap.size()), K(filter));
+            K(result_bitmap.popcnt()), K(result_bitmap), K(filter));
   return ret;
 }
 
@@ -1050,26 +1050,6 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                              nullptr,
                                              is_padding_mode))) {
     LOG_WARN("Failed to get rows for old format", K(ret));
-  }
-  return ret;
-}
-
-int ObIMicroBlockRowScanner::get_aggregate_result(
-    const int32_t col_offset,
-    const int32_t *row_ids,
-    const int64_t row_cap,
-    const bool reserve_memory,
-    ObAggGroupBase &agg_group)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), KP_(range), K_(is_inited));
-  } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
-  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_offset, reader_, row_ids, row_cap, reserve_memory))) {
-    LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;
 }
@@ -1527,7 +1507,6 @@ int ObMultiVersionMicroBlockRowScanner::open(
     } else if (OB_NOT_NULL(sstable_)
         && !block_data.get_micro_header()->contain_uncommitted_rows()
         && block_data.get_micro_header()->max_merged_trans_version_ <= context_->trans_version_range_.snapshot_version_
-        && context_->trans_version_range_.base_version_ > 0
         && block_data.get_micro_header()->min_merged_trans_version_ > context_->trans_version_range_.base_version_) {
       read_row_direct_flag_ = true;
       can_ignore_multi_version_ = flat_reader_->single_version_rows()

@@ -371,8 +371,8 @@ public:
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
 
-  static int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
-  static int check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);
   static int check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
                                               const uint64_t& task_id, const uint64_t& table_id,
@@ -395,7 +395,7 @@ public:
   const static uint64_t TTL_ROWKEY_TASK_TABLE_ID = -2;
   const static uint64_t TTL_THREAD_MAX_SCORE = 100;
 private:
-  static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table);
 private:
   static bool extract_val(const char* ptr, uint64_t len, int& val);
   static bool valid_digit(const char* ptr, uint64_t len);

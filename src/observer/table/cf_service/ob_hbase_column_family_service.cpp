@@ -17,6 +17,7 @@
 #include "share/table/ob_table_util.h"
 #include "observer/table/ob_table_query_common.h"
 #include "observer/table/cf_service/ob_hbase_multi_cf_iterator.h"
+#include "observer/table/part_calc/ob_table_part_calc.h"
 
 using namespace oceanbase::common;
 
@@ -489,9 +490,21 @@ int ObHbaseColumnFamilyService::delete_cell(const ObHbaseQuery &query,
                                             ObIHbaseAdapter &adapter)
 {
   int ret = OB_SUCCESS;
+  ObTableEntity entity;
   exec_ctx.set_table_id(query.get_table_id());
-  if (OB_FAIL(adapter.del(exec_ctx, query.get_tablet_id(), cell))) {
-    LOG_WARN("fail to del one cell", K(ret), K(query.get_tablet_id()), K(cell));
+  ObTabletID real_tablet_id(ObTabletID::INVALID_TABLET_ID);
+  ObTablePartCalculator calculator(exec_ctx.get_allocator(),
+                                   exec_ctx.get_sess_guard(),
+                                   exec_ctx.get_schema_cache_guard(),
+                                   exec_ctx.get_schema_guard());
+  if (OB_FAIL(ObHTableUtils::construct_entity_from_row(cell, exec_ctx.get_schema_cache_guard(), entity))) {
+    LOG_WARN("fail to construct entity from row", K(ret), K(cell));
+  } else if (calculator.calc(exec_ctx.get_table_id(), entity, real_tablet_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to calc tablet id", K(ret), K(exec_ctx.get_table_id()), K(entity));
+  } else if (FALSE_IT(entity.set_tablet_id(real_tablet_id))) {
+  } else if (OB_FAIL(adapter.del(exec_ctx, entity))) {
+    LOG_WARN("fail to del one cell", K(ret), K(entity), K(entity.get_tablet_id()));
   }
   return ret;
 }
@@ -530,28 +543,6 @@ int ObHbaseColumnFamilyService::del(const ObHbaseTableCells &table_cells, ObTabl
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObHbaseMultiCFService::delete_cell(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx, const ObNewRow &cell, ObIHbaseAdapter &adapter)
-{
-  int ret = OB_SUCCESS;
-  uint64_t table_id = query.get_table_id();
-  ObTabletID tablet_id = query.get_tablet_id();
-  uint64_t real_table_id = OB_INVALID_ID;
-  ObTabletID real_tablet_id;
-  ObString family_name;
-
-  if (OB_FAIL(get_family_from_cell(cell, family_name))) {
-    LOG_WARN("fail to get family name", K(ret), K(cell));
-  } else if (OB_FAIL(find_real_table_tablet_id(exec_ctx, table_id, tablet_id, family_name,
-                real_table_id, real_tablet_id))) {
-    LOG_WARN("fail to find real table id and tablet id", K(ret), K(table_id), K(tablet_id), K(family_name));
-  } else if (OB_FAIL(remove_family_from_qualifier(cell))) {
-    LOG_WARN("fail to remove family name", K(ret));
-  } else if (OB_FAIL(adapter.del(exec_ctx, real_tablet_id, cell))) {
-    LOG_WARN("fail to del one cell", K(ret), K(real_tablet_id), K(cell));
   }
   return ret;
 }

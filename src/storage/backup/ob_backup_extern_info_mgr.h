@@ -95,7 +95,7 @@ public:
   ObExternTabletMetaWriter(): is_inited_(false), backup_set_dest_(), ls_id_(), turn_id_(0), retry_id_(0), is_final_fuse_(false),
       io_fd_(0), dev_handle_(nullptr), file_write_ctx_(), file_trailer_(), tmp_buffer_("BackupExtInfo"),
       bandwidth_throttle_(NULL) {};
-  ~ObExternTabletMetaWriter() {};
+  ~ObExternTabletMetaWriter();
   int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
            const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
 	   const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle);

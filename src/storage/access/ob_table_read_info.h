@@ -526,7 +526,7 @@ public:
     OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise need truncate filter");
     return false;
   }
-  TO_STRING_KV(K_(need_release), KPC(cg_basic_info_), KPC(cols_param_), K_(cols_extend));
+  TO_STRING_KV(K_(need_release), KPC(cg_basic_info_), K_(cols_extend));
 protected:
   friend class ObTenantCGReadInfoMgr;
   bool need_release_;

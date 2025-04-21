@@ -263,6 +263,8 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
       is_same = false;
     } else if (param.get_param_meta().get_type() != param_info.type_) {
       is_same = false;
+    } else if (ob_is_enumset_inner_tc(param.get_param_meta().get_type())) { // since enunset_inner type param will mock expr use current param, can not resue plan
+      is_same = false;
     } else if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
       if (param_info.is_oracle_null_value_) {
         is_same = false;

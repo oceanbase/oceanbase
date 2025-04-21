@@ -195,7 +195,7 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
       type.set_precision(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][type.get_type()].get_precision());
     } else if (ObCollectionSQLTC == result_tc) {
       // only support vector / int now
-      if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type1, type_ctx, true/*only_vector*/))) { // here only to avoid type1 cast
+      if (OB_FAIL(ObArrayExprUtils::calc_cast_type(type_, type1, type_ctx, true/*only_vector*/))) { // here only to avoid type1 cast
         LOG_WARN("failed to calc cast type", K(ret), K(type1));
       } else {
         type.set_collection(type1.get_subschema_id());

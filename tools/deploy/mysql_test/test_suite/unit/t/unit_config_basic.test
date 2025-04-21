@@ -144,23 +144,23 @@ drop resource unit box_for_unit_config_test;
 --echo ======== 3.5 DATA_DISK_SIZE:
 if($startup_mode=="shared_storage")
 {
---echo shared_storage模式, 最小值 '2G', 2147483648，容量字符串强制带单位，不支持number类型
-# complete cases in sensitive_test.uc_data_disk_size
+--echo shared_storage模式, 0或正整数(最小值 '2G'), 2147483648，容量字符串强制带单位，不支持number类型
+# complete cases in shared_storage.uc_data_disk_size
 --error 1064
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE='2048';
 --error 1210
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE=2147483648.0;
 --error 1210
 CREATE RESOURCE UNIT box_for_unit_config_test MAX_CPU 1, MEMORY_SIZE '1G', DATA_DISK_SIZE=-1;
---error 1210
-CREATE RESOURCE UNIT box_for_unit_config_test MAX_CPU 1, MEMORY_SIZE '1G', DATA_DISK_SIZE=0;
 --error 4659
 CREATE RESOURCE UNIT box_for_unit_config_test MAX_CPU 1, MEMORY_SIZE '1G', DATA_DISK_SIZE=2147483647;
 
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE='2G';
+create resource unit box_for_unit_config_test1 MAX_CPU=1, MEMORY_SIZE='1G', DATA_DISK_SIZE=0;
 --replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
-select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+select * from DBA_OB_UNIT_CONFIGS where name like 'box_for_unit_config_test%';
 drop resource unit box_for_unit_config_test;
+drop resource unit box_for_unit_config_test1;
 }
 
 if($startup_mode!="shared_storage")
@@ -428,6 +428,48 @@ alter resource unit box_for_unit_config_test IOPS_WEIGHT=-1;
 alter resource unit box_for_unit_config_test IOPS_WEIGHT=0.9;
 --error 1210
 alter resource unit box_for_unit_config_test IOPS_WEIGHT=100.90;
+
+
+###############
+--echo ====   DATA_DISK_SIZE
+if($startup_mode=="shared_storage")
+{
+--echo ====   shared_storage模式, 最小值
+alter RESOURCE UNIT box_for_unit_config_test DATA_DISK_SIZE=0;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+alter RESOURCE UNIT box_for_unit_config_test DATA_DISK_SIZE='2G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--error 4659
+alter RESOURCE UNIT box_for_unit_config_test DATA_DISK_SIZE=2147483647;
+--error 1210
+alter RESOURCE UNIT box_for_unit_config_test DATA_DISK_SIZE=-1;
+
+--echo ====   shared_storage模式, 不能是number类型 
+--error 1064
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE='2048';
+--error 1210
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=2147483648.0;
+}
+
+if($startup_mode!="shared_storage")
+{
+--echo shared_nothing模式, 不可指定;
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=2147483647;
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=-1;
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE='2048';
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=2147483648.0;
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE='2G';
+--error 1235
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=0;
+}
 
 
 ###############

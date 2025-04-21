@@ -58,7 +58,8 @@ struct ObQueryFlag
 #define OBSF_BIT_ENABLE_LOB_PREFETCH  1
 #define OBSF_BIT_IS_BARE_ROW_SCAN     1
 #define OBSF_BIT_MR_MV_SCAN           2
-#define OBSF_BIT_RESERVED             22
+#define OBSF_BIT_IS_PLAIN_INSERT      1
+#define OBSF_BIT_RESERVED             21
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -89,6 +90,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
   static const uint64_t OBSF_MASK_ENABLE_LOB_PREFETCH = (0x1UL << OBSF_BIT_ENABLE_LOB_PREFETCH) - 1;
   static const uint64_t OBSF_MASK_IS_DIRECT_SCAN = (0x1UL << OBSF_BIT_IS_BARE_ROW_SCAN) - 1;
+  static const uint64_t OBSF_MASK_IS_PLAIN_INSERT = (0x1UL << OBSF_BIT_IS_PLAIN_INSERT) - 1;
 
 
   enum ScanOrder //FARM COMPAT WHITELIST
@@ -164,6 +166,7 @@ struct ObQueryFlag
       uint64_t enable_lob_prefetch_ : OBSF_BIT_ENABLE_LOB_PREFETCH;
       uint64_t is_bare_row_scan_ : OBSF_BIT_IS_BARE_ROW_SCAN; // 1: to scan mult version row directly without compact.
       uint64_t mr_mv_scan_ : OBSF_BIT_MR_MV_SCAN; // 0: normal table scan. 1. major refresh mview base table scan in refresh 2. major refresh rt-mview base table scan
+      uint64_t is_plain_insert_gts_opt_ : OBSF_BIT_IS_PLAIN_INSERT;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -303,6 +306,7 @@ struct ObQueryFlag
                "enable_lob_prefetch", enable_lob_prefetch_,
                "is_bare_row_scan", is_bare_row_scan_,
                "mr_mv_scan", mr_mv_scan_,
+               "is_plain_insert_gts_opt", is_plain_insert_gts_opt_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

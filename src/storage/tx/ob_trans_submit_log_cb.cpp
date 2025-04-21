@@ -178,12 +178,15 @@ int ObTxLogCb::on_success()
     const bool bk_is_reserved = group_ptr_->is_reserved();
     ObTxLogCbGroup *bk_group_ptr = group_ptr_;
     ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
+    const ObTransID tx_id = part_ctx->get_trans_id();
+    const ObLSID ls_id = part_ctx->get_ls_id();
+    const share::SCN log_ts = log_ts_;
     if (NULL == part_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ctx is null", K(ret), KPC(part_ctx));
     } else {
       if (OB_FAIL(part_ctx->on_success(this))) {
-        TRANS_LOG(WARN, "sync log success callback error", K(ret), KPC(part_ctx));
+        TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id), K(ls_id), K(log_ts));
       }
       if (!bk_is_reserved) {
         ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
@@ -208,12 +211,15 @@ int ObTxLogCb::on_failure()
     const bool bk_is_reserved = group_ptr_->is_reserved();
     ObTxLogCbGroup *bk_group_ptr = group_ptr_;
     ObPartTransCtx *part_ctx = group_ptr_->get_tx_ctx();
+    const ObTransID tx_id = part_ctx->get_trans_id();
+    const ObLSID ls_id = part_ctx->get_ls_id();
+    const share::SCN log_ts = log_ts_;
     if (NULL == part_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ctx is null", KR(ret), K(*this));
     } else {
       if (OB_FAIL(part_ctx->on_failure(this))) {
-        TRANS_LOG(WARN, "sync log success callback error", KR(ret), KPC(part_ctx));
+        TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(tx_id), K(ls_id), K(log_ts));
       }
       if (!bk_is_reserved) {
         ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
@@ -221,7 +227,7 @@ int ObTxLogCb::on_failure()
                                                 bk_submit_ts);
       }
     }
-    TRANS_LOG(INFO, "ObTxLogCb::on_failure end", KR(ret), KPC(part_ctx));
+    TRANS_LOG(INFO, "ObTxLogCb::on_failure end", KR(ret), K(tx_id), K(ls_id), K(log_ts));
   }
   return ret;
 }

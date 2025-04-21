@@ -138,8 +138,14 @@ int ObPxDistTransmitOp::next_vector(const int64_t max_row_cnt)
     clear_evaluated_flag();
     int64_t size = std::min(std::min(max_row_cnt, MY_SPEC.max_batch_size_),
                             cur_transmit_sampled_rows_->second - cur_transmit_sampled_rows_->first);
-    for (int64_t i = 0; i < MY_SPEC.sampling_saving_row_.count() && OB_SUCC(ret); i++) {
-      if (OB_FAIL(MY_SPEC.sampling_saving_row_.at(i)->init_vector(eval_ctx_, VEC_UNIFORM, size))) {
+    for (int64_t i = 0;
+         i < MY_SPEC.sampling_saving_row_.count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(MY_SPEC.sampling_saving_row_.at(i)->init_vector(
+              eval_ctx_,
+              MY_SPEC.sampling_saving_row_.at(i)->is_batch_result()
+                  ? VEC_UNIFORM
+                  : VEC_UNIFORM_CONST,
+              size))) {
         LOG_WARN("init vector failed", K(ret));
       }
     }

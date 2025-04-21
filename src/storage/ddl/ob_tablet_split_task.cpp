@@ -1371,7 +1371,7 @@ int ObTabletSplitWriteTask::check_and_cast_high_bound(
         void *buf = nullptr;
         if (col_desc.col_type_.is_timestamp_ltz()) {
           /*need to convert the high bound from timestamp_tz to timestamp_ltz*/
-          if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObOTimestampTinyData)))) {
+          if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObObj)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocat memory for storage datum", K(ret));
           } else {
@@ -2471,6 +2471,12 @@ int ObTabletSplitUtil::get_participants(
         } else {
           LOG_INFO("skip table", K(ret), KPC(table));
         }
+      } else if (OB_UNLIKELY(!table->is_sstable() ||
+          (!table->is_mds_sstable() && !table->is_minor_sstable() && !table->is_major_sstable()))) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("an unexpected split table found", K(ret), KPC(table));
+      } else if (table->is_mds_sstable()) {
+        // do nothing.
       } else if (is_contain(skipped_table_keys, table->get_key())) {
         FLOG_INFO("no need to split for the table", "table_key", table->get_key(), K(skipped_table_keys));
       } else if (table->is_minor_sstable()) {
@@ -2484,28 +2490,6 @@ int ObTabletSplitUtil::get_participants(
           // Split with minor only.
         } else if (OB_FAIL(participants.push_back(table))) {
           LOG_WARN("push back major failed", K(ret));
-        }
-      } else {
-        if (!table->is_sstable()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret), KPC(table));
-        } else if (table->is_minor_sstable()) {
-          if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
-            // Split with major only.
-          } else if (OB_FAIL(participants.push_back(table))) {
-            LOG_WARN("push back failed", K(ret));
-          }
-        } else if (table->is_major_sstable()) {
-          if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type) {
-            // Split with minor only.
-          } else if (OB_FAIL(participants.push_back(table))) {
-            LOG_WARN("push back major failed", K(ret));
-          }
-        } else if (table->is_mds_sstable()) {
-          // skip
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret), KPC(table));
         }
       }
     }

@@ -139,10 +139,9 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   const int64_t block_offset = block_size * blk_idx;
   int64_t updated_micro_size = 0;
   int64_t updated_micro_cnt = 0;
-  /* As expected, we do not allow micro blocks to fail to update meta, so OB_ERR_UNEXPECTED will be returned here. */
-  ASSERT_EQ(OB_ERR_UNEXPECTED,
-      micro_meta_mgr.update_micro_block_meta(
-          mem_blk_handle, block_offset, mem_blk_handle()->reuse_version_, updated_micro_size, updated_micro_cnt));
+  /* As expected, we allow micro blocks to fail to update meta*/
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.update_micro_block_meta(mem_blk_handle, block_offset, mem_blk_handle()->reuse_version_,
+                                                                      updated_micro_size, updated_micro_cnt));
   ASSERT_EQ((micro_block_cnt / 2) * micro_size, updated_micro_size);
   ASSERT_EQ(micro_block_cnt / 2, updated_micro_cnt);
   ASSERT_EQ(1, mem_data_mgr.mem_block_pool_.used_extra_count_);
@@ -265,7 +264,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_micro_cache_abnormal_health)
       ASSERT_NE(OB_SUCCESS, ret);
       offset += micro_size;
     }
-    ob_usleep(2 * 1000 * 1000);
+    ob_usleep(3 * 1000 * 1000);
   }
 
   // check abnormal count
@@ -280,9 +279,80 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_micro_cache_abnormal_health)
       ASSERT_EQ(OB_SUCCESS, ret);
       offset += micro_size;
     }
-    ob_usleep(2 * 1000 * 1000);
+    ob_usleep(3 * 1000 * 1000);
   }
   ASSERT_EQ(0, micro_ckpt_task.ckpt_op_.cache_abnormal_cnt_);
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_ckpt_parallel_update_super_blk)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache*)->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache*)->cache_stat_;
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = MTL(ObSSMicroCache*)->task_runner_.micro_ckpt_task_;
+  ObSSExecuteBlkCheckpointTask &blk_ckpt_task = MTL(ObSSMicroCache*)->task_runner_.blk_ckpt_task_;
+  micro_ckpt_task.is_inited_ = false;
+  blk_ckpt_task.is_inited_ = false;
+  ob_usleep(1000 * 1000);
+
+  ObSSExecuteMicroCheckpointOp &micro_ckpt_op = micro_ckpt_task.ckpt_op_;
+  ObSSExecuteBlkCheckpointOp &blk_ckpt_op = blk_ckpt_task.ckpt_op_;
+
+  phy_blk_mgr.super_block_.micro_ckpt_entry_list_.reset();
+  phy_blk_mgr.super_block_.blk_ckpt_entry_list_.reset();
+  // 1. mock exeuted one round micro_meta_ckpt
+  phy_blk_mgr.super_block_.micro_ckpt_entry_list_.push_back(15);
+  phy_blk_mgr.super_block_.micro_ckpt_entry_list_.push_back(16);
+  phy_blk_mgr.super_block_.micro_ckpt_entry_list_.push_back(17);
+  phy_blk_mgr.super_block_.micro_ckpt_entry_list_.push_back(18);
+  phy_blk_mgr.super_block_.update_micro_ckpt_time();
+
+  // 2. mock executed one round blk_info_ckpt
+  phy_blk_mgr.super_block_.blk_ckpt_entry_list_.push_back(31);
+  phy_blk_mgr.super_block_.blk_ckpt_entry_list_.push_back(32);
+  ObSSLSCacheInfo ls_cache_info;
+  share::ObLSID ls_id(1001);
+  ls_cache_info.ls_id_ = ls_id;
+  ls_cache_info.tablet_cnt_ = 55;
+  ls_cache_info.t1_size_ = 10000;
+  ls_cache_info.t2_size_ = 10001;
+  phy_blk_mgr.super_block_.ls_info_list_.push_back(ls_cache_info);
+  ObSSTabletCacheInfo tablet_cache_info;
+  common::ObTabletID tablet_id(201);
+  tablet_cache_info.t1_size_ = 5001;
+  tablet_cache_info.t2_size_ = 5002;
+  phy_blk_mgr.super_block_.tablet_info_list_.push_back(tablet_cache_info);
+
+  // 3. mock executing new round blk_info_ckpt
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_op.get_prev_super_block());
+  blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.push_back(33);
+  blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.push_back(34);
+  blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.push_back(35);
+  // 3.1 mock resize cache file size
+  phy_blk_mgr.super_block_.cache_file_size_ += 1;
+  phy_blk_mgr.super_block_.update_modify_time();
+  // 3.2 build new round blk_info_ckpt ss_super_block
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_op.build_cur_super_block(false/*is_micro_ckpt*/));
+  ASSERT_EQ(1, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.ls_info_list_.count());
+  ASSERT_EQ(ls_cache_info.t1_size_, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.ls_info_list_.at(0).t1_size_);
+  ASSERT_EQ(1, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.tablet_info_list_.count());
+  ASSERT_EQ(tablet_cache_info.t2_size_, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.tablet_info_list_.at(0).t2_size_);
+  ASSERT_EQ(3, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(4, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
+  int64_t exp_modify_time = blk_ckpt_op.blk_ckpt_ctx_.prev_super_block_.modify_time_us_;
+  ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.update_ss_super_block(exp_modify_time, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_));
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_op.get_prev_super_block());
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_op.build_cur_super_block(false/*is_micro_ckpt*/));
+  exp_modify_time = blk_ckpt_op.blk_ckpt_ctx_.prev_super_block_.modify_time_us_;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(exp_modify_time, blk_ckpt_op.blk_ckpt_ctx_.cur_super_block_));
+  // 3.3 verify ss_super_block
+  ASSERT_EQ(3, phy_blk_mgr.super_block_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(4, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(1, phy_blk_mgr.super_block_.ls_info_list_.count());
+  ASSERT_EQ(1, phy_blk_mgr.super_block_.tablet_info_list_.count());
 }
 
 }  // namespace storage

@@ -47,7 +47,7 @@ static int plugin_init(ObPluginParamPtr plugin)
     LOG_WARN("failed to init beng builtin ftparser", K(ret));
   } else if (OB_FAIL(ObPluginHelper::register_builtin_ftparser<ObNgram2FTParserDesc>(
                  plugin,
-                 ObFTSLiteral::PARSER_NAME_RANGE_NGRAM,
+                 ObFTSLiteral::PARSER_NAME_NGRAM2,
                  "This is a range ngram fulltext parser plugin."
                  "It is used to parse fulltext with range ngram."))) {
     LOG_WARN("failed to init range ngram builtin ftparser", K(ret));

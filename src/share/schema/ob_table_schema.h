@@ -33,7 +33,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "lib/compress/ob_compress_util.h"
-#include "share/storage/ob_storage_cache_common.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
 namespace oceanbase
 {
 
@@ -2056,6 +2056,10 @@ public:
   int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
                            uint64_t column_id,
                            bool &is_uni) const;
+  int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
+                           uint64_t column_id,
+                           bool &is_uni,
+                           bool &is_first_notnull_unique) const;
   int is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
                              uint64_t column_id,
                              bool &is_mul) const;

@@ -90,9 +90,9 @@ int ObTableRelatedSysVars::update_sys_vars(bool only_update_dynamic_vars)
             dynamic_vars_.set_binlog_row_image(binlog_row_image);
             dynamic_vars_.set_query_record_size_limit(query_record_size_limit);
             dynamic_vars_.set_enable_query_response_time_stats(enable_query_response_time_stats);
-            dynamic_vars_.set_support_distributed_execute(ObKVFeatureModeUitl::is_distributed_execute_enable());
             omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
             if (tenant_config.is_valid()) {
+              // group commit
               int64_t batch_size = tenant_config->kv_group_commit_batch_size;
               dynamic_vars_.set_kv_group_commit_batch_size(batch_size);
               ObString rw_mode = tenant_config->kv_group_commit_rw_mode.get_value_string();
@@ -105,6 +105,8 @@ int ObTableRelatedSysVars::update_sys_vars(bool only_update_dynamic_vars)
                   dynamic_vars_.set_group_rw_mode(ObTableGroupRwMode::WRITE);
                 }
               }
+              // distributed execute
+              dynamic_vars_.set_support_distributed_execute(tenant_config->_obkv_enable_distributed_execution);
             }
           }
         }

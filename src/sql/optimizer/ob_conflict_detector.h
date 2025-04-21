@@ -170,7 +170,8 @@ public:
                               const common::ObIArray<TableDependInfo> &table_depend_infos,
                               const common::ObIArray<ObRawExpr*> &push_subq_exprs,
                               common::ObIArray<ObRelIds> &bushy_tree_infos,
-                              common::ObIArray<ObRawExpr*> &new_or_quals) :
+                              common::ObIArray<ObRawExpr*> &new_or_quals,
+                              ObQueryCtx *ctx) :
     allocator_(allocator),
     expr_factory_(expr_factory),
     session_info_(session_info),
@@ -180,7 +181,8 @@ public:
     table_depend_infos_(table_depend_infos),
     push_subq_exprs_(push_subq_exprs),
     bushy_tree_infos_(bushy_tree_infos),
-    new_or_quals_(new_or_quals)
+    new_or_quals_(new_or_quals),
+    query_ctx_(ctx)
     {}
 
   virtual ~ObConflictDetectorGenerator() {}
@@ -290,6 +292,7 @@ private:
   const common::ObIArray<ObRawExpr*> &push_subq_exprs_;
   common::ObIArray<ObRelIds> &bushy_tree_infos_;
   common::ObIArray<ObRawExpr*> &new_or_quals_;
+  ObQueryCtx *query_ctx_;
 };
 
 

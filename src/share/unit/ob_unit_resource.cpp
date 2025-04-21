@@ -186,7 +186,6 @@ bool ObUnitResource::is_data_disk_size_valid_for_unit() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    // data_disk_size can be 0 only for hidden_sys unit
     b_ret = 0 == data_disk_size_ || data_disk_size_ >= UNIT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
@@ -198,9 +197,9 @@ bool ObUnitResource::is_data_disk_size_valid_for_meta_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    // data_disk_size can be 0 only for hidden_sys unit
-    b_ret = data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
-            && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE;
+    b_ret = 0 == data_disk_size_ ||
+            (data_disk_size_ >= META_TENANT_MIN_DATA_DISK_SIZE
+            && data_disk_size_ <= META_TENANT_MAX_DATA_DISK_SIZE);
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -211,8 +210,7 @@ bool ObUnitResource::is_data_disk_size_valid_for_user_tenant() const
 {
   bool b_ret = false;
   if (GCTX.is_shared_storage_mode()) {
-    // data_disk_size can be 0 only for hidden_sys unit
-    b_ret = data_disk_size_ >= USER_TENANT_MIN_DATA_DISK_SIZE;
+    b_ret = 0 == data_disk_size_ || data_disk_size_ >= USER_TENANT_MIN_DATA_DISK_SIZE;
   } else {
     b_ret = DEFAULT_DATA_DISK_SIZE == data_disk_size_;
   }
@@ -329,18 +327,26 @@ int ObUnitResource::init_and_check_log_disk_(const ObUnitResource &user_spec)
   return ret;
 }
 
-int ObUnitResource::init_and_check_data_disk_(const ObUnitResource &user_spec)
+int ObUnitResource::init_update_and_check_data_disk_(const ObUnitResource &user_spec, const bool is_update)
 {
   int ret = OB_SUCCESS;
-  if (0 == user_spec.data_disk_size_) {
+  if (0 == user_spec.data_disk_size()) {
     if (! GCTX.is_shared_storage_mode()) {
       // for upgrade compatability in shared-nothing mode
       data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("user specified data_disk_size should not be 0", KR(ret));
+      uint64_t sys_data_version = 0;
+      // user specifying data_disk_size = 0 is supported in 4.3.5.2 and above
+      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+        LOG_WARN("failed to get sys tenant min data version", KR(ret));
+      } else if (sys_data_version < DATA_VERSION_4_3_5_2) {
+        ret = common::OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SYS tenant data version is below 4.3.5.2, DATA_DISK_SIZE being 0");
+      } else {
+        data_disk_size_ = user_spec.data_disk_size();
+      }
     }
-  } else if (user_spec.is_data_disk_size_valid()) {
+  } else if (user_spec.data_disk_size() > 0) {
     // user specify data_disk_size
     if (OB_FAIL(check_data_disk_size_supported())) {
       LOG_WARN("failed to check data_disk_size supported", KR(ret), K(user_spec));
@@ -357,18 +363,21 @@ int ObUnitResource::init_and_check_data_disk_(const ObUnitResource &user_spec)
         data_disk_size_ = user_spec.data_disk_size();
       }
     }
-  } else {
-    // user not specify data_disk_size
-    // use the default value
-    if (GCTX.is_shared_storage_mode()) {
-      data_disk_size_ = get_default_data_disk_size(memory_size_);
+  } else {// user not specify data_disk_size
+    if (is_update) {
+      // no need to update
     } else {
-      data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+      // use the default value
+      if (GCTX.is_shared_storage_mode()) {
+        data_disk_size_ = get_default_data_disk_size(memory_size_);
+      } else {
+        data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+      }
     }
   }
 
-  LOG_INFO("ObUnitResource init_and_check: DATA_DISK", KR(ret), K(data_disk_size_), K(user_spec),
-      KPC(this));
+  LOG_INFO("ObUnitResource init_update_and_check: DATA_DISK", KR(ret), K(data_disk_size_), K(user_spec),
+      K(is_update), KPC(this));
   return ret;
 }
 
@@ -568,7 +577,7 @@ int ObUnitResource::init_and_check_valid_for_unit(const ObUnitResource &user_spe
 
   // check DATADISK
   if (OB_SUCCESS == ret) {
-    ret = init_and_check_data_disk_(user_spec);
+    ret = init_update_and_check_data_disk_(user_spec, false/*is_update*/);
   }
 
   // check IOPS
@@ -700,40 +709,6 @@ int ObUnitResource::update_and_check_log_disk_(const ObUnitResource &user_spec)
   return ret;
 }
 
-int ObUnitResource::update_and_check_data_disk_(const ObUnitResource &user_spec)
-{
-  int ret = OB_SUCCESS;
-  if (0 == user_spec.data_disk_size_) {
-    if (! GCTX.is_shared_storage_mode()) {
-      // for upgrade compatability in shared-nothing mode
-      data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("user specified data_disk_size should not be 0", KR(ret));
-    }
-  } else if (! user_spec.is_data_disk_size_valid()) {
-    // not specified, do not need to update
-  } else {
-    const int64_t unit_min_data_disk_size = UNIT_MIN_DATA_DISK_SIZE;
-    if (OB_FAIL(check_data_disk_size_supported())) {
-      LOG_WARN("failed to check data_disk_size supported", KR(ret), K(user_spec));
-    } else if (user_spec.data_disk_size() < unit_min_data_disk_size) {
-      ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
-      LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
-          K(unit_min_data_disk_size));
-      ObCStringHelper helper;
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "DATA_DISK_SIZE",
-          helper.convert(unit_min_data_disk_size));
-    } else {
-      data_disk_size_ = user_spec.data_disk_size();
-    }
-
-    LOG_INFO("ObUnitResource update_and_check: DATA_DISK", KR(ret), K(data_disk_size_), K(user_spec),
-        KPC(this));
-  }
-  return ret;
-}
-
 int ObUnitResource::update_and_check_iops_(const ObUnitResource &user_spec)
 {
   int ret = OB_SUCCESS;
@@ -860,7 +835,7 @@ int ObUnitResource::update_and_check_valid_for_unit(const ObUnitResource &user_s
 
   // check DATA_DISK_SIZE
   if (OB_SUCCESS == ret) {
-    ret = update_and_check_data_disk_(user_spec);
+    ret = init_update_and_check_data_disk_(user_spec, true/*is_update*/);
   }
 
   // check IOPS

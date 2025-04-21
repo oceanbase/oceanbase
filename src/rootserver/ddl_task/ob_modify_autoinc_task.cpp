@@ -431,6 +431,7 @@ int ObModifyAutoincTask::wait_trans_end()
       LOG_WARN("cannot find orig table", K(ret), K(alter_table_arg_));
     } else if (OB_FAIL(wait_trans_ctx_.init(tenant_id_,
                                             task_id_,
+                                            task_status_,
                                             object_id_,
                                             ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS,
                                             updated_table_schema->get_schema_version()))) {

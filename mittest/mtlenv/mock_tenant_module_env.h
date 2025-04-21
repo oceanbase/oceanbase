@@ -47,7 +47,6 @@
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "sql/ob_sql.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_tablet_diagnose.h"
@@ -484,7 +483,8 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         create_timestamp,
                         has_memstore,
                         false /*is_removed*/,
-                        hidden_sys_data_disk_config_size))) {
+                        hidden_sys_data_disk_config_size,
+                        0 /*actual_data_disk_size*/))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     STORAGE_LOG(WARN, "fail to build tenant meta", K(ret), K(tenant_id));
@@ -786,7 +786,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "init server startup task handler failed", KR(ret));
   } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(GCTX.is_shared_storage_mode()))) {
     STORAGE_LOG(ERROR, "init server checkpoint slog handler fail", K(ret));
-  } else if (OB_FAIL(multi_tenant_.init(self_addr_, nullptr, false))) {
+  } else if (OB_FAIL(multi_tenant_.init(self_addr_, &sql_proxy_, false))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(ObTsMgr::get_instance().init(self_addr_,
                          schema_service_, location_service_, net_frame_.get_req_transport()))) {
@@ -878,7 +878,6 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
       MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObTenantCGReadInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-      MTL_BIND2(mtl_new_default, ObDecodeResourcePool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantDirectLoadMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObEmptyReadBucket::mtl_init, nullptr, nullptr, nullptr, ObEmptyReadBucket::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -912,7 +911,7 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (GCTX.is_shared_storage_mode() &&
-               OB_FAIL(OB_SERVER_DISK_SPACE_MGR.reload_config(config_))) {
+               OB_FAIL(OB_SERVER_DISK_SPACE_MGR.reload_hidden_sys_data_disk_config(config_))) {
       STORAGE_LOG(ERROR, "reload data disk size config failed", K(ret));
 #endif
     } else {

@@ -11,7 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_mysql_user_table.h"
-
+#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -82,7 +82,12 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                     break;
                   }
                   case (PASSWD): {
-                    cells[col_idx].set_varchar(user_info->get_passwd_str());
+                    ObString upper_passwd_str;
+                    if (OB_FAIL(ObCharset::toupper(ObCharset::get_default_collation(ObCharset::get_default_charset()), user_info->get_passwd_str(), upper_passwd_str, *allocator_))) {
+                      SERVER_LOG(WARN, "failed to upper password", K(ret));
+                    } else {
+                      cells[col_idx].set_varchar(upper_passwd_str);
+                    }
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
@@ -141,7 +146,7 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(CREATE_ROUTINE);
                   EXIST_PRIV_CASE(ALTER_ROUTINE);
                   EXIST_PRIV_CASE(CREATE_USER);
-                  NO_EXIST_PRIV_CASE(EVENT);
+                  EXIST_PRIV_CASE(EVENT);
                   EXIST_PRIV_CASE(TRIGGER);
                   EXIST_PRIV_CASE(CREATE_TABLESPACE);
                   EXIST_PRIV_CASE(CREATE_ROLE);

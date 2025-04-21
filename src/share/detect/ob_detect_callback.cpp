@@ -22,7 +22,7 @@ namespace common {
 DEFINE_ENUM_FUNC(DetectCallBackType, detect_callback_type, DETECT_CALLBACK_TYPE);
 
 ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
-    : ref_count_(0), d_node_()
+    : ref_count_(0), sequence_id_(0), executed_(false), d_node_()
 {
   int ret = OB_SUCCESS;
   peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));

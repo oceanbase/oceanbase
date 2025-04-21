@@ -160,11 +160,15 @@ public:
                              ObEvalCtx &ctx,
                              ObIAllocator &allocator,
                              ObIArrayType *&result);
-  static int calc_cast_type(ObExprResType &type, common::ObExprTypeCtx &type_ctx, const bool only_vector = false);
+  static int calc_cast_type(const ObExprOperatorType &expr_type, ObExprResType &type, common::ObExprTypeCtx &type_ctx, const bool only_vector = false);
   static int calc_cast_type2(const ObExprOperatorType &expr_type, ObExprResType &type1, ObExprResType &type2, common::ObExprTypeCtx &type_ctx, uint16_t &res_subschema_id,
                              const bool only_vector = false);
   static int collect_vector_cast_info(ObExprResType &type, ObExecContext &exec_ctx, ObVectorCastInfo &info);
-  static bool is_sparse_vector_supported(const ObExprOperatorType &type) { return type == T_FUN_SYS_INNER_PRODUCT || type == T_FUN_SYS_NEGATIVE_INNER_PRODUCT; };
+  static bool is_sparse_vector_supported(const ObExprOperatorType &type) {
+    return type == T_FUN_SYS_INNER_PRODUCT ||
+           type == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
+           type == T_FUN_SYS_VECTOR_DIMS;
+  };
 
   // update inplace
   static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);

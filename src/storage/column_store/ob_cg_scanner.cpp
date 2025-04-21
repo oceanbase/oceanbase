@@ -638,7 +638,7 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
       }
     }
   }
-  if (count > 0 && datum_infos_.count() > 0) {
+  if (!iter_param_->enable_pd_aggregate() && count > 0 && datum_infos_.count() > 0) {
     if (iter_param_->op_->enable_rich_format_) {
       LOG_DEBUG("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
                 "new format datums",
@@ -667,7 +667,6 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
     }
   }
 
-  int64_t row_cap = 0;
   while (OB_SUCC(ret) && count < batch_size) {
     if (count > 0) {
       micro_scanner_->reserve_reader_memory(true);
@@ -685,45 +684,47 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
           LOG_WARN("Fail to open data block", K(ret), K_(current));
         }
       }
-    } else if (OB_FAIL(convert_bitmap_to_cs_index(row_ids_,
-                                                  row_cap,
-                                                  current_,
-                                                  query_index_range_,
-                                                  prefetcher_.current_micro_info().get_row_range(),
-                                                  filter_bitmap_,
-                                                  batch_size - count,
-                                                  is_reverse_scan_))) {
-      LOG_WARN("Fail to get row ids", K(ret), K_(current), K_(query_index_range));
-    } else if (0 != row_cap && OB_FAIL(inner_fetch_rows(row_cap, datum_offset + count))) {
-      LOG_WARN("Fail to get next rows", K(ret));
-    } else {
-      count += row_cap;
-      if (OB_INVALID_CS_ROW_ID == current_) {
-        const ObCSRange &cs_range = prefetcher_.current_micro_info().get_row_range();
-        if (is_reverse_scan_) {
-          current_ = MAX(cs_range.start_row_id_, query_index_range_.start_row_id_) - 1;
-        } else {
-          current_ = MIN(cs_range.end_row_id_, query_index_range_.end_row_id_) + 1;
-        }
+    } else if (OB_FAIL(inner_fetch_rows(batch_size, count, datum_offset))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("Fail to fetch rows", K(ret), K(batch_size), K(count), K(datum_offset));
+      }
+    } else if (OB_INVALID_CS_ROW_ID == current_) {
+      const ObCSRange &cs_range = prefetcher_.current_micro_info().get_row_range();
+      if (is_reverse_scan_) {
+        current_ = MAX(cs_range.start_row_id_, query_index_range_.start_row_id_) - 1;
+      } else {
+        current_ = MIN(cs_range.end_row_id_, query_index_range_.end_row_id_) + 1;
       }
     }
   }
   return ret;
 }
 
-int ObCGRowScanner::inner_fetch_rows(const int64_t row_cap, const int64_t datum_offset)
+int ObCGRowScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
-                                            col_params_,
-                                            row_ids_,
-                                            cell_data_ptrs_,
-                                            row_cap,
-                                            datum_infos_,
-                                            datum_offset,
-                                            len_array_,
-                                            is_padding_mode_))) {
+  int64_t row_cap = 0;
+  if (OB_FAIL(convert_bitmap_to_cs_index(row_ids_,
+                                         row_cap,
+                                         current_,
+                                         query_index_range_,
+                                         prefetcher_.current_micro_info().get_row_range(),
+                                         filter_bitmap_,
+                                         batch_size - count,
+                                         is_reverse_scan_))) {
+    LOG_WARN("Fail to get row ids", K(ret), K_(current), K_(query_index_range));
+  } else if (0 != row_cap && OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
+                                                   col_params_,
+                                                   row_ids_,
+                                                   cell_data_ptrs_,
+                                                   row_cap,
+                                                   datum_infos_,
+                                                   datum_offset + count,
+                                                   len_array_,
+                                                   is_padding_mode_))) {
     LOG_WARN("Fail to get next rows", K(ret));
+  } else {
+    count += row_cap;
   }
   return ret;
 }

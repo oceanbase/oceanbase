@@ -924,6 +924,26 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to resolve hint", K(ret));
       }
     }
+
+    // check storage cache policy for partitioned table
+    // because we only know the if the table is partitioned table after resolve_table_options
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && is_mysql_mode) {
+      uint64_t tenant_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+        LOG_WARN("failed to get data version", K(ret));
+      } else if (tenant_version >= DATA_VERSION_4_3_5_2) {
+        ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+        if (!is_storage_cache_policy_default(table_schema.get_storage_cache_policy())) {
+          ObStorageCachePolicy storage_cache_policy;
+          if (OB_FAIL(storage_cache_policy.load_from_string(table_schema.get_storage_cache_policy()))) {
+            LOG_WARN("failed to load storage cache policy", K(ret));
+          } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, true/*has_partition_info*/))) {
+            LOG_WARN("failed to check storage cache policy", K(ret));
+          }
+        }
+      }
+    }
+
     if (OB_SUCC(ret)) {
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
       if (!table_schema.get_kv_attributes().empty() &&
@@ -2673,6 +2693,9 @@ int ObCreateTableResolver::set_index_option_to_arg()
     } else if (OB_FAIL(ob_write_string(*allocator_, comment_,
                                        index_arg_.index_option_.comment_))) {
       SQL_RESV_LOG(WARN, "set comment str failed", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_, storage_cache_policy_,
+                   index_arg_.index_option_.storage_cache_policy_))) {
+      SQL_RESV_LOG(WARN, "set storage cache policy failed", K(ret));
     } else {
       index_arg_.index_option_.parser_name_ = parser_name_;
       index_arg_.index_option_.parser_properties_ = parser_properties_;

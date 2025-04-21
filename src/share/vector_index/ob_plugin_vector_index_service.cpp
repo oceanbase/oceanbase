@@ -534,6 +534,12 @@ int ObPluginVectorIndexService::acquire_adapter_guard(ObLSID ls_id,
   } else if (OB_FAIL(ls_index_mgr->get_and_merge_adapter(ctx, allocator_, adapter_guard,
                                                          vec_index_param, dim))) {
     LOG_WARN("failed to get and merge adapter", K(ls_id), K(ctx), KR(ret));
+  } else {
+    share::ObPluginVectorIndexAdaptor* adaptor = adapter_guard.get_adatper();
+    if (OB_NOT_NULL(adaptor) && !adaptor->validate_tablet_ids(ctx)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("validate tablet ids failed", K(ret), K(ctx), K(adaptor));
+    }
   }
 
   return ret;

@@ -673,8 +673,16 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
       }
     } // end for
 
-    if (OB_SUCC(ret) && OB_FAIL(dst_map->init())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(dst_map->init())) {
       LOG_WARN("failed to init map", K(ret));
+    } else if (ob_obj_type_class(static_cast<ObObjType>(key_arr->get_element_type())) != ObStringTC) {
+      ObIArrayType *dst_distinct = NULL;
+      if (OB_FAIL(dst->distinct(alloc, dst_distinct))) {
+        LOG_WARN("get distinct failed", K(ret));
+      } else {
+        dst = dst_distinct;
+      }
     }
 
   }
@@ -910,6 +918,15 @@ int ObMapCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObColl
     LOG_WARN("array element cast failed", K(ret), K(src_value_type), K(dst_value_type));
   } else if (OB_FAIL(dst->init())) {
     LOG_WARN("destination map init failed", K(ret));
+  } else if (ob_obj_type_class(static_cast<ObObjType>(dst_key->get_element_type())) != ObStringTC
+             && ob_obj_type_class(static_cast<ObObjType>(src_key->get_element_type()))
+               != ob_obj_type_class(static_cast<ObObjType>(dst_key->get_element_type()))) {
+    ObIArrayType *dst_distinct = NULL;
+    if (OB_FAIL(dst->distinct(alloc, dst_distinct))) {
+      LOG_WARN("get distinct failed", K(ret));
+    } else {
+      dst = dst_distinct;
+    }
   }
   return ret;
 }

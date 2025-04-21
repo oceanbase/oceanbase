@@ -263,6 +263,7 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
 int ObHBaseModel::lock_rows(ObTableExecCtx &ctx, const ObTableLSOpRequest &req)
 {
   int ret = OB_SUCCESS;
+  ObHTableLockHandle *lock_handle = nullptr;
 
   if (OB_ISNULL(req.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -273,7 +274,6 @@ int ObHBaseModel::lock_rows(ObTableExecCtx &ctx, const ObTableLSOpRequest &req)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should only has one tablet op", K(ret), K(req.ls_op_->count()));
     } else {
-      ObHTableLockHandle *lock_handle = nullptr;
       const ObIArray<ObTableSingleOp> &ops = req.ls_op_->at(0).get_single_ops();
       if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(lock_handle))) {
         LOG_WARN("fail to get htable lock handle", K(ret));
@@ -286,6 +286,11 @@ int ObHBaseModel::lock_rows(ObTableExecCtx &ctx, const ObTableLSOpRequest &req)
         ctx.get_trans_param().lock_handle_ = lock_handle;
       }
     }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(lock_handle)) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle);
+    lock_handle = nullptr;
   }
 
   return ret;
@@ -305,6 +310,11 @@ int ObHBaseModel::lock_rows(ObTableExecCtx &ctx, const ObTableQueryAndMutateRequ
     LOG_WARN("fail to lock row", K(ret), K_(req.table_id), K(query));
   } else {
     ctx.get_trans_param().lock_handle_ = lock_handle;
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(lock_handle)) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle);
+    lock_handle = nullptr;
   }
 
   return ret;
@@ -839,6 +849,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                 }
                 ObString qualifier = cell.get_cell(ObHTableConstants::COL_IDX_Q).get_string(); // qualifier format: cf\0qualifier
                 ObString family = qualifier.split_on('\0'); // now, qualifier is only qualifier
+                cell.get_cell(ObHTableConstants::COL_IDX_Q).set_varbinary(qualifier);
                 ObString tablegroup = ctx.get_table_name();
                 ObSqlString real_table_name;
                 if (OB_FAIL(real_table_name.append(tablegroup))) {
@@ -857,11 +868,9 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                   ret = OB_TABLE_NOT_EXIST;
                   LOG_WARN("table not exist", K(ret), K(real_table_name));
                 } else {
-                  cell.get_cell(ObHTableConstants::COL_IDX_Q).set_varbinary(qualifier);
                   ObHbaseQuery new_query(queries.at(i)->get_query(), false);
                   // set real table id and invalid tablet id to avoid 4377
                   new_query.set_table_id(real_simple_schema->get_table_id());
-                  new_query.set_tablet_id(ObTabletID(ObTabletID::INVALID_TABLET_ID));
                   if (OB_FAIL(cf_service.del(new_query, cell, ctx))) {
                     LOG_WARN("failed to delete cell", K(ret), K(new_query), K(cell));
                   }
@@ -1058,7 +1067,9 @@ int ObHBaseModel::aggregate_scan_result(ObTableExecCtx &ctx,
       int64_t affected_rows = 0;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(one_result.get_row(new_row))) {
-          LOG_WARN("failed to get row", K(ret), K(one_result));
+          if (ret != OB_ARRAY_OUT_OF_RANGE) {
+            LOG_WARN("failed to get row", K(ret), K(one_result));
+          }
         } else if (OB_ISNULL(ctx.get_cb_allocator())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("callback allocator is null", K(ret));

@@ -215,6 +215,8 @@ int ObDBMSSchedTableOperator::_build_job_log_dml(
     }
     if (DATA_VERSION_SUPPORT_EXECUTE_DATE(data_version)) {
       OZ (dml.add_time_column("this_date", job_info.this_date_));
+      int64_t run_duration = (0 == err && job_info.this_date_ > 0) ? (now - job_info.this_date_) / (1000 * 1000) : 0;
+      OZ (dml.add_column("run_duration", run_duration));
       if (job_info.this_exec_date_ > 0) {
         OZ (dml.add_time_column("this_exec_date", job_info.this_exec_date_));
       } else {
@@ -482,6 +484,45 @@ int ObDBMSSchedTableOperator::update_for_kill(ObDBMSSchedJobInfo &job_info)
   return ret;
 }
 
+int ObDBMSSchedTableOperator::update_for_mysql_event_database_not_exist(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObSqlString sql1;
+  ObSqlString sql2;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+  bool need_record = true;
+  int64_t tenant_id = job_info.tenant_id_;
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+  OZ (_check_need_record(job_info, need_record, false));
+
+  if (OB_FAIL(ret)) {
+  } else {
+    OZ (_build_job_drop_dml(now, job_info, sql1));
+  }
+
+  if (OB_SUCC(ret) && need_record) {
+    OZ (_build_job_log_dml(now, job_info, 0, "database not exist, auto drop", sql2));
+  }
+
+  OZ (trans.start(sql_proxy_, tenant_id, true));
+  OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
+  if (OB_SUCC(ret) && need_record) {
+    OZ (trans.write(tenant_id, sql2.ptr(), affected_rows));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running)
 {
   int ret = OB_SUCCESS;
@@ -639,7 +680,6 @@ do {                                                                  \
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_addr", job_info_local.this_exec_addr_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_trace_id", job_info_local.this_exec_trace_id_);
   OZ (job_info.deep_copy(allocator, job_info_local));
-
   return ret;
 }
 

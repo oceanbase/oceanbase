@@ -47,8 +47,6 @@ public:
   virtual int del(const ObHbaseTableCells &table_cells, ObTableExecCtx &exec_ctx) override;
   virtual int query(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx, ObHbaseQueryResultIterator *&result_iter) override;
 private:
-  virtual int delete_cell(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx,
-                          const ObNewRow &cell, ObIHbaseAdapter &adapter) override;
   int delete_all_family(const ObITableEntity &del_cell, const ObString &table_group_name,
                         ObTableExecCtx &exec_ctx, const uint64_t table_id, const ObTabletID &tablet_id);
   int delete_family(const ObITableEntity &del_cell, const ObString &family_name,

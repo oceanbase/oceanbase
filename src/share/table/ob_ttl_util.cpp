@@ -1246,14 +1246,14 @@ int ObTTLUtil::get_tenant_table_ids(const uint64_t tenant_id, ObIArray<uint64_t>
   return ret;
 }
 
-int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
     if (!table_schema.get_ttl_definition().empty()) {
       is_ttl_table = true;
-    } else if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
+    } else if (OB_FAIL(check_is_htable_ttl_(table_schema, true/*allow_timeseries_table*/, is_ttl_table))) {
       LOG_WARN("fail to check is htable ttl", K(ret));
     } else if (!is_ttl_table && !table_schema.get_kv_attributes().empty()) {
       ObKVAttr kv_attr;  // for check validity
@@ -1267,19 +1267,19 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   return ret;
 }
 
-int ObTTLUtil::check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
-    if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
+    if (OB_FAIL(check_is_htable_ttl_(table_schema, false/*allow_timeseries_table*/, is_ttl_table))) {
       LOG_WARN("fail to check is htable ttl", K(ret));
     }
   }
   return ret;
 }
 
-int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
@@ -1287,7 +1287,8 @@ int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_
   table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
   if (OB_FAIL(table::ObHTableUtils::get_mode_type(table_schema, mode_type))) {
     LOG_WARN("fail to get mode type", KR(ret));
-  } else if (mode_type == table::ObHbaseModeType::OB_INVALID_MODE_TYPE) {
+  } else if (mode_type == table::ObHbaseModeType::OB_INVALID_MODE_TYPE ||
+            (!allow_timeseries_table && mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE)) {
     // do nothing
   } else if (OB_NOT_NULL(ttl_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL)) &&
              table::ObHTableConstants::TTL_CNAME_STR.case_compare(ttl_column->get_column_name()) == 0) {

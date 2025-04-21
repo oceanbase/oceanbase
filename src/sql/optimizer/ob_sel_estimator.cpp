@@ -377,6 +377,8 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
   const ObRawExpr *right_expr = NULL;
   const ObRawExpr *param_expr = NULL;
   bool contain_null = false;
+  bool use_hist = false;
+  double hist_density = 1.0;
   if (OB_UNLIKELY(2 != qual.get_param_count()) ||
       OB_ISNULL(left_expr = qual.get_param_expr(0)) ||
       OB_ISNULL(right_expr = qual.get_param_expr(1)) ||
@@ -398,9 +400,12 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
       LOG_WARN("failed to get column basic selectivity", K(ret));
     } else if (OB_FAIL(helper.init(table_metas, ctx, *col))) {
       LOG_WARN("failed to get histogram by column", K(ret));
+    } else {
+      use_hist = helper.is_valid();
+      hist_density = helper.get_density();
+      helper.set_not_eq(T_OP_NOT_IN == qual.get_expr_type());
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < right_expr->get_param_count(); ++i) {
-      // bool can_use_hist = false;
       bool get_value = false;
       if (OB_ISNULL(param_expr = right_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -413,7 +418,6 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
       }
       if (OB_SUCC(ret)) {
         if (helper.is_valid() && get_value) {
-          double null_sel = 0;
           helper.set_compare_value(expr_value);
           if (OB_HASH_EXIST == obj_set.exist_refactored(expr_value)) {
             // duplicate value, do nothing
@@ -431,6 +435,7 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
           } else {
             selectivity += distinct_sel;
           }
+          use_hist = false;
         } else if (OB_HASH_EXIST == obj_set.exist_refactored(expr_value)) {
           // do nothing
         } else if (OB_FAIL(obj_set.set_refactored(expr_value))) {
@@ -479,6 +484,9 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
         } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *cur_vars.at(0),
                                                                   &distinct_sel, &null_sel))) {
           LOG_WARN("failed to get column basic sel", K(ret));
+        } else if (use_hist) {
+          selectivity -= null_sel;
+          selectivity = std::max(hist_density, selectivity);
         } else if (distinct_sel > ((1.0 - null_sel) / 2.0)) {
           // ndv < 2
           // TODO: @yibo 这个refine过程不太理解
@@ -659,14 +667,20 @@ int ObEqualSelEstimator::get_ne_sel(const OptTableMetas &table_metas,
              (!l_expr.has_flag(CNT_COLUMN) && r_expr.has_flag(CNT_COLUMN))) {
     const ObRawExpr *cnt_col_expr = l_expr.has_flag(CNT_COLUMN) ? &l_expr : &r_expr;
     const ObRawExpr *const_expr = l_expr.has_flag(CNT_COLUMN) ? &r_expr : &l_expr;
-    ObSEArray<const ObColumnRefRawExpr *, 2> column_exprs;
-    bool only_monotonic_op = true;
     bool null_const = false;
     double ndv = 1.0;
     double nns = 0;
     ObHistEqualSelHelper helper;
     bool can_use_hist = false;
-    if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(cnt_col_expr))) {
+    if (OB_FAIL(ObOptEstUtils::if_expr_value_null(ctx.get_params(),
+                                                  *const_expr,
+                                                  ctx.get_opt_ctx().get_exec_ctx(),
+                                                  ctx.get_allocator(),
+                                                  null_const))) {
+      LOG_WARN("Failed to check whether expr null value", K(ret));
+    } else if (null_const) {
+      selectivity = 0.0;
+    } else if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(cnt_col_expr))) {
       LOG_WARN("failed to remove ignorable function", K(ret));
     } else if (cnt_col_expr->is_column_ref_expr()) {
       // column != const
@@ -680,41 +694,27 @@ int ObEqualSelEstimator::get_ne_sel(const OptTableMetas &table_metas,
         // Then use ndv instead of histogram
         can_use_hist = false;
         ret = OB_SUCCESS;
+      } else {
+        helper.set_not_eq(true);
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !null_const) {
       if (can_use_hist) {
         if (OB_FAIL(helper.get_sel(ctx, selectivity))) {
           LOG_WARN("Failed to get equal density", K(ret));
         } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *cnt_col_expr, NULL, &nns))) {
           LOG_WARN("failed to get column ndv and nns", K(ret));
         } else {
-          selectivity = (1.0 - selectivity) * nns;
+          selectivity = std::max(1.0 - selectivity, helper.get_density());
+          selectivity *= nns;
         }
-      } else if (OB_FAIL(ObOptEstUtils::extract_column_exprs_with_op_check(cnt_col_expr,
-                                                                           column_exprs,
-                                                                           only_monotonic_op))) {
-        LOG_WARN("failed to extract column exprs with op check", K(ret));
-      } else if (!only_monotonic_op || column_exprs.count() > 1) {
-        selectivity = DEFAULT_SEL; //cnt_col_expr contain not monotonic op OR has more than 1 var
-      } else if (OB_UNLIKELY(1 != column_exprs.count()) || OB_ISNULL(column_exprs.at(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected contain column expr", K(ret), K(*cnt_col_expr));
-      } else if (OB_FAIL(ObOptEstUtils::if_expr_value_null(ctx.get_params(),
-                                                          *const_expr,
-                                                          ctx.get_opt_ctx().get_exec_ctx(),
-                                                          ctx.get_allocator(),
-                                                          null_const))) {
-        LOG_WARN("Failed to check whether expr null value", K(ret));
-      } else if (null_const) {
-        selectivity = 0.0;
-      } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *column_exprs.at(0), &ndv, &nns))) {
-        LOG_WARN("failed to get column ndv and nns", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calc_expr_basic_info(table_metas, ctx, cnt_col_expr, &ndv, &nns))) {
+        LOG_WARN("failed to get expr ndv and nns", K(ret));
       } else if (ndv < 2.0) {
         //The reason doing this is similar as get_is_sel function.
         //If distinct_num is 1, As formula, selectivity of 'c1 != 1' would be 0.0.
         //But we don't know the distinct value, so just get the half selectivity.
-        selectivity = nns / ndv / 2.0;
+        selectivity = nns / std::max(1.0, ndv) / 2.0;
       } else {
         selectivity = nns * (1.0 - 1 / ndv);
       }

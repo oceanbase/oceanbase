@@ -457,6 +457,7 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
   ObCommonID raw_id;
   share::SCN current_scn;
   int64_t schema_version = 0;
@@ -467,8 +468,11 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   if (OB_ISNULL(schema_guard = execute_ctx_->exec_ctx_->get_sql_ctx()->schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard in exe ctx is nullptr", KR(ret));
-  } else if (OB_FAIL(schema_guard->get_schema_version(tenant_id, schema_version))) {
-    LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
     LOG_WARN("failed to gen unique id by rpc", KR(ret), K(tenant_id));
   } else if (OB_FAIL(share::ObLSAttrOperator::get_tenant_gts(tenant_id, current_scn))) {
@@ -476,11 +480,11 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
   } else {
-    ddl_param.schema_version_ = schema_version;
+    ddl_param.dest_table_id_ = table_id;
     ddl_param.task_id_ = raw_id.id();
+    ddl_param.schema_version_ = table_schema->get_schema_version();
     ddl_param.snapshot_version_ = current_scn.convert_to_ts();
     ddl_param.data_version_ = tenant_data_version;
-    ddl_param.dest_table_id_ = table_id;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     LOG_INFO("init ddl param for inc direct load succeed", K(ddl_param));
   }

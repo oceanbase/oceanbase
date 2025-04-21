@@ -173,7 +173,7 @@ private:
                               ObExpr *&distance_calc);
   void set_algo();
 
-  int get_ob_spiv_drop_ratio_search(double &drop_ratio);
+  int get_ob_sparse_drop_ratio_search(uint64_t &drop_ratio);
 
   int get_docid_from_rowkey_docid_table(ObString &docid);
   int get_vector_from_aux_data_table(ObString &vector);
@@ -198,11 +198,10 @@ private:
   int make_cursors(ObIAllocator &allocator, bool is_pre_filter, bool is_vectorized);
   int single_iter_get_next_row(ObIAllocator &allocator, const int64_t iter_idx, ObSPIVItem *&item, bool &is_iter_end, bool is_vectorized);
 
-  int quick_selection(uint32_t *keys, float *values, int l, int r, int k);
   int random_partition_by_key(uint32_t *keys, float *values, int l, int r);
   int random_partition_by_value(uint32_t *keys, float *values, int l, int r);
   void sort_by_key(uint32_t *keys, float *values, int l, int r);
-
+  void sort_by_value(uint32_t *keys, float *values, int l, int r);
 private:
   static const uint64_t MAX_SPIV_BRUTE_FORCE_SIZE = 20000;
   static const int64_t OB_DEFAULT_SPIV_SCAN_ITER_CNT = 16;

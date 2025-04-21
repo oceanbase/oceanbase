@@ -819,8 +819,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
         }
       }
     }
-    LOG_TRACE("[PUSHDOWN] micro block pushdown filter row", K(ret), K(col_params), K(pd_filter_info),
-              K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap.size()));
+    LOG_TRACE("[PUSHDOWN] micro block pushdown filter row", K(ret), K(has_lob_out_row), K(pd_filter_info),
+              K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap), KPC_(header));
   }
   return ret;
 }
@@ -892,7 +892,8 @@ int ObMicroBlockReader::filter_pushdown_truncate_filter(
         }
       }
     }
-    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(result_bitmap.popcnt()), K(result_bitmap.size()),
+    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(pd_filter_info),
+              K(result_bitmap.popcnt()), K(result_bitmap), KPC_(header),
               KPC(truncate_executor), K(filter));
   }
   return ret;

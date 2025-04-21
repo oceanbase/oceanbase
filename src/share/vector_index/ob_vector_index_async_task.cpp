@@ -39,6 +39,22 @@ int ObVecAsyncTaskExector::init(const uint64_t tenant_id, ObLS *ls)
   return ret;
 }
 
+bool ObVecAsyncTaskExector::check_operation_allow()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  bool bret = true;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    bret = false;
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
+    bret = false;
+    LOG_DEBUG("vector index async task can not work with data version less than 4_3_5_2", K(tenant_data_version));
+  }
+  return bret;
+}
+
 int ObVecAsyncTaskExector::get_index_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr)
 {
   int ret = OB_SUCCESS;
@@ -259,6 +275,7 @@ int ObVecAsyncTaskExector::resume_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", KR(ret));
+  } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else {
@@ -286,6 +303,7 @@ int ObVecAsyncTaskExector::start_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", K(ret));
+  } else if (!check_operation_allow()) { // skip
   } else if (OB_ISNULL(vector_index_service_) || OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), KP(vector_index_service_), KP(ls_));
@@ -362,6 +380,7 @@ int ObVecAsyncTaskExector::load_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", KR(ret));
+  } else if (!check_operation_allow()) { // skip
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else {

@@ -770,6 +770,7 @@ public:
     ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     VectorFormat fmt = aggr_info.param_exprs_.at(0)->get_format(eval_ctx);
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SumVector", common::ObCtxIds::WORK_AREA));
     if (OB_LIKELY(!is_null)) {
       if (not_nulls.at(agg_col_idx)) {
         // add single row is full lob no matter what VectorFormat is
@@ -778,7 +779,7 @@ public:
         if (!lob_comm->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected data", K(ret), K(*lob_comm));
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,
@@ -792,7 +793,7 @@ public:
           if (!agg_lob_comm->is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
-          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                   ObLongTextType,
                                                                   CS_TYPE_BINARY,
                                                                   true,
@@ -852,12 +853,13 @@ public:
     const char* param_payload = nullptr;
     int32_t param_len = 0;
     columns.get_payload(row_num, param_payload, param_len);
+    common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SumVector", common::ObCtxIds::WORK_AREA));
     if (not_nulls.at(agg_col_id)) {
       ObString array_data(param_len, param_payload);
       if (!ObCollectionExprUtil::is_compact_fmt_cell(param_payload)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexpected data format", K(ret));
-      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,
@@ -871,7 +873,7 @@ public:
         if (!agg_lob_comm->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,

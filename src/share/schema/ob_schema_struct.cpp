@@ -8570,6 +8570,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" DECRYPT,");
   }
+  if ((priv_set_ & OB_PRIV_EVENT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" EVENT,");
+  }
   if ((priv_set_ & OB_PRIV_CREATE_CATALOG) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" CREATE CATALOG,");
   }

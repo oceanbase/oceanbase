@@ -44,7 +44,7 @@ class ObTableLSExecuteP: public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRp
 
 public:
   explicit ObTableLSExecuteP(const ObGlobalContext &gctx);
-  virtual ~ObTableLSExecuteP();
+  virtual ~ObTableLSExecuteP() {};
   virtual int deserialize() override;
 
 protected:

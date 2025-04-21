@@ -131,11 +131,13 @@ public:
 
 private:
   static const uint64_t SF_BIT_IS_SHARED = 8;
-  static const uint64_t SF_BIT_RESERVED = 24;
+  static const uint64_t SF_BIT_IS_SPLIT_SSTABLE = 1;
+  static const uint64_t SF_BIT_RESERVED = 23;
   union {
     int32_t flag_;
     struct {;
       FLAG shared_flag_ : SF_BIT_IS_SHARED;
+      int32_t is_split_sstable_: SF_BIT_IS_SPLIT_SSTABLE;
       int32_t reserved_: SF_BIT_RESERVED;
     };
   };

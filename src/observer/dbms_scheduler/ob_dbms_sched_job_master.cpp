@@ -17,6 +17,7 @@
 
 #include "rootserver/ob_root_service.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#include "sql/session/ob_basic_session_info.h"
 #define TO_TS(second) (1000000L * second)
 #define IS_SPLIT_TENANT_DATA_VERSION ((GET_MIN_CLUSTER_VERSION() > MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0))
 namespace oceanbase
@@ -270,7 +271,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       } else {
         LOG_WARN("update for stop job", K(job_info));
       }
-    } else if (job_info.is_disabled() || job_info.is_broken()) {
+    } else if (job_info.is_disabled() || job_info.is_broken() || mysql_event_scheduler_is_off(job_info)) {
       free_job_key(job_key);
       job_key = NULL;
       LOG_INFO("free disable/broken job", K(job_info));
@@ -534,7 +535,7 @@ int ObDBMSSchedJobMaster::register_new_jobs(uint64_t tenant_id, bool is_oracle_t
   ObDBMSSchedJobInfo job_info;
   for (int64_t i = 0; OB_SUCC(ret) && i < job_infos.count(); i++) {
     job_info = job_infos.at(i);
-    if (job_info.valid() && !job_info.is_disabled() && !job_info.is_broken()) {
+    if (job_info.valid() && mysql_event_check_databse_exist(job_info) && !job_info.is_disabled() && !job_info.is_broken() && !mysql_event_scheduler_is_off(job_info)) {
       int tmp = alive_jobs_.exist_refactored(job_info.get_job_id());
       if (OB_HASH_EXIST == tmp) {
         // do nothing ...
@@ -660,6 +661,53 @@ bool ObDBMSSchedJobMaster::equal_job_key(const ObDBMSSchedJobKey *lhs, const ObD
   return lhs->get_tenant_id() == rhs->get_tenant_id() &&
          lhs->get_job_id() == rhs->get_job_id() &&
          lhs->get_execute_at() == rhs->get_execute_at();
+}
+
+bool ObDBMSSchedJobMaster::mysql_event_scheduler_is_off(ObDBMSSchedJobInfo &job_info) {
+  int ret = OB_SUCCESS;
+  bool mysql_event_scheduler_is_off = true;
+  if (job_info.is_mysql_event_job()) {
+    ObArenaAllocator alloc;
+    ObObj obj_val;
+    int64_t mysql_event_scheduler_value = 0;
+    if (OB_FAIL(sql::ObBasicSessionInfo::get_global_sys_variable(job_info.get_tenant_id(),
+                                                            alloc,
+                                                            ObDataTypeCastParams(),
+                                                            ObString(OB_SV_EVENT_SCHEDULER),
+                                                            obj_val))) {
+      LOG_WARN("failed to get global sys variable", K(ret), K(job_info.get_tenant_id()), K(OB_SV_EVENT_SCHEDULER), K(obj_val));
+    } else if (OB_FAIL(obj_val.get_int(mysql_event_scheduler_value))) {
+      LOG_WARN("failed to get bool", K(ret), K(obj_val));
+    } else if (0 != mysql_event_scheduler_value) {
+      mysql_event_scheduler_is_off = false;
+    }
+  } else {
+    mysql_event_scheduler_is_off = false;
+  }
+  return mysql_event_scheduler_is_off;
+}
+
+bool ObDBMSSchedJobMaster::mysql_event_check_databse_exist(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  bool mysql_databse_exist = true;
+  if (job_info.is_mysql_event_job()) {
+    if (schema_service_->is_tenant_refreshed(job_info.get_tenant_id())) {
+      ObSchemaGetterGuard schema_guard;
+      bool database_is_exist;
+      uint64_t owner_id = OB_INVALID_ID;
+      if (OB_FAIL(schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard))) {
+        LOG_WARN("get tenant schema guard failed", K(ret));
+      } else if (OB_FAIL(schema_guard.check_database_exist(
+        job_info.get_tenant_id(), job_info.get_cowner(), database_is_exist, &owner_id))) {
+        LOG_WARN("get database schema guard failed", K(ret));
+      } else if (!database_is_exist || (database_is_exist && owner_id != job_info.get_database_id())) {
+        mysql_databse_exist = false;
+        OZ(table_operator_.update_for_mysql_event_database_not_exist(job_info));
+      }
+    }
+  }
+  return mysql_databse_exist;
 }
 
 } // end for namespace dbms_scheduler

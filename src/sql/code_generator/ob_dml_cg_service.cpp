@@ -3654,7 +3654,11 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else {
       fk_column.obj_meta_ = column_schema->get_meta_type();
-      if (fk_column.obj_meta_.is_decimal_int()) {
+      if (fk_column.obj_meta_.is_lob_storage()) {
+        if (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+          fk_column.obj_meta_.set_has_lob_header();
+        }
+      } else if (fk_column.obj_meta_.is_decimal_int()) {
         fk_column.obj_meta_.set_stored_precision(column_schema->get_accuracy().get_precision());
         fk_column.obj_meta_.set_scale(column_schema->get_accuracy().get_scale());
       } else if (ob_is_double_tc(fk_column.obj_meta_.get_type())) {

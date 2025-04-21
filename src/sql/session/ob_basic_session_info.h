@@ -300,6 +300,12 @@ public:
     ~UserScopeGuard() { sql_scope_flags_.set_is_in_user_scope(false); }
     SqlScopeFlags &sql_scope_flags_;
   };
+  enum class ForceRichFormatStatus
+  {
+    Disable = 0,
+    FORCE_ON,
+    FORCE_OFF
+  };
   // 切换自治事务一定需要切换嵌套语句，否则切回主事务后语句执行的上下文信息可能已经有变化，比如：
   //
   // 所以原则上TransSavedValue应该包含StmtSavedValue的所有属性，考虑将前者作为后者的子类，
@@ -345,6 +351,7 @@ public:
     bool need_serial_exec_;
     int64_t cur_query_buf_len_;
     char *cur_query_;
+    ForceRichFormatStatus force_rich_format_status_;
   public:
     // 原TransSavedValue的属性
 //  transaction::ObTxDesc trans_desc_;   // 两者都有trans_desc，但执行操作完全不同，不放在基类中。
@@ -401,13 +408,6 @@ public:
     transaction::ObTxExecResult tx_result_;
     int64_t nested_count_;
     transaction::ObXATransID xid_;
-  };
-
-  enum class ForceRichFormatStatus
-  {
-    Disable = 0,
-    FORCE_ON,
-    FORCE_OFF
   };
 
 public:
@@ -578,6 +578,7 @@ public:
   int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const;
   int get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const;
   int get_ob_hnsw_extra_info_max_size(uint64_t &ob_hnsw_extra_info_max_size) const;
+  int get_ob_sparse_drop_ratio_search(uint64_t &ob_sparse_drop_ratio_search) const;
   int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}

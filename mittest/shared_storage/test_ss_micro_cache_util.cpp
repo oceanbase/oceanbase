@@ -270,7 +270,7 @@ TEST_F(TestSSMicroCacheUtil, test_parse_micro_ckpt_block)
   // 2. execute micro_meta_ckpt
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
-  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MICRO_META_CKPT_INTERVAL_ROUND - 2;
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MIN_MICRO_META_CKPT_INTERVAL_ROUND - 2;
   usleep(5 * 1000 * 1000);
   ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
   ASSERT_LT(0, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());

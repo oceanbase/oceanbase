@@ -81,7 +81,7 @@ int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEnti
 }
 
 int ObHSeriesAdapter::construct_query(ObTableExecCtx &ctx,
-                                      const ObTableEntity &entity,
+                                      const ObITableEntity &entity,
                                       ObTableQuery &table_query)
 {
   int ret = OB_SUCCESS;
@@ -92,31 +92,24 @@ int ObHSeriesAdapter::construct_query(ObTableExecCtx &ctx,
   table_query.set_limit(-1);
   table_query.set_offset(0);
   table_query.set_scan_order(common::ObQueryFlag::Forward);
-  const ObIArray<ObObj> &rowkey_objs = entity.get_rowkey_objs();
+  ObObj k_obj, t_obj;
   if (OB_ISNULL(start_obj = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else if (OB_ISNULL(end_obj = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for end_obj failed", K(ret));
-  } else if (rowkey_objs.count() < ObHTableConstants::HTABLE_ROWKEY_SIZE) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rowkey objs count is less than htable rowkey size", K(ret), K(rowkey_objs.count()));
-  } else if (OB_FAIL(ob_write_obj(allocator_,
-                                  rowkey_objs.at(ObHTableConstants::COL_IDX_K),
-                                  start_obj[ObHTableConstants::COL_IDX_K]))) {
+  } else if (OB_FAIL(entity.get_rowkey_value(ObHTableConstants::COL_IDX_K, k_obj))) {
+    LOG_WARN("fail to get rowkey", K(ret), K(entity));
+  } else if (OB_FAIL(entity.get_rowkey_value(ObHTableConstants::COL_IDX_T, t_obj))) {
+    LOG_WARN("fail to get rowkey", K(ret), K(entity));
+  } else if (OB_FAIL(ob_write_obj(allocator_, k_obj, start_obj[ObHTableConstants::COL_IDX_K]))) {
     LOG_WARN("fail to write start k obj", K(ret), K(entity));
-  } else if (OB_FAIL(ob_write_obj(allocator_,
-                                  rowkey_objs.at(ObHTableConstants::COL_IDX_T),
-                                  start_obj[ObHTableConstants::COL_IDX_SER_T]))) {
+  } else if (OB_FAIL(ob_write_obj(allocator_, t_obj, start_obj[ObHTableConstants::COL_IDX_SER_T]))) {
     LOG_WARN("fail to write start t obj", K(ret), K(entity));
-  } else if (OB_FAIL(ob_write_obj(allocator_,
-                                  rowkey_objs.at(ObHTableConstants::COL_IDX_K),
-                                  end_obj[ObHTableConstants::COL_IDX_K]))) {
+  } else if (OB_FAIL(ob_write_obj(allocator_, k_obj, end_obj[ObHTableConstants::COL_IDX_K]))) {
     LOG_WARN("fail to write end k obj", K(ret), K(entity));
-  } else if (OB_FAIL(ob_write_obj(allocator_,
-                                  rowkey_objs.at(ObHTableConstants::COL_IDX_T),
-                                  end_obj[ObHTableConstants::COL_IDX_SER_T]))) {
+  } else if (OB_FAIL(ob_write_obj(allocator_, t_obj, end_obj[ObHTableConstants::COL_IDX_SER_T]))) {
     LOG_WARN("fail to write end t obj", K(ret), K(entity));
   } else {
     start_obj[ObHTableConstants::COL_IDX_S].set_min_value();
@@ -133,7 +126,7 @@ int ObHSeriesAdapter::construct_query(ObTableExecCtx &ctx,
 }
 
 int ObHSeriesAdapter::get_query_iter(ObTableExecCtx &ctx,
-                                     const ObTableEntity &entity,
+                                     const ObITableEntity &entity,
                                      ObTableCtx &scan_ctx,
                                      ObTableApiRowIterator &tb_row_iter)
 {
@@ -144,6 +137,7 @@ int ObHSeriesAdapter::get_query_iter(ObTableExecCtx &ctx,
       LOG_WARN("fail to construct query", K(ret), K(ctx), K(entity));
     } else if (OB_FAIL(init_scan(ctx, table_query, scan_ctx))) {
       LOG_WARN("fail to init scan table ctx", K(ret));
+    } else if (FALSE_IT(scan_ctx.set_batch_tablet_ids(&table_query.get_tablet_ids()))) {
     } else if (OB_FAIL(ObTableApiService::query(scan_ctx, tb_row_iter))) {
       LOG_WARN("fail to query in hbase series adapter", K(ret), K(table_query));
     } else if (OB_FAIL(tb_row_iter.open())) {
@@ -162,19 +156,16 @@ int ObHSeriesAdapter::del_and_insert(ObIAllocator &alloc,
   int ret = OB_SUCCESS;
   // 1. delete
   ObTableEntity del_entity;
-  ObSEArray<ObITableEntity*, 1> cells;
-  cells.set_attr(ObMemAttr(MTL_ID(), "SerDelCells"));
+  ObTableOperationResult result;
   if (OB_FAIL(ObHTableUtils::construct_entity_from_row(json_cell, *del_ctx.get_schema_cache_guard(), del_entity))) {
     LOG_WARN("fail to construct entity from row", K(ret), K(del_entity), K(json_cell));
-  } else if (OB_FAIL(cells.push_back(&del_entity))) {
-    LOG_WARN("fail to push back del entity", K(ret));
-  } else if (OB_FAIL(ObTableApiService::multi_delete(del_ctx, cells))) {
+  } else if (OB_FAIL(ObTableApiService::del(del_ctx, del_entity, result))) {
     LOG_WARN("fail to del in hbase series adapter", K(ret), K(json_cell));
   } else if (json_node.element_count() != 0) {
     // 2. construct new entity
     // 注意，如果删除这个q，没有其他node的话，就不需要insert了
     ObObj value_obj;
-    ObTableOperationResult result;
+    result.reset();
     ObTableEntity series_cell;
     if (OB_FAIL(add_series_rowkey(series_cell,
                                   json_cell.get_cell(ObHTableConstants::COL_IDX_K),
@@ -192,86 +183,88 @@ int ObHSeriesAdapter::del_and_insert(ObIAllocator &alloc,
   return ret;
 }
 
-int ObHSeriesAdapter::del(ObTableExecCtx &ctx, const ObTabletID &tablet_id, const ObNewRow &cell)
+int ObHSeriesAdapter::del(ObTableExecCtx &ctx, const ObITableEntity &cell)
 {
   int ret = OB_SUCCESS;
-  ObTableEntity entity;
-  entity.set_tablet_id(tablet_id);
-  if (OB_FAIL(ObHTableUtils::construct_entity_from_row(cell, ctx.get_schema_cache_guard(), entity))) {
-    LOG_WARN("fail to construct entity from row", K(ret), K(ctx), K(cell));
+  ObTableCtx *scan_ctx = nullptr;
+  ObTableCtx *del_ctx = nullptr;
+  ObTableCtx *ins_ctx = nullptr;
+  ObTableApiRowIterator tb_row_iter;
+  if (OB_ISNULL(scan_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new scan table ctx", K(ret));
+  } else if (OB_ISNULL(del_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new del table ctx", K(ret));
+  } else if (OB_ISNULL(ins_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new insert table ctx", K(ret));
+  } else if (OB_FAIL(init_table_ctx(ctx, cell, ObTableOperationType::DEL, *del_ctx))) {
+    LOG_WARN("fail to init del table ctx", K(ret));
+  } else if (FALSE_IT(del_ctx->set_skip_scan(true))) {
+  } else if (OB_FAIL(init_table_ctx(ctx, cell, ObTableOperationType::INSERT_OR_UPDATE, *ins_ctx))) {
+    LOG_WARN("fail to init insert table ctx", K(ret));
+  } else if (OB_FAIL(get_query_iter(ctx, cell, *scan_ctx, tb_row_iter))) {
+    LOG_WARN("fail to get table query iter", K(ret), KPC(scan_ctx));
   } else {
-    ObTableCtx *scan_ctx = nullptr;
-    ObTableCtx *del_ctx = nullptr;
-    ObTableCtx *ins_ctx = nullptr;
-    ObTableApiRowIterator tb_row_iter;
-    if (OB_ISNULL(scan_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new scan table ctx", K(ret));
-    } else if (OB_ISNULL(del_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new del table ctx", K(ret));
-    } else if (OB_ISNULL(ins_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new insert table ctx", K(ret));
-    } else if (OB_FAIL(init_table_ctx(ctx, entity, ObTableOperationType::DEL, *del_ctx))) {
-      LOG_WARN("fail to init del table ctx", K(ret));
-    } else if (FALSE_IT(del_ctx->set_skip_scan(true))) {
-    } else if (OB_FAIL(init_table_ctx(ctx, entity, ObTableOperationType::INSERT_OR_UPDATE, *ins_ctx))) {
-      LOG_WARN("fail to init insert table ctx", K(ret));
-    } else if (OB_FAIL(get_query_iter(ctx, entity, *scan_ctx, tb_row_iter))) {
-      LOG_WARN("fail to get table query iter", K(ret), KPC(scan_ctx));
-    } else {
-      ObNewRow *json_cell = nullptr;
-      ObArenaAllocator alloc("SerAdapTreAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      while (OB_SUCC(ret) && OB_SUCC(tb_row_iter.get_next_row(json_cell))) {
-        if (OB_ISNULL(json_cell) || json_cell->get_count() < 4) {
+    ObNewRow *json_cell = nullptr;
+    ObObj qualifier_obj;
+    ObArenaAllocator alloc("SerAdapTreAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    while (OB_SUCC(ret) && OB_SUCC(tb_row_iter.get_next_row(json_cell))) {
+      if (OB_ISNULL(json_cell) || json_cell->get_count() < 4) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("json cell is null or less than 4", K(ret), KPC(json_cell));
+      } else if (cell.get_rowkey_value(ObHTableConstants::COL_IDX_Q, qualifier_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get qualifier", K(ret), K(json_cell));
+      } else {
+        const ObString &qualifier = qualifier_obj.get_varchar();
+        ObObj &json_obj = json_cell->get_cell(ObHTableConstants::COL_IDX_V);
+        if (!json_obj.has_lob_header() || !is_lob_storage(json_obj.get_type())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("json cell is null or less than 4", K(ret), KPC(json_cell));
+          LOG_WARN("json obj is not lob", K(ret), K(json_obj));
+        } else if (OB_FAIL(ObTableCtx::read_real_lob(alloc, json_obj))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to read real lob", K(ret), K(json_obj));
         } else {
-          const ObString &qualifier = cell.get_cell(ObHTableConstants::COL_IDX_Q).get_varchar();
-          ObObj &json_obj = json_cell->get_cell(ObHTableConstants::COL_IDX_V);
-          if (!json_obj.has_lob_header() || !is_lob_storage(json_obj.get_type())) {
+          ObJsonBin bin(json_obj.get_string_ptr(), json_obj.get_val_len(), &alloc);
+          ObJsonNode *json_tree = NULL;
+          uint64_t origin_count = 0;
+          if (OB_FAIL(bin.reset_iter())) {
+            LOG_WARN("fail to reset iter", K(ret), K(json_obj));
+          } else if (OB_FAIL(bin.to_tree(json_tree))) {
+            LOG_WARN("fail to to tree", K(ret), K(json_obj));
+          } else if (OB_ISNULL(json_tree)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("json obj is not lob", K(ret), K(json_obj));
-          } else if (OB_FAIL(ObTableCtx::read_real_lob(alloc, json_obj))) {
+            LOG_WARN("json tree is null", K(ret), K(json_obj));
+          } else if (FALSE_IT(origin_count = json_tree->element_count())) {
+          } else if (origin_count == 0) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail to read real lob", K(ret), K(json_obj));
-          } else {
-            ObJsonBin bin(json_obj.get_string_ptr(), json_obj.get_val_len(), &alloc);
-            ObJsonNode *json_tree = NULL;
-            uint64_t origin_count = 0;
-            if (OB_FAIL(bin.reset_iter())) {
-              LOG_WARN("fail to reset iter", K(ret), K(json_obj));
-            } else if (OB_FAIL(bin.to_tree(json_tree))) {
-              LOG_WARN("fail to to tree", K(ret), K(json_obj));
-            } else if (OB_ISNULL(json_tree)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("json tree is null", K(ret), K(json_obj));
-            } else if (FALSE_IT(origin_count = json_tree->element_count())) {
-            } else if (origin_count == 0) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("series value origin count is 0", K(ret), K(json_obj));
-            } else if (OB_FAIL(json_tree->object_remove(qualifier))) {
-              LOG_WARN("fail to remove", K(ret), K(qualifier));
-            } else if (json_tree->element_count() != origin_count) {
-              if (OB_FAIL(del_and_insert(alloc, *json_tree, *del_ctx, *ins_ctx, *json_cell))) {
-                LOG_WARN("fail to del and insert", K(ret), K(qualifier));
-              }
+            LOG_WARN("series value origin count is 0", K(ret), K(json_obj));
+          } else if (OB_FAIL(json_tree->object_remove(qualifier))) {
+            LOG_WARN("fail to remove", K(ret), K(qualifier));
+          } else if (json_tree->element_count() != origin_count) {
+            if (OB_FAIL(del_and_insert(alloc, *json_tree, *del_ctx, *ins_ctx, *json_cell))) {
+              LOG_WARN("fail to del and insert", K(ret), K(qualifier));
             }
-            OB_DELETEx(ObJsonNode, &alloc, json_tree);
           }
+          OB_DELETEx(ObJsonNode, &alloc, json_tree);
         }
-        json_cell = nullptr;
-        alloc.reuse();
       }
-      if (ret == OB_ITER_END) {
-        ret = OB_SUCCESS; // ret overwrite
-      }
+      json_cell = nullptr;
+      alloc.reuse();
     }
-    OB_DELETEx(ObTableCtx, &allocator_, scan_ctx);
-    OB_DELETEx(ObTableCtx, &allocator_, del_ctx);
-    OB_DELETEx(ObTableCtx, &allocator_, ins_ctx);
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;  // ret overwrite
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("fail to get next row", K(ret), KPC(scan_ctx));
+    }
   }
+  tb_row_iter.close();
+  OB_DELETEx(ObTableCtx, &allocator_, scan_ctx);
+  OB_DELETEx(ObTableCtx, &allocator_, del_ctx);
+  OB_DELETEx(ObTableCtx, &allocator_, ins_ctx);
+
   return ret;
 }
 

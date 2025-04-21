@@ -428,6 +428,7 @@ public:
   bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }
   void refresh_sys_stat();
+  bool contain_extreme_tablet() const { return extreme_tablet_cnt_ > 0; }
 private:
   class TabletStatUpdater : public common::ObTimerTask
   {
@@ -475,6 +476,7 @@ private:
   uint64_t report_cursor_;
   uint64_t pending_cursor_;
   int report_tg_id_;
+  int64_t extreme_tablet_cnt_;
   bool is_inited_;
 };
 

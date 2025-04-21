@@ -42,10 +42,10 @@ WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "schedule_queu
 WAIT_EVENT_DEF(MEMSTORE_MEM_PAGE_ALLOC_WAIT, 11015, "memstore memory page alloc wait", "cur_mem_hold", "sleep_interval", "cur_ts", CONFIGURATION, false, true)
 WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
 WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, true)
-WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, true)
-WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "fd", "offset", "size", USER_IO, true, true)
-WAIT_EVENT_DEF(TMP_FILE_READ, 11021, "tmp file read", "fd", "offset", "size", USER_IO, true, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_READ, 11021, "tmp file read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, true, true)
 
 // SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)

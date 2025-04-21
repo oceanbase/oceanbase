@@ -56,7 +56,7 @@ class Thread {
 public:
   friend class ObPThread;
   static constexpr int PATH_SIZE = 128;
-  Thread(Threads *threads, int64_t idx, int64_t stack_size);
+  Thread(Threads *threads, int64_t idx, int64_t stack_size, int32_t numa_node = OB_NUMA_SHARED_INDEX);
   ~Thread();
 
   int start();
@@ -194,6 +194,7 @@ private:
   ThreadListNode thread_list_node_;
   int64_t cpu_time_;
   int create_ret_;
+  int32_t numa_node_;
 };
 
 OB_INLINE bool Thread::has_set_stop() const

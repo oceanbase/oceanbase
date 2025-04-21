@@ -41,7 +41,7 @@ public:
   ObExprUDFInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
       subprogram_path_(alloc), params_type_(alloc), params_desc_(alloc), nocopy_params_(alloc),
-      dblink_id_(OB_INVALID_ID)
+      dblink_id_(OB_INVALID_ID), is_result_cache_(false), is_deterministic_(false)
   {
   }
 
@@ -64,6 +64,8 @@ public:
   bool is_udt_cons_;
   bool is_called_in_sql_;
   uint64_t dblink_id_;
+  bool is_result_cache_;
+  bool is_deterministic_;
 };
 class ObSqlCtx;
 class ObUDFParamDesc;

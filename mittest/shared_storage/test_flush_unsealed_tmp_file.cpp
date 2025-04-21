@@ -201,7 +201,7 @@ TEST_F(TestFlushUnsealedFile, find_unsealed_tmp_file_to_flush)
     ASSERT_TRUE(meta_handle.get_tmpfile_meta()->is_valid());
     meta_handle.get_tmpfile_meta()->append_timestamp_us_ = cur_timestamp_us - 2 * ObSegmentFileManager::UNSEALED_TMP_FILE_FLUSH_THRESHOLD;
   }
-  const int64_t tmp_file_write_reserved_size = disk_space_mgr->tmp_file_write_cache_reserved_size_ + 100;
+  const int64_t tmp_file_write_reserved_size = disk_space_mgr->all_disk_cache_info_.tmp_file_write_cache_.reserved_size_ + 100;
   // when tmp_file_write_cache_alloc_size exceed reserved_size 5%, can flush unsealed tmp file to object storage
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(tmp_file_write_reserved_size, ObStorageObjectType::TMP_FILE, false/*is_read_cache*/));
   // test_find_unsealed_tmp_file_to_flush

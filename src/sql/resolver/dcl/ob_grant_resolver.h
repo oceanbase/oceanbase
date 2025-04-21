@@ -382,6 +382,11 @@ int ObGrantResolver::resolve_priv_object(const ParseNode *priv_object_node,
           ret = OB_SUCCESS;
         }
       } else {
+        if (is_proc) {
+          object_type = ObObjectType::PROCEDURE;
+        } else {
+          object_type = ObObjectType::FUNCTION;
+        }
         object_id = routine_id;
       }
     } else if (priv_object_node->value_ == 4) {

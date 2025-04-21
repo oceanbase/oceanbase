@@ -32,7 +32,7 @@ static int datum_to_json(ObJsonNode &base_node, const ObDatum &datum)
   switch (node_type) {
     case ObJsonNodeType::J_DECIMAL: {
       ObJsonDecimal& node = static_cast<ObJsonDecimal&>(base_node);
-      node.set_value(number::ObNumber(datum.get_number()));
+      node.set_value(datum.get_number());
       break;
     }
     case ObJsonNodeType::J_INT:
@@ -397,6 +397,22 @@ int ObJsonDataFlatter::add_spare_col(const ObFlatJson &flat_json, const ObSemiSt
     node = &ObSemiStructScalar::null_;
   } else if (OB_FAIL(ObJsonBaseFactory::alloc_node(spare_data_allocator_, flat_json.json_type(), node))) {
     LOG_WARN("alloc node fail", K(ret), K(flat_json));
+  } else if (flat_json.json_type() == ObJsonNodeType::J_OBJECT || flat_json.json_type() == ObJsonNodeType::J_ARRAY){
+    if(! flat_json.get_value().is_null()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("should be empty object/array", K(ret), K(flat_json));
+    }
+  } else if (flat_json.json_type() == ObJsonNodeType::J_DECIMAL) {
+    ObJsonDecimal& decimal_node = static_cast<ObJsonDecimal&>(*node);
+    ObDatum datum;
+    // decimal has special binary format, need deep copy to avoid random memory
+    if (OB_FAIL(datum.deep_copy(flat_json.get_value(), *allocator_))) {
+      LOG_WARN("deep copy fail", K(ret), K(flat_json));
+    } else {
+      decimal_node.set_value(datum.get_number());
+      decimal_node.set_precision(flat_json.get_precision());
+      decimal_node.set_scale(flat_json.get_scale());
+    }
   } else if (OB_FAIL(datum_to_json(*node, flat_json.get_value()))) {
     LOG_WARN("set datum to json node fail", K(ret), K(flat_json));
   }
@@ -445,8 +461,6 @@ int ObJsonSchemaFlatter::visit(const ObString& data)
 int ObJsonSchemaFlatter::add(const ObFlatJson &flat_json)
 {
   int ret = OB_SUCCESS;
-  const ObJsonNodeType j_type = flat_json.json_type();
-  const ObDatum& datum = flat_json.get_value();
   if (OB_FAIL(tmp_sub_schema_.add_column(flat_json))) {
     LOG_WARN("add sub column fail", K(ret), K(flat_json));
   }
@@ -465,37 +479,53 @@ int ObJsonSchemaFlatter::build_sub_schema(ObSemiStructSubSchema &result) const
 int64_t ObSemiStructSubColumn::get_encode_size() const
 {
   int64_t len = 0;
-  len += path_.get_encode_size();
-  OB_UNIS_ADD_LEN(json_type_);
-  OB_UNIS_ADD_LEN(obj_type_);
-  OB_UNIS_ADD_LEN(sub_col_id_);
   OB_UNIS_ADD_LEN(flags_);
+  OB_UNIS_ADD_LEN(json_type_);
+  if (store_obj_meta_) {
+    OB_UNIS_ADD_LEN(obj_meta_);
+  } else {
+    OB_UNIS_ADD_LEN(obj_meta_.get_type());
+  }
+  OB_UNIS_ADD_LEN(sub_col_id_);
+  len += path_.get_encode_size();
   return len;
 }
 
 int ObSemiStructSubColumn::encode(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(path_.encode(buf, buf_len, pos))) {
+  OB_UNIS_ENCODE(flags_);
+  OB_UNIS_ENCODE(json_type_);
+  if (OB_FAIL(ret)) {
+  } else if (store_obj_meta_) {
+    OB_UNIS_ENCODE(obj_meta_);
+  } else {
+    OB_UNIS_ENCODE(obj_meta_.get_type());
+  }
+  OB_UNIS_ENCODE(sub_col_id_);
+  if (OB_SUCC(ret) && OB_FAIL(path_.encode(buf, buf_len, pos))) {
     LOG_WARN("encode sub column fail", K(ret), K(pos), K(buf_len));
   }
-  OB_UNIS_ENCODE(json_type_);
-  OB_UNIS_ENCODE(obj_type_);
-  OB_UNIS_ENCODE(sub_col_id_);
-  OB_UNIS_ENCODE(flags_);
   return ret;
 }
 
 int ObSemiStructSubColumn::decode(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(path_.decode(buf, data_len, pos))) {
+  OB_UNIS_DECODE(flags_);
+  OB_UNIS_DECODE(json_type_);
+  if (OB_FAIL(ret)) {
+  } else if (store_obj_meta_) {
+    OB_UNIS_DECODE(obj_meta_);
+  } else {
+    ObObjType type = ObNullType;
+    OB_UNIS_DECODE(type);
+    if (OB_SUCC(ret)) obj_meta_.set_type_simple(type);
+  }
+  OB_UNIS_DECODE(sub_col_id_);
+  if (OB_SUCC(ret) && OB_FAIL(path_.decode(buf, data_len, pos))) {
     LOG_WARN("decode sub column fail", K(ret), K(pos), K(data_len));
   }
-  OB_UNIS_DECODE(json_type_);
-  OB_UNIS_DECODE(obj_type_);
-  OB_UNIS_DECODE(sub_col_id_);
-  OB_UNIS_DECODE(flags_);
   return ret;
 }
 
@@ -506,7 +536,7 @@ int ObSemiStructSubColumn::init(const share::ObSubColumnPath& path, const ObJson
     LOG_WARN("assign path item fail", K(ret));
   } else {
     json_type_ = json_type;
-    obj_type_ = obj_type;
+    obj_meta_.set_type_simple(obj_type);
     sub_col_id_ = sub_col_id;
   }
   return ret;
@@ -519,7 +549,7 @@ int ObSemiStructSubColumn::deep_copy(ObIAllocator& allocator, const ObSemiStruct
     LOG_WARN("deep_copy path fail", K(ret), K(other));
   } else {
     json_type_ = other.json_type_;
-    obj_type_ = other.obj_type_;
+    obj_meta_ = other.obj_meta_;
     sub_col_id_ = other.sub_col_id_;
     flags_ = other.flags_;
   }
@@ -881,6 +911,8 @@ int ObSimpleSubSchema::add_column(const ObFlatJson &flat_json)
     LOG_WARN("init sub column fail", K(ret), K(path));
   } else if (OB_FAIL(columns_.push_back(ObSimpleSubColumn(sub_column, 1/*cnt*/)))) {
     LOG_WARN("push back sub column fail", K(ret));
+  } else if (ObJsonNodeType::J_DECIMAL == json_type) {
+    sub_column->set_precision_and_scale(flat_json.get_precision(), flat_json.get_scale());
   } else if (ObJsonNodeType::J_STRING == json_type) {
     columns_.get_last().min_len_ = datum.len_;
     columns_.get_last().max_len_ = datum.len_;
@@ -982,17 +1014,17 @@ int ObSimpleSubSchema::build_freq_and_spare_cols(ObIAllocator &allocator, ObIArr
     ObList<ObSimpleSubColumn, ObIAllocator>::const_iterator iter = columns_.begin();
     while(OB_SUCC(ret) && iter != columns_.end()) {
       const ObSimpleSubColumn& sub_column = *iter;
-      const bool is_spare = need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_);
+      const bool need_as_spare = need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_);
       if (OB_ISNULL(sub_column.col_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_column is null", K(ret), K(columns_));
       } else if (sub_column.cnt_ > row_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_column cnt is incorrect", K(ret), K(sub_column), K(row_cnt), K(columns_));
-      } else if (is_spare || sub_column.col_->has_different_type()) {
+      } else if (need_as_spare || sub_column.col_->is_spare() || sub_column.col_->has_different_type()) {
         // spare column
-        LOG_DEBUG("spare sub column", K(sub_column), K(row_cnt), K(is_spare), K(freq_col_threshold_));
-        if (is_spare) sub_column.col_->set_is_spare();
+        LOG_DEBUG("spare sub column", K(sub_column), K(row_cnt), K(need_as_spare), K(freq_col_threshold_));
+        if (need_as_spare) sub_column.col_->set_is_spare();
         if (OB_FAIL(spare_cols.push_back(ObSemiStructSubColumn()))) {
           LOG_WARN("push back fail", K(ret), "size", spare_cols.count(), K(*iter));
         } else if (OB_FAIL(spare_cols.at(spare_cols.count()-1).deep_copy(allocator, *sub_column.col_))) {
@@ -1128,6 +1160,11 @@ int ObSimpleSubSchema::encode_column_path_with_dict(ObSubSchemaKeyDict &key_dict
   return ret;
 }
 
+static bool is_different_number_type(const ObObjMeta& left, const ObObjMeta& right)
+{
+  return left.get_stored_precision() != right.get_stored_precision() || left.get_scale() != right.get_scale();
+}
+
 int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
 {
   int ret = OB_SUCCESS;
@@ -1169,10 +1206,20 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
       }
     } else if (cmp < 0) {
       ++left_iter;
+    } else if (left_sub_column.col_->has_different_type()) {
+      if (left_sub_column.get_obj_type() != ObJsonType) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("heterogeneous column type is not json", K(left_sub_column));
+      } else {
+        left_sub_column.cnt_++;
+        ++left_iter;
+        ++right_iter;
+      }
     } else if (left_sub_column.get_obj_type() != ObNullType
         && right_sub_column.get_obj_type()!= ObNullType
-        && left_sub_column.get_obj_type() != right_sub_column.get_obj_type()) {
-      LOG_DEBUG("same sub column path, but type is not same", K(ret), K(left_sub_column), K(right_sub_column));
+        && (left_sub_column.get_obj_type() != right_sub_column.get_obj_type()
+            || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(left_sub_column.col_->get_obj_meta(), right_sub_column.col_->get_obj_meta())))) {
+      LOG_DEBUG("same sub column path, but type is not same", K(left_sub_column), K(right_sub_column));
       left_sub_column.col_->set_obj_type(ObJsonType);
       left_sub_column.col_->set_has_different_type();
       left_sub_column.cnt_++;
@@ -1185,6 +1232,9 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
         LOG_DEBUG("update sub column type", K(left_sub_column), K(right_sub_column));
         left_sub_column.col_->set_json_type(right_sub_column.get_json_type());
         left_sub_column.col_->set_obj_type(right_sub_column.get_obj_type());
+      }
+      if (left_sub_column.col_->get_obj_type() == ObJsonType) {
+        left_sub_column.col_->set_is_spare();
       }
       left_sub_column.cnt_++;
       left_sub_column.min_len_ = OB_MIN(left_sub_column.min_len_, right_sub_column.min_len_);
@@ -1432,13 +1482,17 @@ int64_t ObSemiStructScalar::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObSemiStructScalar::init()
+int ObSemiStructScalar::init(const ObSemiStructSubColumn& sub_column)
 {
   int ret = OB_SUCCESS;
   if (obj_type_ == ObJsonType) {
 
   } else if (OB_FAIL(ObJsonBaseFactory::alloc_node(*allocator_, json_type_, json_node_))) {
     LOG_WARN("alloc node fail", K(ret), K(json_type_));
+  } else if (ObJsonNodeType::J_DECIMAL == json_type_) {
+    ObJsonDecimal& decimal = static_cast<ObJsonDecimal&>(*json_node_);
+    decimal.set_precision(sub_column.get_obj_meta().get_stored_precision());
+    decimal.set_scale(sub_column.get_obj_meta().get_scale());
   }
   return ret;
 }
@@ -1734,14 +1788,16 @@ int ObJsonReassembler::alloc_container_node(const share::ObSubColumnPathItem& it
   return ret;
 }
 
-int ObJsonReassembler::alloc_scalar_json_node(const ObObjType &obj_type, const ObJsonNodeType &json_type, ObIJsonBase *&node)
+int ObJsonReassembler::alloc_scalar_json_node(const ObSemiStructSubColumn& sub_column, ObIJsonBase *&node)
 {
   int ret = OB_SUCCESS;
   ObSemiStructScalar *scalar = nullptr;
+  const ObObjType obj_type = sub_column.get_obj_type();
+  const ObJsonNodeType json_type = sub_column.get_json_type();
   if (OB_ISNULL(scalar = OB_NEWx(ObSemiStructScalar, &allocator_, &allocator_, obj_type, json_type))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc fail", K(ret), "size", sizeof(ObSemiStructScalar));
-  } else if (OB_FAIL(scalar->init())) {
+  } else if (OB_FAIL(scalar->init(sub_column))) {
     LOG_WARN("init semistruct scalar node fail", K(ret), K(obj_type), K(json_type), KPC(scalar));
   } else {
     node = scalar;
@@ -1789,7 +1845,7 @@ int ObJsonReassembler::reassemble(const int start, const int end, const int dept
     if (current == nullptr && OB_FAIL(alloc_container_node(path_item, child_cnt, current))) {
       LOG_WARN("alloc node fail", K(ret), K(path_item));
     } else if (depth + 1 == sub_cloumn_path.get_path_item_count()) {
-      if (OB_FAIL(alloc_scalar_json_node(sub_column.get_obj_type(), sub_column.get_json_type() , child))) {
+      if (OB_FAIL(alloc_scalar_json_node(sub_column, child))) {
         LOG_WARN("alloc node fail", K(ret), K(path_item));
       } else if (sub_column.is_spare() || sub_column.has_different_type()) {
         if (OB_FAIL(spare_leaves_.push_back((ObSemiStructScalar*)child))) {
@@ -2365,6 +2421,14 @@ int ObJsonBinVisitor::visit_object(ObFlatJson &flat_json)
   int ret = OB_SUCCESS;
   if (OB_FAIL(deserialize_bin_header())) {
     LOG_WARN("init meta fail", K(ret));
+  } else if (meta_.element_count() == 0) {
+    datum_.reuse();
+    datum_.set_null();
+    if (OB_FAIL(flat_json.set_value(ObJsonNodeType::J_OBJECT, ObJsonType, datum_))) {
+      LOG_WARN("set value to flat json fail", K(ret));
+    } else if (OB_FAIL(add(flat_json))) {
+      LOG_WARN("handle fail", K(ret), K(flat_json));
+    }
   } else {
     const int64_t cur_pos = pos_;
     const ObJsonBinMeta cur_meta = meta_;
@@ -2404,6 +2468,14 @@ int ObJsonBinVisitor::visit_array(ObFlatJson &flat_json)
   int ret = OB_SUCCESS;
   if (OB_FAIL(deserialize_bin_header())) {
     LOG_WARN("init meta fail", K(ret));
+  } else if (meta_.element_count() == 0) {
+    datum_.reuse();
+    datum_.set_null();
+    if (OB_FAIL(flat_json.set_value(ObJsonNodeType::J_ARRAY, ObJsonType, datum_))) {
+      LOG_WARN("set value to flat json fail", K(ret));
+    } else if (OB_FAIL(add(flat_json))) {
+      LOG_WARN("handle fail", K(ret), K(flat_json));
+    }
   } else {
     const int64_t cur_pos = pos_;
     const ObJsonBinMeta cur_meta = meta_;
@@ -2437,6 +2509,11 @@ int ObJsonBinVisitor::visit_scalar(ObFlatJson &flat_json)
     LOG_WARN("deserialize fail", K(ret), K(meta_));
   } else if (OB_FAIL(flat_json.set_value(json_type_, json_type_to_obj_type(json_type_), datum_))) {
     LOG_WARN("set value to flat json fail", K(ret));
+  } else if (ObJsonNodeType::J_DECIMAL == json_type_) {
+    flat_json.set_precision(get_decimal_precision());
+    flat_json.set_scale(get_decimal_scale());
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add(flat_json))) {
     LOG_WARN("handle fail", K(ret), K(flat_json));
   }

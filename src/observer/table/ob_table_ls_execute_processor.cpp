@@ -867,15 +867,6 @@ ObTableLSExecuteP::ObTableLSExecuteP(const ObGlobalContext &gctx)
   allocator_.set_attr(ObMemAttr(MTL_ID(), "TbLSExecuteP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
-ObTableLSExecuteP::~ObTableLSExecuteP()
-{
-  // cb need to be released because end_trans wouldn't release it
-  // when txn is rollback
-  if (OB_NOT_NULL(cb_)) {
-    OB_DELETE(ObTableLSExecuteEndTransCb, "TbLsExuTnCb", cb_);
-  }
-}
-
 int ObTableLSExecuteP::deserialize()
 {
   int ret = OB_SUCCESS;
@@ -1006,9 +997,6 @@ void ObTableLSExecuteP::reset_ctx()
 {
   need_retry_in_queue_ = false;
   ObTableApiProcessorBase::reset_ctx();
-  if (OB_NOT_NULL(cb_)) {
-    cb_->get_result().reset();
-  }
 }
 
 int ObTableLSExecuteP::get_ls_id(ObLSID &ls_id, const ObSimpleTableSchemaV2 *simple_table_schema)
@@ -1030,7 +1018,7 @@ int ObTableLSExecuteP::get_ls_id(ObLSID &ls_id, const ObSimpleTableSchemaV2 *sim
       const uint64_t &first_table_id = ls_op->get_table_id();
       ObTabletID real_tablet_id;
       if (OB_FAIL(get_tablet_id(simple_table_schema, first_tablet_id, first_table_id, real_tablet_id))) {
-        LOG_WARN("fail to get tablet id", K(ret), K(first_table_id), K(first_table_id));
+        LOG_WARN("fail to get tablet id", K(ret), K(first_tablet_id), K(first_table_id));
       } else if (OB_FAIL(ParentType::get_ls_id(real_tablet_id, ls_id))) {
         LOG_WARN("fail to get ls id", K(ret), K(real_tablet_id));
       }
@@ -1129,6 +1117,7 @@ int ObTableLSExecuteP::old_try_process()
 
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
 
+  cb_functor_.reset();
   return ret;
 }
 
@@ -1193,7 +1182,7 @@ int ObTableLSExecuteP::new_try_process()
         LOG_WARN("model fail to work", K(ret), K(model->get_new_requests()), K(model->get_new_results()));
       } else if (OB_FAIL(model->after_work(exec_ctx_, arg_, cb_result))) {
         LOG_WARN("model fail to after work", K(ret), K_(arg));
-      } else if (OB_FAIL(cb->assign_dependent_results(model->get_new_results()))) {
+      } else if (OB_FAIL(cb->assign_dependent_results(model->get_new_results(), model->is_alloc_from_pool()))) {
         LOG_WARN("fail to assign dependent results to cb", K(ret));
       }
 
@@ -1219,6 +1208,7 @@ int ObTableLSExecuteP::new_try_process()
     }
   }
 
+  cb_functor_.reset();
   return ret;
 }
 

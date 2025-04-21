@@ -73,7 +73,8 @@ public:
              const int64_t create_timestamp,
              const bool has_memstore,
              const bool is_remove,
-             const int64_t hidden_sys_data_disk_config_size);
+             const int64_t hidden_sys_data_disk_config_size,
+             const int64_t actual_data_disk_size);
 
     int divide_meta_tenant(ObTenantConfig& meta_tenant_config);
 
@@ -84,7 +85,8 @@ public:
     TO_STRING_KV(K_(tenant_id), K_(unit_id), K_(has_memstore),
                  "unit_status", get_unit_status_str(unit_status_),
                  K_(config), K_(mode), K_(create_timestamp), K_(is_removed),
-                 K_(hidden_sys_data_disk_config_size));
+                 K_(hidden_sys_data_disk_config_size),
+                 K_(actual_data_disk_size));
 
     bool is_valid() const
     {
@@ -92,8 +94,16 @@ public:
           unit_id_ != common::OB_INVALID_ID && 
           unit_status_ != UNIT_ERROR_STAT &&
           config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID &&
-          hidden_sys_data_disk_config_size_ >= 0;
+          hidden_sys_data_disk_config_size_ >= 0 &&
+          actual_data_disk_size_ >= 0;
     }
+
+    int64_t get_effective_actual_data_disk_size() const
+    {
+      return 0 == config_.data_disk_size() ? actual_data_disk_size_ : config_.data_disk_size();
+    }
+
+    int64_t gen_init_actual_data_disk_size(const share::ObUnitConfig &config) const;
 
     uint64_t tenant_id_;
     uint64_t unit_id_;
@@ -105,7 +115,13 @@ public:
     bool is_removed_;
     int64_t hidden_sys_data_disk_config_size_;  // In shared storage mode, the value set hidden_sys_memory in sys tenant config.
                                                 // Shared nothing ignore this value and Other tenant ignore this value.
-    int64_t actual_data_disk_size_;  // only as placeholder, always 0
+    // In SS mode,
+    //   If config_.data_disk_size() is 0, then actual_data_disk_size_ > 0, meaning actual data_disk_size of tenant;
+    //   If config_.data_disk_size() is not 0, then actual_data_disk_size_ = 0 and not used;
+    //      (Mainly for compatibility. actual_data_disk_size_ from low version is default value 0)
+    //   For sys tenant, config_.data_disk_size() can not be 0, and actual_data_disk_size_ is always 0.
+    // In SN mode, actual_data_disk_size_ is always 0.
+    int64_t actual_data_disk_size_;
   };
 
   struct ObServerConfig

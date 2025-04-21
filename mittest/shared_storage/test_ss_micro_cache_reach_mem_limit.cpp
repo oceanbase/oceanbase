@@ -154,10 +154,10 @@ int TestSSMicroCacheReachMemLimit::TestSSMicroCacheReachMemLimitThread::parallel
                   micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
             // wait until arc_task delete some micro_mete.
             const int64_t start_us = ObTimeUtility::current_time();
-            const int64_t exceed_cnt = arc_info.calc_exceed_micro_cnt_by_mem(arc_info.mem_limit_);
+            const int64_t exceed_cnt = arc_info.calc_exceed_micro_cnt_by_mem(arc_info.micro_cnt_limit_);
             const int64_t begin = ObTimeUtility::current_time();
             LOG_INFO("start time: wait arc_task to del micro_meta", K(idx), K(i), K(j), K(exceed_cnt));
-            while (OB_SS_CACHE_REACH_MEM_LIMIT == ret) {
+            while (OB_SS_CACHE_REACH_MEM_LIMIT == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               ob_usleep(1000);
               ret = micro_cache->add_micro_block_cache(
                   micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
@@ -166,7 +166,7 @@ int TestSSMicroCacheReachMemLimit::TestSSMicroCacheReachMemLimitThread::parallel
                 break;
               }
             }
-            const int64_t free_cnt = exceed_cnt - arc_info.calc_exceed_micro_cnt_by_mem(arc_info.mem_limit_);
+            const int64_t free_cnt = exceed_cnt - arc_info.calc_exceed_micro_cnt_by_mem(arc_info.micro_cnt_limit_);
             const int64_t cost_ms = (ObTimeUtility::current_time() - begin) / 1000;
             if (OB_FAIL(ret)) {
               LOG_WARN("fail to add micro_block, unexpected behavior", KR(ret), K(idx), K(i), K(j), K(micro_key));
@@ -196,8 +196,10 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_alloc_micro_meta_reach_mem_limit)
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_alloc_micro_meta_reach_mem_limit");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   micro_cache->task_runner_.release_cache_task_.is_inited_ = false;
   ob_usleep(1000 * 1000);
+
   // reduce tenant memory to 32MB
   const int64_t origin_tenant_mem_size = MTL_MEM_SIZE();
   const int64_t new_tenant_mem_size = (1L << 25);
@@ -206,11 +208,10 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_alloc_micro_meta_reach_mem_limit)
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     tenant_config->_ss_micro_cache_memory_percentage = 1;
   }
-  micro_cache->micro_meta_mgr_.update_cache_mem_limit_by_config();
+  micro_meta_mgr.update_cache_mem_limit_by_config();
 
   // add micro block until reach cache mem limit
-  const int64_t cache_mem_limit = micro_cache->micro_meta_mgr_.get_cache_mem_limit();
-  const int64_t max_micro_meta_cnt = cache_mem_limit / (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  const int64_t max_micro_meta_cnt = micro_meta_mgr.get_micro_cnt_limit();
   const int64_t payload_offset =
       ObSSPhyBlockCommonHeader::get_serialize_size() + ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
   const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
@@ -241,7 +242,7 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_alloc_micro_meta_reach_mem_limit)
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     tenant_config->_ss_micro_cache_memory_percentage = 2;
   }
-  micro_cache->micro_meta_mgr_.update_cache_mem_limit_by_config();
+  micro_meta_mgr.update_cache_mem_limit_by_config();
   ASSERT_EQ(OB_SUCCESS,
       micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
 
@@ -276,13 +277,12 @@ TEST_F(TestSSMicroCacheReachMemLimit, test_reach_cache_mem_limit)
     tenant_config->_ss_micro_cache_memory_percentage = 1;
   }
   micro_meta_mgr.update_cache_mem_limit_by_config();
-  const int64_t cache_mem_limit = micro_meta_mgr.get_cache_mem_limit();
-  const int64_t max_micro_meta_cnt = cache_mem_limit / (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  const int64_t max_micro_meta_cnt = micro_meta_mgr.get_micro_cnt_limit();
 
   TestSSMicroCacheReachMemLimitCtx ctx;
-  ctx.micro_blk_cnt_ = 1024;
+  ctx.micro_blk_cnt_ = 2048;
   ctx.thread_num_ = 4;
-  ctx.macro_blk_cnt_ = max_micro_meta_cnt / ctx.micro_blk_cnt_ / ctx.thread_num_;
+  ctx.macro_blk_cnt_ = 2 * max_micro_meta_cnt / ctx.micro_blk_cnt_ / ctx.thread_num_;
   TestSSMicroCacheReachMemLimit::TestSSMicroCacheReachMemLimitThread threads(
       ObTenantEnv::get_tenant(), ctx, TestSSMicroCacheReachMemLimitThread::TestParallelType::ADD_MICRO_BLOCK_REACH_MEM_LIMIT);
   threads.set_thread_count(ctx.thread_num_);

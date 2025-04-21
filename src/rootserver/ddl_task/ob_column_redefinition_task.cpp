@@ -271,7 +271,8 @@ int ObColumnRedefinitionTask::copy_table_indexes()
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
-            } else if (index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) {
+            } else if (index_schema->is_built_in_index()) {
+              // Only domain index need rebuild, while rebuilding vector/fulltext/multivalue index.
               need_rebuild_index = false;
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {
               ret = OB_EAGAIN;

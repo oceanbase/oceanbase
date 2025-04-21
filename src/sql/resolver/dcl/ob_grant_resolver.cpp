@@ -1351,6 +1351,11 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1 or 4_3_5_1", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant encrypt/decrypt privilege");
+          } else if (!((MOCK_DATA_VERSION_4_2_5_2 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_2)
+                     &&((priv_set & OB_PRIV_EVENT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2 or 4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant event");
           } else if (compat_version < DATA_VERSION_4_3_5_2
                      && ((priv_set & OB_PRIV_CREATE_CATALOG) != 0 ||
                          (priv_set & OB_PRIV_USE_CATALOG) != 0)) {

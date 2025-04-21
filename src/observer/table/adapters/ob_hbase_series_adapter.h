@@ -59,7 +59,7 @@ public:
 
   virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) override;
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
-  virtual int del(ObTableExecCtx &ctx, const common::ObTabletID &tablet_id, const ObNewRow &cell) override;
+  virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) override;
   int convert_normal_to_series(const ObITableEntity &cell, ObITableEntity &series_cell);
   int convert_normal_to_series(const ObIArray<ObITableEntity *> &cells,
@@ -70,14 +70,14 @@ private:
   int save_and_adjust_range(ObHbaseSeriesCellIter *&iter, ObIAllocator &alloc);
   int construct_series_value(ObIAllocator &allocator, ObJsonNode &json, ObObj &value_obj);
 
-  int construct_query(ObTableExecCtx &ctx, const ObTableEntity &entity, ObTableQuery &table_query);
+  int construct_query(ObTableExecCtx &ctx, const ObITableEntity &entity, ObTableQuery &table_query);
   int del_and_insert(common::ObIAllocator &alloc,
                      ObJsonNode &json_node,
                      ObTableCtx &del_ctx,
                      ObTableCtx &ins_ctx,
                      ObNewRow &json_cell);
   int get_query_iter(ObTableExecCtx &ctx,
-                     const ObTableEntity &entity,
+                     const ObITableEntity &entity,
                      ObTableCtx &scan_ctx,
                      ObTableApiRowIterator &tb_row_iter);
   int get_normal_rowkey(const ObITableEntity &normal_cell, ObObj &rowkey_obj, ObObj &qualifier_obj, ObObj &timestamp_obj);

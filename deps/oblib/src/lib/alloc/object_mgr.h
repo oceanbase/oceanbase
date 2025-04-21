@@ -47,7 +47,7 @@ public:
   bool check_has_unfree(char *first_label, char *first_bt);
 
 public:
-  const int parallel_;
+  int parallel_;
   ObjectSetV2 obj_sets_[OBJECT_SET_CNT];
 }; // end of class ObjectMgrV2
 

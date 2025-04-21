@@ -24,8 +24,6 @@ namespace oceanbase
 namespace storage
 {
 
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
-
 ObNgramFTParser::ObNgramFTParser() : ngram_impl_(), is_inited_(false) {}
 
 ObNgramFTParser::~ObNgramFTParser()

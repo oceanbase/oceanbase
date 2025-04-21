@@ -536,7 +536,9 @@ int ObUnitManager::alter_unit_config(const ObUnitConfig &unit_config)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pools is null", KP(pools), K(ret));
       } else {
-        if (OB_FAIL(check_expand_resource_("ALTER_RESOURCE_UNIT", *pools, old_ur, new_ur))) {
+        if (OB_FAIL(check_data_disk_size_mode_change_(*pools, old_ur, new_ur))) {
+          LOG_WARN("check data_disk_size mode change failed", K(old_ur), K(new_ur), KR(ret));
+        } else if (OB_FAIL(check_expand_resource_("ALTER_RESOURCE_UNIT", *pools, old_ur, new_ur))) {
           LOG_WARN("check expand config failed", K(old_ur), K(new_ur), KR(ret));
         } else if (OB_FAIL(check_shrink_resource_(*pools, old_ur, new_ur))) {
           LOG_WARN("check shrink config failed", K(old_ur), K(new_ur), KR(ret));
@@ -3573,6 +3575,79 @@ int ObUnitManager::check_expand_zone_resource_allowed_by_new_unit_stat_(
   return ret;
 }
 
+// check if data_disk_size of tenant's resource pools are all zero or all non-zero
+int ObUnitManager::check_expand_zone_resource_allowed_by_data_disk_size_(
+    const uint64_t tenant_id,
+    const common::ObIArray<share::ObResourcePoolName> &pool_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_names));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // check pass
+  } else {
+    bool is_data_disk_size_zero = false;
+    // check new pools
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
+      share::ObResourcePool *pool = NULL;
+      ObUnitConfig *unit_config = nullptr;
+      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
+        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
+      } else if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KR(ret));
+      } else if (OB_FAIL(get_unit_config_by_id(pool->unit_config_id_, unit_config))) {
+        LOG_WARN("fail to get unit config by pool", KR(ret));
+      } else if (OB_ISNULL(unit_config)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit_config ptr is null", KR(ret));
+      } else if (0 == i) {
+        is_data_disk_size_zero = (0 == unit_config->data_disk_size());
+      } else if (is_data_disk_size_zero != (0 == unit_config->data_disk_size())) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("data_disk_size of tenant should be all-zero or all-nonzero", KR(ret),
+                 K(is_data_disk_size_zero), KPC(pool), KPC(unit_config));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The DATA_DISK_SIZE for all resource pools of a tenant must be consistently "
+                       "set to either zero or non-zero values. Mixed configurations are");
+      } else { /*good*/ }
+    }
+    // check curr pools
+    ObArray<share::ObResourcePool *> *curr_pools = nullptr;
+    if (FAILEDx(get_pools_by_tenant_(tenant_id, curr_pools))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
+      }
+    } else if (OB_ISNULL(curr_pools)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("curr_pools is null", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < curr_pools->count(); ++i) {
+        share::ObResourcePool *pool = curr_pools->at(i);
+        ObUnitConfig *unit_config = nullptr;
+        if (OB_ISNULL(pool)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool is null ptr", KR(ret));
+        } else if (OB_FAIL(get_unit_config_by_id(pool->unit_config_id_, unit_config))) {
+          LOG_WARN("fail to get unit config by pool", KR(ret));
+        } else if (OB_ISNULL(unit_config)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit_config ptr is null", KR(ret));
+        } else if (is_data_disk_size_zero != (0 == unit_config->data_disk_size())) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("data_disk_size of tenant should be all-zero or all-nonzero", KR(ret),
+                  K(is_data_disk_size_zero), KPC(pool), KPC(unit_config));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The DATA_DISK_SIZE for all resource pools of a tenant must be consistently "
+                        "set to either zero or non-zero values. Mixed configurations are");
+        } else { /*good*/ }
+      }
+    }
+  }
+  return ret;
+}
+
 /* 1 when this is a tenant being created:
  *   check the input pools, each input pool unit num shall be equal, otherwise illegal
  * 2 when this is a tenant which exists:
@@ -3926,6 +4001,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "grant pool when pools in shrinking");
   } else if (OB_FAIL(check_expand_zone_resource_allowed_by_new_unit_stat_(pool_names))) {
     LOG_WARN("fail to check grant pools allowed by unit stat", KR(ret));
+  } else if (OB_FAIL(check_expand_zone_resource_allowed_by_data_disk_size_(tenant_id, pool_names))) {
+    LOG_WARN("fail to check grant pools allowed by data_disk_size", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_pools_unit_num_legal_(
           tenant_id, pool_names, unit_num_legal, legal_unit_num))) {
     LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
@@ -6120,7 +6197,8 @@ int ObUnitManager::compute_server_resource_(
     server_resource.max_assigned_[RES_LOG_DISK] = server_resource.assigned_[RES_LOG_DISK];
     server_resource.capacity_[RES_LOG_DISK] = static_cast<double>(report_resource.log_disk_total_);
     // RES_DATA_DISK
-    server_resource.assigned_[RES_DATA_DISK] = static_cast<double>(sum_load.data_disk_size());
+    server_resource.assigned_[RES_DATA_DISK] = static_cast<double>(MAX(sum_load.data_disk_size(),
+                                               report_resource.report_data_disk_assigned_));
     server_resource.max_assigned_[RES_DATA_DISK] = server_resource.assigned_[RES_DATA_DISK];
     server_resource.capacity_[RES_DATA_DISK] = static_cast<double>(report_resource.data_disk_total_);
   }
@@ -6674,6 +6752,8 @@ int ObUnitManager::alter_pool_unit_config(share::ObResourcePool  *pool,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "unit MEMORY_SIZE less than __min_full_resource_pool_memory");
   } else if (OB_FAIL(pools.push_back(pool))) {
     LOG_WARN("push back pool into array fail", KR(ret), K(pool), K(pools));
+  } else if (OB_FAIL(check_data_disk_size_mode_change_(pools, config->unit_resource(), alter_config->unit_resource()))) {
+    LOG_WARN("check data_disk_size mode change failed", KR(ret), K(config), K(alter_config));
   } else if (OB_FAIL(check_expand_resource_(
       "ALTER_RESOURCE_POOL_UNIT_CONFIG",
       pools,
@@ -8383,6 +8463,42 @@ int ObUnitManager::check_shrink_memory(
               K(max_used_ratio), K(max_used_memory), K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+// check whether granted unit data_disk_size change between 0 and non-0
+int ObUnitManager::check_data_disk_size_mode_change_(
+    const common::ObIArray<share::ObResourcePool *> &pools,
+    const share::ObUnitResource &old_ur,
+    const share::ObUnitResource &new_ur) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check inner stat failed", KR(ret));
+  } else if (OB_UNLIKELY(pools.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pools is empty", KR(ret));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // no need to check in SN mode, pass
+  } else if ((old_ur.data_disk_size() == 0) == (new_ur.data_disk_size() == 0)) {
+    // 0 and non-0 mode not changed, check pass
+  } else {
+    bool has_granted_pool = false;
+    for (int64_t i = 0; i < pools.count() && OB_SUCC(ret) && !has_granted_pool; i++) {
+      if (OB_ISNULL(pools.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is nullptr", KR(ret));
+      } else if (pools.at(i)->is_granted_to_tenant()) {
+        has_granted_pool = true;
+      }
+    }
+    if (OB_SUCC(ret) && has_granted_pool) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifying data_disk_size between zero and non-zero values");
+      LOG_WARN("modifying data_disk_size between zero and non-zero values not supported",
+                KR(ret), K(old_ur), K(new_ur));
     }
   }
   return ret;

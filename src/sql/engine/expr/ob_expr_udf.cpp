@@ -1067,7 +1067,9 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1085,7 +1087,9 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1103,7 +1107,9 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return len;
 }
 

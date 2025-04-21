@@ -909,6 +909,26 @@ bool ObConfigStorageCachePolicyChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigEnableManualSCPChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  const bool enabled = ObConfigBoolParser::get(t.str(), is_valid);
+  if (enabled) {
+    // TODO @fangdan: impl it in next MR
+  }
+  return is_valid;
+}
+
+bool ObConfigSuspendStorageCacheTaskChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  const bool enabled = ObConfigBoolParser::get(t.str(), is_valid);
+  if (enabled) {
+    // TODO @fangdan: impl it in next MR
+  }
+  return is_valid;
+}
+
 bool ObConfigUseLargePagesChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
@@ -1327,8 +1347,6 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
           kv_mode.set_rerouting_mode(mode);
         } else if (kv_list.at(i).first.case_compare(MODE_NAME_HOTKEY) == 0) {
           kv_mode.set_hotkey_mode(mode);
-        } else if (kv_list.at(i).first.case_compare(MODE_NAME_DISTRIBUTED_EXECUTE) == 0) {
-          kv_mode.set_distributed_execute_mode(mode);
         } else {
           bret = false;
           OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode name", K(kv_list.at(i).first));

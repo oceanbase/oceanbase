@@ -88,7 +88,7 @@ public:
 private:
   ObGenDicLoader()
       : is_inited_(false), lock_(), dic_loader_map_() { }
-  ~ObGenDicLoader() { }
+  ~ObGenDicLoader() { dic_loader_map_.destroy(); }
   int gen_dic_loader(const ObGenDicLoaderKey &dic_loader_key,
                      ObTenantDicLoader *&dic_loader);
 

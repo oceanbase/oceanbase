@@ -21,7 +21,7 @@ SubObjectMgr::SubObjectMgr(ObTenantCtxAllocator &ta,
                            const uint32_t ablock_size,
                            const bool enable_dirty_list,
                            IBlockMgr *blk_mgr)
-  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id()),
+  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
     normal_locker_(mutex_), no_log_locker_(mutex_),
@@ -72,7 +72,7 @@ ObjectMgr::ObjectMgr(ObTenantCtxAllocator &ta,
                      int parallel,
                      bool enable_dirty_list,
                      IBlockMgr *blk_mgr)
-  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id()),
+  : IBlockMgr(ta.get_tenant_id(), ta.get_ctx_id(), ta.get_numa_id()),
     ta_(ta),
     enable_no_log_(enable_no_log),
     ablock_size_(ablock_size),
@@ -274,9 +274,6 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
 void ObjectMgr::destroy_sub_mgr(SubObjectMgr *sub_mgr)
 {
   if (sub_mgr != nullptr) {
-    auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID,
-                                                                          ObCtxIds::DEFAULT_CTX_ID);
-    auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
     sub_mgr->~SubObjectMgr();
     ObTenantCtxAllocator::common_free(sub_mgr);
   }
@@ -345,7 +342,7 @@ bool ObjectMgr::check_has_unfree()
 
 bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
 {
-  bool has_unfree = obj_mgr_v2_.check_has_unfree(first_label, first_label);
+  bool has_unfree = obj_mgr_v2_.check_has_unfree(first_label, first_bt);
   for (uint64_t idx = 0; idx < ATOMIC_LOAD(&sub_cnt_) && !has_unfree; idx++) {
     auto sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
     if (OB_ISNULL(sub_mgr)) {
@@ -362,6 +359,10 @@ bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
 ObjectMgrV2::ObjectMgrV2(int parallel, IBlockMgr *blk_mgr)
   : parallel_(parallel)
 {
+  if (blk_mgr->get_tenant_id() == OB_SERVER_TENANT_ID &&
+      blk_mgr->get_ctx_id() == ObCtxIds::GLIBC) {
+    parallel_ = OBJECT_SET_CNT;
+  }
   for (int i = 0; i < parallel_; ++i) {
     obj_sets_[i].set_block_mgr(blk_mgr);
   }

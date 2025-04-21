@@ -1454,7 +1454,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     int64_t &var_idx,
                                     const ObString &synonym_name,
                                     const uint64_t cur_db_id,
-                                    const pl::ObPLDependencyTable *dep_table) const
+                                    const pl::ObPLDependencyTable *dep_table,
+                                    bool full_schema) const
 {
   int ret = OB_SUCCESS;
 
@@ -1478,52 +1479,50 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   const ObDatabaseSchema *db_schema = nullptr;
   ObSchemaChecker schema_checker;
   ObSchemaObjVersion obj_version;
+
   if (OB_FAIL(schema_checker.init(schema_guard, resolve_ctx_.session_info_.get_server_sid()))) {
     LOG_WARN("fail to init shcema checker", K(ret));
   } else if (OB_FAIL(schema_checker.get_database_schema(tenant_id, object_db_id, db_schema))) {
     LOG_WARN("fail to get db schema", K(ret));
   } else if (OB_NOT_NULL(db_schema)) {
+    // Try Table Schema
     const ObTableSchema *table = nullptr;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, object_db_id, object_name, false /*is_index*/,
-                        table)) || OB_ISNULL(table)) {
+    if (OB_FAIL(schema_guard.get_table_schema(
+        tenant_id, object_db_id, object_name, false /*is_index*/, table)) || OB_ISNULL(table)) {
       ret = OB_TABLE_NOT_EXIST;
     } else {
       object_id = table->get_table_id();
       type = TABLE_NS;
       if (OB_NOT_NULL(dep_table)) {
         ObArray<ObSchemaObjVersion> dependency_objects;
-        if (OB_FAIL(ObPLResolver::collect_dep_info_by_schema(resolve_ctx_,
-                                                              table,
-                                                              dependency_objects))) {
+        if (OB_FAIL(ObPLResolver::collect_dep_info_by_schema(resolve_ctx_, table, dependency_objects))) {
           LOG_WARN("fail to collect dep info by schema", K(ret));
         } else if (OB_FAIL(ObPLDependencyUtil::add_dependency_objects(dep_table, dependency_objects))) {
           LOG_WARN("fail to add dependencys", K(ret));
         }
       }
     }
+    // Try Package Schema
     if (OB_TABLE_NOT_EXIST == ret) {
       const ObPackageInfo *package_info = nullptr;
+      const ObPackageInfo *spec_info = nullptr;
+      const ObPackageInfo *body_info = nullptr;
       if (OB_FAIL(schema_guard.get_package_info(tenant_id, object_db_id, object_name,
-                                            share::schema::PACKAGE_TYPE, compatible_mode, package_info))
-        || OB_ISNULL(package_info)) {
+                                                share::schema::PACKAGE_TYPE, compatible_mode, package_info))
+          || OB_ISNULL(package_info)) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
-        object_id = package_info->get_package_id();
         type = PKG_NS;
-        obj_version.object_id_ = object_id;
-        obj_version.object_type_ = DEPENDENCY_PACKAGE;
-        obj_version.version_ = package_info->get_schema_version();
-        const ObPackageInfo *spec_info = nullptr;
-        const ObPackageInfo *body_info = nullptr;
-        if (OB_FAIL(ObPLPackageManager::get_package_schema_info(schema_guard, package_info->get_package_id(), spec_info, body_info))) {
+        object_id = package_info->get_package_id();
+        if (OB_FAIL(ObPLPackageManager::get_package_schema_info(
+              schema_guard, package_info->get_package_id(), spec_info, body_info))) {
           LOG_WARN("fail to get package info", K(ret));
         } else {
           if (OB_NOT_NULL(spec_info)) {
-            OX (obj_version.object_id_ = spec_info->get_package_id());
-            OX (obj_version.version_ = spec_info->get_schema_version());
-            OX (obj_version.object_type_ = DEPENDENCY_PACKAGE);
+            obj_version.object_id_ = spec_info->get_package_id();
+            obj_version.version_ = spec_info->get_schema_version();
+            obj_version.object_type_ = DEPENDENCY_PACKAGE;
             ADD_DEPENDENCY;
-
           }
           if (OB_NOT_NULL(body_info)) {
             obj_version.reset();
@@ -1535,9 +1534,10 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
         }
       }
     }
+    // Try UDT Schema
     if (OB_TABLE_NOT_EXIST == ret) {
       const ObUDTTypeInfo *udt_info = nullptr;
-      if (OB_FAIL(schema_guard.get_udt_info(tenant_id, object_db_id, OB_INVALID_ID/*package_id*/, object_name, udt_info))
+      if (OB_FAIL(schema_guard.get_udt_info(tenant_id, object_db_id, OB_INVALID_ID, object_name, udt_info))
           || OB_ISNULL(udt_info)) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
@@ -1549,79 +1549,93 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
         ADD_DEPENDENCY;
       }
     }
+    // Try DBLink Schema
     if (OB_TABLE_NOT_EXIST == ret) {
-      // try dblink synonym
-      ObString tmp_name;
+      ObString tmp_name = object_name;
       uint64_t dblink_id = OB_INVALID_ID;
-      if (OB_FAIL(ob_write_string(resolve_ctx_.allocator_, object_name, tmp_name))) {
-        LOG_WARN("write string failed", K(ret));
+      ObString full_object_name = tmp_name.split_on('@');
+      bool exist = false;
+      if (full_object_name.empty()) {
+        ret = OB_TABLE_NOT_EXIST;
       } else {
-        ObString full_object_name = tmp_name.split_on('@');
-        bool exist = false;
-        if (!full_object_name.empty()) {
-          ObString obj_name;
-          // object_id is the synonym id
-          if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
-              || OB_INVALID_ID == dblink_id) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(tmp_name));
-          } else if (OB_FAIL(schema_guard.get_object_with_synonym(tenant_id, cur_db_id, synonym_name, object_db_id,
-                                                                  object_id, obj_name, exist, true))) {
-            LOG_WARN("get synonym schema failed", K(ret), K(cur_db_id), K(synonym_name), K(object_name));
-          } else if (!exist || OB_INVALID_ID == object_id) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
-          } else {
-            type = DBLINK_PKG_NS;
-          }
-        } else {
+        ObString obj_name;
+        if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
+            || OB_INVALID_ID == dblink_id) {
           ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(object_name));
+        } else if (OB_FAIL(schema_guard.get_object_with_synonym(tenant_id, cur_db_id, synonym_name, object_db_id,
+                                                                object_id, obj_name, exist, true))) {
+          LOG_WARN("get synonym schema failed", K(ret), K(cur_db_id), K(synonym_name), K(object_name));
+        } else if (!exist || OB_INVALID_ID == object_id) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
+        } else {
+          type = DBLINK_PKG_NS;
         }
       }
     }
-    //check sequence
+    // Try Sequence Schema
     if (OB_TABLE_NOT_EXIST == ret) {
       const ObSequenceSchema *schema = nullptr;
       if (OB_FAIL(schema_guard.get_sequence_schema_with_name(tenant_id, object_db_id, object_name, schema))
-              || OB_ISNULL(schema)) {
+          || OB_ISNULL(schema)) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
+        if (full_schema) {
+          type = ObPLExternalNS::SEQUENCE;
+          object_id = schema->get_sequence_id();
+        }
         obj_version.object_id_ = schema->get_sequence_id();
         obj_version.object_type_ = DEPENDENCY_SEQUENCE;
         obj_version.version_ = schema->get_schema_version();
         ADD_DEPENDENCY;
       }
     }
-    //check procedure/function
+    // Try Trigger Schema
+    if (OB_TABLE_NOT_EXIST == ret && full_schema) {
+      const ObTriggerInfo *trigger_info = NULL;
+      if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, object_db_id, object_name, trigger_info))
+          || OB_ISNULL(trigger_info)) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        type = ObPLExternalNS::TRIGGER;
+        object_id = trigger_info->get_trigger_id();
+      }
+    }
+    // Try Standalone Procedure
     if (OB_TABLE_NOT_EXIST == ret) {
       const share::schema::ObRoutineInfo *routine_info = nullptr;
       if (OB_FAIL(schema_checker.get_standalone_procedure_info(tenant_id, object_db_id, object_name, routine_info))
-                  || OB_ISNULL(routine_info)) {
+          || OB_ISNULL(routine_info)) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
+        if (full_schema) {
+          type = ObPLExternalNS::EXTERNAL_PROC;
+          object_id = routine_info->get_routine_id();
+        }
         obj_version.object_id_ = routine_info->get_routine_id();
         obj_version.object_type_ = DEPENDENCY_PROCEDURE;
         obj_version.version_ = routine_info->get_schema_version();
         ADD_DEPENDENCY;
       }
     }
+    // Try Standalone Function
     if (OB_TABLE_NOT_EXIST == ret) {
       const share::schema::ObRoutineInfo *routine_info = nullptr;
       if (OB_FAIL(schema_checker.get_standalone_function_info(tenant_id, object_db_id, object_name, routine_info))
-                  || OB_ISNULL(routine_info)) {
+          || OB_ISNULL(routine_info)) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
+        if (full_schema) {
+          type = ObPLExternalNS::UDF_NS;
+          object_id = routine_info->get_routine_id();
+        }
         obj_version.object_id_ = routine_info->get_routine_id();
         obj_version.object_type_ = DEPENDENCY_FUNCTION;
         obj_version.version_ = routine_info->get_schema_version();
         ADD_DEPENDENCY;
       }
     }
-    if (OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    }
-
+    ret = OB_TABLE_NOT_EXIST == ret ? OB_SUCCESS : ret;
     if (OB_SUCC(ret)) {
       if (OB_INVALID_ID == object_id) {
         type = ExternalType::INVALID_VAR;
@@ -1638,7 +1652,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
                                             ExternalType &type,
                                             ObPLDataType &data_type,
                                             uint64_t &parent_id,
-                                            int64_t &var_idx) const
+                                            int64_t &var_idx,
+                                            bool full_schema) const
 {
   int ret = OB_SUCCESS;
   SET_LOG_CHECK_MODE();
@@ -1774,7 +1789,19 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               OZ (ObPLResolver::collect_dep_info_by_schema(resolve_ctx_, table, dependency_objects));
               OZ (ObPLDependencyUtil::add_dependency_objects(dependency_table_, dependency_objects));
             }
-          } else if (ObSQLUtils::is_oracle_sys_view(name) && lib::is_oracle_mode()) {
+          } else if (full_schema && OB_INVALID_ID == table_id) {
+            OZ (schema_guard.get_idx_schema_by_origin_idx_name(tenant_id,
+                                                               db_id,
+                                                               name,
+                                                               table));
+            if (OB_SUCC(ret) && OB_NOT_NULL(table)) {
+              table_id = table->get_table_id();
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_INVALID_ID == table_id
+                     && ObSQLUtils::is_oracle_sys_view(name)
+                     && lib::is_oracle_mode()) {
             // try sys view
             OZ (schema_guard.get_table_id(tenant_id, ObString("SYS"), name, false,
                                           schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
@@ -1840,14 +1867,11 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
       // then routine
       if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
         uint64_t tenant_id = session_info.get_effective_tenant_id();
-        uint64_t db_id = OB_INVALID_ID;
-        uint64_t udt_id = OB_INVALID_ID;
-        if (parent_id != OB_INVALID_INDEX) {
-          db_id = parent_id;
-        } else {
+        uint64_t db_id = parent_id;
+        const ObRoutineInfo *routine_info = NULL;
+        if (OB_INVALID_INDEX == db_id) {
           OZ (session_info.get_database_id(db_id));
         }
-        const ObRoutineInfo *routine_info = NULL;
         OZ (schema_guard.get_standalone_procedure_info(tenant_id, db_id, name, routine_info));
         if (NULL == routine_info && !ObPLResolver::is_unrecoverable_error(ret)) {
           ret = OB_SUCCESS;
@@ -1860,7 +1884,9 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           type = ObPLExternalNS::INVALID_VAR;
         } else {
           // udf/procedure will resolve later, here only avoid to resolve synonym
-          type = ObPLExternalNS::INVALID_VAR;
+          type = full_schema ? (routine_info->is_procedure() ? ObPLExternalNS::EXTERNAL_PROC
+                                                             : ObPLExternalNS::UDF_NS)
+                             : ObPLExternalNS::INVALID_VAR;
           var_idx = routine_info->get_routine_id();
           if (OB_NOT_NULL(get_dependency_table())) {
             ObSchemaObjVersion obj_version;
@@ -1871,7 +1897,41 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           }
         }
       }
-      //then synonym
+      // then trigger
+      if (OB_SUCC(ret) && full_schema && OB_INVALID_INDEX == var_idx) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = parent_id;
+        const ObTriggerInfo *trigger_info = NULL;
+        if (OB_INVALID_ID == db_id) {
+          OZ (session_info.get_database_id(db_id));
+        }
+        OZ (schema_guard.get_trigger_info(tenant_id, db_id, name, trigger_info));
+        if (NULL == trigger_info) {
+          ret = OB_SUCCESS;
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          type = ObPLExternalNS::TRIGGER;
+          var_idx = trigger_info->get_trigger_id();
+        }
+      }
+      // then sequence
+      if (OB_SUCC(ret) && full_schema && OB_INVALID_INDEX == var_idx) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = parent_id;
+        const ObSequenceSchema *sequence_schema = NULL;
+        if (OB_INVALID_ID == db_id) {
+          OZ (session_info.get_database_id(db_id));
+        }
+        OZ (schema_guard.get_sequence_schema_with_name(tenant_id, db_id, name, sequence_schema));
+        if (NULL == sequence_schema) {
+          ret = OB_SUCCESS;
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          type = ObPLExternalNS::SEQUENCE;
+          var_idx = sequence_schema->get_sequence_id();
+        }
+      }
+      // then synonym
       if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
         bool exist = false;
         uint64_t tenant_id = session_info.get_effective_tenant_id();
@@ -1892,7 +1952,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             schema_checker, synonym_checker,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
           if (exist) {
-            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id, get_dependency_table()));
+            OZ (resolve_synonym(
+              object_db_id, object_name, type, parent_id, var_idx, name, db_id, get_dependency_table(), full_schema));
             OZ (ObPLDependencyUtil::collect_synonym_deps(MTL_ID(), synonym_checker, resolve_ctx_.schema_guard_, get_dependency_table()));
           }
         }
@@ -1956,6 +2017,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         && get_tenant_id_by_object_id(parent_id) != OB_SYS_TENANT_ID
         && session_info.get_effective_tenant_id() != OB_SYS_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "package in Mysql mode");
       LOG_WARN("package is not supported in Mysql mode", K(type), K(ret));
     } else {
       const share::schema::ObPackageInfo *package_info_resolve = NULL;
@@ -2556,6 +2618,7 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       }
     } else {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, attr_name.length(), attr_name.ptr());
       LOG_WARN("PLS-00302: component 'A' must be declared", K(ret), K(access_ident), K(user_type));
     }
 #ifdef OB_BUILD_ORACLE_PL
@@ -3534,6 +3597,7 @@ int ObPLBlockNS::get_subtype_actually_basetype(const ObPLDataType *pl_type,
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
   ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "subtype in Mysql mode");
   LOG_WARN("get_subtype_actually_basetype is not supported in mysql mode", K(ret));
 #else
   const ObUserDefinedSubType *subtype = NULL;
@@ -4512,6 +4576,7 @@ int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
       }
       if (OB_SUCC(ret) && !is_type_match) {
         ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
+        LOG_USER_ERROR(OB_ERR_TYPE_MISMATCH_IN_FETCH, var->get_name().length(), var->get_name().ptr());
         LOG_WARN("type not compatible!", K(ret));
       }
     } else if (return_type->get_record_member_count() != into_nums) {

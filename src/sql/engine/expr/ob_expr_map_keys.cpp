@@ -139,7 +139,6 @@ int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr,
   } else {
     ObIVector *map_vec = expr.args_[0]->get_vector(ctx);
     ObIVector *res_vec = expr.get_vector(ctx);
-    ObDatumVector map_datum = expr.args_[0]->locate_expr_datumvector(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
 
@@ -149,7 +148,7 @@ int ObExprMapComponents::eval_map_components_vector(const ObExpr &expr,
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       }
-      if (map_vec->is_null(idx) || map_datum.at(idx)->is_null()) {
+      if (map_vec->is_null(idx)) {
         is_null_res = true;
       } else {
         ObString map_blob = map_vec->get_string(idx);

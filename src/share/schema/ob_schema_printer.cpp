@@ -22,6 +22,7 @@
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
 
 namespace oceanbase
 {
@@ -764,7 +765,6 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             SHARE_SCHEMA_LOG(WARN, "fail to print partition info for index", K(ret), KPC(index_schema));
           }
         }
-
         // print column group info
         if (OB_FAIL(ret)) {
         } else if (strict_compat_) {
@@ -2064,8 +2064,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && !strict_compat_
       && !is_index_tbl
       && !is_no_table_options(sql_mode)
-      && table_schema.is_delete_insert_merge_engine()) { // TODO: zhanghuidong.zhd, print merge engine for all user tables
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = '%s' ",
+      && table_schema.is_delete_insert_merge_engine()) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = %s ",
                                 ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
     }
@@ -2074,6 +2074,13 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && !is_index_tbl) {
     if (OB_FAIL(print_semistruct_encodng_options(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encodng options", K(ret), K(table_schema));
+    }
+  }
+
+  /* print storage cache policy for shared storage mode */
+  if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(ObStorageCacheUtil::print_table_storage_cache_policy(table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy", K(ret), K(table_schema));
     }
   }
 
@@ -2650,9 +2657,8 @@ int ObSchemaPrinter::print_table_definition_table_options(
   if (OB_SUCC(ret)
       && !strict_compat_
       && !is_index_tbl
-      && data_version >= DATA_VERSION_4_3_5_2
-      && table_schema.is_delete_insert_merge_engine()) { // TODO: zhanghuidong.zhd, print merge engine for all user tables
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = '%s' ",
+      && table_schema.is_delete_insert_merge_engine()) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = %s ",
                                 ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
     }
@@ -6047,8 +6053,8 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  BINARY_FORMAT = %.*s,",
                                          static_cast<int>(STRLEN(binary_format)), binary_format))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print binary format", K(ret));
-      } else if (OB_FAIL(csv.ignore_last_empty_col_ &&
-                        databuff_printf(buf, buf_len, pos, "\n  IGNORE_LAST_EMPTY_COLUMN = TRUE,"))) {
+      } else if (OB_FAIL(!csv.ignore_last_empty_col_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  IGNORE_LAST_EMPTY_COLUMN = FALSE,"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print IGNORE_LAST_EMPTY_COLUMN", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {

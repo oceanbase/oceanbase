@@ -87,6 +87,7 @@ default_enable_extended_rowid
 default_load_mode
 default_progressive_merge_num
 default_row_format
+default_storage_cache_policy
 default_table_merge_engine
 default_table_organization
 default_table_store_format
@@ -100,7 +101,6 @@ enable_adaptive_plan_cache
 enable_async_syslog
 enable_auto_split
 enable_cgroup
-enable_crazy_medium_compaction
 enable_dblink
 enable_ddl
 enable_early_lock_release
@@ -108,6 +108,7 @@ enable_global_background_resource_isolation
 enable_kv_ttl
 enable_lock_priority
 enable_major_freeze
+enable_manual_storage_cache_policy
 enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
@@ -198,6 +199,7 @@ net_thread_count
 obconfig_url
 observer_id
 ob_compaction_schedule_interval
+ob_deterministic_udf_cache_max_size
 ob_enable_batched_multi_statement
 ob_enable_java_env
 ob_encoding_granularity
@@ -208,6 +210,7 @@ ob_java_opts
 ob_proxy_readonly_transaction_routing_policy
 ob_query_switch_leader_retry_timeout
 ob_ratelimit_stat_period
+ob_result_cache_evict_percentage
 ob_ssl_invited_common_names
 ob_startup_mode
 ob_storage_s3_url_encode_type
@@ -236,6 +239,8 @@ recyclebin_object_expire_time
 redundancy_level
 replica_parallel_migration_mode
 resource_hard_limit
+result_cache_max_result
+result_cache_max_size
 rootservice_async_task_queue_size
 rootservice_async_task_thread_count
 rootservice_list
@@ -264,6 +269,8 @@ sql_protocol_min_tls_version
 sql_work_area
 ssl_client_authentication
 ssl_external_kms_info
+ss_cache_maxsize_percpu
+ss_cache_max_percentage
 stack_size
 standby_db_fetch_log_rpc_timeout
 standby_db_preferred_upstream_log_region
@@ -272,6 +279,7 @@ storage_meta_cache_priority
 storage_rowsets_size
 strict_check_os_params
 sts_credential
+suspend_storage_cache_task
 sync_io_thread_count
 syslog_compress_func
 syslog_disk_size
@@ -384,11 +392,13 @@ _enable_kv_group_commit_ops
 _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace
+_enable_mock_stmt_flush_table
 _enable_mysql_compatible_dates
 _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_nlj_spf_use_rich_format
+_enable_numa_aware
 _enable_obdal
 _enable_optimizer_qualify_filter
 _enable_oracle_priv_check
@@ -482,6 +492,7 @@ _nested_loop_join_enabled
 _non_standard_comparison_level
 _no_logging
 _object_storage_io_timeout
+_obkv_enable_distributed_execution
 _obkv_feature_mode
 _ob_ash_disk_write_enable
 _ob_ash_enable
@@ -493,6 +504,7 @@ _ob_enable_direct_load
 _ob_enable_dynamic_worker
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
+_ob_enable_pl_dynamic_stack_check
 _ob_enable_prepared_statement
 _ob_enable_standby_db_parallel_log_transport
 _ob_enable_truncate_partition_preserve_global_index
@@ -523,6 +535,7 @@ _pc_adaptive_effectiveness_ratio_threshold
 _pc_adaptive_min_exec_time_threshold
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
+_preserve_order_for_groupby
 _preserve_order_for_pagination
 _preset_runtime_bloom_filter_size
 _print_sample_ppm
@@ -559,6 +572,7 @@ _sqlexec_disable_hash_based_distagg_tiv
 _sql_insert_multi_values_split_opt
 _ss_deleted_tablet_gc_time
 _ss_hidden_sys_tenant_data_disk_size
+_ss_local_cache_expiration_time
 _ss_major_compaction_prewarm_level
 _ss_micro_cache_memory_percentage
 _ss_new_leader_overwrite_delay

@@ -176,6 +176,8 @@ struct TableItem
     values_table_def_ = NULL;
     sample_info_ = nullptr;
     transpose_table_def_ = NULL;
+    // assign default value for compatibility
+    catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -1030,6 +1032,7 @@ public:
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
                          const ObExprInfo &flags,
                          bool match_any_flag = true);
+  int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs, DmlStmtScope scope) const;
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
   int check_relation_exprs_deterministic(bool &is_deterministic) const;

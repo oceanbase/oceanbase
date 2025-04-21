@@ -1846,14 +1846,6 @@ void ObTenantDagWorker::run1()
         }
       }
 
-      {
-        const int64_t curr_time = ObTimeUtility::fast_current_time();
-        const int64_t elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
-      }
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
@@ -1881,11 +1873,6 @@ int ObTenantDagWorker::yield()
   if (!((++counter) & CHECK_INTERVAL)) {
     int64_t curr_time = ObTimeUtility::fast_current_time();
     if (last_check_time_ + check_period_ <= curr_time) {
-      int64_t elapsed_time = curr_time - last_check_time_;
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
       last_check_time_ = curr_time;
       ObThreadCondGuard guard(cond_);
       if (get_force_cancel_flag()) {
@@ -1900,9 +1887,6 @@ int ObTenantDagWorker::yield()
         ObCurTraceId::set(task_->get_dag()->get_dag_id());
         COMMON_LOG(INFO, "worker continues to run", K(*task_));
         curr_time = ObTimeUtility::fast_current_time();
-        elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
         last_check_time_ = curr_time;
         if (DWS_RUNNABLE == status_) {
           status_ = DWS_RUNNING;
@@ -3832,7 +3816,7 @@ int64_t ObDagNetScheduler::get_dag_net_count(const ObDagNetType::ObDagNetTypeEnu
   return count;
 }
 
-bool ObDagNetScheduler::is_dag_map_full()
+bool ObDagNetScheduler::is_dag_map_full_()
 {
   bool bret = false;
   if (OB_UNLIKELY(OB_ISNULL(scheduler_))) {
@@ -3841,7 +3825,6 @@ bool ObDagNetScheduler::is_dag_map_full()
     if (((double)scheduler_->get_cur_dag_cnt() / DEFAULT_MAX_DAG_MAP_CNT) >= ((double)STOP_ADD_DAG_PERCENT / 100)) {
       bret = true;
       if (REACH_THREAD_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL))  {
-        ObMutexGuard guard(dag_net_map_lock_);
         COMMON_LOG(INFO, "dag map is almost full, stop loop blocking dag_net_map",
             "dag_map_size", scheduler_->get_cur_dag_cnt(), "dag_net_map_size", dag_net_map_.size(),
             "blocking_dag_net_list_size", dag_net_list_[BLOCKING_DAG_NET_LIST].get_size(),
@@ -3937,7 +3920,7 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
     ObIDagNet *cur = head->get_next();
     ObIDagNet *tmp = nullptr;
     int64_t rest_cnt = DEFAULT_MAX_RUNNING_DAG_NET_CNT - (dag_net_map_.size() - dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
-    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full()) {
+    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full_()) {
       LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
       tmp = cur;
       cur = cur->get_next();

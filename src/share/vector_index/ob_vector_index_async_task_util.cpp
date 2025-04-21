@@ -819,7 +819,7 @@ int ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
 
 /**************************** ObVecIndexAsyncTaskHandler ******************************/
 ObVecIndexAsyncTaskHandler::ObVecIndexAsyncTaskHandler()
-  : is_inited_(false), tg_id_(INVALID_TG_ID)
+  : is_inited_(false), tg_id_(INVALID_TG_ID), async_task_ref_cnt_(0)
 {
 }
 
@@ -912,15 +912,18 @@ int ObVecIndexAsyncTaskHandler::push_task(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory of ObVecIndexAsyncTask", K(ret), K(tenant_id), K(ls_id));
     } else if (FALSE_IT(async_task = new (async_task) ObVecIndexAsyncTask())) {
-    } else if (OB_FAIL(async_task->init(tenant_id, ls_id, ctx->task_status_.task_type_, ctx, allocator_))) {
+    } else if (OB_FAIL(async_task->init(tenant_id, ls_id, ctx->task_status_.task_type_, ctx))) {
       LOG_WARN("fail to init opt async task", KR(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(TG_PUSH_TASK(tg_id_, async_task))) {
       LOG_WARN("fail to TG_PUSH_TASK", KR(ret), KPC(async_task));
+    } else {
+      // !!!! inc async task ref cnt;
+      inc_async_task_ref();
     }
     // free memory
     if (OB_FAIL(ret) && OB_NOT_NULL(async_task)) {
       async_task->~ObVecIndexAsyncTask();
-      allocator_->free(async_task);  // arena need free ??
+      allocator_->free(async_task);  // arena need free? no
       async_task = nullptr;
     }
   }
@@ -958,6 +961,8 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
       LOG_WARN("unexpected task type", K(ret), KPC(async_task));
     }
   }
+  // !!!!! desc async task ref cnt
+  dec_async_task_ref();
   // free memory
   if (OB_NOT_NULL(async_task)) {
     async_task->~ObVecIndexAsyncTask();
@@ -983,13 +988,15 @@ void ObVecIndexAsyncTaskHandler::handle_drop(void *task)
     async_task->~ObVecIndexAsyncTask();
     allocator_->free(async_task);
     async_task = nullptr;
+    // !!!!! desc async task ref cnt
+    dec_async_task_ref();
   }
 }
 
 
 /**************************** ObVecIndexAsyncTask ******************************/
 int ObVecIndexAsyncTask::init(
-    const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx, ObIAllocator *allocator)
+    const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
    ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
@@ -1005,13 +1012,11 @@ int ObVecIndexAsyncTask::init(
     } else {
       LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_id_));
     }
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (!ls_id.is_valid())
-      || OB_ISNULL(ctx) || OB_ISNULL(allocator))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (!ls_id.is_valid()) || OB_ISNULL(ctx))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(ls_id), KP(ctx), KP(allocator));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(ls_id), KP(ctx));
   } else {
     ctx_ = ctx;
-    allocator_ = allocator;
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     task_type_ = task_type;
@@ -1028,7 +1033,10 @@ int ObVecIndexAsyncTask::do_work()
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
   DEBUG_SYNC(HANDLE_VECTOR_INDEX_ASYNC_TASK);
-  if (OB_ISNULL(ctx_) || OB_ISNULL(vector_index_service)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObVecIndexAsyncTask is not init", KR(ret));
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(vector_index_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret));
   } else if (OB_ISNULL(vec_idx_mgr_)) {
@@ -1066,6 +1074,12 @@ int ObVecIndexAsyncTask::do_work()
   if (task_started) {
     adpt_guard.get_adatper()->vector_index_task_finish();
   }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter)) {
+    vector_index_service->get_allocator().free(new_adapter);
+    new_adapter = nullptr;
+  }
+
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
@@ -1081,10 +1095,9 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   int64_t *vids = nullptr;
   int64_t extra_column_count = 0;
   ObVecExtraInfoObj *out_extra_obj = nullptr;
-  ObArenaAllocator tmp_allocator("VectorOptTask", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   ObVidBound vid_bound;
-  schema::ObTableParam vid_table_param(*allocator_);
-  schema::ObTableParam data_table_param(*allocator_);
+  schema::ObTableParam vid_table_param(allocator_);
+  schema::ObTableParam data_table_param(allocator_);
   common::ObNewRowIterator *vid_id_iter = nullptr;
   common::ObNewRowIterator *data_iter = nullptr;
   ObAccessService *tsc_service = MTL(ObAccessService *);
@@ -1094,18 +1107,18 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
                (storage::ObTableScanParam, data_scan_param)) {
     if (OB_FAIL(adaptor.get_dim(dim))) {
       LOG_WARN("get dim failed", K(ret));
-    } else if (OB_ISNULL(vectors = static_cast<float *>(tmp_allocator.alloc(sizeof(float) * dim * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
+    } else if (OB_ISNULL(vectors = static_cast<float *>(allocator_.alloc(sizeof(float) * dim * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc new mem.", K(ret));
-    } else if (OB_ISNULL(vids = static_cast<int64_t *>(tmp_allocator.alloc(sizeof(int64_t) * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
+    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc new mem.", K(ret));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                                   &adaptor,
                                   ctx_->task_status_.target_scn_,
                                   INDEX_TYPE_VEC_ROWKEY_VID_LOCAL,
-                                  *allocator_,
-                                  *allocator_,
+                                  allocator_,
+                                  allocator_,
                                   vid_id_scan_param,
                                   vid_table_param,
                                   vid_id_iter))) {
@@ -1114,8 +1127,8 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
                                         &adaptor,
                                         ctx_->task_status_.target_scn_,
                                         INDEX_TYPE_IS_NOT,
-                                        *allocator_,
-                                        *allocator_,
+                                        allocator_,
+                                        allocator_,
                                         data_scan_param,
                                         data_table_param,
                                         data_iter))) {
@@ -1123,7 +1136,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
     } else if (OB_FALSE_IT(extra_column_count = adaptor.get_extra_column_count())) {
     } else if (extra_column_count > 0) {
       char *buf = nullptr;
-      if (OB_ISNULL(buf = static_cast<char *>(tmp_allocator.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret), K(extra_column_count));
       } else if (OB_FALSE_IT(out_extra_obj = new (buf) ObVecExtraInfoObj[extra_column_count * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD])) {
@@ -1184,7 +1197,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
                 const ObDatum &extra_datum = datum_row->storage_datums_[i + 1];
                 if (OB_FALSE_IT(out_extra_obj[current_count * extra_column_count + i].reset())) {
                 } else if (OB_FAIL(out_extra_obj[current_count * extra_column_count + i].from_datum(
-                               extra_datum, meta_type, &tmp_allocator))) {
+                               extra_datum, meta_type, &allocator_))) {
                   LOG_WARN("failed to from obj.", K(ret), K(extra_datum), K(meta_type), K(i));
                 }
               }
@@ -1287,11 +1300,10 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   int64_t lob_inrow_threshold;
   transaction::ObTxDesc *tx_desc = nullptr;
   ObAccessService *oas = MTL(ObAccessService *);
-  ObArenaAllocator tmp_allocator("VecIdxSSAR", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   oceanbase::transaction::ObTransService *txs = MTL(transaction::ObTransService *);
   oceanbase::transaction::ObTxReadSnapshot snapshot;
-  share::schema::ObTableDMLParam table_dml_param(*allocator_);
-  share::schema::ObTableDMLParam table_delete_dml_param(*allocator_);
+  share::schema::ObTableDMLParam table_dml_param(allocator_);
+  share::schema::ObTableDMLParam table_delete_dml_param(allocator_);
   ObDMLBaseParam dml_param;
   ObSEArray<uint64_t, 4> all_column_ids;
   ObSEArray<uint64_t, 4> dml_column_ids;
@@ -1315,7 +1327,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   bool trans_start = false;
   if OB_FAIL(ret) {
   } else {
-    HEAP_VARS_2((storage::ObTableScanParam, snap_scan_param), (schema::ObTableParam, snap_table_param, *allocator_)) {
+    HEAP_VARS_2((storage::ObTableScanParam, snap_scan_param), (schema::ObTableParam, snap_table_param, allocator_)) {
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
         LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adaptor.get_snapshot_table_id(), snapshot_table_schema))) {
@@ -1330,8 +1342,8 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                                             &adaptor,
                                             ctx_->task_status_.target_scn_,
                                             INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
-                                            *allocator_,
-                                            *allocator_,
+                                            allocator_,
+                                            allocator_,
                                             snap_scan_param,
                                             snap_table_param,
                                             snap_data_iter))) {
@@ -1375,6 +1387,10 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
             if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
               LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
             }
+          } else { // set extra column id
+            if (OB_FAIL(extra_column_idxs.push_back(i))) {
+              LOG_WARN("failed to push back extra column idx", K(ret), K(i));
+            }
           }
         } // end for.
         if (OB_SUCC(ret)) {
@@ -1417,28 +1433,29 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
         ObOStreamBuf::Callback cb = callback;
         ObHNSWSerializeCallback::CbParam param;
         param.vctx_ = &ctx;
-        param.allocator_ = allocator_;
-        param.tmp_allocator_ = &tmp_allocator;
+        param.allocator_ = &allocator_;
+        param.tmp_allocator_ = &allocator_;
         param.lob_inrow_threshold_ = lob_inrow_threshold;
         param.timeout_ = timeout;
         param.snapshot_ = &snapshot;
         param.tx_desc_ = tx_desc;
         ObVectorIndexAlgorithmType index_type = adaptor.get_snap_index_type();
         int64_t key_pos = 0;
-        char *key_str = static_cast<char*>(allocator_->alloc(ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH));
+        char *key_str = static_cast<char*>(allocator_.alloc(ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH));
         if (OB_ISNULL(key_str)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc vec key", K(ret));
         } else if (OB_FAIL(adaptor.check_snap_hnswsq_index())) {
           LOG_WARN("failed to check snap hnswsq index", K(ret));
-        } else if (OB_FAIL(adaptor.serialize(allocator_, param, cb))) {
+        } else if (OB_FAIL(adaptor.serialize(&allocator_, param, cb))) {
           LOG_WARN("fail to do vsag serialize", K(ret));
         } else if (OB_FAIL(row_iter.init(false))) {
           LOG_WARN("fail to init row iter", K(ret));
         } else {
           HEAP_VAR(blocksstable::ObDatumRow, datum_row, tenant_id_) {
-            if (OB_FAIL(datum_row.init(snapshot_column_count))) {
-              LOG_WARN("fail to init datum row", K(ret), K(snapshot_column_count), K(datum_row));
+            const int64_t new_snapshot_column_cnt = snapshot_column_count + extra_column_idxs.count();
+            if (OB_FAIL(datum_row.init(new_snapshot_column_cnt))) {
+              LOG_WARN("fail to init datum row", K(ret), K(new_snapshot_column_cnt), K(snapshot_column_count), K(datum_row));
             }
             for (int64_t row_id = 0; row_id < ctx.vals_.count() && OB_SUCC(ret); row_id++) {
               if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_data_new_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
@@ -1456,7 +1473,25 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                 datum_row.storage_datums_[vector_data_col_idx].set_has_lob_header();
                 datum_row.storage_datums_[vector_vid_col_idx].set_null();
                 datum_row.storage_datums_[vector_col_idx].set_null();
-                if (OB_FAIL(row_iter.add_row(datum_row, util))) {
+                // set extra column default value
+                if (extra_column_idxs.count() > 0) {
+                  for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_idxs.count(); i++) {
+                    if (extra_column_idxs.at(i) == vector_key_col_idx ||
+                        extra_column_idxs.at(i) == vector_data_col_idx ||
+                        extra_column_idxs.at(i) == vector_vid_col_idx ||
+                        extra_column_idxs.at(i) == vector_col_idx) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("unexpected extra column idx", K(i), K(extra_column_idxs.at(i)),
+                        K(vector_key_col_idx), K(vector_data_col_idx), K(vector_vid_col_idx), K(vector_col_idx));
+                    } else {
+                      datum_row.storage_datums_[extra_column_idxs.at(i)].set_null();
+                    }
+                  }
+                }
+                LOG_DEBUG("[vec async task] print datum column ids", K(ret),
+                  K(vector_key_col_idx), K(vector_data_col_idx), K(vector_vid_col_idx), K(vector_col_idx), K(extra_column_idxs));
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(row_iter.add_row(datum_row, util))) {
                   LOG_WARN("failed to add row to iter", K(ret));
                 }
                 datum_row.reuse();
@@ -1480,7 +1515,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
     dml_param.branch_id_ = 0;
     dml_param.store_ctx_guard_ = &store_ctx_guard;
     dml_param.schema_version_ = snapshot_table_schema->get_schema_version();
-    dml_param.dml_allocator_ = allocator_;
+    dml_param.dml_allocator_ = &allocator_;
     if (OB_ISNULL(adaptor.get_snap_data_()) || !adaptor.get_snap_data_()->is_inited()) {  // adaptor created by vector index async task, there won't be access from other threads.
       LOG_INFO("data table is empty, won't create snapshot index");
     } else if (OB_FAIL(oas->get_write_store_ctx_guard(ls_id_, timeout_us, *tx_desc, snapshot, 0, dml_param.write_flag_, store_ctx_guard))) {
@@ -1588,7 +1623,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
           if (!lob.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid src lob locator.", K(ret));
-          } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, *allocator_, cs_type, 0, UINT64_MAX, timeout_us, lob))) {
+          } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator_, cs_type, 0, UINT64_MAX, timeout_us, lob))) {
             LOG_WARN("fail to build lob param.", K(ret));
           } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
             LOG_WARN("lob meta row delete failed.", K(ret));
@@ -1620,8 +1655,8 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   // 可以考虑一下使用inner sql删除数据。
   // 1. get 3, 4 index table scan iter.
   // 2. use iter to delete data.
-  schema::ObTableParam delta_table_param(*allocator_);
-  schema::ObTableParam index_table_param(*allocator_);
+  schema::ObTableParam delta_table_param(allocator_);
+  schema::ObTableParam index_table_param(allocator_);
   common::ObNewRowIterator *delta_table_iter = nullptr;
   common::ObNewRowIterator *index_table_iter = nullptr;
   storage::ObValueRowIterator delta_row_iter;
@@ -1639,8 +1674,8 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
                                   &adaptor,
                                   ctx_->task_status_.target_scn_,
                                   INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
-                                  *allocator_,
-                                  *allocator_,
+                                  allocator_,
+                                  allocator_,
                                   delta_scan_param,
                                   delta_table_param,
                                   delta_table_iter,
@@ -1651,8 +1686,8 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
                                         &adaptor,
                                         ctx_->task_status_.target_scn_,
                                         INDEX_TYPE_VEC_INDEX_ID_LOCAL,
-                                        *allocator_,
-                                        *allocator_,
+                                        allocator_,
+                                        allocator_,
                                         index_scan_param,
                                         index_table_param,
                                         index_table_iter,
@@ -1707,8 +1742,8 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
 
   const ObTableSchema *delta_table_schema;
   const ObTableSchema *index_table_schema;
-  share::schema::ObTableDMLParam table_dml_param(*allocator_);
-  share::schema::ObTableDMLParam bitmap_table_dml_param(*allocator_);
+  share::schema::ObTableDMLParam table_dml_param(allocator_);
+  share::schema::ObTableDMLParam bitmap_table_dml_param(allocator_);
   ObSchemaGetterGuard schema_guard;
   int64_t affected_rows = 0;
   int64_t affected_rows2 = 0;

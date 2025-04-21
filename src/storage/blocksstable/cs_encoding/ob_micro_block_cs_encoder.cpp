@@ -571,7 +571,8 @@ int ObMicroBlockCSEncoder::copy_and_append_batch_(const ObBatchDatumRows &vec_ba
   // performance critical, do not double check parameters in private method
   const int64_t column_cnt = vec_batch.vectors_.count();
   const int64_t start_offset = length_;
-  if (appended_row_count_ > 0 && estimate_size_ >= estimate_size_limit_) {
+  if ((appended_row_count_ >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
+      && (estimate_size_ >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   } else {
     bool is_finish = false;
@@ -707,7 +708,8 @@ int ObMicroBlockCSEncoder::copy_vector_(const ObIVector *vector,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (appended_batch_count_ > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
+  } else if ((appended_row_count_ >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
+             && (estimate_size_ + store_size >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   } else if (row_count > 1 && estimate_size_ + store_size >= estimate_size_limit_) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -720,7 +722,7 @@ int ObMicroBlockCSEncoder::copy_vector_(const ObIVector *vector,
                                      col_idx,
                                      vec_data_size,
                                      data_format_type,
-                                     store_class == ObIntSC/*is_signed*/))) {
+                                     store_class == ObIntSC /*is_signed*/))) {
     LOG_WARN("fail to do copy vector", K(ret),
         K(data_format_type), K(col_desc), K(row_count), K(vec_data_size));
   }
@@ -1490,7 +1492,8 @@ int ObMicroBlockCSEncoder::copy_and_append_row_(const ObDatumRow &src, int64_t &
   const int64_t column_cnt = src.get_column_count();
   const int64_t datum_row_offset = length_;
   ObDatum dst_datum;
-  if (appended_row_count_ > 0 && estimate_size_ >= estimate_size_limit_) {
+  if ((appended_row_count_ >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
+      && (estimate_size_ >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   } else {
     bool is_finish = false;
@@ -1616,7 +1619,8 @@ int ObMicroBlockCSEncoder::copy_cell_(const ObColDesc &col_desc, const
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(store_size += datum_size + extra_store_size_for_var_string)) {
-  } else if (appended_row_count_ > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
+  } else if ((appended_row_count_ >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
+             && (estimate_size_ + store_size >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   // appended_row_count_ == 0 represent a large row, do not return OB_BUF_NOT_ENOUGH
   } else if (row_buf_holder_.size() < length_ + datum_size) {

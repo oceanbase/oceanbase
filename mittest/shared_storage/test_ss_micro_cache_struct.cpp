@@ -662,7 +662,6 @@ TEST_F(TestSSMicroCacheStruct, micro_meta_pool)
 
 TEST_F(TestSSMicroCacheStruct, arc_iter_info)
 {
-  const uint32_t ori_micro_ref_cnt = ORI_MICRO_REF_CNT;
   const int32_t micro_size = 50;
   ObSSARCIterInfo arc_iter_info;
   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
@@ -697,6 +696,8 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
   ObSSMicroBlockMeta *micro_meta = nullptr;
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::alloc_micro_block_meta(micro_meta));
   ASSERT_NE(nullptr, micro_meta);
+  ObSSMicroBlockMetaHandle micro_meta_handle;
+  micro_meta_handle.set_ptr(micro_meta);
   const int64_t seg_cnt = 500;
   const int64_t total_seg_cnt = seg_cnt * SS_ARC_SEG_COUNT;
   for (int64_t i = 1; i <= total_seg_cnt; ++i) {
@@ -729,18 +730,18 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
     }
 
     if (arc_iter_info.need_iterate_cold_micro(seg_idx)) {
-      ASSERT_EQ(OB_SUCCESS, arc_iter_info.push_cold_micro(micro_key, *micro_meta, seg_idx));
-      ObSSMicroBlockMetaHandle cold_micro_handle;
-      ASSERT_EQ(OB_SUCCESS, arc_iter_info.get_cold_micro(micro_key, cold_micro_handle));
-      ASSERT_EQ(true, cold_micro_handle.is_valid());
-      ASSERT_EQ(ori_micro_ref_cnt + 2, cold_micro_handle.get_ptr()->ref_cnt_);
-      ASSERT_EQ(micro_meta->first_val_, cold_micro_handle.get_ptr()->first_val_);
-      ASSERT_EQ(micro_meta->second_val_, cold_micro_handle.get_ptr()->second_val_);
-      ASSERT_EQ(micro_meta->micro_key(), cold_micro_handle.get_ptr()->micro_key());
-      ASSERT_EQ(micro_meta->crc(), cold_micro_handle.get_ptr()->crc());
+      ObSSMicroMetaSnapshot tmp_cold_micro;
+      ASSERT_EQ(OB_SUCCESS, tmp_cold_micro.init(*micro_meta));
+      ASSERT_EQ(OB_SUCCESS, arc_iter_info.push_cold_micro(micro_key, tmp_cold_micro, seg_idx));
+
+      ObSSMicroMetaSnapshot cold_micro;
+      ASSERT_EQ(OB_SUCCESS, arc_iter_info.get_cold_micro(micro_key, cold_micro));
+      ASSERT_EQ(micro_meta->micro_key(), cold_micro.micro_key());
+      ASSERT_EQ(micro_meta->first_val_, cold_micro.micro_meta_.first_val_);
+      ASSERT_EQ(micro_meta->second_val_, cold_micro.micro_meta_.second_val_);
+      ASSERT_EQ(micro_meta->crc(), cold_micro.micro_meta_.crc());
     }
   }
-  micro_meta->free();
 
   ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.obtained_cnt_);
   ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.obtained_cnt_);
@@ -753,15 +754,15 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
 
   for (int64_t i = 0; i < SS_ARC_SEG_COUNT; ++i) {
     while (arc_iter_info.need_handle_cold_micro(i)) {
-      ObSSMicroBlockMetaHandle cold_micro_handle;
-      ASSERT_EQ(OB_SUCCESS, arc_iter_info.pop_cold_micro(i, cold_micro_handle));
-      ASSERT_EQ(true, cold_micro_handle.is_valid());
-      ASSERT_EQ(1, cold_micro_handle.get_ptr()->ref_cnt_);
+      ObSSMicroMetaSnapshot cold_micro;
+      ASSERT_EQ(OB_SUCCESS, arc_iter_info.pop_cold_micro(i, cold_micro));
+      ASSERT_EQ(true, cold_micro.micro_key().is_valid());
       ASSERT_EQ(OB_SUCCESS, arc_iter_info.finish_handle_cold_micro(i));
     }
   }
 
   arc_iter_info.destroy();
+  micro_meta_handle.reset();
   ASSERT_EQ(0, SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
 }
 

@@ -541,6 +541,7 @@ public:
     MIN_WAIT_TYPE = 0,
     WAIT_SCHEMA_TRANS,
     WAIT_SSTABLE_TRANS,
+    WAIT_SCHEMA_TRANS_WITHOUT_WRITE_DEFENSIVE,
     MAX_WAIT_TYPE
   };
 public:
@@ -549,12 +550,14 @@ public:
   int init(
       const uint64_t tenant_id,
       const int64_t ddl_task_id,
+      const share::ObDDLTaskStatus ddl_task_status,
       const uint64_t table_id,
       const WaitTransType wait_trans_type,
       const int64_t wait_version);
   int init(
       const uint64_t tenant_id,
       const int64_t ddl_task_id,
+      const share::ObDDLTaskStatus ddl_task_status,
       const uint64_t table_id,
       const common::ObIArray<common::ObTabletID> &tablet_ids,
       const WaitTransType wait_trans_type,
@@ -564,7 +567,7 @@ public:
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
   transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_), K_(ddl_task_status), K_(is_write_defensive_done));
 
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
@@ -582,7 +585,8 @@ private:
       const uint64_t tenant_id,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       share::ObLocationService *location_service,
-      const bool need_wait_trans_end);
+      const bool need_wait_trans_end,
+      const bool need_write_defensive);
 
   // check if all transactions before a timestamp have ended
    int check_sstable_trans_end(
@@ -593,6 +597,13 @@ private:
       share::ObLocationService *location_service,
       common::ObIArray<int> &ret_array,
       common::ObIArray<int64_t> &snapshot_array);
+
+  static int do_write_defensive(
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id,
+      const share::ObDDLTaskStatus ddl_task_status,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const int64_t schema_version);
 private:
   static const int64_t INDEX_SNAPSHOT_VERSION_DIFF = 100 * 1000 * 1000; // 100ms
   bool is_inited_;
@@ -605,6 +616,8 @@ private:
   common::ObArray<common::ObTabletID> tablet_ids_;
   common::ObArray<int64_t> snapshot_array_;
   int64_t ddl_task_id_;
+  share::ObDDLTaskStatus ddl_task_status_;
+  bool is_write_defensive_done_;
 };
 
 class ObDDLTask;

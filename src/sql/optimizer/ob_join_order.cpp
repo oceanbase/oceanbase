@@ -1130,7 +1130,6 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       LOG_WARN("failed to final extract index skip query range", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::check_prefix_ranges_count(range_info.get_ranges(),
                                                                   equal_prefix_count,
-                                                                  equal_prefix_null_count,
                                                                   range_prefix_count,
                                                                   contain_always_false))) {
       LOG_WARN("failed to compute query range prefix count", K(ret));
@@ -1152,15 +1151,20 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       } else {
         range_info.set_query_range(static_cast<ObQueryRange*>(query_range_provider));
       }
-      range_info.set_equal_prefix_null_count(equal_prefix_null_count);
       range_info.set_index_column_count(index_schema->is_index_table() ?
                                         index_schema->get_index_column_num() :
                                         index_schema->get_rowkey_column_num());
       range_info.set_index_prefix(out_index_prefix);
-      if (OB_FAIL(get_query_range_count(range_info, range_cnt))) {
+      int64_t index_equal_prefix_cnt = MIN(range_info.get_index_column_count(), equal_prefix_count);
+      if (OB_FAIL(ObOptimizerUtil::check_equal_prefix_null_count(range_info.get_ranges(),
+                                                                 index_equal_prefix_cnt,
+                                                                 equal_prefix_null_count))) {
+
+      } else if (OB_FAIL(get_query_range_count(range_info, range_cnt))) {
         LOG_WARN("failed to get query range count", K(ret));
       } else {
         range_info.set_range_count(range_cnt);
+        range_info.set_equal_prefix_null_count(equal_prefix_null_count);
       }
       LOG_TRACE("succeed to get query range", K(ranges), K(ss_ranges), K(helper.filters_),
                   KPC(query_range_provider), K(range_columns),
@@ -2994,7 +2998,8 @@ int ObJoinOrder::refine_unique_range_rowcnt(const uint64_t table_id,
     } else if (OB_FAIL(unique_ordering_info.push_back(temp_ordering_info))) {
       LOG_WARN("failed to push back ordering info", K(ret));
     }
-    if (OB_SUCC(ret) && index_info_entry->get_range_info().is_get()){
+    if (OB_SUCC(ret) && (index_info_entry->get_range_info().is_get() ||
+                         index_info_entry->is_valid_unique_index())){
       index_info_entry->get_range_info().
           set_unique_range_rowcnt(index_info_entry->get_range_info().get_range_count());
     }
@@ -4504,6 +4509,13 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using match against expr, vector index is");
   } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
+  } else if (stmt->has_vec_approx() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1 && OB_FALSE_IT(add_only_vec_index_id = true)) {
+  } else if (add_only_vec_index_id) {
+    // for compatibility: versions prior to 435bp1 do not have a pre-filter.
+    // if GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1, only add vector index (post-filter)
+    if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, valid_index_ids))) {
+      LOG_WARN("failed to add valid vec index ids", K(ret));
+    }
   } else if (table_item->is_index_table_) {
     if (OB_FAIL(valid_index_ids.push_back(table_item->ref_id_))) {
       LOG_WARN("failed to push back array", K(ret));
@@ -11000,7 +11012,8 @@ int ObJoinOrder::generate_temp_table_paths()
       LOG_WARN("failed to generate subquery property", K(ret));
     } else if (OB_FAIL(compute_subquery_path_property(table_id_,
                                                       temp_table_root,
-                                                      temp_table_path))) {
+                                                      temp_table_path,
+                                                      /*is_temp_table_path = */true))) {
       LOG_WARN("failed to generate subquery paths", K(ret));
     } else if (OB_FAIL(temp_table_path->compute_sharding_info())) {
       LOG_WARN("failed to reset temp table partition keys", K(ret));
@@ -11235,7 +11248,8 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
 // generate physical property for each subquery path, including ordering, sharding
 int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
                                                  ObLogicalOperator *root,
-                                                 Path *path)
+                                                 Path *path,
+                                                 bool is_temp_table_path)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
@@ -11269,7 +11283,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->set_interesting_order_info(interesting_order_info);
       path->is_local_order_ = root->get_is_local_order();
       path->is_range_order_ = root->get_is_range_order();
-      path->exchange_allocated_ = root->is_exchange_allocated();
+      path->exchange_allocated_ = is_temp_table_path ? false : root->is_exchange_allocated();
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();
       path->contain_fake_cte_ = root->get_contains_fake_cte();
@@ -12014,7 +12028,11 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(left_paths.count()), K(right_paths.count()),
         K(left_tree), K(right_tree), K(ret));
-  } else if (OB_FAIL(check_valid_for_inner_path(join_conditions, path_info, *right_tree, need_inner_path))) {
+  } else if (OB_FAIL(check_valid_for_inner_path(join_conditions,
+                                                path_info,
+                                                has_equal_cond,
+                                                *right_tree,
+                                                need_inner_path))) {
     LOG_WARN("failed to check valid for inner path", K(ret));
   } else if (need_inner_path && OB_FAIL(get_cached_inner_paths(join_conditions,
                                                                *left_tree,
@@ -12125,16 +12143,21 @@ int ObJoinOrder::create_subplan_filter_for_join_path(Path *path,
 
 int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_conditions,
                                             const ValidPathInfo &path_info,
+                                            const bool has_equal_cond,
                                             const ObJoinOrder &right_tree,
                                             bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool right_tree_can_push_pred = false;
   is_valid = true;
-  if (path_info.force_inner_nl_) {
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (path_info.force_inner_nl_) {
     is_valid = true;
   } else if (join_conditions.empty() || path_info.force_mat_ ||
-      (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type())) {
+      (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type()) ||
+      (!has_equal_cond && !OPT_CTX.is_nested_join_enabled())) {
     is_valid = false;
   } else if (OB_FAIL(right_tree.check_can_push_join_pred(right_tree_can_push_pred))) {
     LOG_WARN("failed to check right tree can push join pred", K(ret));
@@ -12321,12 +12344,17 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                       dist_algo == DIST_HASH_LOCAL_PARTITION ||
                                       dist_algo == DIST_PARTITION_HASH_LOCAL ||
                                       dist_algo == DIST_NONE_HASH);
+          bool tmp_need_mat = need_mat;
+          bool tmp_need_no_mat = need_no_mat;
           if (!ObOptimizerUtil::is_right_need_exchange(*right_path->get_sharding(), dist_algo) &&
               right_path->exchange_allocated_ &&
               right_path->get_sharding()->is_distributed()) {
-            //如果右边不需要分配exchange，但是right path已经分配过exchange，
-            //生成nl path会导致right path里的exchange打上px表，无法执行
-          } else if ((need_mat || right_need_exchange) &&
+            tmp_need_mat = true;
+            tmp_need_no_mat = false;
+            OPT_TRACE("distributed method", ob_dist_algo_str(dist_algo), "force need materialize");
+            LOG_TRACE("distributed method force need materialize", K(dist_algo), KPC(right_path));
+          }
+          if ((tmp_need_mat || right_need_exchange) &&
                OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                               right_path,
                                               path_info.join_type_,
@@ -12337,7 +12365,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                               !left_is_at_most_one_row,
                                               true))) {
             LOG_WARN("failed to create and  add nl path with materialization", K(ret));
-          } else if (need_no_mat && !right_need_exchange &&
+          } else if (tmp_need_no_mat && !right_need_exchange &&
                      OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                                     right_path,
                                                     path_info.join_type_,
@@ -12879,6 +12907,16 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL) {
     distributed_methods &= ~DIST_PULL_TO_LOCAL;
     OPT_TRACE("plan will not use pull to local method");
+  }
+  if (OB_SUCC(ret)) {
+    OPT_TRACE("succeed to get valid distributed method:");
+    OPT_TRACE_BEGIN_SECTION;
+    for (int64_t j = DistAlgo::DIST_BASIC_METHOD; j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
+      if (distributed_methods & j) {
+        OPT_TRACE(ob_dist_algo_str(get_dist_algo(j)));
+      }
+    }
+    OPT_TRACE_END_SECTION;
   }
   return ret;
 }
@@ -18961,12 +18999,8 @@ int ObJoinOrder::extract_real_join_keys(ObIArray<ObRawExpr *> &join_keys)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < join_keys.count(); ++i) {
-    ObRawExpr *&expr = join_keys.at(i);
-    bool is_lossless = false;
-    if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
-      LOG_WARN("failed to check lossless column cast", K(ret));
-    } else if (is_lossless) {
-      expr = expr->get_param_expr(0);
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(join_keys.at(i), join_keys.at(i)))) {
+      LOG_WARN("failed to get expr without lossless column cast", K(ret));
     }
   }
   return ret;
@@ -19501,6 +19535,30 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
       LOG_WARN("failed to get vector index tid", K(ret));
   } else if ((vec_index_tid != OB_INVALID_ID)) {
     index_tid_array[size++] = vec_index_tid;
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
+                                        ObSqlSchemaGuard *schema_guard,
+                                        const uint64_t table_id,
+                                        const uint64_t ref_table_id,
+                                        const bool has_aggr,
+                                        ObIArray<uint64_t> &valid_index_ids)
+{
+  int ret = OB_SUCCESS;
+  uint64_t vec_index_tid = OB_INVALID_ID;
+  bool vector_index_match = false;
+  ObRawExpr *vector_expr = NULL;
+  if (!stmt.has_vec_approx()
+      || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
+    // do nothing, not vec index
+  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, vec_index_tid))) {
+      LOG_WARN("failed to get vector index tid", K(ret));
+  } else if ((vec_index_tid != OB_INVALID_ID)) {
+    if (OB_FAIL(valid_index_ids.push_back(vec_index_tid))) {
+      LOG_WARN("failed to push back index id", K(ret));
+    }
   }
   return ret;
 }
@@ -20845,10 +20903,8 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
     depend_expr = depend_expr->get_param_expr(4);
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(depend_expr, is_lossless))) {
-    LOG_WARN("check depend epxr lossless failed", K(ret));
-  } else if(is_lossless) {
-    depend_expr = depend_expr->get_param_expr(0);
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(depend_expr, depend_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
   }
   // compare each param expr with depend_expr
   for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {

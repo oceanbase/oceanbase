@@ -30,7 +30,8 @@ public:
         is_inited_(false),
         max_num_(max_num),
         attr_(tenant_id, pool_name),
-        retire_time_(retire_time)
+        retire_time_(retire_time),
+        obj_label_("TbObjVal")
   {}
   virtual ~ObTableObjectPool() { destroy(); }
   TO_STRING_KV(K_(is_inited),
@@ -176,7 +177,7 @@ private:
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(tmp_obj)) { // has no object in pool, need extend
           void *buf = nullptr;
-          ObMemAttr attr(MTL_ID(), "TbObjVal", ObCtxIds::DEFAULT_CTX_ID);
+          ObMemAttr attr(MTL_ID(), obj_label_, ObCtxIds::DEFAULT_CTX_ID);
           if (OB_ISNULL(mem_ctx_)) {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "memory context is null", K(ret));
@@ -197,6 +198,8 @@ private:
 
     return ret;
   }
+public:
+  OB_INLINE void set_obj_label(const char *obj_str) { obj_label_ = obj_str; }
 private:
   common::ObArenaAllocator allocator_; // for init obj_pool_
   lib::MemoryContext mem_ctx_; // for alloc T
@@ -206,6 +209,7 @@ private:
   int64_t retire_time_; // us
   common::ObSpinLock lock_;
   common::ObFixedQueue<T> obj_pool_;
+  ObLabel obj_label_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableObjectPool);
 };

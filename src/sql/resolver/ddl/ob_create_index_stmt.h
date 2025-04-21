@@ -38,6 +38,7 @@ public:
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
   void set_compress_method(const common::ObString &compress_method);
   void set_comment(const common::ObString &comment);
+  void set_storage_cache_policy(const common::ObString &storage_cache_policy);
   void set_index_name(const common::ObString &index_name);
   uint64_t get_tenant_id() const { return create_index_arg_.tenant_id_; };
   void set_tenant_id(const uint64_t tenant_id);

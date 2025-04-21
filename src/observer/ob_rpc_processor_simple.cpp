@@ -59,6 +59,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_file_manager.h"
+#include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #endif
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
@@ -4063,6 +4065,35 @@ int ObRpcClearSSMicroCacheP::process()
   return ret;
 }
 
+int ObTriggerStorageCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant id to switch", K(ret), K(tenant_id));
+  } else if (!is_user_tenant(tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_ERROR("can't trigger non-user tenant for storage cache", K(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id)
+    {
+      ObStorageCachePolicyService *storage_cache_service = nullptr;
+      if (OB_ISNULL(storage_cache_service = MTL(ObStorageCachePolicyService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("storage_cache_service is nullptr", KR(ret));
+      } else if (FALSE_IT(storage_cache_service->set_trigger_status(true))) {
+      } else {
+        LOG_INFO("succeed to trigger storage cache", K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSetSSCkptCompressorP::process()
 {
   int ret = OB_SUCCESS;
@@ -4087,6 +4118,45 @@ int ObSetSSCkptCompressorP::process()
 
       if (OB_SUCC(ret)) {
         LOG_INFO("succeed to set_ss_ckpt_compressor", K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSetSSCacheSizeRatioP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      bool succ_adjust = false;
+      ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
+      int64_t micro_cache_reserved_size = 0;
+      if (OB_ISNULL(tnt_file_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(tnt_file_mgr->adjust_cache_disk_ratio(arg_.micro_cache_size_ratio_,
+                 arg_.macro_cache_size_ratio_, succ_adjust, micro_cache_reserved_size))) {
+        LOG_WARN("fail to adjust cache disk ratio", K_(arg));
+      } else if (succ_adjust) {
+        LOG_INFO("succ to adjust cache disk ratio", K_(arg));
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("can't adjust cache disk ratio now", K(ret), K_(arg));
+      }
+
+      if (OB_SUCC(ret)) {
+        ObSSMicroCache *micro_cache_mgr = MTL(ObSSMicroCache *);
+        if (OB_ISNULL(micro_cache_mgr)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(micro_cache_mgr->resize_micro_cache_file_size(micro_cache_reserved_size))) {
+          LOG_WARN("fail to resize micro cache file size", K(arg_.tenant_id_), K(micro_cache_reserved_size));
+        } else {
+          LOG_INFO("succ to resize micro_cache file size", K(arg_.tenant_id_), K(micro_cache_reserved_size));
+        }
       }
     }
   }

@@ -245,7 +245,9 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
       ObSSMicroBlockMetaHandle micro_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta_handle(micro_key, micro_handle, false));
-      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(micro_handle));
+      ObSSMicroMetaSnapshot evict_micro;
+      evict_micro.micro_meta_ = *micro_handle.get_ptr();
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro));
     }
   }
   ASSERT_EQ(2, cache_stat.task_stat().t1_evict_cnt_);
@@ -269,7 +271,9 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->micro_meta_map_.get(&micro_key, micro_handle));
       ASSERT_EQ(true, micro_handle.is_valid());
       ASSERT_EQ(true, micro_handle()->is_in_ghost_);
-      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_delete_micro_block_meta(micro_handle));
+      ObSSMicroMetaSnapshot delete_micro;
+      delete_micro.micro_meta_ = *micro_handle.get_ptr();
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_delete_micro_block_meta(delete_micro));
     }
   }
   ASSERT_EQ(2, cache_stat.task_stat().b1_delete_cnt_);
@@ -303,15 +307,14 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
   available_space = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_space));
   ASSERT_EQ(available_space,
-      max_cache_data_blk_cnt * micro_cache->phy_block_size_ * (100 - cache_data_blk_usage_pct) / 100);
+      max_cache_data_blk_cnt * block_size * (SS_ARC_LIMIT_MAX_PREWARM_PCT - cache_data_blk_usage_pct) / 100);
 
   cache_stat.cache_load_.common_io_load_.write_load_.update_load_param(1, 100, 6 * 1024 * 1024);
   cache_stat.cache_load_.common_io_load_.write_load_.update_load_param(1, 200, 12 * 1024 * 1024);
   available_space = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_space));
-  const int64_t PREWARM_EXTRA_SPACE_PCT = 3;
   ASSERT_EQ(available_space,
-      max_cache_data_blk_cnt * micro_cache->phy_block_size_ * (100 - cache_data_blk_usage_pct - PREWARM_EXTRA_SPACE_PCT) / 100);
+      max_cache_data_blk_cnt * block_size * (SS_ARC_LIMIT_MAX_PREWARM_PCT - cache_data_blk_usage_pct) / 100 - SS_CLOSE_EVICTION_DIFF_SIZE);
 
   // 8. make arc work_limit=0
   arc_task.interval_us_ = 10 * 1000; // 10ms

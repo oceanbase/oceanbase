@@ -84,8 +84,7 @@ public:
 
   virtual int get_aggregate_result(
       const ObColumnCSDecoderCtx &ctx,
-      const int32_t *row_ids,
-      const int64_t row_cap,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       storage::ObAggCellBase &agg_cell) const override;
 
   virtual int get_null_count(

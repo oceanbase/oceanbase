@@ -126,6 +126,7 @@ private:
   int resolve_drop_index(const ParseNode &node);
   int resolve_drop_foreign_key(const ParseNode &node);
   int resolve_alter_index(const ParseNode &node);
+  int resolve_alter_index_storage_cache_policy(const ParseNode &node);
   int resolve_rename_index(const ParseNode &node);
   int resolve_alter_index_parallel_oracle(const ParseNode &node);
   int resolve_alter_index_parallel_mysql(const ParseNode &node);
@@ -164,6 +165,10 @@ private:
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_rename_subpartition(const ParseNode &node,
                              const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_alter_partition_storage_cache_policy(const ParseNode &node,
+                                                  const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_alter_subpartition_storage_cache_policy(const ParseNode &node,
+                                                     const share::schema::ObTableSchema &orig_table_schema);
   int check_subpart_name(const share::schema::ObPartition &partition,
                          const share::schema::ObSubPartition &subpartition);
   int resolve_add_constraint(const ParseNode &node);

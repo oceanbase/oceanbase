@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace lib
+{
+  class MemoryContext;
+}
 namespace common
 {
 namespace array

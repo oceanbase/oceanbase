@@ -190,7 +190,7 @@ return ret;
 
 int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, const char *&extra_info, int64_t &result_size, int ef_search,
-               void* invalid, bool reverse_filter, float valid_ratio, bool need_extra_info)
+               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, bool need_extra_info)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -199,13 +199,14 @@ int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,in
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
                                   result_dist, result_ids, result_size,
                                   ef_search, need_extra_info, extra_info,
-                                  invalid, reverse_filter, valid_ratio);
+                                  invalid, reverse_filter, is_extra_info_filter,
+                                  valid_ratio);
 #endif
 }
 
 int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, const char *&extra_info, int64_t &result_size, int ef_search,
-               void* invalid, bool reverse_filter, float valid_ratio, bool need_extra_info, void *&iter_ctx, bool is_last_search)
+               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, bool need_extra_info, void *&iter_ctx, bool is_last_search)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -214,8 +215,8 @@ int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,in
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
                                 result_dist, result_ids, result_size,
                                 ef_search, need_extra_info, extra_info,
-                                invalid, reverse_filter, valid_ratio,
-                                iter_ctx, is_last_search);
+                                invalid, reverse_filter, is_extra_info_filter,
+                                valid_ratio, iter_ctx, is_last_search);
 #endif
 }
 

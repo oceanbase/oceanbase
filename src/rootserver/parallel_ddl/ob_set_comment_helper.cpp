@@ -260,7 +260,7 @@ int ObSetCommentHelper::generate_schemas_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (check_table_legitimacy_()) {
+  } else if (OB_FAIL(check_table_legitimacy_())) {
     LOG_WARN("fail to check table legitimacy", KR(ret));
   } else if (OB_ISNULL(orig_table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -318,6 +318,8 @@ int ObSetCommentHelper::operate_schemas_()
   const ObString *ddl_stmt_str = &arg_.ddl_stmt_str_;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_ISNULL(orig_table_schema_) || OB_ISNULL(new_table_schema_)) {
+    LOG_WARN("orig table schema or new table schema is null", KR(ret), KP(orig_table_schema_), KP(new_table_schema_));
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service impl is null", KR(ret));

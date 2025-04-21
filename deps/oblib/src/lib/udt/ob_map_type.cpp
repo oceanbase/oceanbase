@@ -14,6 +14,7 @@
 #include "ob_array_type.h"
 #include "lib/ob_errno.h"
 #include "ob_map_type.h"
+#include <map>
 
 namespace oceanbase {
 namespace common {
@@ -236,6 +237,149 @@ int ObMapType::compare_at(uint32_t left_begin, uint32_t left_len,
   } else if (cmp_ret == 0 && values_->compare_at(left_begin, left_len, right_begin, right_len, *right_map->keys_, cmp_ret)) {
     OB_LOG(WARN, "compare values failed", K(ret), K(cmp_ret));
   }
+  return ret;
+}
+
+int ObMapType::clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only) const
+{
+  int ret = OB_SUCCESS;
+  void *buf = alloc.alloc(sizeof(ObMapType));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "alloc memory failed", K(ret));
+  } else {
+    ObMapType *map_ptr = new (buf) ObMapType();
+    map_ptr->set_array_type(this->map_type_);
+    if (OB_FAIL(keys_->clone_empty(alloc, map_ptr->keys_, read_only))) {
+      OB_LOG(WARN, "keys clone empty failed", K(ret));
+    } else if (OB_FAIL(values_->clone_empty(alloc, map_ptr->values_, read_only))) {
+      OB_LOG(WARN, "values clone empty failed", K(ret));
+    } else {
+      output = map_ptr;
+    }
+  }
+  return ret;
+}
+
+#define CALC_KEY_IDX(Element_Type, Get_Func)                                                      \
+  std::map<Element_Type, uint32_t> idx_map;                                                       \
+  if (OB_ISNULL(keys_)) {                                                                         \
+    ret = OB_ERR_NULL_VALUE;                                                                      \
+    LOG_WARN("key array is null", K(ret));                                                        \
+  }                                                                                               \
+  for (uint32_t i = 0; i < keys_->size() && OB_SUCC(ret); i++) {                                  \
+    ObObj elem_obj;                                                                               \
+    if (keys_->is_null(i)) {                                                                      \
+      idx_arr[0] = i;                                                                             \
+      idx_count = 1;                                                                              \
+    } else if (OB_FAIL(keys_->elem_at(i, elem_obj))) {                                            \
+      LOG_WARN("failed to get element", K(ret), K(i));                                            \
+    } else {                                                                                      \
+      idx_map[elem_obj.Get_Func()] = i;                                                           \
+    }                                                                                             \
+  }                                                                                               \
+  std::map<Element_Type, uint32_t>::iterator it = idx_map.begin();                                \
+  for (; it != idx_map.end() && OB_SUCC(ret); ++it) {                                             \
+    idx_arr[idx_count++] = it->second;                                                            \
+  }
+
+int ObMapType::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
+{
+  int ret = OB_SUCCESS;
+  ObIArrayType *dst_map = NULL;
+  if (OB_FAIL(clone_empty(alloc, dst_map, false))) {
+    OB_LOG(WARN, "clone empty failed", K(ret));
+  } else if (keys_->get_format() != ArrayFormat::Fixed_Size) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "only support fixed size array for distinct operation", K(ret), K(keys_->get_format()));
+  } else if (this->length_ == 0) {
+    output = dst_map;
+  } else {
+    ObIArrayType *dst_key = static_cast<ObMapType *>(dst_map)->keys_;
+    ObIArrayType *dst_value = static_cast<ObMapType *>(dst_map)->values_;
+    const ObCollectionArrayType *key_array_type = dynamic_cast<const ObCollectionArrayType *>(keys_->get_array_type());
+    ObCollectionBasicType *key_elem_type = key_array_type ? dynamic_cast<ObCollectionBasicType *>(key_array_type->element_type_) : NULL;
+    uint32_t *idx_arr = NULL;
+    uint32_t idx_count = 0;
+
+    if (OB_ISNULL(key_elem_type)) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG(WARN, "key_elem_type is NULL", K(ret));
+    } else if (OB_ISNULL(idx_arr = static_cast<uint32_t *>(alloc.alloc(length_ * sizeof(uint32_t))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for tmpbuf", K(ret), K(length_ * sizeof(uint32_t)));
+    } else {
+      switch (key_elem_type->basic_meta_.get_obj_type()) {
+        case ObNullType: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect null value", K(ret));
+          break;
+        }
+        case ObTinyIntType: {
+          CALC_KEY_IDX(int8_t, get_tinyint);
+          break;
+        }
+        case ObSmallIntType: {
+          CALC_KEY_IDX(int16_t, get_smallint);
+          break;
+        }
+        case ObInt32Type: {
+          CALC_KEY_IDX(int32_t, get_int32);
+          break;
+        }
+        case ObIntType: {
+          CALC_KEY_IDX(int64_t, get_int);
+          break;
+        }
+        case ObUTinyIntType: {
+          CALC_KEY_IDX(uint8_t, get_utinyint);
+          break;
+        }
+        case ObUSmallIntType: {
+          CALC_KEY_IDX(uint16_t, get_usmallint);
+          break;
+        }
+        case ObUInt32Type: {
+          CALC_KEY_IDX(uint32_t, get_uint32);
+          break;
+        }
+        case ObUInt64Type: {
+          CALC_KEY_IDX(uint64_t, get_uint64);
+          break;
+        }
+        case ObUFloatType:
+        case ObFloatType: {
+          CALC_KEY_IDX(float, get_float);
+          break;
+        }
+        case ObUDoubleType:
+        case ObDoubleType: {
+          CALC_KEY_IDX(double, get_double);
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported element type", K(ret), K(key_elem_type->basic_meta_.get_obj_type()));
+        }
+      } // end switch
+    }
+
+    for (int i = 0; i < idx_count && OB_SUCC(ret); i++) {
+      if (OB_FAIL(dst_key->insert_from(*keys_, idx_arr[i]))) {
+        OB_LOG(WARN, "append key element failed", K(ret), K(i));
+      } else if (OB_FAIL(dst_value->insert_from(*values_, idx_arr[i]))) {
+        OB_LOG(WARN, "append value element failed", K(ret), K(i));
+      }
+    } // end for
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(dst_map->init())) {
+      OB_LOG(WARN, "init dst map failed", K(ret));
+    } else {
+      output = dst_map;
+    }
+  }
+
   return ret;
 }
 

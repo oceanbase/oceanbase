@@ -231,6 +231,9 @@
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_cs_replica_tablet_stats.h"
 #include "observer/virtual_table/ob_all_virtual_dynamic_partition_table.h"
+#include "observer/virtual_table/ob_all_virtual_storage_cache_task.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_local_cache.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
 
 namespace oceanbase
 {
@@ -2865,6 +2868,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID:
+          {
+            ObAllVirtualTenantMviewRunningJob *running_job = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantMviewRunningJob, running_job))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_SQLSTAT_TID: {
             ObAllVirtualSqlStat *all_virtual_sqlstat = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlStat, all_virtual_sqlstat))) {
@@ -2968,6 +2979,24 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "failed to init ObAllVirtualCSReplicaTabletStats", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cs_replica_tablet_stats);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_STORAGE_CACHE_TASK_TID: {
+            ObAllVirtualStorageCacheTask *storage_cache_task = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageCacheTask, storage_cache_task))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualStorageCacheTask", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_cache_task);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TID: {
+            ObAllVirtualTabletLocalCache *tablet_local_cache = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTabletLocalCache, tablet_local_cache))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualTabletLocalCache", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(tablet_local_cache);
             }
             break;
           }

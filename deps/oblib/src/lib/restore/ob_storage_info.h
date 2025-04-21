@@ -29,6 +29,7 @@ namespace oceanbase
 namespace common
 {
 
+const int64_t OB_MAX_OBJECT_STORAGE_REGION_LENGTH = 128;
 const int64_t OB_MAX_BACKUP_EXTENSION_LENGTH = 512;
 const int64_t OB_MAX_BACKUP_ENDPOINT_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_ACCESSID_LENGTH = 256;
@@ -101,13 +102,14 @@ enum ObStorageAddressingModel
 {
   OB_VIRTUAL_HOSTED_STYLE = 0,
   OB_PATH_STYLE = 1,
+  OB_STORAGE_ADDRESSING_MAX_TYPE = 2
 };
 enum ObStorageChecksumType : uint8_t
 {
   OB_NO_CHECKSUM_ALGO = 0,
   OB_MD5_ALGO = 1,
   OB_CRC32_ALGO = 2,
-  OB_STORAGE_CHECKSUM_MAX_TYPE
+  OB_STORAGE_CHECKSUM_MAX_TYPE = 3
 };
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
@@ -190,6 +192,39 @@ public:
   }
 };
 
+enum ObStorageDeleteMode: uint8_t
+{
+  NONE = 0,
+  STORAGE_DELETE_MODE = 1,
+  STORAGE_TAGGING_MODE = 2,
+  MAX
+};
+
+class ObObjectStorageInfo;
+class ObStorageAccount
+{
+public:
+  ObStorageAccount();
+  virtual ~ObStorageAccount() {};
+  virtual void reset();
+  virtual bool is_valid() const { return is_valid_; }
+  virtual int assign(const ObObjectStorageInfo *storage_info) = 0;
+
+  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_), K(access_id_),
+      K(sts_token_), KP(access_key_));
+
+public:
+  bool is_valid_;
+  char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
+  char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
+  char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
+  ObStorageDeleteMode delete_mode_;
+  ObSTSToken sts_token_;
+};
+
+// ObObjectStorageInfo 存储了需要访问对象存储的所有信息，包括 ak、sk、endpoint 等等
+// ObObjectStorageInfo 可以由一个特定格式的字符串进行初始化，也可以由另外一个 ObObjectStorageInfo 对象赋值，除此之外不提供修改数据的途径
+// 一些字段是可选的，例如 region, checksum_type, addressing_model，它们存在 extension 字段中，但为了方便提取，使用成员变量存放副本
 class ObObjectStorageInfo
 {
   OB_UNIS_VERSION(1);
@@ -197,56 +232,58 @@ class ObObjectStorageInfo
 public:
   ObObjectStorageInfo();
   virtual ~ObObjectStorageInfo();
-
+  virtual void reset();
   virtual int set(const common::ObStorageType device_type, const char *storage_info);
   virtual int set(const char *uri, const char *storage_info);
   virtual int assign(const ObObjectStorageInfo &storage_info);
-  ObStorageType get_type() const;
-  const char *get_type_str() const;
-  ObStorageChecksumType get_checksum_type() const;
-  const char *get_checksum_type_str() const;
-  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
+  int reset_access_id_and_access_key(const char *access_id, const char *access_key);
+  static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
 
-  // the following two functions are designed for Assume Role.
-  virtual int validate_arguments() const;
-  bool is_assume_role_mode() const;
-  bool is_enable_worm() const;
-  virtual int get_authorization_str(char *authorization_str,
-                                  const int64_t authorization_str_len,
-                                  ObSTSToken &sts_token) const;
-
-  // the following two functions are designed for ObDeviceManager, which manages all devices by a device_map_
-  virtual int get_device_map_key_str(char *key_str, const int64_t len) const;
-  virtual int64_t get_device_map_key_len() const;
-  int get_delete_mode() const { return delete_mode_; }
-  bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
-
-  virtual bool is_valid() const;
-  virtual void reset();
+public:
   int64_t hash() const;
   bool operator ==(const ObObjectStorageInfo &storage_info) const;
   bool operator !=(const ObObjectStorageInfo &storage_info) const;
   bool is_access_info_equal(const ObObjectStorageInfo &storage_info) const;
-  int reset_access_id_and_access_key(
-      const char *access_id, const char *access_key);
+
+  ObStorageDeleteMode get_delete_mode() const { return delete_mode_; }
+  ObStorageType get_type() const;
+  const char *get_type_str() const;
+  ObStorageChecksumType get_checksum_type() const;
+  const char *get_checksum_type_str() const;
+
+  bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
+  bool is_enable_worm() const;
+  bool is_assume_role_mode() const;
+  virtual bool is_valid() const;
+  virtual int validate_arguments() const;
+
+  // This function allows the device_manager to determine the key values for different storage information.
+  // Since delete_mode and addressing_mode are recorded in the extension field, they are not separately recorded.
+  virtual int get_device_map_key_str(char *key_str, const int64_t len) const;
+  virtual int64_t get_device_map_key_len() const;
+  // This function retrieves authentication information.
+  // When assume_role is not used, it functions the same as get_storage_info_str.
+  virtual int get_authorization_str(char *authorization_str,
+                                    const int64_t authorization_str_len,
+                                    ObSTSToken &sts_token) const;
+
+  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
+  virtual int to_account(ObStorageAccount &account) const;
+
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id), K_(enable_worm));
-  static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
-
 protected:
-  virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
-  virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
-  int check_enable_worm_(const char *enable_worm);
-  int check_delete_mode_(const char *delete_mode);
-  int check_addressing_model_(const char *addressing_model) const;
-  int set_checksum_type_(const char *checksum_type_str);
-  int set_storage_info_field_(const char *info, char *field, const int64_t length);
+  virtual int get_access_key_(char *buf, const int64_t buf_len) const;
   virtual int get_info_str_(char *storage_info, const int64_t info_len) const;
   virtual int append_extension_str_(char *storage_info, const int64_t info_len) const;
-
+  virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
+  int set_storage_info_field_(const char *info, char *field, const int64_t length);
+  int set_enable_worm_(const char *enable_worm);
+  int set_delete_mode_(const char *delete_mode);
+  int set_addressing_model_(const char *addressing_model);
+  int set_checksum_type_(const char *checksum_type_str);
 
 public:
-  int delete_mode_;
   // TODO: Rename device_type_ to storage_protocol_type_ for better clarity
   // Prefix in the storage_info string, such as 's3://', indicates the protocol used to access the
   // target. Currently, both OBS and GCS are accessed via the s3 protocol, hence s3_region is updated
@@ -256,17 +293,18 @@ public:
   // For OSS/COS, OB_NO_CHECKSUM_ALGO indicates that no checksum algorithm will be used.
   // For Object Storage Services accessed via the S3 protocol,
   // OB_NO_CHECKSUM_ALGO is not supported.
-  ObStorageChecksumType checksum_type_;
+  ObStorageChecksumType checksum_type_;                                 // Repeated in extension_
+  ObStorageAddressingModel addressing_model_;                           // Repeated in extension_
+  ObStorageDeleteMode delete_mode_;                                     // Repeated in extension_
+  char region_[OB_MAX_OBJECT_STORAGE_REGION_LENGTH];                    // Repeated in extension_
   char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
   char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
-  char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
+  char access_key_[OB_MAX_BACKUP_ENCRYPTKEY_LENGTH];
   char extension_[OB_MAX_BACKUP_EXTENSION_LENGTH];
   int64_t max_iops_;
   int64_t max_bandwidth_;
-
-  // Support access object storage by assume role
-  char role_arn_[OB_MAX_ROLE_ARN_LENGTH];
-  char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];
+  char role_arn_[OB_MAX_ROLE_ARN_LENGTH];                               // supported for assume role
+  char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];                         // supported for assume role
   bool is_assume_role_mode_;
   bool enable_worm_;
   static ObClusterVersionBaseMgr *cluster_version_mgr_;

@@ -21,6 +21,17 @@ using namespace common;
 namespace storage
 {
 
+static const int32_t DEFAULT_CS_BATCH_ROW_COUNT = 1024;
+static int32_t default_cs_batch_row_ids_[DEFAULT_CS_BATCH_ROW_COUNT];
+static int32_t default_cs_batch_reverse_row_ids_[DEFAULT_CS_BATCH_ROW_COUNT];
+static void  __attribute__((constructor)) init_row_cs_ids_array()
+{
+  for (int32_t i = 0; i < DEFAULT_CS_BATCH_ROW_COUNT; i++) {
+    default_cs_batch_row_ids_[i] = i;
+    default_cs_batch_reverse_row_ids_[i] = DEFAULT_CS_BATCH_ROW_COUNT - i - 1;
+  }
+}
+
 class ObCGBitmap
 {
 public:

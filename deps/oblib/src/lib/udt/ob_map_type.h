@@ -101,8 +101,8 @@ public :
     }
     return b_ret;
   }
-  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const { return OB_NOT_SUPPORTED; }
-  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const { return OB_NOT_SUPPORTED; }
+  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
+  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
   int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const { return OB_NOT_SUPPORTED; }
   int unionize(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt) { return OB_NOT_SUPPORTED; }
   int intersect(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt) { return OB_NOT_SUPPORTED; }

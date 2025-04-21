@@ -14,6 +14,7 @@
 #define protected public
 #include "lib/alloc/object_mgr.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/utility/ob_backtrace.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -73,9 +74,33 @@ TEST_F(TestObjectSet, basic)
   ASSERT_TRUE(ABlock::EMPTY == block->status_);
 }
 
+TEST(TestMallocAllocator, recycle_tenant_allocator)
+{
+  int64_t tenant_id = 1001;
+  int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
+  const char label[] = "Test";
+  ObMemAttr attr(tenant_id, label, ctx_id);
+  auto ma = ObMallocAllocator::get_instance();
+  ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
+  void *ptr = ma->alloc(1024, attr);
+  AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+  char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  parray(bt, MAX_BACKTRACE_LENGTH, (int64_t*)(obj->bt()), AOBJECT_BACKTRACE_COUNT);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
+  char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  ta->check_has_unfree(first_label, first_bt);
+  ASSERT_TRUE(0 == STRNCMP(first_label, label, STRLEN(label)));
+  ASSERT_TRUE(0 == STRNCMP(first_bt, bt, STRLEN(bt)));
+}
+
 int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
   ::testing::InitGoogleTest(&argc, argv);
+  OB_LOGGER.set_file_name("test_object_set_v2.log", true, true);
+  OB_LOGGER.set_log_level("INFO");
+  enable_malloc_v2(true);
+  enable_memleak_light_backtrace(true);
   return RUN_ALL_TESTS();
 }

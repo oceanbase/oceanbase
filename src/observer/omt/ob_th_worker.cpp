@@ -19,6 +19,7 @@
 #include "sql/executor/ob_memory_tracker.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/thread/threads.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -34,7 +35,7 @@ namespace oceanbase
 namespace omt
 {
 int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
-                  int32_t level, bool force, ObResourceGroup *group)
+                  int32_t level, bool force, ObResourceGroup *group, int32_t group_index)
 {
   int ret = OB_SUCCESS;
   if (!force && tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
@@ -57,6 +58,7 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
     worker->set_group_id_(group_id);
     worker->set_worker_level(level);
     worker->set_group(group);
+    worker->set_numa_info(tenant->id(), GCONF._enable_numa_aware, group_index);
     if (OB_FAIL(worker->start())) {
       ob_delete(worker);
       worker = nullptr;

@@ -102,6 +102,9 @@ static int cast_not_support(const ObObjType expect_type,
                             const ObCastMode cast_mode)
 {
   UNUSED(params);
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+  (void)snprintf(err_msg, sizeof(err_msg), "%s cast to %s", get_type_name(in.get_type()), get_type_name(expect_type));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_NOT_SUPPORTED;
@@ -11373,6 +11376,7 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -11417,10 +11421,16 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
       }
     } else {
       ret = OB_NOT_SUPPORTED;
+      (void)snprintf(err_msg, sizeof(err_msg), "%s type convert to %s",
+                          get_type_name(in.get_type()), get_type_name(expect_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
+    (void)snprintf(err_msg, sizeof(err_msg), "%s type convert to %s",
+                  get_type_name(in.get_type()), get_type_name(expect_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else

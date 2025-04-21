@@ -168,7 +168,7 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     case T_FUN_GROUP_CONCAT: {
       // Assign an int32_t for the string length, another int64_t to record how many rows have
       // already been processed.
-      ret_size = sizeof(int32_t) + sizeof(int64_t);
+      ret_size = sizeof(int32_t) + sizeof(int64_t) + sizeof(bool);
       break;
     }
     default: break;

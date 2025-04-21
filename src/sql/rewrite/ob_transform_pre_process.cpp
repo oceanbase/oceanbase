@@ -277,6 +277,16 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
 
+     if (OB_SUCC(ret)) {
+      if (OB_FAIL(preserve_order_for_gby(stmt, is_happened))) {
+        LOG_WARN("failed to preserve order for pagination", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("preserve order for pagination:", is_happened);
+        LOG_TRACE("succeed to preserve order for pagination", K(is_happened));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_groupingsets_rollup_cube(stmt, is_happened))) {
         LOG_WARN("failed to transform for transform for grouping sets, rollup and cube.", K(ret));
@@ -10827,6 +10837,53 @@ int ObTransformPreProcess::get_rowkey_for_single_table(ObSelectStmt* stmt,
     LOG_WARN("failed to generate unique key", K(ret));
   } else {
     is_valid = true;
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::preserve_order_for_gby(ObDMLStmt *stmt,
+                                                  bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *sel_stmt = NULL;
+  bool is_valid = false;
+  bool is_hint_enabled = false;
+  bool has_hint = false;
+  ObSEArray<ObRawExpr*, 4> group_exprs;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
+  } else if (lib::is_oracle_mode()) {
+    OPT_TRACE("oracle tenant will not preserve order for group by");
+  } else if (OB_FAIL(stmt->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+              ObOptParamHint::PRESERVE_ORDER_FOR_GROUPBY, is_hint_enabled, has_hint))) {
+    LOG_WARN("failed to check has opt param", K(ret));
+  } else if (has_hint && !is_hint_enabled) {
+    OPT_TRACE("query hint disable preserve order for group by");
+  } else if (OB_FAIL(ctx_->session_info_->is_preserve_order_for_groupby_enabled(is_valid))) {
+    LOG_WARN("failed to check preserve order for group by enabled", K(ret));
+  } else if (!is_valid && !has_hint) {
+    OPT_TRACE("system config disable preserve order for group by");
+  } else if (!stmt->is_select_stmt()) {
+    OPT_TRACE("dml query can not preserve order for group by");
+  } else if (OB_FALSE_IT(sel_stmt=static_cast<ObSelectStmt*>(stmt))) {
+  } else if (sel_stmt->has_order_by()) {
+    OPT_TRACE("order by query can not preserve order for group by");
+  } else if (!sel_stmt->has_group_by() || sel_stmt->is_scala_group_by()) {
+    OPT_TRACE("non normal group by query can not preserve order for group by");
+  } else if (OB_FAIL(stmt->get_relation_exprs(group_exprs, SCOPE_GROUPBY))) {
+    LOG_WARN("failed to get group exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
+      OrderItem item(group_exprs.at(i));
+      if (OB_FAIL(sel_stmt->add_order_item(item))) {
+        LOG_WARN("failed to add order item", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !group_exprs.empty()) {
+      trans_happened = true;
+    }
   }
   return ret;
 }

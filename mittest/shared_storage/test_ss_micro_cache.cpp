@@ -280,13 +280,13 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
 
   // 4. find a persisted micro_block
   int64_t persist_idx = -1;
-  ObSSMicroSnapshotInfo micro_snapshot_info;
+  ObSSMicroBaseInfo micro_info;
   ObSSMicroBlockMetaHandle micro_meta_handle;
   ObSSMemBlockHandle mem_blk_handle;
   ObSSPhysicalBlockHandle phy_blk_handle;
   ObSSMicroBlockMeta *cur_micro_meta = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt); ++i) {
-    micro_snapshot_info.reset();
+    micro_info.reset();
     micro_meta_handle.reset();
     mem_blk_handle.reset();
     phy_blk_handle.reset();
@@ -294,13 +294,13 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
     TestSSCommonUtil::MicroBlockInfo &cur_info = micro_block_info_arr.at(i);
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, cur_info.size_);
     ObSSCacheHitType hit_type;
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(micro_key, micro_snapshot_info, micro_meta_handle, mem_blk_handle,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(micro_key, micro_info, micro_meta_handle, mem_blk_handle,
               phy_blk_handle, hit_type, true));
     if (hit_type == ObSSCacheHitType::SS_CACHE_HIT_DISK) {
       persist_idx = i;
       ASSERT_EQ(true, micro_meta_handle.is_valid());
       ASSERT_EQ(true, phy_blk_handle.is_valid());
-      ASSERT_EQ(true, micro_snapshot_info.is_valid());
+      ASSERT_EQ(true, micro_info.is_valid());
       cur_micro_meta = micro_meta_handle.get_ptr();
       ASSERT_EQ(false, cur_micro_meta->is_in_l1_);
       ASSERT_EQ(false, cur_micro_meta->is_in_ghost_);
@@ -421,9 +421,9 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   io_info.user_data_buf_ = read_buf;
   io_info.offset_ = cur_info.offset_;
   io_info.size_ = cur_info.size_;
-  ObSSMicroSnapshotInfo micro_snapshot_info;
+  ObSSMicroBaseInfo micro_info;
   ObSSCacheHitType hit_type;
-  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_snapshot_info, hit_type));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_info, hit_type));
   EXPECT_EQ(ObSSCacheHitType::SS_CACHE_HIT_MEM, hit_type);
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(cur_micro_key, cur_ss_micro_id,
                                      MicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
@@ -472,7 +472,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   io_info.user_data_buf_ = read_buf;
   io_info.offset_ = cur_info.offset_;
   io_info.size_ = cur_info.size_;
-  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_snapshot_info, hit_type));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_info, hit_type));
   EXPECT_EQ(ObSSCacheHitType::SS_CACHE_HIT_DISK, hit_type);
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(cur_micro_key, cur_ss_micro_id,
                                      MicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
@@ -493,7 +493,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   set_basic_read_io_info(io_info);
   io_info.user_data_buf_ = read_buf;
   io_info.size_ = cur_info.size_;
-  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_snapshot_info, hit_type));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_info, hit_type));
   EXPECT_EQ(ObSSCacheHitType::SS_CACHE_MISS, hit_type);
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_cached_micro_block(cur_micro_key, io_info, obj_handle,
                                      ObSSMicroCacheAccessType::REPLICA_PREWARM_TYPE));
@@ -1076,17 +1076,17 @@ TEST_F(TestSSMicroCache, test_disable_micro_cache)
   // ======================== `check_micro_block_exist` ========================
   // micro_block doesn't exist if disable cache
   micro_cache->disable_cache();
-  ObSSMicroSnapshotInfo micro_snapshot_info;
+  ObSSMicroBaseInfo micro_base_info;
   ObSSCacheHitType hit_type = ObSSCacheHitType::SS_CACHE_MISS;
-  ASSERT_EQ(OB_SS_MICRO_CACHE_DISABLED, micro_cache->check_micro_block_exist(micro_key, micro_snapshot_info, hit_type));
+  ASSERT_EQ(OB_SS_MICRO_CACHE_DISABLED, micro_cache->check_micro_block_exist(micro_key, micro_base_info, hit_type));
   ASSERT_EQ(ObSSCacheHitType::SS_CACHE_MISS, hit_type);
 
   // micro_block exists if enable cache
   micro_cache->enable_cache();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(micro_key, micro_snapshot_info, hit_type));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(micro_key, micro_base_info, hit_type));
   ASSERT_NE(ObSSCacheHitType::SS_CACHE_MISS, hit_type);
-  ObSSMicroBlockCacheKeyMeta micro_key_meta(micro_key, micro_snapshot_info.crc_,
-                                            micro_snapshot_info.size_, micro_snapshot_info.is_in_l1_);
+  ObSSMicroBlockCacheKeyMeta micro_key_meta(micro_key, micro_base_info.crc_,
+                                            micro_base_info.size_, micro_base_info.is_in_l1_);
 
   // ======================== `get_not_exist_micro_blocks` ========================
   ObArray<ObSSMicroBlockCacheKeyMeta> in_micro_block_key_metas;
@@ -1151,7 +1151,8 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
   ObSSARCInfo origin_arc_info;
   origin_arc_info = micro_meta_mgr.get_arc_info();
-  ObSSMicroCacheSuperBlock origin_super_blk = phy_blk_mgr.super_block_;
+  ObSSMicroCacheSuperBlock origin_super_blk;
+  ASSERT_EQ(OB_SUCCESS, origin_super_blk.assign(phy_blk_mgr.super_block_));
   TestSSMicroCacheCtx ctx;
   ctx.macro_blk_cnt_ = 10;
   ctx.micro_blk_cnt_ = 128;

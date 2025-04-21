@@ -22,6 +22,8 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
+
 
 namespace oceanbase
 {
@@ -63,8 +65,9 @@ protected:
     int64_t sub_part_id_;
     int64_t sub_part_idx_;
     PartitionType partition_type_;
-
     common::ObString external_location_;
+    storage::ObStorageCachePolicyType part_storage_cache_policy_type_;
+
     TO_STRING_KV(K_(tenant_id),
                  K_(table_id),
                  K_(tablet_id),
@@ -81,7 +84,8 @@ protected:
                  K_(sub_part_id),
                  K_(sub_part_idx),
                  K_(partition_type),
-                 K_(external_location));
+                 K_(external_location),
+                 K_(part_storage_cache_policy_type));
   };
   virtual int extract_part_info(PartInfo &part_info) = 0;
   virtual int convert_to_dml(const PartInfo &part_info, ObDMLSqlSplicer &dml) = 0;
@@ -474,6 +478,7 @@ private:
   common::ObISQLClient &sql_client_;
   DISALLOW_COPY_AND_ASSIGN(ObRenameIncPartHelper);
 };
+
 //rename subpartition
 class ObRenameIncSubpartHelper
 {

@@ -348,9 +348,14 @@ private:
   class DDLScanTask : public common::ObTimerTask
   {
   public:
-    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler) {}
+    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1) {}
     virtual ~DDLScanTask() {};
-    int schedule(int tg_id);
+    int init();
+    int schedule();
+    void mtl_thread_wait();
+    void mtl_thread_stop();
+    void destroy();
+    int get_tg_id() const { return tg_id_; }
   private:
     void runTimerTask() override;
   private:
@@ -360,14 +365,20 @@ private:
     static const int64_t DDL_TASK_SCAN_PERIOD = 60 * 1000L * 1000L; // 60s
 #endif
     ObDDLScheduler &ddl_scheduler_;
+    int tg_id_;
   };
 
   class HeartBeatCheckTask : public common::ObTimerTask
   {
   public:
-    explicit HeartBeatCheckTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler) {}
+    explicit HeartBeatCheckTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1) {}
     virtual ~HeartBeatCheckTask() {};
-    int schedule(int tg_id);
+    int init();
+    int schedule();
+    void mtl_thread_wait();
+    void mtl_thread_stop();
+    void destroy();
+    int get_tg_id() const { return tg_id_; }
   private:
     void runTimerTask() override;
   private:
@@ -377,6 +388,7 @@ private:
     static const int64_t DDL_TASK_CHECK_PERIOD = 30 * 1000L * 1000L; // 30s
 #endif
     ObDDLScheduler &ddl_scheduler_;
+    int tg_id_;
   };
 private:
   int insert_task_record(

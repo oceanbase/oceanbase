@@ -67,7 +67,7 @@ TEST_F(TestSSMicroCacheIOHelper, basic_read_write)
 {
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager);
-  const int64_t micro_cache_file_size = disk_space_manager->get_micro_cache_file_size();
+  const int64_t micro_cache_file_size = disk_space_manager->get_micro_cache_reserved_size();
   const int64_t SIZE_2_MB = 2 * 1024 * 1024;
   ASSERT_GT(micro_cache_file_size, SIZE_2_MB * 10);
 

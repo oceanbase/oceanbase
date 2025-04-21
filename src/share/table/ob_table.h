@@ -1430,6 +1430,7 @@ public:
   void reset_property_names() { properties_names_.reset(); }
   virtual int add_row(const common::ObNewRow &row);
   virtual int add_row(const common::ObIArray<ObObj> &row);
+  virtual int add_one_row_for_exist_only(const common::ObNewRow &row, ObString family_name);
   int add_all_property(const ObTableQueryResult &other);
   int append_property_names(const ObIArray<ObString> &property_names);
   int add_all_row(const ObTableQueryResult &other);
@@ -1499,12 +1500,13 @@ public:
   ObTableQueryIterableResult();
   virtual int add_row(const common::ObNewRow &row, ObString family_name) override;
   virtual int add_row(const common::ObNewRow &row) override;
+  int add_one_row_for_exist_only(const common::ObNewRow &row, ObString family_name);
   int add_all_row(ObTableQueryDListResult &other);
   virtual int add_row(const common::ObIArray<ObObj> &row) override;
   virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
-  void save_row_count_only(const int row_count) { reset_except_property(); row_count_ += row_count; }
+  void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }
   virtual int get_row(ObNewRow &row) override;
-  void reset_except_property();
+  void reset();
   void set_need_append_family(bool need_append_family) { need_append_family_ = need_append_family; }
   bool need_append_family() const { return need_append_family_; }
   TO_STRING_KV(K_(rows), K_(row_count), K_(current), K_(need_append_family));

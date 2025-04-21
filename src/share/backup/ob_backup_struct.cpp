@@ -1658,10 +1658,6 @@ int ObBackupDest::reset_access_id_and_access_key(
     LOG_WARN("failed to print authorization", K(ret), KCSTRING(access_id));
   } else if (OB_FAIL(storage_info_->get_authorization_info(current_authorization, sizeof(current_authorization)))) {
     LOG_WARN("fail to set authorization", K(ret));
-  } else if (OB_UNLIKELY(0 == strcmp(new_authorization, current_authorization))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("access id and access key is the same as current ak/sk", K(ret), KCSTRING(access_id));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT,"reset ak/sk, as the new ak/sk is the same as the current ak/sk.");
   } else if (OB_FAIL(storage_info_->reset_access_id_and_access_key(access_id, access_key))) {
     LOG_WARN("failed to reset access id and access key", K(ret), KCSTRING(access_id));
   } else {

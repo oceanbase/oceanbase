@@ -1247,8 +1247,8 @@ public:
                                   const OptSelectivityCtx &ctx,
                                   const ObRawExpr *expr,
                                   double *ndv,
-                                  double *nns,
-                                  double *base_ndv);
+                                  double *nns = nullptr,
+                                  double *base_ndv = nullptr);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);
@@ -1277,6 +1277,7 @@ public:
   ObIArray<double> &get_part_rows() { return part_rows_; }
   double get_hist_scale() { return hist_scale_; }
   const ObColumnRefRawExpr *get_column_expr() { return column_expr_; }
+  double get_density() const { return density_; }
 
 protected:
   virtual int inner_get_sel(const OptSelectivityCtx &ctx,
@@ -1303,7 +1304,8 @@ private:
 class ObHistEqualSelHelper: public ObHistSelHelper
 {
 public:
-  ObHistEqualSelHelper() = default;
+  ObHistEqualSelHelper() :
+    is_neq_(false) {}
   virtual ~ObHistEqualSelHelper() = default;
 
   int set_compare_value(const OptSelectivityCtx &ctx,
@@ -1315,6 +1317,7 @@ public:
   void set_compare_value(const ObObj &value) {
     compare_value_ = value;
   }
+  void set_not_eq(bool neq) { is_neq_ = neq; }
 protected:
   virtual int inner_get_sel(const OptSelectivityCtx &ctx,
                             const ObHistogram &histogram,
@@ -1326,6 +1329,7 @@ protected:
                                bool &is_rare_value);
 private:
   ObObj compare_value_;
+  bool is_neq_;
 
   DISALLOW_COPY_AND_ASSIGN(ObHistEqualSelHelper);
 };

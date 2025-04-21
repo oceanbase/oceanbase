@@ -85,7 +85,6 @@ private:
                                  uint64_t &show_database_id,
                                  common::ObString &show_database_name);
   int resolve_show_from_routine(const ParseNode *from_routine_node,
-                                const ParseNode *from_database_clause_node,
                                 bool is_database_unselected,
                                 ObItemType node_type,
                                 uint64_t real_tenant_id,
@@ -95,7 +94,6 @@ private:
                                 uint64_t &show_routine_id,
                                 int64_t &proc_type);
   int resolve_show_from_trigger(const ParseNode *from_tg_node,
-                                const ParseNode *from_database_clause_node,
                                 bool is_database_unselected,
                                 uint64_t real_tenant_id,
                                 ObString &show_database_name,

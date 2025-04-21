@@ -14,6 +14,7 @@
 
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_data_store_desc.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -21,7 +22,8 @@ namespace blocksstable
 {
 
 ObMicroBlockBareIterator::ObMicroBlockBareIterator(const uint64_t tenant_id)
-  : allocator_(), macro_block_buf_(nullptr), macro_block_buf_size_(0),
+  : allocator_(ObMemAttr(tenant_id, "MicroBlkBareItr")),
+    macro_block_buf_(nullptr), macro_block_buf_size_(0),
     macro_reader_(tenant_id), index_reader_(tenant_id), common_header_(),
     macro_block_header_(), reader_(nullptr), micro_reader_helper_(),
     index_rowkey_cnt_(0),

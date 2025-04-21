@@ -48,6 +48,9 @@ private:
       case T_FLUSH_MOCK:
         ret = stmt::T_FLUSH_MOCK;
         break;
+      case T_FLUSH_TABLE_MOCK:
+        ret = stmt::T_FLUSH_TABLE_MOCK;
+        break;
       case T_HANDLER_MOCK:
         ret = stmt::T_HANDLER_MOCK;
         break;

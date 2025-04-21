@@ -44,11 +44,6 @@ public:
   static int get_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                               uint64_t tenant_id, uint64_t table_id,
                               const share::schema::ObTableSchema *&table_schema);
-  // 指定tenant schema version 和 table id 获取schema version
-  static int get_table_schema_version(const uint64_t tenant_id,
-                                      const int64_t tenant_schema_version,
-                                      const uint64_t table_id,
-                                      int64_t &schema_version);
 
   static int get_user_column_schemas(const share::schema::ObTableSchema *table_schema,
                                      ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas,

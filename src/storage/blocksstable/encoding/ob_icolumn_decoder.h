@@ -52,7 +52,7 @@ public:
 
 };
 
-struct ObColumnDecoderCtx : public ObBaseDecoderCtx
+struct ObColumnDecoderCtx final : public ObBaseDecoderCtx
 {
 public:
   ObColumnDecoderCtx()

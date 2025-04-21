@@ -542,7 +542,12 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
   } else if (OB_STORAGE_HDFS == device_type_) {
     util_ = &hdfs_util_;
   } else if (is_use_obdal()) {
-    util_ = &obdal_util_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      util_ = &obdal_util_;
+    }
   } else if (OB_STORAGE_OSS == device_type_) {
     util_ = &oss_util_;
   } else if (OB_STORAGE_COS == device_type_) {
@@ -647,9 +652,9 @@ int ObStorageUtil::detect_storage_obj_meta(
     } else {
       // if need_fragment_meta is FALSE, just check format_meta exist or not
       char format_meta_uri[OB_MAX_URI_LENGTH] = { 0 };
-      if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_FORMAT_META,
+      if (OB_FAIL(construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                format_meta_uri, sizeof(format_meta_uri)))) {
-        OB_LOG(WARN, "fail to construct s3 format_meta name", K(ret), K(uri));
+        OB_LOG(WARN, "fail to construct adaptive format_meta name", K(ret), K(uri));
       } else if (OB_FAIL(head_object_meta_(format_meta_uri, obj_meta))) {
         STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
       } else if (obj_meta.is_exist_) {
@@ -680,9 +685,9 @@ int ObStorageUtil::read_seal_meta_if_needed(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret));
   } else if (FALSE_IT(memset(seal_meta_uri, 0, OB_MAX_URI_LENGTH))) {
-  } else if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_SEAL_META,
+  } else if (OB_FAIL(construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
                                                   seal_meta_uri, OB_MAX_URI_LENGTH))) {
-    OB_LOG(WARN, "fail to construct s3 seal_meta name", K(ret), K(uri));
+    OB_LOG(WARN, "fail to construct adaptive seal_meta name", K(ret), K(uri));
   } else {
     ObStorageReader *reader = nullptr;
     if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
@@ -1073,7 +1078,7 @@ int ObStorageUtil::handle_listed_objs(
     bool already_exist_fragment = (strlen(list_ctx->cur_appendable_full_obj_path_) > 0);
     for (int64_t i = 0; OB_SUCC(ret) && (i < list_ctx->rsp_num_) && !list_ctx->has_reached_list_limit(); ++i) {
       ObString cur_obj_path(strlen(list_ctx->name_arr_[i]), list_ctx->name_arr_[i]);
-      char *contain_idx_ptr = strstr(cur_obj_path.ptr(), OB_S3_APPENDABLE_FRAGMENT_PREFIX);
+      char *contain_idx_ptr = strstr(cur_obj_path.ptr(), OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX);
       bool is_fragment_obj = (nullptr != contain_idx_ptr);
       if (is_fragment_obj) {
         const int64_t appendable_full_path_len = (contain_idx_ptr - cur_obj_path.ptr());
@@ -1991,7 +1996,12 @@ int ObStorageReader::open(const common::ObString &uri,
   } else if (OB_STORAGE_HDFS == type) {
     reader_ = &hdfs_reader_;
   } else if (is_use_obdal()) {
-    reader_ = &obdal_reader_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      reader_ = &obdal_reader_;
+    }
   } else if (OB_STORAGE_OSS == type) {
     reader_ = &oss_reader_;
   } else if (OB_STORAGE_COS == type) {
@@ -2190,7 +2200,12 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
   } else if (OB_STORAGE_HDFS == type) {
     reader_ = &hdfs_reader_;
   } else if (is_use_obdal()) {
-    reader_ = &obdal_reader_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      reader_ = &obdal_reader_;
+    }
   } else if (OB_STORAGE_OSS == type) {
     reader_ = &oss_reader_;
   } else if (OB_STORAGE_COS == type) {
@@ -2410,7 +2425,12 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
   } else if (is_use_obdal()) {
-    writer_ = &obdal_writer_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      writer_ = &obdal_writer_;
+    }
   } else if (OB_STORAGE_OSS == type) {
     writer_ = &oss_writer_;
   } else if (OB_STORAGE_COS == type) {
@@ -2559,7 +2579,12 @@ int ObStorageAppender::open(
   } else if (OB_STORAGE_FILE == type_) {
     appender_ = &file_appender_;
   } else if (is_use_obdal()) {
-    appender_ = &obdal_appender_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      appender_ = &obdal_appender_;
+    }
   } else if (OB_STORAGE_OSS == type_ ||
              OB_STORAGE_COS == type_ ||
              OB_STORAGE_S3 == type_) {
@@ -2777,11 +2802,11 @@ int ObStorageAppender::seal_for_adaptive()
       OB_LOG(WARN, "failed to alloc memory for appendable object seal meta buf",
           K(ret), K(serialize_size), K_(uri), K(appendable_obj_meta));
     } else if (OB_FAIL(appendable_obj_meta.serialize(buf, serialize_size, pos))) {
-      OB_LOG(WARN, "failed to serialize s3 appendable object meta",
+      OB_LOG(WARN, "failed to serialize adaptive appendable object meta",
           K(ret), K(serialize_size), K_(uri), K(appendable_obj_meta));
-    } else if (OB_FAIL(construct_fragment_full_name(uri_, OB_S3_APPENDABLE_SEAL_META,
+    } else if (OB_FAIL(construct_fragment_full_name(uri_, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
                                                     seal_meta_uri, sizeof(seal_meta_uri)))) {
-      OB_LOG(WARN, "failed to construct s3 appendable object name for writing seal meta file",
+      OB_LOG(WARN, "failed to construct adaptive appendable object name for writing seal meta file",
           K(ret), K_(uri), K(appendable_obj_meta));
     } else if (OB_FAIL(util.write_single_file(seal_meta_uri, buf, pos))) {
       OB_LOG(WARN, "fail to write seal meta file", K(ret), K(seal_meta_uri), K(appendable_obj_meta));
@@ -2856,7 +2881,12 @@ int ObStorageMultiPartWriter::open(
   } else if (OB_STORAGE_FILE == type) {
     multipart_writer_ = &file_multipart_writer_;
   } else if (is_use_obdal()) {
-    multipart_writer_ = &obdal_multipart_writer_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      multipart_writer_ = &obdal_multipart_writer_;
+    }
   } else if (OB_STORAGE_OSS == type ||
              OB_STORAGE_COS == type ||
              OB_STORAGE_S3 == type) {
@@ -3089,7 +3119,12 @@ int ObStorageParallelMultiPartWriterBase::open(
   } else if (OB_STORAGE_FILE == type) {
     multipart_writer_ = &file_multipart_writer_;
   } else if (is_use_obdal()) {
-    multipart_writer_ = &obdal_multipart_writer_;
+    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
+    } else {
+      multipart_writer_ = &obdal_multipart_writer_;
+    }
   } else if (OB_STORAGE_OSS == type) {
     multipart_writer_ = &oss_multipart_writer_;
   } else if (OB_STORAGE_COS == type) {

@@ -1899,6 +1899,8 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
       resource_info.data_disk_total_ = OB_SERVER_DISK_SPACE_MGR.get_disk_size_capacity();
       resource_info.data_disk_in_use_ = shared_storage_data_disk_in_use;
       resource_info.report_data_disk_assigned_ = svr_res_assigned.data_disk_size_;
+      resource_info.report_data_disk_suggested_size_ = OB_SERVER_DISK_SPACE_MGR.get_data_disk_suggested_size();
+      resource_info.report_data_disk_suggested_operation_ = OB_SERVER_DISK_SPACE_MGR.get_data_disk_suggested_operation();
     } else
     // shared-nothing mode
 #endif

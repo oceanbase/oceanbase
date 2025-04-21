@@ -3002,7 +3002,7 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
     ObExprEqualCheckContext equal_ctx;
     bool true_false = true;
     if (!ObQueryRange::can_be_extract_range(T_OP_EQ, func_expr->get_result_type(),
-        c_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
+        func_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
       always_true = true_false;
     } else if (OB_FAIL(check_expr_equal(partition_expr, func_expr, equal, equal_ctx))) {
       LOG_WARN("Failed to check equal expr", K(ret));
@@ -3051,7 +3051,7 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
     if (column_id == column_expr->get_column_id()) {
       bool true_false = false;
       if (!ObQueryRange::can_be_extract_range(T_OP_EQ, col_expr->get_result_type(),
-          c_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
+          col_expr->get_result_type(), c_expr->get_result_type().get_type(), true_false)) {
         always_true = true_false;
       } else if (NULL == (calc_node = ObPartLocCalcNode::create_part_calc_node(
                   allocator_, calc_nodes_, ObPartLocCalcNode::COLUMN_VALUE))) {
@@ -5327,6 +5327,15 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(check_no_partition_);
   OB_UNIS_ENCODE(is_broadcast_table_);
   OB_UNIS_ENCODE(is_dynamic_replica_select_table_);
+  OB_UNIS_ENCODE(is_col_part_expr_);
+  OB_UNIS_ENCODE(is_col_subpart_expr_);
+  OB_UNIS_ENCODE(part_col_type_);
+  OB_UNIS_ENCODE(part_collation_type_);
+  OB_UNIS_ENCODE(subpart_col_type_);
+  OB_UNIS_ENCODE(subpart_collation_type_);
+  OB_UNIS_ENCODE(is_in_hit_);
+  OB_UNIS_ENCODE(is_valid_temporal_part_range_);
+  OB_UNIS_ENCODE(is_valid_temporal_subpart_range_);
   return ret;
 }
 
@@ -5407,6 +5416,15 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(check_no_partition_);
   OB_UNIS_ADD_LEN(is_broadcast_table_);
   OB_UNIS_ADD_LEN(is_dynamic_replica_select_table_);
+  OB_UNIS_ADD_LEN(is_col_part_expr_);
+  OB_UNIS_ADD_LEN(is_col_subpart_expr_);
+  OB_UNIS_ADD_LEN(part_col_type_);
+  OB_UNIS_ADD_LEN(part_collation_type_);
+  OB_UNIS_ADD_LEN(subpart_col_type_);
+  OB_UNIS_ADD_LEN(subpart_collation_type_);
+  OB_UNIS_ADD_LEN(is_in_hit_);
+  OB_UNIS_ADD_LEN(is_valid_temporal_part_range_);
+  OB_UNIS_ADD_LEN(is_valid_temporal_subpart_range_);
   return len;
 }
 
@@ -5565,6 +5583,15 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(check_no_partition_);
   OB_UNIS_DECODE(is_broadcast_table_);
   OB_UNIS_DECODE(is_dynamic_replica_select_table_);
+  OB_UNIS_DECODE(is_col_part_expr_);
+  OB_UNIS_DECODE(is_col_subpart_expr_);
+  OB_UNIS_DECODE(part_col_type_);
+  OB_UNIS_DECODE(part_collation_type_);
+  OB_UNIS_DECODE(subpart_col_type_);
+  OB_UNIS_DECODE(subpart_collation_type_);
+  OB_UNIS_DECODE(is_in_hit_);
+  OB_UNIS_DECODE(is_valid_temporal_part_range_);
+  OB_UNIS_DECODE(is_valid_temporal_subpart_range_);
   return ret;
 }
 

@@ -138,7 +138,8 @@ struct ObMemAttr
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
-  uint64_t sub_ctx_id_;
+  int32_t sub_ctx_id_;
+  int32_t numa_id_;
   ObAllocPrio prio_;
   explicit ObMemAttr(
     uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
@@ -149,6 +150,7 @@ struct ObMemAttr
         label_(label),
         ctx_id_(ctx_id),
         sub_ctx_id_(ObSubCtxIds::MAX_SUB_CTX_ID),
+        numa_id_(0),
         prio_(prio),
         use_500_(false),
         expect_500_(true),
@@ -259,8 +261,9 @@ struct AChunk {
 #ifdef ENABLE_SANITY
   void *ref_;
 #endif
+  int32_t numa_id_;
+  int32_t using_cnt_;
   BlockSet *block_set_;
-  uint64_t using_cnt_;
   uint64_t washed_blks_;
   uint64_t washed_size_;
   uint64_t alloc_bytes_;
@@ -450,8 +453,9 @@ AChunk::AChunk() :
 #ifdef ENABLE_SANITY
     ref_(nullptr),
 #endif
-    block_set_(nullptr),
+    numa_id_(0),
     using_cnt_(0),
+    block_set_(nullptr),
     washed_blks_(0), washed_size_(0), alloc_bytes_(0),
     prev_(this), next_(this),
     prev2_(this), next2_(this)

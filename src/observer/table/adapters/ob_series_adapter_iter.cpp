@@ -166,12 +166,14 @@ int ObHbaseSeriesCellIter::convert_series_to_normal(ObNewRow &series_row, ObIArr
 int ObHbaseSeriesCellIter::handle_json_row(ObNewRow &series_row)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObNewRow *, 8> normal_rows;
+  normal_rows.set_attr(ObMemAttr(MTL_ID(), "CelIterNorRows"));
   if (series_row.get_count() < 4) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row column count less than 4", K(ret), K(series_row.get_count()));
+  } else if (OB_FAIL(ob_write_string(copy_alloc_, series_row.get_cell(ObHTableConstants::COL_IDX_K).get_varchar(), now_k_))) {
+    LOG_WARN("fail to write string", K(ret), K(series_row.get_cell(ObHTableConstants::COL_IDX_K)));
   } else {
-    ObSEArray<ObNewRow *, 8> normal_rows;
-    now_k_ = series_row.get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
     now_t_ = series_row.get_cell(ObHTableConstants::COL_IDX_SER_T).get_int();
     if (OB_FAIL(convert_series_to_normal(series_row, normal_rows))) {
       LOG_WARN("fail to convert series to normal", K(ret));

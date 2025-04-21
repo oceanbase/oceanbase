@@ -1369,7 +1369,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVecIVFPQCenterVector::generate_pq_center_vector,              /* 817 */
   ObExprDemoteCast::eval_demoted_val,                                 /* 818 */
   ObExprRangePlacement::eval_range_placement,                         /* 819 */
-  NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
+  ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,               /* 820 */
   ObExprIsNot::json_is_not_false,                                     /* 821 */
   ObExprIsNot::json_is_not_true,                                      /* 822 */
   ObExprArrayExcept::eval_array_except,                               /* 823 */
@@ -1397,7 +1397,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMapKeys::eval_map_keys,                                        /* 845 */
   ObExprMapValues::eval_map_values,                                    /* 846 */
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
-  NULL, // ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,/* 848 */
+  ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

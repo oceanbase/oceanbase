@@ -33,10 +33,12 @@ public:
   using LsIdTabletOpsMap = std::unordered_map<int64_t, TabletOps>;
 public:
   ObIModel()
-    : query_session_(nullptr)
+    : allocator_("ObIModel", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      query_session_(nullptr)
   {
     new_reqs_.set_attr(ObMemAttr(MTL_ID(), "ModNewReqs"));
     new_results_.set_attr(ObMemAttr(MTL_ID(), "ModNewRes"));
+    is_alloc_from_pool_ = true;
   }
   virtual ~ObIModel() {}
   virtual int prepare(ObTableExecCtx &ctx,
@@ -266,6 +268,7 @@ public:
 public:
   OB_INLINE const common::ObIArray<ObTableLSOpRequest*> &get_new_requests() const { return new_reqs_; }
   OB_INLINE common::ObIArray<ObTableLSOpResult*> &get_new_results() { return new_results_; }
+  OB_INLINE bool is_alloc_from_pool() { return is_alloc_from_pool_; }
 protected:
   int alloc_and_init_request_result(ObTableExecCtx &ctx,
                                     const ObTableLSOpRequest &src_req,
@@ -305,6 +308,10 @@ protected:
                                  const int64_t count,
                                  common::ObIArray<ObTableLSOpRequest*> &reqs,
                                  common::ObIArray<ObTableLSOpResult*> &results);
+  int alloc_requests_and_results_for_mix_batch(ObTableExecCtx &ctx,
+                                               const int64_t count,
+                                               common::ObIArray<ObTableLSOpRequest*> &reqs,
+                                               common::ObIArray<ObTableLSOpResult*> &results);
   int check_same_ls(const common::ObIArray<common::ObTabletID> &tablet_ids,
                     bool &is_same,
                     share::ObLSID &ls_id);
@@ -314,7 +321,9 @@ protected:
 protected:
   common::ObSEArray<ObTableLSOpRequest*, 8> new_reqs_;
   common::ObSEArray<ObTableLSOpResult*, 8> new_results_;
+  bool is_alloc_from_pool_;
 private:
+  common::ObArenaAllocator allocator_;
   table::ObTableNewQueryAsyncSession *query_session_;
 private:
   // disallow copy

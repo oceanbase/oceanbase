@@ -32,7 +32,9 @@ public:
     path_(),
     json_type_(ObJsonNodeType::J_NULL),
     obj_type_(ObObjType::ObNullType),
-    value_()
+    value_(),
+    prec_(-1),
+    scale_(-1)
   {}
 
   void reuse()
@@ -60,36 +62,53 @@ public:
     value_ = value;
     return OB_SUCCESS;
   }
+
+  OB_INLINE void set_precision(ObPrecision prec) { prec_ = prec; }
+  OB_INLINE ObPrecision get_precision() const { return prec_; }
+  OB_INLINE void set_scale(ObScale scale) { scale_ = scale; }
+  OB_INLINE ObScale get_scale() const { return scale_; }
+
   const ObDatum& get_value() const { return value_; }
   const share::ObSubColumnPath& get_path() const { return path_; }
-  const ObObjType& obj_type() const { return obj_type_; }
+  ObObjType obj_type() const { return obj_type_; }
   ObJsonNodeType json_type() const { return json_type_; }
-  TO_STRING_KV(K_(path), K_(json_type), K_(obj_type), K_(value));
+  TO_STRING_KV(K_(path), K_(json_type), K_(obj_type), K_(value), K_(prec), K_(scale));
 
 private:
   share::ObSubColumnPath path_;
   ObJsonNodeType json_type_;
   ObObjType obj_type_;
   ObDatum value_;
+  // used for number type
+  ObPrecision prec_;
+  ObScale scale_;
 };
 
 struct ObSemiStructSubColumn
 {
 public:
   ObSemiStructSubColumn():
-    path_(),
+    flags_(0),
     json_type_(ObJsonNodeType::J_NULL),
-    obj_type_(ObObjType::ObNullType),
+    obj_meta_(),
     sub_col_id_(0),
-    flags_(0)
+    path_()
   {}
 
   int init(const share::ObSubColumnPath& path, const ObJsonNodeType json_type, const ObObjType type, const int64_t sub_col_id);
   void reset() { path_.reset(); }
   const share::ObSubColumnPath& get_path() const { return  path_; }
   share::ObSubColumnPath& get_path() { return  path_; }
-  ObObjType get_obj_type() const { return obj_type_; }
-  void set_obj_type(const ObObjType type) { obj_type_ = type; }
+  ObObjType get_obj_type() const { return obj_meta_.get_type(); }
+  const ObObjMeta& get_obj_meta() const { return obj_meta_; }
+  void set_obj_type(const ObObjType type) { obj_meta_.set_type_simple(type); }
+  void set_precision_and_scale(const ObPrecision prec, const ObScale scale)
+  {
+    obj_meta_.set_numeric_collation();
+    obj_meta_.set_stored_precision(prec);
+    obj_meta_.set_scale(scale);
+    store_obj_meta_ = true;
+  }
   ObJsonNodeType get_json_type() const { return json_type_; }
   void set_json_type(const ObJsonNodeType type) { json_type_ = type; }
   int compare(const ObSemiStructSubColumn& other, const bool use_lexicographical_order) const { return path_.compare(other.path_, use_lexicographical_order); }
@@ -103,20 +122,23 @@ public:
   int encode(char *buf, const int64_t buf_len, int64_t &pos) const;
   int decode(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_encode_size() const;
-  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_type), K_(path), K_(is_spare), K_(has_different_type), K_(reserved));
+  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_meta), K_(path), K_(is_spare), K_(has_different_type), K_(store_obj_meta), K_(reserved));
 
-  share::ObSubColumnPath path_;
-  ObJsonNodeType json_type_;
-  ObObjType obj_type_;
-  int32_t sub_col_id_;
+private:
   union {
     struct {
       int8_t is_spare_ : 1;
       int8_t has_different_type_ : 1;
-      int8_t reserved_ : 6;
+      // most type store obj type is enough, but for number need store prec and scale
+      int8_t store_obj_meta_: 1;
+      int8_t reserved_ : 5;
     };
     uint8_t flags_;
   };
+  ObJsonNodeType json_type_;
+  ObObjMeta obj_meta_;
+  int32_t sub_col_id_;
+  share::ObSubColumnPath path_;
 };
 
 class ObSubSchemaKeyDict
@@ -529,11 +551,13 @@ public:
     has_value_(false),
     datum_(),
     allocator_(allocator),
-    uint64_val_(0)
+    uint64_val_(0),
+    prec_(-1),
+    scale_(-1)
   {}
 
   virtual ~ObSemiStructScalar() {}
-  int init();
+  int init(const ObSemiStructSubColumn& sub_column);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   OB_INLINE bool is_scalar() const { return true; }
   OB_INLINE uint32_t depth() const override { return 1; }
@@ -567,6 +591,8 @@ private:
     uint32_t uint32_val_;
     uint64_t uint64_val_;
   };
+  ObPrecision prec_;
+  ObScale scale_;
 };
 
 class ObJsonReassembler
@@ -590,7 +616,7 @@ private:
   int fill_freq_column(const ObDatumRow &row);
   int fill_spare_column(const ObDatumRow &row);
   int alloc_container_node(const share::ObSubColumnPathItem& item, const int child_cnt, ObIJsonBase *&node);
-  int alloc_scalar_json_node(const ObObjType &obj_type, const ObJsonNodeType &json_type, ObIJsonBase *&node);
+  int alloc_scalar_json_node(const ObSemiStructSubColumn& sub_column, ObIJsonBase *&node);
   int add_child(ObIJsonBase *parent, ObIJsonBase *child, const share::ObSubColumnPathItem &item);
   int reassemble(const int start, const int end, const int depth, ObIJsonBase *&current);
   int merge_sub_cols();

@@ -37,8 +37,10 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
   for (int64_t i = 0; i < ids.size() && !is_break; ++i) {
     uint64_t tenant_id = ids[i];
     if (!is_virtual_tenant_id(tenant_id)) {
+      int save_ret = ret;
       MTL_SWITCH(tenant_id)
       {
+        ret = save_ret;  // MTL_SWITCH would change the error code. So we change it back.
         if (OB_FAIL(
                 MTL(ObDiagnosticInfoContainer *)->get_session_diag_info(session_id, diag_info))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
@@ -53,6 +55,10 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
           // until success.
           break;
         }
+      } else {
+        LOG_WARN("switch tenant failed", K(ret));
+        is_break = true;
+        break;
       }
     }
   }

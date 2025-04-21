@@ -44,7 +44,6 @@ int ObFTDictHub::destroy()
   is_inited_ = false;
   return ret;
 }
-
 int ObFTDictHub::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container)
 {
   int ret = OB_SUCCESS;
@@ -53,50 +52,37 @@ int ObFTDictHub::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &
   ObFTDictInfo info;
   container.reset();
 
-  bool need_load = false;
-  bool load_ok = false;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("dict hub not init", K(ret));
   } else {
-    while (OB_SUCC(ret) && !load_ok) {
-      { // lock area
-        ObBucketHashWLockGuard guard(rw_dict_lock_, key.hash());
-        need_load = false;
-        if (OB_FAIL(get_dict_info(key, info))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            // try build
-            if (OB_FAIL(ObFTRangeDict::build_cache(desc, container))) {
-              LOG_WARN("Failed to build cache", K(ret));
-            } else if (FALSE_IT(info.range_count_ = container.get_handles().size())) {
-            } else if (OB_FAIL(put_dict_info(key, info))) {
-              LOG_WARN("Failed to put dict info", K(ret));
-            } else {
-              load_ok = true;
-            }
-          } else {
-            LOG_WARN("Failed to get dict info", K(ret));
-          }
-        } else {
-          need_load = true; // read the info, some one build it.
-        }
-      } // lock area
+    ObBucketHashWLockGuard guard(rw_dict_lock_, key.hash());
 
-      if (OB_SUCC(ret) && need_load) {
-        if (OB_FAIL(load_cache(desc, container))) {
-          if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("Failed to load cache", K(ret));
-          } else {
-            ret = OB_SUCCESS; // cache not found or something, try to get it
-          }
-        } else {
-          load_ok = true;
+    // try if valid with no recursive lock
+    if (OB_FAIL(get_dict_info(key, info))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // dict not exist, make new one, by caller
+      } else {
+        LOG_WARN("Failed to get dict info", K(ret));
+      }
+    } else if (OB_FAIL(ObFTRangeDict::try_load_cache(desc, info.range_count_, container))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+      } else {
+        LOG_WARN("Failed to load cache", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_FAIL(ObFTRangeDict::build_cache(desc, container))) {
+          LOG_WARN("Failed to build cache", K(ret));
+        } else if (FALSE_IT(info.range_count_ = container.get_handles().size())) {
+        } else if (OB_FAIL(put_dict_info(key, info))) {
+          LOG_WARN("Failed to put dict info", K(ret));
         }
       }
     }
   }
-
   return ret;
 }
 

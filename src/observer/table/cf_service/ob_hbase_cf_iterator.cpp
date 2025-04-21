@@ -981,7 +981,7 @@ void ObHbaseRowIterator::set_hfilter(table::hfilter::Filter *hfilter)
     matcher_->set_hfilter(hfilter);
   }
   ObTableAuditCtx *audit_ctx = exec_ctx_.get_audit_ctx();
-  if (OB_NOT_NULL(audit_ctx) && audit_ctx->need_audit_) {
+  if (OB_NOT_NULL(audit_ctx)) {
     audit_ctx->filter_ = hfilter;
   }
 }
@@ -994,7 +994,7 @@ void ObHbaseRowIterator::set_need_verify_cell_ttl(bool need_verify_cell_ttl) {
 int ObHbaseRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
   int ret = OB_SUCCESS;
-  if (!is_cur_row_expired_) {
+  if (!is_timeseries_table_ && !is_cur_row_expired_) {
     if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
       LOG_WARN("failed to is cell ttl expired", K(ret));
     } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
@@ -1010,7 +1010,7 @@ int ObHbaseRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell
 
 void ObHbaseRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
-  if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
+  if (!is_timeseries_table_ && max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
     is_cur_row_expired_ = true;
     MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(INVALID_LS,
                                                   hbase_query_.get_table_id(),
@@ -1078,7 +1078,7 @@ int ObHbaseCFIterator::get_next_result(ObTableQueryResult &next_result)
 int ObHbaseCFIterator::get_next_result(ObTableQueryIterableResult &next_result)
 {
   int ret = OB_SUCCESS;
-  next_result.reset_except_property();
+  next_result.reset();
   if (OB_FAIL(get_next_result_internal(next_result))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get next result", K(ret));
@@ -1090,7 +1090,7 @@ int ObHbaseCFIterator::get_next_result(ObTableQueryIterableResult &next_result)
 int ObHbaseCFIterator::get_next_result(ObTableQueryIterableResult *&next_result)
 {
   int ret = OB_SUCCESS;
-  iterable_result_.reset_except_property();
+  iterable_result_.reset();
   next_result = &iterable_result_;
   if (OB_FAIL(get_next_result_internal(iterable_result_))) {
     if (ret != OB_ITER_END) {
@@ -1143,11 +1143,18 @@ int ObHbaseCFIterator::get_next_result_internal(ResultType &next_result)
       continue;
     }
 
-    // if only check exist, just return row_count_ as 1
+    // if only check exist, add one row
+    // cannot just set row_count_ as 1 in multi-cf situation
     if (check_existence_only_) {
-      next_result.save_row_count_only(1);
-      ret = OB_ITER_END;
-      break;
+      ObHTableCellEntity *row = nullptr;
+      if (OB_FAIL(htable_row->get_row(row))) {
+        LOG_WARN("fail to get row from htable row", K(ret));
+      } else if (OB_FAIL(next_result.add_one_row_for_exist_only(*row->get_ob_row(), row->get_family()))) {
+        LOG_WARN("failed to add one row for exist only", K(ret));
+      } else {
+        ret = OB_ITER_END;
+      }
+      break; // break out this while loops
     }
 
     if (OB_FAIL(next_result.add_all_row(*htable_row))) {

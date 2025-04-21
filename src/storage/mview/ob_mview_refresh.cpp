@@ -70,6 +70,11 @@ int ObMViewRefresher::refresh()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefresher not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(OB_ISNULL(refresh_ctx_)) ||
+             (OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_)) ||
+              OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_->get_session_info())))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh ctx is not valid", KR(ret));
   } else {
     const uint64_t tenant_id = refresh_param_.tenant_id_;
     const uint64_t mview_id = refresh_param_.mview_id_;
@@ -89,6 +94,8 @@ int ObMViewRefresher::refresh()
       ObMViewOpArg arg;
       arg.table_id_ =  mview_id;
       arg.parallel_ = refresh_ctx_->refresh_parallelism_;
+      arg.session_id_ = refresh_ctx_->trans_->get_session_info()->get_server_sid();
+      arg.start_ts_ = ObTimeUtil::current_time();
       if (ObMVRefreshType::FAST == refresh_type) {
         arg.mview_op_type_ = MVIEW_OP_TYPE::FAST_REFRESH;
         arg.read_snapshot_ = refresh_ctx_->refresh_scn_range_.end_scn_.get_val_for_tx();
@@ -547,6 +554,10 @@ int ObMViewRefresher::fast_refresh()
     LOG_WARN("failed to set session dml dop", KR(ret));
   }
 
+  if (OB_SUCC(ret) && trans.is_inner_session()) {
+    exec_session_info->set_mysql_cmd(COM_QUERY);
+  }
+
   // exec sqls
   for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(ctx_->check_status()) && i < refresh_sqls.count();
        ++i) {
@@ -565,6 +576,8 @@ int ObMViewRefresher::fast_refresh()
       }
     }
   }
+
+  DEBUG_SYNC(BEFORE_MV_FINISH_RUNNING_JOB);
 
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(restore_session_dml_dop_(tenant_id, data_version, has_updated_dml_dop,
@@ -610,13 +623,18 @@ int ObMViewRefresher::fast_refresh()
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans)
     {
-      mview_info.set_last_refresh_scn(refresh_scn_range.end_scn_.get_val_for_inner_table_field());
+      const uint64_t last_refresh_scn = refresh_scn_range.end_scn_.get_val_for_inner_table_field();
+      mview_info.set_last_refresh_scn(last_refresh_scn);
       mview_info.set_last_refresh_type(ObMVRefreshType::FAST);
       mview_info.set_last_refresh_date(start_time);
       mview_info.set_last_refresh_time((end_time - start_time) / 1000 / 1000);
       char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last refresh trace id", KR(ret));
+      } else if (data_version >= DATA_VERSION_4_3_5_2 &&
+                 OB_FAIL(ObMViewInfo::update_mview_data_sync_scn(trans, tenant_id, mview_info,
+                                                                 last_refresh_scn))) {
+        LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info), K(last_refresh_scn));
       } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
       }

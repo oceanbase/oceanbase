@@ -2224,12 +2224,12 @@ int ObStorageS3AppendWriter::pwrite_(const char *buf, const int64_t size, const 
   } else {
     // write the format file when writing the first fragment because the appender may open multiple times
     if (offset == 0) {
-      if (OB_FAIL(construct_fragment_full_name(object_, OB_S3_APPENDABLE_FORMAT_META,
+      if (OB_FAIL(construct_fragment_full_name(object_, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                fragment_name, sizeof(fragment_name)))) {
         OB_LOG(WARN, "failed to construct s3 mock append object foramt name",
             K(ret), K_(bucket), K_(object));
-      } else if (OB_FAIL(write_obj_(fragment_name, OB_S3_APPENDABLE_FORMAT_CONTENT_V1,
-                                    strlen(OB_S3_APPENDABLE_FORMAT_CONTENT_V1)))) {
+      } else if (OB_FAIL(write_obj_(fragment_name, OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                                    strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)))) {
         OB_LOG(WARN, "fail to write s3 mock append object format file", K(ret), K(fragment_name));
       }
     }

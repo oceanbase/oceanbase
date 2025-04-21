@@ -525,6 +525,7 @@ int ObRoutineInfo::find_param_by_name(const ObString &name, int64_t &position) c
     }
     if (-1 == position) {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, name.length(), name.ptr());
       LOG_WARN("param name is not found in param list", K(ret), K(name), KPC(this), K(position));
     }
   }

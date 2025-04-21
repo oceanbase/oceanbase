@@ -450,11 +450,7 @@ bool ObKVCacheStore::wash()
           ret = hazptr_holder.protect(protect_success, &mb_handles_[i]);
         } while (OB_UNLIKELY(OB_ALLOCATE_MEMORY_FAILED == ret));
         if (OB_FAIL(ret)) {
-          if (OB_LIKELY(OB_ALLOCATE_MEMORY_FAILED == ret)) {
-            ret = OB_SUCCESS;
-          } else {
-            COMMON_LOG(WARN, "failed to protect mb_handle");
-          }
+          COMMON_LOG(WARN, "failed to protect mb_handle");
         }
         if (protect_success) {
           enum ObKVMBHandleStatus status = mb_handles_[i].get_status();
@@ -874,11 +870,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
             ret = hazptr_holder.protect(protect_success, handle);
           } while (OB_UNLIKELY(OB_ALLOCATE_MEMORY_FAILED == ret));
           if (OB_FAIL(ret)) {
-            if (OB_LIKELY(OB_ALLOCATE_MEMORY_FAILED == ret)) {
-              ret = OB_SUCCESS;
-            } else {
-              COMMON_LOG(WARN, "failed to protect mb_handle", KP(handle));
-            }
+            COMMON_LOG(WARN, "failed to protect mb_handle", KP(handle));
           }
           if (protect_success) {
             status = handle->get_status();
@@ -1487,7 +1479,9 @@ bool ObKVCacheStore::is_global_wash_valid(const int64_t total_tenant_wash_block_
 void ObKVCacheStore::wash_mbs(WashHeap &heap)
 {
   if (OB_LIKELY(GCONF._enable_kvcache_hazard_pointer)) {
-    uint64_t total_mb_size = 0;
+    ObKVCacheInst* insts[MAX_CACHE_NUM] = {nullptr};
+    uint64_t retired_mb_sizes[MAX_CACHE_NUM] = {0};
+    uint64_t total_retired_size = 0;
     if (OB_NOT_NULL(heap.heap_) && OB_LIKELY(heap.mb_cnt_ > 0)) {
       ObLink* head = nullptr;
       ObLink* tail = nullptr;
@@ -1501,13 +1495,21 @@ void ObKVCacheStore::wash_mbs(WashHeap &heap)
             tail->next_ = &heap.heap_[i]->retire_link_;
             tail = tail->next_;
           }
-          total_mb_size += heap.heap_[i]->mem_block_->get_hold_size();
+          if (OB_UNLIKELY(0 == retired_mb_sizes[heap.heap_[i]->inst_->cache_id_])) {
+            insts[heap.heap_[i]->inst_->cache_id_] = heap.heap_[i]->inst_;
+          }
+          retired_mb_sizes[heap.heap_[i]->inst_->cache_id_] += heap.heap_[i]->mem_block_->get_hold_size();
         }
       }
       if (OB_NOT_NULL(tail)) {
         tail->next_ = nullptr;
-        HazardDomain::get_instance().retire(head, tail, total_mb_size);
-        ObKVMemBlockHandle* mb_handle = CONTAINER_OF(tail, ObKVMemBlockHandle, retire_link_);
+        for (int i = 0; i < MAX_CACHE_NUM; ++i) {
+          if (0 != retired_mb_sizes[i]) {
+            ATOMIC_FAA(&insts[i]->status_.retired_size_, retired_mb_sizes[i]);
+            total_retired_size += retired_mb_sizes[i];
+          }
+        }
+        HazardDomain::get_instance().retire(head, tail, total_retired_size);
       }
     }
   } else {

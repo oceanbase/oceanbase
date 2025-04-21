@@ -30,7 +30,8 @@ int ObExternalFileWriter::open_file()
     ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
     // for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
     // OSS,COS can also use multipart writer. need to check performance
-    if (IntoFileLocation::REMOTE_S3 == file_location_) {
+    if (IntoFileLocation::REMOTE_S3 == file_location_
+        || IntoFileLocation::REMOTE_COS == file_location_) {
       access_type = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
     }
     if (OB_FAIL(adapter.is_exist(url_, &access_info_, is_exist))) {
@@ -191,7 +192,7 @@ int ObCsvFileWriter::flush_to_storage(const char *data, int64_t data_len)
       if (OB_FAIL(file_appender_.append(data, data_len, false))) {
         LOG_WARN("failed to append file", K(ret), K(data_len));
       }
-    } else if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+    } else {
       int64_t write_size = 0;
       int64_t begin_ts = ObTimeUtility::current_time();
       if (OB_FAIL(storage_appender_.append(data, data_len, write_size))) {
@@ -206,9 +207,6 @@ int ObCsvFileWriter::flush_to_storage(const char *data, int64_t data_len)
         _OB_LOG(TRACE, "write oss stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB",
                 cost_time, write_size, speed, total_write);
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error. invalid file location", K(ret));
     }
   }
   return ret;

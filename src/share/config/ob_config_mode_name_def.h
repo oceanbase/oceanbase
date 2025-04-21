@@ -17,15 +17,11 @@
 #define MODE_NAME_REROUTING "rerouting"
 #define MODE_NAME_HOTKEY "hotkey"
 
-#define MODE_NAME_DISTRIBUTED_EXECUTE "distributed_execute"
-
 #define MODE_DEFAULT_VAL_TTL true
 #define MODE_DEFAULT_VAL_REROUTING false
 #define MODE_DEFAULT_VAL_HOTKEY false
 #define MODE_DEFAULT_VAL_SECONDARY_PARTITION false
 #define MODE_DEFAULT_VAL_TIME_SERIES false
-
-#define MODE_DEFAULT_VAL_DISTRIBUTED_EXECUTE false
 
 // mode value
 #define MODE_VAL_ON "on"

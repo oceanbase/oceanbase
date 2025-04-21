@@ -124,8 +124,8 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_MODIFY_MVIEW_REFERENCE_TABLE_STATUS, = 66)          \
   ACT(OB_DDL_MODIFY_INDEX_TYPE, = 67)                            \
   ACT(OB_DDL_RECOVER_TABLE_END, = 68)                            \
-  ACT(OB_DDL_ALTER_PARTITION_POLICY, = 69)                    \
-  ACT(OB_DDL_ALTER_SUBPARTITION_POLICY, = 70)                        \
+  ACT(OB_DDL_ALTER_PARTITION_POLICY, = 69)                       \
+  ACT(OB_DDL_ALTER_SUBPARTITION_POLICY, = 70)                    \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \
@@ -358,6 +358,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_REVOKE_CATALOG, = 2092)                       \
   ACT(OB_DDL_DEL_CATALOG_PRIV, = 2093)                           \
   ACT(OB_DDL_CATALOG_PRIV_OPERATION_END, = 2100)                 \
+  ACT(OB_DDL_CCL_RULE_OPERATION_BEGIN, = 2101)                   \
+  ACT(OB_DDL_CREATE_CCL_RULE, = 2102)                            \
+  ACT(OB_DDL_DROP_CCL_RULE, = 2103)                              \
+  ACT(OB_DDL_CCL_RULE_OPERATION_END, = 2110)                     \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);

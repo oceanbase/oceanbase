@@ -329,12 +329,6 @@ public:
   TO_STRING_KV(KP_(serlize_result), KP_(iterable_result));
   virtual ~ObMergeTableQueryResultIterator()
   {
-    for (int64_t i = 0; i < result_row_iters_.count(); i++) {
-      ObTableResultRowIter *row_iter = result_row_iters_.at(i);
-      if (OB_NOT_NULL(row_iter)) {
-        row_iter->~ObTableResultRowIter();
-      }
-    }
     result_row_iters_.reset();
     allocator_.reset();
   }

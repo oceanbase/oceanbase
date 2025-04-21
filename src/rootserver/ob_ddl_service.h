@@ -1109,6 +1109,10 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int reset_parallel_cache(const uint64_t tenant_id);
   static int set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,
                                    ObTableSchema& vidx_table_schema);
+  int check_is_alter_decimal_int_offline(const share::ObDDLType &ddl_type,
+                                         const share::schema::ObTableSchema &table_schema,
+                                         const AlterTableSchema &alter_table_schema,
+                                         bool &is_alter_decimal_int_off);
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -1344,10 +1348,6 @@ int check_will_be_having_domain_index_operation(
     const ObTableSchema &table_schema,
     const AlterTableSchema &alter_table_schema,
     bool &need_add_progressive_round);
-  int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
-                                               const uint64_t tenant_data_version,
-                                               bool &is_add_not_null_col,
-                                               bool &need_modify) const;
   bool need_check_constraint_validity(const obrpc::ObAlterTableArg &alter_table_arg) const;
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
@@ -1533,13 +1533,6 @@ int check_will_be_having_domain_index_operation(
   int check_is_modify_partition_key(const ObTableSchema &orig_table_schema,
                                     const AlterTableSchema &alter_table_schema,
                                     bool &is_modify_partition_key);
-  int check_is_change_cst_column_name(const share::schema::ObTableSchema &table_schema,
-                                      const AlterTableSchema &alter_table_schema,
-                                      bool &change_cst_column_name);
-  int check_is_alter_decimal_int_offline(const share::ObDDLType &ddl_type,
-                                         const share::schema::ObTableSchema &table_schema,
-                                         const AlterTableSchema &alter_table_schema,
-                                         bool &is_alter_decimal_int_off);
   int check_exist_stored_gen_col(const ObTableSchema &orig_table_schema,
                                  const AlterTableSchema &alter_table_schema,
                                  bool &is_exist);
@@ -1635,11 +1628,6 @@ int check_will_be_having_domain_index_operation(
                                         const share::schema::ObTableSchema &new_table_schema,
                                         ObDDLOperator &ddl_operator,
                                         common::ObMySQLTransaction &trans);
-  int check_alter_table_constraint(
-      const obrpc::ObAlterTableArg &alter_table_arg,
-      const ObTableSchema &orig_table_schema,
-      const uint64_t tenant_data_version,
-      share::ObDDLType &ddl_type);
   int check_can_alter_table_constraints(
     const obrpc::ObAlterTableArg::AlterConstraintType op_type,
     share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1748,7 +1736,9 @@ int check_will_be_having_domain_index_operation(
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas,
       common::ObSArray<uint64_t> &index_ids);
   int gen_hidden_index_schema_columns(
-      const share::schema::ObTableSchema &orig_index_schema,
+      const ObTableSchema &orig_table_schema,
+      const ObTableSchema &orig_index_schema,
+      ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<uint64_t> &drop_cols_id_arr,
       const share::ObColumnNameMap &col_name_map,
       share::schema::ObTableSchema &new_table_schema,
@@ -1975,7 +1965,12 @@ int check_will_be_having_domain_index_operation(
       share::schema::AlterColumnSchema &alter_column_schema,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
-
+  // update prev id in inner table and add column to new table schema
+  int update_prev_id_and_add_column_(const share::schema::ObTableSchema &origin_table_schema,
+                                     share::schema::ObTableSchema &new_table_schema,
+                                     share::schema::AlterColumnSchema &alter_column_schema,
+                                     ObDDLOperator *ddl_operator,
+                                     common::ObMySQLTransaction *trans);
   int alter_table_update_cg_column(common::ObMySQLTransaction &trans,
                                    ObDDLOperator &ddl_operator,
                                    share::schema::ObColumnSchemaV2 &new_column_schema,
@@ -2166,13 +2161,13 @@ private:
                                     bool &need_update,
                                     bool &need_continue);
 
-  const char* ddl_type_str(const share::ObDDLType ddl_type);
   int check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
                                    const ObTableSchema &orig_table_schema,
                                    obrpc::ObIndexArg *index_arg);
 public:
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
   // used only by create normal tenant
+  const char* ddl_type_str(const share::ObDDLType ddl_type);
 public:
   int ddl_rlock();
   int ddl_wlock();
@@ -2364,8 +2359,8 @@ private:
   int check_alter_drop_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                   const obrpc::ObAlterTableArg &alter_table_arg,
                                   const bool is_truncate);
-  int check_alter_drop_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
-                                     const obrpc::ObAlterTableArg &alter_table_arg);
+ int check_alter_drop_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
+      const obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_split_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                    obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_add_partitions(const share::schema::ObTableSchema &orig_table_schema,
@@ -2658,15 +2653,6 @@ private:
 // check whether the table adds column instant, we need to reorder the column
   int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                ObTableSchema &new_table_schema);
-
-  int check_can_change_cst_column_name(const obrpc::ObAlterTableArg &alter_table_arg,
-                                       const ObTableSchema &orig_table_schema,
-                                       const uint64_t tenant_data_version,
-                                       bool &can_modify_column_name_and_constraint);
-
-  int check_can_add_cst_on_two_column(const obrpc::ObAlterTableArg &alter_table_arg,
-                                      const uint64_t tenant_data_version,
-                                      bool &can_add_cst_on_two_column) const;
 
 private:
   bool inited_;

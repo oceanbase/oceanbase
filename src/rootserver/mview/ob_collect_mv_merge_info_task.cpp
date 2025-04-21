@@ -113,6 +113,8 @@ int ObCollectMvMergeInfoTask::get_stable_member_list_and_config_version(const ui
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(member_info.get_member_list().get_addr_array(addr_list))) {
     LOG_WARN("failed to get member_list addr array", KR(ret), K(member_info));
+  } else {
+    log_config_version = member_info.get_config_version();
   }
 
   return ret;
@@ -250,6 +252,10 @@ int ObCollectMvMergeInfoTask::collect_ls_member_merge_info(const uint64_t tenant
   } else if (OB_FAIL(get_stable_member_list_and_config_version(tenant_id, ls_id,
                                                               addr_list, log_config_version))) {
     LOG_WARN("fail to get member list", KR(ret), K(ls_id));
+  } else if (!log_config_version.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid log config version",
+              KR(ret), K(ls_id), K(log_config_version));
   } else {
     // batch collect ls merge info
     ObCollectMvMergeInfoProxy batch_proxy(
@@ -308,6 +314,10 @@ int ObCollectMvMergeInfoTask::collect_ls_member_merge_info(const uint64_t tenant
         if (OB_FAIL(get_stable_member_list_and_config_version(tenant_id, ls_id,
                                                              addr_list_new, log_config_version_new))) {
           LOG_WARN("fail to get member list", KR(ret), K(ls_id));
+        } else if (!log_config_version_new.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid log config version",
+                   KR(ret), K(ls_id), K(log_config_version_new));
         } else if (log_config_version_new != log_config_version) {
           ret = OB_STATE_NOT_MATCH;
           LOG_WARN("member list or leader changed, skip task", KR(ret),

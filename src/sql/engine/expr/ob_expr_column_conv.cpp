@@ -1034,6 +1034,13 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
         LOG_WARN("failed to convert batch", K(ret));
       }
     }
+
+    if (OB_SUCC(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      if (OB_FAIL(calc_column_name_for_diagnosis(expr, ctx,
+                                                ctx.exec_ctx_.get_diagnosis_manager()))) {
+        LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
+      }
+    }
   }
   return ret;
 }
@@ -1331,6 +1338,16 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
     }
     if (!ALL_ROWS_ACTIVE) {
       eval_flags.set(i);
+    }
+    if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      // overwrite ret on diagnosis node
+      if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+        LOG_WARN("failed to add warning info", K(ret), K(i));
+      } else {
+        // set null to avoid accessing invalid data before setting skip
+        // in ObTableScanOp::do_diagnosis
+        res_vec->set_null(i);
+      }
     }
   }
   if (OB_SUCC(ret) && ALL_ROWS_ACTIVE) {

@@ -44,6 +44,7 @@ class ObAggCellVec;
 class ObGroupByCellBase;
 class ObGroupByCell;
 class ObGroupByCellVec;
+struct ObPushdownRowIdCtx;
 };
 namespace memtable {
 class ObIMvccCtx;
@@ -368,11 +369,10 @@ public:
   }
   virtual int get_aggregate_result(
       const int32_t col_offset,
-      const int32_t *row_ids,
-      const int64_t row_cap,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       storage::ObAggCellVec &agg_cell)
   {
-    UNUSEDx(col_offset, row_ids, row_cap, agg_cell);
+    UNUSEDx(col_offset, pd_row_id_ctx, agg_cell);
     return OB_NOT_SUPPORTED;
   }
   // for normal group by pushdown

@@ -679,6 +679,9 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
       node = node->get_next();
     }
   }
+  // the default value of ignore_last_empty_col_ is true
+  // if ignore_last_empty_col_ is missing in ddl json, set ignore_last_empty_col_ to false for previous tables
+  ignore_last_empty_col_ = false;
   if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IGNORE_LAST_EMPTY_COLUMN)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       ignore_last_empty_col_ = true;

@@ -359,6 +359,7 @@ void ObLibXml2SaxHandler::structured_error(void *ctx, const xmlError *error)
 static int create_memory_parser_ctxt(const ObString& xml_text, xmlParserCtxt*& ctxt)
 {
   INIT_SUCC(ret);
+  int lib_ret = 0;
   xmlParserInputPtr input = nullptr;
   xmlParserInputBufferPtr buf = nullptr;
 
@@ -371,6 +372,12 @@ static int create_memory_parser_ctxt(const ObString& xml_text, xmlParserCtxt*& c
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("create parser input buffer failed", K(ret));
     // free when error
+    xmlFreeParserCtxt(ctxt);
+  } else if ((lib_ret = xmlParserInputBufferGrow(buf, xml_text.length())) != xml_text.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parser push input failed", K(lib_ret), K(xml_text.length()));
+    // free when error
+    xmlFreeParserInputBuffer(buf);
     xmlFreeParserCtxt(ctxt);
   } else if (OB_ISNULL(input = xmlNewIOInputStream(ctxt, buf, XML_CHAR_ENCODING_NONE))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

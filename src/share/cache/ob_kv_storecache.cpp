@@ -124,7 +124,6 @@ void ObKVCacheIterator::reset()
 /*
  * -------------------------------------------------------ObKVGlobalCache---------------------------------------------------------------
  */
-const double ObKVGlobalCache::MAX_RESERVED_MEMORY_RATIO = 0.3;
 //TODO bucket num level map should be system parameter
 const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
     {
@@ -139,6 +138,7 @@ const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
       201326611l,   // more than 512G, 2G kvcache meta
       402653189ll   // more than 1024G, 4G kvcache meta
     };
+ObKVGlobalCache ObKVGlobalCache::instance_;
 
 ObKVGlobalCache::ObKVGlobalCache()
     : inited_(false),
@@ -162,7 +162,6 @@ ObKVGlobalCache::~ObKVGlobalCache()
 
 ObKVGlobalCache &ObKVGlobalCache::get_instance()
 {
-  static ObKVGlobalCache instance_;
   return instance_;
 }
 
@@ -431,8 +430,11 @@ int ObKVGlobalCache::erase(const int64_t cache_id, const ObIKVCacheKey &key)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
   } else if (OB_FAIL(map_.erase(cache_id, key))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
       COMMON_LOG(WARN, "Fail to erase key from cache, ", K(cache_id), K(ret));
+    } else {
+      // has been erased via wash()
+      ret = OB_SUCCESS;
     }
   }
   return ret;

@@ -329,6 +329,7 @@ struct ToFloatCastImpl
         OB_INLINE int operator() (const ObExpr &expr, int idx)
         {
           int ret = OB_SUCCESS;
+          int warning = OB_SUCCESS;
           double tmp_out_val = 0.0;
           if (OB_SUCCESS == DecintToDouble(arg_vec_->get_decimal_int(idx),
                                            in_prec_, in_scale_, tmp_out_val)) {
@@ -339,6 +340,12 @@ struct ToFloatCastImpl
                 SQL_LOG(WARN, "common_double_float failed", K(ret));
               } else {
                 res_vec_->set_float(idx, out_val_float);
+              }
+            } else if (ob_is_unsigned_type(out_type_)) { // unsigned double
+              if (CAST_FAIL(numeric_negative_check(tmp_out_val))) {
+                SQL_LOG(WARN, "numeric_negative_check failed", K(ret));
+              } else {
+                res_vec_->set_double(idx, tmp_out_val);
               }
             } else {  // double
               res_vec_->set_double(idx, tmp_out_val);

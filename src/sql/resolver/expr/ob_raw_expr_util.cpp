@@ -4819,6 +4819,73 @@ int ObRawExprUtils::wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::create_inner_type_to_enumset_expr(ObRawExprFactory &expr_factory,
+                                                      ObRawExpr *src_expr,
+                                                      ObSysFunRawExpr *&out_expr,
+                                                      const ObSQLSessionInfo *session_info,
+                                                      ObIArray<common::ObString> &type_info_value)
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *op = NULL;
+  ObObjType data_type = ObNullType;
+  if (OB_ISNULL(src_expr) || OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_expr or session_info is NULL", K(ret), K(src_expr), K(session_info));
+  } else if (FALSE_IT(data_type = src_expr->get_data_type())) {
+  } else if (OB_UNLIKELY(!ob_is_enumset_inner_tc(data_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_type of src_expr is not enumset inner", K(ret), K(data_type));
+  } else {
+    if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_INNER_TYPE_TO_ENUMSET, out_expr))) {
+      LOG_WARN("create out_expr failed", K(ret));
+    } else if (OB_ISNULL(out_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN(" out_expr is null", K(ret));
+    } else if (OB_ISNULL(op = out_expr->get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate expr operator failed", K(ret));
+    } else {
+      out_expr->set_func_name(ObString::make_string(N_INNER_TYPE_TO_ENUMSET));
+      out_expr->set_dst_type(0);
+    }
+
+    ObConstRawExpr *col_accuracy_expr = NULL;
+    if (OB_SUCC(ret)) {
+      uint16_t subschema_id = 0;
+      ObExprResType res_type;
+      if (ObEnumInnerType == src_expr->get_result_type().get_type()) {
+        res_type.set_type(ObEnumType);
+      } else {
+        res_type.set_type(ObSetType);
+      }
+      res_type.set_collation_type(src_expr->get_collation_type());
+      res_type.set_collation_level(src_expr->get_collation_level());
+      if (OB_FAIL(ObRawExprUtils::get_subschema_id(res_type, type_info_value, *session_info, subschema_id))) {
+        LOG_WARN("failed to get suschema_id", K(ret), K(type_info_value));
+      } else if (OB_FAIL(build_const_int_expr(expr_factory, ObIntType, subschema_id, col_accuracy_expr))) {
+        LOG_WARN("fail to build type expr", K(ret));
+      } else if (OB_ISNULL(col_accuracy_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col_accuracy_expr is NULL", K(ret));
+      } else {
+        col_accuracy_expr->set_accuracy(src_expr->get_accuracy());
+        col_accuracy_expr->set_scale(SCALE_UNKNOWN_YET);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(out_expr->set_param_exprs(col_accuracy_expr, src_expr))) {
+        LOG_WARN("failed to set param expr", K(ret));
+      } else if (OB_FAIL(out_expr->formalize(session_info))) {
+        LOG_WARN("failed to formalize out_expr", K(ret), K(out_expr));
+      } else {
+        out_expr->add_flag(IS_ENUM_OR_SET);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
                                         ObQueryRefRawExpr *query_ref,
                                         ObRawExpr *outer_val_expr,
@@ -7568,87 +7635,95 @@ int ObRawExprUtils::build_ora_decode_expr(ObRawExprFactory *expr_factory,
   return ret;
 }
 
-int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker)
+int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker, bool is_prepare, bool &skip_check)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is NULL", K(ret));
-  } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
-    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(1));
-    ObObj param;
-    ParseNode parse_node;
-    ObObjType obj_type;
-    ObRawExpr *src = expr->get_param_expr(0);
-    uint64_t udt_id = expr->get_param_expr(1)->get_udt_id();
-    CK (OB_NOT_NULL(src), OB_NOT_NULL(const_expr));
-    CK (expr->get_param_expr(1)->is_const_raw_expr());
-    OX (param = const_expr->get_value());
-    OX (parse_node.value_ = param.get_int());
-    OX (obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]));
-    if (OB_FAIL(ret)) {
-    } else if (T_REF_QUERY == src->get_expr_type() &&
-               static_cast<ObQueryRefRawExpr *>(src)->is_multiset()) {
-      // cast(multiset(...) as udt)
-      if (ObExtendType != obj_type || OB_INVALID_ID == udt_id) {
-        ret = OB_ERR_INVALID_MULTISET;
-        LOG_WARN("MULTISET expression not allowed", K(ret));
-      } else {
-        const share::schema::ObUDTTypeInfo *dest_info = NULL;
-        const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
-        OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
-        CK (OB_NOT_NULL(dest_info));
-        if (OB_SUCC(ret) && !dest_info->is_collection()) {
-          ret = OB_ERR_INVALID_CAST_UDT;
-          LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
-        }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    bool child_skip_check = false;
+    OZ (SMART_CALL(check_composite_cast(expr->get_param_expr(i), schema_checker, is_prepare, child_skip_check)));
+    if (OB_SUCC(ret) && child_skip_check) {
+      skip_check = true;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is NULL", K(ret));
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+      ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(1));
+      ObObj param;
+      ParseNode parse_node;
+      ObObjType obj_type;
+      ObRawExpr *src = expr->get_param_expr(0);
+      uint64_t udt_id = expr->get_param_expr(1)->get_udt_id();
+      CK (OB_NOT_NULL(src), OB_NOT_NULL(const_expr));
+      CK (expr->get_param_expr(1)->is_const_raw_expr());
+      OX (param = const_expr->get_value());
+      OX (parse_node.value_ = param.get_int());
+      OX (obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]));
+      if (OB_SUCC(ret) && is_prepare && T_QUESTIONMARK == src->get_expr_type()) { //question mark in prepare phase set skip_check
+        skip_check = true;
       }
-    } else if (ObExtendType == obj_type
-               && OB_INVALID_ID != udt_id
-               && !(src->get_expr_type() == T_QUESTIONMARK ||
-                    (udt_id == T_OBJ_XML && src->get_expr_type() == T_FUN_SYS_CAST
-                    && src->get_param_expr(0)->get_expr_type() == T_QUESTIONMARK))) {
-      if (ObNullType == src->get_result_type().get_type()) {
-        // do nothing
-      } else if (src->get_result_type().is_user_defined_sql_type() ||
-                 (src->get_result_type().is_geometry() && is_oracle_mode() && udt_id == T_OBJ_SDO_GEOMETRY)) {
-        // allow pl udt cast to sql udt type
-        // allow oracle gis cast to pl extend
-      } else if (ObExtendType != src->get_result_type().get_type()) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("invalid cast a normal type to udt", K(ret));
-      } else if (udt_id == src->get_udt_id()) { //同类型cast，直接返回原始表达式
-        expr = src;
-      } else {
-        const share::schema::ObUDTTypeInfo *src_info = NULL;
-        const share::schema::ObUDTTypeInfo *dest_info = NULL;
-        const uint64_t src_tenant_id = pl::get_tenant_id_by_object_id(src->get_udt_id());
-        const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
-        OZ (schema_checker.get_udt_info(src_tenant_id, src->get_udt_id(), src_info));
-        OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
-        CK (OB_NOT_NULL(src_info), OB_NOT_NULL(dest_info));
-        if (OB_SUCC(ret)) {
-          if (src_info->is_collection() && dest_info->is_collection()) {
-            CK (OB_NOT_NULL(src_info->get_coll_info()), OB_NOT_NULL(dest_info->get_coll_info()));
-            if (OB_SUCC(ret)) {
-              if (src_info->get_coll_info()->get_elem_type_id() != dest_info->get_coll_info()->get_elem_type_id()) {
-                ret = OB_ERR_INVALID_TYPE_FOR_OP;
-                LOG_WARN("collection to cast has different elements",
-                         K(src_info->get_coll_info()->get_elem_type_id()),
-                         K(dest_info->get_coll_info()->get_elem_type_id()),
-                         K(ret));
-              }
-            }
-          } else {
+      if (OB_FAIL(ret)) {
+      } else if (T_REF_QUERY == src->get_expr_type() &&
+                 static_cast<ObQueryRefRawExpr *>(src)->is_multiset()) {
+        // cast(multiset(...) as udt)
+        if (ObExtendType != obj_type || OB_INVALID_ID == udt_id) {
+          ret = OB_ERR_INVALID_MULTISET;
+          LOG_WARN("MULTISET expression not allowed", K(ret));
+        } else {
+          const share::schema::ObUDTTypeInfo *dest_info = NULL;
+          const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+          OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
+          CK (OB_NOT_NULL(dest_info));
+          if (OB_SUCC(ret) && !dest_info->is_collection()) {
             ret = OB_ERR_INVALID_CAST_UDT;
-            LOG_WARN("src or dst info can not cast", K(ret), K(src_info->is_collection()), K(dest_info->is_collection()));
+            LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
+          }
+        }
+      } else if (ObExtendType == obj_type
+                 && OB_INVALID_ID != udt_id
+                 && !skip_check) {
+        if (ObNullType == src->get_result_type().get_type()) {
+          // do nothing
+        } else if (src->get_result_type().is_user_defined_sql_type() ||
+                   (src->get_result_type().is_geometry() && is_oracle_mode() && udt_id == T_OBJ_SDO_GEOMETRY)) {
+          // allow pl udt cast to sql udt type
+          // allow oracle gis cast to pl extend
+        } else if (ObExtendType != src->get_result_type().get_type()) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid cast a normal type to udt", K(ret));
+        } else if (udt_id == src->get_udt_id()) { //同类型cast，直接返回原始表达式
+          expr = src;
+        } else {
+          const share::schema::ObUDTTypeInfo *src_info = NULL;
+          const share::schema::ObUDTTypeInfo *dest_info = NULL;
+          const uint64_t src_tenant_id = pl::get_tenant_id_by_object_id(src->get_udt_id());
+          const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+          OZ (schema_checker.get_udt_info(src_tenant_id, src->get_udt_id(), src_info));
+          OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
+          CK (OB_NOT_NULL(src_info), OB_NOT_NULL(dest_info));
+          if (OB_SUCC(ret)) {
+            if (src_info->is_collection() && dest_info->is_collection()) {
+              CK (OB_NOT_NULL(src_info->get_coll_info()), OB_NOT_NULL(dest_info->get_coll_info()));
+              if (OB_SUCC(ret)) {
+                if (src_info->get_coll_info()->get_elem_type_id() != dest_info->get_coll_info()->get_elem_type_id()) {
+                  ret = OB_ERR_INVALID_TYPE_FOR_OP;
+                  LOG_WARN("collection to cast has different elements",
+                           K(src_info->get_coll_info()->get_elem_type_id()),
+                           K(dest_info->get_coll_info()->get_elem_type_id()),
+                           K(ret));
+                }
+              }
+            } else {
+              ret = OB_ERR_INVALID_CAST_UDT;
+              LOG_WARN("src or dst info can not cast", K(ret), K(src_info->is_collection()), K(dest_info->is_collection()));
+            }
           }
         }
       }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-    OZ (SMART_CALL(check_composite_cast(expr->get_param_expr(i), schema_checker)));
   }
 
   return ret;

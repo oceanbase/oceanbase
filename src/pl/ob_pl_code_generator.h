@@ -80,6 +80,7 @@ public:
     jit::ObLLVMFunction spi_destruct_collection_;
     jit::ObLLVMFunction spi_reset_composite_;
     jit::ObLLVMFunction spi_copy_datum_;
+    jit::ObLLVMFunction spi_cast_enum_set_to_string_;
     jit::ObLLVMFunction spi_destruct_obj_;
     jit::ObLLVMFunction spi_sub_nestedtable_;
     jit::ObLLVMFunction spi_alloc_complex_var_;
@@ -349,6 +350,13 @@ public:
   int generate_user_type(const ObUserDefinedType &type);
   int generate_obj_access_expr();
   int generate_set_variable(int64_t expr, jit::ObLLVMValue &value, bool is_default, int64_t stmt_id, bool in_notfound, bool in_warning);
+  int cast_enum_set_to_str(const ObPLBlockNS &ns,
+                           uint64_t type_info_id,
+                           jit::ObLLVMValue &src,
+                           jit::ObLLVMValue &dest,
+                           uint64_t location,
+                           bool in_notfound,
+                           bool in_warning);
   common::ObIAllocator &get_allocator() { return allocator_; }
   const ObSqlExpression *get_expr(int64_t i) const { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   ObSqlExpression *get_expr(int64_t i) { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }

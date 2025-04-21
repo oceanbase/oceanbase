@@ -16,6 +16,7 @@
 #include "src/share/schema/ob_schema_struct.h"
 #include "observer/omt/ob_tenant_mtl_helper.h"
 #include "share/ob_tenant_info_proxy.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 namespace oceanbase
 {
@@ -104,7 +105,6 @@ ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_t
     unit_max_cpu_(0),
     unit_min_cpu_(0),
     unit_memory_size_(0),
-    unit_data_disk_size_(0),
     switchover_epoch_(ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
@@ -122,7 +122,6 @@ ObTenantBase &ObTenantBase::operator=(const ObTenantBase &ctx)
   }
   id_ = ctx.id_;
   epoch_ = ctx.epoch_;
-  unit_data_disk_size_ = ctx.unit_data_disk_size_;
   mtl_init_ctx_ = ctx.mtl_init_ctx_;
   tenant_role_value_ = ctx.tenant_role_value_;
   switchover_epoch_ = ctx.switchover_epoch_;
@@ -363,13 +362,16 @@ int ObTenantBase::pre_run()
     }
   }
   ATOMIC_INC(&thread_count_);
-
+  if (GCONF._enable_numa_aware && OB_NUMA_SHARED_INDEX == AFFINITY_CTRL.get_tls_node()) {
+    AFFINITY_CTRL.thread_bind_to_node(thread_count_);
+  }
   // register in tenant cgroup without modifying group_id
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (OB_NOT_NULL(cgroup_ctrl) && cgroup_ctrl->is_valid()) {
     // add thread to tenant OBCG_DEFAULT cgroup
     ret = cgroup_ctrl->add_self_to_cgroup_(id_);
   }
+
 
   LOG_DEBUG("tenant thread pre_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
   return ret;

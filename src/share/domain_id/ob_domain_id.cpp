@@ -195,7 +195,12 @@ int ObDomainIdUtils::get_domain_tid_table_by_type(ObDomainIDType type,
     switch (type) {
       case ObDomainIDType::DOC_ID: {
         if (OB_FAIL(data_table->get_rowkey_doc_tid(domain_id_table_id))) {
-          LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+            LOG_WARN("fail to get rowkey doc table id, retry", K(ret), KPC(data_table));
+            ret = OB_SCHEMA_EAGAIN;
+          } else {
+            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          }
         }
         break;
       }
@@ -231,7 +236,12 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
     switch (type) {
       case ObDomainIDType::DOC_ID: {
         if (OB_FAIL(data_table->get_rowkey_doc_tid(tid))) {
-          LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+            LOG_WARN("fail to get rowkey doc table id, retry", K(ret), KPC(data_table));
+            ret = OB_SCHEMA_EAGAIN;
+          } else {
+            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          }
         }
         break;
       }

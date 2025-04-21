@@ -91,32 +91,20 @@ int ObHNormalAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEnti
   return ret;
 }
 
-int ObHNormalAdapter::del(ObTableExecCtx &ctx, const ObTabletID &tablet_id, const ObNewRow &cell)
+int ObHNormalAdapter::del(ObTableExecCtx &ctx, const ObITableEntity &cell)
 {
   int ret = OB_SUCCESS;
-  ObTableEntity entity;
-  UNUSED(tablet_id);
-  ObTabletID invalid_tablet_id(ObTabletID::INVALID_TABLET_ID);
-  entity.set_tablet_id(invalid_tablet_id);
-  if (OB_FAIL(ObHTableUtils::construct_entity_from_row(cell, ctx.get_schema_cache_guard(), entity))) {
-    LOG_WARN("fail to construct entity from row", K(ret), K(cell));
-  } else {
-    SMART_VAR(ObTableCtx, tb_ctx, allocator_)
-    {
-      ObTableOperationResult result;
-      ObSEArray<ObITableEntity *, 1> cells;
-      cells.set_attr(ObMemAttr(MTL_ID(), "DelCells"));
-      if (OB_FAIL(cells.push_back(&entity))) {
-        LOG_WARN("fail to push back entity", K(ret), K(entity));
-      } else if (OB_FAIL(init_table_ctx(ctx, entity, ObTableOperationType::DEL, tb_ctx))) {
-        LOG_WARN("fail to init table ctx", K(ret), K(ctx), K(entity));
-      } else if (FALSE_IT(tb_ctx.set_skip_scan(true))) {
-      } else if (OB_FAIL(ObTableApiService::multi_delete(tb_ctx, cells))) {
-        LOG_WARN("fail to multi del in hbase normal adapter", K(ret), K(cells));
-      } else {
-        LOG_DEBUG("delete success", K(ret), K(ctx.get_table_name()),
-            K(tb_ctx.get_tablet_id()), K(entity));
-      }
+  SMART_VAR(ObTableCtx, tb_ctx, allocator_)
+  {
+    ObTableOperationResult result;
+    if (OB_FAIL(init_table_ctx(ctx, cell, ObTableOperationType::DEL, tb_ctx))) {
+      LOG_WARN("fail to init table ctx", K(ret), K(ctx), K(cell));
+    } else if (FALSE_IT(tb_ctx.set_skip_scan(true))) {
+    } else if (OB_FAIL(ObTableApiService::del(tb_ctx, cell, result))) {
+      LOG_WARN("fail to multi del in hbase normal adapter", K(ret), K(cell));
+    } else {
+      LOG_DEBUG("delete success", K(ret), K(ctx.get_table_name()),
+          K(tb_ctx.get_tablet_id()), K(cell));
     }
   }
   return ret;

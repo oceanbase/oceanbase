@@ -354,7 +354,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
               K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(ignore_cost),
               K(is_expected), K(is_original_expected), K(eval_partial_cost));
-  } else if (OB_FAIL(adjust_transformed_stmt(eval_parent_stmts, trans_stmt, tmp1, tmp2))) {
+  } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
     LOG_TRACE("succeed force accept transform because hint/rule");
@@ -461,7 +461,9 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
   return ret;
 }
 
-
+// This function primarily handles scenarios where cost-based rewrites are applied to temporary table queries.
+// Since `PredicateMoveAround` within the temp table query tree cannot push down external common filters,
+// an additional push-down step is performed here.
 int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter)
 {
   int ret = OB_SUCCESS;
@@ -475,12 +477,15 @@ int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_st
             OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(root_stmt));
+  } else if (root_stmt.get_stmt_id() != current_temp_table_->temp_table_query_->get_stmt_id()) {
+    root_stmt_with_filter = &root_stmt;
+    // do partial cost check inside temp table, can't push external common filters into it
   } else if (OB_FAIL(ObSqlTempTableInfo::collect_specified_temp_table(*ctx_->allocator_,
-                                                                       current_temp_table_->temp_table_query_,
-                                                                       current_temp_table_->upper_stmts_,
-                                                                       current_temp_table_->table_items_,
-                                                                       temp_table_info,
-                                                                       have_temp_table_filter))) {
+                                                                      current_temp_table_->temp_table_query_,
+                                                                      current_temp_table_->upper_stmts_,
+                                                                      current_temp_table_->table_items_,
+                                                                      temp_table_info,
+                                                                      have_temp_table_filter))) {
     LOG_WARN("failed to collect_specified_temp_table", K(ret));
   } else if (have_temp_table_filter) {
     TableItem *new_table_item = NULL;

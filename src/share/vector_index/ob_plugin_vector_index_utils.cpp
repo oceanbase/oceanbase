@@ -155,7 +155,7 @@ int ObPluginVectorIndexUtils::read_object_from_data_table_iter(ObObj *&input_obj
           int64_t size = vector.length();
           if (size == 0) {
             output_vec_obj.reset();
-          } else if (OB_ISNULL(copy_str = static_cast<char *>(allocator.alloc(sizeof(char*) * size)))) {
+          } else if (OB_ISNULL(copy_str = static_cast<char *>(allocator.alloc(sizeof(char) * size)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocator.", K(ret));
           } else {

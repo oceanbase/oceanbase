@@ -282,6 +282,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_sequence_load)
 DEF_ASH_FLAGS_SETTER_GUARD(in_committing)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_read)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_write)
+DEF_ASH_FLAGS_SETTER_GUARD(in_das_remote_exec)
 DEF_ASH_FLAGS_SETTER_GUARD(in_filter_rows)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_encode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_decode)
@@ -291,6 +292,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_deadlock_row_register)
 DEF_ASH_FLAGS_SETTER_GUARD(in_check_tx_status)
 DEF_ASH_FLAGS_SETTER_GUARD(in_resolve)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rewrite)
+DEF_ASH_FLAGS_SETTER_GUARD(in_foreign_key_cascading)
 
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD

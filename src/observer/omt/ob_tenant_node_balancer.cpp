@@ -199,7 +199,8 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
                                        create_timestamp,
                                        has_memstore,
                                        false /*is_removed*/,
-                                       hidden_sys_data_disk_config_size))) {
+                                       hidden_sys_data_disk_config_size,
+                                       basic_tenant_unit.gen_init_actual_data_disk_size(unit.unit_config_)))) {
       LOG_WARN("fail to init user tenant config", KR(ret), K(unit));
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
@@ -294,7 +295,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
       server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_) - extra_memory,
                                           tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
-      server_resource.data_disk_size_ += tenant_units.at(i).config_.data_disk_size();
+      server_resource.data_disk_size_ += tenant_units.at(i).get_effective_actual_data_disk_size();
     }
   }
   return ret;
@@ -424,7 +425,9 @@ int ObTenantNodeBalancer::check_new_tenant(
     }
 #ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode()) {
+    } else if (!GCTX.is_shared_storage_mode() || unit.config_.data_disk_size() == 0) {
+      // do nothing
+    } else {
       int64_t data_disk_size = unit.config_.data_disk_size();
       if (is_sys_tenant(tenant_id)) { // real_sys_tenant's data_disk_size = sys_unit_config + hidden_sys_data_disk_size
         data_disk_size += OB_SERVER_DISK_SPACE_MGR.get_hidden_sys_data_disk_config_size();
@@ -530,6 +533,7 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
       if (tenant_config.tenant_id_ == new_tenants.at(j).tenant_id_) {
         new_tenants.at(j).create_timestamp_ = tenant_config.create_timestamp_;
         new_tenants.at(j).is_removed_ = tenant_config.is_removed_;
+        new_tenants.at(j).actual_data_disk_size_ = tenant_config.actual_data_disk_size_;
         found = true;
         break;
       }

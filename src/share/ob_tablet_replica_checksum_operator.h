@@ -63,6 +63,22 @@ public:
   int64_t get_string_length() const;
   TO_STRING_KV(K_(compat_version), K_(checksum_method), K_(checksum_bytes), K_(column_checksums));
 
+  int set_with_str(const int64_t compaction_scn_val, const ObString &str);
+  int set_with_str(const ObDataChecksumType type, const ObString &str);
+  int get_str_obj(
+      const ObDataChecksumType type,
+      common::ObIAllocator &allocator,
+      ObObj &obj,
+      common::ObString &str) const;
+  int get_hex_str(
+      common::ObIAllocator &allocator,
+      common::ObString &column_meta_hex_str) const;
+private:
+  int set_with_hex_str(const ObString &hex_str);
+  int set_with_serialize_str(const ObString &serialize_str);
+  int get_serialize_str(
+      common::ObIAllocator &allocator,
+      common::ObString &str) const;
 public:
   static const int64_t MAX_OCCUPIED_BYTES = 4000 * 8 + 11;
   static const int64_t DEFAULT_COLUMN_CNT = 64;
@@ -90,6 +106,7 @@ public:
   int assign(const ObTabletReplicaChecksumItem &other);
   int set_tenant_id(const uint64_t tenant_id);
   int check_data_checksum_type(bool &is_cs_replica) const;
+  void set_data_checksum_type(const bool is_cs_replica, const int64_t compaction_data_version);
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(server), K_(row_count),
@@ -146,19 +163,10 @@ public:
       const uint64_t tenant_id,
       const ObIArray<compaction::ObTabletCheckInfo> &pairs,
       ObReplicaCkmArray &tablet_replica_checksum_items);
-  static int set_column_meta_with_hex_str(
-      const ObString &hex_str,
-      ObTabletReplicaReportColumnMeta &column_meta);
   static int get_visible_column_meta(
       const ObTabletReplicaReportColumnMeta &column_meta,
       common::ObIAllocator &allocator,
       common::ObString &column_meta_visible_str);
-
-  static int get_hex_column_meta(
-      const ObTabletReplicaReportColumnMeta &column_meta,
-      common::ObIAllocator &allocator,
-      common::ObString &column_meta_hex_str);
-
   static int range_get(
       const uint64_t tenant_id,
       const common::ObTabletID &start_tablet_id,
@@ -183,6 +191,10 @@ public:
   static int get_min_compaction_scn(
       const uint64_t tenant_id,
       SCN &min_compaction_scn);
+  static int mock_large_column_meta(
+      const ObTabletReplicaReportColumnMeta &column_meta,
+      ObTabletReplicaReportColumnMeta &mock_column_meta);
+  static int recover_mock_column_meta(ObTabletReplicaReportColumnMeta &column_meta);
 private:
   struct ObSimpleCkmInfo
   {
@@ -298,6 +310,7 @@ public:
 private:
   const static int64_t MAX_BATCH_COUNT = 128;
   const static int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
+  const static int64_t MOCK_COLUMN_CHECKSUM = 580000000000000;
 };
 
 template<typename T>

@@ -384,6 +384,7 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
   if (OB_SUCC(ret) && func.get_action() != 0) {
     OZ (cg.prepare_expression(func));
     OZ (cg.final_expression(func));
+    OZ (func.get_enum_set_ctx().assgin(func_ast.get_enum_set_ctx()));
     OZ (func.set_variables(func_ast.get_symbol_table()));
     OZ (func.set_types(func_ast.get_user_type_table()));
     OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));
@@ -901,6 +902,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   FLTSpanGuard(pl_compile);
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
+  ObString copy_exec_env;
 
   int64_t compile_start = ObTimeUtility::current_time();
 
@@ -915,7 +917,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     OZ (package_ast.get_compile_flag().add_invoker_right());
   }
   if (OB_SUCC(ret)) {
-    ObString copy_exec_env;
     OZ (ob_write_string(package.get_allocator(), package_info.get_exec_env(), copy_exec_env));
     OZ (package.get_exec_env().init(copy_exec_env));
   }
@@ -944,6 +945,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                       package_ast, package_info.is_for_trigger()));
   int64_t resolve_end = ObTimeUtility::current_time();
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
+
 #ifdef OB_BUILD_ORACLE_PL
   if (OB_FAIL(ret) && package_info.is_package()) {
     int tmp_ret = OB_SUCCESS;
@@ -953,42 +955,39 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     }
   }
 #endif
-  bool is_from_disk = false;
-  {
-    if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
-      HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
+    HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
 #else
-      HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
-                session_info_,
-                schema_guard_,
-                package_ast,
-                package.get_expressions(),
-                package.get_helper(),
-                package.get_di_helper(),
-                lib::is_oracle_mode()) {
+    HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
+             session_info_,
+             schema_guard_,
+             package_ast,
+             package.get_expressions(),
+             package.get_helper(),
+             package.get_di_helper(),
+             lib::is_oracle_mode()) {
 #endif
-        int64_t cg_jit_mem = 0;
-        ObPLCGMallocCallback pmcb(cg_jit_mem);
-        lib::ObMallocCallbackGuard memory_guard(pmcb);
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+      int64_t cg_jit_mem = 0;
+      ObPLCGMallocCallback pmcb(cg_jit_mem);
+      lib::ObMallocCallbackGuard memory_guard(pmcb);
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
 
-        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
-        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
-        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
+      // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+      ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
+      ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
 
-        // check session status after get lock
-        OZ (ObPL::check_session_alive(session_info_));
+      // check session status after get lock
+      OZ (ObPL::check_session_alive(session_info_));
 
-        OZ (cg.init());
-        OZ (cg.generate(package));
-        OX (package.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
-      }
+      OZ (cg.init());
+      OZ (cg.generate(package));
+      OX (package.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
     }
-
-    OZ (generate_package(package_info.get_exec_env(), package_ast, package, is_from_disk));
   }
 
+  bool is_from_disk = false;
+  OZ (generate_package(copy_exec_env, package_ast, package, is_from_disk));
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
@@ -1369,7 +1368,8 @@ int ObPLCompiler::compile_types(const ObIArray<const ObUserDefinedType*> &types,
           LOG_WARN("allocate memory failed", K(ret), KPC(ast_type), K(i));
         } else {
           new (record_type) ObRecordType();
-          if (OB_FAIL(record_type->deep_copy(alloc,
+          if (OB_FAIL(record_type->deep_copy(unit.get_enum_set_ctx(),
+                                             alloc,
                                              *(static_cast<ObRecordType *>(ast_type)),
                                              false))) {
             LOG_WARN("pl user type deep copy failed", K(ret), KPC(ast_type), K(i));

@@ -686,6 +686,17 @@ int ObSSTableRowScanner<PrefetchType>::forward_blockscan(
             // PENDING_BLOCK_SCAN, IN_END_OF_RANGE.
             // ObCOSSTableRowScanner will continue loop.
             block_scan_state = BLOCKSCAN_RANGE;
+            if (co_prefetcher->micro_data_prefetch_idx_ > co_prefetcher->cur_micro_data_fetch_idx_) {
+              const ObSSTableReadHandle& read_handle = co_prefetcher->current_read_handle();
+              const blocksstable::ObMicroIndexInfo &micro_info = co_prefetcher->current_micro_info();
+              int cmp_ret = micro_info.cs_row_range_.compare(end);
+              if (access_ctx_->query_flag_.is_reverse_scan()) {
+                cmp_ret = -cmp_ret;
+              }
+              if (micro_info.range_idx() == read_handle.range_idx_ && cmp_ret > 0) {
+                co_prefetcher->set_block_scan_state(IN_END_OF_RANGE);
+              }
+            }
           }
           break;
         }
@@ -753,7 +764,15 @@ int ObSSTableRowScanner<PrefetchType>::update_border_rowid_for_column_store()
   // Fetch the last data mirco block of current range, get the border rowid
   // and check whether we can continue to block scan.
   ObCOPrefetcher* co_prefetcher = reinterpret_cast<ObCOPrefetcher*>(&prefetcher_);
-  while(OB_SUCC(ret)) {
+  ObSSTableReadHandle& read_handle = co_prefetcher->current_read_handle();
+  const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
+  // 1. Defensive check, must be same range idx.
+  if (OB_UNLIKELY(cur_range_idx_ != read_handle.range_idx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected range idx", K(ret), K_(cur_range_idx), K(read_handle));
+  }
+
+  while(OB_SUCC(ret) && IN_END_OF_RANGE == co_prefetcher->get_block_scan_state()) {
     if (OB_FAIL(co_prefetcher->prefetch())) {
       LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
     } else if (OB_UNLIKELY(prefetcher_.cur_range_fetch_idx_ >= prefetcher_.cur_range_prefetch_idx_)) {
@@ -762,48 +781,44 @@ int ObSSTableRowScanner<PrefetchType>::update_border_rowid_for_column_store()
       LOG_WARN("Unexpected prefetch end", K(ret), K_(prefetcher));
     } else if (co_prefetcher->read_wait()) {
       continue;
+    } else if (OB_UNLIKELY(co_prefetcher->cur_micro_data_fetch_idx_ > read_handle.micro_end_idx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected micro index", K(ret), K_(prefetcher_.is_prefetch_end), K(is_reverse_scan), K_(prefetcher_.cur_range_fetch_idx),
+               K_(prefetcher_.cur_micro_data_fetch_idx), K_(prefetcher_.micro_data_prefetch_idx), K(read_handle));
     } else {
-      ObSSTableReadHandle& read_handle = co_prefetcher->current_read_handle();
+      int64_t start_offset = 0;
+      int64_t end_offset = 0;
+      ObMicroBlockData block_data;
       blocksstable::ObMicroIndexInfo &micro_info = co_prefetcher->current_micro_info();
       ObMicroBlockDataHandle &micro_handle = co_prefetcher->current_micro_handle();
-      // 1. Defensive check, must be same range idx.
-      if (OB_UNLIKELY(cur_range_idx_ != read_handle.range_idx_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected range idx", K(ret), K_(cur_range_idx), K(read_handle));
+      // 2. Open the data micro block.
+      if (OB_FAIL(micro_handle.get_micro_block_data(&macro_block_reader_, block_data))) {
+        LOG_WARN("Fail to get block data", K(ret), K_(prefetcher_.is_prefetch_end), K(is_reverse_scan), K_(prefetcher_.cur_micro_data_fetch_idx),
+                 K_(prefetcher_.micro_data_prefetch_idx), K(read_handle), K(micro_handle));
+      } else if (OB_FAIL(micro_scanner_->open(
+                  micro_handle.macro_block_id_,
+                  block_data,
+                  micro_info.is_left_border(),
+                  micro_info.is_right_border()))) {
+        LOG_WARN("Failed to open micro_scanner", K(ret), K(micro_info), K(micro_handle), KPC(this));
+        // 3. Check the rows that satisfy border rowkey.
+      } else if (OB_FAIL(micro_scanner_->advance_to_border(co_prefetcher->get_border_rowkey(),
+                                                           start_offset, end_offset))) {
+        LOG_WARN("Failed advance to border", K(ret), K(co_prefetcher->get_border_rowkey()));
+      } else if (start_offset < end_offset &&
+                 OB_FAIL(co_prefetcher->update_end_rowid_for_column_store(start_offset, end_offset))) {
+        LOG_WARN("Fail to update end row id for column store", K(ret), K(start_offset), K(end_offset));
+      } else if (OB_ITER_END == micro_scanner_->end_of_block() && micro_info.is_end_border(is_reverse_scan)) {
+        // For non-reverse scan, if current micro block is end, current micro info is also in border.
+        // For reverse scan, if current micro block is end, current micro info is not determined.
+        co_prefetcher->set_block_scan_state(PENDING_SWITCH);
+        co_prefetcher->go_to_next_range();
+      } else if (OB_ITER_END != micro_scanner_->end_of_block() || start_offset >= end_offset) {
+        co_prefetcher->set_block_scan_state(ROW_STORE_SCAN);
       } else {
-        ObMicroBlockData block_data;
-        const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
-        // 2. Open the data micro block.
-        if (OB_FAIL(micro_handle.get_micro_block_data(&macro_block_reader_, block_data))) {
-          LOG_WARN("Fail to get block data", K(ret), K(micro_handle));
-        } else if (OB_FAIL(micro_scanner_->open(
-                             micro_handle.macro_block_id_,
-                             block_data,
-                             micro_info.is_left_border(),
-                             micro_info.is_right_border()))) {
-          LOG_WARN("Failed to open micro_scanner", K(ret), K(micro_info), K(micro_handle), KPC(this));
-        } else {
-          // 3. Check the rows that satisfy border rowkey.
-          int64_t start_offset = 0;
-          int64_t end_offset = 0;
-          if (OB_FAIL(micro_scanner_->advance_to_border(co_prefetcher->get_border_rowkey(),
-                                                        start_offset, end_offset))) {
-            LOG_WARN("Failed advance to border", K(ret), K(co_prefetcher->get_border_rowkey()));
-          } else {
-            co_prefetcher->adjust_border_row_id(end_offset - start_offset, is_reverse_scan);
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_ITER_END == micro_scanner_->end_of_block() && micro_info.is_end_border(is_reverse_scan)) {
-              // For non-reverse scan, if current micro block is end, current micro info is also in border.
-              // For reverse scan, if current micro block is end, current micro info is not determined.
-              co_prefetcher->set_block_scan_state(PENDING_SWITCH);
-              co_prefetcher->go_to_next_range();
-            } else {
-              co_prefetcher->set_block_scan_state(ROW_STORE_SCAN);
-            }
-          }
-        }
-        break;
+        co_prefetcher->block_scan_border_row_id_ = is_reverse_scan ?
+            micro_info.cs_row_range_.begin() : micro_info.cs_row_range_.end();
+        co_prefetcher->cur_micro_data_fetch_idx_++;
       }
     }
   }
@@ -843,7 +858,8 @@ int ObSSTableRowScanner<PrefetchType>::update_start_rowid_for_column_store()
           LOG_WARN("Failed to advance to border", K(ret), K(co_prefetcher->get_border_rowkey()));
         } else if (OB_ITER_END != micro_scanner_->end_of_block()) {
           // Update start_rowid and border_rowid.
-          if (start_offset < end_offset && OB_FAIL(update_start_and_end_rowid_for_column_store(start_offset, end_offset))) {
+          if (start_offset < end_offset &&
+              OB_FAIL(co_prefetcher->update_start_and_end_rowid_for_column_store(start_offset, end_offset))) {
             LOG_WARN("Failed to update start rowid and end rowid", K(ret), KP(co_prefetcher));
           }
         } else if (OB_FAIL(try_refreshing_blockscan_checker_for_column_store(start_offset, end_offset))) {
@@ -920,39 +936,19 @@ int ObSSTableRowScanner<PrefetchType>::try_refreshing_blockscan_checker_for_colu
   int ret = OB_SUCCESS;
   ObCOPrefetcher* co_prefetcher = reinterpret_cast<ObCOPrefetcher*>(&prefetcher_);
   if (OB_FAIL(co_prefetcher->refresh_blockscan_checker_for_column_store(co_prefetcher->cur_micro_data_fetch_idx_ + 1,
-                                                                         co_prefetcher->get_border_rowkey()))) {
+                                                                        co_prefetcher->get_border_rowkey()))) {
     LOG_WARN("Failed to refresh block scan checker", K(ret), K(co_prefetcher->get_border_rowkey()),
-              KP(co_prefetcher));
+             KP(co_prefetcher));
   } else if (co_prefetcher->is_in_switch_range_scan_mode()
-              || co_prefetcher->is_in_row_store_scan_mode()) {
-    if (start_offset < end_offset && OB_FAIL(update_start_and_end_rowid_for_column_store(start_offset, end_offset))) {
+             || co_prefetcher->is_in_row_store_scan_mode()) {
+    if (start_offset < end_offset &&
+        OB_FAIL(co_prefetcher->update_start_and_end_rowid_for_column_store(start_offset, end_offset))) {
       LOG_WARN("Failed to update start rowid and end rowid", K(ret), KP(co_prefetcher));
     }
   } else {
     const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
     co_prefetcher->adjust_start_row_id(end_offset - start_offset, is_reverse_scan);
   }
-  return ret;
-}
-
-template<typename PrefetchType>
-int ObSSTableRowScanner<PrefetchType>::update_start_and_end_rowid_for_column_store(
-    const int64_t start_offset,
-    const int64_t end_offset)
-{
-  int ret = OB_SUCCESS;
-  ObCOPrefetcher* co_prefetcher = reinterpret_cast<ObCOPrefetcher*>(&prefetcher_);
-  ObCSRowId start_row_id = co_prefetcher->cur_start_row_id();
-  const bool is_reverse_scan = access_ctx_->query_flag_.is_reverse_scan();
-  if (is_reverse_scan) {
-    co_prefetcher->set_start_row_id(start_row_id + end_offset - 1);
-    co_prefetcher->set_border_row_id(start_row_id + start_offset);
-  } else {
-    co_prefetcher->set_start_row_id(start_row_id + start_offset);
-    co_prefetcher->set_border_row_id(start_row_id + end_offset - 1);
-  }
-  LOG_DEBUG("update_start_and_end_rowid_for_column_store",
-             K(start_row_id), K(start_offset), K(end_offset));
   return ret;
 }
 

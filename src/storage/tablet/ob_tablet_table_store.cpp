@@ -1839,8 +1839,6 @@ int ObTabletTableStore::build_meta_major_table(
     } else if (OB_FAIL(meta_major_tables_.init(allocator, static_cast<ObSSTable *>(new_table)))) {
       LOG_WARN("failed to init meta major tables", K(ret));
     }
-  } else if (OB_NOT_NULL(new_table) && new_table->is_major_sstable()) {
-    // new table is major sstable, retire old meta sstable.
   } else if (!old_store.meta_major_tables_.empty()) {
     ObITable *old_meta_major = old_store.meta_major_tables_.at(0);
     if (old_meta_major->get_snapshot_version() <= last_major->get_snapshot_version()) { // new table is not meta sstable

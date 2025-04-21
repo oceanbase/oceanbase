@@ -43,11 +43,6 @@ public:
   ObCreateUDTExecutor() {}
   virtual ~ObCreateUDTExecutor() {}
   int execute(ObExecContext &ctx, ObCreateUDTStmt &stmt);
-  static int compile_udt(sql::ObExecContext &ctx,
-                  const ObString &db_name,
-                  const ObString &udt_name,
-                  int64_t type_code,
-                  int64_t schema_version);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUDTExecutor);
 };

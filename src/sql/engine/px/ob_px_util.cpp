@@ -442,8 +442,9 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     LOG_WARN("NULL ptr or sqc is not empty", K(ret), K(dfo));
   } else if (0 != dfo.get_sqcs_count()) {
     /**
-     * this dfo has been build. do nothing.
+     * this dfo has been built. do nothing.
      */
+    LOG_TRACE("this dfo has been built", K(dfo.get_dfo_id()));
   } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
     LOG_WARN("fail find scan ops in dfo", K(dfo), K(ret));
   } else if (OB_FAIL(ObPXServerAddrUtil::find_dml_ops(dml_ops, *root_op))) {
@@ -933,6 +934,11 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
       OB_ISNULL(exec_ctx.get_physical_plan_ctx()->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL phy plan ctx", K(ret), K(exec_ctx.get_physical_plan_ctx()));
+  } else if (0 != parent.get_sqcs_count()) {
+    /**
+     * this dfo has been built. do nothing.
+     */
+    LOG_TRACE("this dfo has been built", K(parent.get_dfo_id()));
   } else if (OB_FAIL(px_node_pool.init(exec_ctx))) {
     LOG_WARN("Fail to init mpp node info", K(ret));
   } else if (px_node_pool.data_node_empty()) {

@@ -18117,7 +18117,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     mdate_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     mdate_decimalint,/*decimalint*/
-    cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_support,/*collection, not implemented in mysql mode*/
     cast_eval_arg,/*mysql date*/
     mdate_mdatetime,/*mysql datetime*/
     cast_not_expected,/*roaringbitmap*/
@@ -18150,7 +18150,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     mdatetime_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     mdatetime_decimalint,/*decimalint*/
-    cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_support,/*collection, not implemented in mysql mode*/
     mdatetime_mdate,/*mysql date*/
     cast_eval_arg,/*mysql datetime*/
     cast_not_expected,/*roaringbitmap*/

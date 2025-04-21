@@ -19,7 +19,7 @@
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/alloc/alloc_interface.h"
 #include "lib/lock/ob_mutex.h"
-#include "lib/container/ob_rbtree.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 namespace oceanbase
 {
@@ -79,9 +79,11 @@ inline ObPageManager::ObPageManager()
 inline int ObPageManager::set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id)
 {
   int ret = OB_SUCCESS;
-  if (tenant_id != tenant_id_ || ctx_id != ctx_id_) {
+  int32_t numa_id = AFFINITY_CTRL.get_numa_id();
+  if (tenant_id != tenant_id_ || ctx_id != ctx_id_ || numa_id != numa_id_) {
     tenant_id_ = tenant_id;
     ctx_id_ = ctx_id;
+    numa_id_ = numa_id;
     is_inited_ = false;
     if (OB_FAIL(init())) {
     }
@@ -99,7 +101,7 @@ inline int ObPageManager::init()
   } else if (OB_ISNULL(ma)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(ERROR, "null ptr", K(ret));
-  } else if (OB_ISNULL(ta_ = ma->get_tenant_ctx_allocator(tenant_id_, ctx_id_))) {
+  } else if (OB_ISNULL(ta_ = ma->get_tenant_ctx_allocator(tenant_id_, ctx_id_, numa_id_))) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(ERROR, "null ptr", K(ret));
   } else {
@@ -125,8 +127,9 @@ inline ABlock *ObPageManager::alloc_block(uint64_t size, const ObMemAttr &attr)
     ret = init();
   }
   if (OB_SUCC(ret)) {
-    ObMemAttr inner_attr(tenant_id_, nullptr, ctx_id_);
-    inner_attr.label_ = attr.label_;
+    ObMemAttr inner_attr = attr;
+    inner_attr.tenant_id_ = tenant_id_;
+    inner_attr.ctx_id_ = ctx_id_;
     block = bs_.alloc_block(size, inner_attr);
     if (OB_UNLIKELY(nullptr == block)) {
       _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld ctx_id=%ld hold=%ld limit=%ld",

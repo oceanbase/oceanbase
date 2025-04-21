@@ -3789,6 +3789,14 @@ bool ObDMLStmt::has_link_table() const
   return bret;
 }
 
+int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs, DmlStmtScope scope) const
+{
+  ObStmtExprGetter visitor;
+  visitor.remove_all();
+  visitor.add_scope(scope);
+  return get_relation_exprs(relation_exprs, visitor);
+}
+
 int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const
 {
   ObStmtExprGetter visitor;

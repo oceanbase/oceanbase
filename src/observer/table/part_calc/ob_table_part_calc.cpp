@@ -209,7 +209,7 @@ int ObTablePartCalculator::calc(const ObSimpleTableSchemaV2 &simple_schema,
       }
       if (OB_ISNULL(ins_ctdef) || OB_ISNULL(ins_ctdef->new_part_id_expr_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null element", K(ret), KPC(ins_ctdef), KPC(ins_ctdef->new_part_id_expr_));
+        LOG_WARN("null element", K(ret), KPC(ins_ctdef));
       } else if (OB_FAIL(eval(ins_ctdef->new_row_, *ins_ctdef->new_part_id_expr_, *calc_entity, tablet_id))) {
         LOG_WARN("fail to eval tablet id", K(ret), KPC(ins_ctdef), K(*calc_entity));
       }

@@ -25,7 +25,6 @@ enum ObKVFeatureType {
   TTL,
   REROUTING,
   HOTKEY,
-  DISTRIBUTED_EXECUTE,
   MAXTYPE
 };
 
@@ -39,8 +38,6 @@ public:
   bool is_ttl_enable();
   bool is_rerouting_enable();
   bool is_hotkey_enable();
-  bool is_distributed_execute_enable();
-  void set_distributed_execute_mode(uint16_t mode);
   void set_ttl_mode(uint16_t mode);
   void set_rerouting_mode(uint16_t mode);
   void set_hotkey_mode(uint16_t mode);
@@ -51,11 +48,10 @@ private:
 	union {
     uint16_t value_; //FARM COMPAT WHITELIST
     struct {
-        uint8_t ttl_mode_ : 2;
-        uint8_t rerouting_mode_ : 2;
-        uint8_t hotkey_mode_ : 2;
-        uint8_t distributed_execute_mode_ : 2;
-        uint8_t reserver_mode_ :8;
+        uint16_t ttl_mode_ : 2;
+        uint16_t rerouting_mode_ : 2;
+        uint16_t hotkey_mode_ : 2;
+        uint16_t reserver_mode_ : 10;
       };
     };
 private:
@@ -69,7 +65,6 @@ public:
   static bool is_ttl_enable();
   static bool is_rerouting_enable();
   static bool is_hotkey_enable();
-  static bool is_distributed_execute_enable();
 };
 
 class ObPrivControlMode final

@@ -302,11 +302,16 @@ int ObAllVirtualSessionWaitI1::get_all_diag_info()
         } else {
           if (OB_FAIL(session_status_.push_back(pair))) {
             SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
+          } else {
+            SERVER_LOG(DEBUG, "found target di info", K(pair.first), K(pair.second.session_id_),
+                K(pair.second.base_value_.get_tenant_id()),
+                K(pair.second.base_value_.get_curr_wait()));
           }
         }
       }
     }
   }
+  SERVER_LOG(DEBUG, "index scan di", K(session_status_.count()));
   return ret;
 }
 

@@ -514,6 +514,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   T_FUN_SYS_MYSQL_TO_CHAR = 783,
   T_FUN_INNER_TYPE_TO_ENUMSET = 784,
+
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -2820,6 +2821,9 @@ typedef enum ObItemType
   T_IGNORE_LAST_EMPTY_COLUMN = 4841,
   T_LOG_ERROR_LIMIT = 4842,
   T_LOG_ERROR_UNLIMITED = 4843,
+
+  T_FLUSH_TABLE_MOCK = 4844,
+  T_TRIGGER_STORAGE_CACHE = 4845,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

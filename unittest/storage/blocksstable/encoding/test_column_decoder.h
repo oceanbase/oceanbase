@@ -79,32 +79,23 @@ public:
   TestColumnDecoder()
       : is_retro_(false), tenant_ctx_(OB_SERVER_TENANT_ID)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   TestColumnDecoder(ObColumnHeader::Type column_encoding_type)
       : is_retro_(false), column_encoding_type_(column_encoding_type), tenant_ctx_(OB_SERVER_TENANT_ID)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   TestColumnDecoder(bool is_retro)
       : is_retro_(is_retro), tenant_ctx_(OB_SERVER_TENANT_ID)
  {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
-    decode_res_pool_->init();
   }
   virtual ~TestColumnDecoder() {}
 
@@ -195,7 +186,6 @@ protected:
   ObColumnHeader::Type column_encoding_type_;
   ObObjType *col_obj_types_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   int64_t extra_rowkey_cnt_;
   int64_t column_cnt_;
   int64_t full_column_cnt_;

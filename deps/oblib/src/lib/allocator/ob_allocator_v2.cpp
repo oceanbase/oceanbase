@@ -12,6 +12,7 @@
 
 #include "lib/allocator/ob_allocator_v2.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 using namespace oceanbase::lib;
 namespace oceanbase
@@ -33,13 +34,15 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
       inner_attr.label_ = attr.label_;
     }
     auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                                inner_attr.ctx_id_);
+                                                                                inner_attr.ctx_id_,
+                                                                                inner_attr.numa_id_);
     if (OB_LIKELY(NULL != ta)) {
       ptr = ObTenantCtxAllocator::common_realloc(NULL, size, inner_attr, *(ta.ref_allocator()), os_);
     } else if (FORCE_MALLOC_FOR_ABSENT_TENANT()) {
       inner_attr.tenant_id_ = OB_SERVER_TENANT_ID;
       ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                            inner_attr.ctx_id_);
+                                                                            inner_attr.ctx_id_,
+                                                                            inner_attr.numa_id_);
       ptr = ObTenantCtxAllocator::common_realloc(NULL, size, inner_attr, *(ta.ref_allocator()), nos_);
     }
 

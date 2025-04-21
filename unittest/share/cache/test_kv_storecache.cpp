@@ -376,7 +376,7 @@ TEST_F(TestKVCache, test_func)
   ret = cache.erase(key);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = cache.erase(key);
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
   //test alloc and put
   handle.reset();
@@ -554,7 +554,7 @@ TEST_F(TestKVCache, test_wash)
 
 
   COMMON_LOG(INFO, "********** Start nonempty wash every tenant **********");
-  for (int64_t t = 190000; t < 19004; ++t) {
+  for (int64_t t = 190000; t < 190004; ++t) {
     key.tenant_id_ = t;
     ret = getter.add_tenant(t,
                             lower_mem_limit_,
@@ -571,7 +571,7 @@ TEST_F(TestKVCache, test_wash)
 
   COMMON_LOG(INFO, "********** Start nonempty wash all tenant **********");
   for (int64_t j = 0; j < 20; ++j) {
-    for (int64_t t = 190000; t < 19004; ++t) {
+    for (int64_t t = 190000; t < 190004; ++t) {
       key.tenant_id_ = t;
       ret = getter.add_tenant(t,
                               lower_mem_limit_,
@@ -1286,14 +1286,12 @@ TEST_F(TestKVCache, cache_handle_pin) {
           value.v_ = val;
           ObKVCacheHandle handle;
           ASSERT_EQ(OB_SUCCESS, cache.put_and_fetch(key, value, values[j], handle));
-          handles[j].assign(handle);
+          ASSERT_EQ(OB_SUCCESS, handles[j].assign(handle));
         }
         for (uint16_t j = 0; j < handle_size; ++j) {
-          if (handles[j].is_valid()) {
-            auto val = (thread_idx << 32) + (repeat << 16) + j;
-            ASSERT_EQ(val, values[j]->v_);
-            handles[j].reset();
-          }
+          auto val = (thread_idx << 32) + (repeat << 16) + j;
+          ASSERT_EQ(val, values[j]->v_);
+          handles[j].reset();
         }
       }
     });

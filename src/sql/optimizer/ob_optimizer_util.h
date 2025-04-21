@@ -583,18 +583,16 @@ public:
 
   static int check_prefix_ranges_count(const common::ObIArray<common::ObNewRange*> &ranges,
                                        int64_t &equal_prefix_count,
-                                       int64_t &equal_prefix_null_count,
                                        int64_t &range_prefix_count,
                                        bool &contain_always_false);
 
-  static int check_prefix_ranges_count(const common::ObIArray<common::ObNewRange> &ranges,
-                                       int64_t &equal_prefix_count,
-                                       int64_t &equal_prefix_null_count,
-                                       int64_t &range_prefix_count);
 
   static int check_prefix_range_count(const common::ObNewRange* range,
                                       int64_t &equal_prefix_count,
                                       int64_t &range_prefix_count);
+  static int check_equal_prefix_null_count(const ObIArray<common::ObNewRange*> &ranges,
+                                           const int64_t equal_prefix_count,
+                                           int64_t &equal_prefix_null_count);
   static int check_equal_prefix_null_count(const common::ObNewRange *range,
                                            const int64_t equal_prefix_count,
                                            int64_t &equal_prefix_null_count);
@@ -1123,17 +1121,15 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                bool &is_match);
-  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range = false);
+  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range = false, bool allow_imprecise_column_cast = false);
   static bool is_lossless_type_conv(const ObRawExprResType &child_type, const ObRawExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
-  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false);
-  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false);
+  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
+  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
   /**
    * This interface is specifically designed for query range, used to retrieve the column c1 that can extract the range from nvl(c1, 1) = 1.
   */
   static int get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr);
-  static int get_expr_without_unprecise_and_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
-  static int is_lossless_or_unprecise_column_cast(const ObRawExpr *expr, bool &is_lossless);
 
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,

@@ -798,22 +798,24 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                      ObCtxIds::DEFAULT_CTX_ID)
     .set_properties(lib::USE_TL_PAGE_OPTIONAL)
     .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
+  bool use_tmp_phy_plan_ctx = !(out_ctx != NULL
+                                && out_ctx->get_physical_plan_ctx() != NULL
+                                && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store()));
+  if (!use_tmp_phy_plan_ctx && !out_ctx->get_physical_plan_ctx()->is_param_datum_frame_inited()) {
+    out_ctx->get_physical_plan_ctx()->set_rich_format(session->use_rich_format());
+    if (OB_FAIL(out_ctx->get_physical_plan_ctx()->init_datum_param_store())) {
+      LOG_WARN("init datum param store failed", K(ret));
+    }
+  }
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
     ObPhysicalPlanCtx tmp_phy_plan_ctx(tmp_allocator);
     ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
-    bool use_tmp_phy_plan_ctx = false;
 
     if (out_ctx != NULL
         && out_ctx->get_physical_plan_ctx() != NULL
         && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store())) {
       phy_plan_ctx = out_ctx->get_physical_plan_ctx();
-      if (OB_UNLIKELY(!phy_plan_ctx->is_param_datum_frame_inited())) {
-        phy_plan_ctx->set_rich_format(session->use_rich_format());
-        if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
-          LOG_WARN("init datum param store failed", K(ret));
-        }
-      }
     } else {
       phy_plan_ctx = &tmp_phy_plan_ctx;
       phy_plan_ctx->set_rich_format(session->use_rich_format());
@@ -825,8 +827,6 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
         LOG_WARN("init datum param store failed", K(ret));
-      } else {
-        use_tmp_phy_plan_ctx = true;
       }
     }
     // pass the outside timeout timestamp if available

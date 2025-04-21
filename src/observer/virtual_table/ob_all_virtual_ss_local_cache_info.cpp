@@ -271,7 +271,7 @@ int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
       inst.total_miss_bytes_ = cache_stat.cache_miss_bytes_;
       inst.total_hit_cnt_ = cache_stat.cache_hit_cnt_;
       inst.total_miss_cnt_ = cache_stat.cache_miss_cnt_;
-      inst.alloc_disk_size_ = disk_space_mgr->get_private_macro_disk_space_size();
+      inst.alloc_disk_size_ = disk_space_mgr->get_private_macro_reserved_size();
       inst.used_disk_size_ = disk_space_mgr->get_private_macro_alloc_size();
 
       const int64_t total_req_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;

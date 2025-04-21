@@ -298,12 +298,14 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_variable_set_executor.cpp
   engine/cmd/ob_xa_executor.cpp
   engine/cmd/ob_context_executor.cpp
+  engine/cmd/ob_event_executor.cpp
   engine/cmd/ob_table_direct_insert_ctx.cpp
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_tenant_snapshot_executor.cpp
   engine/cmd/ob_mock_executor.cpp
   engine/cmd/ob_olap_async_job_executor.cpp
   engine/cmd/ob_catalog_executor.cpp
+  engine/cmd/ob_trigger_storage_cache_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -1297,6 +1299,9 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_olap_async_job_resolver.cpp
   resolver/cmd/ob_olap_async_job_stmt.cpp
   resolver/cmd/ob_module_data_resolver.cpp
+  resolver/cmd/ob_event_resolver.cpp
+  resolver/cmd/ob_event_stmt.cpp
+  resolver/cmd/ob_trigger_storage_cache_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl
@@ -1421,6 +1426,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_context_resolver.cpp
   resolver/ddl/ob_drop_context_resolver.cpp
   resolver/ddl/ob_fts_parser_resolver.cpp
+  resolver/ddl/ob_storage_cache_ddl_util.cpp
   resolver/ddl/ob_catalog_resolver.cpp
   resolver/ddl/ob_catalog_stmt.cpp
 )

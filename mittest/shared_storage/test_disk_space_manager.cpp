@@ -80,6 +80,47 @@ TEST_F(TestDiskSpaceManager, basic_test)
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
   disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
   ASSERT_EQ(OB_NOT_SUPPORTED, tenant_disk_space_mgr->resize_total_disk_size(disk_size));
+
+  // 4.update macro/micro size ratio
+  disk_size = 20L * 1024L * 1024L * 1024L;
+  int64_t new_micro_ratio = 40;
+  int64_t new_macro_ratio = 38;
+  bool succ_adjust = false;
+  int64_t ori_micro_cache_reserved_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+            ori_micro_cache_reserved_size));
+  ASSERT_EQ(false, succ_adjust);
+
+  new_micro_ratio = 41;
+  new_macro_ratio = 38;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+            ori_micro_cache_reserved_size));
+
+  new_micro_ratio = 45;
+  new_macro_ratio = 33;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+            ori_micro_cache_reserved_size));
+  ASSERT_EQ(true, succ_adjust);
+  ASSERT_EQ(new_micro_ratio, tenant_disk_space_mgr->all_disk_cache_info_.micro_cache_.space_percent_);
+  ASSERT_EQ(new_macro_ratio, tenant_disk_space_mgr->all_disk_cache_info_.private_macro_cache_.space_percent_);
+  ASSERT_EQ(ori_micro_cache_reserved_size, disk_size * 40 / 100); // original micro_cache_pct = 40%
+  ASSERT_EQ(tenant_disk_space_mgr->all_disk_cache_info_.micro_cache_.reserved_size_, disk_size * 45 / 100); // new micro_cache_pct = 45%
+  succ_adjust = false;
+
+  new_micro_ratio = 50;
+  new_macro_ratio = 28;
+  ori_micro_cache_reserved_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+            ori_micro_cache_reserved_size));
+  ASSERT_EQ(true, succ_adjust);
+  ASSERT_EQ(ori_micro_cache_reserved_size, disk_size * 45 / 100); // original micro_cache_pct = 45%
+  succ_adjust = false;
+
+  new_micro_ratio = 45;
+  new_macro_ratio = 33;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->update_cache_disk_ratio(new_micro_ratio, new_macro_ratio, succ_adjust,
+            ori_micro_cache_reserved_size));
+  ASSERT_EQ(false, succ_adjust);
 }
 
 TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
@@ -104,7 +145,7 @@ TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
   const int64_t tmp_file_reserved_disk_size = tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size();
   int64_t tmp_file_free_disk_size = tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size() +
                                     tenant_disk_space_mgr->get_preread_cache_reserved_size() -
-                                    tenant_disk_space_mgr->get_reserved_disk_size(tmp_file_reserved_disk_size) - 3 * disk_size;
+                                    tenant_disk_space_mgr->get_dir_reserved_disk_size(tmp_file_reserved_disk_size) - 3 * disk_size;
   ASSERT_EQ(tmp_file_free_disk_size, tenant_disk_space_mgr->get_tmp_file_write_free_disk_size());
   tmp_file_free_disk_size = tenant_disk_space_mgr->get_preread_cache_reserved_size() - 2 * disk_size;
   ASSERT_EQ(tmp_file_free_disk_size, tenant_disk_space_mgr->get_preread_free_disk_size());
@@ -146,8 +187,8 @@ TEST_F(TestDiskSpaceManager, test_meta_file_space_manager)
   int64_t disk_size = 1L * 1024L * 1024L; // 1MB
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_META, false/*is_tmp_file_read_cache*/));
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_meta_file_alloc_size());
-  const int64_t meta_file_reserved_disk_size = tenant_disk_space_mgr->get_meta_reserved_disk_size();
-  int64_t meta_file_free_disk_size = meta_file_reserved_disk_size - tenant_disk_space_mgr->get_reserved_disk_size(meta_file_reserved_disk_size) - disk_size;
+  const int64_t meta_file_reserved_disk_size = tenant_disk_space_mgr->get_meta_file_reserved_size();
+  int64_t meta_file_free_disk_size = meta_file_reserved_disk_size - tenant_disk_space_mgr->get_dir_reserved_disk_size(meta_file_reserved_disk_size) - disk_size;
   ASSERT_EQ(meta_file_free_disk_size, tenant_disk_space_mgr->get_meta_file_free_disk_size());
   // alloc_file_size PRIVATE_TABLET_CURRENT_VERSION do nothing, because create tablet_id dir has been alloced size
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION, false/*is_tmp_file_read_cache*/));

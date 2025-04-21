@@ -1815,6 +1815,7 @@ template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_()
 {
   int ret = OB_SUCCESS;
+  es_lock_();
   if (dir_ != NULL) {
     uint64_t seg_idx = 0;
     while (seg_idx < dir_seg_n_lmt_ && dir_[seg_idx] != NULL) {
@@ -1824,6 +1825,8 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_()
       seg_idx += 1;
     }
   } else { /*Fatal err.*/}
+  es_unlock_();
+
   while (ES_SUCCESS == shrink_()) { }
   return ret;
 }
@@ -1837,24 +1840,28 @@ uint64_t ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_seg_(Bucket *seg, uint
   } else {
     for (uint64_t idx = 0; idx < bkt_n; ++idx) {
       Bucket *bkt = &seg[idx];
-      if (is_bkt_active_(bkt)) {
-        if (is_bkt_nonempty_(bkt)) {
-          Node *iter = bkt->next_;
-          while (iter != NULL) {
-            Node *cur = iter;
-            iter = iter->next_;
-            cur->key_.~Key();
-            cur->value_.~Value();
-            mem_mgr_.get_node_alloc().free(cur);
-            cur = NULL;
+      if (NULL != bkt) {
+        set_bkt_lock_(bkt, true);
+        if (is_bkt_active_(bkt)) {
+          if (is_bkt_nonempty_(bkt)) {
+            Node *iter = bkt->next_;
+            while (iter != NULL) {
+              Node *cur = iter;
+              iter = iter->next_;
+              cur->key_.~Key();
+              cur->value_.~Value();
+              mem_mgr_.get_node_alloc().free(cur);
+              cur = NULL;
+              cnt += 1;
+            }
+            bkt->next_ = NULL;
+            bkt->key_.~Key();
+            bkt->value_.~Value();
+            set_bkt_nonempty_(bkt, false);
             cnt += 1;
           }
-          bkt->next_ = NULL;
-          bkt->key_.~Key();
-          bkt->value_.~Value();
-          set_bkt_nonempty_(bkt, false);
-          cnt += 1;
         }
+        set_bkt_lock_(bkt, false);
       }
     }
   }

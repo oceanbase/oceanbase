@@ -211,6 +211,7 @@ int ObHbaseMultiCFIterator::init_cf_iters()
       LOG_WARN("fail to add cf iter", K(ret));
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(cf_iter)) {
+      cf_iter->close();
       cf_iter->~ObHbaseCFIterator();
       allocator_.free(cf_iter);
       cf_iter = nullptr;

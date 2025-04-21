@@ -2502,7 +2502,12 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       int64_t start_time = ObTimeUtility::current_time();
       bool throw_ds_error = false;
       if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
-        if (EN_THROW_DS_ERROR && OB_NOT_NULL(ctx.get_root_stmt())) {
+        bool tp_force_throw_error = EN_THROW_DS_ERROR;
+        if (OB_TIMEOUT == (OB_E(EN_THROW_DS_ERROR) OB_SUCCESS) &&
+            OB_TIMEOUT == ret) {
+          tp_force_throw_error = false;
+        }
+        if (tp_force_throw_error) {
           LOG_WARN("failed to dynamic sampling", K(ret), K(start_time),
                    K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
                    K(ctx.get_session_info()->get_current_query_string()));

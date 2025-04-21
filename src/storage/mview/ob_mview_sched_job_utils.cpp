@@ -143,7 +143,6 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
       job_info.exec_env_ = exec_env;
-      job_info.max_failures_ = 16;
       job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 

@@ -680,7 +680,7 @@ int ObIndexBuildTask::wait_trans_end()
   if (OB_SUCC(ret) && snapshot_version_ <= 0) {
     bool is_trans_end = false;
     if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
-            tenant_id_, task_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, schema_version_))) {
+            tenant_id_, task_id_, task_status_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, schema_version_))) {
       LOG_WARN("init wait_trans_ctx failed", K(ret), K(object_id_), K(index_table_id_));
     } else if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, new_fetched_snapshot))) {
       LOG_WARN("try wait transaction end failed", K(ret), K(object_id_), K(index_table_id_));
@@ -1299,6 +1299,9 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (create_index_arg_.is_spatial_index() ||
              share::schema::is_fts_index(create_index_arg_.index_type_) ||
              create_index_arg_.is_multivalue_index()) {
@@ -1306,7 +1309,7 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
   } else if (is_unique_index_) {
     ObDDLTaskRecord task_record;
     ObArenaAllocator allocator("uk_checksum");
-    if (parent_task_id_ != 0 && OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id_, parent_task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
+    if (parent_task_id_ != 0 && OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id_, parent_task_id_, *GCTX.sql_proxy_, allocator, task_record))) {
       LOG_WARN("fail to get ddl task record", K(ret), K(parent_task_id_));
     } else if (share::is_direct_load_task(task_record.ddl_type_)) {
       need_verify = false;
@@ -1373,7 +1376,7 @@ int ObIndexBuildTask::verify_checksum()
     bool is_trans_end = false;
     int64_t tmp_snapshot_version = 0;
     if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
-            tenant_id_, task_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SSTABLE_TRANS, sstable_complete_ts_))) {
+            tenant_id_, task_id_, task_status_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SSTABLE_TRANS, sstable_complete_ts_))) {
       LOG_WARN("init wait_trans_ctx failed", K(ret), K(object_id_), K(index_table_id_));
     } else if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, tmp_snapshot_version))) {
       LOG_WARN("try wait transaction end failed", K(ret), K(object_id_), K(index_table_id_));
@@ -1699,7 +1702,10 @@ int ObIndexBuildTask::clean_on_failed()
       } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
         state_finished = false;
       } else if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
-              tenant_id_, task_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, index_schema->get_schema_version()))) {
+              tenant_id_, task_id_, task_status_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS_WITHOUT_WRITE_DEFENSIVE, index_schema->get_schema_version()))) {
+        // Reasons for no need write densive:
+        // 1. setting write defensive mds may concurrent with transfer
+        // 2. writes to index still concurrent with dropping index, because the write defensive is done on data tablets
         LOG_WARN("init wait_trans_ctx failed", K(ret), K(object_id_), K(index_table_id_));
       } else if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, tmp_snapshot_version))) {
         LOG_WARN("try wait transaction end failed", K(ret), K(object_id_), K(index_table_id_));

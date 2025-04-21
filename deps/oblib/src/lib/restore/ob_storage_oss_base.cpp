@@ -2685,11 +2685,11 @@ int ObStorageOssAppendWriter::simulate_append_write_for_worm_(const char *buf, c
   } else {
     // write the format file when writing the first fragment because the appender may open multiple times
     if (offset == 0) {
-      if (OB_FAIL(construct_fragment_full_name(object_, OB_OSS_WORM_APPENDABLE_FORMAT_META,
+      if (OB_FAIL(construct_fragment_full_name(object_, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
         fragment_name, sizeof(fragment_name)))) {
-        OB_LOG(WARN, "failed to construct mock append object foramt name", K(ret), K_(bucket), K_(object));
-      } else if (OB_FAIL(write_obj_(fragment_name, OB_OSS_WORM_APPENDABLE_FORMAT_CONTENT_V1,
-                    strlen(OB_OSS_WORM_APPENDABLE_FORMAT_CONTENT_V1)))) {
+        OB_LOG(WARN, "failed to construct mock append object format name", K(ret), K_(bucket), K_(object));
+      } else if (OB_FAIL(write_obj_(fragment_name, OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                    strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)))) {
           OB_LOG(WARN, "fail to write worm oss mock append object format file", K(ret), K(fragment_name));
       }
     }
@@ -2976,18 +2976,19 @@ int ObStorageOssWriter::write_obj_(const char *obj_name, const char *buf, const 
     if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && enable_worm_) {
       // validate md5
       int tmp_ret = OB_SUCCESS;
+      const char *current_md5 = static_cast<const char *>(apr_table_get(headers, OSS_CONTENT_MD5));
       if (OB_TMP_FAIL(get_oss_file_meta(bucket_, obj_name, is_exist, remote_md5, remote_length))) {
-        OB_LOG(WARN, "fail to get oss file meta", K(tmp_ret), K(bucket_), K(obj_name));
+        OB_LOG(WARN, "fail to get oss file meta", K(ret), K(tmp_ret), K(bucket_), K(obj_name));
+      } else if (OB_UNLIKELY(!is_exist || OB_ISNULL(current_md5) || OB_ISNULL(remote_md5))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "object does not exist, or current_md5/remote_md5 is null",
+                  K(ret), K(tmp_ret), K(bucket_), K(obj_name), K(is_exist), KP(current_md5), KP(remote_md5));
+      } else if (size == remote_length && 0 == strcmp(current_md5, remote_md5)) {
+        ret = OB_SUCCESS;
       } else {
-        const char *current_md5 = static_cast<const char *>(apr_table_get(headers, OSS_CONTENT_MD5));
-        if (is_exist && OB_NOT_NULL(current_md5) && OB_NOT_NULL(remote_md5)
-              && 0 == strcmp(current_md5, remote_md5) && size == remote_length) {
-          ret = OB_SUCCESS;
-        } else {
-          ret = OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
-          OB_LOG(WARN, "fail to overwrite", KR(ret), K(bucket_), K(obj_name),
-                    K(size), K(remote_length), K(current_md5), K(remote_md5), K(is_exist));
-        }
+        ret = OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
+        OB_LOG(WARN, "fail to overwrite", KR(ret), K(bucket_), K(obj_name),
+                 K(size), K(remote_length), K(current_md5), K(remote_md5), K(is_exist));
       }
     }
     //print slow info

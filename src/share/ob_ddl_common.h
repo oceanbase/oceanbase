@@ -1607,7 +1607,9 @@ private:
     struct {
       uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
       uint32_t can_reuse_macro_block_: 1;
-      uint32_t reserved: 30;
+      uint32_t cant_execute_ss_minor_: 1; // can not execute ss minor compaction? default = 0(can execute ss minor).
+      uint32_t cant_gc_macro_blks_: 1; // can not gc macro blocks when gc tablet? default = 0(can gc them).
+      uint32_t reserved: 28;
     };
   };
   ObTabletID split_src_tablet_id_;

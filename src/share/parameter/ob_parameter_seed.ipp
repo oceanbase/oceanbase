@@ -47,6 +47,12 @@ DEF_INT(_datafile_usage_upper_bound_percentage, OB_CLUSTER_PARAMETER, "90", "[5,
 DEF_INT(_datafile_usage_lower_bound_percentage, OB_CLUSTER_PARAMETER, "10", "[5,99]",
         "the percentage of disk space usage lower bound to trigger datafile shrink. Range: [5,99] in integer",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ss_cache_max_percentage, OB_CLUSTER_PARAMETER, "30", "(0,100]",
+        "the maximum percentage of local cache disk space to total data in shared storage mode. Range: (0,100] in integer",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(ss_cache_maxsize_percpu, OB_CLUSTER_PARAMETER, "128G", "(0M,)",
+        "the maximum allowed local cache disk size per CPU per server in shared storage mode. Range: (0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(memory_reserved, OB_CLUSTER_PARAMETER, "500M", "[10M,)",
         "the size of the system memory reserved for emergency internal use. "
         "Range: [10M, total size of memory]",
@@ -72,8 +78,8 @@ DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 1h
          "the number of microseconds an internal DML request is permitted to "
          "execute before it is terminated. Range: [1000us, 1h]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
-        "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 64] in integer, 0 stands for max(6, CPU_NUM/8)",
+DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,128]",
+        "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 128] in integer, 0 stands for max(6, CPU_NUM/8)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
         "the number of rpc I/O threads for high priority messages, 0 means set off. Range: [0, 64] in integer",
@@ -644,9 +650,6 @@ DEF_BOOL(_enable_parallel_table_creation, OB_TENANT_PARAMETER, "True", "specifie
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_crazy_medium_compaction, OB_CLUSTER_PARAMETER, "False",
-              "enables triggering medium compaction repeatly. The default value is False.",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(ob_event_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[1d, 180d]",
          "the time to recycle event history. Range: [1d, 180d]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -945,6 +948,10 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_debug_level, OB_TENANT_PARAMETER, "0", "[0, 10]",
         "the debug level of transaction module. Range: [0, 10] in integer.",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_mock_stmt_flush_table, OB_TENANT_PARAMETER, "False",
+        "Enable the mock MySQL statement FLUSH TABLE. When enabled, the mock SQL statement will do nothing. "
+        "If disabled, executing the mock SQL statement will return the 'NOT_SUPPORTED' error code.",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// rpc config
@@ -1515,6 +1522,24 @@ DEF_STR_WITH_CHECKER(sts_credential, OB_TENANT_PARAMETER, "",
         "STS credential for object storage, "
         "values: sts_url=xxx&sts_ak=xxx&sts_sk=xxx",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// for storage cache policy of hot retention
+DEF_STR_WITH_CHECKER(default_storage_cache_policy, OB_TENANT_PARAMETER, "AUTO",
+    common::ObConfigStorageCachePolicyChecker,
+    "default storage cache policy for tenant, "
+    "values: HOT/AUTO",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL_WITH_CHECKER(enable_manual_storage_cache_policy, OB_TENANT_PARAMETER, "True",
+    common::ObConfigEnableManualSCPChecker,
+    "enable user manual storage cache policy.",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL_WITH_CHECKER(suspend_storage_cache_task, OB_TENANT_PARAMETER, "False",
+    common::ObConfigSuspendStorageCacheTaskChecker,
+    "Suspend background caching tasks.",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
          "enable join bloom filter",
@@ -2233,6 +2258,9 @@ DEF_INT(_checkpoint_diagnose_preservation_count, OB_TENANT_PARAMETER, "100", "[0
 DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
         "enable preserver order for limit",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_preserve_order_for_groupby, OB_TENANT_PARAMETER, "False",
+        "Control whether the query results are sorted according to the GROUP BY expression",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
@@ -2325,6 +2353,11 @@ DEF_TIME(_ss_old_ver_retention_time, OB_TENANT_PARAMETER, "5d", "[0,365d]",
 DEF_BOOL(_enable_ss_migration_prewarm, OB_TENANT_PARAMETER, "True",
          "Control whether open migration prewarm",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",
+         "The expiration time of local cache data in shared storage mode,"
+         "Range: [0s, )",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
@@ -2604,6 +2637,35 @@ DEF_INT(_restore_io_max_retry_count, OB_CLUSTER_PARAMETER, "3", "[0, 64]",
         "max retry times for restore when encounting io error"
         "Range: [0,64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_drop_column_instant, OB_TENANT_PARAMETER, "True", "Whether to enable the capability for fast column deletion."
          "Value:  True: drop column instant;  False: drop column inplace",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_numa_aware, OB_CLUSTER_PARAMETER, "False",
+         "NUMA awareness switch, which, when enabled, allows threads to bind cores with NUMA affinity.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
+DEF_BOOL(_obkv_enable_distributed_execution, OB_TENANT_PARAMETER, "False",
+    "Specifies whether to enable distributed execution in OBKV. The default value is false.",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",
+         "Enable or disable dynamic stack check when executing PL.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(result_cache_max_size, OB_TENANT_PARAMETER, "64M", "[0B,)",
+        "result cache can use max size memory(in bytes) of library cache. if it's zero, disable result cache",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(result_cache_max_result, OB_TENANT_PARAMETER, "5", "[0, 100]",
+        "result_cache_max_result specifies the percentage of result_cache_max_size that any single result can use.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(ob_result_cache_evict_percentage, OB_TENANT_PARAMETER, "90", "[0, 100]",
+        "result cache hold memory over xx%(defalut 90) of total memory, try to evict cache obj.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)",
+        "deternimistic cache can use max size memory(in bytes). if it's zero, disable cache",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

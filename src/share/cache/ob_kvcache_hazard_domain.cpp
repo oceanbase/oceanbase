@@ -117,12 +117,10 @@ int HazardDomain::retire(ObKVMemBlockHandle* mb_handle)
 int HazardDomain::retire(ObLink* head, ObLink* tail, uint64_t retire_size)
 {
   ObLink* retire_list = ATOMIC_LOAD_RLX(&retire_list_);
-  int64_t* retired_size = &CONTAINER_OF(head, ObKVMemBlockHandle, retire_link_)->inst_->status_.retired_size_;
   do {
     tail->next_ = retire_list;
   } while (tail->next_ != (retire_list = ATOMIC_VCAS(&retire_list_, retire_list, head)));
   ATOMIC_FAA(&retired_memory_size_, retire_size);
-  ATOMIC_FAA(retired_size, retire_size);
   return OB_SUCCESS;
 }
 
@@ -144,7 +142,7 @@ void HazardDomain::wash()
   hazptr_allocator_.wash();
 }
 
-HazptrHolder::HazptrHolder() : hazptr_(nullptr) {}
+HazptrHolder::HazptrHolder() : hazptr_(nullptr), is_shared_(false) {}
 
 HazptrHolder::~HazptrHolder()
 {
@@ -239,16 +237,27 @@ int HazptrHolder::hazptr_protect(bool& success, ObKVMemBlockHandle* mb_handle)
 
 void HazptrHolder::hazptr_release()
 {
-  if (OB_NOT_NULL(hazptr_)) {
-    hazptr_->release();
+  if (OB_LIKELY(!is_shared_)) {
+    if (OB_NOT_NULL(hazptr_)) {
+      hazptr_->release();
+    }
+    // do not free hazard pointer to avoid allocation
+  } else {
+    hazptr_reset();
   }
 }
 
 void HazptrHolder::hazptr_reset()
 {
-  if (OB_NOT_NULL(hazptr_)) {
-    hazptr_->release();
-    HazptrTLCache::get_instance().release_hazptr(hazptr_);
+  if (OB_LIKELY(!is_shared_)) {
+    if (OB_NOT_NULL(hazptr_)) {
+      hazptr_->release();
+      HazptrTLCache::get_instance().release_hazptr(hazptr_);
+      hazptr_ = nullptr;
+    }
+  } else {
+    shared_hazptr_.reset();
+    is_shared_ = false;
     hazptr_ = nullptr;
   }
 }
@@ -256,8 +265,12 @@ void HazptrHolder::hazptr_reset()
 ObKVMemBlockHandle* HazptrHolder::hazptr_get_mb_handle() const
 {
   ObKVMemBlockHandle* mb_handle = nullptr;
-  if (OB_NOT_NULL(hazptr_)) {
-    mb_handle = hazptr_->get_mb_handle();
+  if (OB_LIKELY(!is_shared_)) {
+    if (OB_NOT_NULL(hazptr_)) {
+      mb_handle = hazptr_->get_mb_handle();
+    }
+  } else {
+    mb_handle = shared_hazptr_.get_mb_handle();
   }
   return mb_handle;
 }
@@ -265,14 +278,24 @@ ObKVMemBlockHandle* HazptrHolder::hazptr_get_mb_handle() const
 int HazptrHolder::hazptr_assign(const HazptrHolder& other)
 {
   int ret = OB_SUCCESS;
-  bool protect_success;
-  release();
+  bool protect_success = false;
+  hazptr_release();
   if (!other.is_valid()) {
-  } else if (OB_FAIL(hazptr_protect(protect_success, other.get_mb_handle()))) {
-      COMMON_LOG(WARN, "failed to protect");
+  } else if (OB_FAIL(hazptr_protect(protect_success, other.hazptr_get_mb_handle()))) {
   } else if (!protect_success) {
-    // has been retired
-    ret = OB_EAGAIN;
+    hazptr_reset();
+    if (other.is_shared_) {
+      is_shared_ = true;
+      shared_hazptr_ = other.shared_hazptr_;
+    } else if (OB_FAIL(SharedHazptr::make(*other.hazptr_, this->shared_hazptr_))) {
+      hazptr_reset();
+      COMMON_LOG(WARN, "failed to make new shared hazptr");
+    } else {
+      is_shared_ = true;
+      HazptrHolder& nc_other = const_cast<HazptrHolder&>(other);
+      nc_other.is_shared_ = true;
+      nc_other.shared_hazptr_ = this->shared_hazptr_;
+    }
   }
   return ret;
 }

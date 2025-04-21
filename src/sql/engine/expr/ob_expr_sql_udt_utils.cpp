@@ -1097,7 +1097,7 @@ int ObSqlUdtUtils::cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx
     ObObj *varray_objs = NULL;
     uint64_t element_count = varray_handler.get_varray_element_count();
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSPIService::spi_set_collection(0, NULL, alloc, *coll, element_count))) {
+    } else if (OB_FAIL(ObSPIService::spi_set_collection(0, NULL, *coll, element_count))) {
       LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
     } else if (OB_ISNULL(varray_objs = coll->get_data())) {
       ret = OB_ERR_UNEXPECTED;

@@ -70,7 +70,6 @@ namespace sql {
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
-  class ObDecodeResourcePool;
 }
 namespace tmp_file {
   class ObTenantTmpFileManager;
@@ -112,6 +111,7 @@ class ObTenantMdsService;
   class ObSSMicroCachePrewarmService;
   class ObSSMicroCache;
   class ObPublicBlockGCService;
+  class ObStorageCachePolicyService;
 #else
 #endif
 
@@ -285,6 +285,7 @@ namespace detector
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
 #define PublicBlockGCService storage::ObPublicBlockGCService*,
+#define StorageCachePolicyService storage::ObStorageCachePolicyService*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
@@ -294,6 +295,7 @@ namespace detector
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
 #define PublicBlockGCService
+#define StorageCachePolicyService
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -305,7 +307,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
   MTL_LIST(                                          \
       common::ObDiagnosticInfoContainer*,            \
       ObTimerService*,                               \
-      blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \
@@ -325,6 +326,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantFileManager                              \
       SSMicroCache                                   \
       SSMicroCachePrewarmService                     \
+      StorageCachePolicyService                      \
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
       tmp_file::ObTenantTmpFileManager*,             \
@@ -488,7 +490,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
 #define MTL_CPU_COUNT() share::ObTenantEnv::get_tenant()->unit_max_cpu()
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
-#define MTL_DATA_DISK_SIZE() share::ObTenantEnv::get_tenant()->unit_data_disk_size()
 // 设置租户prepare gc状态
 #define MTL_SET_TENANT_PREPARE_GC_STATE() share::ObTenantEnv::get_tenant()->set_prepare_unit_gc()
 // 获取租户prepare gc状态
@@ -618,11 +619,6 @@ public:
     return orig_size;
   }
   int64_t unit_memory_size() const { return unit_memory_size_; }
-  void set_unit_data_disk_size(int64_t data_disk_size)
-  {
-    unit_data_disk_size_ = data_disk_size;
-  }
-  int64_t unit_data_disk_size() const { return unit_data_disk_size_; }
   bool update_mini_mode(bool mini_mode)
   {
     bool orig_mode = mini_mode_;
@@ -798,8 +794,6 @@ protected:
   double unit_max_cpu_;
   double unit_min_cpu_;
   int64_t unit_memory_size_;
-  // tenant data disk size
-  int64_t unit_data_disk_size_;
   int64_t switchover_epoch_;
 
 private:

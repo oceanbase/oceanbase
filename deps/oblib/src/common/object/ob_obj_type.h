@@ -1507,6 +1507,7 @@ inline bool ob_is_oracle_temporal_type(ObObjType type)
 inline bool ob_is_enumset_numeric_type(ObObjType type) { return (ob_is_numeric_type(type) || ObYearType == type); }
 
 inline bool ob_is_enum_or_set_type(ObObjType type) { return ObEnumType == type || ObSetType == type; }
+inline bool ob_is_enum_or_set_inner_type(ObObjType type) { return ObEnumInnerType == type || ObSetInnerType == type; }
 inline bool ob_is_temporal_type(ObObjType type)
 { return (type >= ObDateTimeType && type <= ObYearType) || (type == ObMySQLDateType || type == ObMySQLDateTimeType); }
 inline bool ob_is_string_or_enumset_type(ObObjType type)

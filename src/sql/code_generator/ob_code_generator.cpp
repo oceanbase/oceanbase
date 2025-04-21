@@ -52,6 +52,9 @@ int ObCodeGenerator::generate_exprs(const ObLogPlan &log_plan,
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   CK(NULL != exec_ctx && NULL != exec_ctx->get_physical_plan_ctx());
+  CK(exec_ctx->get_my_session() != NULL);
+  CK(exec_ctx->get_my_session()->use_rich_format() == exec_ctx->get_physical_plan_ctx()->is_rich_format()
+     && exec_ctx->get_my_session()->use_rich_format() == phy_plan.get_use_rich_format());
   if (OB_SUCC(ret)) {
     ObStaticEngineExprCG expr_cg(
         phy_plan.get_allocator(),

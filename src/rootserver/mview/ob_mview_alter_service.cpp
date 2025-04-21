@@ -297,6 +297,7 @@ int ObMviewAlterService::alter_mlog_attributes(const uint64_t tenant_id,
         if (alter_mlog_arg.is_alter_purge_start()) {
           if (alter_mlog_arg.get_start_time().get_timestamp() != mlog_info.get_purge_start()) {
             mlog_info.set_purge_start(alter_mlog_arg.get_start_time().get_timestamp());
+            mlog_info.set_purge_mode(ObMLogPurgeMode::DEFERRED);
             need_alter_mlog_purge_job = true;
             need_alter_mlog_info = true;
           }
@@ -305,6 +306,7 @@ int ObMviewAlterService::alter_mlog_attributes(const uint64_t tenant_id,
         if (alter_mlog_arg.is_alter_purge_next()) {
           if (0 != mlog_info.get_purge_next().compare(alter_mlog_arg.get_next_time_expr())) {
             mlog_info.set_purge_next(alter_mlog_arg.get_next_time_expr());
+            mlog_info.set_purge_mode(ObMLogPurgeMode::DEFERRED);
             need_alter_mlog_purge_job = true;
             need_alter_mlog_info = true;
           }

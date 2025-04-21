@@ -90,6 +90,9 @@ public:
                                      const int64_t distinct_cnt,
                                      const bool is_group_by_col = false,
                                      const bool is_default_datum = false);
+  virtual int agg_pushdown_decoder(blocksstable::ObIMicroBlockReader *reader,
+                                   const int32_t col_offset,
+                                   const ObPushdownRowIdCtx &pd_row_id_ctx);
   virtual int collect_result(const bool fill_output,
                              const sql::ObExpr *group_by_col_expr = nullptr,
                              const int32_t start_ouput_idx = 0,
@@ -110,6 +113,7 @@ public:
   OB_INLINE bool is_padding_mode() const { return basic_info_.is_padding_mode(); }
   OB_INLINE const share::schema::ObColumnParam *get_col_param() const { return basic_info_.col_param_; }
   OB_INLINE int32_t get_col_offset() const { return basic_info_.col_offset_; }
+  OB_INLINE int64_t get_agg_row_id() const { return agg_row_id_; }
   OB_INLINE sql::ObExpr *get_agg_expr() const
   {
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
@@ -125,9 +129,16 @@ public:
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
     return agg_info.expr_->obj_meta_.get_type();
   }
+  OB_INLINE bool is_agg_finish(const ObPushdownRowIdCtx &pd_row_id_ctx)
+  {
+    return OB_INVALID_CS_ROW_ID != agg_row_id_
+        && OB_INVALID_CS_ROW_ID != pd_row_id_ctx.bound_row_id_
+        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ )
+            || (pd_row_id_ctx.is_reverse_ && agg_row_id_ <= pd_row_id_ctx.bound_row_id_));
+  }
   int get_def_datum(const blocksstable::ObStorageDatum *&default_datum);
 
-  INHERIT_TO_STRING_KV("ObAggCellBase", ObAggCellBase, K_(agg_idx), K_(basic_info), KP_(aggregate));
+  INHERIT_TO_STRING_KV("ObAggCellBase", ObAggCellBase, K_(agg_idx), K_(agg_row_id), K_(basic_info), KP_(aggregate));
 protected:
   int read_agg_datum(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index);
   int pad_column_if_need(blocksstable::ObStorageDatum &datum);
@@ -151,6 +162,7 @@ protected:
   share::aggregate::IAggregate* aggregate_;
   common::ObArenaAllocator padding_allocator_;
   blocksstable::ObStorageDatum default_datum_;
+  int64_t agg_row_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggCellVec);
 };
@@ -162,6 +174,8 @@ public:
                     const ObAggCellVecBasicInfo &basic_info,
                     common::ObIAllocator &allocator,
                     const bool exclude_null);
+  void reset() override;
+  int init() override;
   int eval(blocksstable::ObStorageDatum &datum,
            const int64_t row_count = 1,
            const int64_t agg_row_idx = 0) override;
@@ -180,6 +194,9 @@ public:
                              const int64_t distinct_cnt,
                              const bool is_group_by_col = false,
                              const bool is_default_datum = false) override;
+  int agg_pushdown_decoder(blocksstable::ObIMicroBlockReader *reader,
+                           const int32_t col_offset,
+                           const ObPushdownRowIdCtx &pd_row_id_ctx) override;
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
                                  const int32_t col_index, bool &can_agg) override;
   int copy_output_rows(const int32_t start_offset, const int32_t end_offset) override;
@@ -193,8 +210,9 @@ public:
   }
   OB_INLINE bool need_access_data() const override { return false; }
   OB_INLINE bool need_get_row_ids() const override { return exclude_null_; }
-  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(exclude_null));
+  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(exclude_null), KP_(row_id_buffer));
 private:
+  int32_t *row_id_buffer_;
   bool exclude_null_;
 };
 

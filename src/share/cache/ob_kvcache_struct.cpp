@@ -347,6 +347,7 @@ bool ObKVMemBlockHandle::retire()
   if (ObKVMBHandleStatus::FULL == get_status() && ATOMIC_BCAS(&status_, FULL, FREE)) {
     b_ret = true;
     ATOMIC_INC(&seq_num_); // MEM_BARRIER();
+    ATOMIC_FAA(&inst_->status_.retired_size_, mem_block_->get_hold_size());
     HazardDomain::get_instance().retire(this);
   }
 

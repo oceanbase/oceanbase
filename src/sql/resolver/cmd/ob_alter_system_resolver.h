@@ -109,7 +109,6 @@ DEF_SIMPLE_CMD_RESOLVER(ObAdminServerResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAdminZoneResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObAdminStorageResolver);
-
 DEF_SIMPLE_CMD_RESOLVER(ObSwitchReplicaRoleResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObReportReplicaResolver);

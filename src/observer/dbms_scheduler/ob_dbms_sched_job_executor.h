@@ -20,6 +20,10 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObExecEnv;
+}
 namespace dbms_scheduler
 {
 class ObDBMSSchedJobInfo;

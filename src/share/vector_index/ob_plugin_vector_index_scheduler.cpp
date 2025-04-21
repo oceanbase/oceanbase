@@ -551,7 +551,8 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   }
   // vector index async task
   int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
+  if (is_stopped()) { // skip
+  } else if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(tmp_ret));
   } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
     LOG_WARN("fail to load tenant sync task", K(tmp_ret));
@@ -1065,7 +1066,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
 
     // start exec index async task
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(async_task_exec_.start_task())) {
+    if (is_stopped()) { // skip
+    } else if (OB_TMP_FAIL(async_task_exec_.start_task())) {
       LOG_WARN("fail to start index async task", K(tmp_ret));
     }
     // write tablets need memdata sync to clog
@@ -1102,7 +1104,7 @@ void ObPluginVectorIndexLoadScheduler::run_task()
     // reserved, do nothing
     int tmp_ret = OB_SUCCESS;
     LOG_INFO("switch leader", K(tenant_id_), K(ls_->get_ls_id()), K(is_leader_), K(is_stopped_));
-    if (!check_can_do_work()) { // skip
+    if (!check_can_do_work() || is_stopped()) { // skip
     } else if (OB_TMP_FAIL(async_task_exec_.resume_task())) {
       LOG_WARN("fail to resume async task", K(tmp_ret));
     }
@@ -1300,8 +1302,14 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
   is_safe = true;
+
+  int64_t async_task_ref = 0;
+  if (OB_NOT_NULL(vector_index_service_)) {
+    async_task_ref = vector_index_service_->get_vec_async_task_handle().get_async_task_ref();
+  }
+
   int64_t dag_ref = get_dag_ref();
-  if (0 != dag_ref) {
+  if (0 != dag_ref || 0 != async_task_ref) {
     if (REACH_TIME_INTERVAL(60L * 1000000)) {  // 60s
       LOG_WARN("vector index scheduler can't destroy", K(dag_ref));
     }

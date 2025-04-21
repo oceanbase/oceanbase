@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_CACHE_OB_KVCACHE_HAZARD_POINTER_H_
 #define OCEANBASE_CACHE_OB_KVCACHE_HAZARD_POINTER_H_
 
+#include "lib/alloc/alloc_struct.h"
 #include "share/ob_define.h"
 
 namespace oceanbase {
@@ -27,6 +28,7 @@ public:
   bool protect(ObKVMemBlockHandle* mb_handle);
   ObKVMemBlockHandle* get_mb_handle() const;
   void reset_protect(ObKVMemBlockHandle* mb_handle);
+  void reset_protect_seq_cst(ObKVMemBlockHandle* mb_handle);
   void release();
   HazardPointer* get_next() const;
   HazardPointer* get_next_atomic() const;
@@ -41,7 +43,28 @@ private:
 
   HazardPointer* next_;
   ObKVMemBlockHandle* mb_handle_;
-} ;
+};
+
+// like std::shared<HazardPointer>
+class SharedHazptr final {
+public:
+  SharedHazptr() = delete;
+  static int make(HazardPointer& hazptr, SharedHazptr& shared_hazptr);
+  SharedHazptr(const SharedHazptr& other);
+  ~SharedHazptr();
+  SharedHazptr& operator=(const SharedHazptr& other);
+  void reset();
+  ObKVMemBlockHandle* get_mb_handle() const;
+private:
+  struct ControlPointer {
+    ControlPointer(HazardPointer& hazptr) : refcnt_(1), hazptr_(&hazptr) {}
+    ~ControlPointer();
+    uint64_t refcnt_;
+    HazardPointer* hazptr_;
+  };
+  ControlPointer* ctrl_ptr_;
+  static lib::ObMemAttr attr_;
+};
 
 template<typename Node>
 class SList;

@@ -79,6 +79,9 @@
 #include "rootserver/mview/ob_mview_alter_service.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "rootserver/ob_alter_table_constraint_checker.h"
 
 namespace oceanbase
 {
@@ -1304,6 +1307,12 @@ int ObDDLService::generate_schema(
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 &&
+            !is_storage_cache_policy_default(arg.schema_.get_storage_cache_policy())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support storage_cache_policy for this version",
+             KR(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support storage_cache_policy");
   } else if (compat_version < DATA_VERSION_4_3_5_2 && arg.schema_.get_semistruct_encoding_flags() != 0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
@@ -1494,6 +1503,7 @@ int ObDDLService::generate_schema(
 
   if (OB_SUCC(ret)) {
     schema.set_micro_index_clustered(arg.schema_.get_micro_index_clustered());
+    schema.set_storage_cache_policy(arg.schema_.get_storage_cache_policy());
   }
   return ret;
 }
@@ -3397,6 +3407,19 @@ int ObDDLService::set_raw_table_options(
           }
           break;
         }
+        case ObAlterTableArg::STORAGE_CACHE_POLICY: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_3_5_2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("storage cache policy less than 4.3.5.2 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy less than 4.3.5.2");
+          } else {
+            new_table_schema.set_storage_cache_policy(alter_table_schema.get_storage_cache_policy());
+          }
+          break;
+        }
         case ObAlterTableArg::LOB_INROW_THRESHOLD: {
           uint64_t compat_version = OB_INVALID_VERSION;
           if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
@@ -4160,28 +4183,6 @@ int ObDDLService::check_is_modify_partition_key(const ObTableSchema &orig_table_
     } else if (OB_FAIL(orig_table_schema.is_column_in_partition_key(alter_column_schema->get_column_id(),
                                                                     is_modify_partition_key))) {
       LOG_WARN("fail to check if column in partition key", K(ret), "column_id", alter_column_schema->get_column_id());
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::check_is_change_cst_column_name(const ObTableSchema &table_schema,
-                                                  const AlterTableSchema &alter_table_schema,
-                                                  bool &change_cst_column_name)
-{
-  int ret = OB_SUCCESS;
-  change_cst_column_name = false;
-  ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
-  ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
-  AlterColumnSchema *alter_column_schema = nullptr;
-  for(; OB_SUCC(ret) && !change_cst_column_name && iter != iter_end; iter++) {
-    const ObColumnSchemaV2 *col_schema = nullptr;
-    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*iter))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter is NULL", K(ret));
-    } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
-    } else if (col_schema->get_column_name_str() != alter_column_schema->get_column_name_str()) {
-      change_cst_column_name = true;
     }
   }
   return ret;
@@ -6043,160 +6044,6 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
         }
       }
     }
-  }
-  return ret;
-}
-
-
-int ObDDLService::check_can_change_cst_column_name(
-    const obrpc::ObAlterTableArg &alter_table_arg,
-    const ObTableSchema &orig_table_schema,
-    const uint64_t tenant_data_version,
-    bool &can_change_cst_column_name)
-{
-  int ret = OB_SUCCESS;
-  can_change_cst_column_name = false;
-  const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
-
-  if (DATA_VERSION_4_3_5_2 <= tenant_data_version
-   &&  ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
-   && alter_table_arg.is_only_alter_column()
-   && 1 == alter_table_schema.get_constraint_count()) {
-    ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
-    if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("constraint iter is null", K(ret));
-    } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
-      can_change_cst_column_name = true;
-      ObTableSchema::const_column_iterator iter_begin = alter_table_schema.column_begin();
-      ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
-      const uint64_t col_id = *((*iter)->cst_col_begin());
-      AlterColumnSchema *alter_column_schema = nullptr;
-      for(; OB_SUCC(ret) && can_change_cst_column_name && iter_begin != iter_end; iter_begin++) {
-        const ObColumnSchemaV2 *col_schema = nullptr;
-        if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*iter_begin))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("iter is NULL", K(ret));
-        } else if (OB_ISNULL(col_schema = orig_table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
-        } else if (col_schema->get_column_name_str() != alter_column_schema->get_column_name_str() && col_schema->get_column_id() != col_id) {
-          // ensures that the column being renamed and the column to which the constraint is added are the same.
-          can_change_cst_column_name = false;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::check_can_add_cst_on_two_column(
-    const obrpc::ObAlterTableArg &alter_table_arg,
-    const uint64_t tenant_data_version,
-    bool &can_add_cst_on_two_column) const {
-  int ret = OB_SUCCESS;
-  can_add_cst_on_two_column = false;
-  const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
-
-  if (DATA_VERSION_4_3_5_2 <= tenant_data_version
-  && ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
-  && alter_table_arg.is_only_alter_column()
-  && 2 == alter_table_schema.get_constraint_count()
-  && 2 == alter_table_schema.get_column_count()) {
-    can_add_cst_on_two_column = true;
-    ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
-    for (; OB_SUCC(ret) && can_add_cst_on_two_column && iter != alter_table_schema.constraint_end(); iter++) {
-      if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("constraint iter is null", K(ret));
-      } else if (CONSTRAINT_TYPE_NOT_NULL != (*iter)->get_constraint_type()) {
-        can_add_cst_on_two_column = false;
-      } else if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
-      } else if (OB_INVALID_ID == *(*iter)->cst_col_begin()) {
-        can_add_cst_on_two_column = false;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::check_alter_table_constraint(
-    const obrpc::ObAlterTableArg &alter_table_arg,
-    const ObTableSchema &orig_table_schema,
-    const uint64_t tenant_data_version,
-    share::ObDDLType &ddl_type)
-{
-  int ret = OB_SUCCESS;
-  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
-  const ObAlterTableArg::AlterConstraintType type = alter_table_arg.alter_constraint_type_;
-  bool change_cst_column_name = false;
-  bool is_alter_decimal_int_offline = false;
-  bool is_column_group_store = false;
-  bool can_change_cst_column_name = false;
-  bool can_add_cst_on_two_column = false;
-  switch(type) {
-    case obrpc::ObAlterTableArg::ADD_CONSTRAINT:
-    case obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE: {
-      if (OB_FAIL(check_is_change_cst_column_name(orig_table_schema,
-                                                  alter_table_arg.alter_table_schema_,
-                                                  change_cst_column_name))) {
-        LOG_WARN("failed to check change cst column name", K(ret));
-      } else if (change_cst_column_name && OB_FAIL(check_can_change_cst_column_name(alter_table_arg, orig_table_schema, tenant_data_version, can_change_cst_column_name))) {
-        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg), K(orig_table_schema));
-      } else if ((ObDDLType::DDL_TABLE_REDEFINITION == ddl_type || ObDDLType::DDL_MODIFY_COLUMN == ddl_type)
-                  && !change_cst_column_name) {
-        ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-      } else if (can_change_cst_column_name) {
-        ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-      } else if (is_long_running_ddl(ddl_type)) {
-        // if modify auto_increment and constraint together, treat it as normal modify column
-        ret = OB_NOT_SUPPORTED;
-      } else if (change_cst_column_name) {
-        ddl_type = ObDDLType::DDL_CHANGE_COLUMN_NAME;
-        ret = OB_NOT_SUPPORTED;
-      } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1
-              && OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
-        LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg));
-      } else if (can_add_cst_on_two_column) {
-        ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-      } else {
-        ddl_type = ObDDLType::DDL_NORMAL_TYPE;
-      }
-      break;
-    }
-    // to avoid ddl type being modified from DROP_COLUMN to NORMAL_TYPE
-    case obrpc::ObAlterTableArg::DROP_CONSTRAINT: {
-      bool is_drop_col_only = false;
-      if (ObDDLType::DDL_DROP_COLUMN == ddl_type) {
-        // In oracle mode, we support to drop constraint implicitly caused by drop column.
-      } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
-        LOG_WARN("fail to check schema is column group store", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::is_drop_column_only(alter_table_arg.alter_table_schema_, is_drop_col_only))) {
-        LOG_WARN("fail to check is drop column only", K(ret), K(alter_table_arg.alter_table_schema_));
-      } else if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type && is_drop_col_only && is_column_group_store) {
-        // for column store, drop column is table redefinition
-      } else if (OB_FAIL(check_is_alter_decimal_int_offline(ddl_type,
-                                                            orig_table_schema,
-                                                            alter_table_arg.alter_table_schema_,
-                                                            is_alter_decimal_int_offline))) {
-        LOG_WARN("fail to check is alter decimal int offline ddl", K(ret));
-      } else if (is_long_running_ddl(ddl_type) && !is_alter_decimal_int_offline) {
-        ret = OB_NOT_SUPPORTED;
-      } else if (is_alter_decimal_int_offline) {
-        ddl_type = ObDDLType::DDL_MODIFY_COLUMN;
-      } else {
-        ddl_type = ObDDLType::DDL_NORMAL_TYPE;
-      }
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unknown alter constraint action type!", K(ret), K(type));
-    }
-  }
-  if (OB_NOT_SUPPORTED == ret) {
-    (void)snprintf(err_msg, sizeof(err_msg), "%s and alter constraint in single statement", ddl_type_str(ddl_type));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
   }
   return ret;
 }
@@ -11486,9 +11333,6 @@ int ObDDLService::add_new_column_to_table_schema(
     && OB_FAIL(refill_columns_id_for_not_null_constraint(alter_table_schema,
                                                          alter_column_schema))) {
     LOG_WARN("fail to refill column id to constraints", K(ret));
-  } else if (OB_FAIL(update_prev_id_for_add_column(origin_table_schema,
-        new_table_schema, alter_column_schema, ddl_operator, trans))) {
-    LOG_WARN("failed to update prev id", K(ret));
   } else if (update_inner_table) {
     if (OB_FAIL(ddl_operator->create_sequence_in_add_column(new_table_schema,
             alter_column_schema, *trans, schema_guard, sequence_ddl_arg))) {
@@ -11544,13 +11388,9 @@ int ObDDLService::add_new_column_to_table_schema(
       LOG_WARN("fail to deal default value padding", K(alter_column_schema), K(ret));
     } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
       LOG_WARN("fail to check primary key cover partition column", K(ret));
-    } else if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
-      if (OB_ERR_COLUMN_DUPLICATE == ret) {
-        const ObString &column_name = alter_column_schema.get_column_name_str();
-        LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
-        LOG_WARN("duplicate column name", K(column_name), K(ret));
-      }
-      LOG_WARN("failed to add new column", K(ret));
+    } else if (OB_FAIL(update_prev_id_and_add_column_(origin_table_schema,
+               new_table_schema, alter_column_schema, ddl_operator, trans))) {
+      LOG_WARN("failed to update prev id", KR(ret));
     } else if (OB_ISNULL(mem_col = new_table_schema.get_column_schema(
                                     alter_column_schema.get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -12164,6 +12004,28 @@ int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_tabl
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::update_prev_id_and_add_column_(
+    const ObTableSchema &origin_table_schema,
+    ObTableSchema &new_table_schema,
+    AlterColumnSchema &alter_column_schema,
+    ObDDLOperator *ddl_operator,
+    common::ObMySQLTransaction *trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(update_prev_id_for_add_column(origin_table_schema, new_table_schema,
+              alter_column_schema, ddl_operator, trans))) {
+    LOG_WARN("fail to update prev id", KR(ret));
+  } else if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
+    if (OB_ERR_COLUMN_DUPLICATE == ret) {
+      const ObString &column_name = alter_column_schema.get_column_name_str();
+      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+      LOG_WARN("duplicate column name", K(column_name), KR(ret));
+    }
+    LOG_WARN("failed to add new column", KR(ret));
   }
   return ret;
 }
@@ -13300,6 +13162,7 @@ int ObDDLService::gen_inc_table_schema_for_rename_part_(
   return ret;
 }
 
+
 int ObDDLService::gen_inc_table_schema_for_rename_subpart_(
     const share::schema::ObTableSchema &orig_table_schema,
     share::schema::AlterTableSchema &inc_table_schema)
@@ -14341,7 +14204,9 @@ int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_tabl
     LOG_WARN("get_simple_index_infos failed", KR(ret));
   }
   if (obrpc::ObAlterTableArg::RENAME_PARTITION == op_type
-   ||obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == op_type) {
+   ||obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == op_type
+   ||obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == op_type
+   ||obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == op_type) {
     //do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
@@ -14654,7 +14519,6 @@ int ObDDLService::alter_tables_partitions(const obrpc::ObAlterTableArg &alter_ta
     LOG_WARN("orig_table_schemas.count() inc_table_schemas.count() is not equal", KR(ret),
              K(orig_table_schemas), K(del_table_schemas));
   }
-
   for (int64_t i = 0; OB_SUCC(ret) && i < new_table_schemas.count(); ++i) {
     // todo fill AlterTableSchema for splitting partition with inc_table_schema
     if (OB_ISNULL(new_table_schemas.at(i)) || OB_ISNULL(inc_table_schemas.at(i))
@@ -14772,6 +14636,12 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                                                             trans))) {
       LOG_WARN("failed to rename table partitions", KR(ret), K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
       }
+  } else if (obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == op_type) {
+    if (OB_FAIL(ddl_operator.alter_policy_table_partitions(
+                   orig_table_schema, inc_table_schema, new_table_schema, trans))) {
+      LOG_WARN("failed to alter table partitions storage cache policy", KR(ret), K(orig_table_schema),
+          K(inc_table_schema), K(new_table_schema));
+    }
   } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == op_type) {
     if (OB_FAIL(gen_inc_table_schema_for_rename_subpart_(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for rename subpart",
@@ -14783,6 +14653,12 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                                                                new_table_schema,
                                                                trans))) {
     LOG_WARN("failed to rename table subpartitions", KR(ret), K(orig_table_schema), K(inc_table_schema));
+    }
+  } else if (obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == op_type) {
+    if (OB_FAIL(ddl_operator.alter_policy_table_subpartitions(
+                   orig_table_schema, inc_table_schema, new_table_schema, trans))) {
+      LOG_WARN("failed to alter table subpartitions storage cache policy", KR(ret), K(orig_table_schema),
+          K(inc_table_schema), K(new_table_schema));
     }
   } else if (obrpc::ObAlterTableArg::DROP_PARTITION == op_type) {
     if (OB_FAIL(fix_local_idx_part_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
@@ -15120,8 +14996,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         alter_table_arg.ddl_stmt_str_ = empty_stmt;
         alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_ = CST_FK_NO_VALIDATE;
       }
-    } else if (OB_FAIL(need_modify_not_null_constraint_validate(
-              alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
+    } else if (OB_FAIL(ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
+              *this,alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
       LOG_WARN("check need modify not null constraint validate failed", K(ret));
     } else if (need_modify_notnull_validate) {
       alter_table_arg.ddl_stmt_str_ = empty_stmt;
@@ -15576,6 +15452,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             operation_type = OB_DDL_SET_INTERVAL;
           } else if (obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
             operation_type = OB_DDL_INTERVAL_TO_RANGE;
+          } else if (obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == alter_table_arg.alter_part_type_) {
+            operation_type = OB_DDL_ALTER_PARTITION_POLICY;
+          } else if (obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == alter_table_arg.alter_part_type_) {
+            operation_type = OB_DDL_ALTER_SUBPARTITION_POLICY;
           }
 
           if (!alter_table_arg.is_alter_partitions_) {
@@ -15924,8 +15804,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           if (need_check) {
             bool need_modify_notnull_validate = false;
             bool is_add_not_null_col = false;
-            if (OB_FAIL(need_modify_not_null_constraint_validate(
-                  const_alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
+            if (OB_FAIL(ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
+                  *this,const_alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
             } else {
               ObDDLTaskRecord task_record;
               ObTableLockOwnerID owner_id;
@@ -16243,7 +16123,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
 
     if (OB_SUCC(ret) && alter_table_arg.alter_constraint_type_!= obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION
-        && OB_FAIL(check_alter_table_constraint(alter_table_arg, *orig_table_schema, tenant_data_version, ddl_type))) {
+        && OB_FAIL(ObAlterTableConstraintChecker::check_alter_table_constraint(*this, alter_table_arg, *orig_table_schema, tenant_data_version, ddl_type))) {
       LOG_WARN("fail to check alter table constraint", K(ret), K(alter_table_arg), K(ddl_type));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_convert_to_character_
@@ -16775,36 +16655,12 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       if (OB_SUCC(ret) && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type) {
         bool need_modify_notnull_validate = false;
         bool is_add_not_null_col = false;
-        if (OB_FAIL(need_modify_not_null_constraint_validate(
-            alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
+        if (OB_FAIL(ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
+            *this,alter_table_arg, tenant_data_version, is_add_not_null_col, need_modify_notnull_validate))) {
           LOG_WARN("check need modify not null constraint validate failed", K(ret));
-        } else if (need_modify_notnull_validate) {
-          ObTableSchema::constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin_for_non_const_iter();
-          ObTableSchema::constraint_iterator it_end = alter_table_arg.alter_table_schema_.constraint_end_for_non_const_iter();
-          for (; OB_SUCC(ret) && iter != it_end; iter++) {
-            if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column schema not found", K(ret), K(alter_table_arg.alter_table_schema_));
-            } else {
-              const uint64_t col_id = *((*iter)->cst_col_begin());
-              ObColumnSchemaV2 *col_schema = NULL;
-              for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_schema.get_column_count(); i++) {
-                if (OB_ISNULL(alter_table_schema.get_column_schema_by_idx(i))) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("column schema not found", K(ret), K(alter_table_arg));
-                } else if (alter_table_schema.get_column_schema_by_idx(i)->get_column_id() == col_id) {
-                  col_schema = alter_table_schema.get_column_schema_by_idx(i);
-                }
-              }
-              if OB_FAIL(ret) {
-              } else if (OB_ISNULL(col_schema)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("column schema not found", K(ret), K(alter_table_arg));
-              } else {
-                col_schema->del_column_flag(NOT_NULL_VALIDATE_FLAG);
-              }
-            }
-          }
+        } else if (need_modify_notnull_validate && OB_FAIL(ObAlterTableConstraintChecker::modify_not_null_constraint_validate(
+            alter_table_arg, alter_table_schema))) {
+          LOG_WARN("failed to modify not null constraint validate", K(ret), K(alter_table_arg), K(alter_table_schema));
         }
       }
       if (OB_SUCC(ret) && (alter_table_arg.is_alter_columns_ ||
@@ -17951,6 +17807,12 @@ int ObDDLService::check_can_alter_column(
             LOG_WARN("fail to check enable sys table ddl", KR(ret), K(orig_table_schema));
           }
         }
+
+        // check column can be changed when time storage cache policy is existed
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql::ObStorageCacheUtil::check_alter_column_validation(alter_column_schema, orig_table_schema))) {
+          LOG_WARN("failed to check column validation", KR(ret), K(alter_column_schema), K(orig_table_schema));
+        }
       }
     }
   }
@@ -18150,7 +18012,17 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     if (OB_FAIL(check_alter_rename_subpartitions_(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check rename subpartition", KR(ret), K(orig_table_schema), K(alter_table_arg));
     }
-  } else if (obrpc::ObAlterTableArg::ADD_PARTITION == alter_part_type) {
+  }
+  else if (obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == alter_part_type) {
+    if (OB_FAIL(sql::ObStorageCacheUtil::check_alter_partiton_storage_cache_policy(orig_table_schema, alter_table_arg))) {
+      LOG_WARN("failed to check rename subpartition", KR(ret), K(orig_table_schema), K(alter_table_arg));
+    }
+  } else if (obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == alter_part_type) {
+    if (OB_FAIL(sql::ObStorageCacheUtil::check_alter_subpartiton_storage_cache_policy(orig_table_schema, alter_table_arg))) {
+      LOG_WARN("failed to check rename subpartition", KR(ret), K(orig_table_schema), K(alter_table_arg));
+    }
+  }
+  else if (obrpc::ObAlterTableArg::ADD_PARTITION == alter_part_type) {
     if (OB_FAIL(check_alter_add_partitions(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check add paritions", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
@@ -18278,7 +18150,7 @@ int ObDDLService::check_alter_rename_partitions_(const share::schema::ObTableSch
 //3. currently this partition is not splitting
 
 int ObDDLService::check_alter_rename_subpartitions_(const share::schema::ObTableSchema &orig_table_schema,
-                                                  const obrpc::ObAlterTableArg &alter_table_arg)
+                                                    const obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
@@ -18349,6 +18221,7 @@ int ObDDLService::check_alter_rename_subpartitions_(const share::schema::ObTable
   }
   return ret;
 }
+
 // drop or truncate partition
 //1. is partition table
 //2. Cannot drop all partitions, but truncate does not have this restriction
@@ -21448,7 +21321,9 @@ int ObDDLService::gen_new_index_table_name(
 }
 
 // col_name_map must live beyond index_schema
-int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_index_schema,
+int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_table_schema,
+                                                  const ObTableSchema &orig_index_schema,
+                                                  ObSchemaGetterGuard &schema_guard,
                                                   const common::ObIArray<uint64_t> &drop_cols_id_arr,
                                                   const ObColumnNameMap &col_name_map,
                                                   ObTableSchema &new_table_schema,
@@ -21552,6 +21427,11 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_inde
                     new_table_schema, create_index_arg))) {
           LOG_WARN("fail to check unique key cover partition column", K(ret));
         }
+      }
+    }
+    if (OB_SUCC(ret) && orig_index_schema.is_vec_hnsw_index()) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::vec_set_index_arg_index_schema(create_index_arg, schema_guard, orig_table_schema, orig_index_schema))) {
+        LOG_WARN("failed to set vec index schema for create index arg", K(ret), K(create_index_arg), K(orig_index_schema));
       }
     }
     OZ(ObIndexBuilderUtil::set_index_table_columns(create_index_arg, new_table_schema, index_schema));
@@ -21939,9 +21819,6 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
-      } else if (is_vec_index(simple_index_infos.at(i).index_type_) && !is_built_in_vec_spiv_index(simple_index_infos.at(i).index_type_) && !(schema::is_vec_domain_index(simple_index_infos.at(i).index_type_)  || schema::is_vec_rowkey_vid_type(simple_index_infos.at(i).index_type_))) {
-      } else if (is_fts_index(simple_index_infos.at(i).index_type_) && !(schema::is_fts_index_aux(simple_index_infos.at(i).index_type_) || schema::is_rowkey_doc_aux(simple_index_infos.at(i).index_type_))) {
-      } else if (is_multivalue_index(simple_index_infos.at(i).index_type_) && !(schema::is_multivalue_index_aux(simple_index_infos.at(i).index_type_) || schema::is_rowkey_doc_aux(simple_index_infos.at(i).index_type_))) {
       } else if (OB_FAIL(check_index_table_need_rebuild(*index_table_schema,
                                                         drop_cols_id_arr,
                                                         is_oracle_mode,
@@ -22019,17 +21896,17 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
           }
 
           if (OB_FAIL(ret)) {
-          } else if ((new_index_schema.is_vec_domain_index() || new_index_schema.is_vec_rowkey_vid_type()) && OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
+          } else if ((new_index_schema.is_vec_index() && !new_index_schema.is_vec_spiv_index()) && OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
               orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, domain_index_columns, domain_store_columns))) {
             LOG_WARN("failed to generate vec index aux columns", K(ret));
-          } else if ((new_index_schema.is_fts_index_aux() || new_index_schema.is_multivalue_index_aux() || new_index_schema.is_rowkey_doc_id()) && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
+          } else if ((new_index_schema.is_fts_index() || new_index_schema.is_multivalue_index()) && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
               orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, domain_index_columns, domain_store_columns))) {
             LOG_WARN("failed to generate fulltext/multivalue index aux columns", K(ret));
           }
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(gen_hidden_index_schema_columns(
-                     *index_table_schema, drop_cols_id_arr, col_name_map, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns))) {
+                     orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns))) {
             LOG_WARN("failed to gen hidden index schema", K(ret));
           } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table())
                      && new_index_schema.is_index_local_storage()
@@ -22981,7 +22858,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
       } else if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
         // update referenced constraint id
         if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_ ||
-            (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_ && !orig_table_schema.is_index_table())) {
+            (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_ &&
+             foreign_key_info.ref_cst_id_ == orig_table_schema.get_table_id())) {
           if (is_oracle_mode) {
             const ObConstraint *pk_cst = hidden_table_schema.get_pk_constraint();
             if (OB_ISNULL(pk_cst)) {
@@ -23619,9 +23497,9 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               max_dependency_version = MAX(max_dependency_version, based_info.schema_version_);
             }
           }
-          if (OB_SUCC(ret) && !is_based_schema_version_consistent && orig_table_schema->mv_major_refresh()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("change base table during major refresh materialized view creation is not supported", KR(ret));
+          if (OB_SUCC(ret) && !is_based_schema_version_consistent) {
+            ret = OB_ERR_MVIEW_BASE_TABLE_ALTERED;
+            LOG_WARN("base tables are altered during creation or complete refresh of materialized views", KR(ret));
           }
           if (OB_SUCC(ret)) {
             HEAP_VAR(ObTableSchema, new_mview_table_schema) {
@@ -23699,8 +23577,16 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               mview_info.set_last_refresh_type(share::schema::ObMVRefreshType::COMPLETE);
               mview_info.set_last_refresh_date(start_time);
               mview_info.set_last_refresh_time((ObTimeUtil::current_time() - start_time) / 1000 / 1000);
-              if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
+              uint64_t data_version = 0;
+              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+                LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+              } else if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
                 LOG_WARN("fail to set last refresh trace id", KR(ret));
+              } else if (data_version >= DATA_VERSION_4_3_5_2 &&
+                         OB_FAIL(ObMViewInfo::update_mview_data_sync_scn(
+                             trans, tenant_id, mview_info, refresh_scn_val))) {
+                LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info),
+                         K(refresh_scn_val));
               } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
                 LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
               }
@@ -33161,6 +33047,12 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_2_5_1 or DATA_VERSION_4_3_5_1", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke encrypt/decrypt privilege");
+    } else if (!((MOCK_DATA_VERSION_4_2_5_2 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_2)
+              && !is_ora_mode
+              && (0 != (priv_set & OB_PRIV_EVENT))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_2_5_2 or DATA_VERSION_4_3_5_2", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke event");
     } else if (compat_version < DATA_VERSION_4_3_5_2 && !is_ora_mode
                && (0 != (priv_set & OB_PRIV_CREATE_CATALOG) ||
                    0 != (priv_set & OB_PRIV_USE_CATALOG))) {
@@ -37042,92 +36934,6 @@ int ObDDLService::check_has_multi_autoinc(ObTableSchema &table_schema)
         has_autoinc_col = true;
       }
     }
-  }
-  return ret;
-}
-
-// check whether it's modify column not null or modify constraint state, which need send two rpc.
-int ObDDLService::need_modify_not_null_constraint_validate(
-  const obrpc::ObAlterTableArg &alter_table_arg,
-  const uint64_t tenant_data_version,
-  bool &is_add_not_null_col,
-  bool &need_modify) const
-{
-  int ret = OB_SUCCESS;
-  need_modify = false;
-  is_add_not_null_col = false;
-  bool can_add_cst_on_two_column = false;
-  ObSchemaGetterGuard schema_guard;
-  schema_guard.set_session_id(alter_table_arg.session_id_);
-  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
-  const uint64_t tenant_id = alter_table_schema.get_tenant_id();
-  const ObString &origin_database_name = alter_table_schema.get_origin_database_name();
-  const ObString &origin_table_name = alter_table_schema.get_origin_table_name();
-  const ObTableSchema *orig_table_schema = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (obrpc::ObAlterTableArg::ADD_CONSTRAINT != alter_table_arg.alter_constraint_type_
-             && obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE != alter_table_arg.alter_constraint_type_) {
-    // skip
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                   origin_database_name,
-                                                   origin_table_name,
-                                                   false,
-                                                   orig_table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(origin_database_name),
-             K(origin_table_name));
-  } else if (OB_ISNULL(orig_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("NULL ptr", K(ret), KR(tenant_id), K(alter_table_arg), K(schema_guard.get_session_id()));
-  } else if (alter_table_arg.alter_table_schema_.get_constraint_count() == 1) {
-    ObTableSchema::const_constraint_iterator iter =
-        alter_table_arg.alter_table_schema_.constraint_begin();
-    if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("constraint is null", K(ret));
-    } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
-      if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
-      } else if (!(*iter)->get_need_validate_data()) {
-        // don't need validate data, do nothing.
-      } else if (OB_INVALID_ID == *(*iter)->cst_col_begin()) {
-        is_add_not_null_col = true;
-      } else {
-        need_modify = true;
-      }
-    }
-  } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1) {
-    // more than one constraint, check column_id of all not null constraint must be invalid.
-    // since we only support add more than one not null column in one ddl,
-    // not support modify more than one column not null in one ddl.
-    ObTableSchema::const_constraint_iterator iter =
-        alter_table_arg.alter_table_schema_.constraint_begin();
-    for(; iter != alter_table_arg.alter_table_schema_.constraint_end() && OB_SUCC(ret); iter++) {
-      if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("constraint is null", K(ret));
-      } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
-        if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
-        } else if (OB_UNLIKELY(OB_INVALID_ID != *(*iter)->cst_col_begin())) {
-          if (OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
-            LOG_WARN("failed to check can add cst on two column", K(ret), K(alter_table_arg));
-          } else if (can_add_cst_on_two_column) {
-            need_modify = true;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("modify not null column is not allowed with other DDL", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
-          }
-        }
-      }
-    }
-    is_add_not_null_col = can_add_cst_on_two_column ? false : true;
   }
   return ret;
 }

@@ -658,7 +658,8 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
                                           fake_depend_info,
                                           fake_push_subq_exprs,
                                           bushy_tree_infos,
-                                          new_or_quals);
+                                          new_or_quals,
+                                          helper.query_stmt_->get_query_ctx());
     STOP_OPT_TRACE;
     if (OB_FAIL(helper.mv_info_.view_stmt_->get_from_tables(mv_from_tables))) {
       LOG_WARN("failed to get mv from table items", K(ret));

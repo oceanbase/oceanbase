@@ -1708,11 +1708,11 @@ int ObSSTableIndexBuilder::check_and_rewrite_sstable(ObSSTableMergeRes &res)
   int ret = OB_SUCCESS;
   int64_t macro_size = 0;
   for (int64_t i = 0; i < roots_.count(); i++) {
-    macro_size = roots_[i]->last_macro_size_;
+    macro_size += roots_[i]->last_macro_size_;
   }
   const int64_t align_macro_size = upper_align(macro_size, DIO_READ_ALIGN_SIZE);
 
-  if (align_macro_size >= SMALL_SSTABLE_THRESHOLD) { // skip rewrite
+  if (align_macro_size >= SMALL_SSTABLE_THRESHOLD || roots_.count() != 1) { // skip rewrite
     res.nested_offset_ = 0;
     res.nested_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
   } else if (0 == macro_size) {

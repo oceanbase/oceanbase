@@ -81,7 +81,6 @@ private:
   virtual int update_tablet(
     ObTabletHandle &new_tablet_handle) override;
   void try_schedule_compaction_after_mini(storage::ObTabletHandle &tablet_handle);
-  int try_schedule_adaptive_merge(ObTabletHandle &tablet_handle, bool &create_meta_dag);
   int try_report_tablet_stat_after_mini();
 };
 

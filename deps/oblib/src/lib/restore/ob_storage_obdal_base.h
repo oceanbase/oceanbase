@@ -77,25 +77,17 @@ private:
   bool is_global_inited_;
 };
 
-struct ObDalAccount
+struct ObDalAccount : public ObStorageAccount
 {
+public:
   ObDalAccount();
-  ~ObDalAccount();
-  void reset();
-  bool is_valid() const { return is_valid_; }
-  int64_t hash() const;
-  int parse_from(const char *storage_info_str, const int64_t size);
+  virtual ~ObDalAccount() override;
+  virtual void reset() override;
+  virtual bool is_valid() const override { return is_valid_; }
+  virtual int assign(const ObObjectStorageInfo *storage_info) override;
+  INHERIT_TO_STRING_KV("ObStorageAccount", ObStorageAccount, K(region_), K(addressing_model_));
 
-  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(region_), K(endpoint_), K(access_id_),
-      K(sts_token_), KP(secret_key_), K(addressing_model_));
-
-  bool is_valid_;
-  int64_t delete_mode_;
   char region_[MAX_OBDAL_REGION_LENGTH];
-  char endpoint_[MAX_OBDAL_ENDPOINT_LENGTH];
-  char access_id_[MAX_OBDAL_ACCESS_ID_LENGTH];
-  char secret_key_[MAX_OBDAL_ACCESS_ID_LENGTH];
-  ObSTSToken sts_token_;
   ObStorageAddressingModel addressing_model_;
 };
 

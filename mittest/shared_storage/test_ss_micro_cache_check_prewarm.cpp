@@ -160,13 +160,12 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_EQ(ori_t2_cnt + 1, arc_info.seg_info_arr_[ARC_T2].cnt_);
 
     // 1.1.2 evict this micro_block
-    ObSSMicroBlockMetaHandle evict_micro_handle;
-    evict_micro_handle.set_ptr(tmp_micro_meta);
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro_handle));
+    ObSSMicroMetaSnapshot evict_micro;
+    evict_micro.micro_meta_ = *tmp_micro_meta;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro));
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(ori_t2_cnt, arc_info.seg_info_arr_[ARC_T2].cnt_);
     ASSERT_EQ(ori_b2_cnt + 1, arc_info.seg_info_arr_[ARC_B2].cnt_);
-    evict_micro_handle.reset();
 
     // 1.1.3 add a existed B2 micro_block. Res: B2 -> T2
     micro_cache->add_micro_block_cache(tmp_micro_key, data_buf, micro_size,
@@ -192,13 +191,12 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_EQ(ori_t2_cnt + 2, arc_info.seg_info_arr_[ARC_T2].cnt_);
 
     // 1.2.2 evict this micro_block
-    ObSSMicroBlockMetaHandle evict_micro_handle1;
-    evict_micro_handle1.set_ptr(tmp_micro_meta);
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro_handle1));
+    ObSSMicroMetaSnapshot evict_micro1;
+    evict_micro1.micro_meta_ = *tmp_micro_meta;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro1));
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(ori_t2_cnt + 1, arc_info.seg_info_arr_[ARC_T2].cnt_);
     ASSERT_EQ(ori_b2_cnt + 1, arc_info.seg_info_arr_[ARC_B2].cnt_);
-    evict_micro_handle1.reset();
 
     // 1.2.3 add a existed B2 micro_block. Res: B2 -> T2
     micro_cache->add_micro_block_cache(tmp_micro_key, data_buf, micro_size,
@@ -256,23 +254,22 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_EQ(ori_t2_cnt, arc_info.seg_info_arr_[ARC_T2].cnt_);
 
     // 3.1.2 evict this micro_block
-    ObSSMicroBlockMetaHandle evict_micro_handle;
-    evict_micro_handle.set_ptr(tmp_micro_meta);
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro_handle));
+    ObSSMicroMetaSnapshot evict_micro;
+    evict_micro.micro_meta_ = *tmp_micro_meta;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro));
     CHECK_IN_B1(tmp_micro_meta);
     ASSERT_EQ(false, tmp_micro_meta->is_valid_field());
     ASSERT_EQ(ori_t1_cnt - 1, arc_info.seg_info_arr_[ARC_T1].cnt_);
     ASSERT_EQ(ori_b1_cnt + 1, arc_info.seg_info_arr_[ARC_B1].cnt_);
-    evict_micro_handle.reset();
 
     // 3.1.3 get B1 micro_block. Res: cache miss
     io_info.reset();
     ObSSMemBlockHandle mem_blk_handle;
     ObSSMicroBlockMetaHandle micro_meta_handle;
     ObSSCacheHitType hit_type = ObSSCacheHitType::SS_CACHE_MISS;
-    ObSSMicroSnapshotInfo micro_snapshot_info;
+    ObSSMicroBaseInfo micro_info;
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_snapshot_info,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info,
       micro_meta_handle, mem_blk_handle, io_info.phy_block_handle_, hit_type, false/*update_arc*/));
     CHECK_IN_B1(tmp_micro_meta);
     ASSERT_EQ(hit_type, ObSSCacheHitType::SS_CACHE_MISS);
@@ -301,22 +298,21 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ASSERT_EQ(ori_t2_cnt + 1, arc_info.seg_info_arr_[ARC_T2].cnt_);
 
     // 3.2.2 evict this micro_block
-    ObSSMicroBlockMetaHandle evict_micro_handle1;
-    evict_micro_handle1.set_ptr(tmp_micro_meta);
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro_handle1));
+    ObSSMicroMetaSnapshot evict_micro1;
+    evict_micro1.micro_meta_ = *tmp_micro_meta;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->try_evict_micro_block_meta(evict_micro1));
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(ori_t2_cnt, arc_info.seg_info_arr_[ARC_T2].cnt_);
     ASSERT_EQ(ori_b2_cnt + 1, arc_info.seg_info_arr_[ARC_B2].cnt_);
-    evict_micro_handle1.reset();
 
     // 3.2.3 get existed B2 micro_block. Res: still in B2, but marked as invalid
     io_info.reset();
     mem_blk_handle.reset();
     micro_meta_handle.reset();
     hit_type = ObSSCacheHitType::SS_CACHE_MISS;
-    micro_snapshot_info.reset();
+    micro_info.reset();
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
-    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_snapshot_info,
+    ASSERT_EQ(OB_SUCCESS, micro_cache->inner_get_micro_block_handle(tmp_micro_key, micro_info,
       micro_meta_handle, mem_blk_handle, io_info.phy_block_handle_, hit_type, true/*update_arc*/));
     CHECK_IN_B2(tmp_micro_meta);
     ASSERT_EQ(hit_type, ObSSCacheHitType::SS_CACHE_MISS);
@@ -340,11 +336,11 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     CHECK_IN_T1(tmp_micro_meta);
 
     ObSSCacheHitType hit_type;
-    ObSSMicroSnapshotInfo snapshot_info;
-    ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(tmp_micro_key, snapshot_info, hit_type));
+    ObSSMicroBaseInfo micro_info;
+    ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(tmp_micro_key, micro_info, hit_type));
     ASSERT_EQ(ObSSCacheHitType::SS_CACHE_HIT_DISK, hit_type);
-    ASSERT_EQ(true, snapshot_info.is_in_l1_);
-    ASSERT_EQ(false, snapshot_info.is_in_ghost_);
+    ASSERT_EQ(true, micro_info.is_in_l1_);
+    ASSERT_EQ(false, micro_info.is_in_ghost_);
     CHECK_IN_T1(tmp_micro_meta);
     ASSERT_EQ(ori_t1_cnt, arc_info.seg_info_arr_[ARC_T1].cnt_);
 

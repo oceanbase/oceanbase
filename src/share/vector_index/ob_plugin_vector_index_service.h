@@ -52,16 +52,6 @@ public:
   int64_t context_id_;
 };
 
-struct ObVectorIndexAcquireCtx
-{
-  ObTabletID inc_tablet_id_;
-  ObTabletID vbitmap_tablet_id_;
-  ObTabletID snapshot_tablet_id_;
-  ObTabletID data_tablet_id_;
-
-  TO_STRING_KV(K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), K_(data_tablet_id));
-};
-
 class ObVectorIndexAdapterCandiate final
 {
 public:

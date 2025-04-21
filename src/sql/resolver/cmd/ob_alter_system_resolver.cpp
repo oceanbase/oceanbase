@@ -2158,11 +2158,6 @@ static int alter_system_set_reset_constraint_check_and_add_item_mysql_mode(obrpc
   int ret = OB_SUCCESS;
   bool is_backup_config = false;
   bool can_set_trace_control_info = false;
-  int  tmp_ret = OB_SUCCESS;
-  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
-  if (OB_SUCCESS != tmp_ret) {
-    can_set_trace_control_info = true;
-  }
   share::ObBackupConfigChecker backup_config_checker;
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;

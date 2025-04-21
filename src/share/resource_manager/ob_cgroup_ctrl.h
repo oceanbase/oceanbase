@@ -38,6 +38,11 @@ typedef enum  : uint64_t {
   INVALID = UINT64_MAX
 } group_flags_t;
 
+typedef enum  : uint64_t {
+  NORMAL_EXPAND = 0,
+  QUICK_EXPAND
+} group_expand_mode_t;
+
 enum ObCgId
 {
 #define CGID_DEF(name, id, ...) name = id,
@@ -49,12 +54,13 @@ enum ObCgId
 class ObCgInfo
 {
 public:
-  ObCgInfo() : name_(nullptr), is_critical_(false), worker_concurrency_(1) {}
+  ObCgInfo() : name_(nullptr), is_critical_(false), worker_concurrency_(1), is_quick_expand_(false) {}
   void set_name(const char *name) { name_ = name; }
-  void set_args(group_flags_t flags = group_flags_t::DEFAULT, uint64_t worker_concurrency = 1)
+  void set_args(group_flags_t flags = group_flags_t::DEFAULT, uint64_t worker_concurrency = 1, group_expand_mode_t expand_mode = group_expand_mode_t::NORMAL_EXPAND)
   {
     set_flags(flags);
     set_worker_concurrency(worker_concurrency);
+    set_expand_mode(expand_mode);
   }
   void set_flags(group_flags_t flags = group_flags_t::DEFAULT)
   {
@@ -67,9 +73,16 @@ public:
     }
   }
   void set_worker_concurrency(uint64_t worker_concurrency = 1) { worker_concurrency_ = worker_concurrency; }
+  void set_expand_mode(group_expand_mode_t expand_mode = group_expand_mode_t::NORMAL_EXPAND)
+  {
+    if (expand_mode == group_expand_mode_t::QUICK_EXPAND) {
+      is_quick_expand_ = true;
+    }
+  }
   const char *name_;
   bool is_critical_;
   uint64_t worker_concurrency_;
+  bool is_quick_expand_;
 };
 
 class ObCgSet
@@ -108,6 +121,15 @@ public:
       is_group_critical = group_infos_[id].is_critical_;
     }
     return is_group_critical;
+  }
+
+  bool is_group_quick_expand(int64_t id) const
+  {
+    bool is_group_quick_expand = false;
+    if (id >= 0 && id < OBCG_MAXNUM) {
+      is_group_quick_expand = group_infos_[id].is_quick_expand_;
+    }
+    return is_group_quick_expand;
   }
 
   static ObCgSet &instance()

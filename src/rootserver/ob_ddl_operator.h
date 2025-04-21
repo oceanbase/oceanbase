@@ -259,6 +259,11 @@ public:
                               share::schema::ObTableSchema &inc_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObMySQLTransaction &trans);
+  int alter_policy_table_partitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
+
+  int alter_policy_table_subpartitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
   int get_part_array_from_table(const share::schema::ObTableSchema &orig_table_schema,
                                 const share::schema::ObTableSchema &inc_table_schema,
                                 common::ObIArray<share::schema::ObPartition*> &part_array);

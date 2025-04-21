@@ -14,6 +14,7 @@
 #include "observer/mysql/obmp_change_user.h"
 #include "sql/ob_sql.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
+#include "observer/mysql/obmp_stmt_send_piece_data.h"
 
 
 using namespace oceanbase::common;
@@ -192,6 +193,7 @@ int ObMPChangeUser::process()
   bool need_disconnect = true;
   bool need_response_error = true;
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+  int64_t query_timeout = 0;
   bool need_send_auth_switch =
       get_conn()->is_support_plugin_auth() &&
       get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD &&
@@ -202,6 +204,9 @@ int ObMPChangeUser::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
+  } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
+    LOG_WARN("fail to get query timeout", K(ret));
+  } else if (FALSE_IT(THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout))) {
   } else if (OB_FAIL(process_kill_client_session(*session))) {
     LOG_WARN("client session has been killed", K(ret));
   } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
@@ -278,6 +283,43 @@ int ObMPChangeUser::process()
       OB_LOG(WARN,"response fail packet fail", K(ret));
     }
     need_disconnect = true;
+  }
+
+  // Releases prepared statements. (include ps stmt, ps cursor, piece)
+  if (OB_SUCC(ret)) {
+    // 1 ps stmt
+    if (OB_FAIL(session->close_all_ps_stmt())) {
+      LOG_WARN("failed to close all stmt", K(ret));
+    }
+
+    // 2 ps cursor
+    if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
+      if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
+        LOG_WARN("failed to close all cursor", K(ret));
+      } else {
+        session->get_cursor_cache().reset();
+      }
+    }
+
+    // 3 piece
+    if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
+      observer::ObPieceCache* piece_cache =
+        static_cast<observer::ObPieceCache*>(session->get_piece_cache());
+      if (OB_FAIL(piece_cache->close_all(*session))) {
+        LOG_WARN("failed to close all piece", K(ret));
+      }
+      piece_cache->reset();
+      session->get_session_allocator().free(session->get_piece_cache());
+      session->set_piece_cache(NULL);
+    }
+
+    if (OB_SUCC(ret)) {
+      // 4 ps session info
+      session->reset_ps_session_info();
+
+      // 5 ps name
+      session->reset_ps_name();
+    }
   }
 
   if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {

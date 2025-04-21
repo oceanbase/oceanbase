@@ -1103,14 +1103,19 @@ int ObTableScanOp::prepare_all_das_tasks()
       }
     } else {
       int64_t group_size = (output_ == iter_tree_) ?  1: tsc_rtdef_.group_size_;
+      bool need_sort = MY_CTDEF.ordering_used_by_parent_;
       GroupRescanParamGuard grp_guard(tsc_rtdef_, GET_PHY_PLAN_CTX(ctx_)->get_param_store_for_update());
       for (int64_t i = 0; OB_SUCC(ret) && i < group_size; ++i) {
         if (need_perform_real_batch_rescan()) {
           grp_guard.switch_group_rescan_param(i);
         }
-        if (MY_CTDEF.use_index_merge_ && OB_FAIL(prepare_index_merge_scan_range(i))) {
+
+        // When using batch rescan, the actual scan order of storage must be KEEP_ORDER，thus the original ordering
+        // may be disrupted when dealing with multiple range segments.
+        // Therefore we need to sort the scan ranges when upper operator used the tsc ordering.
+        if (MY_CTDEF.use_index_merge_ && OB_FAIL(prepare_index_merge_scan_range(i, need_sort))) {
           LOG_WARN("failed to prepare index merge scan range", K(ret));
-        } else if (!MY_CTDEF.use_index_merge_ && OB_FAIL(prepare_single_scan_range(i))) {
+        } else if (!MY_CTDEF.use_index_merge_ && OB_FAIL(prepare_single_scan_range(i, need_sort))) {
           LOG_WARN("prepare single scan range failed", K(ret));
         } else if (OB_FAIL(prepare_das_task())) {
           LOG_WARN("prepare das task failed", K(ret));
@@ -1374,12 +1379,17 @@ int ObTableScanOp::prepare_batch_scan_range()
       LOG_WARN("batch nlj params is empry", K(ret));
     }
   }
+  bool need_sort = MY_CTDEF.ordering_used_by_parent_;
   GroupRescanParamGuard grp_guard(tsc_rtdef_, GET_PHY_PLAN_CTX(ctx_)->get_param_store_for_update());
   for (int64_t i = 0; OB_SUCC(ret) && i < tsc_rtdef_.group_size_; ++i) {
     //replace real param to param store to extract scan range
     grp_guard.switch_group_rescan_param(i);
     LOG_DEBUG("replace bnlj param to extract range", K(plan_ctx->get_param_store()));
-    if (OB_FAIL(prepare_single_scan_range(i))) {
+
+    // When using batch rescan, the actual scan order of storage must be KEEP_ORDER，thus the original ordering
+    // may be disrupted when dealing with multiple range segments.
+    // Therefore we need to sort the scan ranges when upper operator used the tsc ordering.
+    if (OB_FAIL(prepare_single_scan_range(i, need_sort))) {
       LOG_WARN("prepare single scan range failed", K(ret));
     }
   }
@@ -1427,7 +1437,7 @@ int ObTableScanOp::build_bnlj_params()
   return ret;
 }
 
-int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
+int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
 {
   int ret = OB_SUCCESS;
   ObQueryRangeArray key_ranges;
@@ -1522,6 +1532,9 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
     whole_range.set_whole_range();
     whole_range.table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
     whole_range.group_idx_ = group_idx;
+    if (OB_UNLIKELY(need_sort) && key_ranges.count() > 1) {
+      lib::ob_sort(key_ranges.begin(), key_ranges.end(), ObNewRangeCmp());
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
       key_range = key_ranges.at(i);
       key_range->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
@@ -1541,7 +1554,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
 }
 
 // for index merge, disable equal range optimization
-int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx)
+int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx, bool need_sort)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
@@ -1556,7 +1569,7 @@ int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx)
     if (DAS_OP_TABLE_LOOKUP == attach_rtdef->op_type_ || DAS_OP_INDEX_PROJ_LOOKUP == attach_rtdef->op_type_) {
       index_merge_rtdef = attach_rtdef->children_[0];
     }
-    if (OB_FAIL(prepare_range_for_each_index(group_idx, range_allocator, index_merge_rtdef))) {
+    if (OB_FAIL(prepare_range_for_each_index(group_idx, need_sort, range_allocator, index_merge_rtdef))) {
       LOG_WARN("failed to prepare range for each index", KPC(index_merge_rtdef), K(ret));
     }
   }
@@ -1564,6 +1577,7 @@ int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx)
 }
 
 int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
+                                                bool need_sort,
                                                 ObIAllocator &allocator,
                                                 ObDASBaseRtDef *rtdef)
 {
@@ -1581,7 +1595,7 @@ int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid index merge rtdef", KPC(child_rtdef), K(ret));
       } else if (INDEX_MERGE_UNION == node_type || INDEX_MERGE_INTERSECT == node_type) {
-        if (OB_FAIL(SMART_CALL(prepare_range_for_each_index(group_idx, allocator, child_rtdef)))) {
+        if (OB_FAIL(SMART_CALL(prepare_range_for_each_index(group_idx, need_sort, allocator, child_rtdef)))) {
           LOG_WARN("failed to prepare range for each index", KPC(child_rtdef), K(ret));
         }
       } else if (INDEX_MERGE_SCAN == node_type) {
@@ -1649,6 +1663,9 @@ int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
             whole_range.set_whole_range();
             whole_range.table_id_ = scan_ctdef->ref_table_id_;
             whole_range.group_idx_ = group_idx;
+            if (OB_UNLIKELY(need_sort) && key_ranges.count() > 1) {
+              lib::ob_sort(key_ranges.begin(), key_ranges.end(), ObNewRangeCmp());
+            }
             for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
               key_range = key_ranges.at(i);
               key_range->table_id_ = scan_ctdef->ref_table_id_;
@@ -4220,16 +4237,6 @@ int ObRandScanProcessor::inner_get_next_batch(const int64_t max_row_cnt)
           rand_brs_.size_ = brs.size_;
           rand_brs_.end_ = brs.end_;
           rand_brs_.skip_->deep_copy(*brs.skip_, brs.size_);
-          // for array type need cast to uniform firstly
-          for (int64_t i = 0; i < tsc_spec_->output_.count(); i++) {
-            ObExpr *e = tsc_spec_->output_.at(i);
-            if (OB_FAIL(e->eval_vector(eval_ctx, brs))) {
-              LOG_WARN("eval batch failed", K(ret));
-            } else if (e->is_nested_expr() && !is_uniform_format(e->get_format(eval_ctx)) &&
-                      OB_FAIL(e->nested_cast_to_uniform(brs.size_, eval_ctx, brs.skip_))) {
-              LOG_WARN("failed to cast nested expr to uniform", K(ret));
-            }
-          }
         } else {
           need_output = true;
         }

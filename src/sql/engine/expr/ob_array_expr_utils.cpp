@@ -133,6 +133,7 @@ int ObArrayExprUtils::vector_datum_add(ObDatum &res, const ObDatum &data, ObIAll
 
 // cast any array and varchar to array(float)
 int ObArrayExprUtils::calc_cast_type(
+    const ObExprOperatorType &expr_type,
     ObExprResType &type,
     common::ObExprTypeCtx &type_ctx,
     const bool only_vector)
@@ -156,7 +157,9 @@ int ObArrayExprUtils::calc_cast_type(
     } else {
       const ObSqlCollectionInfo *coll_info = NULL;
       coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
-      if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+        // do nothing
+      } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
         ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
         if (only_vector) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -170,6 +173,14 @@ int ObArrayExprUtils::calc_cast_type(
             need_cast = true;
           }
         }
+      } else if (coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+        if (!is_sparse_vector_supported(expr_type)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret), K(type));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(type));
       }
       // vector and array(float) don't need to cast
       if (OB_SUCC(ret) && !need_cast) {

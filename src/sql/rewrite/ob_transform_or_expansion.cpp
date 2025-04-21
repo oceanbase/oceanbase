@@ -1307,7 +1307,6 @@ int ObTransformOrExpansion::get_expect_ordering(const ObDMLStmt &stmt,
   } else {
     const ObIArray<OrderItem> &order_items = stmt.get_order_items();
     bool is_valid = true;
-    bool is_lossless = false;
     ObRawExpr *expr = NULL;
     bool is_const = false;
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < order_items.count(); ++i) {
@@ -1318,11 +1317,11 @@ int ObTransformOrExpansion::get_expect_ordering(const ObDMLStmt &stmt,
         LOG_WARN("failed to check is_const_expr", K(ret));
       } else if (is_const) {
         /* do nothing */
-      } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
-        LOG_WARN("failed to check is losskess column cast", K(ret));
-      } else if (is_lossless && OB_ISNULL(expr = expr->get_param_expr(0))) {
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(expr, expr))) {
+        LOG_WARN("failed to get expr without lossless cast", K(ret));
+      } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null");
+        LOG_WARN("expr is null", K(ret));
       } else if (!expr->is_column_ref_expr()) {
         is_valid = false;
       } else if (OB_FAIL(expect_ordering.push_back(expr))) {
@@ -1643,15 +1642,13 @@ int ObTransformOrExpansion::inner_get_common_columns_in_condition(const ObDMLStm
     }
   } else if (T_OP_IN == expr->get_expr_type()) {
     const ObRawExpr *param = NULL;
-    bool is_lossless = false;
     if (OB_ISNULL(expr->get_param_expr(1)) || OB_ISNULL(param = expr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr->get_param_expr(1)));
     } else if (T_OP_ROW != expr->get_param_expr(1)->get_expr_type()) {
       /* do nothing */
-    } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(param, is_lossless))) {
-      LOG_WARN("failed to check is lossless column cast", K(ret));
-    } else if (is_lossless && FALSE_IT(param = param->get_param_expr(0))) {
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param, param))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
     } else if (OB_ISNULL(param) || !param->is_column_ref_expr()) {
       /* do nothing */
     } else if (OB_FAIL(add_var_to_array_no_dup(cols, const_cast<ObRawExpr*>(param)))) {

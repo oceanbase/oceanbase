@@ -247,7 +247,8 @@ int ObLogPlan::generate_join_orders()
                                           table_depend_infos_,
                                           push_subq_exprs_,
                                           bushy_tree_infos_,
-                                          new_or_quals_);
+                                          new_or_quals_,
+                                          get_optimizer_context().get_query_ctx());
     if (OB_FAIL(pre_process_quals(from_table_items,
                                   stmt->get_semi_infos(),
                                   quals))) {
@@ -15566,10 +15567,16 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
     LOG_WARN("unexpected null table schema", K(ret));
   } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos))) {
     LOG_WARN("failed to get index infos", K(ret));
-  } else if (OB_FAIL(table_schema->get_doc_id_rowkey_tid(doc_id_rowkey_tid))) {
+  } else if (OB_FAIL(table_schema->get_doc_id_rowkey_tid(doc_id_rowkey_tid)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
     LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
-  } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_tid))) {
+  } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+    // no fulltext index, retry
+    ret = OB_SCHEMA_EAGAIN;
+  } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_tid)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
     LOG_WARN("failed to get rowkey doc table id", K(ret), KPC(table_schema));
+  } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+    // no fulltext index, retry
+    ret = OB_SCHEMA_EAGAIN;
   } else if (OB_FALSE_IT(inv_idx_tid = index_table_id)) {
   } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
                                                     inv_idx_tid,
@@ -15913,24 +15920,13 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     uint64_t index_id_tid = OB_INVALID_ID;
     uint64_t index_snapshot_data_tid = OB_INVALID_ID;
     ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
-    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                        table_schema,
-                                                        INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
-                                                        vec_col_id,
-                                                       delta_buffer_tid))) {
-      LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(vec_col_id), K(table_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                                table_schema,
-                                                                INDEX_TYPE_VEC_INDEX_ID_LOCAL,
-                                                                vec_col_id,
-                                                                index_id_tid))) {
-      LOG_WARN("fail to get spec vector index id table id", K(ret), K(vec_col_id), K(table_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                                table_schema,
-                                                                INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
-                                                                vec_col_id,
-                                                                index_snapshot_data_tid))) {
-      LOG_WARN("fail to get spec vector index snapshot data table id", K(ret), K(vec_col_id), K(table_schema));
+    if (OB_FAIL(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(schema_guard,
+                                                                            table_schema, // data table schema
+                                                                            vec_col_id,
+                                                                            delta_buffer_tid,
+                                                                            index_id_tid,
+                                                                            index_snapshot_data_tid))) {
+      LOG_WARN("fail to get latest avaliable index tids for hnsw ", K(ret), K(vec_col_id), K(table_schema));
     } else if (OB_FAIL(table_schema.get_vec_id_rowkey_tid(vec_id_rowkey_tid))) {
       LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
     } else if (OB_FAIL(table_schema.get_rowkey_vid_tid(rowkey_vid_tid))) {
@@ -15950,6 +15946,11 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     } else {
       table_scan->set_doc_id_index_table_id(vec_id_rowkey_tid);
       table_scan->set_index_back(true);
+      // if vec query and rebuild vec index happened at the same time
+      // the tid maybe not the lastest, update to latest
+      if (vc_info.is_post_filter() && table_scan->get_index_table_id() != delta_buffer_tid) {
+        table_scan->set_index_table_id(delta_buffer_tid);
+      }
     }
   }
   return ret;

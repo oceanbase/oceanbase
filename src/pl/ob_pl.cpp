@@ -119,6 +119,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_reset_composite));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_copy_datum));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_cast_enum_set_to_string"),
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_cast_enum_set_to_string));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
@@ -1634,10 +1636,8 @@ int ObPL::execute(ObExecContext &ctx,
             } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
               ObObjParam &cursor_param = pl.get_params().at(i);
               const ObPLCursorInfo *cursor = NULL;
-              if (!routine.get_in_args().has_member(i)) { //pure out param and formal param does not point to the same cursorInfo
-                OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
-                OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1)); //we need to dec refcount after out param assign to actual param
-              }
+              OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
+              OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1)); //we need to dec refcount after format param assign to actual param
               OX (cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext()));
               OX (params->at(i) = cursor_param);
               if (pl.is_top_call() && OB_NOT_NULL(cursor)) {
@@ -1651,16 +1651,21 @@ int ObPL::execute(ObExecContext &ctx,
                 if (null_value_for_closed_cursor && cursor->is_session_cursor() && !cursor->isopen()) {
                   OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1));
                   OX (params->at(i).set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
-                  if (0 == cursor->get_ref_count()) {
-                    OZ (ctx.get_my_session()->close_cursor(cursor->get_id()));
-                  }
                 }
               }
             } else {
               OX (params->at(i) = pl.get_params().at(i));
             }
           } else {
-            OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+            ObObj str_obj;
+            if (ob_is_enum_or_set_type(pl.get_params().at(i).get_type())) {
+              common::ObIArray<common::ObString>* type_info = NULL;
+              OZ (routine.get_variables().at(i).get_type_info(type_info));
+              CK (OB_NOT_NULL(type_info));
+              OZ (ObSPIService::cast_enum_set_to_string(ctx, *type_info, pl.get_params().at(i), str_obj));
+            }
+            ObObj& param = ob_is_enum_or_set_type(pl.get_params().at(i).get_type()) ? str_obj : pl.get_params().at(i);
+            OZ (deep_copy_obj(allocator, param, params->at(i)));
             ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
@@ -2512,7 +2517,7 @@ int ObPL::execute(ObExecContext &ctx,
         OZ (guard->get_database_schema(ctx.get_my_session()->get_effective_tenant_id(),
                                       routine->get_database_id(),
                                       db_schema));
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && OB_NOT_NULL(db_schema)) {
           db_name = db_schema->get_database_name_str();
         }
       }
@@ -3284,6 +3289,19 @@ int ObPLExecState::final(int ret)
       }
     }
   }
+
+  //release the out ref cursor param when failed
+  for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count(); i++) {
+    if (func_.get_out_args().has_member(i)
+        && get_params().at(i).is_pl_extend()
+        && get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+      tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&get_exec_ctx(), &get_params().at(i), -1);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("faild to dec ref count. ", K(tmp_ret), K(get_params().at(i)));
+      }
+    }
+  }
+
   // 异常场景下，释放参数列表
   for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); ++i) {
     if (!get_params().at(i).is_pl_extend()) {
@@ -4061,6 +4079,10 @@ do {                                                                  \
             OX (get_params().at(i) = tmp);
           } else {
             if (get_params().at(i).is_ref_cursor_type()) {
+              ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(params->at(i).get_ext());
+              if (OB_NOT_NULL(cursor) && func_.get_out_args().has_member(i)) {
+                cursor->inc_ref_count(); // in out param need inc ref count
+              }
               get_params().at(i) = params->at(i);
               get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
               get_params().at(i).set_extend(
@@ -4663,6 +4685,8 @@ int ObPLExecState::check_pl_priv(
 int ObPLExecState::execute()
 {
   int ret = OB_SUCCESS;
+  int32_t pl_stack_size = func_.get_stack_size();
+
   if (OB_ISNULL(get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
@@ -4697,18 +4721,44 @@ int ObPLExecState::execute()
         }
       }
     }
+#define PL_DYNAMIC_STACK_CHECK()                                               \
+  do {                                                                         \
+    bool is_overflow = false;                                                  \
+    int64_t stack_used = OB_INVALID_SIZE;                                      \
+    if (OB_FAIL(ret)) {                                                        \
+    } else if (!GCONF._ob_enable_pl_dynamic_stack_check) {                     \
+    } else if (OB_UNLIKELY(0 > pl_stack_size)) {                               \
+    } else if (OB_FAIL(check_stack_overflow(                                   \
+                         is_overflow,                                          \
+                         pl_stack_size + get_reserved_stack_size(),            \
+                         &stack_used))) {                                      \
+      LOG_WARN("failed to check_stack_overflow", K(ret));                      \
+    } else if (is_overflow) {                                                  \
+      ret = OB_SIZE_OVERFLOW;                                                  \
+      LOG_WARN("stack size is not enough to execute PL",                       \
+               K(ret),                                                         \
+               K(is_overflow),                                                 \
+               K(stack_used),                                                  \
+               K(pl_stack_size),                                               \
+               K(get_reserved_stack_size()),                                   \
+               K(func_));                                                      \
+    }                                                                          \
+  } while (0)
     if (OB_SUCC(ret)) {
       if (inner_call_) {
         _Unwind_Exception *eptr = nullptr;
         ret = SMART_CALL([&]() {
-                           int ret = OB_SUCCESS;
-                           try {
-                             ret = fp(&ctx_, func_.get_arg_count(), argv);
-                           } catch(...) {
-                             eptr = tl_eptr;
-                           }
-                           return ret;
-                         }());
+                          int ret = OB_SUCCESS;
+                          PL_DYNAMIC_STACK_CHECK();
+                          if (OB_SUCC(ret)) {
+                            try {
+                              ret = fp(&ctx_, func_.get_arg_count(), argv);
+                            } catch(...) {
+                              eptr = tl_eptr;
+                            }
+                          }
+                          return ret;
+                        }());
         if (eptr != nullptr) {
           ret = OB_SUCCESS == ret ? (NULL != ctx_.status_ ? *ctx_.status_ : OB_ERR_UNEXPECTED)
               : ret;
@@ -4718,14 +4768,17 @@ int ObPLExecState::execute()
       } else {
         bool has_exception = false;
         ret = SMART_CALL([&]() {
-                           int ret = OB_SUCCESS;
-                           try {
-                             ret = fp(&ctx_, func_.get_arg_count(), argv);
-                           } catch(...) {
-                             has_exception = true;
-                           }
-                           return ret;
-                         }());
+                          int ret = OB_SUCCESS;
+                          PL_DYNAMIC_STACK_CHECK();
+                          if (OB_SUCC(ret)) {
+                            try {
+                              ret = fp(&ctx_, func_.get_arg_count(), argv);
+                            } catch(...) {
+                              has_exception = true;
+                            }
+                          }
+                          return ret;
+                        }());
         if (has_exception) {
           if (OB_ISNULL(ctx_.status_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -4766,6 +4819,7 @@ int ObPLExecState::execute()
         }
       } else { /*do nothing*/ }
     }
+#undef PL_DYNAMIC_STACK_CHECK
 
     if (top_call_
         && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
@@ -4901,7 +4955,8 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
       can_cached_(true),
       has_incomplete_rt_dep_error_(false),
       exec_env_(),
-      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
+      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE)),
+      stack_size_(OB_INVALID_SIZE)
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;

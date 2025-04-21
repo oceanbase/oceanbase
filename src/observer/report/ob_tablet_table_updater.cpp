@@ -588,7 +588,7 @@ int ObTabletTableUpdater::generate_tasks_(
   int tmp_ret = OB_SUCCESS;
   ObCompactionLocalityCache locality_cache;
   bool locality_is_valid = false;
-
+  int64_t retry_tablet_replica_count = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletTableUpdater is not inited", KR(ret));
@@ -618,14 +618,15 @@ int ObTabletTableUpdater::generate_tasks_(
                                                                  replica,
                                                                  checksum_item))) {
       bool is_remove_task = false;
-      if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret && OB_TABLET_NOT_EXIST != ret) {
-        LOG_WARN("failed to fill tablet replica info", KR(ret), KPC(task));
-      } else if (OB_EAGAIN == ret) {
+      if (OB_EAGAIN == ret) {
         if (OB_TMP_FAIL(add_task_(*task))) {
           LOG_WARN("fail to add task", KR(tmp_ret), KPC(task));
         } else {
+          retry_tablet_replica_count++;
           ret = OB_SUCCESS; // do not affect report of other tablets
         }
+      } else if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret && OB_TABLET_NOT_EXIST != ret) {
+        LOG_WARN("failed to fill tablet replica info", KR(ret), KPC(task));
       } else if (OB_TENANT_NOT_IN_SERVER == ret) {
         is_remove_task = true;
         ret = OB_SUCCESS;
@@ -667,13 +668,14 @@ int ObTabletTableUpdater::generate_tasks_(
   } else if (update_tablet_tasks.count() != update_tablet_replicas.count()
           || update_tablet_tasks.count() != update_tablet_checksums.count()
           || (!GCTX.is_shared_storage_mode() &&
-              (update_tablet_tasks.count() + remove_tablet_tasks.count() != batch_tasks.count()))) {
+              (update_tablet_tasks.count() + remove_tablet_tasks.count() + retry_tablet_replica_count != batch_tasks.count()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet task count and replica count not match", KR(ret),
              "tablet_update_tasks count", update_tablet_tasks.count(),
              "tablet_update_replicas count", update_tablet_replicas.count(),
              "tablet_update_checksums count", update_tablet_checksums.count(),
              "tablet_remove_tasks count", remove_tablet_tasks.count(),
+             K(retry_tablet_replica_count),
              "batch_tasks count", batch_tasks.count());
   }
   return ret;

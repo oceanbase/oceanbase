@@ -89,7 +89,7 @@ int ObExprVecVid::cg_expr(
         LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id));
       } else {
         expr_datum.set_int(seq_id);
-        FLOG_INFO("succeed to genearte vector id", K(tablet_id), K(seq_id));
+        LOG_DEBUG("succeed to genearte vector id", K(tablet_id), K(seq_id));
       }
     }
   }

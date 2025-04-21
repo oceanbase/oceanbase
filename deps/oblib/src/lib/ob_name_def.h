@@ -842,6 +842,7 @@
 #define N_ENUM_TO_STR "enum_to_str"
 #define N_SET_TO_INNER_TYPE "set_to_inner_type"
 #define N_ENUM_TO_INNER_TYPE "enum_to_inner_type"
+#define N_INNER_TYPE_TO_ENUMSET "inner_type_to_enumset"
 #define N_ASCII "ascii"
 #define N_ORD "ord"
 #define N_LTRIM "ltrim"
@@ -1266,4 +1267,5 @@
 #define N_INNER_INFO_COLS_EXTRA_PRINTER "inner_info_cols_extra_printer"
 #define N_INNER_INFO_COLS_DATA_TYPE_PRINTER "inner_info_cols_data_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_TYPE_PRINTER "inner_info_cols_column_type_printer"
+#define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

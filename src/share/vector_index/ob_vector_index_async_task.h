@@ -50,6 +50,8 @@ private:
   int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
   int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObIArray<ObVecIndexAsyncTaskCtx*> &task_ctx_array);
 
+  bool check_operation_allow();
+
 private:
   static const int64_t VEC_INDEX_TASK_MAX_RETRY_TIME = 3; // 200
   static const int64_t INVALID_TG_ID = -1;
@@ -58,6 +60,7 @@ private:
   uint64_t tenant_id_;
   ObPluginVectorIndexService *vector_index_service_;
   ObLS *ls_;
+  volatile int64_t async_task_ref_cnt_;
 };
 
 } // namespace share

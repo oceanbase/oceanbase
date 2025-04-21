@@ -282,12 +282,7 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("simple schema is NULL", K(ret));
   } else {
-    int64_t size = 0;
-    if (!simple_table_schema->is_partitioned_table()) {
-      size = 1;
-    } else {
-      size = simple_table_schema->get_partition_num();
-    }
+    int64_t size = simple_table_schema->get_all_part_num();
     if (OB_FAIL(init_tablet_ids_array(ctx, size, tablet_ids))) {
       LOG_WARN("fail to init tablet ids array", K(ret), K(size));
     } else {

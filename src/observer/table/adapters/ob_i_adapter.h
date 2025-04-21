@@ -34,7 +34,7 @@ public:
   virtual ~ObIHbaseAdapter() {}
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) = 0;
   virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) = 0;
-  virtual int del(ObTableExecCtx &ctx, const common::ObTabletID &tablet_id, const ObNewRow &cell) = 0;
+  virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) = 0;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) = 0;
   virtual void reuse();
 

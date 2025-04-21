@@ -191,7 +191,7 @@ int ObDASDMLIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
   int ret = OB_SUCCESS;
   const bool is_domain_index = das_ctdef_->table_param_.get_data_table().is_domain_index();
   row_count = 0;
-  if (1 == batch_size_) {
+  if (1 == batch_size_ && !is_domain_index) {
     if (OB_FAIL(get_next_row(rows))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("Failed to get next row", K(ret), K_(batch_size), K(is_domain_index));

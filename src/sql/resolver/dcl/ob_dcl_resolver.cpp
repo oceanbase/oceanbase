@@ -489,7 +489,7 @@ int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
       if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
                                                   default_auth_plugin))) {
         LOG_WARN("fail to get block encryption variable", K(ret));
-      } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+      } else if (OB_UNLIKELY(0 != auth_plugin.case_compare(default_auth_plugin))) {
         ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
         LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
       } else {/* do nothing */}

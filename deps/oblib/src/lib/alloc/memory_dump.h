@@ -35,6 +35,7 @@ struct AChunk;
 struct ABlock;
 struct AObject;
 class ObTenantCtxAllocator;
+class ObTenantCtxAllocatorV2;
 }
 namespace common
 {
@@ -136,6 +137,7 @@ public:
 private:
 friend class observer::ObAllVirtualMemoryInfo;
 friend class lib::ObTenantCtxAllocator;
+friend class lib::ObTenantCtxAllocatorV2;
 friend class lib::ObMallocAllocator;
 
 static const int64_t TASK_NUM = 8;

@@ -274,12 +274,12 @@ TEST_F(TestSSHAPrewarmStruct, test_get_not_exist_micro_blocks)
   ObArray<ObSSMicroBlockCacheKeyMeta> micro_key_metas_in_cache;
   const int64_t micro_key_in_cache_cnt = micro_keys_in_cache.count();
   for (int64_t i = 0; i < micro_key_in_cache_cnt; ++i) {
-    ObSSMicroSnapshotInfo micro_snapshot_info;
+    ObSSMicroBaseInfo micro_info;
     ObSSCacheHitType hit_type;
     ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(micro_keys_in_cache.at(i),
-                                                               micro_snapshot_info, hit_type));
-    ObSSMicroBlockCacheKeyMeta micro_key_meta(micro_keys_in_cache.at(i), micro_snapshot_info.crc_,
-                                              micro_snapshot_info.size_, micro_snapshot_info.is_in_l1_);
+                                                               micro_info, hit_type));
+    ObSSMicroBlockCacheKeyMeta micro_key_meta(micro_keys_in_cache.at(i), micro_info.crc_,
+                                              micro_info.size_, micro_info.is_in_l1_);
     ASSERT_EQ(OB_SUCCESS, micro_key_metas_in_cache.push_back(micro_key_meta));
   }
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_not_exist_micro_blocks(micro_key_metas_in_cache, not_exist_micro_blocks));

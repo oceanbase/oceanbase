@@ -126,7 +126,7 @@ public:
 // Expression evaluate result info
 struct ObEvalInfo
 {
-  void clear_evaluated_flag()
+  OB_INLINE void clear_evaluated_flag()
   {
     if (evaluated_ || projected_) {
       evaluated_ = 0;
@@ -375,7 +375,8 @@ struct ObDynReserveBuf
            || common::ObGeometryTC == tc
            || common::ObUserDefinedSQLTC == tc
            || common::ObCollectionSQLTC == tc
-           || common::ObRoaringBitmapTC == tc;
+           || common::ObRoaringBitmapTC == tc
+           || common::ObEnumSetInnerTC == tc;
   }
 
   ObDynReserveBuf() = default;

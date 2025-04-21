@@ -1638,6 +1638,7 @@ int ObOperator::convert_vector_format()
 
 int ObOperator::filter_row(ObEvalCtx &eval_ctx, const ObIArray<ObExpr *> &exprs, bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   ObDatum *datum = NULL;
   int ret = OB_SUCCESS;
   filtered = false;
@@ -1662,6 +1663,7 @@ int ObOperator::filter_row_vector(ObEvalCtx &eval_ctx,
                                   const sql::ObBitVector &skip_bit,
                                   bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   filtered = false;
   const int64_t batch_idx = eval_ctx.get_batch_idx();
@@ -1766,6 +1768,7 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
                                   bool &all_filtered,
                                   bool &all_active)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   all_filtered = false;
   bool tmp_all_active = true;

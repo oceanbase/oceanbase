@@ -36,6 +36,7 @@ public:
     TestFilter(roaring::api::roaring64_bitmap_t *bitmap) : bitmap_(bitmap) {}
     ~TestFilter() {}
     bool test(int64_t id) override { return roaring::api::roaring64_bitmap_contains(bitmap_, id); }
+    bool test(const char* data) override { return true; }
 public:
     roaring::api::roaring64_bitmap_t* bitmap_;
 };

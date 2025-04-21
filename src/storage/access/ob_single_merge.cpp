@@ -258,6 +258,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
                                        (is_mview_table_scan(scan_type) ||
                                         read_snapshot_version >= tablet_meta.snapshot_version_) &&
                                        (!table->is_co_sstable() || static_cast<ObCOSSTableV2 *>(table)->is_all_cg_base()) &&
+                                       OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                        !tablet_meta.has_transfer_table(); // The query in the transfer scenario does not enable fuse row cache
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();

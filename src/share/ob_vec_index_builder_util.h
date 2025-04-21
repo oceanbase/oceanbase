@@ -134,6 +134,11 @@ public:
       common::ObMySQLTransaction &trans,
       ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
       ObSEArray<ObString, 1> &domain_store_columns);
+  static int vec_set_index_arg_index_schema(
+      ObCreateIndexArg &create_index_arg,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema);
 
   static int set_vec_aux_table_columns(
       const ObCreateIndexArg &arg,
@@ -464,6 +469,8 @@ private:
 
   static int set_extra_info_columns(
     const ObTableSchema &data_schema,
+    ObRowDesc &row_desc,
+    bool need_set_rk,
     ObVectorIndexParam &index_param,
     ObTableSchema &index_schema);
 };

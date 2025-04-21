@@ -95,7 +95,7 @@ int ObTruncatePartitionFilter::init(
   } else if (OB_FAIL(mds_info_mgr_.init(truncate_info_allocator_, tablet, split_extra_tablet_handles, read_version_range, true/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
   } else if (mds_info_mgr_.empty()) {
-    filter_type_ = ObTruncateFilterType::BASE_VERSION_FILTER;
+    filter_type_ = has_truncate_flag ? ObTruncateFilterType::BASE_VERSION_FILTER : ObTruncateFilterType::EMPTY_FILTER;
     is_inited_ = true;
   } else if (OB_FAIL(init(schema_rowkey_cnt_, cols_desc, cols_param, mds_info_mgr_))) {
     LOG_WARN("failed to init", K(ret));
@@ -151,7 +151,7 @@ int ObTruncatePartitionFilter::switch_info(
   } else if (OB_FAIL(mds_info_mgr_.init(truncate_info_allocator_, tablet, split_extra_tablet_handles, read_version_range, true/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
   } else if (mds_info_mgr_.empty()) {
-    filter_type_ = ObTruncateFilterType::BASE_VERSION_FILTER;
+    filter_type_ = has_truncate_flag ? ObTruncateFilterType::BASE_VERSION_FILTER : ObTruncateFilterType::EMPTY_FILTER;
   } else if (OB_FAIL(truncate_info_array_.init_for_first_creation(truncate_info_allocator_))) {
     LOG_WARN("failed to init truncate info array", KR(ret));
   } else if (OB_FAIL(mds_info_mgr_.get_distinct_truncate_info_array(truncate_info_array_))) {
@@ -234,7 +234,7 @@ int ObTruncatePartitionFilter::do_normal_filter(const blocksstable::ObDatumRow &
 int ObTruncatePartitionFilter::do_base_version_filter(const blocksstable::ObDatumRow &row, bool &filtered)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(base_version_ <= 0 || !row.is_valid() || schema_rowkey_cnt_ >= row.count_)) {
+  if (OB_UNLIKELY(base_version_ < 0 || !row.is_valid() || schema_rowkey_cnt_ >= row.count_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected state", K(ret), K_(base_version), K(row), K_(schema_rowkey_cnt), KPC(this));
   } else {
@@ -287,7 +287,7 @@ int ObTruncatePartitionFilter::combine_to_filter_tree(sql::ObPushdownFilterExecu
       LOG_WARN("Failed to alloc pushdown and filter node", K(ret));
     } else if (nullptr == pd_filter_with_truncate_ &&
                OB_FAIL(filter_factory_.alloc(sql::PushdownExecutorType::AND_FILTER_EXECUTOR, 2, *pd_filter_node_with_truncate_,
-                    pd_filter_with_truncate_, root_filter->get_op()))) {
+                    pd_filter_with_truncate_, op_))) {
       LOG_WARN("Failed to alloc pushdown and filter executor", K(ret));
     } else {
       pd_filter_with_truncate_->set_child(0, root_filter);

@@ -785,10 +785,10 @@ const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
-const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
-const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
-const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
-const char *const OB_OSS_WORM_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1 = "version=1";
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const int64_t OB_STORAGE_DEL_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
@@ -1967,10 +1967,17 @@ const int64_t OB_MAX_THREAD_NUM = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__
-const int64_t OB_MAX_CPU_NUM = 64;
+const int64_t OB_MAX_CPU_NUM = 16;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
 #endif
+
+const int32_t OB_MAX_NUMA_NUM = 16;
+const int32_t OB_NUMA_SHARED_INDEX = OB_MAX_NUMA_NUM;
+const int32_t OB_MAX_NUMA_NUM_WITH_SHARED = OB_MAX_NUMA_NUM + 1;
+//OB_MAX_NUMA_NUM should not be larger than the number of bits of unsigned long.
+const unsigned long OB_ALL_NUMA_NODEMASK = 0xffffffff;
+
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;

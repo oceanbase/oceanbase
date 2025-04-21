@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "src/sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase::common;
@@ -611,6 +612,68 @@ int ObExprEnumToInnerType::calc_to_inner_expr(const ObExpr &expr, ObEvalCtx &ctx
         LOG_WARN("failed to serialize inner_value", K(BUF_LEN), K(ret));
       } else {
         res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
+      }
+    }
+  }
+  return ret;
+}
+
+//////////////////////////// ObExprInnerTypeToEnumSet ////////////////////////////
+ObExprInnerTypeToEnumSet::ObExprInnerTypeToEnumSet(ObIAllocator &alloc)
+  : ObExprOperator(alloc, T_FUN_INNER_TYPE_TO_ENUMSET, N_INNER_TYPE_TO_ENUMSET, 2, NOT_VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE)
+{
+}
+
+ObExprInnerTypeToEnumSet::~ObExprInnerTypeToEnumSet()
+{
+}
+
+int ObExprInnerTypeToEnumSet::calc_result_type2(ObExprResType &type,
+                                                ObExprResType &type1,
+                                                ObExprResType &type2,
+                                                ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  const ObEnumSetMeta *enum_set_meta = NULL;
+  int32_t subschema_id = type1.get_param().get_int();
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(session->get_cur_exec_ctx()));
+  OZ (session->get_cur_exec_ctx()->get_enumset_meta_by_subschema_id(subschema_id, true, enum_set_meta));
+  CK (OB_NOT_NULL(enum_set_meta));
+  OX (type.set_meta(enum_set_meta->get_obj_meta()));
+  OX (type.set_subschema_id(subschema_id));
+  OX (type.mark_pl_enum_set_with_subschema());
+  return ret;
+}
+
+int ObExprInnerTypeToEnumSet::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset;
+  return OB_SUCCESS;
+}
+
+int ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *inner_datum = NULL;
+  if (OB_FAIL(expr.args_[1]->eval(ctx, inner_datum))) {
+    LOG_WARN("eval inner datum failed", K(ret));
+  } else if (inner_datum->is_null()) {
+    res_datum.set_null();
+  } else {
+    ObEnumSetInnerValue inner_value;
+    if (OB_FAIL(inner_datum->get_enumset_inner(inner_value))) {
+      LOG_WARN("failed to get enumset inner value", K(ret), K(inner_datum));
+    } else {
+      if (ObEnumInnerType == expr.args_[1]->obj_meta_.get_type()) {
+        res_datum.set_enum(inner_value.numberic_value_);
+      } else {
+        res_datum.set_set(inner_value.numberic_value_);
       }
     }
   }

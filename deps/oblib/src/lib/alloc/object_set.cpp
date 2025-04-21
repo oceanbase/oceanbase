@@ -559,6 +559,7 @@ bool ObjectSet::build_free_lists()
   ObMemAttr attr;
   attr.tenant_id_ = blk_mgr_->get_tenant_id();
   attr.ctx_id_ = blk_mgr_->get_ctx_id();
+  attr.numa_id_ = blk_mgr_->get_numa_id();
   attr.label_ = common::ObModIds::OB_OBJ_FREELISTS;
   ABlock *new_block = alloc_block(sizeof (FreeList) * (cells_per_block_ + 1) +
       sizeof (BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);

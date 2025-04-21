@@ -788,6 +788,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
       ObSQLSessionInfo &session = res.result_set().get_session();
       session.set_expect_group_id(group_id_);
       CONSUMER_GROUP_ID_GUARD(consumer_group_id_);
+      CONSUMER_GROUP_FUNC_GUARD(session.get_ddl_info().is_refreshing_mview() ? ObFunctionType::PRIO_MVIEW : GET_FUNC_TYPE());
       if (OB_ISNULL(res.sql_ctx().schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null");
@@ -2279,6 +2280,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
     inner_session_ = NULL;
     LOG_WARN("create session failed", K(ret), K(sid));
   } else {
+    THIS_WORKER.set_session(inner_session_);
     free_session_ctx_.sessid_ = sid;
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
@@ -2341,6 +2343,7 @@ int ObInnerSQLConnection::destroy_inner_session()
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("session mgr is null", K(ret));
         } else {
+          THIS_WORKER.set_session(NULL);
           GCTX.session_mgr_->revert_session(inner_session_);
           GCTX.session_mgr_->free_session(free_session_ctx_);
           GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);

@@ -189,6 +189,8 @@ TG_DEF(SSTmpFileShrinkWBP, TmpFileShrink, TIMER)
 TG_DEF(TmpFileFlushTimer, TmpFileFlushTimer, TIMER)
 TG_DEF(TmpFilePrereadTimer, TmpFilePrereadTimer, TIMER)
 TG_DEF(ReplicaPrewarmTimer, ReplicaPrewarmTimer, TIMER)
+TG_DEF(StorageCachePolicyMgr, StorageCachePolicyMgr, TIMER)
+TG_DEF(StorageCacheTabletScheduler, StorageCacheTabletScheduler, QUEUE_THREAD, 1, storage::ObStorageCacheTabletScheduler::MAX_TASK_NUM)
 TG_DEF(TenantDirGCTimer, TntGCTimer, TIMER)
 TG_DEF(ObPublicBlockGCThread, PubGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPublicBlockGCThread::THREAD_NUM,

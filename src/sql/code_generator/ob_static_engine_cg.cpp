@@ -9556,13 +9556,15 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
        * we collect the expressions that appear in SELECT FROM DUAL and can be executed independently,
        * and execute them once as the initialization operation for user variables before the plan is executed.
        **/
-      if (!var_init_expr->has_flag(CNT_SUB_QUERY) &&
-          !var_init_expr->has_flag(CNT_AGG) &&
-          !var_init_expr->has_flag(CNT_WINDOW_FUNC) &&
+      if (!var_init_expr->has_generalized_column() &&
           !var_init_expr->has_flag(CNT_ONETIME) &&
           !var_init_expr->has_flag(CNT_ALIAS) &&
           !var_init_expr->has_flag(CNT_DYNAMIC_PARAM) &&
           !var_init_expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) &&
+          !var_init_expr->has_flag(CNT_STATE_FUNC) &&
+          !var_init_expr->has_flag(CNT_RAND_FUNC) &&
+          !var_init_expr->has_flag(CNT_SO_UDF) &&
+          !var_init_expr->has_flag(CNT_VOLATILE_CONST) &&
           !ObOptimizerUtil::has_psedu_column(*var_init_expr) &&
           !ObOptimizerUtil::has_hierarchical_expr(*var_init_expr) &&
           var_init_expr->get_relation_ids().is_empty()) {

@@ -75,9 +75,12 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int32_t *row_ids,
-      const int64_t row_count,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       const bool reserve_memory) override;
+  int agg_pushdown_decoder(
+      blocksstable::ObIMicroBlockReader *reader,
+      const int32_t col_offset, // column store is 0
+      const ObPushdownRowIdCtx &pd_row_id_ctx);
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   int collect_result();
@@ -107,13 +110,21 @@ public:
   OB_INLINE int64_t get_agg_count() const { return agg_cells_.count(); }
   OB_INLINE bool is_vec() const override { return true; }
   OB_INLINE bool check_finished() const override { return false; }
+  OB_INLINE bool is_agg_finish(const ObPushdownRowIdCtx &pd_row_id_ctx)
+  {
+    return OB_INVALID_CS_ROW_ID != agg_row_id_
+        && OB_INVALID_CS_ROW_ID != pd_row_id_ctx.bound_row_id_
+        && ((!pd_row_id_ctx.is_reverse_ && agg_row_id_ >= pd_row_id_ctx.bound_row_id_ )
+            || (pd_row_id_ctx.is_reverse_ && agg_row_id_ <= pd_row_id_ctx.bound_row_id_));
+  }
   TO_STRING_KV(K_(col_offset), K_(col_index), K_(need_access_data),
-               K_(need_get_row_ids), K_(agg_type_flag),
+               K_(need_get_row_ids), K_(agg_row_id), K_(agg_type_flag),
                K_(agg_cells), KPC_(col_param), KPC_(project_expr));
 public:
   ObSEArray<ObAggCellVec*, 1> agg_cells_;
   ObColumnParam* col_param_;
   sql::ObExpr* project_expr_;
+  int64_t agg_row_id_; // row id in column store, row offset of the microblock in row store.
   int32_t col_offset_; // for row store
   int32_t col_index_;  // for row store
   ObAggTypeFlag agg_type_flag_;

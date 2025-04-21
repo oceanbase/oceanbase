@@ -626,7 +626,11 @@ public:
   static int wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
                                     ObSelectStmt *stmt,
                                     ObSQLSessionInfo *session_info);
-
+  static int create_inner_type_to_enumset_expr(ObRawExprFactory &expr_factory,
+                                               ObRawExpr *src_expr,
+                                               ObSysFunRawExpr *&out_expr,
+                                               const ObSQLSessionInfo *session_info,
+                                               ObIArray<common::ObString> &type_info_value);
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,
@@ -1020,7 +1024,7 @@ public:
   static int resolve_op_exprs_for_oracle_implicit_cast(ObRawExprFactory &expr_factory,
                                                        const ObSQLSessionInfo *session_info,
                                                        common::ObIArray<ObOpRawExpr*> &op_exprs);
-  static int check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker);
+  static int check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker, bool is_prepare, bool &skip_check);
   static int add_cast_to_multiset(ObRawExpr *&expr);
 
 

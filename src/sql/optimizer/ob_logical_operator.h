@@ -1731,6 +1731,7 @@ public:
                              bool &contain_dist_das) const;
 
   inline bool can_re_parallel() { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
+  int check_op_orderding_used_by_parent(bool &used);
 
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
@@ -1769,7 +1770,6 @@ protected:
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 
-  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {

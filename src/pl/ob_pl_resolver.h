@@ -405,8 +405,10 @@ public:
   static
   int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col);
   static
-  int resolve_access_ident(const ObObjAccessIdent &access_ident, ObPLExternalNS &external_ns,
-                           common::ObIArray<ObObjAccessIdx> &access_idexs);
+  int resolve_access_ident(const ObObjAccessIdent &access_ident,
+                           ObPLExternalNS &external_ns,
+                           common::ObIArray<ObObjAccessIdx> &access_idexs,
+                           bool full_schema = false);
 
   static
   int get_view_select_stmt(
@@ -1113,7 +1115,8 @@ private:
                            uint64_t seq_id);
   int calc_subtype_range_bound(const ObStmtNodeTree *bound_node,
                                ObPLCompileUnitAST &unit_ast,
-                               int32_t &bound);
+                               int32_t &bound,
+                               ObString &subtype_name);
   int resolve_external_types_from_expr(ObRawExpr &expr);
   int add_external_cursor(ObPLBlockNS &ns,
                           const ObPLBlockNS *external_ns,

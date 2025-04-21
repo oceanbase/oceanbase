@@ -59,5 +59,12 @@ select * from v1;
 drop view v1;
 SELECT NULL ORDER BY SUBSTR ( 9223372036854775807 FROM @@ob_query_timeout FOR 9223372036854775807 );
 
+create table t1(c1 varchar(20));
+insert into t1 values('1aferfAEWDFE');
+insert into t1 values('12FfdrwfEc');
+set @str = '中';
+select substr(concat(@str, c1), 5) from t1;
+drop table t1;
+
 connection syscon;
 --sleep 2

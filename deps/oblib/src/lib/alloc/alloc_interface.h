@@ -38,18 +38,20 @@ class IBlockMgr
 {
 public:
   IBlockMgr() {}
-  IBlockMgr(int64_t tenant_id, int64_t ctx_id)
-    : tenant_id_(tenant_id), ctx_id_(ctx_id) {}
+  IBlockMgr(int64_t tenant_id, int64_t ctx_id, int32_t numa_id)
+    : tenant_id_(tenant_id), ctx_id_(ctx_id), numa_id_(numa_id) {}
   virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) = 0;
   virtual void free_block(ABlock *block) = 0;
   virtual int64_t sync_wash(int64_t wash_size) = 0;
   virtual int64_t get_tenant_id() { return tenant_id_; }
   virtual int64_t get_ctx_id() { return ctx_id_; }
+  int32_t get_numa_id() { return numa_id_; }
   void set_tenant_id(const int64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
 protected:
   int64_t tenant_id_;
   int64_t ctx_id_;
+  int32_t  numa_id_;
 }; // end of class IBlockMgr
 
 class ISetLocker

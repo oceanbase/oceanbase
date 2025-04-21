@@ -599,8 +599,7 @@ int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(exprs),
-       K_(default_datums),
+  J_KV(K_(default_datums),
        K_(cols_projector),
        K_(count),
        K_(batch_size),

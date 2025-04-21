@@ -57,6 +57,7 @@ public:
     }
     return ret;
   }
+  void set_total_limit(int64_t total_limit) { block_alloc_.set_limit(total_limit); }
   int destroy() { purge_extra_cached_block(0); return OB_SUCCESS; }
 private:
   BlockAlloc block_alloc_;

@@ -820,7 +820,7 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
                                                                        pointer_cast<const char *>(cur_v.ptr),
                                                                        fixed_length) > file_col_expr_->max_length_))) {
             ret = OB_ERR_DATA_TOO_LONG;
-            LOG_WARN("data too long", K(ret));
+            LOG_WARN("data too long", K(file_col_expr_->max_length_), K(fixed_length), K(is_byte_length), K(ret));
           } else {
             if (row_count_ == batch_size_) {
               res_ptr = (void*)(cur_v.ptr);
@@ -880,7 +880,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
                                                                         pointer_cast<const char *>(cur_v.ptr),
                                                                         cur_v.len) > file_col_expr_->max_length_))) {
               ret = OB_ERR_DATA_TOO_LONG;
-              LOG_WARN("data too long", K(ret));
+              LOG_WARN("data too long", K(file_col_expr_->max_length_), K(cur_v.len), K(is_byte_length), K(ret));
             } else {
               if (row_count_ == batch_size_) {
                 res_ptr = (void *)(cur_v.ptr);

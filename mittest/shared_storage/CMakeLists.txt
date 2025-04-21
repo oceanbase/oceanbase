@@ -61,6 +61,7 @@ if(OB_BUILD_CLOSE_MODULES)
   mit_shared_storage_unittest(test_calibrate_disk_space)
   mit_shared_storage_unittest(test_segment_file_manager)
   mit_shared_storage_unittest(test_flush_unsealed_tmp_file)
+  mit_shared_storage_unittest(test_auto_expand_disk)
 endif()
 
 add_subdirectory(tmp_file)

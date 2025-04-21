@@ -38,10 +38,10 @@ int ObHbaseRowForwardCompare::compare(const common::ObNewRow &lhs, const common:
     cmp_ret = 0;
     for (int i = 0; i < ObHTableConstants::COL_IDX_T && cmp_ret == 0; ++i) {
       cmp_ret = lhs.get_cell(i).get_string().compare(rhs.get_cell(i).get_string());
-      if (cmp_ret == 0 && need_compare_ts_) {
-        cmp_ret = lhs.get_cell(ObHTableConstants::COL_IDX_T).get_int() -
-          rhs.get_cell(ObHTableConstants::COL_IDX_T).get_int();
-      }
+    }
+    if (cmp_ret == 0 && need_compare_ts_) {
+      cmp_ret = lhs.get_cell(ObHTableConstants::COL_IDX_T).get_int() -
+        rhs.get_cell(ObHTableConstants::COL_IDX_T).get_int();
     }
   }
   return ret;

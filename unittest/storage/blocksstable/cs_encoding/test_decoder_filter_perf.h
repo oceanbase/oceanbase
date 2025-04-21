@@ -572,7 +572,6 @@ protected:
   ObArenaAllocator cs_allocator_;
   ObArenaAllocator common_allocator_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   common::ObArray<share::schema::ObColDesc> cs_col_descs_;
   int64_t rowkey_cnt_;
@@ -588,8 +587,6 @@ protected:
 
 void TestDecoderFilterPerf::SetUp()
 {
-  decode_res_pool_ = new(common_allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-  tenant_ctx_.set(decode_res_pool_);
   share::ObTenantEnv::set_tenant(&tenant_ctx_);
   encoder_.data_buffer_.allocator_.set_tenant_id(500);
   encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
@@ -598,7 +595,6 @@ void TestDecoderFilterPerf::SetUp()
   cs_encoder_.all_string_data_buffer_.allocator_.set_tenant_id(500);
   raw_encoder_.data_buffer_.allocator_.set_tenant_id(500);
   raw_encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
-  decode_res_pool_->init();
 }
 
 void TestDecoderFilterPerf::TearDown()
@@ -700,10 +696,6 @@ void TestDecoderFilterPerf::reset()
   }
   if (OB_NOT_NULL(cs_ctx_.column_encodings_)) {
     cs_allocator_.free(cs_ctx_.column_encodings_);
-  }
-  if (OB_NOT_NULL(decode_res_pool_)) {
-    common_allocator_.free(decode_res_pool_);
-    decode_res_pool_ = nullptr;
   }
   is_raw_encoder_ = true;
   need_compress_ = false;

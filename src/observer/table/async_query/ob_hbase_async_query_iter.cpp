@@ -13,6 +13,9 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/table/async_query/ob_hbase_async_query_iter.h"
+#include "observer/table/ob_table_audit.h"
+
+using namespace oceanbase::sql::stmt;
 
 namespace oceanbase
 {
@@ -45,6 +48,15 @@ namespace table
   int ObHbaseAsyncQueryIter::start(const ObTableQueryAsyncRequest &req, ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result)
   {
     int ret = OB_SUCCESS;
+    OB_TABLE_START_AUDIT(exec_ctx.get_credential(),
+                         exec_ctx.get_sess_guard(),
+                         exec_ctx.get_table_name(),
+                         exec_ctx.get_audit_ctx(),
+                         req.query_);
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->need_audit_ = false; // avoid record audit in tableapi
+    }
+
     bool is_multi_cf_req = ObHTableUtils::is_tablegroup_req(req.table_name_, req.entity_type_);
     if (OB_FAIL(init_query_and_sel_cols(req, exec_ctx))) {
       if (ret != OB_ITER_END) {
@@ -81,6 +93,17 @@ namespace table
       result.is_end_ = true;
     }
 
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->need_audit_ = true;
+    }
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, exec_ctx.get_trans_param().tx_snapshot_,
+                       stmt_type, StmtType::T_KV_QUERY,
+                       return_rows, result.get_row_count(),
+                       has_table_scan, true,
+                       filter,
+                       (OB_ISNULL(exec_ctx.get_audit_ctx())
+                                ? nullptr : exec_ctx.get_audit_ctx()->filter_));
     return ret;
   }
 
@@ -131,9 +154,18 @@ namespace table
     return ret;
   }
 
-  int ObHbaseAsyncQueryIter::next(ObTableQueryAsyncResult &result)
+  int ObHbaseAsyncQueryIter::next(ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result)
   {
     int ret = OB_SUCCESS;
+    OB_TABLE_START_AUDIT(exec_ctx.get_credential(),
+                         exec_ctx.get_sess_guard(),
+                         exec_ctx.get_table_name(),
+                         exec_ctx.get_audit_ctx(),
+                         query_);
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->need_audit_ = false; // avoid record audit in tableapi
+    }
+
     if (OB_ISNULL(result_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null result iterator", K(ret));
@@ -149,6 +181,18 @@ namespace table
     } else {
       result.is_end_ = !result_iter_->has_more_result();
     }
+
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->need_audit_ = true;
+    }
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, exec_ctx.get_trans_param().tx_snapshot_,
+                       stmt_type, StmtType::T_KV_QUERY,
+                       return_rows, result.get_row_count(),
+                       has_table_scan, true,
+                       filter,
+                       (OB_ISNULL(exec_ctx.get_audit_ctx())
+                                ? nullptr : exec_ctx.get_audit_ctx()->filter_));
     return ret;
   }
 

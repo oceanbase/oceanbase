@@ -690,6 +690,9 @@ int ObRelativeTable::prepare_truncate_part_filter(
     const storage::ObTableReadInfo &read_info = schema_param_->get_read_info();
     if (OB_UNLIKELY(!read_version_range.is_valid())) {
       LOG_DEBUG("[TRUNCATE INFO] invalid version range, filter is empty", K(ret), K(read_version_range), KPC_(truncate_part_filter));
+    } else if (OB_UNLIKELY(nullptr != table_ptr && table_ptr->is_major_sstable() && major_table_version <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected major sstable", K(ret), KPC(table_ptr));
     } else if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
         *tablet_handle->get_obj(),
         tablet_iter_.get_split_extra_tablet_handles_ptr(),

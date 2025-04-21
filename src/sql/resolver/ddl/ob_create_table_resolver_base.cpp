@@ -221,6 +221,7 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
           OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_)) ||
           OB_FAIL(table_schema.set_ttl_definition(ttl_definition_)) ||
           OB_FAIL(table_schema.set_kv_attributes(kv_attributes_)) ||
+          OB_FAIL(table_schema.set_storage_cache_policy(storage_cache_policy_)) ||
           OB_FAIL(table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }

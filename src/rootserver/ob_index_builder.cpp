@@ -2172,6 +2172,10 @@ int ObIndexBuilder::set_index_table_options(const obrpc::ObCreateIndexArg &arg,
         LOG_WARN("fail to set parser name and properties", K(ret), "parser_name", arg.index_option_.parser_name_,
             "parser_properties", arg.index_option_.parser_properties_);
       }
+    } else if (is_vec_ivf_index(schema.get_index_type()) && FALSE_IT(schema.set_lob_inrow_threshold(OB_MAX_LOB_INROW_THRESHOLD))) {
+    }
+    else if (OB_FAIL(schema.set_storage_cache_policy(arg.index_option_.storage_cache_policy_))) {
+      LOG_WARN("set storage cache policy failed", K(ret), "storage_cache_policy", arg.index_option_.storage_cache_policy_);
     }
   }
   return ret;

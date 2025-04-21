@@ -315,7 +315,6 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_cache)
   /*
   * insert 5 truncate info of same range part
   */
-  int64_t schema_version = 10100;
   int64_t idx = 0;
   for ( ; idx < mock_array.count() - 1; ++idx) {
     ASSERT_EQ(OB_SUCCESS, insert_truncate_info(*mock_array.at(idx)));
@@ -376,6 +375,95 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_cache)
     truncate_info_array.reset();
     ret = tablet_handle.get_obj()->read_truncate_info_array(allocator_, ObVersionRange(mock_array.at(commit_cnt - 1)->commit_version_, EXIST_READ_SNAPSHOT_VERSION), false/*for_access*/, truncate_info_array);
     ASSERT_TRUE(truncate_info_array.empty());
+  }
+}
+
+TEST_F(TestTruncateInfoReader, test_put_truncate_info_into_cache)
+{
+  int ret = OB_SUCCESS;
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  ObTabletHandle tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  tablet_handle.reset();
+  const char *key_data =
+    "tx_id    commit_ver    schema_ver    lower_bound    upper_bound\n"
+    "1        1000         10100         100            200        \n"
+    "2        2000         10200         100            200        \n"
+    "3        3000         10300         100            200        \n"
+    "4        4000         10400         100            200        \n"
+    "5        5000         10500         100            200        \n"
+    "6        6000         10600         100            200        \n"
+    "7        7000         10700         100            200        \n"
+    "8        8000         10800         100            200        \n";
+  ObTruncateInfoArray mock_array;
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::batch_mock_truncate_info(allocator_, key_data, mock_array));
+  const int64_t max_cnt = 8;
+  const int64_t first_round = 6;
+  int64_t idx = 0;
+  ASSERT_EQ(max_cnt, mock_array.count());
+  /*
+  * insert 5 truncate info of same range part
+  */
+  for (; idx < first_round; ++idx) {
+    ASSERT_EQ(OB_SUCCESS, insert_truncate_info(*mock_array.at(idx)));
+  } // for
+  ASSERT_EQ(OB_SUCCESS, wait_mds_mini_finish(tablet_id, mock_array.at(first_round - 1)->commit_version_));
+  ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTruncateInfoArray truncate_info_array;
+#define READ_ARRAY(version_range)                                              \
+  TruncateInfoHelper::read_distinct_truncate_info_array(                       \
+      allocator_, *tablet_handle.get_obj(), version_range,                     \
+      truncate_info_array);                                                    \
+  ASSERT_EQ(OB_SUCCESS, ret);
+#define CHECK_RESULT(version_in_array, cache_valid, version_in_cache)          \
+  ASSERT_EQ(1, truncate_info_array.count());                                   \
+  ASSERT_EQ(version_in_array, truncate_info_array.at(0)->commit_version_);     \
+  if (cache_valid) {                                                           \
+    ASSERT_TRUE(truncate_info_cache.is_valid());                               \
+    ASSERT_EQ(truncate_info_cache.newest_commit_version(), version_in_cache);  \
+  }
+  if (tablet_handle.is_valid()) {
+    ObTruncateInfoCache &truncate_info_cache = tablet_handle.get_obj()->truncate_info_cache_;
+    READ_ARRAY(ObVersionRange(2000, EXIST_READ_SNAPSHOT_VERSION));
+    CHECK_RESULT(6000, false/*cache_valid*/, 0);
+    /*
+    * read all truncate info
+    */
+    READ_ARRAY(ObVersionRange(1, EXIST_READ_SNAPSHOT_VERSION));
+    CHECK_RESULT(6000, true/*cache_valid*/, 6000);
+    /*
+    * read truncate info with old snapshot (like major)
+    */
+    READ_ARRAY(ObVersionRange(1, 3000));
+    CHECK_RESULT(3000, true/*cache_valid*/, 6000);
+    /*
+    * read truncate info with old snapshot (like major)
+    */
+    READ_ARRAY(ObVersionRange(1, 6000));
+    CHECK_RESULT(6000, true/*cache_valid*/, 6000);
+  }
+  for (; idx < max_cnt; ++idx) {
+    ASSERT_EQ(OB_SUCCESS, insert_truncate_info(*mock_array.at(idx)));
+  } // for
+  tablet_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, wait_mds_mini_finish(tablet_id, mock_array.at(max_cnt - 1)->commit_version_));
+  ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  if (tablet_handle.is_valid()) {
+    ObTruncateInfoCache &truncate_info_cache = tablet_handle.get_obj()->truncate_info_cache_;
+    ASSERT_FALSE(truncate_info_cache.is_valid());
+
+    READ_ARRAY(ObVersionRange(2000, 7000));
+    CHECK_RESULT(7000, false/*cache_valid*/, 0);
+
+    READ_ARRAY(ObVersionRange(1, 7000));
+    CHECK_RESULT(7000, false/*cache_valid*/, 0);
+
+    READ_ARRAY(ObVersionRange(1, 8000));
+    CHECK_RESULT(8000, true/*cache_valid*/, 8000);
   }
 }
 

@@ -576,10 +576,10 @@ int ObChunkSliceStore::init(const int64_t rowkey_column_count, const ObStorageSc
   } else if (OB_UNLIKELY(rowkey_column_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalida argument", K(ret), K(rowkey_column_count));
+  } else if (FALSE_IT(arena_allocator_ = &allocator)) {
   } else if (OB_FAIL(prepare_datum_stores(MTL_ID(), storage_schema, allocator, col_array, dir_id, parallelism))) {
     LOG_WARN("fail to prepare datum stores");
   } else {
-    arena_allocator_ = &allocator;
     rowkey_column_count_ = rowkey_column_count;
     is_inited_ = true;
     LOG_DEBUG("init chunk slice store", K(ret), KPC(this));
@@ -857,10 +857,10 @@ int ObChunkBatchSliceStore::init(const int64_t rowkey_column_count,
   } else if (OB_UNLIKELY(rowkey_column_count <= 0 || max_batch_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(rowkey_column_count), K(max_batch_size));
+  } else if (FALSE_IT(arena_allocator_ = &allocator)) {
   } else if (OB_FAIL(prepare_column_group_ctxs(MTL_ID(), storage_schema, allocator, col_array, dir_id, parallelism, max_batch_size))) {
     LOG_WARN("fail to prepare datum stores");
   } else {
-    arena_allocator_ = &allocator;
     column_count_ = col_array.count();
     rowkey_column_count_ = rowkey_column_count;
     is_inited_ = true;
@@ -1438,6 +1438,7 @@ int ObColumnBatchSliceStore::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(rowkey_column_count), K(slice_idx), KP(storage_schema),
         KP(tablet_direct_load_mgr), K(data_seq), K(start_scn), K(max_batch_size));
+  } else if (FALSE_IT(arena_allocator_ = &allocator)) {
   } else if (OB_FAIL(prepare_column_group_ctxs(MTL_ID(),
                                                storage_schema,
                                                allocator,
@@ -1447,7 +1448,6 @@ int ObColumnBatchSliceStore::init(
                                                max_batch_size))) {
     LOG_WARN("fail to prepare datum stores");
   } else {
-    arena_allocator_ = &allocator;
     rowkey_column_count_ = rowkey_column_count;
     column_count_ = tablet_direct_load_mgr->get_column_info().count();
     slice_idx_ = slice_idx;
@@ -1899,6 +1899,7 @@ int ObMultiSliceStore::init(
                       || !storage_schema->is_user_data_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr), K(data_seq), K(slice_idx), K(rowkey_column_count), KPC(storage_schema));
+  } else if (FALSE_IT(arena_allocator_ = &allocator)) {
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(allocator, cs_replica_schema_))) {
     LOG_WARN("fail to alloc cs_replica_schema", K(ret));
   } else if (OB_FAIL(cs_replica_schema_->init(allocator, *storage_schema, false /*skip_column_info*/, nullptr /*column_group_schema*/, true /*generate_default_cg_array*/))) {
@@ -1950,12 +1951,7 @@ int ObMultiSliceStore::init(
   }
   if (OB_SUCC(ret)) {
     is_inited_ = true;
-    arena_allocator_ = &allocator;
     LOG_DEBUG("[CS-Replica] Successfully init multi slice store", K(ret), KPC(this));
-  }
-
-  if (OB_FAIL(ret)) {
-    (void) free_memory(allocator);
   }
   return ret;
 }
@@ -3922,8 +3918,8 @@ int ObVectorIndexSliceStore::init(
     }
     // get vid col and vector col
     for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
-      // col_array[1]\col_array[2] is version col
-      if (i == 1 || i == 2) {
+      // version control col is not valid
+      if (!col_array.at(i).is_valid_) {
       } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
         vector_vid_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
@@ -4127,7 +4123,7 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
                                                                        &vec_vid, extra_obj, extra_column_count, 1))) {
           LOG_WARN("fail to build index to adaptor", K(ret), KPC(this));
         } else {
-          LOG_INFO("[vec index debug] add into snap index success", K(tablet_id_), K(vec_vid), K(vec_str));
+          LOG_DEBUG("[vec index debug] add into snap index success", K(tablet_id_), K(vec_vid), K(vec_str));
         }
       }
     }

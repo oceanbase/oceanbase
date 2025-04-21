@@ -19,7 +19,6 @@
 #include "ob_cs_micro_block_transformer.h"
 #include "ob_icolumn_cs_decoder.h"
 #include "ob_new_column_cs_decoder.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
@@ -31,7 +30,7 @@ struct ObBlockCachedCSDecoderHeader;
 struct ObCSDecoderCtxArray;
 class ObIColumnCSDecoder;
 
-struct ObColumnCSDecoder
+struct ObColumnCSDecoder final
 {
 public:
   ObColumnCSDecoder() : decoder_(nullptr), ctx_(nullptr) {}
@@ -66,26 +65,6 @@ public:
 public:
   const ObIColumnCSDecoder *decoder_;
   ObColumnCSDecoderCtx *ctx_;
-};
-
-
-class ObCSDecoderCtxArray final
-{
-public:
-  ObCSDecoderCtxArray(): ctxs_(), ctx_blocks_() {};
-  ~ObCSDecoderCtxArray()
-  {
-    reset();
-  }
-
-  TO_STRING_KV(K_(ctxs));
-  void reset();
-  int get_ctx_array(ObColumnCSDecoderCtx **&ctxs, int64_t size);
-private:
-  ObSEArray<ObColumnCSDecoderCtx *, ObColumnCSDecoderCtxBlock::CS_CTX_NUMS> ctxs_;
-  ObSEArray<ObColumnCSDecoderCtxBlock *, 1> ctx_blocks_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObCSDecoderCtxArray);
 };
 
 template <class Decoder>
@@ -127,7 +106,7 @@ protected:
   int init_decoders();
   int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, int64_t &decoders_buf_pos, ObColumnCSDecoder &dest);
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
-  int alloc_decoders_buf();
+  int alloc_decoders_buf(int64_t &decoders_buf_pos);
   int init_semistruct_decoder(const ObIColumnCSDecoder *decoder, ObColumnCSDecoderCtx &decoder_ctx);
 
 protected:
@@ -139,8 +118,7 @@ protected:
   ObCSMicroBlockTransformHelper transform_helper_;
   int32_t column_count_;
   ObColumnCSDecoder default_decoders_[DEFAULT_DECODER_CNT];
-  ObCSDecoderCtxArray ctx_array_;
-  ObColumnCSDecoderCtx **ctxs_;
+  ObColumnCSDecoderCtx *ctxs_;
   common::ObArenaAllocator decoder_allocator_;
 
   // For highly concurrently get row on wide tables(eg: more then 100 columns),
@@ -155,7 +133,7 @@ protected:
   int32_t default_store_ids_[DEFAULT_DECODER_CNT];
   common::ObObjMeta default_column_types_[DEFAULT_DECODER_CNT];
   bool need_cast_;
-  ObSemiStructDecodeCtx *semistruct_decode_ctx_;
+  ObSemiStructDecodeCtx semistruct_decode_ctx_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
 };
@@ -282,8 +260,7 @@ public:
       ObAggCell &agg_cell) override;
   virtual int get_aggregate_result(
       const int32_t col_offset,
-      const int32_t *row_ids,
-      const int64_t row_cap,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       ObAggCellVec &agg_cell) override;
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(const int32_t group_by_col, const char **cell_datas,
@@ -352,7 +329,7 @@ private:
     Allocator &allocatois_row_store_type_with_cs_encodingr, const ObCSColumnHeader::Type type, const ObIColumnCSDecoder *&decoder);
 
   int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnCSDecoder *&decoder);
-  int alloc_decoders_buf(const bool by_read_info);
+  int alloc_decoders_buf(const bool by_read_info, int64_t &decoders_buf_pos);
   int filter_pushdown_retro(const sql::ObPushdownFilterExecutor *parent,
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     const int32_t col_offset, const share::schema::ObColumnParam *col_param,
@@ -366,8 +343,7 @@ private:
   ObColumnCSDecoder *decoders_;
   ObCSMicroBlockTransformHelper transform_helper_;
   int32_t column_count_;
-  ObCSDecoderCtxArray ctx_array_;
-  ObColumnCSDecoderCtx **ctxs_;
+  ObColumnCSDecoderCtx *ctxs_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
   static ObNewColumnCSDecoder new_column_decoder_;
@@ -376,7 +352,7 @@ private:
   common::ObArenaAllocator buf_allocator_;
   char *allocated_decoders_buf_;
   int64_t allocated_decoders_buf_size_;
-  ObSemiStructDecodeCtx *semistruct_decode_ctx_;
+  ObSemiStructDecodeCtx semistruct_decode_ctx_;
 };
 
 }  // namespace blocksstable

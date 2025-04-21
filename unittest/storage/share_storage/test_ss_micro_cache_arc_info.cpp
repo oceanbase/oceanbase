@@ -191,10 +191,9 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   ASSERT_EQ(5000, arc_info.p_);
   ASSERT_EQ(5500, arc_info.max_p_);
   ASSERT_EQ(2000, arc_info.min_p_);
-  ASSERT_EQ(true, arc_info.is_valid());
-  arc_info.mem_limit_ = 0;
+  ASSERT_EQ(0, arc_info.micro_cnt_limit_);
   ASSERT_EQ(false, arc_info.is_valid());
-  arc_info.mem_limit_ = INT64_MAX;
+  arc_info.micro_cnt_limit_ = 1000000;
   ASSERT_EQ(true, arc_info.is_valid());
   arc_info.dec_arc_work_limit_for_prewarm();
   ASSERT_EQ(10000, arc_info.limit_);
@@ -210,6 +209,8 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   ASSERT_EQ(2000, arc_info.min_p_);
 
   ASSERT_EQ(false, arc_info.trigger_eviction());
+  ASSERT_EQ(false, arc_info.close_to_evict());
+
   arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
   arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
   ASSERT_EQ(false, arc_info.trigger_eviction());
@@ -372,9 +373,9 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   arc_info.seg_info_arr_[ARC_B2].cnt_ = 100;
   arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 100;
   ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.mem_limit_ = 667 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  arc_info.micro_cnt_limit_ = 667;
   ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.mem_limit_ = 500 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  arc_info.micro_cnt_limit_ = 500;
   ASSERT_EQ(true, arc_info.trigger_eviction());
   arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
   ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
@@ -385,7 +386,7 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
   ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
   arc_iter_info.reuse(ARC_T1);
-  arc_info.mem_limit_ = 300 * (SS_MICRO_META_POOL_ITEM_SIZE + SS_MICRO_META_MAP_ITEM_SIZE);
+  arc_info.micro_cnt_limit_ = 300;
   arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
   ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
   arc_iter_info.reuse(ARC_T2);
@@ -410,6 +411,21 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
     ASSERT_EQ(arc_info.seg_info_arr_[i].size_, arc_info2.seg_info_arr_[i].size_);
     ASSERT_EQ(arc_info.seg_info_arr_[i].cnt_, arc_info2.seg_info_arr_[i].cnt_);
   }
+
+  // check close_to_eviction
+  ObSSARCInfo arc_info3;
+  const int64_t large_micro_size = 1024 * 1024;
+  arc_info3.micro_cnt_limit_ = 1024;
+  arc_info3.limit_ = 1024 * large_micro_size;
+  arc_info3.work_limit_ = arc_info3.limit_;
+  arc_info3.p_ = arc_info.work_limit_ / 2;
+
+  arc_info3.seg_info_arr_[ARC_T1].cnt_ = 923;
+  arc_info3.seg_info_arr_[ARC_T1].size_ = large_micro_size * 923;
+  ASSERT_EQ(false, arc_info3.close_to_evict());
+  arc_info3.seg_info_arr_[ARC_T1].cnt_ = 924;
+  arc_info3.seg_info_arr_[ARC_T1].size_ = large_micro_size * 924;
+  ASSERT_EQ(true, arc_info3.close_to_evict());
 }
 
 TEST_F(TestSSMicroCacheArcInfo, arc_state_machine)

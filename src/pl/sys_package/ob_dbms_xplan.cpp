@@ -572,7 +572,6 @@ int ObDbmsXplan::set_display_result_for_oracle(sql::ObExecContext &exec_ctx,
         LOG_WARN("failed to init allocator", K(ret));
       } else if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                                   NULL,
-                                                  exec_ctx.get_allocator(),
                                                   *table,
                                                   plan_strs.count()))) {
         LOG_WARN("failed to set collection size", K(ret));

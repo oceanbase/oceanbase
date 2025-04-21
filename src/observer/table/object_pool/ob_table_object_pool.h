@@ -31,7 +31,10 @@ public:
         sess_pool_(nullptr),
         ls_op_pool_(MTL_ID(), "LsOpPool", static_cast<omt::ObTenant *>(MTL_CTX())->max_worker_cnt(), REQUESE_RESULT_RETIRE_TIME),
         ls_res_pool_(MTL_ID(), "LsOpPool", static_cast<omt::ObTenant *>(MTL_CTX())->max_worker_cnt(), REQUESE_RESULT_RETIRE_TIME)
-  {}
+  {
+    ls_op_pool_.set_obj_label("LsOpObj");
+    ls_res_pool_.set_obj_label("LsResObj");
+  }
   virtual ~ObTableObjectPoolMgr() { destroy(); }
   TO_STRING_KV(K_(is_inited),
                KPC_(sess_pool),

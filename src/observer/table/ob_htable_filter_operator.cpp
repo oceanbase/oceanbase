@@ -1702,11 +1702,18 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
       continue;
     }
 
-    // if only check exist, just return row_count_ as 1
+    // if only check exist, add one row
+    // cannot just set row_count_ as 1 in multi-cf situation
     if (check_existence_only_) {
-      next_result->save_row_count_only(1);
-      ret = OB_ITER_END;
-      break;
+      ObHTableCellEntity *row = nullptr;
+      if (OB_FAIL(htable_row->get_row(row))) {
+        LOG_WARN("fail to get row from htable row", K(ret));
+      } else if (OB_FAIL(next_result->add_one_row_for_exist_only(*row->get_ob_row(), row->get_family()))) {
+        LOG_WARN("failed to add one row for exist only", K(ret));
+      } else {
+        ret = OB_ITER_END;
+      }
+      break; // break out this while loops
     }
 
     /* @todo check batch limit and size limit */
@@ -1729,7 +1736,7 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
     }
   }  // end while
 
-  if (!row_iterator_->has_more_result()) {
+  if (OB_SUCC(ret) && !row_iterator_->has_more_result()) {
     ret = OB_ITER_END;
   }
 

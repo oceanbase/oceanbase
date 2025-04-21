@@ -30,6 +30,7 @@ int ObMPAuthResponse::process()
   bool need_response_error = true;
   ObSMConnection *conn = NULL;
   sql::ObSQLSessionInfo *session = NULL;
+  int64_t query_timeout = 0;
   const ObMySQLRawPacket &mysql_pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
 
   if (OB_FAIL(packet_sender_.alloc_ezbuf())) {
@@ -44,6 +45,9 @@ int ObMPAuthResponse::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session info is null", K(ret));
+  } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
+    LOG_WARN("fail to get query timeout", K(ret));
+  } else if (FALSE_IT(THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout))) {
   } else if (FALSE_IT(session->set_txn_free_route(mysql_pkt.txn_free_route()))) {
   } else if (OB_FAIL(process_extra_info(*session, mysql_pkt, need_response_error))) {
     LOG_WARN("fail get process extra info", K(ret));

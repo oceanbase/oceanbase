@@ -257,13 +257,6 @@ public:
   INHERIT_TO_STRING_KV("ObStorageListCtxBase", ObStorageListCtxBase, K_(already_open_dir));
 };
 
-enum ObStorageDeleteMode: uint8_t
-{
-  NONE = 0,
-  STORAGE_DELETE_MODE = 1,
-  STORAGE_TAGGING_MODE = 2,
-  MAX
-};
 
 class ObIStorageUtil
 {

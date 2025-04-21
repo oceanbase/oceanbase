@@ -1832,12 +1832,13 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     //LOG_DEBUG("resolve_sql_expr:5", "usec", ObSQLUtils::get_usec());
     // refresh info again
     if (OB_SUCC(ret)) {
+      bool skip_check = false;
       if (OB_FAIL(expr->extract_info())) {
         LOG_WARN("failed to extract info", K(ret));
       } else if (OB_FAIL(check_expr_param(*expr))) {
         //一个表达式的根表达式不能是一个向量表达式或者向量结果的子查询表达式
         LOG_WARN("check expr param failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::check_composite_cast(expr, *schema_checker_))) {
+      } else if (OB_FAIL(ObRawExprUtils::check_composite_cast(expr, *schema_checker_, session_info_->is_varparams_sql_prepare(), skip_check))) {
         LOG_WARN("check composite cast failed", K(ret));
       } else if (OB_FAIL(check_cast_multiset(expr))) {
         LOG_WARN("check cast multiset failed", K(ret));
@@ -2178,6 +2179,7 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
              * 直接在sql端执行select 1 into a；mysql会报“ERROR 1327 (42000): Undeclared variable: a”
              * */
             ret = OB_ERR_SP_UNDECLARED_VAR;
+            LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, static_cast<int>(ch_node->str_len_), ch_node->str_value_);
             LOG_WARN("PL Variable used in SQL", K(params_.secondary_namespace_), K(ret));
           }
         }
@@ -2472,8 +2474,11 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
           for (int64_t i = 0; OB_SUCC(ret) && i < into_data_type_count; ++i) {
             element_type = into_record_type->get_record_member_type(i);
             CK (OB_NOT_NULL(element_type));
+            CK (0 < access_expr->get_orig_access_idxs().count());
             if (OB_SUCC(ret) && element_type->is_type_record()) {
               ret = OB_ERR_INTO_EXPR_ILLEGAL;
+              LOG_USER_ERROR(OB_ERR_INTO_EXPR_ILLEGAL, access_expr->get_orig_access_idxs().at(access_expr->get_orig_access_idxs().count() - 1).var_name_.length(),
+                             access_expr->get_orig_access_idxs().at(access_expr->get_orig_access_idxs().count() - 1).var_name_.ptr());
               LOG_WARN("inconsistent datatypes", K(ret));
             }
           }
@@ -3056,7 +3061,9 @@ int ObDMLResolver::try_resolve_external_symbol(ObQualifiedName &q_name,
     is_external = false;
     LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
   } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()
-             || T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
+             || T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()
+             || T_FUN_SYS_PL_SEQ_NEXT_VALUE == real_ref_expr->get_expr_type()
+             || T_FUN_SYS_SEQ_NEXTVAL == real_ref_expr->get_expr_type()) {
     is_external = false;
   }
   return ret;
@@ -3146,6 +3153,10 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
       ret = OB_ERR_SP_UNDECLARED_VAR;
+      if (0 < q_name.access_idents_.count()) {
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,  q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.length(),
+                    q_name.access_idents_.at(q_name.access_idents_.count() - 1).access_name_.ptr());
+      }
       LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
     }
   }
@@ -3729,7 +3740,9 @@ int ObDMLResolver::check_is_table_supported_for_mview(const TableItem &table_ite
     LOG_WARN("unsupported synonym in materialized view", K(ret), K(table_schema), K(table_item));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "synonym in materialized view is");
   } else if (OB_UNLIKELY(!(table_schema.is_user_table()
-                           || table_schema.is_materialized_view()))) {
+                           || table_schema.is_materialized_view()
+                           || table_schema.is_external_table()
+                           || table_schema.is_user_view()))) {
     ret = OB_ERR_MVIEW_INVALID_TABLE_TYPE;
     LOG_WARN("Table type is not valid, the materialized view definition can only reference user "
              "tables or other materialized views",
@@ -6343,9 +6356,32 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     LOG_WARN("check duplicated column failed", K(ret));
   } else if (OB_FAIL(resolve_generate_table_item(ref_stmt, alias_name, table_item))) {
     LOG_WARN("resolve generate table item failed", K(ret));
+  } else if (enable_var_assign_use_das && OB_FAIL(extract_var_init_exprs(ref_stmt, params_.query_ctx_->var_init_exprs_))) {
+    // Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
+    // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+    LOG_WARN("extract var init exprs failed", K(ret));
   } else {
     LOG_DEBUG("finish do_resolve_generate_table", K(alias_name), KPC(table_item),
                                                   KPC(table_item->ref_query_));
+  }
+  return ret;
+}
+
+// Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
+// Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+int ObDMLResolver::extract_var_init_exprs(ObSelectStmt *ref_query, ObIArray<ObRawExpr*> &assign_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ref_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is nullptr", KR(ret));
+  } else if (ref_query->get_from_item_size() <= 0) {
+    for (int i = 0; OB_SUCC(ret) && i < ref_query->get_select_item_size(); ++i) {
+      const SelectItem &select_item = ref_query->get_select_item(i);
+      if (OB_FAIL(ObRawExprUtils::extract_var_assign_exprs(select_item.expr_, assign_exprs))) {
+        LOG_WARN("extract var assign exprs failed", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -19902,7 +19938,7 @@ int ObDMLResolver::resolve_match_index(
     } else if (OB_ISNULL(inv_idx_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index schema", K(ret), KPC(inv_idx_schema));
-    } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+    } else if (!inv_idx_schema->can_read_index() || !inv_idx_schema->is_index_visible()) {
       // index unavailable
     } else if (OB_FAIL(ObTransformUtils::check_fulltext_index_match_column(match_column_set,
                                                                            &table_schema,
@@ -19934,7 +19970,7 @@ int ObDMLResolver::resolve_match_index(
         LOG_WARN("unexpecter nullptr to fwd idx schema", K(ret));
       } else if (!fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
         // skip
-      } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+      } else if (!fwd_idx_schema->can_read_index() || !fwd_idx_schema->is_index_visible()) {
         // index unavailable
       } else {
         found_fwd_idx = true;

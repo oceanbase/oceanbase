@@ -490,6 +490,18 @@ int ObCreateIndexResolver::resolve_index_option_node(
       }
     }
   }
+  // Set default storage cache policy for index, cause the index_scope_ only be set after resolve_table_options
+  if (OB_FAIL(ret)) {
+  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode() && storage_cache_policy_.empty()) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+      LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
+    } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+      if (OB_FAIL(set_default_storage_cache_policy(true/*is_create_index*/))) {
+        SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
+      }
+    }
+  }
 
   // storing column
   if (OB_SUCC(ret)) {
@@ -966,6 +978,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
     index_arg.sql_mode_ = session_info_->get_sql_mode();
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
+    create_index_stmt->set_storage_cache_policy(storage_cache_policy_);
     if (OB_FAIL(ret)) {
     } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_ &&
                OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, index_arg.index_type_, index_arg.index_name_, index_arg.index_name_))) {

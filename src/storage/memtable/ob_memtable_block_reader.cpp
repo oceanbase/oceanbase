@@ -199,7 +199,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
             LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(src_datum), K(obj_type), K(map_type));
           }
           if (OB_FAIL(ret) || nullptr == col_params.at(i) || datum.is_null()) {
-          } else if (col_params.at(i)->get_meta_type().is_fixed_len_char_type()) {
+          } else if (need_padding(filter.is_padding_mode(), col_params.at(i)->get_meta_type())) {
             if (OB_FAIL(storage::pad_column(
                         col_params.at(i)->get_meta_type(),
                         col_params.at(i)->get_accuracy(),
@@ -244,8 +244,8 @@ int ObMemtableBlockReader::filter_pushdown_filter(
         }
       }
     }
-    LOG_TRACE("[PUSHDOWN] memtable block pushdown filter row", K(ret), K(pd_filter_info),
-              K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap.size()));
+    LOG_TRACE("[PUSHDOWN] memtable block pushdown filter row", K(ret), K(has_lob_out_row),
+              K(pd_filter_info), K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap));
   }
   return ret;
 }

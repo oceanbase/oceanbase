@@ -67,6 +67,7 @@ public:
       data_filter_rtdef_(nullptr),
       sort_ctdef_(nullptr),
       sort_rtdef_(nullptr),
+      is_pre_filter_(false),
       post_with_filter_(false) {}
 
   virtual bool is_valid() const override
@@ -79,16 +80,18 @@ public:
            nullptr != snapshot_iter_ &&
            nullptr != vid_rowkey_iter_ &&
            nullptr != com_aux_vec_iter_ &&
-           nullptr != rowkey_vid_iter_ &&
            nullptr != vec_aux_ctdef_ &&
            nullptr != vec_aux_rtdef_ &&
            nullptr != vid_rowkey_ctdef_ &&
-           nullptr != vid_rowkey_rtdef_;
+           nullptr != vid_rowkey_rtdef_ &&
+           (!is_pre_filter_ ||
+           nullptr != rowkey_vid_iter_);
   }
   TO_STRING_KV(K_(post_with_filter),
                 K_(vec_aux_ctdef),
                 K_(vid_rowkey_ctdef),
-                 K_(data_filter_ctdef));
+                 K_(data_filter_ctdef),
+                 K_(is_pre_filter));
 
   share::ObLSID ls_id_;
   transaction::ObTxDesc *tx_desc_;
@@ -110,6 +113,7 @@ public:
   ObDASScanRtDef *data_filter_rtdef_;
   const ObDASSortCtDef *sort_ctdef_;
   ObDASSortRtDef *sort_rtdef_;
+  bool is_pre_filter_;
   bool post_with_filter_;
 };
 class ObSimpleMaxHeap;
@@ -168,6 +172,7 @@ public:
       is_primary_pre_with_rowkey_with_filter_(false),
       go_brute_force_(false),
       only_complete_data_(false),
+      is_pre_filter_(false),
       post_with_filter_(false),
       extra_column_count_(0) {
       }
@@ -221,10 +226,10 @@ private:
                                                     int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int set_rowkey_by_vid(ObNewRow *row);
-  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
-  int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
+  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
-  int get_next_single_row(bool is_vectorized);
+  int get_single_row_from_data_filter_iter(bool is_vectorized);
 
   int prepare_state(const ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext &ada_ctx);
   int call_pva_interface(const ObVidAdaLookupStatus& cur_state,
@@ -266,6 +271,7 @@ private:
     ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx());
     return ObDasVecScanUtils::get_rowkey(allocator, ctdef, rtdef, rowkey);
   }
+  int get_from_vid_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey);
 
   int init_sort(const ObDASVecAuxScanCtDef *ir_ctdef, ObDASVecAuxScanRtDef *ir_rtdef);
   int set_vec_index_param(ObString vec_index_param) { return ob_write_string(vec_op_alloc_, vec_index_param, vec_index_param_); }
@@ -276,6 +282,7 @@ private:
 
   int get_extra_idx_in_outexprs(ObIArray<int64_t> &extra_in_rowkey_idxs);
   bool can_be_last_search(int64_t old_ef, int64_t need_cnt_next, float select_ratio);
+  int init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVectorQueryAdaptorResultContext *ada_ctx);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
@@ -343,6 +350,7 @@ private:
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
   bool only_complete_data_;
+  bool is_pre_filter_;
   bool post_with_filter_;
   int64_t extra_column_count_;
 };

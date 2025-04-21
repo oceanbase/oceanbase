@@ -194,29 +194,6 @@ int ObPLRecompileTaskHelper::construct_select_dep_table_sql(ObSqlString& query_i
   return ret;
 }
 
-#define TRIM_QUOTES_AND_SUBSTR                                        \
-do {                                                                    \
-if (name.length() > 2 && *(name.ptr()) == '\'' && *(name.ptr() + name.length() - 1) == '\'') { \
-    OZ (ob_sub_str(allocator, name, 1, name.length() - 2, var_name));        \
-}                                                                     \
-} while (0)
-
-#define EXTRACT_NAME(keyword) \
-do { \
-  const char* keyword_pos = strstr(err_text_array, keyword);\
-  if (keyword_pos) { \
-    keyword_pos += strlen(keyword); \
-    const char ch = ' ' ; \
-    const char *empty_pos = strchr(keyword_pos, ch); \
-    if (empty_pos != nullptr) {\
-      (name) = ObString(empty_pos - keyword_pos, keyword_pos);\
-    } \
-    else { \
-      (name) = ObString(strlen(keyword_pos), keyword_pos); \
-    } \
-  } \
-} while(0)
-
 int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_proxy,
                                                     uint64_t tenant_id,
                                                     int64_t last_max_schema_version,
@@ -240,8 +217,6 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
           int64_t schema_version = 0;
           int64_t err_num = 0;
           int64_t text_len = 0;
-          ObString name;
-          ObString var_name;
           char* err_text_array = NULL;
           EXTRACT_INT_FIELD_MYSQL(*result, "obj_id", obj_id, int64_t);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, "text", err_text);
@@ -257,50 +232,7 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
               err_text_array[text_len] = '\0';
             }
           }
-          if (OB_SUCC(ret)) {
-            switch (err_num) {
-            case OB_ERR_FUNCTION_UNKNOWN: {
-                  const char* func = "FUNCTION ";
-                  const char* proc = "PROCEDURE ";
-                  EXTRACT_NAME(func);
-                  if (name.empty()) {
-                    EXTRACT_NAME(proc);
-                  }
-                }
-                break;
-            case OB_ERR_TRIGGER_NOT_EXIST: {
-                    const char* trigger = "Trigger ";
-                    EXTRACT_NAME(trigger);
-                    TRIM_QUOTES_AND_SUBSTR;
-                }
-                break;
-            case OB_ERR_BAD_TABLE: {
-                    const char* table = "table or view ";
-                    EXTRACT_NAME(table);
-                    TRIM_QUOTES_AND_SUBSTR;
-                }
-                break;
-            case OB_ERR_SP_UNDECLARED_TYPE: {
-                    const char* type = "Undeclared type: ";
-                    EXTRACT_NAME(type);
-                    TRIM_QUOTES_AND_SUBSTR;
-                }
-                break;
-            case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
-            case OB_TABLE_NOT_EXIST:
-            case OB_ERR_SP_UNDECLARED_VAR:
-            default:
-                break;
-            }
-        }
-#undef TRIM_QUOTES_AND_SUBSTR
-#undef EXTRACT_NAME
         ObPLRecompileInfo tmp_tuple(obj_id);
-        if (!var_name.empty()) {
-          OZ (ob_write_string(allocator, var_name, tmp_tuple.ref_obj_name_));
-        } else if (!name.empty()) {
-          OZ (ob_write_string(allocator, name, tmp_tuple.ref_obj_name_));
-        }
         OX (tmp_tuple.schema_version_ = schema_version);
           int64_t i = 0;
           for (; OB_SUCC(ret) && i < dep_objs.count(); ++i) {
@@ -312,7 +244,7 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
           if (OB_SUCC(ret) && i == dep_objs.count()) {
             OZ (dep_objs.push_back(tmp_tuple));
           }
-          LOG_INFO("[PLRECOMPILE]: collect delta error data", K(ret), K(tmp_tuple));
+          LOG_TRACE("[PLRECOMPILE]: collect delta error data", K(ret), K(tmp_tuple));
         }
       SET_ITERATE_END_RET;
     }
@@ -429,7 +361,6 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLPro
                     ObPLRecompileInfo tmp_tuple(dep_obj_id);
                     int tmp_ret = ddl_drop_obj_map.get_refactored(ref_obj_id, dropped_ref_obj);
                     if (OB_SUCCESS == tmp_ret && ref_obj_type != static_cast<int64_t>(share::schema::ObObjectType::SYNONYM)) {
-                      OX (tmp_tuple.ref_obj_name_ = dropped_ref_obj.first);
                       OX (tmp_tuple.schema_version_ = dropped_ref_obj.second);
                     } else if (OB_HASH_NOT_EXIST == tmp_ret) {
                     } else {
@@ -546,8 +477,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
             EXTRACT_INT_FIELD_MYSQL(*result, "KEY_ID", key_id, int64_t);
             if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
               key_id = share::schema::ObTriggerInfo::get_package_trigger_id(key_id);
-            } else if (share::schema::ObUDTObjectType::is_object_id(key_id) &&
-                    (key_id & common::OB_MOCK_PACKAGE_BODY_ID_MASK) != 0) {
+            } else if (share::schema::ObUDTObjectType::is_object_id(key_id)) {
               uint64_t coll_type = 0;
               coll_type = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
               OZ (find_udt_id(sql_proxy, tenant_id, coll_type, key_id));
@@ -603,7 +533,8 @@ int ObPLRecompileTaskHelper::find_udt_id(common::ObMySQLProxy* sql_proxy,
   ObSqlString query_inner_sql;
   common::sqlclient::ObMySQLResult *result = NULL;
   SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-    OZ (query_inner_sql.assign_fmt("SELECT object_type_id FROM %s where coll_type = %ld;",
+    // here udt body and udt spec share same object_type_id, we only update it if body recompiled successful.
+    OZ (query_inner_sql.assign_fmt("SELECT object_type_id FROM %s where coll_type = %ld and type = 2;",
                  OB_ALL_TENANT_OBJECT_TYPE_TNAME, coll_type));
     OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
@@ -625,7 +556,10 @@ int ObPLRecompileTaskHelper::recompile_single_obj(ObPLRecompileInfo& obj_info,
   int64_t affected_rows = 0;
   ObSqlString sql;
   OZ (sql.assign_fmt("begin dbms_utility.VALIDATE(%ld); end ", obj_info.recompile_obj_id_));
-  OZ (connection->execute_write(tenant_id, sql.string(), affected_rows));
+  if (OB_SUCC(ret)) {
+    int tmp_ret = connection->execute_write(tenant_id, sql.string(), affected_rows);
+    LOG_TRACE("[PLRECOMPILE] recompile single obj using inner sql!", K(tmp_ret), K(sql), K(obj_info.recompile_obj_id_));
+  }
   return ret;
 }
 

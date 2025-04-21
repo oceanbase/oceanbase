@@ -5772,13 +5772,16 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
     if (duration_time > 0) {
       THIS_WORKER.set_timeout_ts(duration_time + ObTimeUtility::current_time());
     }
+    ObOptStatGatherStat mock_gather_stat(task_info);  // used for representing auto gather is running
+    ObOptStatGatherStatList::instance().push(mock_gather_stat);
     if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
       LOG_WARN("failed to flush database monitoring info", K(ret));
     } else if (OB_FAIL(init_gather_task_info(ctx, ObOptStatGatherType::AUTO_GATHER, start_time, 0, task_info))) {
       LOG_WARN("failed to init gather task info", K(ret));
     } else if (OB_FAIL(gather_database_table_stats(ctx, duration_time, succeed_cnt, task_info))) {
       LOG_WARN("failed to gather table stats", K(ret));
-    } else {/*do nothing*/}
+    } else { /*do nothing*/}
+    ObOptStatGatherStatList::instance().remove(mock_gather_stat);
     const int64_t exe_time = ObTimeUtility::current_time() - start_time;
     LOG_INFO("have been gathered database stats job",
               "the total used time:", exe_time,

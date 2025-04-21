@@ -27,7 +27,7 @@ public:
   ObIAsyncQueryIter() = default;
   virtual ~ObIAsyncQueryIter() = default;
   virtual int start(const ObTableQueryAsyncRequest &req, ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result) = 0;
-  virtual int next(ObTableQueryAsyncResult &result) = 0;
+  virtual int next(ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result) = 0;
   virtual int renew(ObTableQueryAsyncResult &result) = 0;
   virtual int end(ObTableQueryAsyncResult &result) = 0;
   virtual uint64_t get_session_time_out_ts() const = 0;
