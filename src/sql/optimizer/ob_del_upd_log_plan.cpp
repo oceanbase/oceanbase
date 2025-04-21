@@ -1536,11 +1536,20 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       insert_op->set_first_dml_op(!is_index_maintenance);
       insert_op->set_replace(insert_stmt->is_replace());
       insert_op->set_ignore(insert_stmt->is_ignore());
+      if (insert_stmt->is_insert_up()) {
+        insert_op->set_insert_up(true);
+        insert_op->set_is_multi_part_dml(true);
+        insert_op->set_table_location_uncertain(true);
+        insert_op->set_constraint_infos(&(static_cast<ObInsertLogPlan *>(this)->get_uk_constraint_infos()));
+      }
       insert_op->set_is_insert_select(insert_stmt->value_from_select());
       if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
         insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
       }
-      if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
+      if (insert_stmt->is_insert_up() && OB_FAIL(insert_op->get_insert_up_index_dml_infos().assign(
+            static_cast<ObInsertLogPlan *>(this)->get_insert_up_index_upd_infos()))) {
+        LOG_WARN("assign insert up index upd infos failed", K(ret));
+      } else if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
         LOG_WARN("failed to get view check exprs", K(ret));
       }
     } else if (get_stmt()->is_update_stmt()) {

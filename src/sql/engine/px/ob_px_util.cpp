@@ -585,7 +585,8 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
   int ret = OB_SUCCESS;
   if (IS_DML(op.get_type())) {
     if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
-        PHY_MERGE != op.get_type()) {
+        PHY_MERGE != op.get_type() &&
+        PHY_INSERT_ON_DUP != op.get_type()) {
       // px no need schedule das except merge
     } else if (PHY_LOCK == op.get_type()) {
       // no need lock op

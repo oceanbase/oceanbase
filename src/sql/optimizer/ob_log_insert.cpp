@@ -195,6 +195,9 @@ int ObLogInsert::compute_sharding_info()
     LOG_WARN("get unexpected null", K(ret));
   } else if (NULL != get_sharding()) {
     //do nothing
+  } else if (is_pdml() && is_multi_part_dml()) {
+    // pdml merge
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (is_multi_part_dml()) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (OB_FAIL(ObLogDelUpd::compute_sharding_info())) {
