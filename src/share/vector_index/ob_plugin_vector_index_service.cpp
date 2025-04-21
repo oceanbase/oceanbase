@@ -1295,9 +1295,15 @@ int ObPluginVectorIndexMgr::replace_old_adapter(ObPluginVectorIndexAdaptor *new_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null adapter", KR(ret));
   } else {
-    int overwrite = 1;
+    int overwrite = 0;
     // should not fail in following process
-    if (OB_FAIL(set_complete_adapter_(new_adapter->get_inc_tablet_id(), new_adapter, overwrite))) {
+    if (OB_FAIL(erase_complete_adapter(new_adapter->get_inc_tablet_id()))) {
+      LOG_WARN("failed to erase new complete partial adapter", K(new_adapter->get_inc_tablet_id()), KR(ret));
+    } else if (OB_FAIL(erase_complete_adapter(new_adapter->get_vbitmap_tablet_id()))) {
+      LOG_WARN("failed to erase new complete partial adapter", K(new_adapter->get_vbitmap_tablet_id()), KR(ret));
+    } else if (OB_FAIL(erase_complete_adapter(new_adapter->get_snap_tablet_id()))) {
+      LOG_WARN("failed to erase new complete partial adapter", K(new_adapter->get_snap_tablet_id()), KR(ret));
+    } else if (OB_FAIL(set_complete_adapter_(new_adapter->get_inc_tablet_id(), new_adapter, overwrite))) {
       LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_inc_tablet_id()), KR(ret));
     } else if (OB_FAIL(set_complete_adapter_(new_adapter->get_vbitmap_tablet_id(), new_adapter, overwrite))) {
       LOG_WARN("failed to set new complete partial adapter", K(new_adapter->get_vbitmap_tablet_id()), KR(ret));
