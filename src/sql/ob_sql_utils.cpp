@@ -3375,7 +3375,8 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
         LOG_TRACE("has other region replica", K(selected_addr));
       } else {
         ret = OB_WORKING_PARTITION_NOT_EXIST;
-        LOG_WARN("No useful replica found", K(ret));
+        LOG_WARN("No useful replica found", K(ret), K(local_addr), K(candi_replicas),
+                 K(all_server_arr));
       }
     }
   }
