@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "storage/multi_data_source/runtime_utility/common_define.h"
+#include <ratio>
 #define UNITTEST_DEBUG
 #include <gtest/gtest.h>
 #define private public
@@ -18,6 +19,8 @@
 #include "src/storage/multi_data_source/mds_table_iterator.ipp"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "src/share/scn.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
+
 namespace oceanbase {
 using namespace share;
 namespace storage {

@@ -1787,6 +1787,34 @@ int ObLS::build_tablet_with_batch_tables(
     const ObBatchUpdateTableStoreParam &param)
 {
   int ret = OB_SUCCESS;
+  const int64_t MAX_RETRY_NUM = 3;
+  const int64_t SLEEP_TS = 100 * 1000L; //100ms;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else {
+    ret = OB_EAGAIN;
+    int64_t retry_count = 0;
+    while (OB_EAGAIN == ret && retry_count < MAX_RETRY_NUM) {
+      if (OB_FAIL(inner_build_tablet_with_batch_tables_(tablet_id, param))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to build tablet with batch tables", KR(ret), K(tablet_id));
+        } else {
+          ob_usleep(SLEEP_TS);
+        }
+      }
+      ++retry_count;
+    }
+  }
+  return ret;
+}
+
+int ObLS::inner_build_tablet_with_batch_tables_(
+    const ObTabletID &tablet_id,
+    const ObBatchUpdateTableStoreParam &param)
+{
+  int ret = OB_SUCCESS;
   RDLockGuard guard(meta_rwlock_);
   const share::ObLSID &ls_id = ls_meta_.ls_id_;
   const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
@@ -1797,7 +1825,7 @@ int ObLS::build_tablet_with_batch_tables(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build ha tablet new table store get invalid argument", K(ret), K(ls_id), K(tablet_id), K(param));
   } else if (param.rebuild_seq_ != rebuild_seq) {
-    ret = OB_EAGAIN;
+    ret = OB_STATE_NOT_MATCH;
     LOG_WARN("build ha tablet new table store rebuild seq not same, need retry",
         K(ret), K(ls_id), K(tablet_id), K(rebuild_seq), K(param));
   } else if (OB_FAIL(ls_tablet_svr_.build_tablet_with_batch_tables(tablet_id, param))) {

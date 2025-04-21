@@ -4126,6 +4126,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
     ObTabletHandle new_tablet_handle;
 
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+
     time_guard.click("Lock");
 
     if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
@@ -4136,43 +4137,47 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet pointer should not be NULL", K(ret), K(old_tablet_handle));
     } else {
-      time_guard.click("GetTablet");
-
-      if (param.release_mds_scn_.is_min()) {
-        //do nothing
+      ObTabletMdsExclusiveLockGuard mds_truncate_log_guard(pointer->get_mds_truncate_lock(), true);
+      if (OB_FAIL(mds_truncate_log_guard.get_ret())) {
+        LOG_WARN("try lock mds truncate failed", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
+        ret = OB_EAGAIN;
       } else {
-        TabletMdsLockGuard<storage::LockMode::EXCLUSIVE> guard;
-        pointer->get_mds_truncate_lock_guard(guard);
-        if (OB_FAIL(pointer->release_mds_nodes_redo_scn_below(tablet_id, param.release_mds_scn_))) {
-          //overwrite ret
-          LOG_WARN("failed to relase mds node redo scn below", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
-          ret = OB_RELEASE_MDS_NODE_ERROR;
+        if (param.release_mds_scn_.is_min()) {
+          //do nothing
+        } else {
+          // pointer->get_mds_truncate_lock().exclusive_lock(); // need use try lock, and expand critical area
+          if (OB_FAIL(pointer->release_mds_nodes_redo_scn_below(tablet_id, param.release_mds_scn_))) {
+            //overwrite ret
+            LOG_WARN("failed to relase mds node redo scn below", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
+            ret = OB_RELEASE_MDS_NODE_ERROR;
+          }
+          // pointer->get_mds_truncate_lock().exclusive_unlock();
         }
-      }
 
-      time_guard.click("ReleaseMDS");
+        time_guard.click("ReleaseMDS");
 
-      ObTablet *old_tablet = old_tablet_handle.get_obj();
-      ObTablet *tmp_tablet = nullptr;
-      const share::ObLSID &ls_id = ls_->get_ls_id();
-      const ObTabletMapKey key(ls_id, tablet_id);
-      const ObTabletPersisterParam persist_param(ls_id, ls_->get_ls_epoch(), tablet_id, old_tablet->get_transfer_seq());
+        ObTablet *old_tablet = old_tablet_handle.get_obj();
+        ObTablet *tmp_tablet = nullptr;
+        const share::ObLSID &ls_id = ls_->get_ls_id();
+        const ObTabletMapKey key(ls_id, tablet_id);
+        const ObTabletPersisterParam persist_param(ls_id, ls_->get_ls_epoch(), tablet_id, old_tablet->get_transfer_seq());
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
-        LOG_WARN("failed to acquire tablet", K(ret), K(key));
-      } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {
-      } else if (OB_FAIL(tmp_tablet->init_for_sstable_replace(allocator, param, *old_tablet))) {
-        LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
-      } else if (FALSE_IT(time_guard.click("InitTablet"))) {
-      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(persist_param, *tmp_tablet, new_tablet_handle))) {
-        LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
-      } else if (FALSE_IT(time_guard.click("Persist"))) {
-      } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
-      } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle, time_guard))) {
-        LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
-      } else {
-        LOG_INFO("succeed to build ha tablet new table store", K(ret), K(key), K(disk_addr), K(param));
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
+          LOG_WARN("failed to acquire tablet", K(ret), K(key));
+        } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {
+        } else if (OB_FAIL(tmp_tablet->init_for_sstable_replace(allocator, param, *old_tablet))) {
+          LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+        } else if (FALSE_IT(time_guard.click("InitTablet"))) {
+        } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(persist_param, *tmp_tablet, new_tablet_handle))) {
+          LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
+        } else if (FALSE_IT(time_guard.click("Persist"))) {
+        } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
+        } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle, time_guard))) {
+          LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+        } else {
+          LOG_INFO("succeed to build ha tablet new table store", K(ret), K(key), K(disk_addr), K(param));
+        }
       }
     }
   }

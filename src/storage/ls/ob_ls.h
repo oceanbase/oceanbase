@@ -1053,9 +1053,9 @@ public:
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
-
-
-
+  int inner_build_tablet_with_batch_tables_(
+      const ObTabletID &tablet_id,
+      const ObBatchUpdateTableStoreParam &param);
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.
