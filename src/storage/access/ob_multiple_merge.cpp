@@ -823,7 +823,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next aggregate rows fast", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
-                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC(batch_row_store), KPC_(access_param));
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
               } else {
                 // OB_ITER_END should use fuse to make sure no greater key in dynamic data
                 ret = OB_SUCCESS;
@@ -850,7 +850,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next di base rows", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
-                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC(batch_row_store), KPC_(access_param));
+                         K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
               } else {
                 if (OB_ITER_END == ret) {
                   need_scan_di_base_ = false;

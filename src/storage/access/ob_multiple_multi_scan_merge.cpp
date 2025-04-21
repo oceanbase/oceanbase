@@ -176,7 +176,7 @@ int ObMultipleMultiScanMerge::construct_iters(const bool is_refresh)
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
-    STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K(access_param_->iter_param_.is_delete_insert_),
+    STORAGE_LOG(TRACE, "construct iters begin", K(is_refresh), K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K(access_param_->iter_param_.is_delete_insert_),
                        K_(di_base_border_rowkey), KPC_(ranges), KPC_(di_base_ranges), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
@@ -188,16 +188,16 @@ int ObMultipleMultiScanMerge::construct_iters(const bool is_refresh)
     if (table_cnt > 0 && access_param_->iter_param_.is_delete_insert_ &&
         (!is_refresh || use_di_merge_scan_)) {
       if (OB_FAIL(tables_.at(0, table))) {  // only one di base iter currently
-        STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret));
+        STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret), K_(tables));
       } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), K(*table));
+        STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), KPC(table));
       } else if (table->is_major_sstable()) {
         need_scan_di_base_ = true;
         use_di_merge_scan_ = true;
         if (!use_cache_iter) {
           if (OB_FAIL(table->multi_scan(*iter_param, *access_ctx_, *di_base_ranges_, iter))) {
-            STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), K(*iter_param));
+            STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), KPC(table), K(*iter_param));
           } else if (OB_FAIL(di_base_iters_.push_back(iter))) {
             iter->~ObStoreRowIterator();
             STORAGE_LOG(WARN, "Fail to push di base iter to di base iterator array", K(ret));
@@ -224,20 +224,20 @@ int ObMultipleMultiScanMerge::construct_iters(const bool is_refresh)
     int32_t di_base_cnt = di_base_iters_.count();
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_rows_merger(tables_.count() - di_base_cnt))) {
-      STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret));
+      STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(di_base_cnt), K(tables_));
     } else if (delta_iter_end_) { // construct_iters is called by refresh_table_on_demand, and minor sstable, mini sstable, memtable iter ends
       consumer_cnt_ = 0;
     } else {
       consumer_cnt_ = 0;
       for (int64_t i = table_cnt; OB_SUCC(ret) && i >= di_base_cnt; --i) {
         if (OB_FAIL(tables_.at(i, table))) {
-          STORAGE_LOG(WARN, "Fail to get ith store, ", K(i), K(ret));
+          STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
         } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Fail to get access param", K(i), K(ret), K(*table));
+          STORAGE_LOG(WARN, "Fail to get access param", K(ret), K(i), KPC(table));
         } else if (!use_cache_iter) {
           if (OB_FAIL(table->multi_scan(*iter_param, *access_ctx_, *ranges_, iter))) {
-            STORAGE_LOG(WARN, "Fail to get iterator, ", K(ret), K(i), K(*iter_param));
+            STORAGE_LOG(WARN, "Fail to get iterator, ", K(ret), K(i), KPC(table), K(*iter_param));
           } else if (OB_FAIL(iters_.push_back(iter))) {
             iter->~ObStoreRowIterator();
             STORAGE_LOG(WARN, "Fail to push iter to iterator array, ", K(ret), K(i));
@@ -259,7 +259,7 @@ int ObMultipleMultiScanMerge::construct_iters(const bool is_refresh)
     if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan() &&
         consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter() &&
         OB_FAIL(locate_blockscan_border())) {
-      STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret));
+      STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(is_refresh), K(iters_.count()), K(di_base_iters_.count()), K_(need_scan_di_base), K_(tables));
     }
     STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(need_scan_di_base));
   }
