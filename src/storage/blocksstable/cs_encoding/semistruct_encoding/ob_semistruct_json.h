@@ -90,25 +90,26 @@ public:
   ObSemiStructSubColumn():
     flags_(0),
     json_type_(ObJsonNodeType::J_NULL),
-    obj_meta_(),
+    obj_type_(),
     sub_col_id_(0),
-    path_()
+    path_(),
+    prec_(-1),
+    scale_(-1)
   {}
 
   int init(const share::ObSubColumnPath& path, const ObJsonNodeType json_type, const ObObjType type, const int64_t sub_col_id);
   void reset() { path_.reset(); }
   const share::ObSubColumnPath& get_path() const { return  path_; }
   share::ObSubColumnPath& get_path() { return  path_; }
-  ObObjType get_obj_type() const { return obj_meta_.get_type(); }
-  const ObObjMeta& get_obj_meta() const { return obj_meta_; }
-  void set_obj_type(const ObObjType type) { obj_meta_.set_type_simple(type); }
+  ObObjType get_obj_type() const { return obj_type_; }
+  void set_obj_type(const ObObjType type) { obj_type_ = type; }
   void set_precision_and_scale(const ObPrecision prec, const ObScale scale)
   {
-    obj_meta_.set_numeric_collation();
-    obj_meta_.set_stored_precision(prec);
-    obj_meta_.set_scale(scale);
-    store_obj_meta_ = true;
+    prec_ = prec;
+    scale_ = scale;
   }
+  OB_INLINE ObPrecision get_precision() const { return prec_; }
+  OB_INLINE ObScale get_scale() const { return scale_; }
   ObJsonNodeType get_json_type() const { return json_type_; }
   void set_json_type(const ObJsonNodeType type) { json_type_ = type; }
   int compare(const ObSemiStructSubColumn& other, const bool use_lexicographical_order) const { return path_.compare(other.path_, use_lexicographical_order); }
@@ -122,23 +123,24 @@ public:
   int encode(char *buf, const int64_t buf_len, int64_t &pos) const;
   int decode(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_encode_size() const;
-  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_meta), K_(path), K_(is_spare), K_(has_different_type), K_(store_obj_meta), K_(reserved));
+  TO_STRING_KV(KP(this), K_(sub_col_id), K_(json_type), K_(obj_type), K_(path), K_(is_spare), K_(has_different_type), K_(reserved), K_(prec), K_(scale));
 
 private:
   union {
     struct {
       int8_t is_spare_ : 1;
       int8_t has_different_type_ : 1;
-      // most type store obj type is enough, but for number need store prec and scale
-      int8_t store_obj_meta_: 1;
       int8_t reserved_ : 5;
     };
     uint8_t flags_;
   };
   ObJsonNodeType json_type_;
-  ObObjMeta obj_meta_;
+  ObObjType obj_type_;
   int32_t sub_col_id_;
   share::ObSubColumnPath path_;
+
+  ObPrecision prec_;
+  ObScale scale_;
 };
 
 class ObSubSchemaKeyDict

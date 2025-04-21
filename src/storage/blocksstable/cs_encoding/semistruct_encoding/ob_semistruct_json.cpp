@@ -481,13 +481,13 @@ int64_t ObSemiStructSubColumn::get_encode_size() const
   int64_t len = 0;
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(json_type_);
-  if (store_obj_meta_) {
-    OB_UNIS_ADD_LEN(obj_meta_);
-  } else {
-    OB_UNIS_ADD_LEN(obj_meta_.get_type());
-  }
+  OB_UNIS_ADD_LEN(obj_type_);
   OB_UNIS_ADD_LEN(sub_col_id_);
   len += path_.get_encode_size();
+  if (json_type_ == ObJsonNodeType::J_DECIMAL) {
+    OB_UNIS_ADD_LEN(prec_);
+    OB_UNIS_ADD_LEN(scale_);
+  }
   return len;
 }
 
@@ -496,15 +496,14 @@ int ObSemiStructSubColumn::encode(char *buf, const int64_t buf_len, int64_t &pos
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(json_type_);
-  if (OB_FAIL(ret)) {
-  } else if (store_obj_meta_) {
-    OB_UNIS_ENCODE(obj_meta_);
-  } else {
-    OB_UNIS_ENCODE(obj_meta_.get_type());
-  }
+  OB_UNIS_ENCODE(obj_type_);
   OB_UNIS_ENCODE(sub_col_id_);
   if (OB_SUCC(ret) && OB_FAIL(path_.encode(buf, buf_len, pos))) {
     LOG_WARN("encode sub column fail", K(ret), K(pos), K(buf_len));
+  }
+  if (OB_SUCC(ret) && json_type_ == ObJsonNodeType::J_DECIMAL) {
+    OB_UNIS_ENCODE(prec_);
+    OB_UNIS_ENCODE(scale_);
   }
   return ret;
 }
@@ -514,17 +513,14 @@ int ObSemiStructSubColumn::decode(const char *buf, const int64_t data_len, int64
   int ret = OB_SUCCESS;
   OB_UNIS_DECODE(flags_);
   OB_UNIS_DECODE(json_type_);
-  if (OB_FAIL(ret)) {
-  } else if (store_obj_meta_) {
-    OB_UNIS_DECODE(obj_meta_);
-  } else {
-    ObObjType type = ObNullType;
-    OB_UNIS_DECODE(type);
-    if (OB_SUCC(ret)) obj_meta_.set_type_simple(type);
-  }
+  OB_UNIS_DECODE(obj_type_);
   OB_UNIS_DECODE(sub_col_id_);
   if (OB_SUCC(ret) && OB_FAIL(path_.decode(buf, data_len, pos))) {
     LOG_WARN("decode sub column fail", K(ret), K(pos), K(data_len));
+  }
+  if (OB_SUCC(ret) && json_type_ == ObJsonNodeType::J_DECIMAL) {
+    OB_UNIS_DECODE(prec_);
+    OB_UNIS_DECODE(scale_);
   }
   return ret;
 }
@@ -536,7 +532,7 @@ int ObSemiStructSubColumn::init(const share::ObSubColumnPath& path, const ObJson
     LOG_WARN("assign path item fail", K(ret));
   } else {
     json_type_ = json_type;
-    obj_meta_.set_type_simple(obj_type);
+    obj_type_ = obj_type;
     sub_col_id_ = sub_col_id;
   }
   return ret;
@@ -549,9 +545,11 @@ int ObSemiStructSubColumn::deep_copy(ObIAllocator& allocator, const ObSemiStruct
     LOG_WARN("deep_copy path fail", K(ret), K(other));
   } else {
     json_type_ = other.json_type_;
-    obj_meta_ = other.obj_meta_;
+    obj_type_ = other.obj_type_;
     sub_col_id_ = other.sub_col_id_;
     flags_ = other.flags_;
+    prec_ = other.prec_;
+    scale_ = other.scale_;
   }
   return ret;
 }
@@ -1160,9 +1158,9 @@ int ObSimpleSubSchema::encode_column_path_with_dict(ObSubSchemaKeyDict &key_dict
   return ret;
 }
 
-static bool is_different_number_type(const ObObjMeta& left, const ObObjMeta& right)
+static bool is_different_number_type(const ObSemiStructSubColumn& left, const ObSemiStructSubColumn& right)
 {
-  return left.get_stored_precision() != right.get_stored_precision() || left.get_scale() != right.get_scale();
+  return left.get_precision() != right.get_precision() || left.get_scale() != right.get_scale();
 }
 
 int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
@@ -1218,7 +1216,7 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
     } else if (left_sub_column.get_obj_type() != ObNullType
         && right_sub_column.get_obj_type()!= ObNullType
         && (left_sub_column.get_obj_type() != right_sub_column.get_obj_type()
-            || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(left_sub_column.col_->get_obj_meta(), right_sub_column.col_->get_obj_meta())))) {
+            || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(*left_sub_column.col_, *right_sub_column.col_)))) {
       LOG_DEBUG("same sub column path, but type is not same", K(left_sub_column), K(right_sub_column));
       left_sub_column.col_->set_obj_type(ObJsonType);
       left_sub_column.col_->set_has_different_type();
@@ -1491,8 +1489,8 @@ int ObSemiStructScalar::init(const ObSemiStructSubColumn& sub_column)
     LOG_WARN("alloc node fail", K(ret), K(json_type_));
   } else if (ObJsonNodeType::J_DECIMAL == json_type_) {
     ObJsonDecimal& decimal = static_cast<ObJsonDecimal&>(*json_node_);
-    decimal.set_precision(sub_column.get_obj_meta().get_stored_precision());
-    decimal.set_scale(sub_column.get_obj_meta().get_scale());
+    decimal.set_precision(sub_column.get_precision());
+    decimal.set_scale(sub_column.get_scale());
   }
   return ret;
 }
