@@ -304,6 +304,9 @@ int ObOptStatRunningMonitor::flush_gather_audit()
       LOG_WARN("failed to write string", K(ret));
     } else {
       ObOptStatGatherStatList::instance().update_gather_stat_audit(gather_audit, opt_stat_gather_stat_);
+      if (pos >= buf_len - 1) {
+        LOG_INFO("gather stats audit", K(gather_audit));
+      }
     }
   }
   return ret;

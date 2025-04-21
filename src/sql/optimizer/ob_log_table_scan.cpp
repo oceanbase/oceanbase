@@ -5512,7 +5512,8 @@ int ObLogTableScan::try_adjust_scan_direction(const ObIArray<OrderItem> &sort_ke
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(path));
   } else if (sort_keys.empty() || path->ordering_.empty() ||
-             path->force_direction_ || use_batch()) {
+             path->force_direction_ || use_batch() ||
+             !pushdown_groupby_columns_.empty()) {
     // do nothing
   } else if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
     LOG_WARN("failed to check op ordering", K(ret));
