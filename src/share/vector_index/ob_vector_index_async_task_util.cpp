@@ -60,6 +60,7 @@ void ObVecIndexAsyncTaskOption::destroy()
     }
   }
   task_ctx_map_.destroy();
+  allocator_.reset();
 }
 
 int ObVecIndexAsyncTaskOption::add_task_ctx(ObTabletID &tablet_id, ObVecIndexAsyncTaskCtx *task, bool &inc_new_task)
