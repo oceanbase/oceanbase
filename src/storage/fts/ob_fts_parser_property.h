@@ -65,8 +65,6 @@ public:
                             const common::ObCollationType &type,
                             const bool log_to_user);
 
-  int check_conflict_config_for_resolve(bool &has_conflict_config) const;
-
   int check_unsupported_config(const char **config_array,
                                int32_t config_count,
                                bool &has_unsupported) const;

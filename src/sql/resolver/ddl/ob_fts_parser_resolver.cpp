@@ -44,13 +44,7 @@ int ObFTParserResolverHelper::resolve_parser_properties(
         LOG_WARN("fail to resolve fts index parser properties", K(ret));
       }
     }
-    bool has_conflict = false;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(property.check_conflict_config_for_resolve(has_conflict))) {
-      LOG_WARN("invalid argument", K(ret), K(property));
-    } else if (has_conflict) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "the parser properties has conflict config");
     } else if (OB_FAIL(property.to_format_json(allocator, parser_property))) {
       LOG_WARN("fail to serialize parser properties", K(ret), K(property));
     }

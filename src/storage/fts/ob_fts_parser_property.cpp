@@ -920,45 +920,6 @@ int ObFTParserJsonProps::plugin_rebuild_props_for_ddl(const bool log_to_user)
   return ret;
 }
 
-int ObFTParserJsonProps::check_conflict_config_for_resolve(bool &has_conflict) const
-{
-  int ret = OB_SUCCESS;
-  if (!IS_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    bool has_min = false;
-    bool has_max = false;
-    int64_t min_token_size = 0;
-    int64_t max_token_size = 0;
-    if (OB_FAIL(config_get_min_token_size(min_token_size))) {
-      if (OB_SEARCH_NOT_FOUND == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Fail to get min_token_size", K(ret));
-      }
-    } else {
-      has_min = true;
-    }
-
-    if (FAILEDx(config_get_max_token_size(max_token_size))) {
-      if (OB_SEARCH_NOT_FOUND == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Fail to get max_token_size", K(ret));
-      }
-    } else {
-      has_max = true;
-    }
-    min_token_size = has_min ? min_token_size : ObFTSLiteral::FT_DEFAULT_MIN_TOKEN_SIZE;
-    max_token_size = has_max ? max_token_size : ObFTSLiteral::FT_DEFAULT_MAX_TOKEN_SIZE;
-    if (has_min && has_max && min_token_size > max_token_size) {
-      has_conflict = true;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_MAX_TOKEN_SIZE_SCOPE_STR);
-    }
-  }
-  return ret;
-}
-
 ObFTParserJsonProps::ObFTParserJsonProps()
     : allocator_("FTJsonProps"), root_(NULL), is_inited_(false)
 {
