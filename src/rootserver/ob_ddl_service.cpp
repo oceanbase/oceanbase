@@ -5455,7 +5455,7 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("column group should not be null", K(ret), KPC(column_group));
       } else if (OB_FAIL(ori_table_schema.has_unused_column(has_unused_column))) {
         LOG_WARN("fail to check orig table schema has unused column", KR(ret), K(ori_table_schema));
-      } else if (OB_FAIL(new_table_schema.remove_column_group(ori_column_group->get_column_group_id()))) {
+      } else if (OB_FAIL(new_table_schema.remove_column_group(ori_column_group->get_column_group_name()))) {
         if (OB_HASH_NOT_EXIST == ret && has_unused_column) {
           // unused column and its' column group has deleted in delete_unused_columns_and_redistribute_schema
           ret = OB_SUCCESS;

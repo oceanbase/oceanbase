@@ -10166,13 +10166,13 @@ int ObTableSchema::add_column_group_to_array(ObColumnGroupSchema *column_group)
   return ret;
 }
 
-int ObTableSchema::remove_column_group(const uint64_t column_group_id)
+int ObTableSchema::remove_column_group(const common::ObString &column_group_name)
 {
   int ret = OB_SUCCESS;
   bool is_cg_exist = false;
   ObColumnGroupSchema *column_group = nullptr;
-  if (OB_FAIL(get_column_group_by_id(column_group_id, column_group))) {
-    LOG_WARN("fail to get column group by id", K(ret), K(column_group_id));
+  if (OB_FAIL(get_column_group_by_name(column_group_name, column_group))) {
+    LOG_WARN("fail to get column group by id", K(ret), K(column_group_name));
   } else if (OB_ISNULL(column_group)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column group should be null", K(ret));

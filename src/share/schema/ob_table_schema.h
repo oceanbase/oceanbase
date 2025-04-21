@@ -1834,7 +1834,7 @@ public:
                                    const bool filter_empty_cg = true) const;
   int get_store_column_groups(ObIArray<const ObColumnGroupSchema *> &column_groups,
                               const bool filter_empty_cg = true) const;
-  int remove_column_group(const uint64_t column_group_id);
+  int remove_column_group(const common::ObString &column_group_name);
   int has_all_column_group(bool &has_all_column_group) const;
   int adjust_column_group_array();
   // materialized view log related

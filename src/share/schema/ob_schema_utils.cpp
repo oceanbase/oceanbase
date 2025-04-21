@@ -898,7 +898,7 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
     } else {
       /*other situation, rowkey column group should not exist*/
       if (OB_NOT_NULL(rowkey_cg)) {
-        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_id()))){
+        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_name()))){
           LOG_WARN("fail to remove rowkey cg", K(ret));
         }
       }
