@@ -93,6 +93,8 @@ private:
   int make_clustered_index_micro_block_with_reuse(
       const ObMicroBlockData &micro_block_data,
       const MacroBlockId &macro_id);
+  void prepare_clustered_row_desc_from_row_header(ObIndexBlockRowDesc &clustered_row_desc,
+                                                  const ObIndexBlockRowHeader &idx_row_header);
   int print_macro_ids();
 
 private:
