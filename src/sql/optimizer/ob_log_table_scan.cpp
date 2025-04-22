@@ -787,7 +787,8 @@ int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
       }
     }
     // Scenario processing without index table.
-    if (OB_SUCC(ret) && !get_index_back()) {
+    // for is_primary_vec_idx_scan, is_index_back = true，but filter should add to scan ctdef
+    if (OB_SUCC(ret) && (!get_index_back() || is_primary_vec_idx_scan())) {
       if (NULL != part_expr_  &&
               OB_FAIL(replace_expr_action(replacer, part_expr_))) {
         LOG_WARN("failed to replace part expr ", K(ret));
