@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_osg_column_stat.h"
+#include "share/stat/ob_opt_table_stat.h"
 
 namespace oceanbase
 {
@@ -24,28 +24,27 @@ namespace table
 struct ObTableLoadSqlStatistics
 {
   OB_UNIS_VERSION(1);
+
 public:
   ObTableLoadSqlStatistics() : allocator_("TLD_Opstat")
   {
-    table_stat_array_.set_tenant_id(MTL_ID());
-    col_stat_array_.set_tenant_id(MTL_ID());
     allocator_.set_tenant_id(MTL_ID());
+    table_stat_array_.set_block_allocator(ModulePageAllocator(allocator_));
+    col_stat_array_.set_block_allocator(ModulePageAllocator(allocator_));
   }
   ~ObTableLoadSqlStatistics() { reset(); }
   void reset();
-  bool is_empty() const
-  {
-    return table_stat_array_.count() == 0 && col_stat_array_.count() == 0;
-  }
+  OB_INLINE bool is_empty() const { return table_stat_array_.empty() && col_stat_array_.empty(); }
+  int create(const int64_t column_count);
+  int merge(const ObTableLoadSqlStatistics &other);
+  int get_table_stat(int64_t idx, ObOptTableStat *&table_stat);
+  int get_col_stat(int64_t idx, ObOptOSGColumnStat *&osg_col_stat);
+  int get_table_stat_array(ObIArray<ObOptTableStat *> &table_stat_array) const;
+  int get_col_stat_array(ObIArray<ObOptColumnStat *> &col_stat_array) const;
+  TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
+private:
   int allocate_table_stat(ObOptTableStat *&table_stat);
   int allocate_col_stat(ObOptOSGColumnStat *&col_stat);
-  int merge(const ObTableLoadSqlStatistics& other);
-  int get_table_stat_array(ObIArray<ObOptTableStat*> &table_stat_array) const;
-  int get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array) const;
-  int persistence_col_stats();
-  ObIArray<ObOptTableStat*> & get_table_stat_array() {return table_stat_array_; }
-  ObIArray<ObOptOSGColumnStat*> & get_col_stat_array() {return col_stat_array_; }
-  TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 public:
   common::ObArray<ObOptTableStat *> table_stat_array_;
   common::ObArray<ObOptOSGColumnStat *> col_stat_array_;

@@ -26,12 +26,22 @@ struct ObDirectLoadInsertTableParam
 public:
   ObDirectLoadInsertTableParam();
   ~ObDirectLoadInsertTableParam();
-  int assign(const ObDirectLoadInsertTableParam &other);
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
-               K_(execution_id), K_(ddl_task_id), K_(data_version), K_(session_cnt),
-               K_(rowkey_column_count), K_(column_count), K_(online_opt_stat_gather),
-               K_(is_heap_table), K_(ls_partition_ids));
+  TO_STRING_KV(K_(table_id),
+               K_(dest_table_id),
+               K_(schema_version),
+               K_(snapshot_version),
+               K_(execution_id),
+               K_(ddl_task_id),
+               K_(data_version),
+               K_(session_cnt),
+               K_(rowkey_column_count),
+               K_(column_count),
+               K_(is_partitioned_table),
+               K_(is_heap_table),
+               K_(online_opt_stat_gather),
+               KP_(col_descs),
+               KP_(cmp_funcs));
 public:
   uint64_t table_id_;
   uint64_t dest_table_id_;
@@ -43,11 +53,11 @@ public:
   int64_t session_cnt_;
   int64_t rowkey_column_count_;
   int64_t column_count_;
-  bool online_opt_stat_gather_;
+  bool is_partitioned_table_;
   bool is_heap_table_;
+  bool online_opt_stat_gather_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
-  common::ObArray<table::ObTableLoadLSIdAndPartitionId> ls_partition_ids_;
 };
 
 class ObDirectLoadInsertTableContext
@@ -55,9 +65,8 @@ class ObDirectLoadInsertTableContext
 public:
   ObDirectLoadInsertTableContext();
   ~ObDirectLoadInsertTableContext();
-  void reset();
-  int init(const ObDirectLoadInsertTableParam &param);
-  int collect_obj(const blocksstable::ObDatumRow &datum_row);
+  int init(const ObDirectLoadInsertTableParam &param,
+           const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids);
   int add_sstable_slice(const common::ObTabletID &tablet_id,
                         const blocksstable::ObMacroDataSeq &start_seq,
                         common::ObNewRowIterator &iter,
@@ -71,15 +80,23 @@ public:
   void inc_row_count(int64_t row_count) { ATOMIC_AAF(&table_row_count_, row_count); }
   int64_t get_row_count() const { return table_row_count_; }
   TO_STRING_KV(K_(param), K_(tablet_finish_count), K_(table_row_count), K_(ddl_ctrl));
+
+  //////////////////////// sql stats interface ////////////////////////
+public:
+  int get_sql_statistics(table::ObTableLoadSqlStatistics *&sql_statistics);
+  // datum_row是带多版本列的完整行
+  int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                            const blocksstable::ObDatumRow &datum_row);
 private:
-  int get_sql_stat(table::ObTableLoadSqlStatistics *&sql_statistics);
-  int init_sql_statistics();
+  int64_t get_sql_stat_column_count() const;
   int collect_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics);
+
 private:
   common::ObArenaAllocator allocator_;
   common::ObSafeArenaAllocator safe_allocator_;
   ObDirectLoadInsertTableParam param_;
   sql::ObDDLCtrl ddl_ctrl_;
+  int64_t tablet_count_;
   int64_t tablet_finish_count_ CACHE_ALIGNED;
   int64_t table_row_count_ CACHE_ALIGNED;
   common::hash::ObHashMap<int64_t, table::ObTableLoadSqlStatistics *> sql_stat_map_;

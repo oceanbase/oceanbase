@@ -62,6 +62,7 @@ ObDirectLoadFastHeapTableBuilder::ObDirectLoadFastHeapTableBuilder()
     slice_writer_allocator_("TLD_SliceWriter"),
     fast_heap_table_tablet_ctx_(nullptr),
     slice_writer_(nullptr),
+    sql_statistics_(nullptr),
     row_count_(0),
     is_closed_(false),
     is_inited_(false)
@@ -90,7 +91,9 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(
+    if (OB_FAIL(param_.insert_table_ctx_->get_sql_statistics(sql_statistics_))) {
+      LOG_WARN("fail to get sql statistics", KR(ret));
+    } else if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(
                  param_.tablet_id_, fast_heap_table_tablet_ctx_))) {
       LOG_WARN("fail to get tablet context", KR(ret));
     } else if (OB_FAIL(init_sstable_slice_ctx())) {
@@ -180,8 +183,9 @@ int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
       }
       if (OB_FAIL(slice_writer_->append_row(datum_row_))) {
         LOG_WARN("fail to append row", KR(ret));
-      } else if (param_.insert_table_ctx_->collect_obj(datum_row_)) {
-        LOG_WARN("fail to collect", KR(ret));
+      } else if (nullptr != sql_statistics_ &&
+                 OB_FAIL(param_.insert_table_ctx_->update_sql_statistics(*sql_statistics_, datum_row_))) {
+        LOG_WARN("fail to update sql statistics", KR(ret));
       } else {
         ++row_count_;
       }

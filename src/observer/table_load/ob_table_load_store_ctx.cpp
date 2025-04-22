@@ -94,10 +94,11 @@ int ObTableLoadStoreCtx::init(
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
     insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
     insert_table_param.session_cnt_ = ctx_->param_.session_count_;
-    insert_table_param.rowkey_column_count_ = (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
-    insert_table_param.column_count_ = ctx_->param_.column_count_;
-    insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
+    insert_table_param.rowkey_column_count_ = ctx_->schema_.rowkey_column_count_;
+    insert_table_param.column_count_ = ctx_->schema_.store_column_count_;
+    insert_table_param.is_partitioned_table_ = ctx_->schema_.is_partitioned_table_;
     insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
+    insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
     insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
     insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
@@ -178,8 +179,6 @@ int ObTableLoadStoreCtx::init(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(target_ls_partition_ids_))) {
-      LOG_WARN("fail to assign ls tablet ids", KR(ret));
     }
     // init trans_allocator_
     else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
@@ -221,7 +220,7 @@ int ObTableLoadStoreCtx::init(
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
-    } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param))) {
+    } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param, target_ls_partition_ids_))) {
       LOG_WARN("fail to init insert table ctx", KR(ret));
     }
     // init tmp_file_mgr_

@@ -63,6 +63,7 @@ int ObDirectLoadPartitionMergeTask::process()
     const ObTabletID &target_tablet_id = merge_ctx_->get_target_tablet_id();
     ObIStoreRowIterator *row_iter = nullptr;
     ObSSTableInsertSliceWriter *writer = nullptr;
+    ObTableLoadSqlStatistics *sql_statistics = nullptr;
     ObMacroDataSeq block_start_seq;
     block_start_seq.set_parallel_degree(parallel_idx_);
     if (OB_FAIL(construct_row_iter(allocator_, row_iter))) {
@@ -71,6 +72,8 @@ int ObDirectLoadPartitionMergeTask::process()
                  target_tablet_id, block_start_seq, writer, allocator_))) {
       LOG_WARN("fail to construct sstable slice writer", KR(ret), K(target_tablet_id),
                K(block_start_seq));
+    } else if (OB_FAIL(merge_param_->insert_table_ctx_->get_sql_statistics(sql_statistics))) {
+      LOG_WARN("fail to get sql statistics", KR(ret));
     } else {
       LOG_INFO("add sstable slice begin", K(target_tablet_id), K(parallel_idx_));
       const ObDatumRow *datum_row = nullptr;
@@ -87,8 +90,10 @@ int ObDirectLoadPartitionMergeTask::process()
           }
         } else if (OB_FAIL(writer->append_row(*const_cast<ObDatumRow *>(datum_row)))) {
           LOG_WARN("fail to append row", KR(ret), KPC(datum_row));
-        } else if (OB_FAIL(merge_param_->insert_table_ctx_->collect_obj(*datum_row))) {
-          LOG_WARN("fail to collect statistics", KR(ret));
+        } else if (nullptr != sql_statistics &&
+                   OB_FAIL(merge_param_->insert_table_ctx_->update_sql_statistics(*sql_statistics,
+                                                                                  *datum_row))) {
+          LOG_WARN("fail to update sql statistics", KR(ret));
         } else {
           ++affected_rows_;
           ATOMIC_AAF(&ctx_->job_stat_->store_.merge_stage_write_rows_, 1);

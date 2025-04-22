@@ -22,6 +22,7 @@ namespace oceanbase
 namespace table
 {
 class ObTableLoadResultInfo;
+class ObTableLoadSqlStatistics;
 } // namespace table
 namespace common
 {
@@ -76,6 +77,7 @@ private:
   common::ObArenaAllocator slice_writer_allocator_;
   ObDirectLoadFastHeapTableTabletContext *fast_heap_table_tablet_ctx_;
   ObSSTableInsertSliceWriter *slice_writer_;
+  table::ObTableLoadSqlStatistics *sql_statistics_;
   ObDirectLoadFastHeapTableTabletWriteCtx write_ctx_;
   blocksstable::ObDatumRow datum_row_;
   int64_t row_count_;
