@@ -182,10 +182,13 @@ int ObStorageListRowValues::compare(const ObStorageListRowValues &other, bool &e
     equal = (cnt_ == other.cnt_);
     for (int64_t i = 0; OB_SUCC(ret) && equal && i < cnt_; i++) {
       int cmp = 0;
-      if (OB_FAIL(ObRowUtil::compare_row(values_[i], other.values_[i], cmp))) {
-        LOG_WARN("row is invalid", KR(ret), K(i), KPC(this), K(other));
-      } else {
-        equal = (0 == cmp);
+      equal = (values_[i].count_ == other.values_[i].count_);
+      for (int64_t j = 0; OB_SUCC(ret) && equal && j < values_[i].count_; ++j) {
+        if (OB_FAIL(values_[i].get_cell(j).compare(other.values_[i].get_cell(j), cmp))) {
+          LOG_WARN("failed to compare object", KR(ret), K(i), K(j), K(values_[i]), K(other.values_[i]));
+        } else {
+          equal = (0 == cmp);
+        }
       }
     } // for
   }

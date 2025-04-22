@@ -22,6 +22,7 @@ namespace oceanbase
 using namespace common;
 using namespace storage;
 using namespace compaction;
+using namespace share::schema;
 namespace unittest
 {
 class TestTruncateInfo : public ::testing::Test
@@ -256,6 +257,41 @@ TEST_F(TestTruncateInfo, test_memleak)
 
   truncate_part2.destroy(tmp_allocator2);
   ASSERT_EQ(tmp_allocator2.used(), 0);
+}
+
+TEST_F(TestTruncateInfo, test_null_list_val)
+{
+  int ret = OB_SUCCESS;
+  bool equal = false;
+  ObTruncatePartition truncate_part;
+  ObTruncatePartition truncate_part2;
+  ObListRowValues tmp_values(allocator_);
+  truncate_part.part_type_ = ObTruncatePartition::LIST_PART;
+  truncate_part.part_op_ = ObTruncatePartition::INCLUDE;
+  ObObj tmp_obj;
+  ObObj tmp_obj2;
+  ObNewRow tmp_row(&tmp_obj, 1);
+  tmp_obj.set_null();
+  tmp_obj2.set_null();
+  if (OB_FAIL(tmp_values.push_back(tmp_row))) {
+    COMMON_LOG(WARN, "Fail to push row", K(ret), K(tmp_row));
+  } else if (OB_FAIL(truncate_part.list_row_values_.init(allocator_, tmp_values.get_values()))) {
+    COMMON_LOG(WARN, "failed to init list row values", KR(ret), K(tmp_values));
+  }
+  int64_t part_key_idxs[] = {0};
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, part_key_idxs, truncate_part));
+
+  ASSERT_EQ(OB_SUCCESS, truncate_part2.assign(allocator_, truncate_part));
+  ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_part2, equal));
+  ASSERT_TRUE(equal);
+  ASSERT_EQ(0, tmp_obj.compare(tmp_obj2));
+
+  THIS_WORKER.set_compatibility_mode(lib::Worker::CompatMode::ORACLE);
+  ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_part2, equal));
+  ASSERT_TRUE(equal);
+  ASSERT_EQ(0, tmp_obj.compare(tmp_obj2));
+  truncate_part.destroy(allocator_);
+  truncate_part2.destroy(allocator_);
 }
 
 }//end namespace unittest

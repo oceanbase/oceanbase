@@ -737,7 +737,10 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ASSERT_TRUE(index_table_id != index_table_id_after_truncate);
   index_table_id = index_table_id_after_truncate;
 
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p0", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write("alter table t_expr3 truncate partition p2", affected_rows));
   ASSERT_EQ(OB_SUCCESS, get_table_id(*conn, "t_expr3", true/*is_index*/, index_table_id_after_truncate));
   ASSERT_EQ(index_table_id, index_table_id_after_truncate);
   ObTruncateInfoArray truncate_info_array;
@@ -746,8 +749,10 @@ TEST_F(ObTruncateInfoServiceTest, truncate_with_expr_part_key)
   ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, get_tablet_and_ls_id(*conn, index_table_id, tablet_id, ls_id));
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle));
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->read_truncate_info_array(
-      allocator_, ObVersionRange(0, EXIST_READ_SNAPSHOT_VERSION), false/*for_access*/, truncate_info_array));
+  ASSERT_EQ(OB_SUCCESS,
+              TruncateInfoHelper::read_distinct_truncate_info_array(
+                  allocator_, *tablet_handle.get_obj(),
+                  ObVersionRange(0, EXIST_READ_SNAPSHOT_VERSION), truncate_info_array));
   ASSERT_EQ(1, truncate_info_array.count());
 }
 
