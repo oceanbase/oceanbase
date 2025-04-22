@@ -3076,6 +3076,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_PL_SEQ_NEXT_VALUE:
       case T_FUN_SYS_SEQ_NEXTVAL: {
         ObSequenceRawExpr *seq_expr= static_cast<ObSequenceRawExpr*>(expr);
         if (1 != seq_expr->get_param_count()) {
