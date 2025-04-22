@@ -649,9 +649,6 @@ public:
   ObAdapterCreateType &get_create_type() { return create_type_; };
   void set_create_type(ObAdapterCreateType type) { create_type_ = type; };
   ObVectorIndexAlgorithmType get_snap_index_type();
-  int64_t get_hnswsq_type_metric(int64_t origin_metric) {
-    return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
-  }
   OB_INLINE int64_t get_extra_column_count()
   {
     return extra_info_column_count_;

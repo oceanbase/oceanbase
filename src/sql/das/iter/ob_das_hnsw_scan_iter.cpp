@@ -1345,6 +1345,13 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       void *iter_buff = nullptr;
       uint64_t final_res_cnt = limit_param_.limit_ + limit_param_.offset_;
       int64_t extra_info_actual_size = 0;
+
+      if (is_hnsw_bq()) {
+        // normally topK(real_limit) should be the same as ef_search for bq
+        // but if topK is larger than ef_search, use topK
+        final_res_cnt = OB_MIN(OB_MAX(final_res_cnt, query_cond_.ef_search_), MAX_VSAG_QUERY_RES_SIZE);
+      }
+
       if (OB_FAIL(adaptor->get_extra_info_actual_size(extra_info_actual_size))) {
         LOG_WARN("failed to get extra info actual size.", K(ret));
       } else if (OB_ISNULL(iter_buff = vec_op_alloc_.alloc(sizeof(ObVectorQueryVidIterator)))) {

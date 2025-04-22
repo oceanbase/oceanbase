@@ -4254,7 +4254,7 @@ int ObVectorIndexSliceStore::get_next_vector_data_row(
       LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K(index_type));
     } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_sq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build sq vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hnsw_bq_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+    } else if (index_type == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_bq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build bq vec snapshot key str", K(ret), K(index_type));
     } else {
       current_row_.storage_datums_[vector_key_col_idx_].set_string(key_str, key_pos);
