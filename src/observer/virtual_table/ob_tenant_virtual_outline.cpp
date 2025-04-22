@@ -336,25 +336,26 @@ int ObTenantVirtualOutline::inner_get_next_row(common::ObNewRow *&row)
     LOG_WARN("invalid array idx", K(ret), K(outline_info_idx_));
   } else if (outline_info_idx_ >= outline_infos_.count()) {
     ret = OB_ITER_END;
-  } else if (OB_ISNULL(outline_info = outline_infos_.at(outline_info_idx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("outline info is NULL", K(ret), K(outline_info_idx_));
-  } else if (OB_FAIL(is_output_outline(outline_info, is_output))) {
-    LOG_WARN("fail to judge output", K(ret), KPC(outline_info));
-  } else if (is_output) {
-    if (OB_FAIL(fill_cells(outline_info))) {
-      LOG_WARN("fail to fill cells", K(ret), K(outline_info), K(outline_info_idx_));
-    } else {
-      ++outline_info_idx_;
-      row = &cur_row_;
-    }
   } else {
-    ++outline_info_idx_;
-    if (OB_FAIL(inner_get_next_row(row))) {
-      LOG_WARN("fail to get_next_row", K(ret));
+    while (OB_SUCC(ret) && outline_info_idx_ < outline_infos_.count() && !is_output) {
+      if (OB_ISNULL(outline_info = outline_infos_.at(outline_info_idx_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("outline info is NULL", K(ret), K(outline_info_idx_));
+      } else if (OB_FAIL(is_output_outline(outline_info, is_output))) {
+        LOG_WARN("fail to judge output", K(ret), KPC(outline_info));
+      } else if (is_output) {
+        if (OB_FAIL(fill_cells(outline_info))) {
+          LOG_WARN("fail to fill cells", K(ret), K(outline_info), K(outline_info_idx_));
+        } else {
+          row = &cur_row_;
+        }
+      }
+      outline_info_idx_++;
     }
   }
-
+  if (OB_SUCC(ret) && !is_output) {
+    ret = OB_ITER_END;
+  }
   return ret;
 }
 }
