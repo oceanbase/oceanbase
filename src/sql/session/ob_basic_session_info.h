@@ -1243,6 +1243,16 @@ public:
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
   }
 
+  inline void set_client_use_lob_locatorv2(bool flag)
+  {
+    client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = (flag ? 1 : 0);
+  }
+
+  inline bool need_return_lob_locator() const
+  {
+    return is_client_use_lob_locator() || is_client_support_lob_locatorv2();
+  }
+
   inline bool is_support_new_result_meta_data() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA;

@@ -546,7 +546,9 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 }
 
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                                   const bool is_column_store_tbl, bool &found)
+                                                   const bool is_column_store_tbl,
+                                                   const bool need_return_lob_locator,
+                                                   bool &found)
 {
   bool new_vector_support = is_column_store_tbl && IS_CLUSTER_VERSION_AFTER_4_3_1_0;
   bool is_cluster_before_433 = GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0;
@@ -567,6 +569,8 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
           // tinytext and text support vectorize in 4.1
           found = true;
         }
+      } else if (need_return_lob_locator && lib::is_oracle_mode() && col->get_result_type().get_type() == ObLongTextType) {
+        found = true;
       } else if (col->get_result_type().is_geometry()) {
         found = true;
       }
@@ -10865,7 +10869,8 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
                && OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
       LOG_WARN("get column store info failed", K(ret));
     } else {
-      exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, disable_vectorize);
+      const bool need_return_lob_locator = op->get_plan()->get_optimizer_context().get_session_info()->need_return_lob_locator();
+      exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, need_return_lob_locator, disable_vectorize);
     }
     if (OB_FAIL(ret)) {
     } else if (tsc->is_multivalue_index_scan()) {

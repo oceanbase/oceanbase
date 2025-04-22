@@ -1852,7 +1852,6 @@ int ObMPConnect::check_update_client_capability(uint64_t &cap) const
   // set client_capability_ to tell client which features observer supports
   ObClientAttributeCapabilityFlags server_client_cap_flag;
   // version control need change 425
-  server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = 1;
   server_client_cap_flag.cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE = 1;
   if (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0
       || GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_5_0) {
