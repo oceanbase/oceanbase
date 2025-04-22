@@ -216,6 +216,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
     if (first_val) {
       nop_pos.reset();
       result.row_flag_ = former.row_flag_;
+      result.fast_filter_skipped_ = former.fast_filter_skipped_;
       column_cnt = former.count_;
     } else {
       column_cnt = nop_pos.count_;

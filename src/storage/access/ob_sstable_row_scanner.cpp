@@ -256,7 +256,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         LOG_WARN("Fail to open micro_scanner", K(ret), K(micro_info), K(micro_handle), KPC(this));
       } else if (OB_FAIL(prefetcher_.check_blockscan(can_blockscan))) {
         LOG_WARN("Fail to check_blockscan", K(ret));
-      } else if ((iter_param_->is_delete_insert_ || can_blockscan) && nullptr != block_row_store_ && !block_row_store_->is_disabled()) {
+      } else if (iter_param_->is_delete_insert_ || (can_blockscan && nullptr != block_row_store_ && !block_row_store_->is_disabled())) {
         // Apply pushdown filter and block scan
         sql::ObPushdownFilterExecutor *filter = block_row_store_->get_pd_filter();
         ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());

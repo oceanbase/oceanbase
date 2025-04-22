@@ -508,7 +508,6 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             //success to get row directly from iterator without merge
             need_supply_consume = false;
             row.scan_index_ = item.row_->scan_index_;
-            row.fast_filter_skipped_ = item.row_->fast_filter_skipped_;
             REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             break;
           } else {
