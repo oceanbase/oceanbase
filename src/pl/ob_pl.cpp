@@ -2425,7 +2425,7 @@ int ObPL::execute(ObExecContext &ctx,
         OZ (guard->get_database_schema(ctx.get_my_session()->get_effective_tenant_id(),
                                       routine->get_database_id(),
                                       db_schema));
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && OB_NOT_NULL(db_schema)) {
           db_name = db_schema->get_database_name_str();
         }
       }
