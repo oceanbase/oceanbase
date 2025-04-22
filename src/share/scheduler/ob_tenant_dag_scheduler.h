@@ -855,7 +855,6 @@ public:
       ObDagId &dag_net_id,
       int64_t &start_time);
   int64_t get_dag_net_count(const ObDagNetType::ObDagNetTypeEnum type);
-  bool is_dag_map_full();
   int loop_running_dag_net_list();
   // do not hold dag_net_map_lock_, otherwise deadlock when clear_dag_net_ctx,  see
   int loop_finished_dag_net_list();
@@ -867,6 +866,7 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
+  bool is_dag_map_full_();
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
                           ObIDagNet*,
