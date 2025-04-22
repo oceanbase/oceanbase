@@ -2126,6 +2126,7 @@ public:
     mv_mode = mv_mode_;
     return OB_SUCCESS;
   }
+  inline ObMvMode get_mv_mode_struct() const { return mv_mode_; }
   inline bool mv_major_refresh() const
   {
     return IS_MV_MAJOR_REFRESH == (enum ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
