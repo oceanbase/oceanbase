@@ -7299,7 +7299,8 @@ int ObRawExprUtils::need_wrap_to_string(const ObRawExprResType &src_res_type,
       case ObNVarchar2Type:
       case ObNCharType:
       case ObMySQLDateType:
-      case ObMySQLDateTimeType: {
+      case ObMySQLDateTimeType:
+      case ObCollectionSQLType: {
         // use the generic cast expr to process the enumset cast.
         need_wrap = !(support_subschema && src_res_type.is_sql_enum_set_with_subschema());
         break;
