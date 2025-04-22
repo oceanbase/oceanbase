@@ -14905,7 +14905,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql date -> XXX*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdate_int,/*int*/
     mdate_uint,/*uint*/
     mdate_float,/*float*/
@@ -14937,7 +14937,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql datetime -> XXX*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdatetime_int,/*int*/
     mdatetime_uint,/*uint*/
     mdatetime_float,/*float*/
