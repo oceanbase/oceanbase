@@ -22,7 +22,8 @@ namespace observer
 
 ObAllVirtualSessionWaitHistory::ObAllVirtualSessionWaitHistory()
     : ObVirtualTableScannerIterator(),
-    session_status_(),
+    alloc_wrapper_(),
+    session_status_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc_wrapper_),
     addr_(NULL),
     ipstr_(),
     port_(0),
@@ -73,6 +74,9 @@ int ObAllVirtualSessionWaitHistory::set_ip(common::ObAddr *addr)
 int ObAllVirtualSessionWaitHistory::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
+    alloc_wrapper_.set_alloc(allocator_);
+  }
   if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_all_diag_info(session_status_, effective_tenant_id_))) {
     SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
   }
@@ -282,6 +286,9 @@ int ObAllVirtualSessionWaitHistoryI1::get_all_diag_info()
   int64_t index_id = -1;
   uint64_t key = 0;
   typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
+  if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
+    alloc_wrapper_.set_alloc(allocator_);
+  }
   HEAP_VAR(DiPair, pair) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_index_ids().count(); ++i) {
       index_id = get_index_ids().at(i);

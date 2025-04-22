@@ -39,8 +39,9 @@ public:
 
 protected:
   virtual int get_all_diag_info();
+  ObWrapperAllocator alloc_wrapper_;
   common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect>,
-  8> session_status_;
+  8, ObWrapperAllocator&> session_status_;
 
 private:
   enum HISTORY_COLUMN
