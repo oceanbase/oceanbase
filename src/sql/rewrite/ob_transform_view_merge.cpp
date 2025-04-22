@@ -406,7 +406,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          parent_stmt->is_hierarchical_query(),
-                                         false,
+                                         parent_stmt->is_semi_left_table(table_item->table_id_),
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {

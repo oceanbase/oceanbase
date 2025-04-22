@@ -560,7 +560,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tenant_snapshot_stmt snapshot_name drop_tenant_snapshot_stmt clone_tenant_stmt clone_snapshot_option clone_tenant_option clone_tenant_option_list
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> geometry_collection
-%type <node> mock_stmt check_table_options check_table_option user_host_or_current_user install_plugin_stmt plugin_name uninstall_plugin_stmt flush_stmt flush_options flush_options_list flush_option opt_no_write_to_binlog handler_stmt handler_read_or_scan handler_scan_function handler_rkey_function handler_rkey_mode
+%type <node> mock_stmt check_table_options check_table_option user_host_or_current_user install_plugin_stmt plugin_name uninstall_plugin_stmt flush_stmt flush_options flush_options_list flush_option opt_no_write_to_binlog opt_flush_lock handler_stmt handler_read_or_scan handler_scan_function handler_rkey_function handler_rkey_mode
 %type <node> show_plugin_stmt merge_insert_types opt_table_list
 %type <node> create_server_stmt server_options_list server_option alter_server_stmt drop_server_stmt create_logfile_group_stmt logfile_group_info add_log_file lg_undofile lg_redofile logfile_group_options  opt_ts_initial_size opt_ts_undo_buffer_size opt_ts_redo_buffer_size opt_ts_engine opt_ts_comment
 %type <node> alter_logfile_group_stmt alter_logfile_group_info alter_logfile_group_option_list alter_logfile_group_options alter_logfile_group_option drop_logfile_group_stmt drop_ts_options_list drop_ts_options drop_ts_option opt_ts_nodegroup logfile_group_option logfile_group_option_list
@@ -2750,8 +2750,7 @@ MOD '(' expr ',' expr ')'
 }
 | PERCENTILE_CONT '(' opt_distinct_or_all expr ',' expr_list ')'
 {
-  ParseNode *percentile_cont_exprs = $6;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_PERCENTILE_CONT, 4, $3, percentile_cont_exprs, $4, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_PERCENTILE_CONT, 4, $3, $4, $6, NULL);
 }
 | GROUPING '(' expr ')'
 {
@@ -22407,16 +22406,24 @@ flush_options_list
 {
   merge_nodes($$, result, T_FLUSH_MOCK_LIST, $1);
 }
-/*
+| table_or_tables
+{
+  (void) ($1);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
+}
+| table_or_tables WITH READ LOCK_
+{
+  (void) ($1);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
+}
 |
 table_or_tables opt_table_list opt_flush_lock
 {
   (void) ($1);
   (void) ($2);
   (void) ($3);
-  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_MOCK);
+  malloc_terminal_node($$, result->malloc_pool_, T_FLUSH_TABLE_MOCK);
 }
-*/
 ;
 
 opt_no_write_to_binlog:
@@ -22435,20 +22442,20 @@ opt_no_write_to_binlog:
 ;
 
 /* In mysql the will give a flag to the table */
-// opt_flush_lock:
-// /* empty */
-// {
-//   (void) ($$);
-// }
-// | WITH READ LOCK_
-// {
-//   (void) ($$);
-// }
-// | FOR EXPORT
-// {
-//   (void) ($$);
-// }
-// ;
+opt_flush_lock:
+/* empty */
+{
+  (void) ($$);
+}
+| WITH READ LOCK_
+{
+  (void) ($$);
+}
+| FOR EXPORT
+{
+  (void) ($$);
+}
+;
 
 
 flush_options_list:

@@ -357,7 +357,7 @@ public:
   void destroy()
   {
     arr_.destroy();
-    arr_size_ = 0;
+    arr_size_ = INIT_HASH_SIZE;
     tail_node_.hash_ = 0xFFFFFFFFFFFFFFFF; // can be any value
     tail_node_.next_ = NULL;
     zero_node_.set_bucket_filled(0);

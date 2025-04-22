@@ -1048,6 +1048,15 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
   return ret;
 }
 
+bool ObPlanCache::is_contains_external_object(const DependenyTableStore &dep_schema_objs)
+{
+  bool is_contains = false;
+  for (int i = 0; i < dep_schema_objs.count() && !is_contains; i++) {
+    is_contains = is_external_object_id(dep_schema_objs.at(i).get_object_id());
+  }
+  return is_contains;
+}
+
 int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
                                 ObILibCacheObject *cache_obj)
 {

@@ -1406,6 +1406,14 @@ public:
       const int64_t ddl_task_id = 0,
       const int64_t trans_end_snapshot = 0,
       const int64_t index_snapshot_version_diff = 0);
+  static int write_defensive_and_obtain_snapshot(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObSchemaService *schema_service,
+      int64_t &new_fetched_snapshot);
+
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,

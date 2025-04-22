@@ -213,6 +213,9 @@ namespace sql
     int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
+    int check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
+                                     const ObSQLSessionInfo &session,
+                                     bool &is_use_pdml);
     int check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
                                        ObSQLSessionInfo &session);
     int check_parallel_das_dml_supported_feature(const ObDelUpdStmt &pdml_stmt,

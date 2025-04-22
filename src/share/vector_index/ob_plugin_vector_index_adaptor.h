@@ -181,6 +181,7 @@ private:
 struct ObVectorQueryConditions {
   uint32_t query_limit_;
   bool query_order_; // true: asc, false: desc
+  bool only_complete_data_; // true when search brute force
   int64_t ef_search_;
   ObString query_vector_;
   SCN query_scn_;
@@ -326,6 +327,16 @@ struct ObVectorIndexSharedTableInfo
   uint64_t data_table_id_;
   ObTabletID rowkey_vid_tablet_id_;
   ObTabletID vid_rowkey_tablet_id_;
+};
+
+struct ObVectorIndexAcquireCtx
+{
+  ObTabletID inc_tablet_id_;
+  ObTabletID vbitmap_tablet_id_;
+  ObTabletID snapshot_tablet_id_;
+  ObTabletID data_tablet_id_;
+
+  TO_STRING_KV(K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), K_(data_tablet_id));
 };
 
 class ObPluginVectorIndexAdaptor
@@ -502,6 +513,13 @@ public:
   ObVectorIndexAlgorithmType get_snap_index_type();
   int64_t get_hnswsq_type_metric(int64_t origin_metric) {
     return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
+  }
+
+  bool validate_tablet_ids(const ObVectorIndexAcquireCtx& ctx) {
+    return inc_tablet_id_ == ctx.inc_tablet_id_
+           && vbitmap_tablet_id_ == ctx.vbitmap_tablet_id_
+           && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
+           && data_tablet_id_ == ctx.data_tablet_id_;
   }
 
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),

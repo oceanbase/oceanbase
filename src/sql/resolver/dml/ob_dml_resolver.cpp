@@ -5209,7 +5209,8 @@ int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
   ObSqlString temp_str;
   int64_t schema_version = 0;
 
-  if (OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
+  if (ObExternalFileFormat::ODPS_FORMAT != format.format_type_ &&
+    OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
     LOG_WARN("failed to resolve external file location", K(ret));
   } else if (OB_FAIL(temp_str.assign_fmt("temp_external_%lu", new_table_id))) {
     LOG_WARN("failed to assign table name", K(ret));
@@ -5300,7 +5301,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   ObString table_location;
   if (OB_SUCC(ret)) {
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
-      table_location = ObString("mock_path");
+      // do nothing
     } else {
       if (OB_ISNULL(location_node->children_[0])) {
         ret = OB_ERR_UNEXPECTED;
@@ -6399,6 +6400,7 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   ObCharsetType character_set_connection = CHARSET_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
@@ -6416,6 +6418,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
     LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
+                                                                     enable_mysql_compatible_dates))) {
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,
                                              // stmt_type is only used in oracle mode
                                              lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -6429,6 +6433,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              session_info->get_sql_mode(),
                                              enable_decimal_int,
                                              compat_type,
+                                             enable_mysql_compatible_dates,
+                                             session_info->get_min_const_integer_precision(),
                                              nullptr != params_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
@@ -20630,6 +20636,7 @@ int ObDMLResolver::resolve_match_index(
   uint64_t column_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  const ObTableSchema *doc_rowkey_schema = nullptr;
   const ObTableSchema *inv_idx_schema = nullptr;
   const ObTableSchema *fwd_idx_schema = nullptr;
 
@@ -20646,6 +20653,15 @@ int ObDMLResolver::resolve_match_index(
     if (OB_UNLIKELY(OB_INVALID_ID == doc_rowkey_tid)) {
       ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
       LOG_WARN("No matched fulltext index exists", K(ret));
+    } else if (OB_FAIL(schema_checker_->get_table_schema(
+          session_info_->get_effective_tenant_id(), doc_rowkey_tid, doc_rowkey_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(doc_rowkey_schema)) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("unexpected index schema", K(ret));
+    } else if (!doc_rowkey_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("unexpected index schema", K(ret), KPC(doc_rowkey_schema));
     }
   }
   bool found_matched_index = false;
@@ -20660,7 +20676,7 @@ int ObDMLResolver::resolve_match_index(
     } else if (OB_ISNULL(inv_idx_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index schema", K(ret), KPC(inv_idx_schema));
-    } else if (!inv_idx_schema->can_read_index()) {
+    } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
       // index unavailable
     } else if (OB_FAIL(ObTransformUtils::check_fulltext_index_match_column(match_column_set,
                                                                            &table_schema,
@@ -20688,9 +20704,13 @@ int ObDMLResolver::resolve_match_index(
           session_info_->get_effective_tenant_id(), index_info.table_id_, fwd_idx_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(fwd_idx_schema)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
         LOG_WARN("unexpecter nullptr to fwd idx schema", K(ret));
-      } else if (fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+      } else if (!fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+        // skip
+      } else if (!inv_idx_schema->can_read_index() || !doc_rowkey_schema->is_index_visible()) {
+        // index unavailable
+      } else {
         found_fwd_idx = true;
         fwd_idx_tid = fwd_idx_schema->get_table_id();
       }
@@ -20698,7 +20718,7 @@ int ObDMLResolver::resolve_match_index(
 
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(!found_fwd_idx)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
         LOG_WARN("found matched inverted index table, but corresponding forward index table not found",
             K(ret), K(inv_idx_tid), K(index_infos));
       }
@@ -20840,15 +20860,9 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &n
       }
       for (int64_t i = 0; OB_SUCC(ret) && !need_column_ref_expr && i < simple_index_infos.count(); ++i) {
         ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
-        if (is_doc_rowkey_aux(index_info.index_type_)) {
+        if (is_doc_rowkey_aux(index_info.index_type_) || is_fts_index_aux(index_info.index_type_) ||
+            is_fts_doc_word_aux(index_info.index_type_) || is_multivalue_index_aux(index_info.index_type_)) {
           need_column_ref_expr = true;
-        }
-      }
-      if (OB_SUCC(ret) && !need_column_ref_expr) {
-        // TODO: @zyx439997 fix the bug. id = 2025022600107346118
-        ret = OB_EAGAIN;
-        if (REACH_TIME_INTERVAL(1000 * 1000)) {
-          LOG_WARN("funlltext is being built, so need wait.");
         }
       }
     } else {

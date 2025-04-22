@@ -31,6 +31,10 @@ public:
       inv_scan_vec_id_col_(nullptr),
       vec_index_param_(),
       dim_(0),
+      vec_type_(ObVecIndexType::VEC_INDEX_INVALID),
+      algorithm_type_(ObVectorIndexAlgorithmType::VIAT_MAX),
+      selectivity_(0.0),
+      row_count_(0),
       access_pk_(false),
       can_use_vec_pri_opt_(false) {}
 
@@ -43,8 +47,8 @@ public:
   int64_t get_delta_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
   int64_t get_index_id_tbl_idx() const { return ObVecAuxTableIdx::SECOND_VEC_AUX_TBL_IDX; }
   int64_t get_snapshot_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
-  int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::COM_AUX_TBL_IDX; }
-  int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
+  int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
+  int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
 
   // IVF
   int64_t get_ivf_centroid_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }

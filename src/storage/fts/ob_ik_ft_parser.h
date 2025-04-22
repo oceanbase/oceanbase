@@ -31,9 +31,18 @@ class ObIKFTParser final : public plugin::ObITokenIterator
 {
 public:
   ObIKFTParser(ObIAllocator &allocator, ObFTDictHub *hub)
-      : allocator_(allocator), is_inited_(false), ctx_(nullptr), hub_(hub), segmenters_(allocator_),
-        cache_main_(allocator), cache_quan_(allocator), cache_stop_(allocator), dict_main_(nullptr),
-        dict_quan_(nullptr), dict_stop_(nullptr)
+      : allocator_(allocator),
+        is_inited_(false),
+        coll_type_(ObCollationType::CS_TYPE_INVALID),
+        ctx_(nullptr),
+        hub_(hub),
+        segmenters_(allocator_),
+        cache_main_(allocator),
+        cache_quan_(allocator),
+        cache_stop_(allocator),
+        dict_main_(nullptr),
+        dict_quan_(nullptr),
+        dict_stop_(nullptr)
   {
   }
 
@@ -70,10 +79,6 @@ private:
   void reset();
 
   bool should_read_newest_table() const;
-
-  int build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container);
-
-  int load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container);
 
   int build_dict_from_cache(const ObFTDictDesc &desc,
                             ObFTCacheRangeContainer &container,

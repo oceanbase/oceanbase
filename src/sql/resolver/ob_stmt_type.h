@@ -378,6 +378,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REBUILD_TABLET, get_sys_tenant_alter_system_priv, 
 //377 for T_FLASHBACK_STANDBY_LOG
 //378 for T_LOAD_LICENSE
 
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_FLUSH_TABLE_MOCK, no_priv_needed, 382)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

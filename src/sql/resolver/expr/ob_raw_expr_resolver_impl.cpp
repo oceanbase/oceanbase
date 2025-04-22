@@ -3082,6 +3082,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              enable_decimal_int, // FIXME: enable decimal int
                                              compat_type,
                                              enable_mysql_compatible_dates,
+                                             session_info->get_min_const_integer_precision(),
                                              nullptr != ctx_.secondary_namespace_,
                                              ctx_.formalize_const_int_prec_))) {
     LOG_WARN("failed to resolve const", K(ret));
@@ -5412,6 +5413,9 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     ParseNode *expr_list_node = node->children_[1];
+    if (lib::is_mysql_mode() && T_FUN_GROUP_PERCENTILE_CONT == node->type_) {
+      expr_list_node = node->children_[2];
+    }
     if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
       LOG_WARN("failed to add member", K(ret));
     } else if (OB_ISNULL(expr_list_node) || OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)
@@ -5477,20 +5481,22 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
     if (OB_SUCC(ret)) {
       //解析order by
       if (is_mysql_mode() && T_FUN_GROUP_PERCENTILE_CONT == node->type_) {
-        const ParseNode *column_node = node->children_[2];
+        const ParseNode *column_node = node->children_[1];
         if (OB_ISNULL(column_node)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("column_node is null or invalid", KP(column_node), K(column_node->type_));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "percentile_cont");
-        } else if (OB_UNLIKELY(column_node->type_ != T_COLUMN_REF)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("percentile_cont only support column", K(ret), K(node));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "percentile_cont");
         } else {
           OrderItem order_item;
           order_item.order_type_ = NULLS_FIRST_ASC;
-          if (OB_FAIL(SMART_CALL(recursive_resolve(column_node->children_[2], order_item.expr_)))) {
-            LOG_WARN("fail to recursive resolve order item expr", K(ret));
+          if (column_node->type_ == T_COLUMN_REF) {
+            if (OB_FAIL(SMART_CALL(recursive_resolve(column_node->children_[2], order_item.expr_)))) {
+              LOG_WARN("fail to recursive resolve order item expr", K(ret));
+            }
+          } else {
+            if (OB_FAIL(SMART_CALL(recursive_resolve(column_node, order_item.expr_)))) {
+              LOG_WARN("fail to recursive resolve order item expr", K(ret));
+            }
           }
           OZ(not_row_check(order_item.expr_));
           if (OB_FAIL(ret)) {

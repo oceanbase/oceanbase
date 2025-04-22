@@ -281,7 +281,9 @@ int ObCOSSTableV2::init(
   return ret;
 }
 
-int ObCOSSTableV2::fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables)
+int ObCOSSTableV2::fill_cg_sstables(
+    const common::ObIArray<ObITable *> &cg_tables,
+    const int64_t new_progressive_merge_step)
 {
   int ret = OB_SUCCESS;
 
@@ -292,7 +294,7 @@ int ObCOSSTableV2::fill_cg_sstables(const common::ObIArray<ObITable *> &cg_table
   } else if (OB_UNLIKELY(!is_loaded())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("co sstable must be loaded before persist", K(ret), KPC(this));
-  } else if (OB_FAIL(meta_->fill_cg_sstables(tmp_allocator_, cg_tables))) {
+  } else if (OB_FAIL(meta_->fill_cg_sstables(tmp_allocator_, cg_tables, new_progressive_merge_step))) {
     LOG_WARN("failed to fill cg sstables to sstable meta", K(ret), KPC(this), KPC(meta_));
   } else if (OB_FAIL(build_cs_meta())) {
     LOG_WARN("failed to build cs meta", K(ret), KPC(this));

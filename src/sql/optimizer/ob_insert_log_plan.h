@@ -47,6 +47,8 @@ public:
   { return insert_up_index_upd_infos_; }
   const common::ObIArray<IndexDMLInfo *> &get_insert_up_index_upd_infos() const
   { return insert_up_index_upd_infos_; }
+  common::ObIArray<ObUniqueConstraintInfo> &get_uk_constraint_infos()
+  { return uk_constraint_infos_; }
 
   virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)override;
 protected:

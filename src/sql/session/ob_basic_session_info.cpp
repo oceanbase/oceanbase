@@ -7359,5 +7359,10 @@ bool ObBasicSessionInfo::get_enable_hyperscan_regexp_engine() const
          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0;
 }
 
+int8_t ObBasicSessionInfo::get_min_const_integer_precision() const
+{
+  return inf_pc_configs_.min_const_integer_precision_;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase

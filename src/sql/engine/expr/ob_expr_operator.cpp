@@ -2268,11 +2268,17 @@ int ObRelationalExprOperator::is_equal_transitive(const common::ObObjMeta &meta1
 {
   int ret = OB_SUCCESS;
   result = false;
-  ObObjMeta equal_meta;
-  if (OB_FAIL(get_equal_meta(equal_meta, meta1, meta2))) {
-    LOG_WARN("get equal meta failed", K(ret), K(meta1), K(meta2));
+  ObObjType type = ObMaxType;
+  if (OB_FAIL(ObExprResultTypeUtil::get_relational_equal_type(type,
+                                                              meta1.get_type(),
+                                                              meta2.get_type()))) {
+    LOG_WARN("get equal type failed", K(ret), K(meta1), K(meta2));
+  } else if (ObMaxType == type) {
+    // do nothing
+  } else if (!ob_is_string_or_lob_type(type)) {
+    result = true;
   } else {
-    result = equal_meta.get_type() != ObMaxType;
+    result = meta1.get_collation_type() == meta2.get_collation_type();
   }
   return ret;
 }
@@ -2283,7 +2289,6 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
 {
   int ret = OB_SUCCESS;
   ObObjType type = ObMaxType;
-  ObExprTypeCtx type_ctx;
   if (OB_FAIL(ObExprResultTypeUtil::get_relational_equal_type(type,
                                                               meta1.get_type(),
                                                               meta2.get_type()))) {

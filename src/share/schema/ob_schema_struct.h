@@ -3827,17 +3827,23 @@ struct ObVectorIndexRefreshInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObString exec_env_;
   // TODO:(@wangmiao) more infos for complete refresh (aka. rebuild)
   ObVectorIndexRefreshInfo():
-  exec_env_() {}
+    exec_env_(),
+    index_params_()
+  {}
   void reset() {
     exec_env_.reset();
+    index_params_.reset();
   }
   bool operator == (const ObVectorIndexRefreshInfo &other) const {
-    return exec_env_ == other.exec_env_;
+    return exec_env_ == other.exec_env_ &&
+           index_params_ == other.index_params_;
   }
-  TO_STRING_KV(K_(exec_env));
+public:
+  ObString exec_env_;
+  ObString index_params_;
+  TO_STRING_KV(K_(exec_env), K_(index_params));
 };
 
 struct ObMVRefreshInfo

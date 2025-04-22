@@ -32,7 +32,7 @@ enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
   SECOND_VEC_AUX_TBL_IDX = 2,
   THIRD_VEC_AUX_TBL_IDX = 3,
   FOURTH_VEC_AUX_TBL_IDX = 4,
-  COM_AUX_TBL_IDX = 5,
+  FIFTH_VEC_AUX_TBL_IDX = 5,
 };
 
 enum ObVectorIndexDistAlgorithm
@@ -174,6 +174,10 @@ class ObVectorIndexUtil final
     ObExprVecIvfCenterIdCache pq_cache_;
   };
 public:
+  static int construct_rebuild_index_param(
+      const ObString &old_index_params,
+      ObString &new_index_params,
+      common::ObIAllocator *allocator);
   static int check_vec_index_param(
       const uint64_t tenant_id,
       const ParseNode *option_node,
@@ -185,7 +189,8 @@ public:
   static int parser_params_from_string(
       const ObString &origin_string,
       ObVectorIndexType vector_index_type,
-      ObVectorIndexParam &param);
+      ObVectorIndexParam &param,
+      const bool set_default=true);
   static int check_distance_algorithm_match(
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
@@ -246,6 +251,20 @@ public:
       const ObIndexType index_type,
       const int64_t col_id, // index col id
       uint64_t &tid);
+  static int get_latest_avaliable_index_tids_for_hnsw(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const int64_t col_id,
+    uint64_t &inc_tid,
+    uint64_t &vbitmap_tid,
+    uint64_t &snapshot_tid);
+  static int get_vector_index_tid_with_index_prefix(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const ObIndexType index_type,
+    const int64_t col_id,
+    ObString &index_prefix,
+    uint64_t &tid);
   static int get_vector_index_tid(
       sql::ObSqlSchemaGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -463,6 +482,25 @@ public:
   ObTabletID lob_meta_tablet_id_;
   ObTabletID lob_piece_tablet_id_;
   ObArray<ObString> vals_;
+};
+
+struct ObVecTidCandidate
+{
+  ObVecTidCandidate() : version_(OB_INVALID_ID), inc_tid_(OB_INVALID_ID) {}
+  ObVecTidCandidate(int64_t version, uint64_t inc_tid, ObString &index_prefix)
+    : version_(version), inc_tid_(inc_tid), index_prefix_(index_prefix) {}
+  int64_t version_;
+  uint64_t inc_tid_;
+  ObString index_prefix_;
+  TO_STRING_KV(K_(version), K_(inc_tid), K_(index_prefix));
+};
+struct ObVecTidCandidateMaxCompare
+{
+  bool operator()(const ObVecTidCandidate &lhs, const ObVecTidCandidate &rhs)
+  {
+    return lhs.version_ < rhs.version_ ? true : false;
+  }
+  int get_error_code() const { return OB_SUCCESS; }
 };
 
 }

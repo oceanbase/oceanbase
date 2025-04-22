@@ -411,7 +411,8 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const int64_t snapshot_version);
   int create_constraint_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *table_schema,

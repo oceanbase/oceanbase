@@ -909,6 +909,9 @@ int ObTempRowStoreBase<RA_ACCESS>::add_batch(const common::ObIArray<ObExpr *> &e
       ObIVector *vec = nullptr;
       if (OB_FAIL(e->eval_vector(ctx, skip, bound))) {
         LOG_WARN("eval vector failed", K(ret));
+      } else if (e->is_nested_expr() && !is_uniform_format(e->get_format(ctx)) &&
+                 OB_FAIL(e->nested_cast_to_uniform(bound.batch_size(), ctx, &skip))) {
+        LOG_WARN("failed to cast nested expr to uniform", K(ret));
       } else {
         vec = e->get_vector(ctx);
         batch_ctx_->vectors_.at(i) = vec;
@@ -1081,6 +1084,9 @@ int ObTempRowStoreBase<RA>::add_row(const common::ObIArray<ObExpr*> &exprs,
     LOG_WARN("ensure write block failed", K(ret), K(row_size + idx_size));
   } else if (OB_FAIL(cur_blk()->add_row(blk_buf_, exprs, row_meta_, ctx, stored_row))) {
     LOG_WARN("fail to add row", K(ret));
+  } else if (OB_UNLIKELY(stored_row->get_row_size() != row_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row size mismatch", K(ret), K(row_size), K(stored_row->get_row_size()));
   } else {
     block_id_cnt_ += 1;
     inc_mem_used(row_size + idx_size);

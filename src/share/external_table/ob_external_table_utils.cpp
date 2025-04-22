@@ -292,8 +292,7 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
 }
 
 int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
-                                                    const uint64_t table_id,
-                                                    const ObString &table_format_or_properties,
+                                                    const ObDASScanCtDef &das_ctdef,
                                                     ObIArray<int64_t> &partition_ids,
                                                     ObIArray<ObNewRange *> &ranges,
                                                     ObIAllocator &range_allocator,
@@ -312,21 +311,12 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
   } else if (OB_FAIL(tmp_ranges.assign(ranges))) {
     LOG_WARN("failed to assign array", K(ret));
   }
-
-  bool is_external_object = is_external_object_id(table_id);
-  const ObTableSchema *table_schema = NULL;
-
-  if (OB_SUCC(ret) && is_external_object) {
-    const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
-    if (OB_FAIL(sql_schema_guard.get_table_schema(table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret));
-    }
-  }
-
+  const uint64_t table_id = das_ctdef.ref_table_id_;
+  const ObString &table_format_or_properties = das_ctdef.external_file_format_str_.str_;
   if (OB_SUCC(ret)) {
-    if (is_external_object) {
+    if (is_external_object_id(table_id)) {
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
-                              tenant_id, table_id, partition_ids, file_urls, table_schema, ctx))) {
+                                            tenant_id, partition_ids, ctx, das_ctdef, file_urls))) {
         LOG_WARN("failed to get mocked external table files", K(ret));
       }
     } else {
@@ -351,16 +341,14 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_format_or_properties, is_odps_external_table))) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_format_or_properties,
+                                                        is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret), K(table_format_or_properties));
   } else if (!file_urls.empty() && is_odps_external_table) {
     for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
       const ObExternalFileInfo& external_info = file_urls.at(i);
       ObNewRange *range = NULL;
-      if (0 != external_info.file_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected file id", K(ret), K(i), K(external_info.file_id_));
-      } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
+      if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to new a ptr", K(ret));
       } else if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,

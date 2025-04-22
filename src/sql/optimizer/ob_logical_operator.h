@@ -965,6 +965,12 @@ public:
     return OB_LIKELY(index >= 0 && index < child_.count()) ? child_.at(index) : NULL;
   }
 
+  inline const ObLogicalOperator *get_op_below_exchange() const
+  {
+    const ObLogicalOperator *op = log_op_def::LOG_EXCHANGE == get_type() ? get_child(0) : this;
+    return (OB_NOT_NULL(op) && log_op_def::LOG_EXCHANGE == op->get_type()) ? op->get_child(0) : op;
+  }
+
   inline ObIArray<ObLogicalOperator*> &get_child_list()
   {
     return child_;

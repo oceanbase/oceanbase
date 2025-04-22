@@ -570,6 +570,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_INSTALL_PLUGIN:
       case stmt::T_UNINSTALL_PLUGIN:
       case stmt::T_FLUSH_MOCK:
+      case stmt::T_FLUSH_TABLE_MOCK:
       case stmt::T_FLUSH_MOCK_LIST:
       case stmt::T_HANDLER_MOCK:
       case stmt::T_SHOW_PLUGINS:

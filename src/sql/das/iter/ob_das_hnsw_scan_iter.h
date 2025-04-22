@@ -56,7 +56,8 @@ public:
       vid_rowkey_ctdef_(nullptr),
       vid_rowkey_rtdef_(nullptr),
       sort_ctdef_(nullptr),
-      sort_rtdef_(nullptr) {}
+      sort_rtdef_(nullptr),
+      is_pre_filter_(false) {}
 
   virtual bool is_valid() const override
   {
@@ -68,11 +69,12 @@ public:
            nullptr != snapshot_iter_ &&
            nullptr != vid_rowkey_iter_ &&
            nullptr != com_aux_vec_iter_ &&
-           nullptr != rowkey_vid_iter_ &&
            nullptr != vec_aux_ctdef_ &&
            nullptr != vec_aux_rtdef_ &&
            nullptr != vid_rowkey_ctdef_ &&
-           nullptr != vid_rowkey_rtdef_;
+           nullptr != vid_rowkey_rtdef_ &&
+           (!is_pre_filter_ ||
+           nullptr != rowkey_vid_iter_);
   }
 
   share::ObLSID ls_id_;
@@ -92,6 +94,7 @@ public:
   ObDASScanRtDef *vid_rowkey_rtdef_;
   const ObDASSortCtDef *sort_ctdef_;
   ObDASSortRtDef *sort_rtdef_;
+  bool is_pre_filter_;
 };
 
 class ObDASHNSWScanIter : public ObDASIter
@@ -142,7 +145,9 @@ public:
       search_vec_(nullptr),
       distance_calc_(nullptr),
       is_primary_pre_with_rowkey_with_filter_(false),
-      go_brute_force_(false) {
+      go_brute_force_(false),
+      only_complete_data_(false),
+      is_pre_filter_(false) {
       }
 
   virtual ~ObDASHNSWScanIter() {}
@@ -190,7 +195,8 @@ private:
   int process_adaptor_state_pre_filter_with_rowkey(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, int64_t *&vids,
                         int& brute_cnt, bool is_vectorized);
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
-                                                    int64_t *&brute_vids, int& brute_cnt);
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_next_single_row(bool is_vectorized);
 
@@ -234,6 +240,7 @@ private:
     ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx());
     return ObDasVecScanUtils::get_rowkey(allocator, ctdef, rtdef, rowkey);
   }
+  int get_from_vid_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey);
 
   int init_sort(const ObDASVecAuxScanCtDef *ir_ctdef, ObDASVecAuxScanRtDef *ir_rtdef);
   int set_vec_index_param(ObString vec_index_param) { return ob_write_string(vec_op_alloc_, vec_index_param, vec_index_param_); }
@@ -296,6 +303,8 @@ private:
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
+  bool only_complete_data_;
+  bool is_pre_filter_;
 };
 
 

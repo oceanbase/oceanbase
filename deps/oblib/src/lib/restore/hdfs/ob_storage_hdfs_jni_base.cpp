@@ -422,11 +422,9 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
       hdfsFileInfo *file_infos =
           obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
       if (OB_ISNULL(file_infos)) {
-        ret = OB_HDFS_ERROR;
-        OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
-      }
-
-      if (OB_SUCC(ret)) {
+        // If the directory is empty, the file_infos will be null.
+        OB_LOG(TRACE, "get empty files in directory", K(ret), K(uri), K(full_dir_path));
+      } else {
         dirent entry;
         entry.d_type = DT_REG;
 
@@ -567,11 +565,9 @@ int ObStorageHdfsJniUtil::list_directories(
       int num_entries = 0;
       hdfsFileInfo *file_infos = obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
       if (OB_ISNULL(file_infos)) {
-        ret = OB_HDFS_ERROR;
-        OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
-      }
-
-      if (OB_SUCC(ret)) {
+        // If the directory is empty, the file_infos will be null.
+        OB_LOG(TRACE, "get a empty file info", K(ret), K(uri), K(full_dir_path));
+      } else {
         dirent entry;
         entry.d_type = DT_DIR;
 

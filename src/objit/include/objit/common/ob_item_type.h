@@ -2767,6 +2767,7 @@ typedef enum ObItemType
   // parser config: range ngram
   T_PARSER_MIN_NGRAM_SIZE = 4809,
   T_PARSER_MAX_NGRAM_SIZE = 4810,
+  T_FLUSH_TABLE_MOCK = 4844,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

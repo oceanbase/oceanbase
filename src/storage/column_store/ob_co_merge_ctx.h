@@ -151,7 +151,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
   int prepare_cs_replica_param();
-  int check_and_set_build_redundant_row_merge();
+  int handle_alter_cg_delayed_in_cs_replica();
   int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_redundant_row_store_from_rowkey_cg() const { return static_param_.is_build_redundent_row_store_from_rowkey_cg(); }

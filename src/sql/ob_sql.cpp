@@ -757,7 +757,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (context->session_info_->is_varparams_sql_prepare()) {
+        if (context->session_info_->is_varparams_sql_prepare() && !context->is_dbms_sql_) {
           // question mark expr has no valid result type in prepare stage
         } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
@@ -1143,6 +1143,8 @@ int ObSql::check_contain_temporary_table(share::schema::ObSchemaGetterGuard &sch
     table_schema = nullptr;
     ObSchemaObjVersion &obj_version = result.get_ref_objects().at(i);
     if (DEPENDENCY_TABLE != obj_version.object_type_) {
+      // do nothing
+    } else if (is_external_object_id(obj_version.object_id_)) {
       // do nothing
     } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
                                               obj_version.object_id_,
@@ -2129,7 +2131,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       static_cast<ObCollationType>(server_collation),
                                                       NULL, session.get_sql_mode(),
                                                       enable_decimal_int, compat_type,
-                                                      enable_mysql_compatible_dates))) {
+                                                      enable_mysql_compatible_dates,
+                                                      session.get_min_const_integer_precision()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));
@@ -4968,6 +4971,9 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret), KP(result.get_exec_context().get_stmt_factory()));
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_dblink()) {
+    need_add_plan = false;
+  } else if (ObPlanCache::is_contains_external_object(
+                                            result.get_physical_plan()->get_dependency_table())) {
     need_add_plan = false;
   }
   return ret;

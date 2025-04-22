@@ -366,6 +366,7 @@ public:
                            bool enable_decimal_int_type,
                            const ObCompatType compat_type,
                            const bool enable_mysql_compatible_dates,
+                           int8_t min_const_integer_precision,
                            bool is_from_pl = false,
                            bool fmt_int_or_ch_decint = false);
 

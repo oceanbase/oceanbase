@@ -22,6 +22,7 @@
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/px/ob_dfo_scheduler.h"
+#include "sql/engine/dml/ob_table_merge_op.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #endif
@@ -234,24 +235,27 @@ int ObPXServerAddrUtil::get_external_table_loc(
       ret = part_ids.push_back((*iter)->partition_id_);
     }
 
-    bool is_external_object = is_external_object_id(ref_table_id);
-    const ObTableSchema *table_schema = NULL;
-
-    if (OB_SUCC(ret) && is_external_object) {
-      const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
-      OZ (sql_schema_guard.get_table_schema(ref_table_id, table_schema));
-    }
-
     OZ (ObSQLUtils::extract_pre_query_range(pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())));
 
-    if (is_external_object) {
-      OZ (ObExternalTableFileManager::get_instance().get_mocked_external_table_files(tenant_id,
-                                                                                      ref_table_id,
-                                                                                      part_ids,
-                                                                                      ext_file_urls,
-                                                                                      table_schema,
-                                                                                      ctx));
+    if (is_external_object_id(ref_table_id)) {
+      ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+      const ObOpSpec *root_op = NULL;
+      dfo.get_root(root_op);
+      if (OB_ISNULL(root_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+        LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+      } else if (scan_ops.count() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("empty scan_ops", K(ret));
+      } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
+                                                            tenant_id, part_ids, ctx,
+                                                            scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
+                                                            ext_file_urls))) {
+        LOG_WARN("fail to get mocked external table files", K(ret));
+      }
     } else {
       OZ (ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
                                                                                     ref_table_id,
@@ -516,8 +520,54 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
       } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
             OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
         LOG_WARN("fail to build dynamic partition pruning table", K(ret));
+      } else if (NULL != dml_op && OB_FAIL(add_pdml_merge_gindex_locations(*dml_op, ctx, dfo))) {
+        LOG_WARN("add pdml merge global index locations failed", K(ret));
       }
       LOG_TRACE("allocate sqc by data distribution", K(dfo), K(locations));
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_NOT_ADD_PDML_MERGE_GINDEX_LOCATION);
+int ObPXServerAddrUtil::add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
+                                                        ObExecContext &ctx,
+                                                        ObDfo &dfo)
+{
+  int ret = OB_SUCCESS;
+  if (dml_op.get_type() != PHY_MERGE) {
+    // do nothing
+  } else if (ERRSIM_NOT_ADD_PDML_MERGE_GINDEX_LOCATION) {
+    // do nothing
+  } else {
+    ObSEArray<const ObDMLBaseCtDef *, 8> dml_ctdefs;
+    if (OB_FAIL(static_cast<const ObTableMergeSpec &>(dml_op).get_global_index_ctdefs(dml_ctdefs))) {
+      LOG_WARN("get global index ctdefs failed", K(ret));
+    } else {
+      for (int64_t i = 0; i < dml_ctdefs.count() && OB_SUCC(ret); i++) {
+        uint64_t idx_table_location_key = dml_ctdefs.at(i)->das_base_ctdef_.table_id_;
+        uint64_t idx_ref_table_id = dml_ctdefs.at(i)->das_base_ctdef_.index_tid_;
+        ObDASTableLoc *idx_table_loc = NULL;
+        if (OB_FAIL(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                              ctx.get_allocator(),
+                                              ctx.get_my_session()->get_effective_tenant_id(),
+                                              idx_table_location_key,
+                                              idx_ref_table_id,
+                                              idx_table_loc))) {
+          LOG_WARN("get full leader table location failed", K(ret), K(idx_table_location_key), K(idx_ref_table_id));
+        } else {
+          ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
+          for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); i++) {
+            DASTabletLocIArray &sqc_locations = sqcs.at(i).get_extra_access_table_locations_for_update();
+            for (DASTabletLocListIter iter = idx_table_loc->tablet_locs_begin();
+                 iter != idx_table_loc->tablet_locs_end() && OB_SUCC(ret); ++iter) {
+              OZ (sqc_locations.push_back(*iter));
+            }
+          }
+          LOG_TRACE("add sqc extra access table locations", K(idx_table_location_key),
+                    K(idx_ref_table_id), KPC(idx_table_loc));
+        }
+      }
     }
   }
   return ret;
@@ -534,7 +584,8 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
   int ret = OB_SUCCESS;
   if (IS_DML(op.get_type())) {
     if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
-        PHY_MERGE != op.get_type()) {
+        PHY_MERGE != op.get_type() &&
+        PHY_INSERT_ON_DUP != op.get_type()) {
       // px no need schedule das except merge
     } else if (PHY_LOCK == op.get_type()) {
       // no need lock op

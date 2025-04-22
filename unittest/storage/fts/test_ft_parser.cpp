@@ -37,6 +37,7 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -826,6 +827,7 @@ TEST_F(FTParserTest, DISABLED_benchmark)
     std::cout << "Words(by char):" << sizeof(test_str) << ".\n";
   }
 }
+
 
 } // end namespace storage
 } // end namespace oceanbase

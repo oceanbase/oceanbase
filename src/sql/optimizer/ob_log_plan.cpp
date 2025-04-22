@@ -6413,7 +6413,7 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
   static const double AVG_COLUMN_STORE_COLUMN_RATIO = 0.5;
 
   const ObTableSchema *table_schema = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObLogicalOperator *best_plan = NULL;
   const ObDMLStmt *stmt = NULL;
   double group_ndv = 1.0;
@@ -6428,9 +6428,12 @@ int ObLogPlan::check_table_columns_can_storage_pushdown(const uint64_t tenant_id
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(column = static_cast<ObColumnRefRawExpr*>(pushdown_groupby_columns.at(0)))) {
-  } else if (FALSE_IT(schema_guard = get_optimizer_context().get_schema_guard())) {
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+  } else if (FALSE_IT(sql_schema_guard = get_optimizer_context().get_sql_schema_guard())) {
+  } else if (OB_FAIL(sql_schema_guard->get_table_schema(table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_id(0, first_column_id))) {
     LOG_WARN("failed to get first rowkey column id", K(ret));
   } else if (column->get_column_id() == first_column_id) {
@@ -10455,7 +10458,12 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     bool second_can_px_batch_rescan = false;
     bool first_rescan_contain_match_all = false;
     bool second_rescan_contain_match_all = false;
-    if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
+    bool need_compare = false;
+    if (OB_FAIL(ObLogSubPlanFilter::need_compare_batch_rescan(*first_spf, *second_spf, need_compare))) {
+      LOG_WARN("failed to check need compare batch rescan", K(ret));
+    } else if (!need_compare) {
+      /* do nothing */
+    } else if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right plan dominate left plan because of group rescan subplan filter");
     } else if (first_spf->enable_das_group_rescan() && !second_spf->enable_das_group_rescan()) {
@@ -10496,7 +10504,7 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     } else {
       /* do nothing */
     }
-    LOG_TRACE("finish compute spf rescan plan relationship",
+    LOG_TRACE("finish compute spf rescan plan relationship", K(need_compare),
                     K(first_spf->enable_das_group_rescan()), K(second_spf->enable_das_group_rescan()),
                     K(first_right_local_rescan), K(second_right_local_rescan),
                     K(first_can_px_batch_rescan), K(second_can_px_batch_rescan));
@@ -15443,24 +15451,13 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     uint64_t index_id_tid = OB_INVALID_ID;
     uint64_t index_snapshot_data_tid = OB_INVALID_ID;
     ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
-    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                        table_schema,
-                                                        INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
-                                                        vec_col_id,
-                                                       delta_buffer_tid))) {
-      LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(vec_col_id), K(table_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                                table_schema,
-                                                                INDEX_TYPE_VEC_INDEX_ID_LOCAL,
-                                                                vec_col_id,
-                                                                index_id_tid))) {
-      LOG_WARN("fail to get spec vector index id table id", K(ret), K(vec_col_id), K(table_schema));
-    } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                                table_schema,
-                                                                INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
-                                                                vec_col_id,
-                                                                index_snapshot_data_tid))) {
-      LOG_WARN("fail to get spec vector index snapshot data table id", K(ret), K(vec_col_id), K(table_schema));
+    if (OB_FAIL(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(schema_guard,
+                                                                            table_schema, // data table schema
+                                                                            vec_col_id,
+                                                                            delta_buffer_tid,
+                                                                            index_id_tid,
+                                                                            index_snapshot_data_tid))) {
+      LOG_WARN("fail to get latest avaliable index tids for hnsw ", K(ret), K(vec_col_id), K(table_schema));
     } else if (OB_FAIL(table_schema.get_vec_id_rowkey_tid(vec_id_rowkey_tid))) {
       LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
     } else if (OB_FAIL(table_schema.get_rowkey_vid_tid(rowkey_vid_tid))) {
@@ -15480,6 +15477,11 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     } else {
       table_scan->set_doc_id_index_table_id(vec_id_rowkey_tid);
       table_scan->set_index_back(true);
+      // if vec query and rebuild vec index happened at the same time
+      // the tid maybe not the lastest, update to latest
+      if (vc_info.is_post_filter() && table_scan->get_index_table_id() != delta_buffer_tid) {
+        table_scan->set_index_table_id(delta_buffer_tid);
+      }
     }
   }
   return ret;

@@ -35,6 +35,8 @@ namespace pl
 class ObPLParser
 {
 public:
+  static constexpr int64_t MAX_PRINT_LEN = 64;
+
   ObPLParser(common::ObIAllocator &allocator, sql::ObCharsets4Parser charsets4parser, ObSQLMode sql_mode = 0)
     : allocator_(allocator),
       charsets4parser_(charsets4parser),

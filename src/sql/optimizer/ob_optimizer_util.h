@@ -1656,6 +1656,13 @@ public:
                                                            const ObTableMetaInfo *esti_table_meta_info,
                                                            int64_t compute_parallel,
                                                            int64_t &px_expected_work_count);
+
+  static int get_rescan_path_index_id(const ObLogicalOperator *op,
+                                      bool &simple_rescan_path,
+                                      uint64_t &table_id,
+                                      uint64_t &index_id,
+                                      double &range_row_count);
+
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,

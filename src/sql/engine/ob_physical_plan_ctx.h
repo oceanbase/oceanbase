@@ -535,6 +535,9 @@ public:
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
   ObSubSchemaCtx &get_subschema_ctx() { return subschema_ctx_; }
+  inline int set_subschema_ctx(ObSubSchemaCtx &subschema_ctx) {
+    return subschema_ctx_.assgin(subschema_ctx);
+  }
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);

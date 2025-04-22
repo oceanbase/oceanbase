@@ -287,17 +287,19 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
       agg_row_meta_.extra_idxes_[i] = agg_extra_id++;
     }
   }
-  agg_row_meta_.extra_cnt_ = agg_extra_id;
-  agg_row_meta_.col_offsets_[aggr_infos.count()] = agg_row_meta_.row_size_;
-  if (has_extra_) {
-    agg_row_meta_.row_size_ += sizeof(int32_t);
-    agg_row_meta_.extra_idx_offset_ = offset;
-    offset = agg_row_meta_.row_size_;
-  } else {
-    agg_row_meta_.extra_idx_offset_ = -1;
+  if (OB_SUCC(ret)) {
+    agg_row_meta_.extra_cnt_ = agg_extra_id;
+    agg_row_meta_.col_offsets_[aggr_infos.count()] = agg_row_meta_.row_size_;
+    if (has_extra_) {
+      agg_row_meta_.row_size_ += sizeof(int32_t);
+      agg_row_meta_.extra_idx_offset_ = offset;
+      offset = agg_row_meta_.row_size_;
+    } else {
+      agg_row_meta_.extra_idx_offset_ = -1;
+    }
+    agg_row_meta_.row_size_ += bit_vec_size;
+    agg_row_meta_.nullbits_offset_ = offset;
   }
-  agg_row_meta_.row_size_ += bit_vec_size;
-  agg_row_meta_.nullbits_offset_ = offset;
   return ret;
 }
 

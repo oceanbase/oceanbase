@@ -289,7 +289,9 @@ int ObRebuildIndexTask::rebuild_index_impl()
       create_index_arg.index_option_.block_size_ = 1;
       create_index_arg.index_option_.index_status_ = INDEX_STATUS_UNAVAILABLE;
       create_index_arg.index_option_.progressive_merge_num_ = 1;
+      // set refresh info
       create_index_arg.vidx_refresh_info_.exec_env_ = job_info.get_exec_env();
+      create_index_arg.vidx_refresh_info_.index_params_ = rebuild_index_arg_.vidx_refresh_info_.index_params_;
 
       if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));

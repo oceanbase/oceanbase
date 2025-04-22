@@ -637,9 +637,9 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     bret = true;
   } else if (equal_sets.empty()) {
     // do nothing
-  } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
-             != OB_SUCCESS) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "check expr is order consist ent failed");
+  } else if (ObRelationalExprOperator::is_equal_transitive(from->get_result_type(),
+                          to->get_result_type(), is_consistent) != OB_SUCCESS) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to check is equal transitive");
   } else if (is_consistent) {
     int64_t N = equal_sets.count();
     for (int64_t i = 0; !l_found && !r_found && i < N; ++i) {
@@ -836,8 +836,9 @@ int ObOptimizerUtil::is_root_expr_const(const ObRawExpr *expr,
           if (OB_ISNULL(cur_expr = equal_set->at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr passed in should not be NULL", K(j), K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(cur_expr, expr, is_consistent))) {
-            LOG_WARN("check expr is order consistent failed", K(ret));
+          } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(cur_expr->get_result_type(),
+                                  expr->get_result_type(), is_consistent))) {
+            LOG_WARN("failed to check is equal transitive", K(ret));
           } else if (is_consistent && OB_FAIL(is_const_expr(cur_expr, const_exprs, is_const))) {
             LOG_WARN("failed to check const expr", K(cur_expr), K(ret));
           } else { /*do nothing*/ }
@@ -5263,7 +5264,7 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
                                             ObIArray<ObRawExpr *> &order_exprs)
 {
   int ret = OB_SUCCESS;
-  ObSqlBitSet<> eliminate_set;
+  ObSqlBitSet<> candi_set;
   ObSqlBitSet<> checked_fd_item;
   ObFdItem *fd_item = NULL;
   bool is_contain = false;
@@ -5272,34 +5273,37 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
   order_exprs.reset();
   ObSEArray<ObRawExpr *, 8> extended_order_exprs;
   ObSEArray<ObRawExpr *, 8> fd_set_parent_exprs;
-  ObRawExpr *first_removed_expr = NULL;
   if (OB_FAIL(get_fd_set_parent_exprs(fd_item_set, fd_set_parent_exprs))) {
     LOG_WARN("failed to get fd set parent exprs ", K(ret));
+  } else if (OB_FAIL(candi_set.init_mask(candi_exprs.count()))) {
+    LOG_WARN("failed to init mask", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
     ObRawExpr *expr = NULL;
     if (OB_ISNULL(expr = candi_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null fd item", K(ret));
+    } else if (!candi_set.has_member(i)) {
+      /*do nothing*/
     } else if (OB_FAIL(is_const_or_equivalent_expr(candi_exprs, equal_sets, const_exprs,
                                                    exec_ref_exprs, i, is_const))) {
       LOG_WARN("failed to check is const expr", K(ret));
     } else if (is_const) {//const expr 不需要排序
       /*do nothing*/
-    } else if (eliminate_set.has_member(i)) {
-      first_removed_expr = NULL == first_removed_expr ? expr : first_removed_expr;
     } else if (OB_FAIL(order_exprs.push_back(expr))) {
       LOG_WARN("failed to push back exprs", K(ret));
     } else if (OB_FAIL(extended_order_exprs.push_back(expr))) {
       LOG_WARN("failed to push back exprs", K(ret));
     } else if (OB_FAIL(remove_item(fd_set_parent_exprs, expr))) {
       LOG_WARN("failed to remove expr", K(ret));
+    } else if (OB_FAIL(candi_set.del_member(i))) {
+      LOG_WARN("failed to add member", K(ret));
     } else {
       //查找目前 extended_order_exprs 中包含的 fd, 并使用 fd 查找并标记 candi_exprs i 位置后需要移除的expr
       int64_t last_count = -1;
-      while (extended_order_exprs.count() > last_count) {
+      while (extended_order_exprs.count() > last_count && !candi_set.is_empty()) {
         last_count = extended_order_exprs.count();
-        for (int64_t fd_idx = 0; OB_SUCC(ret) && fd_idx < fd_item_set.count(); ++fd_idx) {
+        for (int64_t fd_idx = 0; OB_SUCC(ret) && fd_idx < fd_item_set.count() && !candi_set.is_empty(); ++fd_idx) {
           if (checked_fd_item.has_member(fd_idx)) {//对于已经进行检查的 fd 不再重复检查
             /*do nothing*/
           } else if (OB_ISNULL(fd_item = fd_item_set.at(fd_idx))) {
@@ -5311,7 +5315,7 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
             LOG_WARN("failed to check is exprs contain fd parent", K(ret));
           } else if (is_contain) {
             for (int64_t j = i+1; OB_SUCC(ret) && j < candi_exprs.count(); ++j) {
-              if (eliminate_set.has_member(j)) {
+              if (!candi_set.has_member(j)) {
                 /*do nothing*/
               } else if (OB_FAIL(fd_item->check_expr_in_child(candi_exprs.at(j), equal_sets,
                                                               is_in_child))) {
@@ -5320,7 +5324,7 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
                 /*do nothing*/
               } else if (candi_exprs.at(j)->has_flag(CNT_SUB_QUERY)) {
                 /* to check output more than one row, do not remove subquery in order expr. */
-              } else if (OB_FAIL(eliminate_set.add_member(j))) {
+              } else if (OB_FAIL(candi_set.del_member(j))) {
                 LOG_WARN("failed to add member", K(ret));
               }
             }
@@ -5336,10 +5340,10 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
         }
       }
     }
-  }
-  if (OB_FAIL(ret) && order_exprs.empty() && NULL != first_removed_expr
-      && OB_FAIL(order_exprs.push_back(first_removed_expr))) {
-    LOG_WARN("failed to push back exprs", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(candi_set.del_member(i))) {
+      LOG_WARN("failed to add member", K(ret));
+    }
   }
   return ret;
 }
@@ -10569,6 +10573,30 @@ int ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerCo
       }
     }
   }
+  return ret;
+}
 
+int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
+                                              bool &simple_rescan_path,
+                                              uint64_t &table_id,
+                                              uint64_t &index_id,
+                                              double &range_row_count)
+{
+  int ret = OB_SUCCESS;
+  while (OB_NOT_NULL(op) && 1 == op->get_num_of_child()) {
+    op = op->get_child(0);
+  }
+
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(op));
+  } else if (!op->is_table_scan() || 1 < op->get_num_of_child()) {
+    simple_rescan_path = false;
+  } else {
+    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
+    table_id = table_scan->get_table_id();
+    index_id = table_scan->get_index_table_id();
+    range_row_count = table_scan->get_logical_query_range_row_count();
+  }
   return ret;
 }

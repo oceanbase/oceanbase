@@ -591,6 +591,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
       append("postfix filters:", ap.est_cost_info_.postfix_filters_, ",selectivity:", ap.est_cost_info_.postfix_filter_sel_);
       new_line();
       append("table filters:", ap.est_cost_info_.table_filters_, ",selectivity:", ap.est_cost_info_.table_filter_sel_);
+      new_line();
+      append("output row count before revising:", ap.get_output_row_count());
     }
     new_line();
     append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),

@@ -206,7 +206,10 @@ public:
   int init(
       const storage::ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator &allocator);
-  int fill_cg_sstables(common::ObArenaAllocator &allocator, const common::ObIArray<ObITable *> &cg_tables);
+  int fill_cg_sstables(
+      common::ObArenaAllocator &allocator,
+      const common::ObIArray<ObITable *> &cg_tables,
+      const int64_t new_progressive_merge_step);
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
@@ -332,6 +335,8 @@ private:
   int64_t get_serialize_size_() const;
 private:
   friend class ObSSTable;
+  static const int64_t MAX_PROGRESSIVE_MERGE_STEP = 100;
+  static const int64_t MIN_PROGRESSIVE_MERGE_STEP = 0;
   static const int64_t SSTABLE_META_VERSION = 1;
 private:
   ObSSTableBasicMeta basic_meta_;

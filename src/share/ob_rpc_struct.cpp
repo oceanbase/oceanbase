@@ -3518,12 +3518,14 @@ DEF_TO_STRING(ObRebuildIndexArg) {
        K_(table_name),
        K_(database_name),
        K_(index_action_type),
-       K_(index_table_id));
+       K_(index_table_id),
+       K_(vidx_refresh_info));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER((ObRebuildIndexArg, ObIndexArg),
-                    index_table_id_);
+                    index_table_id_,
+                    vidx_refresh_info_);
 
 bool ObRenameIndexArg::is_valid() const
 {

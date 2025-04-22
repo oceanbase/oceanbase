@@ -19,7 +19,6 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
-#include "share/ob_server_struct.h"
 #include "storage/fts/ob_fts_struct.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/dict/ob_ft_dict.h"
@@ -290,13 +289,7 @@ int ObIKFTParser::init_dict(const plugin::ObFTParserParam &param)
                                   ObCollationType::CS_TYPE_UTF8MB4_BIN);
 
   if (should_read_newest_table()) {
-    cache_main_.reset();
-    cache_quan_.reset();
-    if (OB_FAIL(build_cache(main_dict_desc, cache_main_))) {
-      LOG_WARN("Failed to read newest main table", K(ret));
-    } else if (OB_FAIL(build_cache(quan_dict_desc, cache_quan_))) {
-      LOG_WARN("Failed to read newest quan table", K(ret));
-    }
+    // clear dict cache, always false now
   } else {
     if (OB_FAIL(init_single_dict(main_dict_desc, cache_main_))) {
       LOG_WARN("Failed to init main dict", K(ret));
@@ -323,9 +316,9 @@ int ObIKFTParser::init_dict(const plugin::ObFTParserParam &param)
 int ObIKFTParser::init_single_dict(ObFTDictDesc desc, ObFTCacheRangeContainer &container)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(load_cache(desc, container))) {
+  if (OB_FAIL(hub_->load_cache(desc, container))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      if (OB_FAIL(build_cache(desc, container))) {
+      if (OB_FAIL(hub_->build_cache(desc, container))) {
         LOG_WARN("Failed to read newest main table", K(ret));
       }
     } else {
@@ -464,44 +457,6 @@ void ObIKFTParser::reset()
 }
 
 bool ObIKFTParser::should_read_newest_table() const { return false; }
-int ObIKFTParser::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container)
-{
-  int ret = OB_SUCCESS;
-  ObFTDictInfoKey key;
-  key.type_ = static_cast<uint64_t>(desc.type_);
-  ObFTDictInfo info;
-
-  container.reset();
-  if (OB_FAIL(ObFTRangeDict::build_cache(desc, container))) {
-    LOG_WARN("Failed to build cache", K(ret));
-  } else if (FALSE_IT(info.range_count_ = container.get_handles().size())) {
-  } else if (OB_FAIL(hub_->put_dict_info(key, info))) {
-    LOG_WARN("Failed to put dict info", K(ret));
-  }
-
-  return ret;
-}
-
-int ObIKFTParser::load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container)
-{
-  int ret = OB_SUCCESS;
-  ObFTDictInfo info;
-  container.reset();
-  ObFTDictInfoKey key;
-  key.type_ = static_cast<uint64_t>(desc.type_);
-  if (OB_FAIL(hub_->get_dict_info(key, info)) && OB_ENTRY_NOT_EXIST != ret) {
-    LOG_WARN("Failed to get dict info", K(ret));
-  } else if (OB_ENTRY_NOT_EXIST == ret) {
-    // dict not exist, make new one, by caller
-  } else if (OB_FAIL(ObFTRangeDict::try_load_cache(desc, info.range_count_, container))
-             && OB_ENTRY_NOT_EXIST != ret) {
-    LOG_WARN("Failed to load cache", K(ret));
-  } else if (OB_ENTRY_NOT_EXIST == ret) {
-    // dict not exist, make new one, by caller
-  }
-  return ret;
-}
-
 int ObIKFTParser::build_dict_from_cache(const ObFTDictDesc &desc,
                                         ObFTCacheRangeContainer &container,
                                         ObIFTDict *&dict)

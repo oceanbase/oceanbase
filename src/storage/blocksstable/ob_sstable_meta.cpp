@@ -768,14 +768,21 @@ int ObSSTableMeta::init(
 
 int ObSSTableMeta::fill_cg_sstables(
     common::ObArenaAllocator &allocator,
-    const common::ObIArray<ObITable *> &cg_tables)
+    const common::ObIArray<ObITable *> &cg_tables,
+    const int64_t new_progressive_merge_step)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cg_sstables_.count() != cg_tables.count())) {
+  if (OB_UNLIKELY(new_progressive_merge_step != OB_INVALID_INDEX_INT64
+    && (new_progressive_merge_step < MIN_PROGRESSIVE_MERGE_STEP || new_progressive_merge_step > MAX_PROGRESSIVE_MERGE_STEP) )) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid new progressive merge step", K(ret), K(new_progressive_merge_step));
+  } else if (OB_UNLIKELY(cg_sstables_.count() != cg_tables.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cg table count unexpected not match", K(ret), K(cg_sstables_), K(cg_tables.count()));
   } else if (OB_FAIL(cg_sstables_.add_tables_for_cg(allocator, cg_tables))) {
     LOG_WARN("failed to add cg sstables", K(ret), K(cg_tables));
+  } else if (new_progressive_merge_step != OB_INVALID_INDEX_INT64) {
+    basic_meta_.progressive_merge_step_ = new_progressive_merge_step;
   }
   return ret;
 }

@@ -30,7 +30,7 @@ namespace oceanbase
 namespace share
 {
 class ObLSID;
-class ObPartitionIdRowPairArray;
+class ObExternalTablePartInfoArray;
 }
 namespace sql
 {
@@ -461,7 +461,7 @@ ObVTableScanParam() :
   sql::ObExternalFileFormat external_file_format_;
   ObString external_file_location_;
   ObString external_file_access_info_;
-  const share::ObPartitionIdRowPairArray *partition_infos_;
+  const share::ObExternalTablePartInfoArray *partition_infos_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

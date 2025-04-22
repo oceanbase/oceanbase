@@ -344,6 +344,7 @@ public:
     is_update = false;
     return OB_SUCCESS;
   }
+  int check_fts_docid_expr(const ObColumnRefRawExpr *expr, const uint64_t table_id, bool &need_column_ref_expr);
 
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;

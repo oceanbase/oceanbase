@@ -427,6 +427,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_INSTALL_PLUGIN:
       case T_UNINSTALL_PLUGIN:
       case T_FLUSH_MOCK:
+      case T_FLUSH_TABLE_MOCK:
       case T_HANDLER_MOCK:
       case T_FLUSH_MOCK_LIST:
       case T_SHOW_PLUGINS:

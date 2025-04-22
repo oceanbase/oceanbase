@@ -2160,7 +2160,8 @@ int ObDirectLoadSliceWriter::mock_chunk_store(const int64_t row_cnt)
 int ObDirectLoadSliceWriter::prepare_vector_slice_store(
     const ObStorageSchema *storage_schema,
     const ObString vec_idx_param,
-    const int64_t vec_dim)
+    const int64_t vec_dim,
+    const int64_t context_id)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexBaseSliceStore *vec_idx_slice_store = nullptr;
@@ -2190,7 +2191,8 @@ int ObDirectLoadSliceWriter::prepare_vector_slice_store(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(vec_idx_slice_store->init(tablet_direct_load_mgr_, vec_idx_param, vec_dim,
-                                                tablet_direct_load_mgr_->get_column_info()))) {
+                                                tablet_direct_load_mgr_->get_column_info(),
+                                                context_id))) {
     LOG_WARN("init vector index slice store failed", K(ret), KPC(storage_schema));
   } else {
     slice_store_ = vec_idx_slice_store;
@@ -2234,6 +2236,7 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     const SCN &start_scn,
     const ObString vec_idx_param,
     const int64_t vec_dim,
+    const int64_t context_id,
     const bool use_batch_store,
     const int64_t max_batch_size)
 {
@@ -2249,7 +2252,7 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
               schema::is_local_vec_ivf_centroid_index(storage_schema->get_index_type()) ||
               schema::is_vec_ivfsq8_meta_index(storage_schema->get_index_type()) ||
               schema::is_vec_ivfpq_pq_centroid_index(storage_schema->get_index_type()))) {
-    if (OB_FAIL(prepare_vector_slice_store(storage_schema, vec_idx_param, vec_dim))) {
+    if (OB_FAIL(prepare_vector_slice_store(storage_schema, vec_idx_param, vec_dim, context_id))) {
       LOG_WARN("failed to prepare vector slice_store", K(ret));
     }
   } else if (tablet_direct_load_mgr_->need_process_cs_replica()) {
@@ -2578,7 +2581,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
             LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
           } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
               false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, nullptr /*storage_schema*/, start_scn,
-              ObString()/*unsued*/, 0/*unsued*/))) {
+              ObString()/*unsued*/, 0/*unsued*/, 0/*unsued*/))) {
             LOG_WARN("prepare macro block writer failed", K(ret));
           } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
             LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row));
@@ -2874,6 +2877,7 @@ int ObDirectLoadSliceWriter::fill_lob_meta_sstable_slice(
                                                      nullptr /*storage_schema*/,
                                                      start_scn,
                                                      ObString()/*unsued*/,
+                                                     0/*unsued*/,
                                                      0/*unsued*/))) {
         LOG_WARN("prepare macro block writer failed", K(ret));
       } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
@@ -2899,6 +2903,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     const ObArray<ObColumnSchemaItem> &column_items,
     const int64_t dir_id,
     const int64_t parallelism,
+    const int64_t context_id,
     int64_t &affected_rows,
     ObInsertMonitor *insert_monitor)
 {
@@ -2962,7 +2967,8 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
                                                      storage_schema,
                                                      start_scn,
                                                      schema_item.vec_idx_param_,
-                                                     schema_item.vec_dim_))) {
+                                                     schema_item.vec_dim_,
+                                                     context_id))) {
         LOG_WARN("prepare macro block writer failed", K(ret));
       } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
         if (is_full_direct_load_task && OB_ERR_PRIMARY_KEY_DUPLICATE == ret && schema_item.is_unique_index_) {
@@ -3005,6 +3011,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     const ObArray<ObColumnSchemaItem> &column_items,
     const int64_t dir_id,
     const int64_t parallelism,
+    const int64_t context_id,
     ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
@@ -3055,6 +3062,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
                                                    start_scn,
                                                    schema_item.vec_idx_param_,
                                                    schema_item.vec_dim_,
+                                                   context_id,
                                                    true/*use_batch_store*/,
                                                    max_batch_size))) {
       LOG_WARN("prepare macro block writer failed", K(ret));
@@ -3436,14 +3444,15 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
     const ObStorageSchema *storage_schema,
     const SCN &start_scn,
     const ObTableSchemaItem &schema_item,
-    ObInsertMonitor* insert_monitor)
+    ObInsertMonitor* insert_monitor,
+    const int64_t context_id)
 {
 #define FILL_VECTOR_INDEX_DATA(type_str, slice_store_type) \
   slice_store_type *vec_idx_slice_store = static_cast<slice_store_type *>(slice_store_); \
   if (OB_ISNULL(vec_idx_slice_store)) { \
     slice_store_type tmp_slice_store; \
     if (OB_FAIL(tmp_slice_store.init(tablet_direct_load_mgr_, schema_item.vec_idx_param_, schema_item.vec_dim_, \
-                                                tablet_direct_load_mgr_->get_column_info()))) { \
+                                                tablet_direct_load_mgr_->get_column_info(), context_id))) { \
       LOG_WARN("init vector index slice store failed", K(ret), KPC(storage_schema)); \
     } else if (OB_FAIL(inner_fill_##type_str##_vector_index_data( \
         tmp_slice_store, snapshot_version, storage_schema, start_scn, schema_item.lob_inrow_threshold_, insert_monitor))) { \
@@ -3455,7 +3464,6 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   }
 
   int ret = OB_SUCCESS;
-  ObIvfSliceStore *vec_idx_slice_store = static_cast<ObIvfSliceStore *>(slice_store_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -3505,10 +3513,11 @@ int ObDirectLoadSliceWriter::inner_fill_ivf_vector_index_data(
     LOG_WARN("fail to inner fill vector index data", K(ret));
   } else {
     ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+    ObIvfHelperKey key(vec_idx_slice_store.tablet_id_, vec_idx_slice_store.get_context_id());
     if (OB_ISNULL(vec_index_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
-    } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), vec_idx_slice_store.tablet_id_))) {
+    } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
       LOG_WARN("failed to erase ivf build helper", K(ret), K(tablet_direct_load_mgr_->get_ls_id()), K(vec_idx_slice_store.tablet_id_));
     }
   }
@@ -3847,9 +3856,11 @@ int ObVectorIndexSliceStore::init(
     ObTabletDirectLoadMgr *tablet_direct_load_mgr,
     const ObString vec_idx_param,
     const int64_t vec_dim,
-    const ObIArray<ObColumnSchemaItem> &col_array)
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t context_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(context_id);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -4238,7 +4249,8 @@ int ObIvfCenterSliceStore::init(
     ObTabletDirectLoadMgr *tablet_direct_load_mgr,
     const ObString vec_idx_param,
     const int64_t vec_dim,
-    const ObIArray<ObColumnSchemaItem> &col_array)
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t context_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -4266,11 +4278,13 @@ int ObIvfCenterSliceStore::init(
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(center_id_col_idx_), K(center_vector_col_idx_), K(col_array));
       } else {
         ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+        ObIvfHelperKey key(tablet_id_, context_id);
+        context_id_ = context_id;
         if (OB_ISNULL(vec_index_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
         } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
-                                                                             tablet_id_,
+                                                                             key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {
@@ -4470,7 +4484,8 @@ int ObIvfSq8MetaSliceStore::init(
     ObTabletDirectLoadMgr *tablet_direct_load_mgr,
     const ObString vec_idx_param,
     const int64_t vec_dim,
-    const ObIArray<ObColumnSchemaItem> &col_array)
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t context_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -4498,11 +4513,13 @@ int ObIvfSq8MetaSliceStore::init(
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(meta_id_col_idx_), K(meta_vector_col_idx_), K(col_array));
       } else {
         ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+        ObIvfHelperKey key(tablet_id_, context_id);
+        context_id_ = context_id;
         if (OB_ISNULL(vec_index_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
         } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
-                                                                             tablet_id_,
+                                                                             key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFSQ8_META_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {
@@ -4661,7 +4678,8 @@ int ObIvfPqSliceStore::init(
     ObTabletDirectLoadMgr *tablet_direct_load_mgr,
     const ObString vec_idx_param,
     const int64_t vec_dim,
-    const ObIArray<ObColumnSchemaItem> &col_array)
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t context_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -4685,16 +4703,18 @@ int ObIvfPqSliceStore::init(
     }
     if (OB_SUCC(ret)) {
       ObIvfPqBuildHelper *helper = nullptr;
+      context_id_ = context_id;
       if (pq_center_id_col_idx_ == -1 || pq_center_vector_col_idx_ == -1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(pq_center_id_col_idx_), K(pq_center_vector_col_idx_), K(col_array));
       } else {
         ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+        ObIvfHelperKey key(tablet_id_, context_id);
         if (OB_ISNULL(vec_index_service) || OB_ISNULL(GCTX.ddl_sql_proxy_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService or GCTX.ddl_sql_proxy_ ptr", K(ret), K(MTL_ID()), KP(vec_index_service));
         } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
-                                                                             tablet_id_,
+                                                                             key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {

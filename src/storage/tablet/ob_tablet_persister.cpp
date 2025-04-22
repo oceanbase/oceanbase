@@ -1437,11 +1437,16 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
     } else {
       const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
       for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
-        if (OB_FAIL(persist_sstable_linked_block_if_need(allocator,
+        if (cg_sstables[idx]->get_addr().is_disked()) {
+          // do nothing
+        } else if (OB_FAIL(persist_sstable_linked_block_if_need(allocator,
                                                  cg_sstables[idx],
                                                  cur_macro_seq_,
                                                  sstable_persist_ctx.sstable_meta_write_ctxs_))) {
           LOG_WARN("fail to persist sstable linked_block if need", K(ret), K(param_), K(idx), KPC(cg_sstables[idx]), K(cur_macro_seq_));
+        }
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(fill_sstable_write_info_and_record(allocator,
                                                    cg_sstables[idx],
                                                    false, /*check_has_padding_meta_cache*/

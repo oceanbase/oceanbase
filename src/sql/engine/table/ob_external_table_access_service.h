@@ -31,7 +31,7 @@ namespace common
 
 namespace share
 {
-class ObPartitionIdRowPairArray;
+class ObExternalTablePartInfoArray;
 }
 
 namespace sql {
@@ -167,7 +167,7 @@ protected:
                                      common::ObNewRow &value);
   int calc_file_part_list_value_by_array(const int64_t part_id,
                                         common::ObIAllocator &allocator,
-                                        const share::ObPartitionIdRowPairArray *partition_array,
+                                        const share::ObExternalTablePartInfoArray *partition_array,
                                         common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
   int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);

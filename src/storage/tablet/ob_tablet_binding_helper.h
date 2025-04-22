@@ -221,6 +221,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSetRwDefensiveOp);
 };
 
+class ObSetWriteDefensiveOp final
+{
+public:
+  ObSetWriteDefensiveOp(const int64_t schema_version)
+    : schema_version_(schema_version) {}
+  ~ObSetWriteDefensiveOp() = default;
+  int operator()(ObTabletBindingMdsUserData &data);
+private:
+  int64_t schema_version_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSetWriteDefensiveOp);
+};
+
 template<typename F>
 struct ModifyBindingByOp final
 {
@@ -281,6 +294,12 @@ public:
     const int64_t abs_timeout_us,
     ObMySQLTransaction &trans);
   static int modify_tablet_binding_for_rw_defensive(
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const int64_t schema_version,
+    const int64_t abs_timeout_us,
+    ObMySQLTransaction &trans);
+  static int modify_tablet_binding_for_write_defensive(
     const uint64_t tenant_id,
     const ObIArray<ObTabletID> &tablet_ids,
     const int64_t schema_version,

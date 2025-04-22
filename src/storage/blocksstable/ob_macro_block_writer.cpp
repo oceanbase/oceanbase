@@ -2384,7 +2384,9 @@ int ObMacroBlockWriter::init_pre_warmer(const share::ObPreWarmerParam &pre_warm_
   } else if (PRE_WARM_TYPE_NONE == tmp_type) {
     // do nothing
   } else if (MEM_PRE_WARM == tmp_type) {
-    if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
+    if (data_store_desc_->get_exec_mode() != compaction::ObExecMode::EXEC_MODE_LOCAL) {
+      // not local mode, should not do prewarm
+    } else if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
       LOG_WARN("fail to create pre warmer", KR(tmp_ret), K(pre_warm_param));
     }
   } else if (MEM_AND_FILE_PRE_WARM == tmp_type) {

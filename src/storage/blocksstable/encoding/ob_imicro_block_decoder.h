@@ -79,7 +79,7 @@ protected:
 
   #define FOREACH_ADD_DECODER(col_param) \
   for (int64_t i = 0; OB_SUCC(ret) && i < request_cnt_; ++i) { \
-    if (OB_FAIL(add_decoder(cols_index.at(i),  cols_desc.at(i).col_type_, (col_param), decoders_[i]))) { \
+    if (OB_FAIL(add_decoder(cols_index.at(i),  cols_desc.at(i).col_type_, (col_param), decoders_buf_pos, decoders_[i]))) { \
       LOG_WARN("add_decoder failed", K(ret), "request_idx", i); \
     } \
   }

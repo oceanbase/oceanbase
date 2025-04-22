@@ -21,7 +21,7 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "share/domain_id/ob_domain_id.h"
-#include "share/external_table/ob_partition_id_row_pair.h"
+#include "share/external_table/ob_external_table_part_info.h"
 
 namespace oceanbase
 {
@@ -99,6 +99,7 @@ public:
       is_external_table_(false),
       external_file_access_info_(alloc),
       external_file_location_(alloc),
+      external_file_pattern_(alloc),
       external_files_(alloc),
       external_file_format_str_(alloc),
       partition_infos_(alloc),
@@ -155,6 +156,7 @@ public:
                        K_(external_files),
                        K_(external_file_format_str),
                        K_(external_file_location),
+                       K_(external_file_pattern),
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
                        K_(rowkey_exprs),
@@ -181,9 +183,10 @@ public:
   bool is_external_table_;
   ObExternalFileFormat::StringData external_file_access_info_;
   ObExternalFileFormat::StringData external_file_location_;
+  ObExternalFileFormat::StringData external_file_pattern_;
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
   ObExternalFileFormat::StringData external_file_format_str_;
-  share::ObPartitionIdRowPairArray partition_infos_;
+  share::ObExternalTablePartInfoArray partition_infos_; // FARM COMPAT WHITELIST
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup

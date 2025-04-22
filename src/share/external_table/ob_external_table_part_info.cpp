@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL
-#include "share/external_table/ob_partition_id_row_pair.h"
+#include "share/external_table/ob_external_table_part_info.h"
 
 namespace oceanbase
 {
@@ -18,50 +18,52 @@ namespace oceanbase
 namespace share
 {
 
-int ObPartitionIdRowPairArray::set_part_pair_by_idx(const int64_t idx, ObPartitionIdRowPair &pair)
+int ObExternalTablePartInfoArray::set_part_pair_by_idx(const int64_t idx, ObExternalTablePartInfo &part_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(idx < 0 || idx >= pairs_.count())) {
+  if (OB_UNLIKELY(idx < 0 || idx >= part_infos_.count())) {
     ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("array index out of range", K(ret), K(idx), K(pairs_.count()));
+    LOG_WARN("array index out of range", K(ret), K(idx), K(part_infos_.count()));
   } else {
-    pairs_.at(idx) = pair;
+    part_infos_.at(idx) = part_info;
   }
   return ret;
 }
-int ObPartitionIdRowPairArray::reserve(const int64_t capacity)
+int ObExternalTablePartInfoArray::reserve(const int64_t capacity)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(capacity < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid capacity", K(ret), K(capacity));
-  } else if (OB_FAIL(pairs_.allocate_array(allocator_, capacity))) {
+  } else if (OB_FAIL(part_infos_.allocate_array(allocator_, capacity))) {
     LOG_WARN("fail to reserve array", K(ret), K(capacity));
   }
   return ret;
 }
 
-int ObPartitionIdRowPairArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObExternalTablePartInfoArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   // 序列化数组大小
-  if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, pairs_.count()))) {
+  if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, part_infos_.count()))) {
     LOG_WARN("fail to encode count", K(ret));
   }
   // 序列化每个pair
-  for (int64_t i = 0; OB_SUCC(ret) && i < pairs_.count(); i++) {
-    const ObPartitionIdRowPair &pair = pairs_.at(i);
-    LST_DO_CODE(OB_UNIS_ENCODE, pair.part_id_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_infos_.count(); i++) {
+    const ObExternalTablePartInfo &part_info = part_infos_.at(i);
+    LST_DO_CODE(OB_UNIS_ENCODE, part_info.part_id_);
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(pair.list_row_value_.serialize(buf, buf_len, pos))) {
+      if (OB_FAIL(part_info.list_row_value_.serialize(buf, buf_len, pos))) {
         LOG_WARN("fail to serialize row", K(ret));
+      } else {
+        LST_DO_CODE(OB_UNIS_ENCODE, part_info.partition_spec_);
       }
     }
   }
   return ret;
 }
 
-int ObPartitionIdRowPairArray::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+int ObExternalTablePartInfoArray::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   // 反序列化数组大小
@@ -74,7 +76,7 @@ int ObPartitionIdRowPairArray::deserialize(const char *buf, const int64_t data_l
   } else if (count == 0) {
     // 如果count为0，则不进行反序列化
     return ret;
-  } else if (OB_FAIL(pairs_.allocate_array(allocator_, count))) {
+  } else if (OB_FAIL(part_infos_.allocate_array(allocator_, count))) {
     LOG_WARN("fail to alloc pairs array", K(ret), K(count));
   } else {
     // 分配临时内存用于ObObj数组
@@ -92,12 +94,12 @@ int ObPartitionIdRowPairArray::deserialize(const char *buf, const int64_t data_l
     } else {
       // 反序列化每个pair
       for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-        ObPartitionIdRowPair pair;
+        ObExternalTablePartInfo part_info;
         ObNewRow row;
         ObNewRow tmp_row;
         row.assign(obj_array, obj_capacity);
 
-        LST_DO_CODE(OB_UNIS_DECODE, pair.part_id_);
+        LST_DO_CODE(OB_UNIS_DECODE, part_info.part_id_);
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to decode part_id", K(ret));
         } else if (OB_FAIL(row.deserialize(buf, data_len, pos))) {
@@ -105,8 +107,18 @@ int ObPartitionIdRowPairArray::deserialize(const char *buf, const int64_t data_l
         } else if (OB_FAIL(ob_write_row(allocator_, row, tmp_row))) {
           LOG_WARN("fail to write row", K(ret));
         } else {
-          pair.list_row_value_ = tmp_row;
-          pairs_.at(i) = pair;
+          part_info.list_row_value_ = tmp_row;
+        }
+
+        if (OB_SUCC(ret)) {
+          ObString tmp_str;
+          LST_DO_CODE(OB_UNIS_DECODE, tmp_str);
+          if (OB_FAIL(ob_write_string(allocator_, tmp_str, part_info.partition_spec_))) {
+            LOG_WARN("failed to copy string", KR(ret), K(tmp_str));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          part_infos_.at(i) = part_info;
         }
       }
     }
@@ -114,13 +126,14 @@ int ObPartitionIdRowPairArray::deserialize(const char *buf, const int64_t data_l
   return ret;
 }
 
-int64_t ObPartitionIdRowPairArray::get_serialize_size() const
+int64_t ObExternalTablePartInfoArray::get_serialize_size() const
 {
-  int64_t len = serialization::encoded_length_vi64(pairs_.count());
-  for (int64_t i = 0; i < pairs_.count(); i++) {
-    const ObPartitionIdRowPair &pair = pairs_.at(i);
-    len += serialization::encoded_length_vi64(pair.part_id_);
-    len += pair.list_row_value_.get_serialize_size();
+  int64_t len = serialization::encoded_length_vi64(part_infos_.count());
+  for (int64_t i = 0; i < part_infos_.count(); i++) {
+    const ObExternalTablePartInfo &part_info = part_infos_.at(i);
+    len += serialization::encoded_length_vi64(part_info.part_id_);
+    len += part_info.list_row_value_.get_serialize_size();
+    len += part_info.partition_spec_.get_serialize_size();
   }
   return len;
 }

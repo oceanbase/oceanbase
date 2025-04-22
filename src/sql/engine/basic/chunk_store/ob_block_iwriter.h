@@ -93,6 +93,7 @@ protected:
       cur_blk_->cnt_ += 1;
       store_->inc_block_id_cnt(1);
       ret = store_->get_blk_buf().advance(size);
+      store_->inc_mem_used(size);
     }
     return ret;
   }

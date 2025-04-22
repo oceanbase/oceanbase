@@ -4862,7 +4862,7 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
 int ObTransformUtils::need_compute_fd_item_set(ObIArray<ObRawExpr*> &exprs)
 {
   bool need = true;
-  if (exprs.count() > 128) {
+  if (exprs.count() > 32) {
     need = false;
   }
   return need;

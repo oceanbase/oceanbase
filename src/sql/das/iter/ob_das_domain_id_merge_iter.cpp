@@ -157,7 +157,7 @@ int ObDASDomainIdMergeIter::inner_init(ObDASIterParam &param)
       LOG_WARN("failed to create merge memctx", K(ret));
     } else {
       common::ObArenaAllocator& alloc = get_arena_allocator();
-      for (int64_t i = 0; i < merge_param.rowkey_domain_table_iters_.count(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < merge_param.rowkey_domain_table_iters_.count(); i++) {
         ObTableScanParam *rowkey_scan_param = nullptr;
         if (OB_ISNULL(rowkey_scan_param = OB_NEWx(ObTableScanParam, &alloc))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -616,7 +616,7 @@ int ObDASDomainIdMergeIter::sorted_merge_join_row()
       for (int64_t i = 0; i < rowkey_domain_iters_.count(); i++) {
         while (OB_SUCC(rowkey_domain_iters_.at(i)->get_next_row()));
         if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next rowkey domain row", K(ret));
+          LOG_WARN("fail to get next rowkey domain row", K(ret), K(i), KPC(rowkey_domain_iters_.at(i)));
         }
       }
     }

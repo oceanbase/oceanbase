@@ -105,25 +105,20 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
       const ObExternalFileInfo& external_info = external_table_files.at(i);
       ObNewRange new_range;
-      if (0 != external_info.file_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected file id", K(ret), K(i), K(external_info.file_id_));
-      } else {
-        int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
-        int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
-        if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
-                                                    external_info.file_id_,
-                                                    external_info.part_id_,
-                                                    file_start,
-                                                    file_row_count,
-                                                    allocator,
-                                                    new_range))) {
-          LOG_WARN("failed to make external table scan range", K(ret));
-        } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
-                OB_FAIL(granule_idx.push_back(task_idx++)) ||
-                OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
-          LOG_WARN("fail to push back", K(ret));
-        }
+      int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
+      int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
+      if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
+                                                  external_info.file_id_,
+                                                  external_info.part_id_,
+                                                  file_start,
+                                                  file_row_count,
+                                                  allocator,
+                                                  new_range))) {
+        LOG_WARN("failed to make external table scan range", K(ret));
+      } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
+              OB_FAIL(granule_idx.push_back(task_idx++)) ||
+              OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
+        LOG_WARN("fail to push back", K(ret));
       }
     }
 #else

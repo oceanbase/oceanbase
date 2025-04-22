@@ -1008,34 +1008,39 @@ int ObArrayExprUtils::calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &
 {
   int ret = OB_SUCCESS;
   size = 0;
-  for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
-    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
-    VectorFormat format = vec->get_format();
-    if (VEC_DISCRETE == format) {
-      ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
-      if (!disc_vec->is_null(batch_idx)) {
-        ObLength *lens = disc_vec->get_lens();
-        size += lens[batch_idx];
-      }
-    } else if (VEC_CONTINUOUS == format) {
-      ObContinuousBase *cont_vec = static_cast<ObContinuousBase*>(vec);
-      uint32_t *offsets = cont_vec->get_offsets();
-      size += (offsets[batch_idx + 1] - offsets[batch_idx]);
-    } else if (is_uniform_format(format)) {
-      ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
-      ObDatum *datums = uni_vec->get_datums();
-      const uint64_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT64_MAX;
-      size += datums[batch_idx & idx_mask].len_;
-    } else if (VEC_FIXED == format) {
-      // array len
-      size += sizeof(uint32_t);
-    }
-  }
-  ObTextStringResult blob_res(ObLongTextType, true, nullptr);
-  if (OB_FAIL(blob_res.calc_buffer_len(size))) {
-    LOG_WARN("calculate data size failed", K(ret));
+  ObIVector *root_vec = expr.get_vector(ctx);
+  if (root_vec->is_null(batch_idx)) {
+    // do nothing
   } else {
-    size = blob_res.get_buff_len();
+    for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
+      ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+      VectorFormat format = vec->get_format();
+      if (VEC_DISCRETE == format) {
+        ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
+        if (!disc_vec->is_null(batch_idx)) {
+          ObLength *lens = disc_vec->get_lens();
+          size += lens[batch_idx];
+        }
+      } else if (VEC_CONTINUOUS == format) {
+        ObContinuousBase *cont_vec = static_cast<ObContinuousBase*>(vec);
+        uint32_t *offsets = cont_vec->get_offsets();
+        size += (offsets[batch_idx + 1] - offsets[batch_idx]);
+      } else if (is_uniform_format(format)) {
+        ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+        ObDatum *datums = uni_vec->get_datums();
+        const uint64_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT64_MAX;
+        size += datums[batch_idx & idx_mask].len_;
+      } else if (VEC_FIXED == format && !vec->is_null(batch_idx)) {
+        // array len
+        size += sizeof(uint32_t);
+      }
+    }
+    ObTextStringResult blob_res(ObLongTextType, true, nullptr);
+    if (OB_FAIL(blob_res.calc_buffer_len(size))) {
+      LOG_WARN("calculate data size failed", K(ret));
+    } else {
+      size = blob_res.get_buff_len();
+    }
   }
   return ret;
 }

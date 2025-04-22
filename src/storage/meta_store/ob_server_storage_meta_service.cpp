@@ -75,6 +75,8 @@ int ObServerStorageMetaService::start()
     LOG_WARN("fail to start slogger mgr", K(ret));
   } else if (OB_FAIL(replayer_.start_replay()))  {
     LOG_WARN("fail to start replayer", K(ret));
+  } else if (!is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.start())) {
+    LOG_WARN("fail to start ckpt slog handler", K(ret));
   } else {
     ATOMIC_STORE(&is_started_, true);
   }

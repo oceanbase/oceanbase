@@ -409,10 +409,11 @@ int ObIndexBuildTask::init(
     if (snapshot_version > 0) {
       snapshot_version_ = snapshot_version;
     }
-    if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_)) {
+    if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
+        share::schema::is_vec_rowkey_vid_type(create_index_arg_.index_type_)) {
       if (snapshot_version_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_));
+        LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_), K(create_index_arg_.index_type_));
       }
     }
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status) {
@@ -1913,7 +1914,7 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
 int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg tmp_arg;
+  SMART_VAR(ObCreateIndexArg, tmp_arg) {
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
@@ -1928,6 +1929,7 @@ int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, 
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_, target_cg_cnt_);
   }
+  } // end smart var
   return ret;
 }
 

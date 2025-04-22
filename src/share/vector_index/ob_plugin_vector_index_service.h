@@ -28,14 +28,25 @@ namespace oceanbase
 namespace share
 {
 
-struct ObVectorIndexAcquireCtx
+struct ObIvfHelperKey final
 {
-  ObTabletID inc_tablet_id_;
-  ObTabletID vbitmap_tablet_id_;
-  ObTabletID snapshot_tablet_id_;
-  ObTabletID data_tablet_id_;
-
-  TO_STRING_KV(K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), K_(data_tablet_id));
+public:
+  ObIvfHelperKey(): tablet_id_(), context_id_(OB_INVALID_ID)
+  {}
+  ObIvfHelperKey(const ObTabletID &tablet_id, const int64_t context_id)
+    : tablet_id_(tablet_id), context_id_(context_id) {}
+  ~ObIvfHelperKey() = default;
+  uint64_t hash() const {
+    return tablet_id_.hash() + murmurhash(&context_id_, sizeof(context_id_), 0);
+  }
+  int hash(uint64_t &hash_val) const {hash_val = hash(); return OB_SUCCESS;}
+  bool is_valid() const { return tablet_id_.is_valid() && context_id_ >= 0; }
+  bool operator == (const ObIvfHelperKey &other) const {
+        return tablet_id_ == other.tablet_id_ && context_id_ == other.context_id_; }
+  TO_STRING_KV(K_(tablet_id), K_(context_id));
+public:
+  common::ObTabletID tablet_id_;
+  int64_t context_id_;
 };
 
 class ObVectorIndexAdapterCandiate final
@@ -68,7 +79,7 @@ public:
   ObPluginVectorIndexAdapterGuard sn_adatper_guard_;
 };
 
-typedef common::hash::ObHashMap<common::ObTabletID, ObIvfBuildHelper*> IvfVectorIndexHelperMap;
+typedef common::hash::ObHashMap<ObIvfHelperKey, ObIvfBuildHelper*> IvfVectorIndexHelperMap;
 // Manage all vector index adapter in a ls
 class ObPluginVectorIndexMgr
 {
@@ -106,7 +117,7 @@ public:
   void release_all_adapters();
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
-  int get_build_helper_inst_guard(ObTabletID tablet_id, ObIvfBuildHelperGuard &helper_guard);
+  int get_build_helper_inst_guard(const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
                              ObIndexType type,
@@ -114,7 +125,7 @@ public:
                              int64_t index_table_id,
                              ObString *vec_index_param = nullptr,
                              int64_t dim = 0);
-  int create_ivf_build_helper(ObTabletID idx_tablet_id, ObIndexType type, ObString &vec_index_param, ObIAllocator &allocator);
+  int create_ivf_build_helper(const ObIvfHelperKey &key, ObIndexType type, ObString &vec_index_param, ObIAllocator &allocator);
   int replace_with_complete_adapter(ObVectorIndexAdapterCandiate *candidate,
                                     ObVecIdxSharedTableInfoMap &info_map,
                                     ObIAllocator &allocator);
@@ -150,7 +161,7 @@ public:
   int check_need_mem_data_sync_task(bool &need_sync);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
-  int erase_ivf_build_helper(ObTabletID tablet_id);
+  int erase_ivf_build_helper(const ObIvfHelperKey &key);
   ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
   // for debug
   void dump_all_inst();
@@ -166,7 +177,7 @@ private:
 
   int set_partial_adapter_(ObTabletID tablet_id, ObPluginVectorIndexAdaptor *adapter_inst, int overwrite = 0);
   int erase_partial_adapter_(ObTabletID tablet_id);
-  int set_ivf_build_helper_(ObTabletID tablet_id, ObIvfBuildHelper *helper_inst);
+  int set_ivf_build_helper_(const ObIvfHelperKey &key, ObIvfBuildHelper *helper_inst);
   // thread save inner functions
   int get_or_create_partial_adapter_(ObTabletID tablet_id,
                                      ObIndexType type,
@@ -175,7 +186,7 @@ private:
                                      int64_t dim,
                                      ObIAllocator &allocator);
 
-  int get_build_helper_inst_(ObTabletID tablet_id, ObIvfBuildHelper *&helper_inst);
+  int get_build_helper_inst_(const ObIvfHelperKey &key, ObIvfBuildHelper *&helper_inst);
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;
@@ -267,7 +278,7 @@ public:
   // feature interfaces
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   int get_adapter_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adapter_guard);
-  int get_build_helper_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObIvfBuildHelperGuard &helper_guard);
+  int get_build_helper_inst_guard(ObLSID ls_id, const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObLSID ls_id,
                              ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
@@ -276,10 +287,10 @@ public:
                              ObString *vec_index_param = nullptr,
                              int64_t dim = 0);
   int create_ivf_build_helper(ObLSID ls_id,
-                              ObTabletID idx_tablet_id,
+                              const ObIvfHelperKey &key,
                               ObIndexType type,
                               ObString &vec_index_param);
-  int erase_ivf_build_helper(ObLSID ls_id, ObTabletID idx_tablet_id);
+  int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
   int check_and_merge_adapter(ObLSID ls_id, ObVecIdxSharedTableInfoMap &info_map);
   int acquire_vector_index_mgr(ObLSID ls_id, ObPluginVectorIndexMgr *&mgr);
 
@@ -296,7 +307,7 @@ public:
                             ObString *vec_index_param = nullptr,
                             int64_t dim = 0);
   int acquire_ivf_build_helper_guard(ObLSID ls_id,
-                                     ObTabletID tablet_id,
+                                     const ObIvfHelperKey &key,
                                      ObIndexType type,
                                      ObIvfBuildHelperGuard &helper_guard,
                                      ObString &vec_index_param);

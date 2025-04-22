@@ -9,9 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#ifndef _OB_PARTITION_ID_ROW_PAIR_H
-#define _OB_PARTITION_ID_ROW_PAIR_H
+#ifndef _OB_EXTERNAL_TABLE_PART_INFO_H
+#define _OB_EXTERNAL_TABLE_PART_INFO_H
 
 #include <stdint.h>
 #include "src/share/schema/ob_column_schema.h"
@@ -21,42 +20,43 @@ namespace oceanbase
 
 namespace share
 {
-struct ObPartitionIdRowPair {
-  ObPartitionIdRowPair()
+struct ObExternalTablePartInfo {
+  ObExternalTablePartInfo()
     : part_id_(common::OB_INVALID_ID),
       list_row_value_() {}
 
-  TO_STRING_KV(K_(part_id), K_(list_row_value));
+  TO_STRING_KV(K_(part_id), K_(list_row_value), K_(partition_spec));
 
   int64_t part_id_;
   common::ObNewRow list_row_value_;
+  common::ObString partition_spec_;
 };
 
-class ObPartitionIdRowPairArray
+class ObExternalTablePartInfoArray
 {
 public:
-  ObPartitionIdRowPairArray(common::ObIAllocator &alloc)
-    : pairs_(),
+  ObExternalTablePartInfoArray(common::ObIAllocator &alloc)
+    : part_infos_(),
       allocator_(alloc) {}
 
-  ~ObPartitionIdRowPairArray() {}
+  ~ObExternalTablePartInfoArray() {}
 
-  TO_STRING_KV(K_(pairs));
+  TO_STRING_KV(K_(part_infos));
 
-  int set_part_pair_by_idx(const int64_t idx, ObPartitionIdRowPair &pair);
+  int set_part_pair_by_idx(const int64_t idx, ObExternalTablePartInfo &pair);
 
   int reserve(const int64_t capacity);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
-  int64_t count() const { return pairs_.count(); }
+  int64_t count() const { return part_infos_.count(); }
 
-  const ObPartitionIdRowPair &at(const int64_t idx) const { return pairs_.at(idx); }
+  const ObExternalTablePartInfo &at(const int64_t idx) const { return part_infos_.at(idx); }
 
 private:
-  common::ObArrayWrap<ObPartitionIdRowPair> pairs_;
+  common::ObArrayWrap<ObExternalTablePartInfo> part_infos_;
   common::ObIAllocator &allocator_;
 };
 }
 }
-#endif /* _OB_PARTITION_ID_ROW_PAIR_H */
+#endif /* _OB_EXTERNAL_TABLE_PART_INFO_H */

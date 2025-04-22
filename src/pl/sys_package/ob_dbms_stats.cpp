@@ -7436,10 +7436,12 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 4> approx_first_part_ids;
   //If the value of async_full_table_size_ is 0, it means that the table no need to async gather stats.
-  if (param.auto_sample_row_cnt_ == 0) {
+  if (param.async_full_table_size_ == 0) {
     param.subpart_stat_param_.reset_gather_stat();
     param.part_stat_param_.reset_gather_stat();
     param.global_stat_param_.reset_gather_stat();
+  } else if (param.auto_sample_row_cnt_ == 0) {
+    param.auto_sample_row_cnt_ = DEFAULT_ASYNC_SAMPLE_ROW_COUNT;
   }
   if (param.subpart_stat_param_.need_modify_) {
     ObSEArray<PartInfo, 4> new_subpart_infos;

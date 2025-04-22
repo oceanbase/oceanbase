@@ -1955,7 +1955,6 @@ int ObSSTable::persist_linked_block_if_need(
     ObSharedObjectsWriteCtx &linked_block_write_ctx)
 {
   int ret = OB_SUCCESS;
-  ObSSTableMetaHandle meta_handle;
   ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
 #ifdef ERRSIM
   const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
@@ -1964,8 +1963,9 @@ int ObSSTable::persist_linked_block_if_need(
 #else
   const int64_t block_cnt_threshold = ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
 #endif
-  if (OB_FAIL(get_meta(meta_handle))) {
-    LOG_WARN("fail to get sstable meta", K(ret));
+  if (OB_FAIL(!is_loaded())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only loaded sstable should check linked_block", K(ret), KPC(this));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != meta_->macro_info_.entry_id_) {
     // linked block had been persisted
   } else if (is_small_sstable()) {

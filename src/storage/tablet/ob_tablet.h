@@ -574,7 +574,8 @@ public:
       const common::ObAddr &addr,
       ObTabletReplica &tablet_replica,
       share::ObTabletReplicaChecksumItem &tablet_checksum,
-      const bool need_checksums = true) const;
+      const bool need_checksums,
+      const bool is_cs_replica) const;
   int check_and_set_initial_state();
   int read_mds_table(
       common::ObIAllocator &allocator,
@@ -912,7 +913,8 @@ private:
     const ObTabletTableStore &table_store,
     ObTabletReplica &tablet_replica,
     share::ObTabletReplicaChecksumItem &tablet_checksum,
-    const bool need_checksums) const;
+    const bool need_checksums,
+    const bool is_cs_replica) const;
   int get_tablet_report_info_by_ckm_info(
     const common::ObAddr &addr,
     const blocksstable::ObMajorChecksumInfo &major_ckm_info,

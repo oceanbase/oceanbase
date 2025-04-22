@@ -1283,6 +1283,8 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
     } else if (OB_ISNULL(vid_array) || OB_ISNULL(vec_array)) {
       // do nothing :maybe null data
+    } else if (OB_FAIL(check_vsag_mem_used())) {
+      LOG_WARN("check vsag mem used failed.", K(ret));
     } else {
       ObVectorIndexAlgorithmType build_type = VIAT_HNSW;
       int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
@@ -1883,6 +1885,8 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
   } else if (OB_FAIL(index_seri.serialize(snap_data_->index_, cb_param, cb, tenant_id_))) {
     LOG_WARN("serialize index failed.", K(ret));
   } else {
+    // for multi-version snapshot
+    // rb_flag is true means need check snapshot next query.
     snap_data_->rb_flag_ = true;
   }
   return ret;
@@ -2081,7 +2085,12 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
         snap_valid_ratio = (float) valid_cnt / (float) snap_cnt;
       }
       valid_ratio = incr_valid_ratio < snap_valid_ratio ? incr_valid_ratio : snap_valid_ratio;
-      valid_ratio = valid_ratio < 1.0 ? valid_ratio : 1.0;
+      valid_ratio = valid_ratio < 1.0f ? valid_ratio : 1.0f;
+      // ATTENTION!!!!
+      // valid_ratio is relative to VSAG version, after version 0.13.4 need to be reviewed to see if any modifications are required
+      // get new_ratio from (1 - new_ratio) * 0.9 = 1 - (1 - old_ratio) * 0.7
+      // TOREMOVE : remove this when vsag fix skip_ratio
+      valid_ratio = (6.0f - 7.0f * valid_ratio) / 9.0f;
     }
   }
   if (OB_SUCC(ret)) {
@@ -2218,7 +2227,9 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
     LOG_WARN("failed to allocator iter.", K(ret));
   } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator())) {
   } else if (ctx->flag_ == PVQP_FIRST) {
-    if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
+    if (query_cond->only_complete_data_) {
+      // do nothing
+    } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
 
@@ -2245,7 +2256,10 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       }
     }
 
-    if (OB_SUCC(ret) && OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
+    if (OB_FAIL(ret)) {
+    } else if (query_cond->only_complete_data_) {
+      // do nothing
+    } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   }
@@ -2605,6 +2619,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
     // no get_index_number interface currently
     int64_t current_incr_count = 0;
     if (OB_NOT_NULL(get_incr_index())) {
+      TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::get_index_number(get_incr_index(), current_incr_count))) {
         ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get incr index number", K(ret));
@@ -2625,6 +2640,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
 
     int64_t current_snapshot_count = 0;
     if (OB_NOT_NULL(get_snap_index())) {
+      TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::get_index_number(get_snap_index(), current_snapshot_count))) {
         ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get snap index number", K(ret));

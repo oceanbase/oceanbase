@@ -165,6 +165,31 @@ TEST_F(TestSqlBitSet, do_mask)
   ASSERT_TRUE(bs2.has_member(63));
 }
 
+TEST_F(TestSqlBitSet, init_mask)
+{
+  ObSqlBitSet<16> bs;
+  int64_t mask_bits = 0;
+  for (int64_t i = 1; i < 128; ++i) {
+    mask_bits = i;
+    ASSERT_TRUE(OB_SUCCESS == bs.init_mask(mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+    ASSERT_TRUE(OB_SUCCESS == bs.do_mask(0, mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+
+    mask_bits = i + 1;
+    ASSERT_TRUE(OB_SUCCESS == bs.init_mask(mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+    ASSERT_TRUE(OB_SUCCESS == bs.do_mask(0, mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+
+    mask_bits = i;
+    ASSERT_TRUE(OB_SUCCESS == bs.init_mask(mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+    ASSERT_TRUE(OB_SUCCESS == bs.do_mask(0, mask_bits));
+    ASSERT_EQ(mask_bits, bs.num_members());
+  }
+}
+
 TEST_F(TestSqlBitSet, set_operation)
 {
   ObSqlBitSet<16> bs;

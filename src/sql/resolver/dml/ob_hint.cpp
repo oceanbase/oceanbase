@@ -1012,6 +1012,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && 0 <= val.get_int();
       break;
     }
+    case ENABLE_PDML_INSERT_UP:
     case ENABLE_CONSTANT_TYPE_DEMOTION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));

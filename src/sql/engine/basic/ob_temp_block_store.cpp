@@ -1273,6 +1273,13 @@ int ObTempBlockStore::dump(const bool all_dump, const int64_t target_dump_size /
       if (OB_UNLIKELY(!blk_mem_list_.is_empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("all_dump mode blk_mem_list_ is non-empty", K(ret), K(blk_mem_list_.get_size()));
+      } else if (OB_UNLIKELY((mem_used_ > 0))) {
+        // The `mem_hold` metric accounts not only for memory used by data/index blocks, but also
+        // includes temporarily allocated memory and block reader's temporary memory. So `mem_hold`
+        // may not be zero after dumping.
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected memory statistics", K(ret), K_(mem_hold), K_(mem_used),
+                 K_(alloced_mem_size));
       }
       inner_reader_.reset_cursor(0);
     }

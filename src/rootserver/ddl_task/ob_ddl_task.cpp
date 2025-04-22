@@ -225,7 +225,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     tenant_data_version_(0),
-    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), fts_snapshot_version_(0)
+    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), new_snapshot_version_(0)
 {
 }
 

@@ -4406,7 +4406,7 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
     } else {
       OZ(create_real_cast_expr(expr_factory, src_expr, dst_type, func_expr, session));
     }
-    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    if (OB_SUCC(ret)) {
       if (dst_type.get_collation_level() == CS_LEVEL_INVALID) {
         LOG_WARN("aggregation level is CS_TYPE_INVALID", K(dst_type));
       } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(dst_type.get_collation_level(), cm))) {
@@ -7221,21 +7221,6 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
     column_expr.set_subschema_id(ObXMLSqlType);
   }
 
-  return ret;
-}
-
-int ObRawExprUtils::expr_is_order_consistent(const ObRawExpr *from, const ObRawExpr *to, bool &is_consistent)
-{
-  int ret = OB_SUCCESS;
-  is_consistent = false;
-  if (OB_ISNULL(from) || OB_ISNULL(to)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("expr is null", K(from), K(to));
-  } else if (OB_FAIL(ObObjCaster::is_order_consistent(from->get_result_type(),
-                                                      to->get_result_type(),
-                                                      is_consistent))) {
-    LOG_WARN("check is order consistent failed", K(ret));
-  }
   return ret;
 }
 

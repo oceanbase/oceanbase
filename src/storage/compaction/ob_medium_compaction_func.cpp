@@ -780,11 +780,11 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
       inc_row_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_row_count();
       inc_macro_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_data_macro_block_count();
     }
-
     if (OB_FAIL(ret)) {
     } else if ((0 == macro_block_cnt && inc_row_cnt > SCHEDULE_RANGE_ROW_COUNT_THRESHOLD)
         || (first_sstable->get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD
-            && inc_row_cnt >= first_sstable->get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)) {
+            && inc_row_cnt >= first_sstable->get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)
+        || (is_column_store_medium_info && !first_sstable->is_co_sstable())) {
       const int64_t estimate_macro_cnt = macro_block_cnt + inc_macro_cnt / 5;
       if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, estimate_macro_cnt, expected_task_count))) {
         STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
@@ -1113,11 +1113,8 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     }
   }
 #endif
-  bool is_cs_replica = false;
   // for old version medium info, need generate old version schema
-  if (FAILEDx(ObCSReplicaUtil::check_is_cs_replica(*table_schema, tablet, is_cs_replica))) {
-    LOG_WARN("fail to get is row store", K(ret), K(table_id), KPC(table_schema));
-  } else if (OB_FAIL(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, is_cs_replica))) {
+  if (FAILEDx(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, false/*generate_cs_replica_cg_array*/))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
   } else {
     LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version), K(save_schema_version),

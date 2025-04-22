@@ -266,6 +266,7 @@ public:
    */
   int add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx);
 
+  static bool is_contains_external_object(const DependenyTableStore &dep_schema_objs);
   /**
    * Add new ps plan to PlanCache
    */

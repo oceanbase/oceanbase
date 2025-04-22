@@ -586,6 +586,8 @@ int ObVectorIndexRefresher::do_rebuild() {
   // 1. get base_table row count ( if need )
   // 2. get domain_table row count (if need )
   // 3. get index_id_table row count (if need)
+  ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "RebuildVecIdx"));
+  ObString idx_parameters;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
     LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),K(refresh_ctx_->base_tb_id_));
@@ -606,7 +608,13 @@ int ObVectorIndexRefresher::do_rebuild() {
   }
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index()) {
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
+    bool is_valid = true;
+    if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
+      LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
+    } else if (!idx_parameters.empty()
+        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
+      LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
       LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
     } else if (OB_ISNULL(index_id_tb_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -680,6 +688,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.index_table_id_ = domain_table_schema->get_table_id();
     rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
+    rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
     if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));

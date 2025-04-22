@@ -95,8 +95,7 @@ class ObExternalTableUtils {
                                                 common::ObNewRange &new_range);
 
   static int prepare_single_scan_range(const uint64_t tenant_id,
-                                       const uint64_t table_id,
-                                       const ObString &table_format_or_properties,
+                                       const ObDASScanCtDef &das_ctdef,
                                        ObIArray<int64_t> &partition_ids,
                                        common::ObIArray<common::ObNewRange *> &ranges,
                                        common::ObIAllocator &range_allocator,

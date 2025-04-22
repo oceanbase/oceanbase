@@ -1629,6 +1629,39 @@ int ObLogDelUpd::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   return ret;
 }
 
+int ObLogDelUpd::check_fts_docid_expr(const ObColumnRefRawExpr *expr, const uint64_t table_id, bool &need_column_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  need_column_ref_expr = false;
+  if (!expr->is_virtual_generated_column()) {
+  } else {
+    if (OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, schema guard or get_plan() is nullptr", K(ret), KP(get_plan()), KP(schema_guard));
+    } else if (OB_FAIL(schema_guard->get_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, table schema is nullptr", K(ret), K(table_id));
+    } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos failed", K(ret));
+    } else {
+      for (int64_t i = 0; i < simple_index_infos.count(); ++i) {
+        ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
+        if (is_doc_rowkey_aux(index_info.index_type_) || is_fts_index_aux(index_info.index_type_) ||
+            is_fts_doc_word_aux(index_info.index_type_) || is_multivalue_index_aux(index_info.index_type_)) {
+          need_column_ref_expr = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogDelUpd::replace_dml_info_exprs(
     ObRawExprReplacer &replacer,
     const ObIArray<IndexDMLInfo *> &index_dml_infos)
@@ -1661,7 +1694,12 @@ int ObLogDelUpd::replace_dml_info_exprs(
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->column_old_values_exprs_.count(); ++i) {
       ObRawExpr *&expr = index_dml_info->column_old_values_exprs_.at(i);
       if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column()) {
-        // just skip, nothing to do.
+        bool need_column_ref_expr = false;
+        if (OB_FAIL(check_fts_docid_expr(static_cast<ObColumnRefRawExpr *>(expr), index_dml_info->ref_table_id_, need_column_ref_expr))) {
+          LOG_WARN("fail to check fts docid expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
+        } else if (!need_column_ref_expr && OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
+          LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
+        }
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()) {
         // just skip, nothing to do.
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()) {

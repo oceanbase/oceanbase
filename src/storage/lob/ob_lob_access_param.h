@@ -14,13 +14,10 @@
 #define OCEANBASE_STORAGE_OB_LOB_ACCESS_PARAM_H_
 
 #include "storage/tx/ob_trans_define_v4.h"
+#include "share/ob_tablet_autoincrement_param.h"
 
 namespace oceanbase
 {
-
-namespace share {
-class ObTabletCacheInterval;
-}
 
 namespace blocksstable {
 class ObDatumRow;

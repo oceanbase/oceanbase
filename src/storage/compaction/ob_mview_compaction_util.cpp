@@ -471,6 +471,8 @@ int ObMviewCompactionHelper::convert_datum_range(
         if (i < merge_range.get_start_key().get_datum_cnt()) {
           if (OB_FAIL(merge_range.get_start_key().get_datum(i).to_obj_enhance(start_key[i], col_descs.at(i).col_type_))) {
             LOG_WARN("Failed to convert to obj", K(ret), K(i));
+          } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+            start_key[i].set_has_lob_header();
           }
         } else {
           start_key[i].set_min_value();
@@ -479,6 +481,8 @@ int ObMviewCompactionHelper::convert_datum_range(
         } else if (i < merge_range.get_end_key().get_datum_cnt()) {
           if (OB_FAIL(merge_range.get_end_key().get_datum(i).to_obj_enhance(end_key[i], col_descs.at(i).col_type_))) {
             LOG_WARN("Failed to convert to obj", K(ret), K(i));
+          } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+            end_key[i].set_has_lob_header();
           }
         } else {
           end_key[i].set_max_value();

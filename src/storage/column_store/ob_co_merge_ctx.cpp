@@ -212,13 +212,40 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
   return ret;
 }
 
-// major_sstable_status_ is decided in static_param_, according to the storage schema in medium compaction info
-int ObCOTabletMergeCtx::check_and_set_build_redundant_row_merge()
+int ObCOTabletMergeCtx::handle_alter_cg_delayed_in_cs_replica()
 {
   int ret = OB_SUCCESS;
-  if (static_param_.is_cs_replica_ && static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
-    static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
-    LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for cs replica", K(ret), K_(static_param));
+  // in cs replica, alter column group delayed need reset co major merge type in some conditions
+  if (get_ls()->is_cs_replica() && ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(static_param_.co_major_merge_type_)) {
+    if (static_param_.is_cs_replica_) {
+      // major_sstable_status_ is decided in static_param_, according to the storage schema in medium compaction info
+      if (static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
+        static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
+        LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for cs replica", K(ret), K_(static_param));
+      }
+    } else {
+      // Storage schema in tablet may be column store when alter column group delayed and do transfer (with updated storage schema).
+      // The operation will make it confuse to decide the co major merge type, so need handle it case by case.
+      ObStorageSchema *schema_on_tablet = nullptr;
+      if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
+        LOG_WARN("failed to load schema", K(ret));
+      } else if (OB_ISNULL(schema_on_tablet)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema on tablet is nullptr", K(ret));
+      } else if (schema_on_tablet->is_column_table_schema_) {
+        if (is_rowkey_major_sstable(static_param_.major_sstable_status_)) {
+          // storage schema for compaction: rowkey cg + normal cg (from table schema after alter column group delayed)
+          // base major sstable: rowkey cg + normal cg (from cs replica)
+          static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
+          LOG_INFO("[CS-Replica] Decide build column store from rowkey cg for potential cs replica", K(ret), K_(static_param));
+        } else if (static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
+          // storage schema for compaction: all cg + normal cg (from table schema after alter column group delayed)
+          // base major sstable: rowkey cg + normal cg (from cs replica)
+          static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
+          LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for potential cs replica", K(ret), K_(static_param));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -280,8 +307,8 @@ int ObCOTabletMergeCtx::prepare_schema()
 
   if (FAILEDx(prepare_row_store_cg_schema())) {
     LOG_WARN("failed to init major sstable status", K(ret));
-  } else if (OB_FAIL(check_and_set_build_redundant_row_merge())) {
-    LOG_WARN("failed to check and set build redundant row merge", K(ret), KPC(this));
+  } else if (OB_FAIL(handle_alter_cg_delayed_in_cs_replica())) {
+    LOG_WARN("failed to handle alter column group in cs replica ", K(ret), KPC(this));
   } else {
     LOG_INFO("[CS-Replica] finish prepare schema for co merge", K(ret),
              "is_cs_replica", static_param_.is_cs_replica_, KPC(this));
@@ -758,6 +785,7 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
   // check cksum between co and cg sstables
   const common::ObTabletID &tablet_id = get_tablet_id();
   ObSSTableMetaHandle meta_handle;
+  int64_t new_progressive_merge_step = OB_INVALID_INDEX_INT64;
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(base_co_table)) {
     ret = OB_ERR_UNEXPECTED;
@@ -771,8 +799,11 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
     if (OB_CHECKSUM_ERROR == ret) {
       (void) get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id, true/*found_cksum_error*/);
     }
-  } else if (OB_FAIL(base_co_table->fill_cg_sstables(cg_sstables))) {
-    LOG_WARN("failed to fill cg sstables to co sstable", K(ret), KPC(base_co_table));
+  } else if (progressive_merge_mgr_.need_calc_progressive_merge()
+    && FALSE_IT(new_progressive_merge_step = get_result_progressive_merge_step(base_rowkey_cg_idx_))) {
+    // make the progressive step of rowkey cg in all replicas be consistent
+  } else if (OB_FAIL(base_co_table->fill_cg_sstables(cg_sstables, new_progressive_merge_step))) {
+    LOG_WARN("failed to fill cg sstables to co sstable", K(ret), K(new_progressive_merge_step), KPC(base_co_table));
   } else {
     new_sstable = base_co_table;
     LOG_DEBUG("[RowColSwitch] Success to fill cg sstables to co sstable", KPC(new_sstable));

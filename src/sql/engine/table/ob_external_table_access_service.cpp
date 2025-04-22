@@ -37,8 +37,8 @@ extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
 
 namespace share
 {
-struct ObPartitionIdRowPair;
-class ObPartitionIdRowPairArray;
+struct ObExternalTablePartInfo;
+class ObExternalTablePartInfoArray;
 }
 using namespace share::schema;
 using namespace common;
@@ -822,14 +822,13 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   }
   return ret;
 }
-int ObExternalTableRowIterator::calc_file_part_list_value_by_array(const int64_t part_id,
-                                                                  ObIAllocator &allocator,
-                                                                  const share::ObPartitionIdRowPairArray *partition_array,
-                                                                  ObNewRow &value)
+int ObExternalTableRowIterator::calc_file_part_list_value_by_array(
+                                  const int64_t part_id, ObIAllocator &allocator,
+                                  const share::ObExternalTablePartInfoArray *partition_array, ObNewRow &value)
 {
   int ret = OB_SUCCESS;
   int64_t partition_index = OB_INVALID_INDEX;
-  share::ObPartitionIdRowPair partition;
+  share::ObExternalTablePartInfo partition;
 
   int64_t partition_num = partition_array->count();
   if (OB_ISNULL(partition_array) || partition_num <= 0) {

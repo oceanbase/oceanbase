@@ -946,6 +946,10 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
 DEF_INT(_tx_debug_level, OB_TENANT_PARAMETER, "0", "[0, 10]",
         "the debug level of transaction module. Range: [0, 10] in integer.",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_mock_stmt_flush_table, OB_TENANT_PARAMETER, "False",
+        "Enable the mock MySQL statement FLUSH TABLE. When enabled, the mock SQL statement will do nothing. "
+        "If disabled, executing the mock SQL statement will return the 'NOT_SUPPORTED' error code.",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// rpc config
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
