@@ -8323,6 +8323,8 @@ Outputs & filters:
       access([t2.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  Equal Parameter Constraints:
+      :1 = :0
 explain select a from t1 intersect select a from t2 intersect select b from t3;
 Query Plan
 =====================================================================

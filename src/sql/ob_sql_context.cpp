@@ -250,6 +250,9 @@ void ObSqlCtx::reset()
   is_protocol_weak_read_ = false;
   first_plan_hash_ = 0;
   first_outline_data_.reset();
+  first_equal_param_cons_cnt_ = 0;
+  first_const_param_cons_cnt_ = 0;
+  first_expr_cons_cnt_ = 0;
   if (nullptr != reroute_info_) {
     reroute_info_->reset();
     op_reclaim_free(reroute_info_);

@@ -393,6 +393,7 @@ private:
   int append_condition_array(ObIArray<ObRawExprCondition *> &conditions, int count, ObRawExprCondition *value);
 
   int filter_lateral_correlated_preds(TableItem &table_item, ObIArray<ObRawExpr*> &preds);
+  void reset();
 
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
@@ -402,6 +403,9 @@ private:
   ObSEArray<ObDMLStmt *, 8> transed_stmts_;
   ObSEArray<ObHint *, 4> applied_hints_;
   ObSEArray<ObSqlTempTableInfo *, 2> temp_table_infos_;
+  ObSEArray<ObRawExpr *, 4> null_constraints_;
+  ObSEArray<ObRawExpr *, 4> not_null_constraints_;
+  ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
   bool real_happened_;
 };
 

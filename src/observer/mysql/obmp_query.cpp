@@ -603,6 +603,9 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                      need_disconnect);
     ctx_.first_plan_hash_ = 0;
     ctx_.first_outline_data_.reset();
+    ctx_.first_equal_param_cons_cnt_ = 0;
+    ctx_.first_const_param_cons_cnt_ = 0;
+    ctx_.first_expr_cons_cnt_ = 0;
     ctx_.clear();
   }
   return ret;

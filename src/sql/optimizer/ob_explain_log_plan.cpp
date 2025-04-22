@@ -123,10 +123,11 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
   ObSqlCtx *sql_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(get_stmt());
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
   if (OB_ISNULL(real_plan) || OB_ISNULL(explain_stmt)
       || OB_ISNULL(exec_ctx = get_optimizer_context().get_exec_ctx())
       || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
-      || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
+      || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx()) || OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(session_info), K(exec_ctx), K(sql_ctx));
   } else if (session_info->is_inner() || sql_ctx->is_prepare_protocol_) {
@@ -162,6 +163,9 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
       } else {
         sql_ctx->first_outline_data_.assign_ptr(plan_text.buf_, static_cast<ObString::obstr_size_t>(plan_text.pos_));
         sql_ctx->first_plan_hash_ = real_plan->get_signature();
+        sql_ctx->first_equal_param_cons_cnt_ = query_ctx->all_equal_param_constraints_.count();
+        sql_ctx->first_const_param_cons_cnt_ = query_ctx->all_plan_const_param_constraints_.count();
+        sql_ctx->first_expr_cons_cnt_ = query_ctx->all_expr_constraints_.count();
         ret = OB_SQL_RETRY_SPM;
         LOG_WARN("generate plan again for explain use outline", K(ret));
       }
@@ -185,12 +189,26 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
           ret = OB_OUTLINE_NOT_REPRODUCIBLE;
           LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_outline_data_));
         }
+        if (query_ctx->all_equal_param_constraints_.count() != sql_ctx->first_equal_param_cons_cnt_ ||
+            query_ctx->all_plan_const_param_constraints_.count() != sql_ctx->first_const_param_cons_cnt_ ||
+            query_ctx->all_expr_constraints_.count() != sql_ctx->first_expr_cons_cnt_) {
+          ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_equal_param_cons_cnt_),
+                                                          K(sql_ctx->first_const_param_cons_cnt_),
+                                                          K(sql_ctx->first_expr_cons_cnt_),
+                                                          K(query_ctx->all_equal_param_constraints_.count()),
+                                                          K(query_ctx->all_plan_const_param_constraints_.count()),
+                                                          K(query_ctx->all_expr_constraints_.count()));
+        }
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to generate plan use outline", K(cur_plan_hash), K(cur_outline_data));
         }
       }
       sql_ctx->first_plan_hash_ = 0;
       sql_ctx->first_outline_data_.reset();
+      sql_ctx->first_equal_param_cons_cnt_ = 0;
+      sql_ctx->first_const_param_cons_cnt_ = 0;
+      sql_ctx->first_expr_cons_cnt_ = 0;
     }
   }
   return ret;

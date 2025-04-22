@@ -10223,6 +10223,18 @@ int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
   return ret;
 }
 
+int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
+                                                ObIArray<ObRawExpr *> &null_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < null_exprs.count(); ++i) {
+    if (OB_FAIL(add_param_null_constraint(ctx, null_exprs.at(i)))) {
+      LOG_WARN("failed to add param null constraint", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
                                                          ObRawExpr *expr,
                                                          const ObRawExpr *dst_expr)

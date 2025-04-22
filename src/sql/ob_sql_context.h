@@ -652,6 +652,9 @@ public:
   bool is_text_ps_mode_;
   uint64_t first_plan_hash_;
   common::ObString first_outline_data_;
+  int64_t first_equal_param_cons_cnt_;
+  int64_t first_const_param_cons_cnt_;
+  int64_t first_expr_cons_cnt_;
   bool is_bulk_;
   ObInsertRewriteOptCtx ins_opt_ctx_;
   union
