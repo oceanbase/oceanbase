@@ -3171,6 +3171,246 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   reuse();
 }
 
+int check_json_datum(ObIAllocator& allocator, const ObDatum& src_datum, const ObDatum& decode)
+{
+  int ret = OB_SUCCESS;
+  if (decode.is_null()) {
+    LOG_TRACE("compare info", K(src_datum), K(decode));
+    if (! src_datum.is_null()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("src is not null", K(src_datum), K(decode));
+      ob_abort();
+    }
+  } else {
+    const ObLobCommon& lob_common = decode.get_lob_data();
+    ObString src = src_datum.get_string();
+    ObString output = decode.get_string();
+    LOG_TRACE("compare info", K(src_datum), K(decode));
+    if (src.compare(output) != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("src and decode is not binary equal",  K(src_datum), K(decode));
+      ob_abort();
+    }
+  }
+  return ret;
+}
+
+TEST_F(TestSemiStructEncoding, test_zero_stream)
+{
+  share::ObTenantEnv::get_tenant_local()->id_ = 500;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  const int64_t row_cnt = 4;
+  ObColDatums datums(allocator);
+  ObMicroBlockCSEncoder encoder;
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 3;
+  ObObjType col_types[col_cnt] = {ObIntType, ObJsonType, ObJsonType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.semistruct_encoding_type_.mode_ = 1;
+
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
+  { // 0
+    row.storage_datums_[0].set_int(0);
+    {
+      ObString j_text("{\"avatar_url\":\"111111111111111111\",\"display_login\":\"dependabot\",\"gravatar_id\":\"2222222222222222\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_string(json_datum.get_string());
+    }
+    {
+      ObString j_text("{\"id\":240446072,\"name\":\"AdamariMosqueda/P05.Mosqueda-Espinoza-Adamari-Antonia\",\"url\":\"xaau;||api$github$com/repos/AdamariMosqueda/P05.Mosqueda-Espinoza-Adamari-Antonia\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  { // 1
+    row.storage_datums_[0].set_int(1);
+    {
+      ObString j_text("{\"avatar_url\":\"2222222222222222\",\"display_login\":\"dependabot\",\"gravatar_id\":\"33333333333333333\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_string(json_datum.get_string());
+    }
+    {
+      ObString j_text("{\"id\":561944721,\"name\":\"disha4u/CSE564-Assignment3\",\"url\":\"xaau;||api$github$com/repos/disha4u/CSE564-Assignment3\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  {
+    row.storage_datums_[0].set_int(2);
+    {
+      ObString j_text("{\"avatar_url\":\"2222222222222222\",\"display_login\":\"dependabot\",\"gravatar_id\":\"2222222222222222\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_string(json_datum.get_string());
+    }
+    {
+      ObString j_text("{\"id\":481452780,\"name\":\"mo9a7i/time_now\",\"url\":\"xaau;||api$github$com/repos/mo9a7i/time_now\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  {
+    row.storage_datums_[0].set_int(3);
+    {
+      ObString j_text("{\"avatar_url\":\"111111111111111111\",\"display_login\":\"dependabot\",\"gravatar_id\":\"2222222222222222\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_string(json_datum.get_string());
+    }
+    {
+      ObString j_text("{\"id\":562683951,\"name\":\"amulyadutta/Presenter\",\"url\":\"xaau;||api$github$com/repos/amulyadutta/Presenter\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  {
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
+    ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+    ASSERT_EQ(encoder.encoders_[2]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+    ObMicroBlockData full_transformed_data;
+    ObMicroBlockCSDecoder decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+    for (int32_t i = 0; i < row_cnt; ++i) {
+      ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, row));
+      ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2), row.storage_datums_[1])) << "i: " << i;
+      ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2 + 1), row.storage_datums_[2])) << "i: " << i;
+    }
+  }
+  encoder.reuse();
+  datums.reuse();
+  { // 0
+    row.storage_datums_[0].set_int(0);
+    {
+      ObDatum json_datum;json_datum.set_null();
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_null();
+    }
+    {
+      ObString j_text("{\"id\":240446072,\"name\":\"AdamariMosqueda/P05.Mosqueda-Espinoza-Adamari-Antonia\",\"url\":\"xaau;||api$github$com/repos/AdamariMosqueda/P05.Mosqueda-Espinoza-Adamari-Antonia\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  { // 1
+    row.storage_datums_[0].set_int(1);
+    {
+      ObDatum json_datum;json_datum.set_null();
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_null();
+    }
+    {
+      ObString j_text("{\"id\":561944721,\"name\":\"disha4u/CSE564-Assignment3\",\"url\":\"xaau;||api$github$com/repos/disha4u/CSE564-Assignment3\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  {
+    row.storage_datums_[0].set_int(2);
+    {
+      ObDatum json_datum;json_datum.set_null();
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_null();
+    }
+    {
+      ObString j_text("{\"id\":481452780,\"name\":\"mo9a7i/time_now\",\"url\":\"xaau;||api$github$com/repos/mo9a7i/time_now\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  {
+    row.storage_datums_[0].set_int(3);
+    {
+      ObDatum json_datum;json_datum.set_null();
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_null();
+    }
+    {
+      ObString j_text("{\"id\":562683951,\"name\":\"amulyadutta/Presenter\",\"url\":\"xaau;||api$github$com/repos/amulyadutta/Presenter\"}");
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[2].set_string(json_datum.get_string());
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  {
+    ObMicroBlockDesc micro_block_desc;
+    ObMicroBlockHeader *header = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
+    ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+    ASSERT_EQ(encoder.encoders_[2]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+    { // full transform
+      ObMicroBlockData full_transformed_data;
+      ObMicroBlockCSDecoder decoder;
+      ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+      for (int32_t i = 0; i < row_cnt; ++i) {
+        ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, row));
+        ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2), row.storage_datums_[1])) << "i: " << i;
+        ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2 + 1), row.storage_datums_[2])) << "i: " << i;
+      }
+    }
+    { // part transform
+      ObMicroBlockCSDecoder decoder;
+      const char *block_buf = micro_block_desc.buf_  - header->header_size_;
+      const int64_t block_buf_len = micro_block_desc.buf_size_ + header->header_size_;
+      ObMicroBlockData part_transformed_data(block_buf, block_buf_len);
+      MockObTableReadInfo read_info;
+      common::ObArray<int32_t> storage_cols_index;
+      common::ObArray<share::schema::ObColDesc> col_descs;
+      for(int store_id = 0; store_id < col_cnt; ++store_id) {
+        ASSERT_EQ(OB_SUCCESS, storage_cols_index.push_back(store_id));
+        ASSERT_EQ(OB_SUCCESS, col_descs.push_back(col_descs_.at(store_id)));
+      }
+      ASSERT_EQ(OB_SUCCESS, read_info.init(allocator, col_cnt, rowkey_cnt, false, col_descs, &storage_cols_index));
+      ASSERT_EQ(OB_SUCCESS, decoder.init(part_transformed_data, read_info));
+      for (int32_t i = 0; i < row_cnt; ++i) {
+        ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, row));
+        ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2), row.storage_datums_[1])) << "i: " << i;
+        ASSERT_EQ(OB_SUCCESS, check_json_datum(allocator, datums.at(i * 2 + 1), row.storage_datums_[2])) << "i: " << i;
+      }
+    }
+  }
+}
+
 TEST_F(TestSemiStructEncoding, test_heteroid_sub_column)
 {
   ObArenaAllocator allocator(ObModIds::TEST);

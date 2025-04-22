@@ -461,6 +461,9 @@ int ObCSMicroBlockTransformer::build_semistruct_column_stream_(
       }
     }
   }
+  if (OB_SUCC(ret) && semistruct_header->stream_cnt_ == 0) {
+    pre_streams_len += semistruct_header->header_len_;
+  }
   return ret;
 }
 
