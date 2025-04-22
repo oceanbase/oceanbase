@@ -634,7 +634,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
           bool exist = false;
           bool is_private_syn = false;
           OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
-                                                                        session_info->get_database_id(),
+                                                                        pc_ctx.key_.db_id_,
                                                                         synonym_info->get_synonym_name_str(),
                                                                         exist,
                                                                         is_private_syn));
@@ -643,7 +643,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
             ret = OB_OLD_SCHEMA_VERSION;
             LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
           } else {
-            OZ (resolve_and_check_synonym(schema_checker, tenant_id, session_info->get_database_id(), *session_info, *synonym_info));
+            OZ (resolve_and_check_synonym(schema_checker, tenant_id, pc_ctx.key_.db_id_, *session_info, *synonym_info));
             OX (new_version = synonym_info->get_schema_version());
           }
         }
