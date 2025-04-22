@@ -2960,7 +2960,11 @@ typedef enum ObOutlineType
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
 #define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS \
                            || (op) == T_SHOW_CREATE_USER || (op) == T_SHOW_CATALOGS \
-                           || (op) == T_SHOW_CREATE_CATALOG)
+                           || (op) == T_SHOW_CREATE_CATALOG || (op) == T_SHOW_PROFILE \
+                           || (op) == T_SHOW_PROCEDURE_CODE || (op) == T_SHOW_FUNCTION_CODE \
+                           || (op) == T_SHOW_ENGINE || (op) == T_SHOW_OPEN_TABLES \
+                           || (op) == T_SHOW_PLUGINS || (op) == T_SHOW_CHECK_TABLE \
+                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

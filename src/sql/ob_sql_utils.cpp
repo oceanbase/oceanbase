@@ -1708,26 +1708,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                && root->children_[1]->type_ == T_SELECT
                && NULL == root->children_[1]->children_[PARSE_SELECT_FOR_UPD]) {
       ret = true;
-    } else if (T_SHOW_COLUMNS == type
-               || T_SHOW_TABLES == type
-               || T_SHOW_DATABASES == type
-               || T_SHOW_TABLE_STATUS == type
-               || T_SHOW_SERVER_STATUS == type
-               || T_SHOW_VARIABLES == type
-               || T_SHOW_SCHEMA == type
-               || T_SHOW_CREATE_DATABASE == type
-               || T_SHOW_CREATE_TABLE == type
-               || T_SHOW_CREATE_VIEW == type
-               || T_SHOW_WARNINGS == type
-               || T_SHOW_ERRORS == type
-               || T_SHOW_GRANTS == type
-               || T_SHOW_CHARSET == type
-               || T_SHOW_COLLATION == type
-               || T_SHOW_PARAMETERS == type
-               || T_SHOW_INDEXES == type
-               || T_SHOW_PROCESSLIST == type
-               || T_SHOW_TABLEGROUPS == type
-               || T_SHOW_TRIGGERS == type
+    } else if (IS_SHOW_STMT(type)
                || T_HELP == type
                || T_USE_DATABASE == type
                || T_TRANSACTION == type
@@ -1737,13 +1718,6 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_VARIABLE_SET == type
                || T_SET_NAMES == type //read only not restrict it
                || T_SET_CHARSET == type  //read only not restrict it
-               || T_SHOW_RECYCLEBIN == type
-               || T_SHOW_PROFILE == type
-               || T_SHOW_TENANT == type
-               || T_SHOW_RESTORE_PREVIEW == type
-               || T_SHOW_SEQUENCES == type
-               || T_SHOW_ENGINE == type
-               || T_SHOW_OPEN_TABLES == type
                || T_XA_START == type
                || T_XA_END == type
                || T_XA_PREPARE == type
@@ -1751,10 +1725,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_XA_ROLLBACK == type
                || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
-               || T_SHOW_CREATE_USER == type
-               || T_SET_CATALOG == type
-               || T_SHOW_CATALOGS == type
-               || T_SHOW_CREATE_CATALOG == type) {
+               || T_SET_CATALOG == type) {
       ret = true;
     }
   }
