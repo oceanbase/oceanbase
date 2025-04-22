@@ -58,6 +58,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
 {
   MDS_TG(5_ms);
   int ret = OB_SUCCESS;
+  CONSUMER_GROUP_FUNC_GUARD(share::ObFunctionType::PRIO_REPLAY_HIGH);
   storage::ObTabletHandle tablet_handle;
   bool can_skip_replay = false;
   ObTablet *tablet = nullptr;
