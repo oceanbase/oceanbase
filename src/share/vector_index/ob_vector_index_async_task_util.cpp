@@ -1077,8 +1077,9 @@ int ObVecIndexAsyncTask::do_work()
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter)) {
-    vector_index_service->get_allocator().free(new_adapter);
-    new_adapter = nullptr;
+    if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_adapter(new_adapter))) {
+      LOG_WARN("failed to release adapter", K(ret));
+    }
   }
 
   if (OB_NOT_NULL(ctx_)) {
