@@ -124,18 +124,17 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
       const ObObj &obj  = index_key.get_obj_ptr()[i];
       if (OB_FAIL(obj.print_plain_str_literal(buffer, buffer_len, pos))) {
         LOG_WARN("fail to print_plain_str_literal", K(ret), KP(buffer));
-      } else if (i < valid_index_size - 1) {
-        if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
-          LOG_WARN("databuff print failed", K(ret));
-        }
+      } else if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
+        LOG_WARN("databuff print failed", K(ret));
       }
     }
-    if (buffer != nullptr) {
-      buffer[pos++] = '\0';
-      if (OB_SIZE_OVERFLOW == ret) {
-        LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
-        ret = OB_SUCCESS;
-      }
+    if (OB_SUCC(ret) && pos > 0) {
+      buffer[pos - 1] = '\0'; // overwrite the tail '-'
+    }
+    if (OB_SIZE_OVERFLOW == ret) {
+      buffer[buffer_len - 1] = '\0';
+      LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
+      ret = OB_SUCCESS;
     }
   }
 
