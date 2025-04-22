@@ -40,6 +40,8 @@ void ObPLCacheObject::reset()
   sql_expression_factory_.destroy();
   expr_operator_factory_.destroy();
   expressions_.reset();
+  concurrent_num_ = 0;
+  max_concurrent_num_ = ObMaxConcurrentParam::UNLIMITED;
 }
 
 int ObPLCacheObject::set_tenant_sys_schema_version(schema::ObSchemaGetterGuard &schema_guard,
@@ -52,6 +54,31 @@ int ObPLCacheObject::set_tenant_sys_schema_version(schema::ObSchemaGetterGuard &
   OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
   OX (set_tenant_schema_version(tenant_schema_version));
   OX (set_sys_schema_version(sys_schema_version));
+  return ret;
+}
+
+int ObPLCacheObject::inc_concurrent_num()
+{
+  int ret = OB_SUCCESS;
+  int64_t concurrent_num = 0;
+  int64_t new_num = 0;
+  bool is_succ = false;
+  if (max_concurrent_num_ == ObMaxConcurrentParam::UNLIMITED) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current pl object is unlimit", K(ret), K(max_concurrent_num_));
+  } else {
+    while(OB_SUCC(ret) && false == is_succ) {
+      concurrent_num = ATOMIC_LOAD(&concurrent_num_);
+      if (0 == max_concurrent_num_) {
+        ret = OB_REACH_MAX_CONCURRENT_NUM;
+      } else if (concurrent_num >= max_concurrent_num_) {
+        ret = OB_REACH_MAX_CONCURRENT_NUM;
+      } else {
+        new_num = concurrent_num + 1;
+        is_succ = ATOMIC_BCAS(&concurrent_num_, concurrent_num, new_num);
+      }
+    }
+  }
   return ret;
 }
 

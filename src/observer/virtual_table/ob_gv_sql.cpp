@@ -198,9 +198,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SQL_ID: {
       if (cache_stat_updated) {
         ObString sql_id;
-        if (OB_NOT_NULL(pl_object)
-          && (pl_object->get_ns() == ObLibCacheNameSpace::NS_CALLSTMT
-            || pl_object->get_ns() == ObLibCacheNameSpace::NS_ANON)) {
+        if (OB_NOT_NULL(pl_object)) {
             if (OB_FAIL(ob_write_string(*allocator_,
                                         pl_object->get_stat().sql_id_,
                                         sql_id))) {
@@ -756,6 +754,8 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.outline_version_);
+      } else if (NULL != pl_object) {
+        cells[i].set_int(pl_object->get_stat().outline_version_.version_);
       } else {
         cells[i].set_int(0);
       }
@@ -766,6 +766,8 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.outline_id_);
+      } else if (NULL != pl_object) {
+        cells[i].set_int(pl_object->get_stat().outline_version_.object_id_);
       } else {
         cells[i].set_int(0);
       }
@@ -794,13 +796,27 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::OUTLINE_DATA: {
       if (!cache_stat_updated) {
         cells[i].set_null();
-      } else if (cache_obj->is_sql_crsr()) {
+      } else if (cache_obj->is_sql_crsr() || NULL != pl_object) {
         ObString outline_data;
-        if (OB_FAIL(ob_write_string(*allocator_,
+        if (NULL != pl_object) {
+          int64_t buf_len = ObPlParamInfo::MAX_STR_DES_LEN_PL;
+          char *buf = (char *)allocator_->alloc(buf_len);
+          int64_t pos = 0;
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SERVER_LOG(WARN, "fail to alloc memory for OUTLINE_DATA", K(ret));
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                  "/*+max_concurrent(%ld)*/", pl_object->get_max_concurrent_num()))) {
+            SERVER_LOG(WARN, "fail to print string of concurrent", K(ret));
+          } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, buf), outline_data))) {
+            SERVER_LOG(ERROR, "copy outline_data failed", K(ret));
+          }
+        } else if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.outline_data_,
                                     outline_data))) {
           SERVER_LOG(ERROR, "copy outline_data failed", K(ret));
-        } else {
+        }
+        if (OB_SUCC(ret)) {
           cells[i].set_lob_value(ObLongTextType, outline_data.ptr(),
                                  static_cast<int32_t>(outline_data.length()));
           cells[i].set_collation_type(ObCharset::get_default_collation(
