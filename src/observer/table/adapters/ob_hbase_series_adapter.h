@@ -52,7 +52,7 @@ typedef common::hash::ObHashMap<KTNode, QVMap *, common::hash::NoPthreadDefendMo
 class ObHSeriesAdapter : public ObIHbaseAdapter
 {
 public:
-  ObHSeriesAdapter() = default;
+  ObHSeriesAdapter(): table_query_(nullptr) {}
   virtual ~ObHSeriesAdapter() {
     release_map();
   }
@@ -86,6 +86,7 @@ private:
 
 private:
   KTAggMap kt_agg_map_;
+  ObTableQuery *table_query_;
 
 private:
   // disallow copy

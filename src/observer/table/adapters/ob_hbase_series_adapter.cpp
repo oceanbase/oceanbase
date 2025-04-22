@@ -131,19 +131,23 @@ int ObHSeriesAdapter::get_query_iter(ObTableExecCtx &ctx,
                                      ObTableApiRowIterator &tb_row_iter)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObTableQuery, table_query)
-  {
-    if (OB_FAIL(construct_query(ctx, entity, table_query))) {
-      LOG_WARN("fail to construct query", K(ret), K(ctx), K(entity));
-    } else if (OB_FAIL(init_scan(ctx, table_query, scan_ctx))) {
-      LOG_WARN("fail to init scan table ctx", K(ret));
-    } else if (FALSE_IT(scan_ctx.set_batch_tablet_ids(&table_query.get_tablet_ids()))) {
-    } else if (OB_FAIL(ObTableApiService::query(scan_ctx, tb_row_iter))) {
-      LOG_WARN("fail to query in hbase series adapter", K(ret), K(table_query));
-    } else if (OB_FAIL(tb_row_iter.open())) {
-      LOG_WARN("fail to open table api row iter", K(ret), K(table_query));
-    }
+  if (OB_NOT_NULL(table_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table query should be null", K(ret));
+  } else if (OB_ISNULL(table_query_ = OB_NEWx(ObTableQuery, (&allocator_)))) { // will be freed in del
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new table query", K(ret));
+  } else if (OB_FAIL(construct_query(ctx, entity, *table_query_))) {
+    LOG_WARN("fail to construct query", K(ret), K(ctx), K(entity));
+  } else if (OB_FAIL(init_scan(ctx, *table_query_, scan_ctx))) {
+    LOG_WARN("fail to init scan table ctx", K(ret));
+  } else if (FALSE_IT(scan_ctx.set_batch_tablet_ids(table_query_->get_tablet_ids_ptr()))) {
+  } else if (OB_FAIL(ObTableApiService::query(scan_ctx, tb_row_iter))) {
+    LOG_WARN("fail to query in hbase series adapter", K(ret), KPC(table_query_));
+  } else if (OB_FAIL(tb_row_iter.open())) {
+    LOG_WARN("fail to open table api row iter", K(ret), KPC(table_query_));
   }
+
   return ret;
 }
 
@@ -264,6 +268,7 @@ int ObHSeriesAdapter::del(ObTableExecCtx &ctx, const ObITableEntity &cell)
   OB_DELETEx(ObTableCtx, &allocator_, scan_ctx);
   OB_DELETEx(ObTableCtx, &allocator_, del_ctx);
   OB_DELETEx(ObTableCtx, &allocator_, ins_ctx);
+  OB_DELETEx(ObTableQuery, &allocator_, table_query_); // allocated in get_query_iter
 
   return ret;
 }

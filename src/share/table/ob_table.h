@@ -1202,6 +1202,13 @@ public:
   {
     return tablet_ids_;
   }
+  OB_INLINE ObIArray<common::ObTabletID> *get_tablet_ids_ptr()
+  {
+    return &tablet_ids_;
+  }
+  OB_INLINE const ObIArray<common::ObTabletID> *get_tablet_ids_ptr() const {
+    return &tablet_ids_;
+  }
   OB_INLINE void invalid_all_tablet_id()
   {
     for (int64_t i = 0; i < tablet_ids_.count(); i++) {

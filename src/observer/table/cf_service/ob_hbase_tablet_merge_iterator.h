@@ -59,7 +59,8 @@ public:
       cell_iter_->close();
     }
   }
-  TO_STRING_KV(KPC_(cur_row));
+
+  TO_STRING_KV(KPC_(cur_row), K_(valid));
 private:
   // current row
   common::ObNewRow *cur_row_;

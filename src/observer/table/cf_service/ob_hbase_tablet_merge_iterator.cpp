@@ -31,6 +31,7 @@ int ObHbaseCellRowIter::next_row()
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get cell", K(ret));
     } else {
+      set_valid(false);
       LOG_DEBUG("one cell iter end", K(ret), KP(this));
     }
   } else {

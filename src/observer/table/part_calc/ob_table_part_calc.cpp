@@ -809,8 +809,11 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
   part_ids.set_attr(ObMemAttr(MTL_ID(), "PartIds"));
   subpart_ids.set_attr(ObMemAttr(MTL_ID(), "SubPartIds"));
   tmp_tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TmpPartIds"));
-  bool is_part_single = part_range.is_single_rowkey() && part_range.get_start_key().get_obj_cnt() == 1;
-  bool is_subpart_single = subpart_range.is_single_rowkey() && subpart_range.get_start_key().get_obj_cnt() == 1;
+  // TODO: In HBase scenarios, each partition level has only one partition key,
+  // so we only need to check if start_key == end_key to determine if it's a single partition, no need to check border_flag
+  // Later if table also goes through here, we need to push down the running mode here
+  bool is_part_single = is_single_rowkey(part_range) && part_range.get_start_key().get_obj_cnt() == 1;
+  bool is_subpart_single = is_single_rowkey(subpart_range) && subpart_range.get_start_key().get_obj_cnt() == 1;
 
   if (is_part_single && table_schema.is_hash_like_part()) {
     if (OB_FAIL(get_hash_like_tablet_id(tablet_mapper,
@@ -1000,6 +1003,19 @@ int ObTablePartCalculator::calc(const ObString table_name,
   return ret;
 }
 
+bool ObTablePartCalculator::is_single_rowkey(const common::ObNewRange &range) const
+{
+  bool bret = false;
+  ObRowkey start_key = range.get_start_key();
+  ObRowkey end_key = range.get_end_key();
+  if (start_key.is_min_row() || start_key.is_max_row()
+      || end_key.is_min_row() || end_key.is_max_row()) {
+    bret = false;
+  } else if (start_key == end_key) { // ignore border flag
+    bret = true;
+  }
+  return bret;
+}
 
 } // end namespace table
 } // end namespace oceanbase

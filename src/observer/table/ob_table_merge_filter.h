@@ -37,6 +37,11 @@ public:
   virtual Row *get_cur_row() = 0;
   virtual const Row *get_cur_row() const = 0;
   virtual int rescan(ReScanParam&... rescan_param) = 0;
+
+  bool valid() const { return valid_; }
+  void set_valid(bool valid) { valid_ = valid; }
+protected:
+  bool valid_ = true;
 };
 
 // cache query result row to adapt table merge row iter
@@ -103,11 +108,18 @@ public:
   }
   template<typename... ReScanParam>
   int rescan(ReScanParam&... rescan_param);
-  TO_STRING_KV(K_(binary_heap));
+
+  void reset() {
+    binary_heap_.reset();
+    last_pop_iter_ = nullptr;
+  }
+
+  TO_STRING_KV(K_(binary_heap), K_(inner_row_iters));
 
 private:
   int build_heap(const common::ObIArray<RowIterator*>& inner_row_iters);
   int iter_and_push_iterator(RowIterator &iter);
+  int direct_push_iterator(RowIterator &iter);
 
 private:
   struct HeapCompare
@@ -183,19 +195,43 @@ template <typename Row, typename Compare, typename RowIterator>
 int ObTableMergeRowIterator<Row, Compare, RowIterator>::build_heap(const ObIArray<RowIterator*>& inner_row_iters)
 {
   int ret = common::OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < inner_row_iters.count(); ++i) {
-    bool in_heap = false;
+  ObSEArray<RowIterator *, 8> valid_row_iters;
+  valid_row_iters.set_attr(ObMemAttr(MTL_ID(), "MergeValidIters"));
+  for (int i = 0; OB_SUCC(ret) && i < inner_row_iters.count(); i++) {
     RowIterator *row_iter = inner_row_iters.at(i);
     if (OB_ISNULL(row_iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null row iterator", K(ret));
-    } else if (OB_FAIL(iter_and_push_iterator(*row_iter))) {
-      LOG_WARN("fail to iter and push iterator", K(ret));
-    } else {}
+    } else if (OB_FAIL(row_iter->next_row())) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to iterate to next", K(ret));
+      } else {
+        // row_iter valid -> false
+        LOG_DEBUG("no valid row iter", KPC(row_iter));
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(valid_row_iters.push_back(row_iter))) {
+      LOG_WARN("fail to push valid row iter", K(ret));
+    }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(inner_row_iters_.assign(valid_row_iters))) {
+    LOG_WARN("fail to assign inner row iters", K(ret), K(valid_row_iters.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < inner_row_iters_.count(); ++i) {
+      RowIterator *row_iter = inner_row_iters_.at(i);
+      if (OB_ISNULL(row_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null row iterator", K(ret));
+      } else if (OB_FAIL(direct_push_iterator(*row_iter))) {
+        LOG_WARN("fail to direct push iterator", K(ret));
+      }
+    }
+  }
   return ret;
 }
+
 template <typename Row, typename Compare, typename RowIterator>
 int ObTableMergeRowIterator<Row, Compare, RowIterator>::iter_and_push_iterator(RowIterator &iter)
 {
@@ -214,6 +250,22 @@ int ObTableMergeRowIterator<Row, Compare, RowIterator>::iter_and_push_iterator(R
   } else {}
   return ret;
 }
+
+template <typename Row, typename Compare, typename RowIterator>
+int ObTableMergeRowIterator<Row, Compare, RowIterator>::direct_push_iterator(RowIterator &iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!iter.valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try to push invalid iter to heap", K(iter), K(ret));
+  } else if (OB_FAIL(binary_heap_.push(&iter))) {
+    LOG_WARN("fail to push iter", K(iter), K(ret));
+  } else if (OB_FAIL(compare_.get_error_code())) {
+    LOG_WARN("fail to compare iter", K(iter), K(ret));
+  } else {}
+  return ret;
+}
+
 
 template <typename Row, typename Compare, typename RowIterator>
 int ObTableMergeRowIterator<Row, Compare, RowIterator>::get_next_row(Row *&row)
@@ -292,10 +344,8 @@ template<typename... ReScanParam>
 int ObTableMergeRowIterator<Row, Compare, RowIterator>::rescan(ReScanParam&... rescan_param)
 {
   int ret = common::OB_SUCCESS;
-  binary_heap_.reset();
-  last_pop_iter_ = nullptr;
+  reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < inner_row_iters_.count(); ++i) {
-    bool in_heap = false;
     RowIterator *row_iter = inner_row_iters_.at(i);
     if (OB_ISNULL(row_iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -309,7 +359,7 @@ int ObTableMergeRowIterator<Row, Compare, RowIterator>::rescan(ReScanParam&... r
       }
     } else if (OB_FAIL(iter_and_push_iterator(*row_iter))) {
       LOG_WARN("fail to iter and push iterator", K(ret));
-    } else {}
+    }
   }
 
   return ret;

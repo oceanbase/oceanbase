@@ -148,6 +148,7 @@ private:
                   bool &is_max);
   int construct_series_entity(const ObITableEntity &entity,
                               ObTableEntity &series_entity);
+  bool is_single_rowkey(const common::ObNewRange &range) const;
 private:
   common::ObIAllocator &allocator_;
   ObTableApiSessGuard &sess_guard_;
