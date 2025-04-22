@@ -339,6 +339,17 @@ int ObExprRangeConverter::get_basic_range_node(const ObRawExpr *l_expr,
                                           range_node))) {
         LOG_WARN("failed to get implicit cast range", K(ret));
       }
+    } else if (ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
+               ObSQLUtils::is_opt_feature_version_ge_425_or_435(ctx_.optimizer_features_enable_version_) &&
+               ((l_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION && r_expr->is_const_expr()) ||
+               (r_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION && l_expr->is_const_expr()))) {
+      if (OB_FAIL(get_implicit_set_collation_range(*l_ori_expr,
+                                                   *r_ori_expr,
+                                                   cmp_type,
+                                                   expr_depth,
+                                                   range_node))) {
+        LOG_WARN("failed to get implicit set collation range", K(ret));
+      }
     } else {
       if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
         LOG_WARN("failed to generate always true node");
@@ -1046,6 +1057,14 @@ int ObExprRangeConverter::convert_in_expr(const ObRawExpr *expr, int64_t expr_de
   } else if (l_expr->has_flag(IS_ROWID)) {
     if (OB_FAIL(get_single_rowid_in_range_node(*l_expr, *r_expr, range_node))) {
       LOG_WARN("failed to get single row in range node", K(ret));
+    }
+  } else if (ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
+             ObSQLUtils::is_opt_feature_version_ge_425_or_435(ctx_.optimizer_features_enable_version_) &&
+             (l_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION ||
+              (l_expr->get_expr_type() == T_FUN_SYS_CAST &&
+               l_expr->get_result_type().is_string_type()))) {
+    if (OB_FAIL(get_implicit_set_collation_in_range(l_expr, r_expr, expr->get_result_type(), expr_depth, range_node))) {
+      LOG_WARN("failed to get implicit set collation range", K(ret));
     }
   }
 
@@ -2861,7 +2880,8 @@ int ObExprRangeConverter::get_implicit_cast_range(const ObRawExpr &l_expr,
     } else if (!is_range_key(static_cast<const ObColumnRefRawExpr*>(inner_expr)->get_column_id(),
                              key_idx)) {
       // do nothing
-    } else if (OB_FAIL(can_extract_implicit_cast_range(*static_cast<const ObColumnRefRawExpr*>(inner_expr),
+    } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type,
+                                                       *static_cast<const ObColumnRefRawExpr*>(inner_expr),
                                                        *const_expr,
                                                        can_extract))) {
       LOG_WARN("failed to check can extract implicit range", K(ret));
@@ -2899,6 +2919,18 @@ int ObExprRangeConverter::gen_implicit_cast_range(const ObColumnRefRawExpr *colu
       OB_ISNULL(const_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexptected null", K(ret), K(column_expr), K(const_expr));
+  } else if ((column_expr->get_result_type().get_type() ==
+              const_expr->get_result_type().get_type()) &&
+             column_expr->get_result_type().is_string_type()) {
+    if (OB_FAIL(get_basic_range_node(column_expr,
+                                     const_expr,
+                                     cmp_type,
+                                     expr_depth + 1,
+                                     range_node))) {
+      LOG_WARN("failed to get basic range node", K(ret));
+    } else {
+      ctx_.cur_is_precise_ = false;
+    }
   } else if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
     ObRangeNode *start_range = nullptr;
     ObRangeNode *end_range = nullptr;
@@ -3087,7 +3119,8 @@ int ObExprRangeConverter::get_row_cmp_node(const ObRawExpr &l_expr,
         bool can_extract = false;
         if (!l_param->has_flag(IS_COLUMN)) {
           // do nothing
-        } else if (OB_FAIL(can_extract_implicit_cast_range(*static_cast<const ObColumnRefRawExpr*>(l_param),
+        } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type,
+                                                           *static_cast<const ObColumnRefRawExpr*>(l_param),
                                                            *r_param,
                                                            can_extract))) {
           LOG_WARN("failed to check can extract implicit cast range", K(ret));
@@ -3115,7 +3148,8 @@ int ObExprRangeConverter::get_row_cmp_node(const ObRawExpr &l_expr,
         r_param = r_param->get_param_expr(0);
         if (!r_param->has_flag(IS_COLUMN)) {
           // do nothing
-        } else if (OB_FAIL(can_extract_implicit_cast_range(*static_cast<const ObColumnRefRawExpr*>(r_param),
+        } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type,
+                                                           *static_cast<const ObColumnRefRawExpr*>(r_param),
                                                            *l_param,
                                                            can_extract))) {
           LOG_WARN("failed to check can extract implicit cast range", K(ret));
@@ -3493,7 +3527,8 @@ int ObExprRangeConverter::build_implicit_cast_range_expr(const ObColumnRefRawExp
   return ret;
 }
 
-int ObExprRangeConverter::can_extract_implicit_cast_range(const ObColumnRefRawExpr &column_expr,
+int ObExprRangeConverter::can_extract_implicit_cast_range(ObItemType cmp_type,
+                                                          const ObColumnRefRawExpr &column_expr,
                                                           const ObRawExpr &const_expr,
                                                           bool &can_extract)
 {
@@ -3503,6 +3538,15 @@ int ObExprRangeConverter::can_extract_implicit_cast_range(const ObColumnRefRawEx
   can_extract = false;
   if (lib::is_oracle_mode()) {
     can_extract = false;
+  } else if (column_expr.get_result_type().get_type() ==
+              const_expr.get_result_type().get_type() &&
+             column_expr.get_result_type().is_string_type()) {
+    if (OB_FAIL(is_implicit_collation_range_valid(cmp_type,
+                                                  column_expr.get_result_type().get_collation_type(),
+                                                  const_expr.get_result_type().get_collation_type(),
+                                                  can_extract))) {
+      LOG_WARN("failed to check implicit collation range", K(ret));
+    }
   } else if ((ObIntTC == column_tc || ObUIntTC == column_tc) &&
              (const_tc == ObDoubleTC || const_tc == ObFloatTC)) {
     can_extract = true;
@@ -3697,5 +3741,181 @@ int ObExprRangeConverter::ignore_inner_generate_expr(const ObRawExpr *const_expr
   return ret;
 }
 
+int ObExprRangeConverter::get_implicit_set_collation_range(const ObRawExpr &l_expr,
+                                                           const ObRawExpr &r_expr,
+                                                           ObItemType cmp_type,
+                                                           int64_t expr_depth,
+                                                           ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *collation_expr = nullptr;
+  const ObRawExpr *const_expr = nullptr;
+  const ObRawExpr *inner_expr = nullptr;
+  bool can_extract = false;
+  range_node = nullptr;
+  if (l_expr.get_expr_type() == T_FUN_SYS_SET_COLLATION && r_expr.is_const_expr()) {
+    collation_expr = &l_expr;
+    const_expr = &r_expr;
+  } else if (r_expr.get_expr_type() == T_FUN_SYS_SET_COLLATION && l_expr.is_const_expr()) {
+    collation_expr = &r_expr;
+    const_expr = &l_expr;
+    cmp_type = get_opposite_compare_type(cmp_type);
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(collation_expr) &&
+      OB_NOT_NULL(const_expr)) {
+    if (OB_FAIL(check_can_extract_implicit_collation_range(cmp_type,
+                                                           collation_expr,
+                                                           inner_expr,
+                                                           can_extract))) {
+      LOG_WARN("failed to check can extract implicit collation range", K(ret));
+    } else if (OB_FAIL(get_basic_range_node(inner_expr,
+                                            const_expr,
+                                            cmp_type,
+                                            expr_depth + 1,
+                                            range_node))) {
+      LOG_WARN("failed to get basic range node", K(ret));
+    } else {
+      ctx_.cur_is_precise_ = false;
+    }
+  }
+
+  if (OB_SUCC(ret) && nullptr == range_node) {
+    ctx_.cur_is_precise_ = false;
+    if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true or fasle node");
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::check_can_extract_implicit_collation_range(
+                          ObItemType cmp_type,
+                          const ObRawExpr *l_expr,
+                          const ObRawExpr *&real_expr,
+                          bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *collation_expr = nullptr;
+  ObObj collation_val;
+  bool is_valid = false;
+  int64_t dest_collation = 0;
+  real_expr = nullptr;
+  can_extract = false;
+  if (OB_ISNULL(l_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (l_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION) {
+    if (OB_UNLIKELY(l_expr->get_param_count() != 2) ||
+              OB_ISNULL(real_expr = l_expr->get_param_expr(0)) ||
+              OB_ISNULL(collation_expr = l_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KPC(l_expr));
+    } else if (!collation_expr->is_const_expr()) {
+      // do nothing
+    } else if (OB_FAIL(get_calculable_expr_val(collation_expr,
+                                              collation_val,
+                                              is_valid))) {
+      LOG_WARN("failed to get calculable expr");
+    } else if (!is_valid) {
+      // do nothing
+    } else if (OB_FAIL(collation_val.get_int(dest_collation))) {
+      LOG_WARN("failed to get collation val", K(ret));
+    } else if (OB_FAIL(is_implicit_collation_range_valid(
+                        cmp_type,
+                        real_expr->get_result_type().get_obj_meta().get_collation_type(),
+                        static_cast<ObCollationType>(dest_collation),
+                        can_extract))) {
+      LOG_WARN("failed to chacke can extract implicit collation range", K(ret));
+    }
+  } else if (l_expr->get_expr_type() == T_FUN_SYS_CAST) {
+    if (OB_ISNULL(real_expr = l_expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KPC(l_expr));
+    } else if (real_expr->get_result_type().get_type() !=
+                 l_expr->get_result_type().get_type() ||
+               !real_expr->get_result_type().is_string_type()) {
+      // do nothing
+    } else if (OB_FAIL(is_implicit_collation_range_valid(
+                        cmp_type,
+                        real_expr->get_result_type().get_obj_meta().get_collation_type(),
+                        l_expr->get_result_type().get_obj_meta().get_collation_type(),
+                        can_extract))) {
+      LOG_WARN("failed to chacke can extract implicit collation range", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::get_implicit_set_collation_in_range(
+                          const ObRawExpr *l_expr,
+                          const ObRawExpr *r_expr,
+                          const ObExprResType &result_type,
+                          int64_t expr_depth,
+                          ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *inner_expr = nullptr;
+  bool can_extract = false;
+  bool use_implicit_cast_feature = true;
+  if (OB_FAIL(check_can_extract_implicit_collation_range(T_OP_IN,
+                                                         l_expr,
+                                                         inner_expr,
+                                                         can_extract))) {
+    LOG_WARN("failed to check can extract implicit collation range", K(ret));
+  } else if (!can_extract) {
+    // do nothing
+  } else if (OB_ISNULL(inner_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(inner_expr,
+                                                                     inner_expr,
+                                                                     use_implicit_cast_feature))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (!inner_expr->is_column_ref_expr()) {
+    // do nothing
+  } else if (OB_FAIL(get_single_in_range_node(static_cast<const ObColumnRefRawExpr *>(inner_expr),
+                                              r_expr,
+                                              result_type,
+                                              expr_depth + 1,
+                                              range_node))) {
+    LOG_WARN("failed to get single row in range node", K(ret));
+  } else {
+    ctx_.cur_is_precise_ = false;
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::is_implicit_collation_range_valid(
+                          ObItemType cmp_type,
+                          ObCollationType l_collation,
+                          ObCollationType r_collation,
+                          bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (cmp_type != T_OP_EQ && cmp_type != T_OP_NSEQ &&
+      cmp_type != T_OP_IN) {
+    is_valid = false;
+  } else if (l_collation == CS_TYPE_UTF8MB4_GENERAL_CI &&
+      (r_collation == CS_TYPE_UTF8MB4_BIN ||
+       r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF16_GENERAL_CI &&
+             (r_collation == CS_TYPE_UTF16_BIN ||
+              r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF16LE_GENERAL_CI &&
+             (r_collation == CS_TYPE_UTF16LE_BIN ||
+              r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF8MB4_BIN &&
+             r_collation == CS_TYPE_BINARY) {
+    is_valid = true;
+  } else {
+    LOG_TRACE("unsupport implicit collation range", K(l_collation), K(r_collation));
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase
