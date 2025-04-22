@@ -8140,6 +8140,8 @@ def_table_schema(
 
 # 547: __all_ccl_rule
 # 548: __all_ccl_rule_history
+# 549: __all_balance_job_description
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16245,6 +16247,7 @@ def_table_schema(
 # 12537: __all_virtual_ls_migration_task
 # 12538 __all_virtual_ss_notify_tasks_stat
 # 12539 __all_virtual_ss_notify_tablets_stat
+# 12540: __all_virtual_balance_job_description
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16794,6 +16797,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15504', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keywords['__all_virtual_mview_running_job']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
+# 15510: __all_virtual_balance_job_description
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
