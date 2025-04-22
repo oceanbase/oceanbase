@@ -50,6 +50,10 @@ if ($table_name == 'DBA_TAB_COL_STATISTICS')
 {
 let $query_type = 2;
 }
+if ($table_name == 'CDB_OB_SERVER_SPACE_USAGE')
+{
+let $query_type = 3;
+}
 
 if ($query_type == 1)
 {
@@ -60,6 +64,14 @@ eval select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from $da
 if ($query_type == 2)
 {
 eval select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
+}
+
+if ($query_type == 3)
+{
+--disable_warnings
+--replace_column 1 1
+eval select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from $database_name.$table_name limit 1);
+--enable_warnings
 }
 
 inc $idx;
