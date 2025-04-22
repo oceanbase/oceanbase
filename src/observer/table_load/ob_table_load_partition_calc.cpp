@@ -35,9 +35,15 @@ ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
     is_partitioned_(false),
     allocator_("TLD_PartCalc"),
     exec_ctx_(allocator_),
+    phy_plan_ctx_(allocator_),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+}
+
+ObTableLoadPartitionCalc::~ObTableLoadPartitionCalc()
+{
+  exec_ctx_.set_physical_plan_ctx(NULL);
 }
 
 int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param,
@@ -53,6 +59,7 @@ int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param,
     uint64_t table_id = param.table_id_;
     sql_ctx_.schema_guard_ = &schema_guard_;
     exec_ctx_.set_sql_ctx(&sql_ctx_);
+    exec_ctx_.set_physical_plan_ctx(&phy_plan_ctx_);
     const ObTableSchema *table_schema = nullptr;
     ObDataTypeCastParams cast_params(session_info->get_timezone_info());
     if (OB_FAIL(time_cvrt_.init(cast_params.get_nls_format(ObDateTimeType)))) {

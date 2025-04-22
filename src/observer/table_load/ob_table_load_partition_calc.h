@@ -34,6 +34,7 @@ class ObTableLoadPartitionCalc
 {
 public:
   ObTableLoadPartitionCalc();
+  ~ObTableLoadPartitionCalc();
   int init(const ObTableLoadParam &param,
            sql::ObSQLSessionInfo *session_info,
            const ObIArray<ObTabletID> &tablet_ids);
@@ -70,6 +71,7 @@ private:
   common::ObArenaAllocator allocator_;
   sql::ObSqlCtx sql_ctx_;
   sql::ObExecContext exec_ctx_;
+  sql::ObPhysicalPlanCtx phy_plan_ctx_;
   sql::ObTableLocation table_location_;
   ObSchemaGetterGuard schema_guard_;
   common::hash::ObHashSet<ObTabletID> tablet_ids_set_; // only for load_level == PARTITION
