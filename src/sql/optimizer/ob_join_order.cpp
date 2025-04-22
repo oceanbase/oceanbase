@@ -1746,6 +1746,9 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
           access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
           // for optimize, distance expr just for order by needn't calculate
           // using vsag calc result is ok
+          if (OB_ISNULL(vector_expr)) {
+            vector_expr = stmt->get_first_vector_expr();
+          }
           if (OB_NOT_NULL(vector_expr) &&
               access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
               && ! access_path.domain_idx_info_.vec_extra_info_.is_hnsw_bq_scan()
