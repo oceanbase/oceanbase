@@ -4051,6 +4051,7 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
         new_index_table_schema.set_schema_version(new_schema_version);
         new_index_table_schema.set_tablespace_id(alter_tablespace_arg.tablespace_id_);
         new_index_table_schema.set_encryption_str(alter_tablespace_arg.encryption_);
+        new_index_table_schema.set_progressive_merge_round(index_table_schema->get_progressive_merge_round() + 1);
         if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
                         trans,
                         *index_table_schema,
