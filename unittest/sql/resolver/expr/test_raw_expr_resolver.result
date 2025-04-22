@@ -2053,7 +2053,8 @@
   },
   "expr_info": [
     "CNT_CONST",
-    "CNT_SUB_QUERY"
+    "CNT_SUB_QUERY",
+    "IS_WITH_SUBQUERY"
   ],
   "rel_id": [
   ],
@@ -2147,7 +2148,8 @@
   },
   "expr_info": [
     "CNT_COLUMN",
-    "CNT_SUB_QUERY"
+    "CNT_SUB_QUERY",
+    "IS_WITH_SUBQUERY"
   ],
   "rel_id": [
   ],

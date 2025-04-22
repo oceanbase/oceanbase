@@ -406,7 +406,9 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr &expr)
           expr.set_expr_type(get_subquery_comparison_type(expr.get_expr_type()));
         }
         if (!IS_SUBQUERY_COMPARISON_OP(expr.get_expr_type())) {
-          // do nothing
+          if (OB_FAIL(expr.add_flag(IS_WITH_SUBQUERY))) {
+            LOG_WARN("failed to add flag IS_WITH_SUBQUERY", K(ret));
+          }
         } else if (expr.get_subquery_key() == T_WITH_ALL) {
           if (OB_FAIL(expr.add_flag(IS_WITH_ALL))) {
             LOG_WARN("failed to add flag IS_WITH_ALL", K(ret));
