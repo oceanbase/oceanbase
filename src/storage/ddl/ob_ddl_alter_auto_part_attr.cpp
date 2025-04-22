@@ -510,7 +510,7 @@ int ObAlterAutoPartAttrOp::sync_aux_tables_partition_option(
         } else if (OB_FAIL(new_aux_table_schema.assign_partition_schema(data_table_schema))) {
           LOG_WARN("fail to assign partition schema", K(data_table_schema), KR(ret));
         } else {
-          new_aux_table_schema.forbid_auto_partition();
+          new_aux_table_schema.get_part_option().forbid_auto_partition(true);
           if (OB_FAIL(ddl_operator.update_partition_option(trans, new_aux_table_schema, ddl_stmt_str))) {
             LOG_WARN("fail to update partition option.", K(ret), K(new_aux_table_schema));
           }
