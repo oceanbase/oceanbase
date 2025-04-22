@@ -4797,6 +4797,8 @@ double ObOptSelectivity::calc_equal_filter_sel(const OptSelectivityCtx &ctx,
                                                double right_nns)
 {
   double selectivity = 0.0;
+  left_ndv = MAX(1.0, left_ndv);
+  right_ndv = MAX(1.0, right_ndv);
   if (is_same_expr) {
     // same table same column
     if (T_OP_NSEQ == op_type) {
@@ -4844,6 +4846,8 @@ double ObOptSelectivity::calc_equal_join_sel(const OptSelectivityCtx &ctx,
 {
   double selectivity = 0.0;
   ObJoinType join_type = ctx.get_join_type();
+  left_ndv = MAX(1.0, left_ndv);
+  right_ndv = MAX(1.0, right_ndv);
   left_base_ndv = MAX(left_ndv, left_base_ndv);
   right_base_ndv = MAX(right_ndv, right_base_ndv);
   if (IS_RIGHT_STYLE_JOIN(join_type)) {

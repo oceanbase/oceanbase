@@ -731,7 +731,7 @@ int ObEqualSelEstimator::get_ne_sel(const OptTableMetas &table_metas,
         //The reason doing this is similar as get_is_sel function.
         //If distinct_num is 1, As formula, selectivity of 'c1 != 1' would be 0.0.
         //But we don't know the distinct value, so just get the half selectivity.
-        selectivity = nns / ndv / 2.0;
+        selectivity = nns / std::max(1.0, ndv) / 2.0;
       } else {
         selectivity = nns * (1.0 - 1 / ndv);
       }
