@@ -2696,9 +2696,12 @@ inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
 
 inline bool ObSimpleTableSchemaV2::should_not_validate_data_index_ckm() const
 {
+  // [COMPACTION]
   // spatial index column is different from data table column, should not validate data & index column checksum
   // fulltext index cannot validate data by simply column checksum comparision
   // multi-value index column is different from data table column, should not validate data & index column checksum
+
+  // [TRUNCATE] these index will not be preserved when truncate partition of data table
   return is_domain_index();
 }
 

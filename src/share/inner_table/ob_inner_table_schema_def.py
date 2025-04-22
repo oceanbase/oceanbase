@@ -10724,7 +10724,8 @@ def_table_schema(
       ('merge_reason', 'varchar:OB_MERGE_REASON_STR_LENGTH'),
       ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
       ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
-      ('mds_filter_info', 'varchar:OB_COMPACTION_COMMENT_STR_LENGTH')
+      ('mds_filter_info', 'varchar:OB_COMPACTION_COMMENT_STR_LENGTH'),
+      ('execute_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

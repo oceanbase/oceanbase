@@ -53,20 +53,6 @@ int ObCOMergeProjector::init(const ObStorageColumnGroupSchema &cg_schema)
   return ret;
 }
 
-bool ObCOMergeProjector::is_all_nop(const blocksstable::ObDatumRow &row) const
-{
-  bool all_nop = true;
-
-  for (int64_t i = 0; i < projector_.count(); i++) {
-    const uint16_t idx = projector_.at(i);
-    if (idx < row.count_ && !row.storage_datums_[idx].is_nop()) {
-      all_nop = false;
-    }
-  }
-
-  return all_nop;
-}
-
 int ObCOMergeProjector::project(const blocksstable::ObDatumRow &row)
 {
   bool is_all_nop = false;

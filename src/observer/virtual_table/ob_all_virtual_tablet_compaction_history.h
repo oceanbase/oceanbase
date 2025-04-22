@@ -64,7 +64,8 @@ public:
     MERGE_REASON,
     BASE_MAJOR_STATUS,
     CO_MERGE_TYPE,
-    MDS_FILTER_INFO
+    MDS_FILTER_INFO,
+    EXECUTE_TIME
   };
   ObAllVirtualTabletCompactionHistory();
   virtual ~ObAllVirtualTabletCompactionHistory();

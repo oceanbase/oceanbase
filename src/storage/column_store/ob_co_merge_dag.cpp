@@ -304,6 +304,7 @@ int ObCOMergePrepareTask::process()
   } else if (OB_UNLIKELY(NULL == dag_net_ || NULL != dag_net_->get_merge_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected dag net", K(ret), KPC(dag_net_));
+  } else if (FALSE_IT(dag_net_->set_prepare_dag_running_ts())) {
   } else if (OB_FAIL(dag_net_->prepare_co_merge_ctx())) {
     LOG_WARN("failed to prepare merge ctx", K(ret), KPC(dag_net_));
   } else if (OB_FAIL(create_schedule_dag(*dag_net_->get_merge_ctx()))) {

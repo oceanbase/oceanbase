@@ -278,6 +278,9 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_varchar(static_info.mds_filter_info_str_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
+    case EXECUTE_TIME:
+      cells[i].set_int(running_info.execute_time_);
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

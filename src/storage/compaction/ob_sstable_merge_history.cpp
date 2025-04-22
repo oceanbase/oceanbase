@@ -410,7 +410,9 @@ void ObSSTableMergeHistory::update_start_time()
 int ObSSTableMergeHistory::fill_comment(char *buf, const int64_t buf_len, const char* other_info) const
 {
   int ret = OB_SUCCESS;
-  compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len, "comment", running_info_.comment_);
+  if (strlen(running_info_.comment_) > 0) {
+    compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len, "comment", running_info_.comment_);
+  }
   if (0 != diagnose_info_.suspect_add_time_) {
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "[suspect info=");
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, other_info);

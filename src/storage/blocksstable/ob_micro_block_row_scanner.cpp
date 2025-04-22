@@ -1822,7 +1822,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
         if (OB_FAIL(reader_->get_row(current_, *row))) {
           LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_));
         } else if (row->row_flag_.is_lock()) {
-          int64_t rowkey_read_cnt = MIN(read_info_->get_seq_read_column_count(), read_info_->get_rowkey_count());
           if (OB_FAIL(ObLockRowChecker::check_lock_row_valid(*row, *read_info_))) {
             LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_), KPC(row), KPC_(read_info));
           } else if (row->is_uncommitted_row()) {

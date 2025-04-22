@@ -1751,9 +1751,6 @@ int ObMacroBlockWriter::try_active_flush_macro_block()
           STORAGE_LOG(WARN, "macro block writer fail to flush macro block.", K(ret));
         }
       } else if (estimate_macro_remain_size < data_store_desc_->get_micro_block_size()) {
-        // Reserving 1/4 of DEFAULT_MINIMUM_CS_ENCODING_BLOCK_SIZE for micro header makes it
-        // more likely that the data micro block can be put into macro block.
-        const int64_t estimate_upper_bound = (estimate_macro_remain_size - DEFAULT_MINIMUM_CS_ENCODING_BLOCK_SIZE / 4) * last_micro_expand_pct_ / 100;
         micro_writer_->set_block_size_upper_bound(estimate_macro_remain_size);
       }
     } else {

@@ -414,7 +414,7 @@ int ObCOTabletMergeCtx::collect_running_info()
   } else {
     dag_net_merge_history_.static_info_.shallow_copy(static_history_);
     dag_net_merge_history_.static_info_.is_fake_ = true;
-    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
+    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_prepare_dag_running_ts();
     // add a fake merge info into history with only dag_net time_guard
     (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_,
                                                          dag_net_.get_dag_id(),

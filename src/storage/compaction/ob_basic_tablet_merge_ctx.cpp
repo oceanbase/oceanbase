@@ -858,7 +858,9 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   if (mem_peak_mb > 0) {
     ADD_COMMENT("cost_mb", mem_peak_mb);
   }
-  ADD_COMMENT("time", time_guard);
+  if (time_guard.need_print()) {
+    ADD_COMMENT("time", time_guard);
+  }
   if (nullptr != static_param_.schema_ && static_param_.schema_->is_mv_major_refresh_table()) {
     ADD_COMMENT("mv", 1);
   }

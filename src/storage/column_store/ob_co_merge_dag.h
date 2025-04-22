@@ -297,6 +297,8 @@ public:
   const ObCOMergeDagParam& get_dag_param() const { return basic_param_; }
   int64_t get_batch_dag_count() const { return ATOMIC_LOAD(&batch_dag_cnt_); }
   void inc_batch_dag_count() { ATOMIC_INC(&batch_dag_cnt_); }
+  void set_prepare_dag_running_ts() { prepare_dag_running_ts_ = ObTimeUtility::fast_current_time(); }
+  int64_t get_prepare_dag_running_ts() const { return prepare_dag_running_ts_; }
   void collect_running_info(const uint32_t start_cg_idx, const uint32_t end_cg_idx, const int64_t hash,
       const share::ObDagId &dag_id, const ObCompactionTimeGuard &time_guard);
   template<class T>
@@ -309,7 +311,7 @@ public:
   int init_min_sstable_end_scn();
   int get_min_sstable_end_scn(SCN &min_end_scn); // return min_end_scn from ctx
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn));
+      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn), K_(prepare_dag_running_ts));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
@@ -360,6 +362,7 @@ private:
   ObCOMergeFinishDag *finish_dag_;
   ObStorageCompactionTimeGuard time_guard_;
   int64_t min_sstable_end_scn_;
+  int64_t prepare_dag_running_ts_;
 };
 
 template<class T>

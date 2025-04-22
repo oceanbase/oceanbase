@@ -13983,7 +13983,9 @@ int ObDDLService::decide_global_index_op_type_by_index_(
     bool is_column_store = false;
     if (OB_FAIL(index_table_schema.get_is_column_store(is_column_store))) {
       LOG_WARN("failed to get is column store", KR(ret), K(index_table_id));
-    } else if (!is_column_store && OB_FAIL(truncate_service.check_stored_ref_columns_for_index(index_table_schema, stored_ref_columns))) {
+    } else if (!is_column_store
+        && !index_table_schema.should_not_validate_data_index_ckm() // except fts / spatial / vector index
+        && OB_FAIL(truncate_service.check_stored_ref_columns_for_index(index_table_schema, stored_ref_columns))) {
       LOG_WARN("failed to check stored ref columns", KR(ret));
     } else if (stored_ref_columns) {
       op_type = WRITE_TRUNCATE_INFO;
