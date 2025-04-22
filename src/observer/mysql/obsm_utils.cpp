@@ -338,6 +338,10 @@ int ObSMUtils::cell_str(
               }
             } else {
               ret = OB_NOT_SUPPORTED;
+              char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+              (void)snprintf(err_msg, sizeof(err_msg), "serialize extend type %s to string",
+                    get_extend_type_name(obj.get_meta().get_extend_type()));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
               OB_LOG(WARN, "this extend type is not support", KPC(field), K(type), K(obj.get_meta().get_extend_type()), K(ret));
             }
 #endif
@@ -693,4 +697,22 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     const_cast<pl::ObUserDefinedType *>(user_type)->reset_charset();
   }
   return ret;
+}
+
+const char* ObSMUtils::get_extend_type_name(int type)
+{
+	switch(type){
+    case PL_INVALID_TYPE: return "INVALID";
+    case PL_OBJ_TYPE: return "OBJECT";
+    case PL_RECORD_TYPE: return "RECORD";
+    case PL_NESTED_TABLE_TYPE: return "NESTED TABLE";
+    case PL_ASSOCIATIVE_ARRAY_TYPE: return "ASSOCIATIVE ARRAY";
+    case PL_VARRAY_TYPE: return "VARRAY";
+    case PL_CURSOR_TYPE: return "CURSOR";
+    case PL_SUBTYPE: return "SUBTYPE";
+    case PL_INTEGER_TYPE: return "PL INTEGER";
+    case PL_REF_CURSOR_TYPE: return "REF CURSOR";
+    case PL_OPAQUE_TYPE: return "OPAQUE";
+    default: return "UNKNOW";
+  }
 }

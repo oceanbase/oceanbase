@@ -675,6 +675,7 @@ int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
     OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
   } else if (NULL == udt_info) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "system package composite type in select field");
     OB_LOG(WARN, "udt info is null.", K(type_id), K(ret));
   } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, schema_guard, user_type))) {
     OB_LOG(WARN, "faild to transform to pl type", K(ret));

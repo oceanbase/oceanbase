@@ -1927,6 +1927,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         && get_tenant_id_by_object_id(parent_id) != OB_SYS_TENANT_ID
         && session_info.get_effective_tenant_id() != OB_SYS_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "package in Mysql mode");
       LOG_WARN("package is not supported in Mysql mode", K(type), K(ret));
     } else {
       const share::schema::ObPackageInfo *package_info_resolve = NULL;
@@ -3516,6 +3517,7 @@ int ObPLBlockNS::get_subtype_actually_basetype(const ObPLDataType *pl_type,
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
   ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "subtype in Mysql mode");
   LOG_WARN("get_subtype_actually_basetype is not supported in mysql mode", K(ret));
 #else
   const ObUserDefinedSubType *subtype = NULL;

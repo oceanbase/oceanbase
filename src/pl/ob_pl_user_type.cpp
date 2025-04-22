@@ -87,6 +87,9 @@ int ObUserDefinedType::get_serialize_size(
     const ObPLResolveCtx &resolve_ctx, char *&src, int64_t &size) const
 {
   UNUSEDx(resolve_ctx, src, size);
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+  (void)snprintf(err_msg, sizeof(err_msg), "%s serialize", get_name().ptr());
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }

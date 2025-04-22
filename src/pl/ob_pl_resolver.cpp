@@ -674,9 +674,10 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         break;
 #define NOT_SUPPORT_IN_ROUTINE \
   ret = OB_NOT_SUPPORTED;       \
-  LOG_WARN("Not support parser node", K(get_type_name(parse_tree->type_)), K(ret));
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser node");
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, get_type_name(parse_tree->type_));
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0}; \
+  LOG_WARN("Not support parser node", K(get_type_name(parse_tree->type_)), K(ret)); \
+  (void)snprintf(err_msg, sizeof(err_msg), "parser node %s in current context", get_type_name(parse_tree->type_)); \
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
 
       case T_SF_ALTER:
       case T_SF_DROP: {
@@ -703,8 +704,9 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         }
       }
         break;
-      default:
+      default:{
         NOT_SUPPORT_IN_ROUTINE
+      }
         break;
       }
 #undef NOT_SUPPORT_IN_ROUTINE
@@ -7362,6 +7364,14 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
     }
     if (T_QUESTIONMARK != const_expr->get_expr_type() || is_anonymos_const_var) {
       ret = OB_NOT_SUPPORTED;
+      char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+      if (T_QUESTIONMARK != const_expr->get_expr_type()) {
+        (void)snprintf(err_msg, sizeof(err_msg), "use %s type as out param",
+                    get_type_name(const_expr->get_expr_type()));
+      } else {
+        (void)snprintf(err_msg, sizeof(err_msg), "use anonymos const var as out param");
+      }
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
       LOG_WARN("procedure parameter expr type is wrong", K(ret), K(const_expr->get_expr_type()));
     } else {
       out_idx = const_expr->get_value().get_unknown();
@@ -11365,8 +11375,9 @@ int ObPLResolver::resolve_inner_call(
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support procedure type", K(access_idxs.at(idx_cnt - 1)), K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "procedure type");
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, const_cast<char *> (func.get_name().ptr()));
+          char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+          (void)snprintf(err_msg, sizeof(err_msg), "procedure type %s", func.get_name().ptr());
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
         }
       } else if (access_idxs.at(idx_cnt - 1).is_type_method()) {
         ObRawExpr *expr = NULL;
