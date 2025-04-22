@@ -429,6 +429,7 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObITableEntity &cell,
     // construct series value
     ObJsonBinSerializer bin_serializer(&allocator_);
     ObJsonObject json_obj(&allocator_);
+    json_obj.set_use_lexicographical_order();
     ObJsonString json_value(value_obj.get_string_ptr(), value_obj.get_string_len());
     ObStringBuffer str_buf(&allocator_);
     if (OB_FAIL(json_obj.add(qualifier_obj.get_varchar(), &json_value))) {
@@ -528,6 +529,7 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> 
       } else {
         QVMap *qv_map = i->second;
         ObJsonObject json_obj(&allocator_);
+        json_obj.set_use_lexicographical_order();
         for (QVMap::const_iterator j = qv_map->begin(); OB_SUCC(ret) && j != qv_map->end(); ++j) {
           ObJsonString *json_node = nullptr;
           if (OB_ISNULL(json_node = OB_NEWx(ObJsonString, (&allocator_), j->second))) {

@@ -226,6 +226,64 @@ TEST_F(TestSeriesConvert, htable_normal_convert_series)
     EXPECT_STREQ(buf.ptr(), actual.c_str());
   }
 
+  series_entities.reset();
+  real_tablet_ids.reset();
+  entities.reset();
+  alloc.reuse();
+
+  // test set use_lexicographical_order
+  key3.set_int(3);
+  char qualifier_non_order[COLUMN_COUNT_1][128];
+  sprintf(qualifier[0], "cq7");
+  sprintf(qualifier[1], "cq71");
+  sprintf(qualifier[2], "cq742");
+  sprintf(qualifier[3], "cq712");
+  sprintf(qualifier[4], "cq93");
+  sprintf(qualifier[5], "cq123");
+  sprintf(qualifier[6], "cq01");
+  sprintf(qualifier[7], "cq73");
+  for (int64_t i = 0; i < COLUMN_COUNT_1; ++i) {
+    key2.set_varbinary(ObString::make_string(qualifier[i]));
+    entity = entity_factory.alloc();
+    ASSERT_TRUE(NULL != entity);
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key1));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key2));
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key3));
+    ObTabletID tablet_id(1);
+    entity->set_tablet_id(tablet_id);
+    value.set_varbinary(ObString::make_string(values[i]));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
+    ASSERT_EQ(OB_SUCCESS, entities.push_back(entity));
+  }  // end for
+
+  ASSERT_EQ(OB_SUCCESS, adapter->convert_normal_to_series(entities, series_entities, real_tablet_ids));
+  ASSERT_EQ(1, series_entities.count());
+  ASSERT_EQ(1, real_tablet_ids.count());
+
+  {
+    entity = NULL;
+    entity = series_entities.at(0);
+    ASSERT_TRUE(NULL != entity);
+    ObObj timestamp;
+    ASSERT_EQ(OB_SUCCESS, entity->get_rowkey_value(1, timestamp));
+    int k = timestamp.get_int();
+    ObObj &json_obj = const_cast<ObObj &>(entity->get_properties_value(0));
+    ASSERT_TRUE(json_obj.has_lob_header());
+    ASSERT_TRUE(is_lob_storage(json_obj.get_type()));
+    ASSERT_EQ(OB_SUCCESS, ObTableCtx::read_real_lob(alloc, json_obj));
+    ObJsonBin bin(json_obj.get_string_ptr(), json_obj.get_string_len(), &alloc);
+    ASSERT_EQ(OB_SUCCESS, bin.reset_iter());
+    ASSERT_EQ(COLUMN_COUNT_1, bin.element_count());
+    ObJsonBuffer buf(&alloc);
+    ObIJsonBase *j_base = &bin;
+    ASSERT_EQ(OB_SUCCESS, j_base->print(buf, true));
+    std::cout << buf.ptr() << std::endl;
+    std::string actual = "{\"cq01\": \"value_string6\", \"cq123\": \"value_string5\", \"cq7\": \"value_string0\", "
+                           "\"cq71\": \"value_string1\", \"cq712\": \"value_string3\", \"cq73\": \"value_string7\", "
+                           "\"cq742\": \"value_string2\", \"cq93\": \"value_string4\"}";
+    EXPECT_STREQ(buf.ptr(), actual.c_str());
+  }
+
   alloc.reuse();
 
   // -------------------test int64_t-------------------
