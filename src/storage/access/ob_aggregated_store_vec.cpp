@@ -391,7 +391,8 @@ int ObAggregatedStoreVec::check_agg_store_valid()
         LOG_WARN("Failed to set agg_type_flag", K(ret), K(agg_type));
       }
     }
-    if (OB_UNLIKELY(agg_group->need_access_data_ && !agg_group->need_get_row_ids_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(agg_group->need_access_data_ && !agg_group->need_get_row_ids_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid aggregate store status", K(ret), K(i), KPC(agg_group));
     } else if (!agg_group->need_access_data_
