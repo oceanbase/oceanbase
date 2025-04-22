@@ -80,8 +80,6 @@ int ObFTDictTableIter::init(const ObString &table_name)
       } else if (OB_FAIL(sql_string.append(" ORDER BY word"))) {
         LOG_WARN("Failed to append sql", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res_, MTL_ID(), sql_string.ptr()))) {
-      }
-      if (OB_FAIL(sql_proxy->read(res_, MTL_ID(), sql_string.ptr()))) {
         LOG_WARN("Failed to execute sql", K(ret));
       }
     }
