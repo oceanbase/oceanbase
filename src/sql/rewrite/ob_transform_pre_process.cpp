@@ -279,11 +279,11 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
 
      if (OB_SUCC(ret)) {
       if (OB_FAIL(preserve_order_for_gby(stmt, is_happened))) {
-        LOG_WARN("failed to preserve order for pagination", K(ret));
+        LOG_WARN("failed to preserve order for groupby", K(ret));
       } else {
         trans_happened |= is_happened;
-        OPT_TRACE("preserve order for pagination:", is_happened);
-        LOG_TRACE("succeed to preserve order for pagination", K(is_happened));
+        OPT_TRACE("preserve order for groupby:", is_happened);
+        LOG_TRACE("succeed to preserve order for groupby", K(is_happened));
       }
     }
 

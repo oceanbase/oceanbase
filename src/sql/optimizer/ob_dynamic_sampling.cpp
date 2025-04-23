@@ -30,11 +30,15 @@ int ObDSResultItem::append_exprs(const ObIArray<ObRawExpr *> &exprs)
     if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_be_applied_to_filter(exprs.at(i), invalid))) {
       LOG_WARN("failed to check ds can use filter", K(ret));
     } else if (invalid) {
-      if (OB_FAIL(non_ds_exprs_.push_back(exprs.at(i)))) {
+      if (ObOptimizerUtil::find_equal_expr(non_ds_exprs_, exprs.at(i))) {
+        //do nothing
+      } else if (OB_FAIL(non_ds_exprs_.push_back(exprs.at(i)))) {
         LOG_WARN("failed to push back", K(ret));
       }
     } else {
-      if (OB_FAIL(exprs_.push_back(exprs.at(i)))) {
+      if (ObOptimizerUtil::find_equal_expr(exprs_, exprs.at(i))) {
+        //do nothing
+      } else if (OB_FAIL(exprs_.push_back(exprs.at(i)))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }
@@ -108,7 +112,7 @@ int ObDynamicSampling::add_ds_result_cache(ObIArray<ObDSResultItem> &ds_result_i
         } else {
           ds_result_items.at(i).stat_ = NULL;
         }
-      } else if (allow_cache_ds_result_to_sql_ctx () &&
+      } else if (allow_cache_ds_result_to_sql_ctx() &&
                  ds_result_items.at(i).type_ != ObDSResultItemType::OB_DS_BASIC_STAT) {
         if (!query_ctx->filter_ds_stat_cache_.created() &&
             OB_FAIL(query_ctx->filter_ds_stat_cache_.create(
@@ -161,7 +165,8 @@ int ObDynamicSampling::get_ds_stat_items(const ObDSTableParam &param,
       if (OB_FAIL(construct_ds_stat_key(param, ds_result_items.at(i).type_,
                                         ds_result_items.at(i).exprs_, key))) {
         LOG_WARN("failed to construct ds stat key", K(ret));
-      } else if (allow_cache_ds_result_to_sql_ctx () &&
+      } else if (allow_cache_ds_result_to_sql_ctx() &&
+                 !ds_result_items.at(i).exprs_.empty() &&
                  ds_result_items.at(i).type_ != ObDSResultItemType::OB_DS_BASIC_STAT) {
         if (query_ctx->filter_ds_stat_cache_.created()) {
           handle.stat_ = query_ctx->filter_ds_stat_cache_.get(key);
@@ -474,7 +479,7 @@ int ObDynamicSampling::construct_ds_stat_key(const ObDSTableParam &param,
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(print_filter_exprs(ctx_->get_session_info(),
                                         ctx_->get_sql_schema_guard()->get_schema_guard(),
-                                        NULL,
+                                        allow_cache_ds_result_to_sql_ctx() ? ctx_->get_params() : NULL,
                                         type == ObDSResultItemType::OB_DS_BASIC_STAT ? empty_exprs : filter_exprs,
                                         true,
                                         expr_str))) {
@@ -1407,7 +1412,7 @@ int ObDynamicSampling::add_table_clause(ObSqlString &table_str)
   return ret;
 }
 
-bool ObDynamicSampling::allow_cache_ds_result_to_sql_ctx () const {
+bool ObDynamicSampling::allow_cache_ds_result_to_sql_ctx() const {
   return OB_NOT_NULL(ctx_) && OB_NOT_NULL(ctx_->get_query_ctx()) &&
          ctx_->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
 }

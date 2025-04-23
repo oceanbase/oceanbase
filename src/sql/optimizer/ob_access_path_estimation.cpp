@@ -2591,7 +2591,8 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
     } else if (OB_FAIL(ds_result_items.push_back(basic_item))) {
       LOG_WARN("failed to push back", K(ret));
     //2.init all filter output stat item
-    } else if (OB_FAIL(ds_result_items.push_back(filter_item))) {
+    } else if (!filter_item.exprs_.empty() &&
+               OB_FAIL(ds_result_items.push_back(filter_item))) {
       LOG_WARN("failed to push back", K(ret));
     }
     //3.init query range item
@@ -2768,12 +2769,20 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                                                                        ObIArray<ObDSResultItem> &ds_result_items)
 {
   int ret = OB_SUCCESS;
-  const ObDSResultItem *all_filter_item = NULL;
+  const ObDSResultItem *all_filter_item =
+      ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_OUTPUT_STAT,
+                                                 table_id,
+                                                 ds_result_items);
+  if (NULL == all_filter_item) {
+    // non filter
+    all_filter_item =
+        ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_BASIC_STAT,
+                                                   table_id,
+                                                   ds_result_items);
+  }
   const OptTableMetas *table_metas = NULL;
   OptSelectivityCtx *sel_ctx = NULL;
-  if (OB_ISNULL(all_filter_item = ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_OUTPUT_STAT,
-                                                                             table_id,
-                                                                             ds_result_items)) ||
+  if (OB_ISNULL(all_filter_item) ||
       OB_ISNULL(all_filter_item->stat_handle_.stat_) ||
       OB_UNLIKELY(all_filter_item->stat_handle_.stat_->get_sample_block_ratio() <= 0 ||
                   all_filter_item->stat_handle_.stat_->get_sample_block_ratio() > 100.0) ||
