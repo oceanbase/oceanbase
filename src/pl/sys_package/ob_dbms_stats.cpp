@@ -7503,6 +7503,10 @@ int ObDbmsStats::do_async_gather_table_stats(sql::ObExecContext &ctx,
     if (OB_LIKELY(task_info.task_table_count_ > 0)) {
       -- task_info.task_table_count_;
     }
+  } else if (table_schema->is_index_table()) {
+    if (OB_LIKELY(task_info.task_table_count_ > 0)) {
+      --task_info.task_table_count_;
+    }
   } else {
     //begin async gather table stats
     StatTable stat_table(table_schema->get_database_id(), async_table.table_id_, true/*is_async_gather*/);
@@ -7829,6 +7833,12 @@ int ObDbmsStats::update_analyze_failed_count(const ObTableStatParam &stat_param,
                                              const ObSEArray<int64_t, 4> &failed_part_ids,
                                              const StatTable &stat_table) {
   int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+  int64_t origin_timeout = THIS_WORKER.get_timeout_ts();
+  THIS_WORKER.set_session(NULL);
+  const int64_t MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT = 2000000;//default 2 seconds
+  THIS_WORKER.set_timeout_ts(MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT + ObTimeUtility::current_time());
+
   int64_t affected_rows = 0;
   ObArray<int64_t> partition_ids;
   for (int64_t i = 0; OB_SUCC(ret) && i < failed_part_ids.count(); i++) {
@@ -7844,6 +7854,8 @@ int ObDbmsStats::update_analyze_failed_count(const ObTableStatParam &stat_param,
           affected_rows))) {
     LOG_WARN("failed to update ANALYZE failed_count", K(ret), K(affected_rows));
   }
+  THIS_WORKER.set_session(origin_session);
+  THIS_WORKER.set_timeout_ts(origin_timeout);
   return ret;
 }
 

@@ -922,10 +922,13 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
   if (OB_SUCC(ret) && random_split_part) {
     gather_helper.maximum_gather_col_cnt_ = ObRandom::rand(1, column_cnt);
     gather_helper.maximum_gather_part_cnt_ = ObRandom::rand(1, partition_cnt);
-    gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt ||
-                                     column_cnt != origin_column_cnt;
+    if (gather_helper.maximum_gather_col_cnt_ > column_cnt) {
+      gather_helper.maximum_gather_col_cnt_ = column_cnt;
+    }
+    gather_helper.is_split_gather_ = gather_helper.maximum_gather_part_cnt_ != origin_partition_cnt ||
+                                     gather_helper.maximum_gather_col_cnt_  != origin_column_cnt;
   }
-  LOG_TRACE("succeed to get the maximum num of part and column for stat gather", K(param), K(max_memory_used),
+  LOG_TRACE("succeed to get the maximum num of part and column for stat gather", K(param), K(column_cnt), K(max_memory_used),
                                          K(max_wa_memory_size), K(tab_stat_size), K(col_histogram_size),
                                          K(col_stat_size), K(calc_stat_size), K(gather_helper));
   if (gather_helper.is_split_gather_) {
