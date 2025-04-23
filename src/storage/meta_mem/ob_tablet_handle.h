@@ -118,7 +118,7 @@ public:
       const bool need_split_src_table,
       const bool need_split_dst_table,
       ObIArray<ObITable *> &tables);
-  TO_STRING_KV(K_(tablet_handle), K_(transfer_src_handle), K_(table_store_iter));
+  TO_STRING_KV(K_(tablet_handle), K_(transfer_src_handle), K_(table_store_iter), K_(split_extra_tablet_handles));
 private:
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator table_store_iter_;
