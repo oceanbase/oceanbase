@@ -171,6 +171,9 @@ int ObStorageHAMacroBlockWriter::process(
         STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
           K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
         break;
+      } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
+        STORAGE_LOG(WARN, "failed to check disk space", K(ret));
+        break;
       } else if (OB_FAIL(ObStorageHAUtils::check_log_status(tenant_id_, ls_id_, result))) {
         LOG_WARN("failed to check log status", K(ret), K(tenant_id_), K(ls_id_));
       } else if (OB_SUCCESS != result) {
