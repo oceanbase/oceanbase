@@ -3059,8 +3059,8 @@ int ObTransformMVRewrite::check_rewrite_expected(MvRewriteHelper &helper,
   } else if (!is_match_index) {
     is_expected = false;
     OPT_TRACE("condition does not match index, can not rewrite");
-  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*parent_stmts_, ori_stmt, true,
-                                                                        partial_cost_check))) {
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, *parent_stmts_, ori_stmt,
+                                                                        true, partial_cost_check))) {
     LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(*parent_stmts_, ori_stmt, rewrite_stmt,
                                       !need_check_cost, false, accepted, partial_cost_check))) {

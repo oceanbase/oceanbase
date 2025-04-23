@@ -92,7 +92,8 @@ int ObTransformSemiToInner::transform_one_stmt(
       } else if (!happened) {
         OPT_TRACE("semi join can not transform to inner join");
         LOG_TRACE("semi join can not transform to inner join", K(*semi_info));
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
+                                                                            stmt, true,
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,

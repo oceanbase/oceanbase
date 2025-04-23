@@ -2970,7 +2970,8 @@ int ObTransformTempTable::need_check_global_cte_cost(const ObDMLStmt *root_stmt,
     for (int64_t i = 0; OB_SUCC(ret) && !check_global_cost && i < origin_stmts.count(); ++i) {
       const ObSelectStmt *stmt = origin_stmts.at(i);
       bool has_nlj_opportunity = false;
-      if (OB_FAIL(ObTransformUtils::check_nlj_opportunity(root_stmt,
+      if (OB_FAIL(ObTransformUtils::check_nlj_opportunity(*ctx_,
+                                                          root_stmt,
                                                           stmt,
                                                           parent_map,
                                                           semi_join_stmt_ids,

@@ -169,8 +169,8 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
-                                                                            partial_cost_check))) {
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+                                                                            true, partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                           NULL != ctx.hint_, false,
@@ -276,7 +276,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
             LOG_WARN("failed to do transformation", K(ret));
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
             LOG_WARN("failed to merge stmt", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+          } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
+                                                                                stmt, true,
                                                                                 partial_cost_check))) {
             LOG_WARN("failed to check partial cost eval validity", K(ret));
           } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
@@ -452,7 +453,8 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to merge stmt", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? origin_trans_stmt = trans_stmt
                                                 : view_table->ref_query_ = static_cast<ObSelectStmt*>(trans_stmt))) {
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
+                                                                            stmt, true,
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, origin_trans_stmt,
@@ -586,7 +588,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
         LOG_WARN("just stmt select item failed", K(ret));
       } else if (OB_FALSE_IT(NULL == view_table ? trans_stmt = trans_ref_query
                                                 : view_table->ref_query_ = trans_ref_query)) {
-      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, true,
+      } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
+                                                                            stmt, true,
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,

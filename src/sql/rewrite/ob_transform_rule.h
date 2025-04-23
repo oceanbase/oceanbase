@@ -528,10 +528,6 @@ protected:
                              ObDMLStmt &stmt,
                              ObDMLStmt *&copied_stmt,
                              bool is_trans_stmt);
-  int partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                       ObDMLStmt *&stmt,
-                                       bool check_nlj_inner_path,
-                                       bool &is_valid);
 private:
   // pre-order transformation
   int transform_pre_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,

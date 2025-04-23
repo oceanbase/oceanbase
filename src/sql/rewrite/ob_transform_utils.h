@@ -2046,11 +2046,13 @@ public:
   static int check_has_exec_param_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
                                               ObDMLStmt *&stmt,
                                               bool &has_pushed_param);
-  static int partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt> &parent_stmts,
+  static int partial_cost_eval_validity_check(ObTransformerCtx &ctx,
+                                              ObIArray<ObParentDMLStmt> &parent_stmts,
                                               ObDMLStmt *&stmt,
                                               bool check_nlj_inner_path,
                                               bool &is_valid);
-  static int check_nlj_opportunity(const ObDMLStmt *root_stmt,
+  static int check_nlj_opportunity(ObTransformerCtx &ctx,
+                                   const ObDMLStmt *root_stmt,
                                    const ObSelectStmt *stmt,
                                    const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                    ObIArray<int64_t> &semi_join_stmt_ids,

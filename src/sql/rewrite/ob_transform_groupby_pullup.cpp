@@ -57,8 +57,8 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to get transform view", K(ret));
     } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i), unique_key_provider))) {
       LOG_WARN("failed to do pull up group by", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
-                                                                          partial_cost_check))) {
+    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+                                                                          false, partial_cost_check))) {
       LOG_WARN("failed to check partial cost eval validity", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                         valid_views.at(i).need_merge_, true,

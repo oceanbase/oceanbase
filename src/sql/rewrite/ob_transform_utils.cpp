@@ -17157,10 +17157,11 @@ int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                                      ObDMLStmt *&stmt,
-                                                      bool check_nlj_inner_path,
-                                                      bool &is_valid)
+int ObTransformUtils::partial_cost_eval_validity_check(ObTransformerCtx &ctx,
+                                                       ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                       ObDMLStmt *&stmt,
+                                                       bool check_nlj_inner_path,
+                                                       bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -17184,6 +17185,7 @@ int ObTransformUtils::partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt>
   } else if (has_pushed_param) {
     is_valid = false;
   }
+
   // 2. current sub stmt tree must not reference fake cte table
   if (OB_FAIL(ret) || !is_valid) {
     //do nothing
@@ -17192,6 +17194,7 @@ int ObTransformUtils::partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt>
   } else if (ref_fake_cte_table) {
     is_valid = false;
   }
+
   // 3. check the opportunity for pushing down dynamic filter to view through NLJ path
   if (OB_FAIL(ret) || !is_valid || !check_nlj_inner_path || !stmt->is_select_stmt()) {
     //do nothing
@@ -17199,7 +17202,8 @@ int ObTransformUtils::partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to init stmt map", K(ret));
   } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(root_stmt, dummy, &parent_map))) {
     LOG_WARN("failed to get all child stmts", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_nlj_opportunity(root_stmt,
+  } else if (OB_FAIL(ObTransformUtils::check_nlj_opportunity(ctx,
+                                                             root_stmt,
                                                              static_cast<ObSelectStmt*>(stmt),
                                                              parent_map,
                                                              dummy_semi_ids,
@@ -17213,18 +17217,40 @@ int ObTransformUtils::partial_cost_eval_validity_check(ObIArray<ObParentDMLStmt>
   return ret;
 }
 
-int ObTransformUtils::check_nlj_opportunity(const ObDMLStmt *root_stmt,
+int ObTransformUtils::check_nlj_opportunity(ObTransformerCtx &ctx,
+                                            const ObDMLStmt *root_stmt,
                                             const ObSelectStmt *stmt,
                                             const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
                                             ObIArray<int64_t> &semi_join_stmt_ids,
                                             bool &has_nlj_opportunity)
 {
   int ret = OB_SUCCESS;
+  bool nlj_enabled = true;
   has_nlj_opportunity = false;
-  if (OB_ISNULL(root_stmt) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+  if (OB_ISNULL(root_stmt) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) ||
+      OB_ISNULL(ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root stmt or stmt is null", K(ret), K(root_stmt), K(stmt));
   } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.session_info_->get_effective_tenant_id()));
+    bool nested_loop_join_enabled = tenant_config.is_valid() && tenant_config->_nested_loop_join_enabled;
+    bool push_join_pred_into_view_enabled = true;
+    const ObOptParamHint &opt_params = stmt->get_query_ctx()->get_global_hint().opt_params_;
+    if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, nested_loop_join_enabled))) {
+      LOG_WARN("failed to check nested loop join enabled", K(ret));
+    } else if (!nested_loop_join_enabled) {
+      nlj_enabled = false;
+      // nested loop join disabled, need not to check nlj opportunity
+    } else if (OB_FAIL(ctx.session_info_->is_push_join_predicate_enabled(push_join_pred_into_view_enabled))) {
+      LOG_WARN("failed to get push join predicate variable", K(ret));
+    } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
+      LOG_WARN("failed to get push join predicate opt param value", K(ret));
+    } else if (!push_join_pred_into_view_enabled) {
+      nlj_enabled = false;
+      // push join preds to view disabled, need not to check nlj opportunity
+    }
+  }
+  if (OB_SUCC(ret) && nlj_enabled) {
     ObSqlSchemaGuard &schema_guard = stmt->get_query_ctx()->sql_schema_guard_;
     ObSEArray<int64_t, 4> sel_idxs;
     // collect idxs of select items that can match index

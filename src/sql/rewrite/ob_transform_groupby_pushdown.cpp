@@ -132,8 +132,8 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_join(
     LOG_TRACE("is not happened");
   } else if (OB_FAIL(get_tables_from_params(*stmt, params, cross_join_params, trans_tables, force_rewrite))) {
     LOG_WARN("get tables failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
-                                                                        partial_cost_check))) {
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+                                                                        false, partial_cost_check))) {
     LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                       (NULL != myhint && myhint->is_enable_hint()) || force_rewrite, false,
@@ -175,7 +175,7 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_union(
   bool is_happened = false;
   trans_happened = false;
   bool partial_cost_check = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (!stmt->is_select_stmt()) {
@@ -204,8 +204,8 @@ int ObTransformGroupByPushdown::try_push_down_groupby_into_union(
   } else {
     if (trans_stmt == stmt) {
       trans_happened = true;
-    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(parent_stmts, stmt, false,
-                                                                          partial_cost_check))) {
+    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+                                                                          false, partial_cost_check))) {
       LOG_WARN("failed to check partial cost eval validity", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                  NULL != myhint && myhint->is_enable_hint(),
