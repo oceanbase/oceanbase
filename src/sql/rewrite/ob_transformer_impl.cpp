@@ -540,11 +540,11 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(LEFT_JOIN_TO_ANTI, ObTransformLeftJoinToAnti);
     APPLY_RULE_IF_NEEDED(AGGR_SUBQUERY, ObTransformAggrSubquery);
     APPLY_RULE_IF_NEEDED(WIN_MAGIC, ObTransformWinMagic);
-    APPLY_RULE_IF_NEEDED(GROUPBY_PUSHDOWN, ObTransformGroupByPushdown);
-    APPLY_RULE_IF_NEEDED(GROUPBY_PULLUP, ObTransformGroupByPullup);
     APPLY_RULE_IF_NEEDED(CONDITIONAL_AGGR_COALESCE, ObTransformConditionalAggrCoalesce);
     APPLY_RULE_IF_NEEDED(FASTMINMAX, ObTransformMinMax);
     APPLY_RULE_IF_NEEDED(PREDICATE_MOVE_AROUND, ObTransformPredicateMoveAround);
+    APPLY_RULE_IF_NEEDED(GROUPBY_PUSHDOWN, ObTransformGroupByPushdown);
+    APPLY_RULE_IF_NEEDED(GROUPBY_PULLUP, ObTransformGroupByPullup);
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
     APPLY_RULE_IF_NEEDED(LATE_MATERIALIZATION, ObTransformLateMaterialization);
   }

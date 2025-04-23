@@ -307,7 +307,6 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *tmp1 = NULL;
   ObDMLStmt *tmp2 = NULL;
   bool ignore_cost = (OB_E(EventTable::EN_CBQT_IGNORE_COST) OB_SUCCESS) != OB_SUCCESS;
-  cost_based_trans_tried_ = true;
   ObSEArray<ObParentDMLStmt, 4> dummy_parent_stmts;
   ObIArray<ObParentDMLStmt> &eval_parent_stmts = eval_partial_cost ? dummy_parent_stmts : parent_stmts;
   BEGIN_OPT_TRACE_EVA_COST;
@@ -323,6 +322,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   } else if (ctx_->eval_cost_) {
     LOG_TRACE("not accept transform because already in one cost evaluation process", K(ctx_->eval_cost_));
   } else {
+    cost_based_trans_tried_ = true;
     if (OB_FAIL(evaluate_cost(eval_parent_stmts, trans_stmt, true, trans_stmt_cost, is_expected,
                               check_ctx))) {
       LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));

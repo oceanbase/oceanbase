@@ -1224,7 +1224,7 @@ int ObTransformSimplifySubquery::recursive_eliminate_subquery(ObDMLStmt *stmt,
 //        c. 消除order by
 //2. 如果是ANY/ALL
 //  2.1 消除group by
-//  2.2 非相关any子查询如果select item为const item，则添加limit 1，
+//  2.2 非相关any子查询如果select item为const item，则添加limit 1
 //      eg: select * from t1 where c1 in (select 1 from t2);
 //          ==> select * from t1 where c1 in (select 1 from t2 limit 1);
 //  2.3 消除distinct
