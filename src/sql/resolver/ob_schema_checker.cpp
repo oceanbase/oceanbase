@@ -992,6 +992,19 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
             helper.convert(table_name));
       }
+    } else if (table->is_materialized_view() && !(table->mv_available())) {
+      const ObDatabaseSchema *db_schema = NULL;
+      if (OB_FAIL(schema_mgr_->get_database_schema(tenant_id, database_id, db_schema))) {
+        LOG_WARN("get database schema failed", K(tenant_id), K(database_id), K(ret));
+      } else if (NULL == db_schema) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
+      } else {
+        ret = OB_TABLE_NOT_EXIST;
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+                       helper.convert(table_name));
+      }
     } else {
       table_schema = table;
     }
