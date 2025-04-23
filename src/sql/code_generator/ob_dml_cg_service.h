@@ -411,7 +411,8 @@ private:
                                          const common::ObIArray<ObColumnRefRawExpr *> &columns,
                                          const ObTableSchema &rowkey_domain,
                                          ObDASScanCtDef *ctdef);
-  int check_need_domain_id_merge_iter(ObLogicalOperator &op,
+  int check_need_domain_id_merge_iter(const common::ObIArray<ObColumnRefRawExpr*> &columns,
+                                      ObLogicalOperator &op,
                                       const uint64_t ref_table_id,
                                       ObIArray<int64_t> &need_domain_id_merge_iter,
                                       ObIArray<uint64_t> &domain_tids);

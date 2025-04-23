@@ -84,6 +84,12 @@ public:
       const void *table_schema,
       ObIArray<int64_t> &domain_types,
       ObIArray<uint64_t> &domain_tids);
+  static int resort_domain_info_by_base_cols(
+      sql::ObSqlSchemaGuard &sql_schema_guard,
+      const ObTableSchema &table_schema,
+      const ObIArray<uint64_t> &base_col_ids,
+      ObIArray<int64_t> &domain_types,
+      ObIArray<uint64_t> &domain_tids);
   /* dml cg End */
 
   /* domain iter Begin */
