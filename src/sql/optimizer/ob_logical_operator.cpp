@@ -417,7 +417,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     max_px_thread_branch_(OB_INVALID_INDEX),
     max_px_group_branch_(OB_INVALID_INDEX),
     need_re_est_child_cost_(false),
-    dist_method_(DIST_INVALID_METHOD)
+    dist_method_(DIST_INVALID_METHOD),
+    is_order_by_plan_top_(false)
 {
 }
 
@@ -6716,8 +6717,11 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
   int64_t inherit_child_ordering_index = -1;
   ObLogicalOperator *parent = get_parent();
   ObLogicalOperator *child = this;
+  if (NULL == parent) {
+    used = false;
+  }
   while (OB_SUCC(ret) && NULL != child) {
-    if (child->is_plan_root()) {
+    if (child->is_order_by_plan_top()) {
       ObLogPlan *plan = child->get_plan();
       const ObDMLStmt *stmt = NULL;
       if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
@@ -6725,27 +6729,22 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
         LOG_WARN("unexpect null param", K(ret));
       } else if (0 == stmt->get_order_item_size()) {
         //do nothing
-        if (NULL == parent) {
-          used = false;
-        }
       } else {
         used = true;
         break;
       }
     }
-    if (NULL == parent) {
+    if (OB_FAIL(ret)) {
+    } else if (NULL == parent) {
       break;
-    }
-    if (OB_SUCC(ret) && NULL != parent) {
-      if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
-        LOG_WARN("failed to check use child ordering", K(ret));
-      } else if (OB_FALSE_IT(inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index))) {
-      } else if (used || !inherit_child_ordering) {
-        break;
-      } else {
-        child = parent;
-        parent = parent->get_parent();
-      }
+    } else if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
+      LOG_WARN("failed to check use child ordering", K(ret));
+    } else if (OB_FALSE_IT(inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index))) {
+    } else if (used || !inherit_child_ordering) {
+      break;
+    } else {
+      child = parent;
+      parent = parent->get_parent();
     }
   }
   return ret;

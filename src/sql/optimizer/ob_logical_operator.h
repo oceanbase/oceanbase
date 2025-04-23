@@ -1733,6 +1733,8 @@ public:
   inline bool can_re_parallel() { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
   int check_op_orderding_used_by_parent(bool &used);
 
+  inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
+  inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1984,6 +1986,7 @@ protected:
   int64_t max_px_group_branch_;
   bool need_re_est_child_cost_;
   DistAlgo dist_method_;
+  bool is_order_by_plan_top_;
 };
 
 template <typename Allocator>
