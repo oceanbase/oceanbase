@@ -16825,6 +16825,7 @@ int ObPLResolver::resolve_questionmark_cursor(
         LOG_WARN("get invalid symbol.", K(symbol_idx));
       } else {
         var->set_readonly(false);
+        var->set_name(ObPLResolver::ANONYMOUS_INOUT_ARG);
         var->set_type(PL_CURSOR_TYPE);
         var->get_type().set_sys_refcursor_type();
         cursor = ns.get_cursors().at(ns.get_cursors().count() - 1);
