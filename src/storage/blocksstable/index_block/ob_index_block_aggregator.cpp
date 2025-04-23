@@ -414,6 +414,7 @@ int ObColMaxAggregator::cmp_with_prefix(
           left_str = left_datum.get_string();
           right_str = right_datum.get_string();
         }
+        const ObObjType &obj_type = col_desc_.col_type_.get_type();
         const ObCollationType &coll = col_desc_.col_type_.get_collation_type();
         const int64_t left_char_num = ObCharset::strlen_char(coll, left_str.ptr(), left_str.length());
         const int64_t right_char_num = ObCharset::strlen_char(coll, right_str.ptr(), right_str.length());
@@ -428,12 +429,13 @@ int ObColMaxAggregator::cmp_with_prefix(
           const ObString &long_str = left_shorter ? right_str : left_str;
           const int64_t prefix_length = ObCharset::charpos(coll, long_str.ptr(), long_str.length(), prefix_char_num);
           ObString prefix_str(prefix_length, long_str.ptr());
+          const bool end_with_space = common::is_calc_with_end_space(obj_type, obj_type, lib::is_oracle_mode(), coll, coll);
           const bool prefix_match = (0 == ObCharset::strcmpsp(
-              coll, long_str.ptr(), prefix_length, short_str.ptr(), short_str.length(), false));
+              coll, long_str.ptr(), prefix_length, short_str.ptr(), short_str.length(), end_with_space));
           if (!prefix_match) {
             cmp_res = tmp_res;
           } else {
-            // long str larger than short str with same prefix
+            // short str prefix larger than long str prefix with same prefix
             cmp_res = left_shorter ? 1 : -1;
           }
         }
