@@ -4317,7 +4317,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4423,7 +4423,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4478,7 +4478,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4536,7 +4536,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4590,7 +4590,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1" "primary")
       REPLACE_CONST(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
@@ -4817,7 +4817,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4924,7 +4924,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4976,7 +4976,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -5030,7 +5030,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "primary")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */

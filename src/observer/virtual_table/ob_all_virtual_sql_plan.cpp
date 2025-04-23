@@ -266,7 +266,11 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case COST: {
-      cells[cell_idx].set_int(plan_item->cost_);
+      if (plan_item->cost_ < 0) {
+        cells[cell_idx].set_int(INT64_MAX);
+      } else {
+        cells[cell_idx].set_int(plan_item->cost_);
+      }
       break;
     }
     case REAL_COST: {
@@ -274,7 +278,11 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case CARDINALITY: {
-      cells[cell_idx].set_int(plan_item->cardinality_);
+      if (plan_item->cardinality_ < 0) {
+        cells[cell_idx].set_int(INT64_MAX);
+      } else {
+        cells[cell_idx].set_int(plan_item->cardinality_);
+      }
       break;
     }
     case REAL_CARDINALITY: {

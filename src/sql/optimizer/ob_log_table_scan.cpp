@@ -2620,7 +2620,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     } else {
       index_name = &get_index_name();
     }
-  } else if (ref_table_id_ == index_table_id_ && index_prefix < 0 && !use_desc_hint) {
+  } else if (ref_table_id_ == index_table_id_ && !use_query_range() && !use_desc_hint) {
     index_type = T_FULL_HINT;
     index_name = &ObIndexHint::PRIMARY_KEY;
   } else {

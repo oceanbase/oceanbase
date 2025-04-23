@@ -462,8 +462,8 @@ Outline Data:
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$21AFC505" ("view"."t11"@"SEL$2" "view"."t21"@"SEL$2"))
       USE_MERGE(@"SEL$21AFC505" "view"."t21"@"SEL$2")
-      FULL(@"SEL$21AFC505" "view"."t11"@"SEL$2")
-      FULL(@"SEL$21AFC505" "view"."t21"@"SEL$2")
+      INDEX(@"SEL$21AFC505" "view"."t11"@"SEL$2" "primary")
+      INDEX(@"SEL$21AFC505" "view"."t21"@"SEL$2" "primary")
       MERGE(@"SEL$2" > "SEL$1")
       OUTER_TO_INNER(@"SEL$CFEA49FE")
       PRED_DEDUCE(@"SEL$A7A036C9")
