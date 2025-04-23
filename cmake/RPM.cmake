@@ -128,6 +128,19 @@ if (OB_BUILD_STANDALONE)
   set(CPACK_RPM_RELOCATION_PATHS "/usr/bin")
 endif()
 
+# add software package info
+set(CPACK_FULL_PACKAGE_NAME
+  "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.${ARCHITECTURE}.rpm")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package.template
+              ${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package
+              @ONLY)
+
+install(FILES
+  tools/ocp/software_package
+  DESTINATION "."
+  COMPONENT server)
+
 message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
 
 # install cpack to make everything work
