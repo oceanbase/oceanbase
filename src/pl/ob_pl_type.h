@@ -885,7 +885,7 @@ public:
   static int get_package_id(const sql::ObRawExpr *expr,
                             uint64_t& package_id, uint64_t *p_var_idx = NULL);
   static bool has_same_collection_access(const sql::ObRawExpr *expr, const sql::ObObjAccessRawExpr *access_expr);
-  static bool has_collection_access(const sql::ObRawExpr *expr);
+  static int has_collection_access(const sql::ObRawExpr *expr, bool &collection_access);
   static int datum_need_copy(const sql::ObRawExpr *into, const sql::ObRawExpr *value, AccessType &alloc_scop);
   static int64_t get_local_variable_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static int64_t get_subprogram_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
