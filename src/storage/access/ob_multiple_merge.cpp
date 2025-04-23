@@ -704,6 +704,8 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             }
 
             if (OB_FAIL(ret)) {
+            } else if (unprojected_row_.is_filtered()) {
+              // continue
             } else if (need_handle_lob_columns(unprojected_row_) && OB_FAIL(handle_lob_before_fuse_row())) {
               LOG_WARN("Fail to handle lobs", K(ret), KP(this));
             } else {
@@ -908,6 +910,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             }
 
             if (OB_FAIL(ret)) {
+            } else if (unprojected_row_.is_filtered()) {
+              // continue
             } else if (need_handle_lob_columns(unprojected_row_) && OB_FAIL(handle_lob_before_fuse_row())) {
               LOG_WARN("Fail to handle lobs", K(ret), KP(this));
             } else {
@@ -1064,7 +1068,6 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   }
   if (OB_SUCC(ret) && !need_skip) {
     if (in_row.fast_filter_skipped_) {
-      is_filter_filtered = in_row.is_insert_filtered_;
       in_row.read_flag_ = 0;
     } else if (OB_FAIL(check_filtered(cur_row_, is_filter_filtered))) {
       LOG_WARN("fail to check row filtered", K(ret));

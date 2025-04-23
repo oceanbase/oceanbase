@@ -368,6 +368,10 @@ public:
    *delete_insert section
    */
   OB_INLINE bool is_di_delete() const { return !is_delete_filtered_ && (delete_version_ > 0 || row_flag_.is_delete()); }
+  OB_INLINE bool is_filtered() const
+  {
+    return is_insert_filtered_ || (row_flag_.is_delete() && is_delete_filtered_);
+  }
   int fuse_delete_insert(const ObDatumRow &former);
 
   DECLARE_TO_STRING;
@@ -377,15 +381,15 @@ public:
   uint16_t count_;
   union {
     struct {
-      int32_t have_uncommited_row_: 1;
-      int32_t fast_filter_skipped_: 1;
+      uint32_t have_uncommited_row_: 1;
+      uint32_t fast_filter_skipped_: 1;
       // the followings added for delete_insert scan, row must be projected for delete_insert,
       // is_filtered_ means whether or not filtered by the pushdown filter
-      int32_t is_insert_filtered_:  1;
-      int32_t is_delete_filtered_:  1;
-      int32_t reserved_ : 28;
+      uint32_t is_insert_filtered_:  1;
+      uint32_t is_delete_filtered_:  1;
+      uint32_t reserved_ : 28;
     };
-    int32_t read_flag_;
+    uint32_t read_flag_;
   };
   ObDmlRowFlag row_flag_;
   ObMultiVersionRowFlag mvcc_row_flag_;

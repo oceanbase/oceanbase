@@ -203,6 +203,7 @@ int ObReadRow::iterate_delete_insert_row(const ObITableReadInfo &read_info,
       if (ObDmlFlag::DF_INSERT == earliest_dml && ObDmlFlag::DF_DELETE == latest_dml) {
         // Insert1->Delete2->Insert2->Delete3 (Drop all node)
         // earliest(Insert1) latest(Delete3)
+        fill_latest = true;
       } else if (ObDmlFlag::DF_INSERT == earliest_dml && ObDmlFlag::DF_INSERT == latest_dml) {
         // Insert1->Delete2->Insert2->Delete3->Insert3 (Keep Insert3)
         // latest(Insert3)
@@ -290,6 +291,8 @@ int ObReadRow::acquire_delete_insert_tx_node_(ObMvccValueIterator &value_iter,
       } else {
         // Use two tx_node pointer to record the tx_node range need to be fused
         if (OB_ISNULL(latest_tx_node)) {
+          latest_tx_node = tx_node;
+        } else if (DF_DELETE == latest_tx_node->get_dml_flag() && DF_DELETE == tx_node->get_dml_flag()) {
           latest_tx_node = tx_node;
         }
         earliest_tx_node = tx_node;

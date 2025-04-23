@@ -184,9 +184,10 @@ protected:
   OB_INLINE bool is_row_empty(const ObDatumRow &row) const
   { return row.row_flag_.is_not_exist(); }
   int get_filter_result(ObFilterResult &res);
-  int init_bitmap();
-private:
+  bool is_di_bitmap_valid() const;
+  int init_bitmap(ObCGBitmap *&bitmap, bool is_all_true);
   int inner_get_next_row_blockscan(const ObDatumRow *&row);
+private:
   int apply_black_filter_batch(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObBlackFilterExecutor &filter,
@@ -220,7 +221,8 @@ protected:
   storage::ObTableAccessContext *context_;
   ObIAllocator &allocator_;
   storage::ObBlockRowStore *block_row_store_;
-  ObCGBitmap *bitmap_;
+  ObCGBitmap *di_bitmap_;
+  ObCGBitmap *filter_bitmap_;
 };
 
 // tablet split ddl task scan bared row without multi-merge.
@@ -342,8 +344,7 @@ public:
                        K_(finish_scanning_cur_rowkey));
 
 protected:
-  virtual int inner_get_next_row(const ObDatumRow *&row) override final;
-  virtual int inner_get_next_row_impl(const ObDatumRow *&ret_row);
+  virtual int inner_get_next_row(const ObDatumRow *&row) override;
   int check_trans_version(
       bool &final_result,
       bool &version_fit,
@@ -356,11 +357,12 @@ protected:
       const int64_t trans_version,
       const int64_t sql_sequence,
       const ObRowHeader *row_header);
-private:
   void reuse_cur_micro_row();
+private:
   void reuse_prev_micro_row();
   void inner_reset();
   int locate_cursor_to_read(bool &found_first_row);
+  int inner_get_next_row_impl(const ObDatumRow *&ret_row);
   int inner_inner_get_next_row(
       const ObDatumRow *&ret_row,
       bool &version_fit,
@@ -419,14 +421,16 @@ public:
       const bool is_right_border) override final;
   INHERIT_TO_STRING_KV("ObMultiVersionDIMicroBlockRowScanner", ObMultiVersionMicroBlockRowScanner,
       K_(is_prev_micro_row_valid), K_(found_first_di_row));
+protected:
+  virtual int inner_get_next_row(const ObDatumRow *&row) override final;
 private:
-  virtual int inner_get_next_row_impl(const ObDatumRow *&ret_row) override final;
+  int inner_get_next_row_direct(const ObDatumRow *&row);
+  int inner_get_next_di_row(const ObDatumRow *&ret_row);
   int inner_get_next_header_info(
-      int64_t &index,
-      bool &version_fit,
-      bool &final_result,
-      ObMultiVersionRowFlag &mvcc_row_flag,
-      ObDmlRowFlag &row_flag);
+    int64_t &index,
+    bool &version_fit,
+    bool &final_result,
+    ObDmlRowFlag &row_flag);
   int locate_next_rowkey(int64_t &index);
   int preprocess_di_rows();
   int compact_rows_of_same_rowkey(
@@ -444,7 +448,7 @@ private:
       int64_t &trans_version,
       const int64_t index);
   int set_row_trans_col(
-      const int64_t idx,
+      const int64_t trans_version,
       ObDatumRow &row);
 
 private:

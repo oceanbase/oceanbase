@@ -162,9 +162,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
     for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
       found_lob_out_row = false;
       row_idx = offset + pd_filter_info.start_;
-      if (pd_filter_info.can_skip_filter_delete_insert(offset)) {
-        continue;
-      } else if (nullptr != parent && parent->can_skip_filter(offset)) {
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
         continue;
       } else if (0 < col_count) {
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -236,7 +234,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
 }
 
 int ObMemtableBlockReader::get_next_di_row(const ObFilterResult &filter_res,
-                                           int64_t& current,
+                                           int64_t &current,
                                            ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -263,6 +261,7 @@ int ObMemtableBlockReader::get_next_di_row(const ObFilterResult &filter_res,
       }
     }
   }
+  LOG_DEBUG("[MULTIVERSION MOW] memtable get next di row", K(ret), K(current), K(row));
   return ret;
 }
 
