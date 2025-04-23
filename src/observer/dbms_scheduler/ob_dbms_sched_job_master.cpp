@@ -248,17 +248,6 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
         } else {
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
         }
-      } else if (job_info.is_on_executing()) {
-        int64_t running_job_count = 0;
-        if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_running_job_count(job_info, running_job_count))) {
-          LOG_WARN("update for end failed for timeout job", K(ret));
-        } else if (running_job_count == 0 && REACH_TIME_INTERVAL_NO_INSTANT(CHECK_JOB_LOST_THRESHOLD)) {
-          if (OB_FAIL(table_operator_.update_for_lost(job_info))) {
-            LOG_WARN("update for end failed for lost job", K(ret));
-          } else {
-            LOG_WARN("job session not exist, regarded as lost, force update for end", K(job_info), K(now));
-          }
-        }
       } else {
         LOG_INFO("job is running now, retry later", K(job_info));
       }
