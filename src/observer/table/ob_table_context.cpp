@@ -2046,8 +2046,9 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
     }
 
     if (OB_SUCC(ret) && !is_found) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_WRONG_NAME_FOR_INDEX;
       LOG_WARN("invalid index name", K(ret), K(index_name));
+      LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, index_name.length(), index_name.ptr());
     }
   }
 
@@ -2221,6 +2222,9 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
     if (OB_ISNULL(simple_table_schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret));
+    } else if (!tablet_id_.is_valid()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     } else if (OB_FAIL(simple_table_schema_->get_part_idx_by_tablet(tablet_id_, part_idx, subpart_idx))) {
       LOG_WARN("fail to get part idx", K(ret), K_(tablet_id));
     } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx,

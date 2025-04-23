@@ -396,6 +396,11 @@ int ObTableBatchService::multi_execute_internal(ObTableBatchCtx &ctx,
     if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
       LOG_WARN("fail to adjust entity", K(ret));
     } else if (use_multi_tablets && FALSE_IT(tb_ctx.set_tablet_id(ctx.tablet_ids_.at(i)))) {
+    } else if (tb_ctx.has_fts_index() && OB_FAIL(ObTableTransUtils::setup_tx_snapshot(*ctx.trans_param_))) {
+      LOG_WARN("fail to refresh read snapshot for fts dml");
+    } else if (tb_ctx.has_fts_index() &&
+                OB_FAIL(tb_ctx.init_trans(ctx.trans_param_->trans_desc_, ctx.trans_param_->tx_snapshot_))) {
+      LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
     } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, &spec, op_result))) {
       LOG_WARN("fail to process insert with spec", K(ret), K(i));
       ObTableApiUtil::replace_ret_code(ret);
