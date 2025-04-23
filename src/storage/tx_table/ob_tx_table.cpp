@@ -457,9 +457,12 @@ int ObTxTable::load_tx_ctx_table_()
 {
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
-  ObTablet *tablet;
+  ObTablet *tablet = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
+  ObMemtableMgrHandle mgr_handle;
+  ObTableHandleV2 table_handle;
+  ObTxCtxMemtable *memtable = nullptr;
 
   CreateMemtableArg arg;
   if (NULL == ls_tablet_svr) {
@@ -472,6 +475,15 @@ int ObTxTable::load_tx_ctx_table_()
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, arg/* use default arg */))) {
     LOG_WARN("failed to create memtable", K(ret));
+  } else if (OB_FAIL(ls_tablet_svr->get_tx_ctx_memtable_mgr(mgr_handle))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_ISNULL(mgr_handle.get_memtable_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_FAIL(mgr_handle.get_memtable_mgr()->get_active_memtable(table_handle))) {
+    LOG_WARN("failed to get memtable handle", K(ret));
+  } else if (OB_FAIL(table_handle.get_tx_ctx_memtable(memtable))) {
+    LOG_WARN("failed to get tx ctx memtable", K(ret));
   } else {
     const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();
 
@@ -486,6 +498,8 @@ int ObTxTable::load_tx_ctx_table_()
       }
       if (FAILEDx(restore_tx_ctx_table_(*sstable))) {
         LOG_WARN("fail to restore tx ctx table", K(ret), KPC(sstable));
+      } else {
+        memtable->set_max_end_scn(sstable->get_end_scn());
       }
     }
   }

@@ -95,14 +95,17 @@ public:
 
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
 
+  void set_max_end_scn(const share::SCN end_scn);
+
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(snapshot_version),
-                       K_(ls_id), K_(is_frozen));
+                       K_(ls_id), K_(is_frozen), K_(max_end_scn));
 
 private:
   bool is_inited_;
   bool is_frozen_;
   ObTxCtxTable ls_ctx_mgr_guard_;
   common::ObSpinLock flush_lock_;
+  share::SCN max_end_scn_;
 };
 
 }  // namespace storage
