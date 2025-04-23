@@ -318,7 +318,6 @@ int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id,
     LIB_LOG(WARN, "[DM] invalid callback pointer");
   } else {
     ObDMCallbackDList callback_dlist;
-    callback_dlist.add_last(callback);
     // A slightly more complicated but safe inspection operation
     // Since map does not provide the operation of "create or modify", nor does it provide the ability to hold bucket locks
     // Therefore, add cyclic verification to prevent the occurrence of
@@ -326,6 +325,12 @@ int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id,
     // Such a situation
     ObDetectCallbackSetCall set_call(this, callback);
     do {
+      // hashmap copy value before set_refactored, if set_refactored failed(return HASH_NOT_EXIST),
+      // the data of callback_dlist is moved to the copied one, the outside one is empty, we should
+      // reset it in the next while loop.
+      callback->reset();
+      callback_dlist.reset();
+      callback_dlist.add_last(callback);
       ret = all_check_items_.set_refactored(detectable_id, callback_dlist, 0, 0, 0, &set_call);
       if (OB_HASH_EXIST == ret) {
         ObDetectCallbackAddCall add_call(callback, this);
