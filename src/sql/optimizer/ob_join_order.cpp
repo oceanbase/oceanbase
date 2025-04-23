@@ -4494,6 +4494,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   const bool has_match_expr_on_table = helper.match_expr_infos_.count() > 0;
   bool can_use_global_index = false;
   bool add_only_vec_index_id = false;
+  bool add_only_fts_index_id = false;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
@@ -4518,6 +4519,12 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     // if GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1, only add vector index (post-filter)
     if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, valid_index_ids))) {
       LOG_WARN("failed to add valid vec index ids", K(ret));
+    }
+  } else if (OB_FALSE_IT(add_only_fts_index_id = (!helper.match_expr_infos_.empty() && !stmt->is_select_stmt()))) {
+  } else if (add_only_fts_index_id) {
+    // TODO: Delete when DML functional lookup is supported.
+    if (OB_FAIL(add_valid_fts_index_ids_for_dml(helper, table_id, valid_index_ids))) {
+      LOG_WARN("failed to add valid fts index ids", K(ret));
     }
   } else if (table_item->is_index_table_) {
     if (OB_FAIL(valid_index_ids.push_back(table_item->ref_id_))) {
@@ -12166,14 +12173,18 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
     LOG_WARN("failed to check right tree can push join pred", K(ret));
   } else if (!right_tree_can_push_pred) {
     is_valid = false;
-  } else if (CONNECT_BY_JOIN == path_info.join_type_) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_conditions.count(); i++) {
       if (OB_ISNULL(join_conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (join_conditions.at(i)->has_flag(CNT_ROWNUM)) {
+      } else if (CONNECT_BY_JOIN == path_info.join_type_ &&
+                 join_conditions.at(i)->has_flag(CNT_ROWNUM)) {
         is_valid = false;
-      } else {/*do nothing*/}
+      } else if (join_conditions.at(i)->has_flag(CNT_MATCH_EXPR)) {
+        // When match expr exists in join condition, prohibit inner path
+        is_valid = false;
+      }
     }
   }
   return ret;
@@ -18632,14 +18643,17 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(qual), K(ret));
     // can not push down expr with subquery
-    } else if (qual->has_flag(CNT_ROWNUM)) {
-      if (force_inner_nl && qual->has_flag(CNT_SUB_QUERY)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
-      }
+    } else if (force_inner_nl && qual->has_flag(CNT_ROWNUM) && qual->has_flag(CNT_SUB_QUERY)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
+    } else if (force_inner_nl && qual->has_flag(CNT_MATCH_EXPR)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't pushdown join conds with match expr");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "pushdown join conds with match expr");
     } else if ((T_OP_NE == qual->get_expr_type() ||
-                T_OP_NOT_IN == qual->get_expr_type()) &&
-               !force_inner_nl) {
+                T_OP_NOT_IN == qual->get_expr_type() ||
+                qual->has_flag(CNT_MATCH_EXPR)) &&
+                !force_inner_nl) {
       //do nothing
     } else if (OB_FAIL(pushdown_quals.push_back(qual))) {
       LOG_WARN("failed to push back qual", K(ret));
@@ -19720,7 +19734,7 @@ int ObJoinOrder::extract_scan_match_expr_candidates(const ObIArray<ObRawExpr *> 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null param expr for bool op", K(ret));
       } else if (param_expr->has_flag(IS_MATCH_EXPR)) {
-        if (OB_FAIL(scan_match_exprs.push_back(static_cast<ObMatchFunRawExpr*>(param_expr)))) {
+        if (OB_FAIL(add_var_to_array_no_dup(scan_match_exprs, static_cast<ObMatchFunRawExpr*>(param_expr)))) {
           LOG_WARN("failed to append match expr to array", K(ret));
         } else if (OB_FAIL(scan_match_filters.push_back(filter))) {
           LOG_WARN("failed to append match filter to array", K(ret));
@@ -20292,6 +20306,45 @@ int ObJoinOrder::add_valid_fts_index_ids(PathHelper &helper, uint64_t *index_tid
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; i < fts_index_ids.count() && size < OB_MAX_INDEX_PER_TABLE + 1; ++i) {
         index_tid_array[size++] = fts_index_ids.at(i);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_valid_fts_index_ids_for_dml(const PathHelper &helper,
+                                                 const uint64_t table_id,
+                                                 ObIArray<uint64_t> &valid_index_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObMatchFunRawExpr *, 4> scan_match_exprs;
+  ObSEArray<ObRawExpr *, 4> scan_match_filters;
+  ObSEArray<ObRawExpr *, 2> match_exprs_on_table;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(extract_scan_match_expr_candidates(get_restrict_infos(),
+                                                        scan_match_exprs,
+                                                        scan_match_filters))) {
+    LOG_WARN("failed to extract scan match expr candidates", K(ret));
+  } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_exprs_on_table))) {
+    LOG_WARN("failed to get match expr on table", K(ret));
+  } else if (scan_match_exprs.count() > 1 || match_exprs_on_table.count() > 1 ||
+             scan_match_exprs.count() != match_exprs_on_table.count()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("complex query with dml on fulltext index not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext index is");
+  } else if (!scan_match_exprs.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < scan_match_exprs.count(); ++i) {
+      const MatchExprInfo *match_expr_info = NULL;
+      if (OB_FAIL(find_match_expr_info(helper.match_expr_infos_, scan_match_exprs.at(i), match_expr_info))) {
+        LOG_WARN("failed to find match expr info", K(ret));
+      } else if (OB_ISNULL(match_expr_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(add_var_to_array_no_dup(valid_index_ids, match_expr_info->inv_idx_id_))) {
+        LOG_WARN("failed to add var to array no dup", K(ret));
       }
     }
   }

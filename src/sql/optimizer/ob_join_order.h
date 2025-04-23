@@ -2883,6 +2883,9 @@ struct NullAwareAntiJoinInfo {
                                 int64_t &query_range_row_count,
                                 double &selectivity);
     int add_valid_fts_index_ids(PathHelper &helper, uint64_t *index_tid_array, int64_t &size);
+    int add_valid_fts_index_ids_for_dml(const PathHelper &helper,
+                                        const uint64_t table_id,
+                                        ObIArray<uint64_t> &valid_index_ids);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                 ObSqlSchemaGuard *schema_guard,
                                 const uint64_t table_id,
