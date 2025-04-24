@@ -173,6 +173,10 @@ enum ObMatchAgainstMode {
 
 #define IS_OUTER_OR_CONNECT_BY_JOIN(join_type) (IS_OUTER_JOIN(join_type) || CONNECT_BY_JOIN == join_type)
 
+#define IS_INNER_JOIN(join_type) (INNER_JOIN == join_type)
+
+#define IS_NOT_INNER_JOIN(join_type) (INNER_JOIN != join_type)
+
 #define IS_DUMMY_PHY_OPERATOR(op_type) ((op_type == PHY_MONITORING_DUMP))
 
 #define IS_LEFT_STYLE_JOIN(join_type) \

@@ -591,7 +591,7 @@ public:
                                            int64_t sel_index,
                                            bool &is_match);
 
-  static int get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
+  static int get_valid_index_id(ObSqlSchemaGuard *schema_guard,
                                 const ObDMLStmt *stmt,
                                 const TableItem *table_item,
                                 ObIArray<uint64_t> &index_ids);
@@ -635,6 +635,10 @@ public:
   static int classify_scalar_query_ref(ObRawExpr *expr,
                                        ObIArray<ObRawExpr*> &scalar_query_refs,
                                        ObIArray<ObRawExpr*> &non_scalar_query_refs);
+
+  static int extract_query_ref_stmts(const ObIArray<ObRawExpr*> &exprs,
+                                     ObIArray<ObSelectStmt *> &subquery_stmts,
+                                     const bool with_nested = true);
 
   static int extract_query_ref_expr(const ObIArray<ObRawExpr*> &exprs,
                                     ObIArray<ObQueryRefRawExpr *> &subqueries,
@@ -1937,6 +1941,9 @@ public:
                                              bool &is_valid);
   static int cartesian_tables_pre_split(ObSelectStmt *subquery,
                                         ObIArray<ObRawExpr*> &outer_conditions,
+                                        ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables);
+  static int cartesian_tables_pre_split(const ObIArray<TableItem*> &table_items,
+                                        const ObIArray<ObRawExpr*> &conditions,
                                         ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables);
   static int do_split_cartesian_tables(ObTransformerCtx *ctx,
                                        ObDMLStmt *stmt,

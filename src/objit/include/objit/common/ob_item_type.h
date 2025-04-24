@@ -2616,6 +2616,11 @@ typedef enum ObItemType
   T_LOAD_TIME_ZONE_INFO = 4764,
   T_SP_OBJ_PERSISTABLE = 4797,
   T_LOAD_LICENSE = 4808,
+
+  // optimizer hint
+  T_PUSH_SUBQ = 4823,
+  T_NO_PUSH_SUBQ = 4824,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -92,9 +92,9 @@ namespace sql
                  K_(where_conditions),
                  K_(equal_join_conditions));
     ObRelIds table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer join
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer join，则是join filter，如果是inner join，则是join condition
-    common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> equal_join_conditions_;//是连接条件（outer的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的mergejoin所需的序的时候使用
+    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer/semi join
+    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
+    common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
     ObJoinType join_type_;
   };
 
@@ -2061,8 +2061,6 @@ struct NullAwareAntiJoinInfo {
                           const bool has_non_nl_path,
                           const bool has_equal_cond);
 
-    int create_plan_for_inner_path(Path *path);
-
     int create_subplan_filter_for_join_path(Path *path,
                                             ObIArray<ObRawExpr*> &subquery_filters);
 
@@ -2627,6 +2625,8 @@ struct NullAwareAntiJoinInfo {
                                            ObIArray<AccessPath *> &access_paths);
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
+    int create_plan_for_path_with_subq(Path *path);
+    int create_plan_tree_from_access_paths(ObIArray<AccessPath*> &access_paths);
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
                      const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,

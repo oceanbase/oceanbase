@@ -11613,7 +11613,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_USE_HASH_SET:
     case T_NO_USE_HASH_SET:
     case T_USE_DISTRIBUTED_DML:
-    case T_NO_USE_DISTRIBUTED_DML: {
+    case T_NO_USE_DISTRIBUTED_DML:
+    case T_PUSH_SUBQ:
+    case T_NO_PUSH_SUBQ: {
       if (OB_FAIL(resolve_normal_optimize_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve normal optimize hint.", K(ret));
       }

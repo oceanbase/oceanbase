@@ -152,6 +152,8 @@ private:
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+  int print_push_subq_outline(PlanText &plan_text);
+  int print_push_subq_used_hint(PlanText &plan_text);
 
 protected:
   DistAlgo dist_algo_;

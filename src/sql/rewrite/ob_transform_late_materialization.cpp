@@ -295,7 +295,7 @@ int ObTransformLateMaterialization::get_accessible_index(const ObSelectStmt &sel
       OB_ISNULL(query_hint = select_stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_vaild_index_id(schema_guard, &select_stmt, &table_item,
+  } else if (OB_FAIL(ObTransformUtils::get_valid_index_id(schema_guard, &select_stmt, &table_item,
                                                           index_ids))) {
     LOG_WARN("fail to get vaild index id", K(ret));
   } else {

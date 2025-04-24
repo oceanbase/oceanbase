@@ -675,39 +675,6 @@ int ObLogPlan::generate_conflict_rule(ConflictDetector *parent,
   return ret;
 }
 
-int ObLogPlan::get_base_table_items(const ObDMLStmt &stmt,
-                                    const ObIArray<TableItem*> &table_items,
-                                    const ObIArray<SemiInfo*> &semi_infos,
-                                    ObIArray<TableItem*> &base_tables)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    TableItem *item = table_items.at(i);
-    if (OB_ISNULL(item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!item->is_joined_table()) {
-      ret = base_tables.push_back(item);
-    } else {
-      JoinedTable *joined_table = static_cast<JoinedTable*>(item);
-      for (int64_t j = 0; OB_SUCC(ret) && j < joined_table->single_table_ids_.count(); ++j) {
-        TableItem *table = stmt.get_table_item_by_id(joined_table->single_table_ids_.at(j));
-        ret = base_tables.push_back(table);
-      }
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-    if (OB_ISNULL(semi_infos.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null semi info", K(ret));
-    } else {
-      TableItem *table = stmt.get_table_item_by_id(semi_infos.at(i)->right_table_id_);
-      ret = base_tables.push_back(table);
-    }
-  }
-  return ret;
-}
-
 //1. 添加基本表的ObJoinOrder结构到base level
 //2. 添加Semi Join的右支block到base level
 //3. 条件下推到基表
@@ -723,7 +690,6 @@ int ObLogPlan::generate_join_orders()
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> quals;
   ObSEArray<TableItem*, 8> from_table_items;
-  ObSEArray<TableItem*, 8> base_table_items;
   JoinOrderArray base_level;
   int64_t join_level = 0;
   common::ObArray<JoinOrderArray> join_rels;
@@ -732,11 +698,6 @@ int ObLogPlan::generate_join_orders()
     LOG_WARN("unexpected NULL", K(stmt), K(ret));
   } else if (OB_FAIL(get_from_table_items(stmt->get_from_items(), from_table_items))) {
       LOG_WARN("failed to get table items", K(ret));
-  } else if (OB_FAIL(get_base_table_items(*stmt,
-                                          from_table_items,
-                                          stmt->get_semi_infos(),
-                                          base_table_items))) {
-    LOG_WARN("failed to flatten table items", K(ret));
   } else if (OB_FAIL(append(quals, get_stmt()->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(quals, get_pushdown_filters()))) {
@@ -748,14 +709,14 @@ int ObLogPlan::generate_join_orders()
                                   stmt->get_semi_infos(),
                                   quals))) {
       LOG_WARN("failed to distribute special quals", K(ret));
-    } else if (OB_FAIL(generate_base_level_join_order(base_table_items,
+    } else if (OB_FAIL(generate_base_level_join_order(stmt->get_table_items(),
                                                       base_level))) {
       LOG_WARN("fail to generate base level join order", K(ret));
-    } else if (OB_FAIL(init_function_table_depend_info(base_table_items))) {
+    } else if (OB_FAIL(init_function_table_depend_info(stmt->get_table_items()))) {
       LOG_WARN("failed to init function table depend infos", K(ret));
-    } else if (OB_FAIL(init_json_table_depend_info(base_table_items))) {
+    } else if (OB_FAIL(init_json_table_depend_info(stmt->get_table_items()))) {
       LOG_WARN("failed to init json table depend infos", K(ret));
-    } else if (OB_FAIL(init_lateral_table_depend_info(base_table_items))) {
+    } else if (OB_FAIL(init_lateral_table_depend_info(stmt->get_table_items()))) {
       LOG_WARN("failed to init lateral table depend info", K(ret));
     } else if (OB_FAIL(generate_conflict_detectors(from_table_items,
                                                   stmt->get_semi_infos(),
@@ -830,6 +791,263 @@ int ObLogPlan::generate_join_orders()
                         ",interesting path count:", join_order_->get_interesting_paths().count());
       OPT_TRACE_TIME_USED;
       OPT_TRACE_MEM_USED;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::pre_process_push_subq(ObIArray<ObRawExpr*> &quals)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  ObSEArray<ObRelIds, 4> connected_table_ids;
+  bool has_outline_data = false;
+  if (OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(query_ctx));
+  } else if (OB_FAIL(get_connected_table_ids(quals, connected_table_ids))) {
+    LOG_WARN("failed to get connected table ids", K(ret));
+  } else {
+    has_outline_data = query_ctx->get_query_hint().has_outline_data();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
+    ObRawExpr* expr = quals.at(i);
+    bool force_push_subq = false;
+    bool force_no_push_subq = false;
+    bool need_push_subq = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null qual", K(ret), K(i));
+    } else if (!expr->has_flag(CNT_SUB_QUERY)) {
+      // do nothing
+    } else if (OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+      LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
+    } else if (force_push_subq || force_no_push_subq || has_outline_data) {
+      // handle hint or outline
+      if (force_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    } else if (OB_FAIL(check_subq_need_push(expr, connected_table_ids, need_push_subq))) {
+      LOG_WARN("failed to check subquery expr need push", K(ret));
+    } else if (need_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_connected_table_ids(const ObIArray<ObRawExpr*> &quals,
+                                       ObIArray<ObRelIds> &connected_table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> join_cond_quals;
+  ObSEArray<ObSEArray<TableItem*, 4>, 8> all_connected_tables;
+  const ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null stmt", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
+    ObRawExpr *qual = quals.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null qual", K(ret));
+    } else if (!qual->has_flag(IS_JOIN_COND)) {
+      // do nothing
+    } else if (OB_FAIL(join_cond_quals.push_back(qual))) {
+      LOG_WARN("failed to push back qual", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTransformUtils::cartesian_tables_pre_split(stmt->get_table_items(),
+                                                                  join_cond_quals,
+                                                                  all_connected_tables))) {
+    LOG_WARN("failed to split cartesian table", K(ret));
+  } else if (OB_FAIL(connected_table_ids.prepare_allocate(all_connected_tables.count()))) {
+    LOG_WARN("failed to prepare allocate connected_table_ids", K(ret), K(all_connected_tables.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_connected_tables.count(); ++i) {
+    if (OB_FAIL(stmt->get_table_rel_ids(all_connected_tables.at(i), connected_table_ids.at(i)))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_push_subq_hint(const ObRawExpr *expr,
+                                    bool &force_push,
+                                    bool &force_no_push)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null expr", K(ret), K(expr));
+  } else if (expr->is_query_ref_expr()) {
+    const ObSelectStmt *ref_stmt = static_cast<const ObQueryRefRawExpr*>(expr)->get_ref_stmt();
+    if (OB_ISNULL(ref_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(ref_stmt));
+    } else {
+      const ObHint *push_subq_hint = ref_stmt->get_stmt_hint().get_normal_hint(T_PUSH_SUBQ);
+      if (NULL != push_subq_hint) {
+        force_push = push_subq_hint->is_enable_hint();
+        force_no_push = push_subq_hint->is_disable_hint();
+      }
+    }
+  } else if (!expr->has_flag(CNT_SUB_QUERY)) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !(force_push || force_no_push) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_push_subq_hint(expr->get_param_expr(i), force_push, force_no_push)))) {
+        LOG_WARN("failed to check param expr push subq hint", K(ret), K(i), KPC(expr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_subq_need_push(ObRawExpr *expr,
+                                    ObIArray<ObRelIds> &connected_table_ids,
+                                    bool &need_push_subq)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  const ObColumnRefRawExpr *col_expr = NULL;
+  const ObRawExpr *subq_expr = NULL;
+  bool is_valid_pattern = false;
+  bool has_other_quals = false;
+  bool is_match_index = false;
+  need_push_subq = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr), K(query_ctx));
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4)) {
+    // do nothing
+  } else if (OB_FAIL(check_push_subq_expr_pattern(expr,
+                                                  col_expr,
+                                                  subq_expr,
+                                                  is_valid_pattern))) {
+    LOG_WARN("failed to check push subq expr pattern", K(ret));
+  } else if (!is_valid_pattern) {
+    // do nothing
+  } else if (OB_FAIL(check_push_subq_has_other_quals(col_expr,
+                                                     subq_expr,
+                                                     connected_table_ids,
+                                                     has_other_quals))) {
+    LOG_WARN("failed to check push subq has other quals", K(ret));
+  } else if (has_other_quals) {
+    // do nothing
+  } else if (OB_FAIL(check_push_subq_expr_match_index(expr, col_expr, is_match_index))) {
+    LOG_WARN("failed to check push subq expr match index", K(ret));
+  } else if (!is_match_index) {
+    // do nothing
+  } else {
+    need_push_subq = true;
+  }
+  return ret;
+}
+
+int ObLogPlan::check_push_subq_expr_pattern(const ObRawExpr *expr,
+                                            const ObColumnRefRawExpr *&col_expr,
+                                            const ObRawExpr *&subq_expr,
+                                            bool &is_valid_pattern)
+{
+  int ret = OB_SUCCESS;
+  col_expr = NULL;
+  subq_expr = NULL;
+  is_valid_pattern = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (!IS_BASIC_CMP_OP(expr->get_expr_type())) {
+    // do nothing
+  } else if (T_OP_LIKE == expr->get_expr_type()) {
+    if (OB_UNLIKELY(3 != expr->get_param_count())
+             || OB_ISNULL(expr->get_param_expr(0))
+             || OB_ISNULL(expr->get_param_expr(1))
+             || OB_ISNULL(expr->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected like condition", K(ret), KPC(expr));
+    } else if (expr->get_param_expr(0)->is_column_ref_expr()
+               && expr->get_param_expr(1)->has_flag(CNT_SUB_QUERY)
+               && expr->get_param_expr(2)->is_static_const_expr()) {
+      col_expr = static_cast<const ObColumnRefRawExpr *>(expr->get_param_expr(0));
+      subq_expr = expr->get_param_expr(1);
+      is_valid_pattern = !col_expr->get_relation_ids().overlap(subq_expr->get_relation_ids());
+    }
+  } else if (OB_UNLIKELY(2 != expr->get_param_count())
+             || OB_ISNULL(expr->get_param_expr(0))
+             || OB_ISNULL(expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected simple or range condition", K(ret), KPC(expr));
+  } else if (expr->get_param_expr(0)->is_column_ref_expr()
+             && expr->get_param_expr(1)->has_flag(CNT_SUB_QUERY)) {
+    col_expr = static_cast<const ObColumnRefRawExpr *>(expr->get_param_expr(0));
+    subq_expr = expr->get_param_expr(1);
+    is_valid_pattern = !col_expr->get_relation_ids().overlap(subq_expr->get_relation_ids());
+  } else if (expr->get_param_expr(1)->is_column_ref_expr()
+             && expr->get_param_expr(0)->has_flag(CNT_SUB_QUERY)) {
+    col_expr = static_cast<const ObColumnRefRawExpr *>(expr->get_param_expr(1));
+    subq_expr = expr->get_param_expr(0);
+    is_valid_pattern = !col_expr->get_relation_ids().overlap(subq_expr->get_relation_ids());
+  }
+  return ret;
+}
+
+int ObLogPlan::check_push_subq_has_other_quals(const ObColumnRefRawExpr *col_expr,
+                                               const ObRawExpr *subq_expr,
+                                               ObIArray<ObRelIds> &connected_table_ids,
+                                               bool &has_other_quals)
+{
+  int ret = OB_SUCCESS;
+  has_other_quals = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < connected_table_ids.count(); ++i) {
+    if (connected_table_ids.at(i).overlap(col_expr->get_relation_ids())) {
+      if (connected_table_ids.at(i).overlap(subq_expr->get_relation_ids())) {
+        has_other_quals = true;
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_push_subq_expr_match_index(ObRawExpr *expr,
+                                                const ObColumnRefRawExpr *col_expr,
+                                                bool &is_match_index)
+{
+  int ret = OB_SUCCESS;
+  const TableItem *table_item = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  ObSEArray<uint64_t, 4> index_ids;
+  is_match_index = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(col_expr) || OB_ISNULL(get_stmt())
+      || OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(col_expr->get_table_id()))
+      || OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr), K(col_expr), K(get_stmt()), K(table_item), K(schema_guard));
+  } else if (!table_item->is_basic_table()) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::get_valid_index_id(schema_guard,
+                                                          get_stmt(),
+                                                          table_item,
+                                                          index_ids))) {
+    LOG_WARN("failed to get valid index ids", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_match_index && i < index_ids.count(); ++i) {
+      const ObTableSchema *index_schema = NULL;
+      ObSEArray<uint64_t, 4> index_column_ids;
+      uint64_t index_id = index_ids.at(i);
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
+        LOG_WARN("failed to get index table schema", K(ret), K(index_id));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null index schema", K(ret));
+      } else if (OB_FAIL(index_schema->get_rowkey_column_ids(index_column_ids))) {
+        LOG_WARN("failed to get all column ids", K(ret));
+      } else if (!index_column_ids.empty() && index_column_ids.at(0) == col_expr->get_column_id()) {
+        is_match_index = true;
+      }
     }
   }
   return ret;
@@ -948,11 +1166,14 @@ int ObLogPlan::split_or_quals(const ObIArray<TableItem*> &table_items,
 }
 
 int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
-                                const ObIArray<SemiInfo*> &semi_infos,
-                                ObIArray<ObRawExpr*> &quals)
+                                 const ObIArray<SemiInfo*> &semi_infos,
+                                 ObIArray<ObRawExpr*> &quals)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> normal_quals;
+  if (OB_FAIL(pre_process_push_subq(quals))) {
+    LOG_WARN("failed to pre process push subq", K(ret));
+  }
   //1. where conditions
   for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
     ObRawExpr *qual = quals.at(i);
@@ -966,6 +1187,8 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
     } else if (qual->has_flag(CNT_SUB_QUERY)) {
       if (OB_FAIL(split_or_quals(table_items, qual, quals))) {
         LOG_WARN("failed to split or quals", K(ret));
+      } else if (ObOptimizerUtil::find_item(push_subq_exprs_, qual)) {
+        ret = normal_quals.push_back(qual);
       } else {
         ret = add_subquery_filter(qual);
       }
@@ -1027,7 +1250,14 @@ int ObLogPlan::pre_process_quals(SemiInfo* semi_info)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL", K(ret), K(expr));
     } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
-      // do nothing
+      bool force_push_subq = false;
+      bool force_no_push_subq = false;
+      if (expr->has_flag(CNT_SUB_QUERY)
+          && OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+        LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
+      } else if (force_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     } else if (OB_FAIL(add_subquery_filter(expr))) {
       LOG_WARN("failed to add subquery filter", K(ret));
     }
@@ -1063,7 +1293,14 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(expr));
       } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
-        // do nothing
+        bool force_push_subq = false;
+        bool force_no_push_subq = false;
+        if (expr->has_flag(CNT_SUB_QUERY)
+            && OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+          LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
+        } else if (force_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       } else if (OB_FAIL(add_subquery_filter(expr))) {
         LOG_WARN("failed to add subquery filter", K(ret));
       }
@@ -1152,7 +1389,7 @@ int ObLogPlan::generate_semi_join_detectors(const ObIArray<SemiInfo*> &semi_info
           LOG_WARN("failed to try replace onetime subquery", K(ret));
         } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
           LOG_WARN("failed to add members", K(ret));
-        } else if (OB_FAIL(detector->join_info_.where_conditions_.push_back(expr))) {
+        } else if (OB_FAIL(detector->join_info_.on_conditions_.push_back(expr))) {
           LOG_WARN("failed to push back exprs", K(ret));
         } else if (expr->has_flag(IS_JOIN_COND) &&
                    OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
@@ -1231,7 +1468,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
-                  expr->has_flag(CNT_SUB_QUERY)) {
+                 (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr))) {
         //do nothing
       } else if (expr->get_relation_ids().is_empty() &&
                  !expr->is_const_expr() &&
@@ -1281,7 +1518,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
-      } else if (expr->has_flag(CNT_SUB_QUERY) &&
+      } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                  OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
         LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
@@ -1306,7 +1543,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
-    } else if (expr->has_flag(CNT_SUB_QUERY) &&
+    } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
       LOG_WARN("failed to add members", K(ret));
     }
@@ -1346,7 +1583,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
       if (OB_ISNULL(outer_detector)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null detector", K(ret));
-      } else if (!IS_OUTER_OR_CONNECT_BY_JOIN(outer_detector->join_info_.join_type_)) {
+      } else if (IS_INNER_JOIN(outer_detector->join_info_.join_type_)) {
         //inner join与inner join之前没有冲突，do nothing
       } else if (OB_FAIL(generate_conflict_rule(inner_detector,
                                                 outer_detector,
@@ -1752,7 +1989,8 @@ int ObLogPlan::pushdown_on_conditions(JoinedTable* joined_table,
       if (OB_ISNULL(qual = new_conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
-      } else if (qual->has_flag(CNT_ROWNUM) || qual->has_flag(CNT_SUB_QUERY)) {
+      } else if (qual->has_flag(CNT_ROWNUM) ||
+                 (qual->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, qual))) {
         if (OB_FAIL(join_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
@@ -3760,7 +3998,7 @@ int ObLogPlan::remove_redundancy_pred(ObJoinOrder *left_tree,
       RIGHT_ANTI_JOIN == join_info.join_type_ ||
       LEFT_OUTER_JOIN == join_info.join_type_ ||
       RIGHT_OUTER_JOIN == join_info.join_type_) {
-    ObIArray<ObRawExpr*> &join_pred = IS_OUTER_JOIN(join_info.join_type_) ?
+    ObIArray<ObRawExpr*> &join_pred = IS_NOT_INNER_JOIN(join_info.join_type_) ?
                                       join_info.on_conditions_ :
                                       join_info.where_conditions_;
     EqualSets input_equal_sets;
@@ -4684,7 +4922,7 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
         LOG_WARN("failed to set nl params", K(ret));
       } else if (OB_FAIL(join_op->set_join_conditions(join_path->equal_join_conditions_))) {
         LOG_WARN("append error in allocate_join_path", K(ret));
-      } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_path->join_type_)) {
+      } else if (IS_NOT_INNER_JOIN(join_path->join_type_)) {
         if (OB_FAIL(append(join_op->get_join_filters(), join_path->other_join_conditions_))) {
           LOG_WARN("failed to allocate filter", K(ret));
         } else if (OB_FAIL(append(join_op->get_filter_exprs(), join_path->filter_))) {
@@ -15344,21 +15582,28 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
 {
   int ret = OB_SUCCESS;
   EqualSets all_equal_sets;
+  ObSEArray<ObRawExpr*, 8> normal_quals;
+  ObSEArray<ObRawExpr*, 8> subquery_quals;
   ObSEArray<ObRelIds, 8> connect_infos;
   ObSEArray<ObRelIds, 8> single_table_ids;
   ObRelIds table_ids;
   ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
-                                                 quals,
-                                                 all_equal_sets))) {
+  if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(quals,
+                                                       subquery_quals,
+                                                       normal_quals,
+                                                       false /* with_onetime */ ))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
+  } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
+                                                        normal_quals,
+                                                        all_equal_sets))) {
     LOG_WARN("failed to compute equal set", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
-    if (OB_ISNULL(quals.at(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < normal_quals.count(); ++i) {
+    if (OB_ISNULL(normal_quals.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(add_var_to_array_no_dup(connect_infos,
-                                               quals.at(i)->get_relation_ids()))) {
+                                               normal_quals.at(i)->get_relation_ids()))) {
       LOG_WARN("failed to add var to array no dup", K(ret));
     }
   }

@@ -4003,6 +4003,8 @@ int ObJoinOrder::estimate_size_for_base_table(PathHelper &helper,
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   const TableItem *table_item = NULL;
+  ObSEArray<ObRawExpr*, 4> filter_exprs;
+  ObSEArray<ObRawExpr*, 4> pushdown_exprs;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_)) ||
       OB_UNLIKELY(type_ != ACCESS) || OB_ISNULL(helper.table_opt_info_)) {
@@ -4013,10 +4015,17 @@ int ObJoinOrder::estimate_size_for_base_table(PathHelper &helper,
                                                table_item->ref_id_,
                                                access_paths))) {
     LOG_WARN("failed to fill path index meta info", K(ret));
+  } else if (OB_FAIL(filter_exprs.assign(helper.filters_))) {
+    LOG_WARN("failed to append filters", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(helper.subquery_exprs_,
+                                                              filter_exprs,
+                                                              pushdown_exprs,
+                                                              false /* with_onetime */ ))) {
+    LOG_WARN("failed to append subquery exprs", K(ret));
   } else if (OB_FAIL(estimate_rowcount_for_access_path(access_paths,
-                                                  helper.is_inner_path_,
-                                                  helper.filters_,
-                                                  helper.est_method_))) {
+                                                       helper.is_inner_path_,
+                                                       filter_exprs,
+                                                       helper.est_method_))) {
     LOG_WARN("failed to estimate and add access path", K(ret));
   } else {
     LOG_TRACE("estimate rows for base table", K(output_rows_),
@@ -4252,18 +4261,18 @@ int ObJoinOrder::compute_const_exprs_for_join(const ObJoinOrder* left_tree,
       LOG_WARN("failed to compute const exprs", K(ret));
     }
   } else if (IS_SEMI_ANTI_JOIN(join_type)) {
-    if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
-      if (OB_FAIL(append(output_const_exprs_, left_tree->get_output_const_exprs()))) {
-        LOG_WARN("failed to append const exprs", K(ret));
-      }
-    } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)) {
-      if (OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
-        LOG_WARN("failed to append const exprs", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && IS_SEMI_JOIN(join_type)
-        && OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
-                                                        output_const_exprs_))) {
+    if (IS_LEFT_SEMI_ANTI_JOIN(join_type)
+        && OB_FAIL(append(output_const_exprs_, left_tree->get_output_const_exprs()))) {
+      LOG_WARN("failed to append const exprs", K(ret));
+    } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)
+               && OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
+      LOG_WARN("failed to append const exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
+                                                            output_const_exprs_))) {
+      LOG_WARN("failed to compute const exprs", K(ret));
+    } else if (IS_SEMI_JOIN(join_type)
+               && OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->on_conditions_,
+                                                               output_const_exprs_))) {
       LOG_WARN("failed to compute const exprs for semi join", K(ret));
     }
   } else if (CONNECT_BY_JOIN == join_type) {
@@ -4304,30 +4313,32 @@ int ObJoinOrder::compute_equal_set_for_join(const ObJoinOrder* left_tree,
                                                      join_info_->where_conditions_,
                                                      child_eset,
                                                      output_equal_sets_))) {
-        LOG_WARN("failed to compute ordering equal set for left/right outer join", K(ret));
+        LOG_WARN("failed to compute equal sets for left/right outer join", K(ret));
       }
     } else if (FULL_OUTER_JOIN == join_type) {
       if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_,
                                                      join_info_->where_conditions_,
                                                      output_equal_sets_))) {
-        LOG_WARN("failed to compute ordering equal set for full outer join", K(ret));
+        LOG_WARN("failed to compute equal sets for full outer join", K(ret));
       }
     }
   } else if (IS_SEMI_ANTI_JOIN(join_type)) {
-    const EqualSets &child_eset = IS_LEFT_SEMI_ANTI_JOIN(join_type)
-                                  ? left_tree->output_equal_sets_
-                                  : right_tree->output_equal_sets_;
-    if (IS_ANTI_JOIN(join_type)) {
-      if (OB_FAIL(append(output_equal_sets_, child_eset))) {
-        LOG_WARN("failed to append equal set for left/right anti join", K(ret));
-      }
+    const EqualSets &input_equal_sets = IS_LEFT_SEMI_ANTI_JOIN(join_type)
+                                        ? left_tree->output_equal_sets_
+                                        : right_tree->output_equal_sets_;
+    ObSEArray<ObRawExpr*, 8> eset_conditions;
+    if (OB_FAIL(eset_conditions.assign(join_info_->where_conditions_))) {
+      LOG_WARN("failed to assign filter exprs", K(ret));
+    } else if (IS_SEMI_JOIN(join_type)
+               && OB_FAIL(append(eset_conditions, join_info_->on_conditions_))) {
+      LOG_WARN("failed to append semi join conditions", K(ret));
     } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_,
-                                                          join_info_->where_conditions_,
-                                                          child_eset,
+                                                          eset_conditions,
+                                                          input_equal_sets,
                                                           output_equal_sets_))) {
       // semi right table exprs may exists in sharding info,
       //  need compute equal sets use semi condition
-      LOG_WARN("failed to compute ordering equal set for left/right semi join", K(ret));
+      LOG_WARN("failed to compute equal sets for semi/anti join", K(ret));
     } else { /*do nothing*/ }
   } else { /*do nothing*/ }
   return ret;
@@ -5368,7 +5379,9 @@ int oceanbase::sql::Path::compute_path_property_from_log_op()
     cost_ = log_op_->get_cost();
     op_cost_ = log_op_->get_op_cost();
     contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
-    inner_row_count_ = log_op_->get_card();
+    if (is_inner_path_) {
+      inner_row_count_ = log_op_->get_card();
+    }
   }
   return ret;
 }
@@ -7357,7 +7370,7 @@ int JoinPath::re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_in
   } else {
     JoinInfo join_info;
     join_info.join_type_ = join_type_;
-    if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type_)) {
+    if (IS_NOT_INNER_JOIN(join_type_)) {
       if (OB_FAIL(join_info.where_conditions_.assign(filter_))) {
         LOG_WARN("failed to assign join conditions", K(ret));
       } else if (OB_FAIL(join_info.on_conditions_.assign(other_join_conditions_))) {
@@ -8062,8 +8075,11 @@ int ObJoinOrder::generate_json_table_paths()
     json_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
     if (OB_FAIL(json_path->set_parallel_and_server_info_for_match_all())) {
       LOG_WARN("failed set parallel and server info for match all", K(ret));
-    } else if (OB_FAIL(append(json_path->filter_, get_restrict_infos()))) {
-      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(get_restrict_infos(),
+                                                                json_path->subquery_exprs_,
+                                                                json_path->filter_,
+                                                                false /* with_onetime */ ))) {
+      LOG_WARN("failed to classify filters", K(ret));
     } else if (OB_ISNULL(json_table_expr = table_item->json_table_def_->doc_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to extract param for json table expr", K(ret));
@@ -8107,15 +8123,16 @@ int ObJoinOrder::generate_json_table_paths()
         LOG_WARN("fail to append col default into array", K(ret), K(col_val));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(json_path->estimate_cost())) {
-        LOG_WARN("failed to estimate cost", K(ret));
-      } else if (OB_FAIL(json_path->compute_pipeline_info())) {
-        LOG_WARN("failed to compute pipelined path", K(ret));
-      } else if (OB_FAIL(add_path(*get_plan(), json_path))) {
-        LOG_WARN("failed to add path", K(ret));
-      } else { /*do nothing*/ }
-    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(json_path->estimate_cost())) {
+      LOG_WARN("failed to estimate cost", K(ret));
+    } else if (OB_FAIL(json_path->compute_pipeline_info())) {
+      LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(create_plan_for_path_with_subq(json_path))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
+    } else if (OB_FAIL(add_path(*get_plan(), json_path))) {
+      LOG_WARN("failed to add path", K(ret));
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -8188,8 +8205,11 @@ int ObJoinOrder::generate_function_table_paths()
     func_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
     if (OB_FAIL(func_path->set_parallel_and_server_info_for_match_all())) {
       LOG_WARN("failed set parallel and server info for match all", K(ret));
-    } else if (OB_FAIL(append(func_path->filter_, get_restrict_infos()))) {
-      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(get_restrict_infos(),
+                                                                func_path->subquery_exprs_,
+                                                                func_path->filter_,
+                                                                false /* with_onetime */ ))) {
+      LOG_WARN("failed to classify filters", K(ret));
     } else if (OB_ISNULL(function_table_expr = table_item->function_table_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null function table expr", K(ret));
@@ -8202,15 +8222,16 @@ int ObJoinOrder::generate_function_table_paths()
     } else {
       func_path->value_expr_ = function_table_expr;
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(func_path->estimate_cost())) {
-        LOG_WARN("failed to estimate cost", K(ret));
-      } else if (OB_FAIL(func_path->compute_pipeline_info())) {
-        LOG_WARN("failed to compute pipelined path", K(ret));
-      } else if (OB_FAIL(add_path(*get_plan(), func_path))) {
-        LOG_WARN("failed to add path", K(ret));
-      } else { /*do nothing*/ }
-    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(func_path->estimate_cost())) {
+      LOG_WARN("failed to estimate cost", K(ret));
+    } else if (OB_FAIL(func_path->compute_pipeline_info())) {
+      LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(create_plan_for_path_with_subq(func_path))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
+    } else if (OB_FAIL(add_path(*get_plan(), func_path))) {
+      LOG_WARN("failed to add path", K(ret));
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -8296,12 +8317,17 @@ int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
                                        sharding->is_match_all());
     if (OB_FAIL(ap->set_parallel_and_server_info_for_match_all())) {
       LOG_WARN("failed set parallel and server info for match all", K(ret));
-    } else if (OB_FAIL(append(ap->filter_, get_restrict_infos()))) {
-      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(get_restrict_infos(),
+                                                                ap->subquery_exprs_,
+                                                                ap->filter_,
+                                                                false /* with_onetime */ ))) {
+      LOG_WARN("failed to classify filters", K(ret));
     } else if (OB_FAIL(ap->estimate_cost())) {
       LOG_WARN("failed to estimate cost", K(ret));
     } else if (OB_FAIL(ap->compute_pipeline_info())) {
       LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(create_plan_for_path_with_subq(ap))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
     } else if (OB_FAIL(add_path(*get_plan(), ap))) {
       LOG_WARN("failed to add path", K(ret));
     } else {
@@ -8402,7 +8428,10 @@ int ObJoinOrder::generate_normal_base_table_paths()
   helper.is_inner_path_ = false;
   helper.table_opt_info_ = &table_opt_info_;
   bool is_adaptive = false;
-  if (OB_FAIL(helper.filters_.assign(restrict_info_set_))) {
+  if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(restrict_info_set_,
+                                                       helper.subquery_exprs_,
+                                                       helper.filters_,
+                                                       false /* with_onetime */ ))) {
     LOG_WARN("failed to assign restrict info set", K(ret));
   } else if (OB_FAIL(generate_base_table_paths(helper, is_adaptive))) {
     LOG_WARN("failed to generate access paths", K(ret));
@@ -8444,6 +8473,8 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper, bool is_adaptive)
     LOG_WARN("failed to compute cost and prune access path", K(ret));
   } else if (OB_FAIL(revise_output_rows_after_creating_path(helper, access_paths))) {
     LOG_WARN("failed to revise output rows after creating path", K(ret));
+  } else if (OB_FAIL(create_plan_tree_from_access_paths(access_paths))) {
+    LOG_WARN("failed to create plan from access paths", K(ret));
   } else if (OB_FAIL(append(available_access_paths_, access_paths))) {
     LOG_WARN("failed to append access paths", K(ret));
   }
@@ -8662,8 +8693,11 @@ int ObJoinOrder::generate_temp_table_paths()
     temp_table_path->temp_table_id_ = table_item->ref_id_;
     temp_table_path->root_ = temp_table_root;
     temp_table_path->parent_ = this;
-    if (OB_FAIL(append(temp_table_path->filter_, get_restrict_infos()))) {
-      LOG_WARN("failed to push back restrict infos.", K(ret));
+    if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(get_restrict_infos(),
+                                                         temp_table_path->subquery_exprs_,
+                                                         temp_table_path->filter_,
+                                                         false /* with_onetime */ ))) {
+      LOG_WARN("failed to classify filters", K(ret));
     } else if (OB_FAIL(compute_subquery_property(table_id_,
                                                  temp_table_root))) {
       LOG_WARN("failed to generate subquery property", K(ret));
@@ -8680,6 +8714,8 @@ int ObJoinOrder::generate_temp_table_paths()
       LOG_WARN("failed to estimate cost", K(ret));
     } else if (OB_FAIL(temp_table_path->compute_pipeline_info())) {
       LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(create_plan_for_path_with_subq(temp_table_path))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
     } else if (OB_FAIL(add_path(*get_plan(), temp_table_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else if (ObShardingInfo::is_shuffled_server_list(temp_table_path->server_list_)) {
@@ -8759,6 +8795,7 @@ int ObJoinOrder::generate_normal_subquery_paths()
   ObRawExprFactory *expr_factory = NULL;
   ObSEArray<ObRawExpr*, 4> candi_pushdown_quals;
   ObSEArray<ObRawExpr*, 4> candi_nonpushdown_quals;
+  ObSEArray<ObRawExpr*, 4> remain_quals;
   helper.is_inner_path_ = false;
   LOG_TRACE("start to generate normal subquery path", K(table_id_));
   if (OB_ISNULL(get_plan()) || OB_ISNULL(parent_stmt = get_plan()->get_stmt()) ||
@@ -8780,11 +8817,16 @@ int ObJoinOrder::generate_normal_subquery_paths()
                                                                                get_plan()->get_optimizer_context(),
                                                                                candi_pushdown_quals,
                                                                                helper.pushdown_filters_,
-                                                                               helper.filters_,
+                                                                               remain_quals,
                                                                                /*check_match_index*/false))) {
-        LOG_WARN("failed to push down filter into subquery", K(ret));
-  } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
-    LOG_WARN("failed to append", K(ret));
+    LOG_WARN("failed to push down filter into subquery", K(ret));
+  } else if (OB_FAIL(append(candi_nonpushdown_quals, remain_quals))) {
+    LOG_WARN("failed to append non push down quals", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(candi_nonpushdown_quals,
+                                                              helper.subquery_exprs_,
+                                                              helper.filters_,
+                                                              false /* with_onetime */ ))) {
+    LOG_WARN("failed to classify filters", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_onetime_exprs(helper.pushdown_filters_,
                                                         helper.exec_params_))) {
     LOG_WARN("failed to get onetime exprs", K(ret));
@@ -8871,11 +8913,14 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
             LOG_WARN("failed to calculate cost of subquery path", K(ret));
           } else if (OB_FAIL(sub_path->compute_pipeline_info())) {
             LOG_WARN("failed to compute pipelined path", K(ret));
+          } else if (helper.is_inner_path_
+                     && OB_FALSE_IT(sub_path->inner_row_count_ = inner_row_count)) {
+          } else if (OB_FAIL(create_plan_for_path_with_subq(sub_path))) {
+            LOG_WARN("failed to create plan for path with subq", K(ret));
           } else if (helper.is_inner_path_) {
             if (OB_FAIL(helper.inner_paths_.push_back(sub_path))) {
               LOG_WARN("failed to push back inner path", K(ret));
             } else {
-              sub_path->inner_row_count_ = inner_row_count;
               LOG_TRACE("succeed to generate inner subquery path", K(table_id_), K(sub_path->get_ordering()));
             }
           } else if (OB_FAIL(add_path(*get_plan(), sub_path))) {
@@ -9076,7 +9121,7 @@ int ObJoinOrder::init_join_order(const ObJoinOrder *left_tree,
 
     if (OB_SUCC(ret)) {
       //outer join的join qual暂存于restrict info，用于equal set、const expr计算
-      if (IS_OUTER_OR_CONNECT_BY_JOIN(join_info->join_type_)) {
+      if (IS_NOT_INNER_JOIN(join_info->join_type_)) {
         if (OB_FAIL(append(get_restrict_infos(), join_info->where_conditions_))) {
           LOG_WARN("failed to append restrict info", K(ret));
         }
@@ -9116,7 +9161,7 @@ int ObJoinOrder::compute_join_property(const ObJoinOrder *left_tree,
     LOG_WARN("failed to compute fd item set for join", K(ret));
   } else if (OB_FAIL(compute_one_row_info_for_join(left_tree,
                                                    right_tree,
-                                                   IS_OUTER_OR_CONNECT_BY_JOIN(join_info->join_type_) ?
+                                                   IS_NOT_INNER_JOIN(join_info->join_type_) ?
                                                    join_info->on_conditions_ : join_info->where_conditions_,
                                                    join_info->equal_join_conditions_,
                                                    join_info->join_type_))) {
@@ -9158,7 +9203,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
     } else if (OB_FAIL(get_valid_path_info(left_tree,
                                           right_tree,
                                           join_type,
-                                          IS_OUTER_OR_CONNECT_BY_JOIN(join_type) ?
+                                          IS_NOT_INNER_JOIN(join_type) ?
                                           join_info.on_conditions_ :
                                           join_info.where_conditions_,
                                           false,
@@ -9169,7 +9214,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
               && OB_FAIL(get_valid_path_info(right_tree,
                                               left_tree,
                                               reverse_join_type,
-                                              IS_OUTER_OR_CONNECT_BY_JOIN(join_type) ?
+                                              IS_NOT_INNER_JOIN(join_type) ?
                                               join_info.on_conditions_ :
                                               join_info.where_conditions_,
                                               false,
@@ -9197,7 +9242,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
     } else if (OB_FAIL(get_valid_path_info(left_tree,
                                           right_tree,
                                           join_type,
-                                          IS_OUTER_OR_CONNECT_BY_JOIN(join_type) ?
+                                          IS_NOT_INNER_JOIN(join_type) ?
                                           join_info.on_conditions_ :
                                           join_info.where_conditions_,
                                           true,
@@ -9207,7 +9252,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
     } else if (!is_connect_by && OB_FAIL(get_valid_path_info(right_tree,
                                                             left_tree,
                                                             reverse_join_type,
-                                                            IS_OUTER_OR_CONNECT_BY_JOIN(join_type) ?
+                                                            IS_NOT_INNER_JOIN(join_type) ?
                                                             join_info.on_conditions_ :
                                                             join_info.where_conditions_,
                                                             true,
@@ -9781,7 +9826,7 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
   ObJoinOrder *right_tree = NULL;
   ObSEArray<Path*, 8> best_paths;
   const ObIArray<ObRawExpr*> &join_conditions =
-      IS_OUTER_OR_CONNECT_BY_JOIN(path_info.join_type_) ? on_conditions : where_conditions;
+      IS_NOT_INNER_JOIN(path_info.join_type_) ? on_conditions : where_conditions;
   bool need_inner_path = false;
   if (path_info.is_reverse_path_) {
     OPT_TRACE_TITLE("Consider Reverse NL", ob_join_type_str(path_info.join_type_));
@@ -9807,9 +9852,7 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
   } else if (!best_paths.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < best_paths.count(); j++) {
-        if (OB_FAIL(create_plan_for_inner_path(best_paths.at(j)))) {
-          LOG_WARN("failed to create plan for inner path", K(ret));
-        } else if (OB_FAIL(generate_inner_nl_paths(equal_sets,
+        if (OB_FAIL(generate_inner_nl_paths(equal_sets,
                                             left_paths.at(i),
                                             best_paths.at(j),
                                             left_join_keys,
@@ -9875,7 +9918,7 @@ int ObJoinOrder::generate_aj_paths(const EqualSets &equal_sets,
   ObJoinOrder *left_tree = NULL;
   ObJoinOrder *right_tree = NULL;
   const ObIArray<ObRawExpr*> &join_conditions =
-      IS_OUTER_OR_CONNECT_BY_JOIN(path_info.join_type_) ? on_conditions : where_conditions;
+      IS_NOT_INNER_JOIN(path_info.join_type_) ? on_conditions : where_conditions;
   ObSEArray<Path*, 8> left_best_paths;
   ObSEArray<Path*, 8> right_best_paths;
   ObSEArray<Path*, 8> hj_right_best_paths;
@@ -9898,7 +9941,7 @@ int ObJoinOrder::generate_aj_paths(const EqualSets &equal_sets,
   } else if (!need_inner_path) {
     // do nothing.
     LOG_TRACE("do not need inner path");
-  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(path_info.join_type_)
+  } else if (IS_NOT_INNER_JOIN(path_info.join_type_)
              && OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(where_conditions,
                                                                  subquery_filters,
                                                                  normal_filters,
@@ -10031,7 +10074,7 @@ int ObJoinOrder::generate_aj_paths(const EqualSets &equal_sets,
   return ret;
 }
 
-int ObJoinOrder::create_plan_for_inner_path(Path *path)
+int ObJoinOrder::create_plan_for_path_with_subq(Path *path)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *op = NULL;
@@ -10039,11 +10082,22 @@ int ObJoinOrder::create_plan_for_inner_path(Path *path)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null path", K(ret));
   } else if (path->subquery_exprs_.empty()) {
-    //do nothing
+    // do nothing
   } else if (OB_FAIL(get_plan()->create_plan_tree_from_path(path, op))) {
-    LOG_WARN("failed to create plan from path", K(ret));
+    LOG_WARN("failed to create plan from path", K(ret), KPC(path));
   } else if (OB_FAIL(path->compute_path_property_from_log_op())) {
     LOG_WARN("failed to compute path property", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_plan_tree_from_access_paths(ObIArray<AccessPath*> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    if (OB_FAIL(create_plan_for_path_with_subq(access_paths.at(i)))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
+    }
   }
   return ret;
 }
@@ -10819,13 +10873,13 @@ int ObJoinOrder::classify_mergejoin_conditions(const ObJoinOrder &left_tree,
                                                ObIArray<ObRawExpr*> &filters)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(extract_mergejoin_conditions(IS_OUTER_OR_CONNECT_BY_JOIN(join_type) ? on_condition : where_condition,
+  if (OB_FAIL(extract_mergejoin_conditions(IS_NOT_INNER_JOIN(join_type) ? on_condition : where_condition,
                                            left_tree.get_tables(),
                                            right_tree.get_tables(),
                                            equal_join_conditions,
                                            other_join_conditions))) {
     LOG_WARN("failed to extract merge-join conditions and on_conditions", K(join_type), K(ret));
-  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type) && OB_FAIL(append(filters, where_condition))) {
+  } else if (IS_NOT_INNER_JOIN(join_type) && OB_FAIL(append(filters, where_condition))) {
     LOG_WARN("failed to append join where_filters", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -11204,7 +11258,7 @@ int ObJoinOrder::set_nl_filters(JoinPath *join_path,
   if (OB_ISNULL(join_path) || OB_ISNULL(right_path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(join_path), K(right_path), K(ret));
-  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) {
+  } else if (IS_NOT_INNER_JOIN(join_type)) {
     if (OB_FAIL(append_array_no_dup(join_path->filter_, where_conditions))) {
       LOG_WARN("failed to append conditions", K(ret));
     }
@@ -11397,13 +11451,13 @@ int ObJoinOrder::create_nl_join_path(const Path *left_path,
       OB_ISNULL(left_path->parent_) || OB_ISNULL(right_path->parent_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
-  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type) &&
+  } else if (IS_NOT_INNER_JOIN(join_type) &&
              OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(where_conditions,
                                                               subquery_filters,
                                                               normal_filters,
                                                               false))) {
     LOG_WARN("failed to classify subquery exprs", K(ret));
-  } else if (!(IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) &&
+  } else if (!(IS_NOT_INNER_JOIN(join_type)) &&
              OB_FAIL(normal_filters.assign(where_conditions))) {
     LOG_WARN("failed to assign filters", K(ret));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
@@ -12447,7 +12501,7 @@ int ObJoinOrder::classify_hashjoin_conditions(const ObJoinOrder &left_tree,
                                               NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(extract_hashjoin_conditions(IS_OUTER_OR_CONNECT_BY_JOIN(join_type)
+  if (OB_FAIL(extract_hashjoin_conditions(IS_NOT_INNER_JOIN(join_type)
                                              ? on_conditions : where_filters,
                                           left_tree.get_tables(),
                                           right_tree.get_tables(),
@@ -12456,7 +12510,7 @@ int ObJoinOrder::classify_hashjoin_conditions(const ObJoinOrder &left_tree,
                                           join_type,
                                           naaj_info))) {
     LOG_WARN("failed to extract hash join conditions and filters", K(join_type), K(ret));
-  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)
+  } else if (IS_NOT_INNER_JOIN(join_type)
             && OB_FAIL(append(filters, where_filters))) {
     LOG_WARN("failed to append join quals", K(ret));
   } else {}
@@ -14808,7 +14862,7 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
   // calculate selectivity for left ambient cardinality
   if (OB_SUCC(ret)) {
     tmp_join_info.join_type_ = IS_ANTI_JOIN(join_type) ? LEFT_ANTI_JOIN : LEFT_SEMI_JOIN;
-    tmp_join_info.where_conditions_.reuse();
+    tmp_join_info.on_conditions_.reuse();
     if (CONNECT_BY_JOIN == join_type) {
       // todo
     } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)) {
@@ -14825,9 +14879,9 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
           ambient_card_sels.at(i) = 1.0;
         }
       }
-    } else if (RIGHT_OUTER_JOIN == join_type && OB_FAIL(append(tmp_join_info.where_conditions_, join_info.on_conditions_))) {
+    } else if (IS_NOT_INNER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.on_conditions_, join_info.on_conditions_))) {
       LOG_WARN("failed to append on conditions", K(ret));
-    } else if (!IS_OUTER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.where_conditions_, join_info.where_conditions_))) {
+    } else if (IS_INNER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.on_conditions_, join_info.where_conditions_))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(calc_join_output_rows(plan,
                                              left_tree.get_tables(),
@@ -14863,7 +14917,7 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
   // calculate selectivity for right ambient cardinality
   if (OB_SUCC(ret)) {
     tmp_join_info.join_type_ = IS_ANTI_JOIN(join_type) ? RIGHT_ANTI_JOIN : RIGHT_SEMI_JOIN;
-    tmp_join_info.where_conditions_.reuse();
+    tmp_join_info.on_conditions_.reuse();
     if (CONNECT_BY_JOIN == join_type) {
       // todo
     } else if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
@@ -14880,9 +14934,9 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
           ambient_card_sels.at(i) = 1.0;
         }
       }
-    } else if (LEFT_OUTER_JOIN == join_type && OB_FAIL(append(tmp_join_info.where_conditions_, join_info.on_conditions_))) {
+    } else if (IS_NOT_INNER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.on_conditions_, join_info.on_conditions_))) {
       LOG_WARN("failed to assign on conditions", K(ret));
-    } else if (!IS_OUTER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.where_conditions_, join_info.where_conditions_))) {
+    } else if (IS_INNER_JOIN(join_type) && OB_FAIL(append(tmp_join_info.on_conditions_, join_info.where_conditions_))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(calc_join_output_rows(plan,
                                              left_tree.get_tables(),
@@ -14915,7 +14969,7 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
     }
   }
 
-  if (OB_SUCC(ret) && IS_OUTER_JOIN(join_type) && !join_info.where_conditions_.empty()) {
+  if (OB_SUCC(ret) && IS_NOT_INNER_JOIN(join_type) && !join_info.where_conditions_.empty()) {
     plan->get_selectivity_ctx().init_join_ctx(join_type,
                                               &left_tree.get_tables(),
                                               &right_tree.get_tables(),
@@ -14932,7 +14986,7 @@ int ObJoinOrder::calc_join_ambient_card(ObLogPlan *plan,
     }
   }
 
-  OPT_TRACE("outer join filter selectivity :", where_sel_for_oj);
+  OPT_TRACE("outer/semi/anti join filter selectivity :", where_sel_for_oj);
   OPT_TRACE("selectivity of the left side :", left_ambient_card_sel);
   OPT_TRACE("selectivity of the right side :", right_ambient_card_sel);
   OPT_TRACE("selectivity of each table :", ambient_card_sels);
@@ -15014,9 +15068,9 @@ int ObJoinOrder::calc_table_ambient_card(ObLogPlan *plan,
   } else if (OB_FAIL(exclusion_ids.except(in_left ? left_ids : right_ids, table_id))) {
     LOG_WARN("failed to except", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < join_info.where_conditions_.count(); i ++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < join_info.on_conditions_.count(); ++i) {
     bool is_direct_condition = false;
-    if (OB_FAIL(check_direct_join_condition(join_info.where_conditions_.at(i),
+    if (OB_FAIL(check_direct_join_condition(join_info.on_conditions_.at(i),
                                             equal_sets,
                                             table_id,
                                             exclusion_ids,
@@ -15024,12 +15078,12 @@ int ObJoinOrder::calc_table_ambient_card(ObLogPlan *plan,
       LOG_WARN("failed to check join condition", K(ret), K(left_ids), K(right_ids));
     } else if (!is_direct_condition) {
       // do nothing
-    } else if (OB_FAIL(table_join_info.where_conditions_.push_back(join_info.where_conditions_.at(i)))) {
+    } else if (OB_FAIL(table_join_info.on_conditions_.push_back(join_info.on_conditions_.at(i)))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (table_join_info.where_conditions_.empty()) {
+  } else if (table_join_info.on_conditions_.empty()) {
     ambient_card_sel = 1.0;
   } else if (OB_FAIL(calc_join_output_rows(plan,
                                            left_tree.get_tables(),
@@ -15110,7 +15164,7 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                                                    left_output_rows,
                                                                    right_output_rows,
                                                                    &equal_sets))) {
-  } else if (INNER_JOIN == join_type) {
+  } else if (IS_INNER_JOIN(join_type)) {
     if (join_info.where_conditions_.empty()) {
       selectivity = 1.0;
       new_rows = left_output_rows * right_output_rows;
@@ -15155,7 +15209,7 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                            (FULL_OUTER_JOIN == join_type && left_has_is_null);
       JoinInfo tmp_join_info;
       new_rows = 0.0;
-      if (OB_FAIL(tmp_join_info.where_conditions_.assign(join_info.on_conditions_))) {
+      if (OB_FAIL(tmp_join_info.on_conditions_.assign(join_info.on_conditions_))) {
         LOG_WARN("failed to assign on conditions", K(ret));
       } else if (is_left_anti) {
         tmp_join_info.join_type_ = LEFT_ANTI_JOIN;
@@ -15229,17 +15283,18 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
   } else if (IS_SEMI_ANTI_JOIN(join_type)) {
     double outer_rows = IS_LEFT_SEMI_ANTI_JOIN(join_type)?
           left_output_rows: right_output_rows;
-    if (join_info.where_conditions_.empty()) {
+    double qual_sel = 1.0;
+    if (join_info.on_conditions_.empty()) {
       // It is difficult to esitmate whether the inner table is empty,
       // so we assume that this cartesian join filters nothing
       new_rows = outer_rows;
       selectivity = 1.0;
     } else if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
-                                                             plan->get_selectivity_ctx(),
-                                                             join_info.where_conditions_,
-                                                             selectivity,
-                                                             plan->get_predicate_selectivities()))) {
-      LOG_WARN("Failed to calc filter selectivities", K(ret));
+                                                                    plan->get_selectivity_ctx(),
+                                                                    join_info.on_conditions_,
+                                                                    selectivity,
+                                                                    plan->get_predicate_selectivities()))) {
+      LOG_WARN("Failed to calc join condition selectivities", K(ret));
     } else {
       if (LEFT_SEMI_JOIN == join_type || RIGHT_SEMI_JOIN == join_type) {
         new_rows = outer_rows * selectivity;
@@ -15247,6 +15302,19 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
         selectivity = 1 - selectivity;
         new_rows = outer_rows * selectivity;
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (join_info.where_conditions_.empty()) {
+      // do nothing
+    } else if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
+                                                                    plan->get_selectivity_ctx(),
+                                                                    join_info.where_conditions_,
+                                                                    qual_sel,
+                                                                    plan->get_predicate_selectivities()))) {
+      LOG_WARN("Failed to calc filter selectivities", K(ret));
+    } else {
+      selectivity *= qual_sel;
+      new_rows *= qual_sel;
     }
   } else if (CONNECT_BY_JOIN == join_type) {
     double join_qual_sel = 1.0;
@@ -15397,7 +15465,7 @@ int ObJoinOrder::compute_fd_item_set_for_join(const ObJoinOrder *left_tree,
   if (OB_SUCC(ret)) {
     LOG_TRACE("join fd item set", K(fd_item_set_));
   } else {
-    LOG_WARN("failed to compute fd item set for join", K(join_type));
+    LOG_WARN("failed to compute fd item set for join", K(ret), K(join_type));
   }
   return ret;
 }
@@ -15504,21 +15572,23 @@ int ObJoinOrder::compute_fd_item_set_for_semi_anti_join(const ObJoinOrder *left_
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) ||
-      !IS_SEMI_ANTI_JOIN(join_type)) {
+      OB_ISNULL (join_info) || !IS_SEMI_ANTI_JOIN(join_type)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params are invalid", K(ret), K(left_tree), K(right_tree),
-                                   K(join_type));
+    LOG_WARN("params are invalid", K(ret), K(left_tree), K(right_tree), K(join_info), K(join_type));
   } else if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
+    ObSEArray<ObRawExpr*, 8> input_quals;
     if (OB_FAIL(fd_item_set_.assign(left_tree->fd_item_set_)) ||
         OB_FAIL(candi_fd_item_set_.assign(left_tree->candi_fd_item_set_)) ||
         OB_FAIL(not_null_columns_.assign(left_tree->not_null_columns_))) {
       LOG_WARN("failed to assign fd item set", K(ret));
-    } else if (IS_ANTI_JOIN(join_type)) {
+    } else if (OB_FAIL(input_quals.assign(join_info->where_conditions_))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    } else if (IS_SEMI_JOIN(join_type) && OB_FAIL(append(input_quals, join_info->on_conditions_))) {
+      LOG_WARN("failed to append semi join conditions", K(ret));
       // anti join 的 filter 不能用来加强减少左表的空值列。
       // SELECT * from A where A.c1 > all (SELECT c1 from B);
       // 当 B 表为空时，A.c1 = NULL 的行依然可以输出
-    } else if (NULL != join_info &&
-               OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(join_info->where_conditions_,
+    } else if (OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(input_quals,
                                                             candi_fd_item_set_,
                                                             fd_item_set_,
                                                             not_null_columns_))) {
@@ -15852,6 +15922,7 @@ int ObJoinOrder::generate_inner_base_table_paths(const ObIArray<ObRawExpr *> &jo
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 4> pushdown_quals;
+  ObSEArray<ObRawExpr*, 4> all_quals;
   PathHelper helper;
   helper.is_inner_path_ = true;
   helper.force_inner_nl_ = inner_path_info.force_inner_nl_;
@@ -15875,16 +15946,20 @@ int ObJoinOrder::generate_inner_base_table_paths(const ObIArray<ObRawExpr *> &jo
     LOG_WARN("failed to check inner path valid", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(helper.filters_.assign(right_tree.get_restrict_infos()))) {
+  } else if (OB_FAIL(all_quals.assign(right_tree.get_restrict_infos()))) {
     LOG_WARN("failed to assign restrict infos", K(ret));
   } else if (OB_FAIL(remove_redudant_filter(left_tree,
                                             right_tree,
                                             join_conditions,
-                                            helper.filters_,
+                                            all_quals,
                                             helper.equal_param_constraints_))) {
     LOG_WARN("failed to remove filter", K(ret));
-  } else if (OB_FAIL(append(helper.filters_, helper.pushdown_filters_))) {
+  } else if (OB_FAIL(append(all_quals, helper.pushdown_filters_))) {
     LOG_WARN("failed to append pushdown quals", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(all_quals,
+                                                              helper.subquery_exprs_,
+                                                              helper.filters_,
+                                                              false /* with_onetime */ ))) {
   } else if (OB_FAIL(right_tree.generate_base_table_paths(helper, is_adaptive))) {
     LOG_WARN("failed to generate access paths", K(ret));
   } else if (helper.inner_paths_.count() <= 0) {
@@ -16120,6 +16195,7 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
   ObSEArray<ObRawExpr*, 4> candi_pushdown_quals;
   ObSEArray<ObRawExpr*, 4> neccesary_pushdown_quals;
   ObSEArray<ObRawExpr*, 4> candi_nonpushdown_quals;
+  ObSEArray<ObRawExpr*, 4> remain_quals;
   ObSEArray<ObExecParamRawExpr *, 4> nl_params;
   ObSQLSessionInfo *session_info = NULL;
   ObRawExprFactory *expr_factory = NULL;
@@ -16149,7 +16225,7 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                                     get_plan()->get_optimizer_context(),
                                                                     neccesary_pushdown_quals,
                                                                     candi_pushdown_quals,
-                                                                    helper.filters_,
+                                                                    remain_quals,
                                                                     can_pushdown))) {
     LOG_WARN("failed to pushdown filter into subquery", K(ret));
   } else if (table_item->is_lateral_table() &&
@@ -16167,8 +16243,13 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                             candi_pushdown_quals,
                                                             helper.pushdown_filters_))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
-    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(candi_nonpushdown_quals, remain_quals))) {
+    LOG_WARN("failed to append non push down quals", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(candi_nonpushdown_quals,
+                                                              helper.subquery_exprs_,
+                                                              helper.filters_,
+                                                              false /* with_onetime */ ))) {
+    LOG_WARN("failed to classify filters", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_onetime_exprs(helper.pushdown_filters_,
                                                         helper.exec_params_))) {
     LOG_WARN("failed to get onetime exprs", K(ret));
@@ -16309,6 +16390,9 @@ int ObJoinOrder::generate_force_inner_path(const ObIArray<ObRawExpr *> &join_con
       inner_path->is_inner_path_ = true;
       inner_path->inner_row_count_ = right_tree.get_output_rows();
       inner_path->log_op_ = NULL;
+      if (OB_FAIL(create_plan_for_path_with_subq(inner_path))) {
+        LOG_WARN("failed to create plan for path with subq", K(ret));
+      }
     }
   }
   return ret;
@@ -17187,7 +17271,7 @@ int ValuesTablePath::estimate_row_count()
     ObOptimizerContext &opt_ctx = plan->get_optimizer_context();
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(plan->get_basic_table_metas(),
                                                         plan->get_selectivity_ctx(),
-                                                        filter_,
+                                                        parent_->get_restrict_infos(),
                                                         selectivity,
                                                         plan->get_predicate_selectivities()))) {
       LOG_WARN("failed to calc filter selectivities", K(ret));
@@ -17236,8 +17320,11 @@ int ObJoinOrder::generate_values_table_paths()
     values_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
     if (OB_FAIL(values_path->set_parallel_and_server_info_for_match_all())) {
       LOG_WARN("failed set parallel and server info for match all", K(ret));
-    } else if (OB_FAIL(append(values_path->filter_, get_restrict_infos()))) {
-      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(get_restrict_infos(),
+                                                                values_path->subquery_exprs_,
+                                                                values_path->filter_,
+                                                                false /* with_onetime */ ))) {
+      LOG_WARN("failed to classify filters", K(ret));
     } else if (OB_FAIL(get_plan()->get_basic_table_metas().add_values_table_meta_info(stmt,
                        table_id_, get_plan()->get_selectivity_ctx(), values_table))) {
       LOG_WARN("failed to add values table meta info", K(ret));
@@ -17259,6 +17346,8 @@ int ObJoinOrder::generate_values_table_paths()
       LOG_WARN("failed to assign nl params", K(ret));
     } else if (OB_FAIL(values_path->compute_pipeline_info())) {
       LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(create_plan_for_path_with_subq(values_path))) {
+      LOG_WARN("failed to create plan for path with subq", K(ret));
     } else if (OB_FAIL(add_path(*get_plan(), values_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else { /*do nothing*/ }

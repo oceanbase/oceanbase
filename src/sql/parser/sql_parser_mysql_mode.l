@@ -1052,6 +1052,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_PARTITION_SORT  { return NO_PARTITION_SORT; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
+<hint>PUSH_SUBQ  { return PUSH_SUBQ; }
+<hint>NO_PUSH_SUBQ  { return NO_PUSH_SUBQ; }
 <hint>TRACE_LOG { return TRACE_LOG; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
 <hint>DIRECT { return DIRECT; }
