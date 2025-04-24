@@ -6401,13 +6401,30 @@ int ObSelectLogPlan::get_distribute_window_method(ObLogicalOperator *top,
                      WinDistAlgo::WIN_DIST_LIST |
                      WinDistAlgo::WIN_DIST_HASH |
                      WinDistAlgo::WIN_DIST_HASH_LOCAL;
-  if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+  bool all_winfunc_support_range_exec = true;
+  for (int i = 0; OB_SUCC(ret) && all_winfunc_support_range_exec
+                  && i < win_func_helper.all_win_func_exprs_.count(); i++) {
+    ObWinFunRawExpr *win_expr = win_func_helper.all_win_func_exprs_.at(i);
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null window function expr", K(ret));
+    } else {
+      all_winfunc_support_range_exec = supported_wf_dist_list_func(*win_expr);
+    }
+  }
+  if (OB_SUCC(ret) && !all_winfunc_support_range_exec) {
+    win_dist_methods &= ~WinDistAlgo::WIN_DIST_RANGE;
+    win_dist_methods &= ~WinDistAlgo::WIN_DIST_LIST;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(top), K(query_ctx));
   } else if (win_func_helper.explicit_hint_) {
     win_dist_methods &= win_func_helper.win_dist_method_;
-  } else if (WinDistAlgo::WIN_DIST_RANGE == win_func_helper.win_dist_method_ ||
-            WinDistAlgo::WIN_DIST_LIST == win_func_helper.win_dist_method_) {
+  } else if (all_winfunc_support_range_exec
+             && (WinDistAlgo::WIN_DIST_RANGE == win_func_helper.win_dist_method_
+                 || WinDistAlgo::WIN_DIST_LIST == win_func_helper.win_dist_method_)) {
     win_dist_methods &= win_func_helper.win_dist_method_;
   } else {
     win_dist_methods &= ~WinDistAlgo::WIN_DIST_RANGE;
@@ -6492,6 +6509,26 @@ int ObSelectLogPlan::get_distribute_window_method(ObLogicalOperator *top,
     OPT_TRACE("window function will use list method");
   }
   return ret;
+}
+
+bool ObSelectLogPlan::supported_wf_dist_list_func(ObWinFunRawExpr &win_expr)
+{
+  bool bret = false;
+  switch (win_expr.get_func_type()) {
+  case T_WIN_FUN_RANK:
+  case T_WIN_FUN_DENSE_RANK:
+  case T_FUN_MIN:
+  case T_FUN_MAX:
+  case T_FUN_COUNT:
+  case T_FUN_SUM: {
+    bret = true;
+    break;
+  }
+  default: {
+    bret = false;
+  }
+  }
+  return bret;
 }
 
 int ObSelectLogPlan::check_win_func_need_sort(const ObLogicalOperator &top,
@@ -7620,7 +7657,7 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
     need_normal_sort = !win_func_helper.force_hash_sort_;
     need_hash_sort = need_sort && part_cnt > 0 && !win_func_helper.force_normal_sort_;
     LOG_TRACE("begin to create hash dist window function", K(need_pushdown), K(need_sort), K(part_cnt),
-                K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
+                K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_), K(pushdown_info));
   }
   if (OB_SUCC(ret) && need_normal_sort) {
     ObLogicalOperator *normal_sort_top= top;

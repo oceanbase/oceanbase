@@ -678,6 +678,7 @@ private:
                                   uint64_t &win_dist_methods,
                                   bool &single_part_parallel,
                                   bool &is_partition_wise);
+  bool supported_wf_dist_list_func(ObWinFunRawExpr &win_expr);
   int create_none_dist_win_func(ObLogicalOperator *top,
                                 const WinFuncOpHelper &win_func_helper,
                                 const bool need_sort,
