@@ -194,7 +194,7 @@ int ObMPResetConnection::process()
     // 9. Releases locks acquired with GET_LOCK().
     if (OB_SUCC(ret)) {
       ObTableLockOwnerID owner_id;
-      if (OB_FAIL(owner_id.convert_from_client_sessid(session->get_client_sid(),
+      if (OB_FAIL(owner_id.convert_from_client_sessid(session->get_sid(),
                                                       session->get_client_create_time()))) {
         LOG_WARN("failed to convert from client sessid", K(ret));
       } else if (OB_FAIL(ObTableLockDetector::remove_lock_by_owner_id(owner_id))) {
