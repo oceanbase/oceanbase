@@ -164,7 +164,9 @@ int ObNestedLoopJoinVecOp::get_next_left_row()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(drive_iter_.get_next_left_row())) {
-    LOG_WARN("failed to get next left row from friver iterator", K(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to get next left row from driver iterator", K(ret));
+    }
   }
   return ret;
 }
@@ -273,9 +275,7 @@ int ObNestedLoopJoinVecOp::process_right_batch()
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
   } else if (0 == right_brs->size_ && right_brs->end_) {
     match_right_batch_end_ = true;
-    LOG_TRACE("right rows iter end");
-  } else if (OB_FAIL(drive_iter_.extend_save_drive_rows(right_brs->size_))) {
-    LOG_WARN("failed to extend save left brs", K(ret));
+    LOG_DEBUG("right rows iter end");
   } else if (OB_FAIL(drive_iter_.drive_row_extend(right_brs->size_))) {
     LOG_WARN("failed to extend drive row", K(ret));
   } else {
@@ -374,7 +374,7 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
   while (!iter_end_ && OB_SUCC(ret)) {
     clear_evaluated_flag();
     if (JS_GET_LEFT_ROW == batch_state_) {
-      LOG_TRACE("start get left row", K(spec_.id_));
+      LOG_DEBUG("start get left row", K(spec_.id_));
       if (OB_FAIL(get_next_left_row())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -390,7 +390,7 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     }
 
     if (OB_SUCC(ret) && JS_RESCAN_RIGHT_OP == batch_state_) {
-      LOG_TRACE("start rescan right op", K(spec_.id_), K(drive_iter_.get_left_batch_idx()));
+      LOG_DEBUG("start rescan right op", K(spec_.id_), K(drive_iter_.get_left_batch_idx()));
       if (OB_FAIL(rescan_right_op())) {
         LOG_WARN("failed to rescan right", K(ret));
       } else {
@@ -399,7 +399,7 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     }
     // process right batch
     if (OB_SUCC(ret) && JS_PROCESS_RIGHT_BATCH == batch_state_) {
-      LOG_TRACE("start process right batch", K(spec_.id_),K(drive_iter_.get_left_batch_idx()));
+      LOG_DEBUG("start process right batch", K(spec_.id_),K(drive_iter_.get_left_batch_idx()));
       if (OB_FAIL(process_right_batch())) {
         LOG_WARN("fail to process right batch", K(ret));
       } else {
@@ -419,7 +419,7 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 
     // start output state
     if (OB_SUCC(ret) && JS_OUTPUT == batch_state_) {
-      LOG_TRACE("start output", K(spec_.id_), K(drive_iter_.get_left_batch_idx()));
+      LOG_DEBUG("start output", K(spec_.id_), K(drive_iter_.get_left_batch_idx()));
       if (OB_FAIL(output())) {
         LOG_WARN("fail to output", K(ret));
       } else {

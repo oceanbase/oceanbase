@@ -51,7 +51,6 @@ public:
     // continuous format don't support restore single row, so if the backup vector is continuous format, we need to convert it to other format
     return src_format == VEC_CONTINUOUS ? expr->get_default_res_format() : src_format;
   }
-  int extend_save(const int64_t size);
   void clear_saved_size() { saved_size_ = 0; }
 
   void reset()
