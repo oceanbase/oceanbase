@@ -4180,21 +4180,27 @@ int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, 
       }
     }
   }
+  OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
+  if (var->is_referenced()) {
+    OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_INOUT_ARG));
+  }
   if (OB_SUCC(ret) && need_set) {
-    OX ((const_cast<ObPLVar*>(var))->set_type(*type));
-    OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
-    if (var->is_referenced()) {
-      OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_INOUT_ARG));
+    ObPLDataType &dest_type = const_cast<ObPLDataType &>(*type);
+    if (!need_check && !(OB_NOT_NULL(var->get_type().get_data_type())
+              && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
+      OX (dest_type = var->get_type());
+    } else {
+      OX ((const_cast<ObPLVar*>(var))->set_type(dest_type));
     }
     if (OB_FAIL(ret)) {
-    } else if (type->is_obj_type()) {
-      CK (OB_NOT_NULL(type->get_data_type()));
-      OX (res_type.set_meta(type->get_data_type()->get_meta_type()));
-      OX (res_type.set_accuracy(type->get_data_type()->get_accuracy()));
+    } else if (dest_type.is_obj_type()) {
+      CK (OB_NOT_NULL(dest_type.get_data_type()));
+      OX (res_type.set_meta(dest_type.get_data_type()->get_meta_type()));
+      OX (res_type.set_accuracy(dest_type.get_data_type()->get_accuracy()));
     } else {
       OX (res_type.set_ext());
-      OX (res_type.set_extend_type(type->get_type()));
-      OX (res_type.set_udt_id(type->get_user_type_id()));
+      OX (res_type.set_extend_type(dest_type.get_type()));
+      OX (res_type.set_udt_id(dest_type.get_user_type_id()));
     }
     OX (into_expr->set_result_type(res_type));
   }
@@ -4303,8 +4309,9 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
               if (OB_FAIL(ret)) {
                 // do nothing
               } else if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
-                if (!var->is_readonly()) {
-                  const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG);
+                if (!(OB_NOT_NULL(var->get_type().get_data_type())
+                    && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
+                  expected_type = &(var->get_type());
                 }
               } else {
                 expected_type = &(var->get_type());
@@ -6100,7 +6107,12 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
               CK (OB_NOT_NULL(const_expr = static_cast<const ObConstRawExpr *>(expr)));
               CK (OB_NOT_NULL(var = table->get_symbol(const_expr->get_value().get_unknown())));
               if (OB_SUCC(ret) && var->get_name().prefix_match(ANONYMOUS_ARG)) {
-                (const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_SQL_ARG);
+                OX ((const_cast<ObPLVar*>(var))->set_is_referenced(true));
+                if (!var->is_readonly()) {
+                  OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_INOUT_ARG));
+                } else {
+                  OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_SQL_ARG));
+                }
               }
             }
           }
@@ -13936,6 +13948,9 @@ int ObPLResolver::check_variable_accessible(
       CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
       OV (OB_NOT_NULL(var = const_cast<ObPLVar *>(symbol_table->get_symbol(idx))), OB_ERR_UNEXPECTED, K(idx));
       OX (var->set_is_referenced(true));
+      if (var->get_name().prefix_match(ANONYMOUS_ARG) && !var->is_readonly()) {
+        OX (var->set_name(ANONYMOUS_INOUT_ARG));
+      }
     }
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
     if ((for_write && ns.get_compile_flag().compile_with_wnps())

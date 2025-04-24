@@ -3327,7 +3327,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
             CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
             if (OB_SUCC(ret)) {
-              if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+              if (var->get_name().prefix_match(pl::ObPLResolver::ANONYMOUS_ARG)) {
                 if (!var->is_readonly()) {
                   // set in out flag
                   OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_INOUT_ARG));
@@ -3413,7 +3413,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
             CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
             if (OB_SUCC(ret)) {
-              if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+              if (var->get_name().prefix_match(pl::ObPLResolver::ANONYMOUS_ARG)) {
                 if (!var->is_readonly()) {
                   // set in out flag
                   OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_INOUT_ARG));
