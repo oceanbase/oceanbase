@@ -13,7 +13,7 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/x86_64/
 obdal-0.2-132025040114.al8.x86_64.rpm target=community
 devdeps-gtest-1.8.0-192024092714.al8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-52024092714.al8.x86_64.rpm
-devdeps-libcurl-static-8.12.1-122025032110.al8.x86_64.rpm
+devdeps-libcurl-static-8.12.1-132025040210.al8.x86_64.rpm
 devdeps-libunwind-static-1.6.2-342024092715.al8.x86_64.rpm
 devdeps-mariadb-connector-c-3.1.12-42024100814.al8.x86_64.rpm
 devdeps-libaio-0.3.112-42024092715.al8.x86_64.rpm
