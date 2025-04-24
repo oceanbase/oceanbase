@@ -102,6 +102,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -140,6 +141,9 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       LOG_WARN("failed to get element", K(ret), K(idx));
     } else {
       res.from_obj(elem_obj);
+      if (elem_obj.is_string_type() && OB_FAIL(res.deep_copy(res, res_alloc))) {
+        LOG_WARN("fail to deep copy for res datum", K(ret), K(elem_obj), K(res));
+      }
     }
   }
   return ret;
@@ -153,6 +157,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -213,6 +218,9 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
           LOG_WARN("failed to get element", K(ret), K(idx));
         } else {
           res_datum.at(j)->from_obj(elem_obj);
+          if (elem_obj.is_string_type() && OB_FAIL(res_datum.at(j)->deep_copy(*res_datum.at(j), res_alloc))) {
+            LOG_WARN("fail to deep copy for res datum", K(ret), K(elem_obj), KPC(res_datum.at(j)));
+          }
         }
       }
     } // end for
@@ -226,6 +234,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -290,7 +299,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
         ObObj elem_obj;
         if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(arr_idx), elem_obj))) {
           LOG_WARN("failed to get element", K(ret), K(arr_idx));
-        } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj))) {
+        } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj, res_alloc))) {
           LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(elem_obj));
         }
       }

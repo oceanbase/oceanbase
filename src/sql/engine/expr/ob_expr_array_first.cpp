@@ -174,6 +174,10 @@ int ObExprArrayFirst::eval_array_first(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             LOG_WARN("failed to get element", K(ret), K(i));
           } else {
             res.from_obj(elem_obj);
+            ObExprStrResAlloc res_alloc(expr, ctx);
+            if (elem_obj.is_string_type() && OB_FAIL(res.deep_copy(res, res_alloc))) {
+              LOG_WARN("fail to deep copy for res datum", K(ret), K(elem_obj), K(res));
+            }
           }
         }
       }
