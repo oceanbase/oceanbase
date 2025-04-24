@@ -573,7 +573,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   // do { do_process } while(retry) 之前出错才会
   // 走到send_error_packet逻辑
   // 所以无需考虑当前为sync还是async模式
-  if (!OB_SUCC(ret) && need_response_error && is_conn_valid()) {
+  if (!OB_SUCC(ret) && need_response_error && is_conn_valid() &&
+        !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
     send_error_packet(ret, NULL);
   }
   ctx_.reset();
@@ -833,7 +834,8 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
     }
 
-    if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid()) {
+    if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() &&
+          !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
       LOG_WARN("query failed", K(ret), K(session), K(sql));
       // 这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
       // 则需要在下面回复一个error_packet作为收尾。
@@ -1210,7 +1212,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
         }
 
-        if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() && !THIS_WORKER.need_retry()) {
+        if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() && !THIS_WORKER.need_retry() &&
+              !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("query should be rerouted", K(ret), K(async_resp_used));
           } else {
