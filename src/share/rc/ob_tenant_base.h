@@ -393,6 +393,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
+      storage::ObTenantDirectLoadMgr*,              \
       share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
@@ -418,7 +419,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
-      storage::ObTenantDirectLoadMgr*,              \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
