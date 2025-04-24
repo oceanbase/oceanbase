@@ -840,7 +840,6 @@ public:
     if (mem_context_ != nullptr) {
       DESTROY_CONTEXT(mem_context_);
       mem_context_ = nullptr;
-      all_vsag_use_mem_ = nullptr;
     }
   }
   int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id);
