@@ -1055,26 +1055,24 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_schema_from_inner_table(
                                                 "WHERE tenant_id = %lu AND schema_version <= %ld GROUP BY tenant_id, table_id) AS b "\
                                                 "ON a.tenant_id = b.tenant_id AND a.table_id = b.table_id AND a.schema_version = b.schema_version "\
                                                 "WHERE a.is_deleted = 0 and a.table_id != %lu"
-#define FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY     "SELECT /*+ no_rewrite */ r.* "\
-                                                "FROM ( "\
-                                                "  SELECT /*+ no_rewrite */ column_0 tid "\
-                                                "  FROM ( "\
-                                                "    SELECT /*+ no_rewrite */ * FROM ( "\
-                                                "      VALUES %.*s"  /* table id list, e.g. row(500001), row(500002), ..., row(500100) */  \
-                                                "    ) "\
-                                                "  ) "\
-                                                ") l "\
-                                                "JOIN %s r "\
-                                                "ON r.tenant_id = %lu "\
-                                                "AND r.table_id = l.tid "\
-                                                "AND r.schema_version = ( "\
-                                                "  SELECT /*+ no_rewrite */ schema_version "\
-                                                "  FROM %s "\
+
+// when optimizer statistics is disabled, to prevent incorrect selection of the larger table as the driving table of join,
+// we use leading hint to fix the value list as the driving table.
+#define FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY     "SELECT /*+ LEADING(@\"SEL$1\" (\"VALUES_TABLE1\"@\"SEL$3\" \"a\"@\"SEL$1\")) USE_NL(@\"SEL$1\" \"a\"@\"SEL$1\") */ a.* FROM "\
+                                                "( "\
+                                                "  SELECT * FROM "\
+                                                "  ( "\
+                                                "    VALUES %s"  /* table id list, e.g. row(500001), row(500002), ..., row(500100) */  \
+                                                "  ) AS l(table_id) "\
+                                                ") AS tlist, "\
+                                                "LATERAL "\
+                                                "( "\
+                                                "  SELECT * FROM %s "\
                                                 "  WHERE tenant_id = %lu "\
-                                                "  AND table_id = l.tid "\
+                                                "  AND table_id = tlist.table_id "\
                                                 "  AND schema_version <= %ld "\
                                                 "  ORDER BY schema_version DESC LIMIT 1 "\
-                                                ") "\
+                                                ") AS a "\
                                                 "ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"
 
 int ObSchemaServiceSQLImpl::get_all_tenants(ObISQLClient &client,
@@ -2972,10 +2970,7 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
             }
           }
           if (FAILEDx(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY,
-                                     static_cast<int32_t>(table_id_list.length()),
                                      table_id_list.ptr(),
-                                     table_name,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
                                      table_name,
                                      fill_extract_tenant_id(schema_status, tenant_id),
                                      schema_version))) {
@@ -5290,10 +5285,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(
           }
         }
         if (FAILEDx(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_WITH_ROWKEY,
-                                   static_cast<int32_t>(table_id_list.length()),
                                    table_id_list.ptr(),
-                                   table_name,
-                                   fill_extract_tenant_id(schema_status, tenant_id),
                                    table_name,
                                    fill_extract_tenant_id(schema_status, tenant_id),
                                    schema_version))) {
