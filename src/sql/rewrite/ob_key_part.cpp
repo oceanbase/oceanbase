@@ -667,14 +667,15 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
 {
   int ret = OB_SUCCESS;
   id_ = other.id_;
-  pos_ = other.pos_;
   null_safe_ = other.null_safe_;
   rowid_column_idx_ = other.rowid_column_idx_;
   is_phy_rowid_key_part_ = other.is_phy_rowid_key_part_;
   item_next_ = NULL;
   or_next_ = NULL;
   and_next_ = NULL;
-  if (other.is_normal_key()) {
+  if (OB_FAIL(pos_.deep_copy(allocator_, other.pos_))) {
+    LOG_WARN("failed to deep copy pos", K(ret));
+  } else if (other.is_normal_key()) {
     if (OB_FAIL(create_normal_key())) {
       LOG_WARN("create normal key failed", K(ret));
     } else if (OB_FAIL(ob_write_obj(allocator_, other.normal_keypart_->start_, normal_keypart_->start_))) {
@@ -1056,6 +1057,18 @@ int ObKeyPartPos::assign(const ObKeyPartPos &other)
   column_type_ = other.column_type_;
   if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
     LOG_WARN("failed to assign enum set values", K(ret));
+  }
+  return ret;
+}
+
+int ObKeyPartPos::deep_copy(common::ObIAllocator &allocator, const ObKeyPartPos &other)
+{
+  int ret = OB_SUCCESS;
+  offset_ = other.offset_;
+  column_type_ = other.column_type_;
+  enum_set_values_.reuse();
+  if (OB_FAIL(set_enum_set_values(allocator, other.enum_set_values_))) {
+    LOG_WARN("failed to set enum set values", K(ret));
   }
   return ret;
 }
