@@ -78,6 +78,9 @@ int ObSetCommentHelper::lock_objects_()
   RS_TRACE(lock_objects);
   if (FAILEDx(lock_for_common_ddl_())) { // online ddl lock & table lock
     LOG_WARN("fail to lock for common ddl", KR(ret));
+  } else if (OB_ISNULL(orig_table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_table_schema_ is null", KR(ret));
   } else if (OB_UNLIKELY(database_id_ != orig_table_schema_->get_database_id())) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("database_id_ is not equal to table schema's databse_id",
@@ -267,6 +270,9 @@ int ObSetCommentHelper::generate_schemas_()
     LOG_WARN("orig table schema is nullptr", KR(ret));
   } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, *orig_table_schema_, new_table_schema_))) {
     LOG_WARN("fail to alloc schema", KR(ret));
+  } else if (OB_ISNULL(new_table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new table schema is nullptr", KR(ret));
   } else {
     if (obrpc::ObSetCommentArg::COMMENT_TABLE == arg_.op_type_) {
       if (OB_FAIL(new_table_schema_->set_comment(arg_.table_comment_))) {
@@ -319,6 +325,7 @@ int ObSetCommentHelper::operate_schemas_()
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(orig_table_schema_) || OB_ISNULL(new_table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig table schema or new table schema is null", KR(ret), KP(orig_table_schema_), KP(new_table_schema_));
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
