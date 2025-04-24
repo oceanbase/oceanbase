@@ -321,6 +321,7 @@ tools/systemd/profile/preinst
 tools/systemd/profile/postinst
 tools/systemd/profile/prerm
 tools/systemd/profile/postrm
+tools/ocp/software_package
 
 ############# unittest #############
 unittest/**/test_*
