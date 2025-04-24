@@ -752,7 +752,7 @@ int ObSemiStructDecodeHandler::init(ObIAllocator &allocator, const char* sub_sch
   } else if (pos != sub_schema_data_len) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub schema decode incorrect", K(ret), K(pos), K(sub_schema_data_len));
-  } else if (OB_ISNULL(reassembler_ = OB_NEWx(ObJsonReassembler, &allocator, sub_schema_))) {
+  } else if (OB_ISNULL(reassembler_ = OB_NEWx(ObJsonReassembler, &allocator, sub_schema_, &allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc reassembler fail", K(ret), "size", sizeof(ObJsonReassembler));
   } else if (OB_FAIL(reassembler_->init())) {

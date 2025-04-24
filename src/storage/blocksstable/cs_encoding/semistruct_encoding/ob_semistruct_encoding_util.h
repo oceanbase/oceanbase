@@ -165,6 +165,7 @@ public:
   virtual ~ObSemiStructDecodeHandler() {}
 
   int init(ObIAllocator &allocator, const char* sub_schema_data_ptr, const int64_t sub_schema_data_len);
+  void reuse();
   virtual void reset();
   virtual ObDatumRow& get_sub_row();
   virtual int serialize(const ObDatumRow &row, ObString &result);

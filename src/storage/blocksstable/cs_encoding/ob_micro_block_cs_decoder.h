@@ -75,13 +75,15 @@ class ObSemiStructDecodeCtx
 public:
   ObSemiStructDecodeCtx():
     allocator_("SemiDec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    handlers_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiDec", MTL_ID()))
+    handlers_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiDec", MTL_ID())),
+    reserve_memory_(false)
   {}
 
   ~ObSemiStructDecodeCtx() { reset(); }
-
+  void reuse();
   void reset();
   int build_semistruct_ctx(ObSemiStructColumnDecoderCtx &semistruct_ctx);
+  OB_INLINE void set_reserve_memory(bool reserve) { reserve_memory_ = reserve;}
 
 private:
   int build_decode_handler(ObSemiStructColumnDecoderCtx &semistruct_ctx);
@@ -90,6 +92,7 @@ private:
 public:
   common::ObArenaAllocator allocator_;
   ObSEArray<ObSemiStructDecodeHandler*, 10> handlers_;
+  bool reserve_memory_;
 };
 
 class ObICSEncodeBlockReader
@@ -229,6 +232,7 @@ public:
   virtual void reserve_reader_memory(bool reserve) override
   {
     decoder_allocator_.set_reserve_memory(reserve);
+    semistruct_decode_ctx_.set_reserve_memory(reserve);
   }
   virtual int get_column_datum(
       const ObTableIterParam &iter_param,

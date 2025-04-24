@@ -1561,9 +1561,14 @@ int ObSemiStructScalar::set_value(ObJsonBin &bin)
 void ObJsonReassembler::reset()
 {
   allocator_.reset();
+  tmp_allocator_.reset();
+  decode_allocator_ = nullptr;
   sub_schema_ = nullptr;
   json_ = nullptr;
   leaves_.reset();
+  spare_leaves_.reset();
+  sub_row_.reset();
+  sub_cols_.reset();
 }
 
 int ObJsonReassembler::serialize(const ObDatumRow &row, ObString &result)
@@ -1581,7 +1586,7 @@ int ObJsonReassembler::serialize(const ObDatumRow &row, ObString &result)
     LOG_WARN("column count not match", K(ret), K(sub_schema_->get_store_column_count()), K(row.count_));
   } else {
     tmp_allocator_.reuse();
-    ObStringBuffer j_bin_buf(&allocator_);
+    ObStringBuffer j_bin_buf(decode_allocator_);
     ObString json_data;
     if (OB_FAIL(fill_freq_column(row))) {
       LOG_WARN("fill freq column fail", K(ret), K(row));

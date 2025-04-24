@@ -597,9 +597,10 @@ private:
 class ObJsonReassembler
 {
 public:
-  ObJsonReassembler(ObSemiStructSubSchema *sub_schema):
+  ObJsonReassembler(ObSemiStructSubSchema *sub_schema, ObIAllocator* decode_allocator):
     allocator_("SemiJson", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tmp_allocator_("SemiJsonTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    decode_allocator_(decode_allocator),
     sub_schema_(sub_schema),
     json_(nullptr)
   {}
@@ -625,6 +626,7 @@ private:
 private:
   ObArenaAllocator allocator_;
   ObArenaAllocator tmp_allocator_;
+  ObIAllocator* decode_allocator_;
   ObSemiStructSubSchema *sub_schema_;
   ObIJsonBase *json_;
   ObSEArray<ObSemiStructScalar*, 10> leaves_;

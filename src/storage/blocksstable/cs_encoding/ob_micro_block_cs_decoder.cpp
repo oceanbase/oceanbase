@@ -194,7 +194,6 @@ ObICSEncodeBlockReader::~ObICSEncodeBlockReader()
 
 void ObICSEncodeBlockReader::reuse()
 {
-  semistruct_decode_ctx_.reset();
   cached_decoder_ = nullptr;
   request_cnt_ = 0;
   decoders_ = nullptr;
@@ -205,6 +204,7 @@ void ObICSEncodeBlockReader::reuse()
   transform_helper_.reset();
   column_count_ = 0;
   decoder_allocator_.reuse();
+  semistruct_decode_ctx_.reuse();
 }
 
 void ObICSEncodeBlockReader::reset()
@@ -809,7 +809,6 @@ int ObMicroBlockCSDecoder::alloc_decoders_buf(const bool by_read_info, int64_t &
 
 void ObMicroBlockCSDecoder::inner_reset()
 {
-  semistruct_decode_ctx_.reset();
   cached_decoder_ = nullptr;
   ctxs_ = nullptr;
   column_count_ = 0;
@@ -817,6 +816,7 @@ void ObMicroBlockCSDecoder::inner_reset()
   ObIMicroBlockReader::reset();
   decoder_allocator_.reuse();
   transform_allocator_.reuse();
+  semistruct_decode_ctx_.reuse();
 }
 
 void ObMicroBlockCSDecoder::reset()
@@ -828,6 +828,7 @@ void ObMicroBlockCSDecoder::reset()
   transform_allocator_.reset();
   allocated_decoders_buf_ = nullptr;
   allocated_decoders_buf_size_ = 0;
+  semistruct_decode_ctx_.reset();
 }
 
 int ObMicroBlockCSDecoder::init_decoders()
@@ -2178,6 +2179,19 @@ void ObSemiStructDecodeCtx::reset()
   }
   handlers_.reset();
   allocator_.reset();
+  reserve_memory_ = false;
+}
+
+void ObSemiStructDecodeCtx::reuse()
+{
+  for (int i = 0; i < handlers_.count(); ++i) {
+    ObSemiStructDecodeHandler* handler = handlers_.at(i);
+    if (OB_NOT_NULL(handler)) {
+      handler->reset();
+    }
+  }
+  handlers_.reuse();
+  if (! reserve_memory_) allocator_.reuse();
 }
 
 }  // namespace blocksstable
