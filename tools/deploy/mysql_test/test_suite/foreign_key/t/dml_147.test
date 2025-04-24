@@ -364,5 +364,30 @@ delete from parent;
 select * from parent;
 select * from child;
 
+--disable_warnings
+drop table if exists A, B;
+--enable_warnings
+create table A (c1 string primary key, c2 string);
+create table B (c1 string, foreign key (c1) references A(c1) on update cascade on delete cascade);
+insert into A values ("pk", "xxx");
+insert into B values ("pk");
+insert into B values ("pk");
+select * from A order by c1;
+select * from B order by c1;
+-- error 1452
+insert into B values ("error");
+-- error 1452
+update B set c1 = "error" where c1 = "pk";
+insert into A values("pk", "insert up stmt") on duplicate key update c2 = values(c2);
+select * from A order by c1;
+select * from B order by c1;
+replace into A values("pk", "replace stmt");
+select * from A order by c1;
+select * from B order by c1;
+insert into B values ("pk");
+select * from B order by c1;
+
+--disable_warnings
+drop table if exists A, B;
 --enable_warnings
 
