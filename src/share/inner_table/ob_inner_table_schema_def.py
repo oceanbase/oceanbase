@@ -47123,7 +47123,8 @@ def_table_schema(
              AND (A.DATABASE_ID = USERENV('SCHEMAID')
                   OR USER_CAN_ACCESS_OBJ(1, DECODE(TABLE_TYPE,
                                                    3, A.INDEX_ID,
-                                                   5, DATA_TABLE_ID), A.DATABASE_ID) = 1)
+                                                   5, DATA_TABLE_ID,
+                                                   15, A.INDEX_ID), A.DATABASE_ID) = 1)
 
           LEFT JOIN SYS.ALL_VIRTUAL_CONSTRAINT_REAL_AGENT CONS_TAB
           ON (CONS_TAB.TABLE_ID = A.INDEX_ID)
