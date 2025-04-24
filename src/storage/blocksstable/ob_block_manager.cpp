@@ -897,6 +897,36 @@ bool ObBlockManager::DoBlockSweepFunctor::operator()(
   return true;
 }
 
+int ObBlockManager::get_limited_iter_macro_ids(ObArray<MacroBlockId> &ids_array, int max_iteration)
+{
+  int ret = OB_SUCCESS;
+  ObBlockManager::LimitedIterGetBlockFunctor getter(ids_array, max_iteration);
+  if (OB_FAIL(block_map_.for_each(getter))) {
+    if (OB_EAGAIN == ret && OB_SUCCESS == getter.get_ret_code()) {
+      // reach target iteration and early exit
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to for each block map", K(ret), K(getter.get_ret_code()));
+    }
+  }
+  return ret;
+}
+
+bool ObBlockManager::LimitedIterGetBlockFunctor::operator()(const MacroBlockId &key, const BlockInfo &value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(value.ref_cnt_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fatal error, macro block ref cnt less than 0", K(ret), K(key),
+              K(value));
+  } else if (OB_FAIL(block_ids_.push_back(key))) {
+    LOG_WARN("fail to push back macro block id", K(ret), K(key));
+  }
+  ret_code_ = ret;
+  max_iteration_--;
+  return max_iteration_ > 0 && OB_SUCCESS == ret;
+}
+
 bool ObBlockManager::is_bad_block(const MacroBlockId &macro_block_id) {
   bool is_exist = false;
   lib::ObMutexGuard bad_block_guard(bad_block_lock_);

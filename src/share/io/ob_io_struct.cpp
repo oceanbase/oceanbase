@@ -824,16 +824,21 @@ int ObIOTuner::init()
 int ObIOTuner::send_detect_task()
 {
   int ret = OB_SUCCESS;
-  int64_t block_cnt = 0;
-  blocksstable::ObMacroBlockHandle block_handle;
+  ObArray<MacroBlockId> macro_ids;
+  macro_ids.set_attr(ObMemAttr(OB_SYS_TENANT_ID, "back_io_detect"));
   if (!OB_SERVER_BLOCK_MGR.is_started() || 0 == OB_SERVER_BLOCK_MGR.get_used_macro_block_count()) {
     ret = OB_NOT_INIT;
     LOG_WARN("block manager not init", K(ret));
-  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(block_handle))) {
-    LOG_WARN("alloc macro block failed", K(ret), K(block_handle));
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_health_detector().record_timing_task(
-                 block_handle.get_macro_id().first_id(), block_handle.get_macro_id().second_id()))) {
-    LOG_WARN("fail to record timing task", K(ret), K(block_handle));
+  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_limited_iter_macro_ids(macro_ids, 128))) {
+    LOG_WARN("fail to get macro ids", K(ret), K(macro_ids));
+  } else if (OB_UNLIKELY(0 == macro_ids.count())) {
+    // skip
+  } else {
+    MacroBlockId &rand_id = macro_ids.at(ObRandom::rand(0, macro_ids.count() - 1));
+    if (OB_FAIL(
+            OB_IO_MANAGER.get_device_health_detector().record_timing_task(rand_id.first_id(), rand_id.second_id()))) {
+      LOG_WARN("fail to record timing task", K(ret), K(rand_id));
+    }
   }
   return ret;
 }
