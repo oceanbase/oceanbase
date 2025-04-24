@@ -3968,6 +3968,9 @@ int ObSql::code_generate(
             const ObCandiTableLoc &candi_table_loc = tbl_part_infos.at(i)->get_phy_tbl_location_info();
             if (OB_FAIL(das_ctx.add_candi_table_loc(tl.get_loc_meta(), candi_table_loc))) {
               LOG_WARN("add candi table location failed", K(ret), K(tl.get_loc_meta()), K(candi_table_loc));
+            } else if (OB_UNLIKELY(das_ctx.get_table_loc_list().empty())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected empty table loc list", K(ret), K(candi_table_loc), K(tbl_part_infos));
             }
           }
         } // for end
