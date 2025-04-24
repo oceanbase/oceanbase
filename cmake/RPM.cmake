@@ -129,8 +129,18 @@ if (OB_BUILD_STANDALONE)
 endif()
 
 # add software package info
+set(RPM_DIST "")
+if (OB_BUILD_OPENSOURCE)
+  execute_process(
+      COMMAND rpm --eval "%{dist}"
+      OUTPUT_VARIABLE RPM_DIST
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+  )
+endif()
+
 set(CPACK_FULL_PACKAGE_NAME
-  "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.${ARCHITECTURE}.rpm")
+  "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}${RPM_DIST}.${ARCHITECTURE}.rpm")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package.template
               ${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package
