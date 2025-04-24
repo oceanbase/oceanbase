@@ -3216,7 +3216,8 @@ int ObSchemaChecker::construct_udt_qualified_name(const ObUDTTypeInfo &udt_info,
   return ret;
 }
 
-int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos)
+int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id,
+                                          uint64_t &attr_pos, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
@@ -3236,14 +3237,25 @@ int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("udt info is null.", K(ret), K(udt_id));
   } else if (!udt_info->is_collection()) {
-    for (int i = 0; i < udt_info->get_attributes() && OB_SUCC(ret) && attr_id == OB_INVALID_ID; i++) {
+    for (int i = 0; OB_SUCC(ret) && i < udt_info->get_attributes() && attr_id == OB_INVALID_ID; i++) {
       const ObUDTTypeAttr *attr = udt_info->get_attrs().at(i);
       if (attr->get_name().case_compare(attr_name) == 0) {
         attr_id = attr->get_type_attr_id();
         attr_pos++;
+        if (!attr->is_base_type()) {
+          // not basic type
+          if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, attr_id, udt_info))) {
+            LOG_WARN("get udt info failed", K(ret), K(tenant_id), K(attr_id));
+          } else if (OB_ISNULL(udt_info)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("udt info is null.", K(ret), K(tenant_id), K(attr_id));
+          } else {
+            schema_version = udt_info->get_schema_version();
+          }
+        }
       } else if (attr->get_type_attr_id() >= ObMaxType) {
         attr_pos++;
-        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos))) {
+        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos, schema_version))) {
            LOG_WARN("failed to get udt attribute id", K(ret), K(udt_id));
         }
       }

@@ -2732,7 +2732,7 @@ int ObMultiModeDMLResolver::geo_transform_dot_notation_attr(ParseNode &node, con
     if (!is_basic_attr) {
       ObString sub_name = raw_text.after(raw_text.reverse_find('.'));
       uint64_t attr_pos = 0;
-      if (OB_FAIL(dml_resolver->schema_checker_->get_udt_attribute_id(udt_id, sub_name, sub_udt_id, attr_pos))) {
+      if (OB_FAIL(dml_resolver->schema_checker_->get_udt_attribute_id(udt_id, sub_name, sub_udt_id, attr_pos, schema_version))) {
         LOG_WARN("fail to get tenant udt id", K(ret));
       } else if (sub_udt_id == OB_INVALID_ID || sub_udt_id <= ObMaxType) {
         ret = OB_ERR_BAD_FIELD_ERROR;
