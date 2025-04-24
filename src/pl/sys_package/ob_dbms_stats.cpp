@@ -7360,7 +7360,7 @@ void ObDbmsStats::update_optimizer_gather_stat_info(const ObOptStatTaskInfo *tas
   THIS_WORKER.set_session(NULL);
   const int64_t MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT = 10000000;//default 10 seconds
   THIS_WORKER.set_timeout_ts(MAX_UPDATE_OPT_GATHER_STAT_TIMEOUT + ObTimeUtility::current_time());
-  if (task_info != NULL) {
+  if (task_info != NULL && task_info->task_table_count_ > 0) {
     if (OB_FAIL(ObOptStatManager::get_instance().update_opt_stat_task_stat(*task_info))) {
       LOG_WARN("failed to update opt stat task stat", K(ret));
       LOG_USER_WARN(OB_ERR_DBMS_STATS_PL, "failed to update opt stat task stat");
