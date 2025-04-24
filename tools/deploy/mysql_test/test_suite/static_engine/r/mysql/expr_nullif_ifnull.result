@@ -3,6 +3,7 @@ explain_protocol: 0
 
 set @@ob_enable_plan_cache = 0;
 drop table if exists t1;
+alter system set default_table_store_format = "row";
 create table t1 (c1 int, c2 int unsigned,
     c3 tinyint, c4 tinyint unsigned,
     c5 smallint, c6 smallint unsigned,

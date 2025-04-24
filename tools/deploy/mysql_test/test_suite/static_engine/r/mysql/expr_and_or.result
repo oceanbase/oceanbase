@@ -1,5 +1,6 @@
 result_format: 4
 
+alter system set default_table_store_format = "row";
 set ob_enable_plan_cache = 0;
 drop table if exists t1;
 create table t1(col_int int, 

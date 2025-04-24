@@ -9,6 +9,8 @@ connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
 connection conn_admin;
 
 sleep 2;
+alter system set default_table_store_format = "row";
+--sleep 5
 set ob_enable_plan_cache = 0;
 --disable_warnings
 drop table if exists t1;

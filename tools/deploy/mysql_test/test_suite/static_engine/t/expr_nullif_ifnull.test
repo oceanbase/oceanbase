@@ -17,7 +17,8 @@ set @@ob_enable_plan_cache = 0;
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
-
+alter system set default_table_store_format = "row";
+--sleep 5
 create table t1 (c1 int, c2 int unsigned,
     c3 tinyint, c4 tinyint unsigned,
     c5 smallint, c6 smallint unsigned,

@@ -2,6 +2,7 @@ result_format: 4
 
 drop table if exists t1, t2;
 explain_protocol: 0
+alter system set default_table_store_format = "row";
 create table t1 (
   col_tinyint tinyint,
   col_smallint smallint,
