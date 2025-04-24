@@ -1602,7 +1602,6 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
 {
   INIT_SUCC(ret);
   uint64_t element_count = this->element_count();
-  object->set_serialize_size(obj_size());
   ObJsonBin child_bin(allocator_);
   for (uint64_t i = 0; OB_SUCC(ret) && i < element_count; i++) {
     ObJsonNode *node = nullptr;
@@ -1645,7 +1644,6 @@ int ObJsonBin::deserialize_json_array_v0(ObJsonArray *array)
 {
   INIT_SUCC(ret);
   uint64_t element_count = this->element_count();
-  array->set_serialize_size(this->obj_size());
   ObJsonBin child_bin(allocator_);
   for (uint64_t i = 0; OB_SUCC(ret) && i < element_count; i++) {
     ObJsonNode *node = nullptr;
