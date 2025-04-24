@@ -997,7 +997,7 @@ int ObOrcTableRowIterator::DataLoader::load_string_col()
                                                                               pointer_cast<const char *>(string_batch->data[i]),
                                                                               string_batch->length[i]) > file_col_expr_->max_length_))) {
                         ret = OB_ERR_DATA_TOO_LONG;
-                        LOG_WARN("data too long", K(ret));
+                        LOG_WARN("data too long", K(ret), K(string_batch->length[i]), K(file_col_expr_->max_length_));
                       } else {
                         text_vec->set_string(i, string_batch->data[i], string_batch->length[i]);
                       }
@@ -1019,7 +1019,7 @@ int ObOrcTableRowIterator::DataLoader::load_string_col()
                                                                             pointer_cast<const char *>(string_batch->data[i]),
                                                                             string_batch->length[i]) > file_col_expr_->max_length_))) {
                     ret = OB_ERR_DATA_TOO_LONG;
-                    LOG_WARN("data too long", K(ret));
+                    LOG_WARN("data too long", K(ret), K(string_batch->length[i]), K(file_col_expr_->max_length_));
                   } else {
                     text_vec->set_string(i, string_batch->data[i], string_batch->length[i]);
                   }

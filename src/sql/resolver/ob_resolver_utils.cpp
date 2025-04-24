@@ -5063,13 +5063,9 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
               file_column_expr->set_data_type(ObRawType);
             } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
               file_column_expr->set_data_type(ObCharType);
-            } else {
-              file_column_expr->set_data_type(ObVarcharType);
-            }
-            if (is_mysql_mode()) {
               file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
             } else {
-              file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+              file_column_expr->set_data_type(ObVarcharType);
             }
           }
         }
