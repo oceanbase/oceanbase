@@ -485,19 +485,34 @@ int ObLSReplica::member_list2text(
 
 int ObLSReplica::parse_addr_from_learner_string_(
     const ObString &input_string,
-    int64_t &the_count_of_colon_already_parsed,
-    ObAddr &learner_addr)
+    ObAddr &learner_addr,
+    ObString &remained_string)
 {
   int ret = OB_SUCCESS;
   int64_t input_string_length = input_string.length();
   learner_addr.reset();
+  remained_string.reset();
   int64_t learner_addr_length = 0;
-  the_count_of_colon_already_parsed = 0;
   ObSqlString learner_addr_string("LearnerStr");
   // ipv4 format: a.b.c.d:port:timestamp:flag,..
   // ipv6 format: [a:b:c:d:e:f:g:h]:port:timestamp:flag,...
   // for ipv4, we can directly find learner_addr_string before the second ':'
   // for ipv6, we have to find learner_addr_string before the second ':' at the begining of ']'
+  // ATTENTION:
+  //   for ipv6, "[a:b:c:d:e:f:g:h]:port:timestamp:flag" is basic format,
+  //   if some parts in a-h is 0 and these parts all next to each other,
+  //   it can be in a short format by replacing these 0 parts by '::',
+  //   for example:
+  //      "[a:b:0:0:0:f:g:h]:port:timestamp:flag"
+  //      is equal to "[a:b::f:g:h]:port:timestamp:flag"
+  //   ObAddr.parse_from_string() can handle both basic format and short format,
+  //   so we just need to input parts before port when calling ObAddr.parse_from_string()
+  //   BUT unfortunately, split_on(':') can not handle short format, input string will be wrongly splited.
+  //   for example:
+  //      split_on("a:b::c:d:e", ':', output_array) could return array like this:
+  //      output_array: ['a', 'b', ':c:d:e']
+  //   Considering '::' counld only be showed up in addr part, we return remained_string without addr,
+  //   let later process avoid parsing '::' by using split_on(':').
   if (OB_UNLIKELY(input_string.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -506,8 +521,6 @@ int ObLSReplica::parse_addr_from_learner_string_(
     while (OB_SUCC(ret) && learner_addr_length < input_string_length) {
       if (0 == input_string.ptr()[learner_addr_length] - ']') {
         break;
-      } else if (0 == input_string.ptr()[learner_addr_length] - ':') {
-        the_count_of_colon_already_parsed++;
       }
       learner_addr_length++;
     }
@@ -519,18 +532,17 @@ int ObLSReplica::parse_addr_from_learner_string_(
   } else if (learner_addr_length >= input_string_length) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(learner_addr_length),
-             K(input_string_length), K(input_string), K(the_count_of_colon_already_parsed));
+             K(input_string_length), K(input_string));
   } else {
     int64_t colon_num = 0;
     while (OB_SUCC(ret) && learner_addr_length < input_string_length) {
       if (0 == input_string.ptr()[learner_addr_length] - ':') {
         colon_num++;
-        the_count_of_colon_already_parsed++;
         if (2 == colon_num) {
           // find the end of learner addr string
           if (OB_FAIL(learner_addr_string.append(input_string.ptr(), learner_addr_length))) {
             LOG_WARN("fail to construct learner addr string", KR(ret),
-                     K(input_string), K(learner_addr_length), K(the_count_of_colon_already_parsed));
+                     K(input_string), K(learner_addr_length));
           } else {
             break;
           }
@@ -548,7 +560,12 @@ int ObLSReplica::parse_addr_from_learner_string_(
     LOG_WARN("invalid argument", KR(ret), K(input_string), K(learner_addr_length), K(learner_addr_string));
   } else if (OB_FAIL(learner_addr.parse_from_string(learner_addr_string.string()))) {
     LOG_WARN("fail to parse addr from string", KR(ret), K(input_string), K(input_string_length),
-             K(learner_addr_string), K(learner_addr_length), K(the_count_of_colon_already_parsed));
+             K(learner_addr_string), K(learner_addr_length));
+  } else if (OB_UNLIKELY(input_string.length() <= learner_addr_length + 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(input_string), "input_string_length", input_string.length(), K(learner_addr_length));
+  } else {
+    remained_string.assign_ptr(input_string.ptr() + learner_addr_length + 1, input_string.length() - learner_addr_length - 1);
   }
   return ret;
 }
@@ -596,42 +613,48 @@ int ObLSReplica::text2learner_list(const char *text, GlobalLearnerList &learner_
        *  ipv4 format: a.b.c.d:port:timestamp:flag,...
        *  ipv6 format: [a:b:c:d:e:f:g:h]:port:timestamp:flag,...
        */
-      int64_t the_count_of_colon_already_parsed = 0;
       // 1. parse ip:port
       ObAddr learner_addr;
+      ObString remained_part_without_addr;
       if (OB_FAIL(parse_addr_from_learner_string_(
                       learner_string_array.at(learner_index),
-                      the_count_of_colon_already_parsed,
-                      learner_addr))) {
+                      learner_addr,
+                      remained_part_without_addr))) {
         LOG_WARN("fail to parse learner addr from string", KR(ret),
                  K(learner_index), K(learner_string_array));
       }
 
-      // 2. split learner addr string by ':'
+      // 2. split remained learner addr string by ':'
+      //    if string has '::', then split_on(':') will wrongly splited
+      //    '::' could only show up in addr with ipv6 format
+      //    remained_part_without_addr should not contain '::'
       ObArray<ObString> learner_sub_string_array;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(split_on(learner_string_array.at(learner_index), ':', learner_sub_string_array))) {
-        LOG_WARN("fail to split learner string", KR(ret),
-                 K(learner_string_array), K(learner_sub_string_array));
-      } else if (OB_UNLIKELY(the_count_of_colon_already_parsed >= learner_sub_string_array.count())) {
+      } else if (OB_UNLIKELY(0 >= remained_part_without_addr.length())) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", KR(ret), K(the_count_of_colon_already_parsed),
-                 "array_count", learner_sub_string_array.count(),
-                 K(learner_string_array), K(learner_index));
+        LOG_WARN("invalid argument", KR(ret), K(remained_part_without_addr));
+      } else if (OB_FAIL(split_on(remained_part_without_addr, ':', learner_sub_string_array))) {
+        LOG_WARN("fail to split string", KR(ret), K(remained_part_without_addr));
+      } else if (OB_UNLIKELY(0 >= learner_sub_string_array.count())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument, should at least have timestamp string", KR(ret),
+                 K(learner_string_array), K(learner_index), K(learner_addr),
+                 K(remained_part_without_addr), K(learner_sub_string_array));
       }
 
-      // 3. skip the_count_of_colon_already_parsed and parse timestamp
+      // 3. parse timestamp
+      int64_t sub_array_index = 0;
       int64_t timestamp_val = 0;
       if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(the_count_of_colon_already_parsed >= learner_sub_string_array.count())) {
+      } else if (OB_UNLIKELY(sub_array_index >= learner_sub_string_array.count())) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", KR(ret), K(the_count_of_colon_already_parsed),
+        LOG_WARN("invalid argument", KR(ret), K(sub_array_index),
                  "array_count", learner_sub_string_array.count(),
                  K(learner_sub_string_array));
-      } else if (OB_FAIL(parsing_int_from_string_(learner_sub_string_array.at(the_count_of_colon_already_parsed), timestamp_val))) {
-        LOG_WARN("fail to extract timestamp from string", KR(ret), K(learner_sub_string_array), K(the_count_of_colon_already_parsed));
+      } else if (OB_FAIL(parsing_int_from_string_(learner_sub_string_array.at(sub_array_index), timestamp_val))) {
+        LOG_WARN("fail to extract timestamp from string", KR(ret), K(learner_sub_string_array), K(sub_array_index));
       } else {
-        the_count_of_colon_already_parsed++;
+        sub_array_index++;
       }
 
       // 4. parse flag if needed
@@ -641,19 +664,19 @@ int ObLSReplica::text2learner_list(const char *text, GlobalLearnerList &learner_
       // We have to deal with the compatible problem here to parse learner with flag or just ignore flag substring.
       int64_t flag_val = 0;
       if (OB_FAIL(ret)) {
-      } else if (the_count_of_colon_already_parsed < learner_sub_string_array.count()) {
-        if (OB_FAIL(parsing_int_from_string_(learner_sub_string_array.at(the_count_of_colon_already_parsed), flag_val))) {
-          LOG_WARN("fail to extract flag from string", KR(ret), K(learner_sub_string_array), K(the_count_of_colon_already_parsed));
+      } else if (sub_array_index < learner_sub_string_array.count()) {
+        if (OB_FAIL(parsing_int_from_string_(learner_sub_string_array.at(sub_array_index), flag_val))) {
+          LOG_WARN("fail to extract flag from string", KR(ret), K(learner_sub_string_array), K(sub_array_index));
         } else {
-          the_count_of_colon_already_parsed++;
+          sub_array_index++;
         }
       }
 
       // 5. make sure no remain parts
       if (OB_FAIL(ret)) {
-      } else if (the_count_of_colon_already_parsed < learner_sub_string_array.count()) {
+      } else if (sub_array_index < learner_sub_string_array.count()) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", KR(ret), K(the_count_of_colon_already_parsed),
+        LOG_WARN("invalid argument", KR(ret), K(sub_array_index),
                  "array_count", learner_sub_string_array.count(),
                  K(learner_sub_string_array));
       }
@@ -667,6 +690,8 @@ int ObLSReplica::text2learner_list(const char *text, GlobalLearnerList &learner_
           LOG_WARN("push back learner failed", KR(ret), K(learner_to_add));
         }
       }
+      LOG_TRACE("finish parse single learner", KR(ret), K(learner_string_array), K(learner_index), K(learner_addr),
+                K(remained_part_without_addr), K(learner_sub_string_array), K(timestamp_val), K(flag_val));
     }
   }
   return ret;
