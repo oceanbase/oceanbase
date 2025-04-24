@@ -567,7 +567,13 @@ int ObSemiStructColumnEncodeCtx::choose_encoder_for_integer(const int64_t column
   } else {
     int64_t integer_estimate_size = integer_encoder->estimate_store_size();
     int64_t dict_estimate_size = dict_encoder->estimate_store_size();
-    if (dict_estimate_size < integer_estimate_size) {
+    bool use_dict = false;
+    const int64_t row_count = dict_encoder->get_row_count();
+    const int64_t distinct_cnt = static_cast<ObStrDictColumnEncoder*>(dict_encoder)->get_distinct_cnt();
+    use_dict = (dict_estimate_size < integer_estimate_size * 70 / 100) ||
+        (dict_estimate_size < integer_estimate_size && distinct_cnt < row_count * 50 / 100);
+
+    if (use_dict) {
       e = dict_encoder;
       free_encoder(integer_encoder);
       integer_encoder = nullptr;
@@ -605,7 +611,13 @@ int ObSemiStructColumnEncodeCtx::choose_encoder_for_string(const int64_t column_
   } else {
     int64_t string_estimate_size = string_encoder->estimate_store_size();
     int64_t dict_estimate_size = dict_encoder->estimate_store_size();
-    if (dict_estimate_size < string_estimate_size) {
+    bool use_dict = false;
+    const int64_t row_count = dict_encoder->get_row_count();
+    const int64_t distinct_cnt = static_cast<ObStrDictColumnEncoder*>(dict_encoder)->get_distinct_cnt();
+    use_dict = (dict_estimate_size < string_estimate_size * 70 / 100) ||
+        (dict_estimate_size < string_estimate_size && distinct_cnt < row_count * 50 / 100);
+
+    if (use_dict) {
       e = dict_encoder;
       free_encoder(string_encoder);
       string_encoder = nullptr;

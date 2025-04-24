@@ -24,9 +24,11 @@ struct ObSemiStructEncodeHeader
   ObSemiStructEncodeHeader():
     type_(0),
     header_len_(0),
+    reserved0_(0),
     column_cnt_(0),
     stream_cnt_(0),
-    schema_len_(0)
+    schema_len_(0),
+    reserved1_(0)
   {}
 
   enum Type {
@@ -35,20 +37,20 @@ struct ObSemiStructEncodeHeader
     MAX_TYPE
   };
 
-  TO_STRING_KV(K_(type), K_(header_len), K_(column_cnt), K_(stream_cnt), K_(schema_len));
+  TO_STRING_KV(K_(type), K_(header_len), K_(reserved0), K_(column_cnt), K_(stream_cnt), K_(schema_len), K_(reserved1));
 
   uint32_t type_ : 8;
-  uint32_t header_len_ : 24;
+  uint32_t header_len_ : 20;
+  uint32_t reserved0_ : 4;
   uint16_t column_cnt_;
   uint16_t stream_cnt_;
 
-  union {
-    uint32_t schema_len_;
-  };
+  uint64_t schema_len_ : 20;
+  uint64_t reserved1_ : 44;
 
 } __attribute__((packed));
 
-static_assert(sizeof(ObSemiStructEncodeHeader) == 12, "size of ObSemiStructEncodeHeader isn't equal to 12");
+static_assert(sizeof(ObSemiStructEncodeHeader) == 16, "size of ObSemiStructEncodeHeader isn't equal to 16");
 
 class ObCSColumnHeader;
 struct ObSemiStructEncodeMetaDesc
