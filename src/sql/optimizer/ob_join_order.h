@@ -2608,8 +2608,6 @@ struct NullAwareAntiJoinInfo {
                            const common::ObIArray<ObRawExpr*> *unprecise_range_exprs,
                            PathHelper &helper);
 
-    int classify_path_filters(PathHelper &helper);
-
     int set_nl_filters(JoinPath *join_path,
                        const Path *right_path,
                        const ObJoinType join_type,

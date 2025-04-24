@@ -1640,6 +1640,10 @@ public:
                                           ObIArray<ObRawExpr *> &pullup_exprs,
                                           ObIArray<ObRawExpr *> &new_select_list);
 
+  static int extract_rowid_exprs(const ObDMLStmt *stmt,
+                                 ObIArray<TableItem*> &table_items,
+                                 ObIArray<ObRawExpr*> &rowid_exprs);
+
   static int extract_rowid_exprs(ObIArray<ObRawExpr *> &exprs, ObIArray<ObRawExpr *> &rowid_exprs);
 
   static int extract_rowid_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &rowid_exprs);
