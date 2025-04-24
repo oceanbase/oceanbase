@@ -2504,6 +2504,33 @@ int ObDbmsWorkloadRepository::print_ash_foreground_db_time(const AshReportParams
     LOG_WARN("failed to push ##phase pair into phase array", K(ret));                             \
   }
 
+//when adding a row in tm_columns, the bit flag in tm_flags should be set
+const char *tm_columns[] = {"IN_PARSE",
+                            "IN_PL_PARSE",
+                            "IN_PLAN_CACHE",
+                            "IN_SQL_OPTIMIZE",
+                            "IN_SQL_EXECUTION",
+                            "IN_PX_EXECUTION",
+                            "IN_SEQUENCE_LOAD",
+                            "IN_COMMITTING",
+                            "IN_STORAGE_READ",
+                            "IN_STORAGE_WRITE",
+                            "IN_REMOTE_DAS_EXECUTION",
+                            "IN_PLSQL_COMPILATION",
+                            "IN_PLSQL_EXECUTION",
+                            "IN_FILTER_ROWS",
+                            "IN_RPC_ENCODE",
+                            "IN_RPC_DECODE",
+                            "IN_CONNECTION_MGR",
+                            "IN_CHECK_ROW_CONFLICTION",
+                            "IN_DEADLOCK_ROW_REGISTER",
+                            "IN_CHECK_TX_STATUS",
+                            "IN_RESOLVE",
+                            "IN_REWRITE",
+                            "IN_DUPLICATE_CONFLICT_RESOLVE",
+                            "IN_FOREIGN_KEY_CASCADING"};
+int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
+
 int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
     const AshReportParams &ash_report_params, const int64_t num_samples, ObStringBuffer &buff)
 {
@@ -2528,30 +2555,6 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
     AshColumnItem column_headers[column_size] = {
         "Session Type", "Phase of Execution", "Active Samples", "% Activity", "SQL_ID", "% SQL_ID"};
     column_headers[0].merge_cell_ = true; //merge empty cell with session type
-    //when adding a row in tm_columns, the bit flag in tm_flags should be set
-    const char *tm_columns[] = {"IN_PARSE",
-                                "IN_PL_PARSE",
-                                "IN_PLAN_CACHE",
-                                "IN_SQL_OPTIMIZE",
-                                "IN_SQL_EXECUTION",
-                                "IN_PX_EXECUTION",
-                                "IN_SEQUENCE_LOAD",
-                                "IN_COMMITTING",
-                                "IN_STORAGE_READ",
-                                "IN_STORAGE_WRITE",
-                                "IN_REMOTE_DAS_EXECUTION",
-                                "IN_PLSQL_COMPILATION",
-                                "IN_PLSQL_EXECUTION",
-                                "IN_FILTER_ROWS",
-                                "IN_RPC_ENCODE",
-                                "IN_RPC_DECODE",
-                                "IN_CONNECTION_MGR",
-                                "IN_CHECK_ROW_CONFLICTION",
-                                "IN_DEADLOCK_ROW_REGISTER",
-                                "IN_CHECK_TX_STATUS",
-                                "IN_RESOLVE",
-                                "IN_REWRITE"};
-    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
     ObArrayWrap<const char*> tm_cols_wrap(tm_columns, ARRAYSIZEOF(tm_columns));
     ObArrayWrap<int32_t> tm_flags_wrap(tm_flags, ARRAYSIZEOF(tm_columns));
     HEAP_VARS_3((ObISQLClient::ReadResult, res), (ObSqlString, sql_string), (ObSqlString, tm_view))
@@ -3973,30 +3976,6 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_wait_events(
       "SQL ID", "Plan Hash", "Active Samples", "% Activity", "Sampled Executions",
       "Top Event", "% Event", "Top Operator/ExecPhase", "% Operator/ExecPhase", "SQL Text"
     };
-    //when adding a row in tm_columns, the bit flag in tm_flags should be set
-    const char *tm_columns[] = {"IN_PARSE",
-                                "IN_PL_PARSE",
-                                "IN_PLAN_CACHE",
-                                "IN_SQL_OPTIMIZE",
-                                "IN_SQL_EXECUTION",
-                                "IN_PX_EXECUTION",
-                                "IN_SEQUENCE_LOAD",
-                                "IN_COMMITTING",
-                                "IN_STORAGE_READ",
-                                "IN_STORAGE_WRITE",
-                                "IN_REMOTE_DAS_EXECUTION",
-                                "IN_PLSQL_COMPILATION",
-                                "IN_PLSQL_EXECUTION",
-                                "IN_FILTER_ROWS",
-                                "IN_RPC_ENCODE",
-                                "IN_RPC_DECODE",
-                                "IN_CONNECTION_MGR",
-                                "IN_CHECK_ROW_CONFLICTION",
-                                "IN_DEADLOCK_ROW_REGISTER",
-                                "IN_CHECK_TX_STATUS",
-                                "IN_RESOLVE",
-                                "IN_REWRITE"};
-    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
     ObArrayWrap<const char*> tm_cols_wrap(tm_columns, ARRAYSIZEOF(tm_columns));
     ObArrayWrap<int32_t> tm_flags_wrap(tm_flags, ARRAYSIZEOF(tm_columns));
     const uint64_t request_tenant_id = MTL_ID();

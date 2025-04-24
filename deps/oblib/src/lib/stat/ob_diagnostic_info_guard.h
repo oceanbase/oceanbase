@@ -292,6 +292,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_deadlock_row_register)
 DEF_ASH_FLAGS_SETTER_GUARD(in_check_tx_status)
 DEF_ASH_FLAGS_SETTER_GUARD(in_resolve)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rewrite)
+DEF_ASH_FLAGS_SETTER_GUARD(in_foreign_key_cascading)
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD
 

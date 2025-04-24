@@ -2461,6 +2461,7 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
         } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
           LOG_WARN("failed to covert stored new row to expr", K(ret));
         } else if (op.need_foreign_key_checks()) {
+          ACTIVE_SESSION_FLAG_SETTER_GUARD(in_foreign_key_cascading);
           if (t_update == dml_event && !reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_) {
             LOG_DEBUG("update operation don't change any value, no need to perform foreign key check");
           } else {
