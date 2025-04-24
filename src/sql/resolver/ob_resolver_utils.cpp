@@ -7552,6 +7552,7 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                         routine_info));
       if (OB_FAIL(ret)) {
         ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
+        LOG_USER_ERROR(OB_ERR_PRIVATE_UDF_USE_IN_SQL, udf_raw_expr.get_func_name().length(), udf_raw_expr.get_func_name().ptr());
         LOG_WARN("function 'string' may not be used in SQL", K(ret), K(udf_raw_expr));
       }
     }

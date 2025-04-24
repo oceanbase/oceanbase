@@ -380,6 +380,8 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       }
       if (OB_NOT_SUPPORTED == ret) {
         LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
+      } else if (OB_ERR_NON_INT_LITERAL == ret) {
+       LOG_USER_ERROR(OB_ERR_NON_INT_LITERAL, static_cast<int32_t>(strlen(parse_ctx.global_errmsg_)), parse_ctx.global_errmsg_);
       }
       parse_ctx.stmt_tree_ = merge_tree(parse_ctx.mem_pool_, &(parse_ctx.global_errno_), T_STMT_LIST, parse_ctx.stmt_tree_);
       multi_stmt = parse_ctx.stmt_tree_;

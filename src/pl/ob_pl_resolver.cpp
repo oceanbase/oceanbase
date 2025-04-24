@@ -1450,7 +1450,8 @@ int ObPLResolver::get_const_number_variable_literal_value(ObRawExpr *expr, int64
 
 int ObPLResolver::calc_subtype_range_bound(const ObStmtNodeTree *bound_node,
                                            ObPLCompileUnitAST &unit_ast,
-                                           int32_t &bound)
+                                           int32_t &bound,
+                                           ObString &subtype_name)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *bound_expr = NULL;
@@ -1474,6 +1475,7 @@ int ObPLResolver::calc_subtype_range_bound(const ObStmtNodeTree *bound_node,
       bound = result;
     } else {
       ret = OB_ERR_NON_INT_LITERAL;
+      LOG_USER_ERROR(OB_ERR_NON_INT_LITERAL, subtype_name.length(), subtype_name.ptr());
       LOG_WARN("PLS-00325: non-integral numeric literal string is inappropriate in this context",
                K(ret), K(result));
     }
@@ -1602,8 +1604,8 @@ int ObPLResolver::resolve_declare_user_subtype(const ObStmtNodeTree *parse_tree,
       CK (OB_LIKELY(2 == constraint_node->num_child_));
       CK (OB_NOT_NULL(constraint_node->children_[0]));
       CK (OB_NOT_NULL(constraint_node->children_[1]));
-      OZ (calc_subtype_range_bound(constraint_node->children_[0], unit_ast, lower));
-      OZ (calc_subtype_range_bound(constraint_node->children_[1], unit_ast, upper));
+      OZ (calc_subtype_range_bound(constraint_node->children_[0], unit_ast, lower, subtype_name));
+      OZ (calc_subtype_range_bound(constraint_node->children_[1], unit_ast, upper, subtype_name));
       if (OB_SUCC(ret)) {
         if (!base_type.is_pl_integer_type() || upper < lower) {
           ret = OB_ERR_IMPROPER_CONSTRAINT_FORM;
@@ -1712,6 +1714,7 @@ int ObPLResolver::resolve_ref_cursor_type(const ParseNode *node,
         LOG_WARN("failed to resolve cursor comm", K(ret), K(name));
       } else if (NULL != type_node && !return_type.is_record_type()) {
         ret = OB_ERR_INVALID_CURSOR_RETURN_TYPE;
+        LOG_USER_ERROR(OB_ERR_INVALID_CURSOR_RETURN_TYPE, static_cast<int>(name_node->str_len_), name_node->str_value_);
         LOG_WARN("ref cursor must return record type", K(return_type), K(ret));
       } else {
         ObRefCursorType *ref_cursor_type = NULL;
@@ -5719,6 +5722,9 @@ int ObPLResolver::resolve_forall(const ObStmtNodeTree *parse_tree,
 
     // 检查sql语句以及Index使用的合法性
     OZ (check_forall_sql_and_modify_params(*stmt, func));
+    if (OB_ERR_FORALL_ITER_NOT_ALLOWED == ret) {
+      LOG_USER_ERROR(OB_ERR_FORALL_ITER_NOT_ALLOWED, stmt->get_index_var()->get_name().length(), stmt->get_index_var()->get_name().ptr());
+    }
   }
   return ret;
 }
@@ -15193,6 +15199,13 @@ int ObPLResolver::resolve_composite_access(ObObjAccessIdent &access_ident,
 
   if (!parent_type.is_composite_type()) {
     ret = OB_ERR_OUT_OF_SCOPE;
+    if (0 < access_idxs.at(access_idxs.count() - 1).var_name_.length()) {
+      LOG_USER_ERROR(OB_ERR_OUT_OF_SCOPE,
+                    access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
+    } else {
+      LOG_USER_ERROR(OB_ERR_OUT_OF_SCOPE,
+                    access_ident.access_name_.length(), access_ident.access_name_.ptr());
+    }
     LOG_WARN("PLS-00225: subprogram or cursor reference is out of scope", K(ret), K(parent_type), K(access_ident));
   }
 

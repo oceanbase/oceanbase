@@ -1132,8 +1132,11 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
           for (int64_t i = 0; OB_SUCC(ret) && i < into_data_type_count; ++i) {
             element_type = into_record_type->get_record_member_type(i);
             CK (OB_NOT_NULL(element_type));
+            CK (0 < access_expr->get_orig_access_idxs().count());
             if (OB_SUCC(ret) && element_type->is_type_record()) {
               ret = OB_ERR_INTO_EXPR_ILLEGAL;
+              LOG_USER_ERROR(OB_ERR_INTO_EXPR_ILLEGAL, access_expr->get_orig_access_idxs().at(access_expr->get_orig_access_idxs().count() - 1).var_name_.length(),
+                             access_expr->get_orig_access_idxs().at(access_expr->get_orig_access_idxs().count() - 1).var_name_.ptr());
               LOG_WARN("inconsistent datatypes", K(ret));
             }
           }

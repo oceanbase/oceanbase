@@ -4489,6 +4489,7 @@ int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
       }
       if (OB_SUCC(ret) && !is_type_match) {
         ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
+        LOG_USER_ERROR(OB_ERR_TYPE_MISMATCH_IN_FETCH, var->get_name().length(), var->get_name().ptr());
         LOG_WARN("type not compatible!", K(ret));
       }
     } else if (return_type->get_record_member_count() != into_nums) {
