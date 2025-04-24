@@ -645,7 +645,7 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
             break;
           }
         }
-        is_use_pdml = !update_unique_key;
+        //is_use_pdml = !update_unique_key;
       }
     }
   }
