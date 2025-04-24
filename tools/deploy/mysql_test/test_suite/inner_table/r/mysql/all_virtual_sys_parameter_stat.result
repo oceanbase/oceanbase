@@ -581,6 +581,7 @@ _stall_threshold_for_dynamic_worker
 _standby_max_replay_gap_time
 _storage_leak_check_mod
 _storage_meta_memory_limit_percentage
+_storage_stream_rpc_buffer_size
 _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
 _system_trig_enabled

@@ -2669,3 +2669,7 @@ DEF_INT(ob_result_cache_evict_percentage, OB_TENANT_PARAMETER, "90", "[0, 100]",
 DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)",
         "deternimistic cache can use max size memory(in bytes). if it's zero, disable cache",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
+         "the buffer size of storage stream rpc"
+         "Range: [2M, 128M]",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
