@@ -91,14 +91,16 @@ enum CompileType {
                      uint64_t database_id,
                      const ObString &object_name,
                      CompileType object_type,
-                     int64_t schema_version = OB_INVALID_VERSION);
+                     int64_t schema_version = OB_INVALID_VERSION,
+                     bool is_recompile = false);
 
   static int compile(sql::ObExecContext &ctx,
                      uint64_t tenant_id,
                      const ObString &database_name,
                      const ObString &object_name,
                      CompileType object_type,
-                     int64_t schema_version = OB_INVALID_VERSION);
+                     int64_t schema_version = OB_INVALID_VERSION,
+                     bool is_recompile = false);
 
 private:
   static int compile_routine(sql::ObExecContext &ctx,
@@ -106,24 +108,28 @@ private:
                              uint64_t database_id,
                              const ObString &routine_name,
                              share::schema::ObRoutineType routine_type,
-                             int64_t schema_version);
+                             int64_t schema_version,
+                             bool is_recompile);
   static int compile_package(sql::ObExecContext &ctx,
                              uint64_t tenant_id,
                              uint64_t database_id,
                              const ObString &package_name,
                              share::schema::ObPackageType package_type,
-                             int64_t schema_version);
+                             int64_t schema_version,
+                             bool is_recompile);
   static int compile_trigger(sql::ObExecContext &ctx,
                              uint64_t tenant_id,
                              uint64_t database_id,
                              const ObString &trigger_name,
-                             int64_t schema_version);
+                             int64_t schema_version,
+                             bool is_recompile);
 #ifdef OB_BUILD_ORACLE_PL
   static int compile_udt(sql::ObExecContext &ctx,
                          uint64_t tenant_id,
                          uint64_t database_id,
                          const ObString &udt_name,
-                         int64_t schema_version);
+                         int64_t schema_version,
+                         bool is_recompile);
 #endif
 };
 

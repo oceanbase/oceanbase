@@ -252,9 +252,56 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
   return ret;
 }
 
+int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(
+                                      common::ObMySQLProxy* sql_proxy,
+                                      uint64_t tenant_id,
+                                      ObIArray<ObPLRecompileInfo>& dep_objs,
+                                      ObArray<int64_t>& ddl_alter_obj_infos,
+                                      common::hash::ObHashMap<int64_t, std::pair<ObString, int64_t>>& ddl_drop_obj_map)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString query_inner_sql;
+  common::sqlclient::ObMySQLResult *result = NULL;
+  SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+    if (!ddl_drop_obj_map.empty() || !ddl_alter_obj_infos.empty()) {
+      OZ (construct_select_dep_table_sql(query_inner_sql, ddl_drop_obj_map, ddl_alter_obj_infos, tenant_id));
+      OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
+      CK (OB_NOT_NULL(result = res.get_result()));
+      if (OB_SUCC(ret)) {
+        while (OB_SUCC(result->next())) {
+          int64_t dep_obj_id = OB_INVALID_ID;
+          int64_t dep_obj_type = 0;
+          int64_t ref_obj_id = OB_INVALID_ID;
+          int64_t ref_obj_type = 0;
+          std::pair<ObString, int64_t> dropped_ref_obj;
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", dep_obj_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_type", dep_obj_type, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ref_obj_id", ref_obj_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ref_obj_type", ref_obj_type, int64_t);
+          CK (dep_obj_type >= static_cast<int64_t>(share::schema::ObObjectType::INVALID)
+              && dep_obj_type <= static_cast<int64_t>(share::schema::ObObjectType::MAX_TYPE)
+              && ref_obj_type >= static_cast<int64_t>(share::schema::ObObjectType::INVALID)
+              && ref_obj_type <= static_cast<int64_t>(share::schema::ObObjectType::MAX_TYPE));
+          if (OB_SUCC(ret) && is_pl_object_type(static_cast<share::schema::ObObjectType>(dep_obj_type))) {
+            ObPLRecompileInfo tmp_tuple(dep_obj_id);
+            int tmp_ret = ddl_drop_obj_map.get_refactored(ref_obj_id, dropped_ref_obj);
+            if (OB_SUCCESS == tmp_ret && ref_obj_type != static_cast<int64_t>(share::schema::ObObjectType::SYNONYM)) {
+              OX (tmp_tuple.schema_version_ = dropped_ref_obj.second);
+            } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+            } else {
+              ret = OB_SUCCESS == ret ? tmp_ret : ret;
+            }
+            OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
+          }
+        }
+        SET_ITERATE_END_RET;
+      }
+    }
+  }
+  return ret;
+}
 
-
-int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLProxy* sql_proxy,
+int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLProxy* sql_proxy,
                                                     uint64_t tenant_id,
                                                     ObIAllocator& allocator,
                                                     int64_t& max_schema_version)
@@ -271,10 +318,6 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLPro
     " and  schema_version > %ld  and operation_type in ( 2, 3, 4, 16, 19, "
     " 21, 25, 26, 902, 903, 904, 1202, 1203, 1204, 1205, 1252, 1253, 1254, 1312, 1313, "
     " 1314, 1322, 1323, 1324, 1325, 1952, 1953, 1954) " ;
-
-  static constexpr char insert_recomp_table[] =
-    "INSERT INTO %s (recompile_obj_id, ref_obj_name, schema_version, fail_count) "
-    " VALUES ";
 
   common::sqlclient::ObMySQLResult *result = NULL;
   ObSqlString query_inner_sql;
@@ -297,120 +340,97 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(common::ObMySQLPro
         SET_ITERATE_END_RET;
       }
       OX (cur_max_schema_version = last_max_schema_version) ;
+
+      // step2 : get delta ddl operation
+      OZ (query_inner_sql.assign_fmt(get_delta_ddl_operation,
+          OB_ALL_VIRTUAL_DDL_OPERATION_TNAME, tenant_id, last_max_schema_version));
+      // user tenant can not get real table data
+      OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
+      CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
-        // step2 : get delta ddl operation
-        OZ (query_inner_sql.assign_fmt(get_delta_ddl_operation,
-            OB_ALL_VIRTUAL_DDL_OPERATION_TNAME, tenant_id, last_max_schema_version));
-        // user tenant can not get real table data
-        OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
-        CK (OB_NOT_NULL(result = res.get_result()));
-        if (OB_SUCC(ret)) {
-          while (OB_SUCC(result->next())) {
-            int64_t op_type = OB_INVALID_ID;
-            int64_t table_id = OB_INVALID_ID;
-            int64_t schema_version = 0;
-            ObString table_name;
-            ObString table_name_deep_copy;
-            EXTRACT_INT_FIELD_MYSQL(*result, "operation_type", op_type, int64_t);
-            EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, int64_t);
-            EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", table_name);
-            EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t);
-            if (OB_SUCC(ret)) {
-              CK (op_type > static_cast<int64_t>(OB_INVALID_DDL_OP) &&
-                  op_type < static_cast<int64_t>(OB_DDL_MAX_OP));
-              ObSchemaOperationType operation_type = static_cast<ObSchemaOperationType>(op_type);
-              cur_max_schema_version = cur_max_schema_version > schema_version ? cur_max_schema_version : schema_version;
-              if (is_pl_drop_ddl_operation(operation_type) || is_sql_drop_ddl_operation(operation_type)) {
-                OZ (ob_write_string(allocator, table_name, table_name_deep_copy));
-                OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version)));
-              } else if (is_pl_create_ddl_operation(operation_type)) {
-                ObPLRecompileInfo tmp_tuple(table_id);
-                OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
-                OZ (ddl_alter_obj_infos.push_back(table_id));
-              } else if (is_sql_create_ddl_operation(operation_type)) {
-                OZ (ddl_alter_obj_infos.push_back(table_id));
-              }
+        while (OB_SUCC(result->next())) {
+          int64_t op_type = OB_INVALID_ID;
+          int64_t table_id = OB_INVALID_ID;
+          int64_t schema_version = 0;
+          ObString table_name;
+          ObString table_name_deep_copy;
+          EXTRACT_INT_FIELD_MYSQL(*result, "operation_type", op_type, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, int64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", table_name);
+          EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t);
+          if (OB_SUCC(ret)) {
+            CK (op_type > static_cast<int64_t>(OB_INVALID_DDL_OP) &&
+                op_type < static_cast<int64_t>(OB_DDL_MAX_OP));
+            ObSchemaOperationType operation_type = static_cast<ObSchemaOperationType>(op_type);
+            cur_max_schema_version = cur_max_schema_version > schema_version ? cur_max_schema_version : schema_version;
+            if (is_pl_drop_ddl_operation(operation_type) || is_sql_drop_ddl_operation(operation_type)) {
+              OZ (ob_write_string(allocator, table_name, table_name_deep_copy));
+              OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version)));
+            } else if (is_pl_create_ddl_operation(operation_type)) {
+              ObPLRecompileInfo tmp_tuple(table_id);
+              OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
+              OZ (ddl_alter_obj_infos.push_back(table_id));
+            } else if (is_sql_create_ddl_operation(operation_type)) {
+              OZ (ddl_alter_obj_infos.push_back(table_id));
             }
           }
-          SET_ITERATE_END_RET;
         }
+        SET_ITERATE_END_RET;
       }
-      if (OB_SUCC(ret)) {
-        // step3 : get delta recompile pl obj info from ddl operation
-        if (!ddl_drop_obj_map.empty() || !ddl_alter_obj_infos.empty()) {
-            OZ (construct_select_dep_table_sql(query_inner_sql, ddl_drop_obj_map, ddl_alter_obj_infos, tenant_id));
-            if (OB_SUCC(ret)) {
-              OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
-              CK (OB_NOT_NULL(result = res.get_result()));
-              if (OB_SUCC(ret)) {
-                while (OB_SUCC(result->next())) {
-                  int64_t dep_obj_id = OB_INVALID_ID;
-                  int64_t dep_obj_type = 0;
-                  int64_t ref_obj_id = OB_INVALID_ID;
-                  int64_t ref_obj_type = 0;
-                  std::pair<ObString, int64_t> dropped_ref_obj;
-                  EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", dep_obj_id, int64_t);
-                  EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_type", dep_obj_type, int64_t);
-                  EXTRACT_INT_FIELD_MYSQL(*result, "ref_obj_id", ref_obj_id, int64_t);
-                  EXTRACT_INT_FIELD_MYSQL(*result, "ref_obj_type", ref_obj_type, int64_t);
-                  CK (dep_obj_type >= static_cast<int64_t>(share::schema::ObObjectType::INVALID)
-                      && dep_obj_type <= static_cast<int64_t>(share::schema::ObObjectType::MAX_TYPE)
-                      && ref_obj_type >= static_cast<int64_t>(share::schema::ObObjectType::INVALID)
-                      && ref_obj_type <= static_cast<int64_t>(share::schema::ObObjectType::MAX_TYPE));
-                  if (OB_SUCC(ret) && is_pl_object_type(static_cast<share::schema::ObObjectType>(dep_obj_type))) {
-                    ObPLRecompileInfo tmp_tuple(dep_obj_id);
-                    int tmp_ret = ddl_drop_obj_map.get_refactored(ref_obj_id, dropped_ref_obj);
-                    if (OB_SUCCESS == tmp_ret && ref_obj_type != static_cast<int64_t>(share::schema::ObObjectType::SYNONYM)) {
-                      OX (tmp_tuple.schema_version_ = dropped_ref_obj.second);
-                    } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-                    } else {
-                      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-                    }
-                    OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
-                  }
-                }
-                SET_ITERATE_END_RET;
-              }
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          // step4 : get delta recompile pl obj info from resolve error
-          OZ (collect_delta_error_data(sql_proxy, tenant_id, last_max_schema_version,
-                                allocator, dep_objs));
-        }
-        if (OB_SUCC(ret)) {
-          // step5 : write delta recompile pl obj into __all_pl_recompile_objinfo
-          int64_t affected_rows = 0;
-          OZ (query_inner_sql.assign_fmt(insert_recomp_table, OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
-          if (!dep_objs.empty() && OB_SUCC(ret)) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < dep_objs.count(); ++i) {
-              OZ (query_inner_sql.append_fmt("( %ld, '%.*s', %ld , %ld ) , ",
-                        dep_objs.at(i).recompile_obj_id_,
-                        dep_objs.at(i).ref_obj_name_.length(),
-                        dep_objs.at(i).ref_obj_name_.ptr(),
-                        dep_objs.at(i).schema_version_,
-                        dep_objs.at(i).fail_cnt_));
-            }
-          }
-          OZ (query_inner_sql.append_fmt("( 0, '%.*s', %ld, 0) ON DUPLICATE KEY UPDATE "
-                                        " recompile_obj_id = VALUES(recompile_obj_id), "
-                                        " ref_obj_name = VALUES(ref_obj_name), "
-                                        " schema_version = VALUES(schema_version), "
-                                        " fail_count = VALUES(fail_count); ",
-                                          Dummy.length(),
-                                          Dummy.ptr(),
-                                          cur_max_schema_version));
-          OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows), query_inner_sql);
-          OX (max_schema_version = cur_max_schema_version);
-          LOG_INFO("[PLRECOMPILE]: Insert into __all_pl_recompile_objinfo", K(ret), K(affected_rows),
-                        K(dep_objs), K(query_inner_sql), K(max_schema_version));
-        }
-      }
+      // step3 : get delta recompile pl obj info from ddl operation
+      OZ (collect_delta_ddl_operation_data(sql_proxy, tenant_id, dep_objs, ddl_alter_obj_infos, ddl_drop_obj_map));
+      // step4 : get delta recompile pl obj info from resolve error
+      OZ (collect_delta_error_data(sql_proxy, tenant_id, last_max_schema_version,
+                              allocator, dep_objs));
+      // step5 : write delta recompile pl obj into __all_pl_recompile_objinfo
+      OZ (batch_insert_recompile_obj_info(sql_proxy, tenant_id, cur_max_schema_version, dep_objs));
     }
-    if (ddl_drop_obj_map.created()) {
-      ddl_drop_obj_map.destroy();
+  }
+  OX (max_schema_version = cur_max_schema_version);
+  if (ddl_drop_obj_map.created()) {
+    ddl_drop_obj_map.destroy();
+  }
+  return ret;
+}
+
+int ObPLRecompileTaskHelper::batch_insert_recompile_obj_info(common::ObMySQLProxy* sql_proxy,
+                                                          uint64_t tenant_id,
+                                                          int64_t cur_max_schema_version,
+                                                          ObIArray<ObPLRecompileInfo>& dep_objs)
+{
+  int ret = OB_SUCCESS;
+  static constexpr char insert_recomp_table[] =
+    "INSERT INTO %s (recompile_obj_id, ref_obj_name, schema_version, fail_count) "
+    " VALUES ";
+  ObString Dummy = ObString("__dummuy");
+  ObSqlString query_inner_sql;
+  int64_t batch_num = 1000;
+  int64_t affected_rows = 0;
+  for (int i = 0; OB_SUCC(ret) && i < dep_objs.count(); i = i + batch_num) {
+    int64_t start = i;
+    int64_t end = i + batch_num > dep_objs.count() ? dep_objs.count() : i + batch_num;
+    OZ (query_inner_sql.assign_fmt(insert_recomp_table, OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
+    for (; OB_SUCC(ret) && start < end; ++start) {
+      OZ (query_inner_sql.append_fmt("( %ld, '%.*s', %ld , %ld ) , ",
+                dep_objs.at(start).recompile_obj_id_,
+                dep_objs.at(start).ref_obj_name_.length(),
+                dep_objs.at(start).ref_obj_name_.ptr(),
+                dep_objs.at(start).schema_version_,
+                dep_objs.at(start).fail_cnt_));
     }
+    OZ (query_inner_sql.append_fmt("( 0, '%.*s', %ld, 0) ON DUPLICATE KEY UPDATE "
+                                " recompile_obj_id = VALUES(recompile_obj_id), "
+                                " ref_obj_name = VALUES(ref_obj_name), "
+                                " schema_version = VALUES(schema_version), "
+                                " fail_count = VALUES(fail_count); ",
+                                  Dummy.length(),
+                                  Dummy.ptr(),
+                                  cur_max_schema_version));
+    OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows), query_inner_sql);
+
+    LOG_TRACE("[PLRECOMPILE]: Insert into __all_pl_recompile_objinfo", K(ret), K(affected_rows),
+                K(dep_objs), K(query_inner_sql), K(cur_max_schema_version));
+  }
   return ret;
 }
 
@@ -455,14 +475,17 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
                                 common::ObMySQLProxy* sql_proxy,
                                 uint64_t tenant_id,
                                 int64_t last_max_schema_version,
-                                int64_t idx)
+                                int64_t start,
+                                int64_t end)
 {
   int ret = OB_SUCCESS;
-  if (dep_objs.count() > 0 && idx > 0) {
+  if (dep_objs.count() > 0 && end > 0) {
     common::sqlclient::ObMySQLResult *result = NULL;
     ObSqlString query_inner_sql;
     ObSqlString update_sql;
     int64_t affected_rows = 0;
+    bool need_comma = false;
+    bool update_need_comma = false;
     common::hash::ObHashSet<int64_t> in_disk_cache_obj;
     OZ (in_disk_cache_obj.create(32));
     OZ (query_inner_sql.assign_fmt("select KEY_ID, MERGE_VERSION FROM %s where MERGE_VERSION >= %ld",
@@ -489,33 +512,29 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      bool need_comma = false;
-      bool update_need_comma = false;
-      OZ (query_inner_sql.assign_fmt("DELETE FROM %s where recompile_obj_id in ( ",
-                OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
-      OZ (update_sql.assign_fmt("UPDATE %s SET fail_count = fail_count + 1 WHERE recompile_obj_id in ( ",
-                OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
-      for (int64_t i = 0; OB_SUCC(ret) && i < idx; ++i) {
-        int tmp_ret = in_disk_cache_obj.exist_refactored(dep_objs.at(i).recompile_obj_id_);
-        if (OB_HASH_EXIST == tmp_ret) {
-          OZ (query_inner_sql.append_fmt(" %s  %ld ", need_comma ? ", " : "",
-                        dep_objs.at(i).recompile_obj_id_));
-          OX (need_comma = true);
-        } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-          OZ (update_sql.append_fmt(" %s  %ld ", update_need_comma ? ", " : "",
-                        dep_objs.at(i).recompile_obj_id_));
-          OX (update_need_comma = true);
-        }
+    OZ (query_inner_sql.assign_fmt("DELETE FROM %s where recompile_obj_id in ( ",
+              OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
+    OZ (update_sql.assign_fmt("UPDATE %s SET fail_count = fail_count + 1 WHERE recompile_obj_id in ( ",
+              OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
+    for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+      int tmp_ret = in_disk_cache_obj.exist_refactored(dep_objs.at(i).recompile_obj_id_);
+      if (OB_HASH_EXIST == tmp_ret) {
+        OZ (query_inner_sql.append_fmt(" %s  %ld ", need_comma ? ", " : "",
+                      dep_objs.at(i).recompile_obj_id_));
+        OX (need_comma = true);
+      } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+        OZ (update_sql.append_fmt(" %s  %ld ", update_need_comma ? ", " : "",
+                      dep_objs.at(i).recompile_obj_id_));
+        OX (update_need_comma = true);
       }
-      if (OB_SUCC(ret) && need_comma) {
-        OZ (query_inner_sql.append_fmt(")"));
-        OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows));
-      }
-      if (OB_SUCC(ret) && update_need_comma) {
-        OZ (update_sql.append_fmt(")"));
-        OZ (sql_proxy->write(tenant_id, update_sql.ptr(), affected_rows));
-      }
+    }
+    if (need_comma) {
+      OZ (query_inner_sql.append_fmt(")"));
+      OZ (sql_proxy->write(tenant_id, query_inner_sql.ptr(), affected_rows));
+    }
+    if (update_need_comma) {
+      OZ (update_sql.append_fmt(")"));
+      OZ (sql_proxy->write(tenant_id, update_sql.ptr(), affected_rows));
     }
     if (in_disk_cache_obj.created()) {
       in_disk_cache_obj.destroy();
@@ -555,7 +574,7 @@ int ObPLRecompileTaskHelper::recompile_single_obj(ObPLRecompileInfo& obj_info,
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObSqlString sql;
-  OZ (sql.assign_fmt("begin dbms_utility.VALIDATE(%ld); end ", obj_info.recompile_obj_id_));
+  OZ (sql.assign_fmt("begin dbms_utility.VALIDATE(%ld, true); end ", obj_info.recompile_obj_id_));
   if (OB_SUCC(ret)) {
     int tmp_ret = connection->execute_write(tenant_id, sql.string(), affected_rows);
     LOG_TRACE("[PLRECOMPILE] recompile single obj using inner sql!", K(tmp_ret), K(sql), K(obj_info.recompile_obj_id_));
@@ -573,7 +592,7 @@ int ObPLRecompileTaskHelper::get_recompile_pl_objs(common::ObMySQLProxy* sql_pro
   ObSqlString query_inner_sql;
   common::sqlclient::ObMySQLResult *result = NULL;
   SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-    OZ (query_inner_sql.assign_fmt("SELECT * FROM %s where fail_count < 3 and recompile_obj_id > 300000 limit 50;", OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
+    OZ (query_inner_sql.assign_fmt("SELECT * FROM %s where fail_count < 3 and recompile_obj_id > 300000", OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
     OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
     if (OB_SUCC(ret)) {
@@ -601,6 +620,47 @@ int ObPLRecompileTaskHelper::get_recompile_pl_objs(common::ObMySQLProxy* sql_pro
   return ret;
 }
 #undef SET_ITERATE_END_RET
+
+int ObPLRecompileTaskHelper::batch_recompile_obj(common::ObMySQLProxy* sql_proxy,
+                                              uint64_t tenant_id,
+                                              int64_t max_schema_version,
+                                              ObISQLConnection *connection,
+                                              ObIArray<ObPLRecompileInfo>& dep_objs,
+                                              common::hash::ObHashMap<ObString, int64_t>& dropped_ref_objs,
+                                              int64_t recompile_start)
+{
+  int ret = OB_SUCCESS;
+  int64_t batch_num = 200;
+  for (int i = 0; OB_SUCC(ret) && i < dep_objs.count(); i = i + batch_num) {
+    int64_t start = i;
+    int64_t end = i + batch_num > dep_objs.count() ? dep_objs.count() : i + batch_num;
+    for (; OB_SUCC(ret) && start < end; ++start) {
+      ObString ref_obj_name = dep_objs.at(start).ref_obj_name_;
+      bool need_check_dropped_ref_obj = !ref_obj_name.empty();
+      int64_t dropped_schema_version = 0;
+      int64_t cur_time = ObTimeUtility::current_time();
+      if (cur_time - recompile_start > 1680000000) {
+          // 28 * 60 * 1000000 us
+          break;
+      } else if (need_check_dropped_ref_obj) {
+        int64_t tmp_ret = dropped_ref_objs.get_refactored(ref_obj_name, dropped_schema_version);
+        ret = tmp_ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : tmp_ret;
+      }
+      if (OB_SUCC(ret)) {
+        if (dropped_schema_version != 0) {
+          // do nothing
+        } else if (dep_objs.at(start).fail_cnt_ < 3) {
+          OZ (recompile_single_obj(dep_objs.at(start), connection, tenant_id));
+        }
+      } else {
+        LOG_WARN("[PLRECOMPILE]: Unexpected error!", K(ret));
+      }
+    }
+    int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i, start);
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+  }
+  return ret;
+}
 
 int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result)
 {
@@ -639,60 +699,44 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
                 && !GCONF.in_upgrade_mode()
                 && (data_version >= DATA_VERSION_4_3_5_2 && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2);
   LOG_INFO("[PLRECOMPILE]: before recompile ", K(ret), K(consumer_group_id), K(enable), K(recompile_start));
-  if (OB_SUCC(ret) && enable) {
+  if (enable) {
     int64_t max_schema_version = 0;
-    OZ (collect_delta_ddl_operation_data(sql_proxy, tenant_id, ctx.exec_ctx_->get_allocator(), max_schema_version));
+    OZ (collect_delta_recompile_obj_data(sql_proxy, tenant_id, ctx.exec_ctx_->get_allocator(), max_schema_version));
     if (OB_SUCC(ret)) {
       ObArray<ObPLRecompileInfo> dep_objs;
       common::hash::ObHashMap<ObString, int64_t> dropped_ref_objs;
       ObISQLConnection *connection = nullptr;
       ObISQLConnectionPool *pool = nullptr;
+      uint64_t compat_version;
+      ObObj compat_obj;
+      OZ (sess_info->get_compatibility_version(compat_version));
+      OX (compat_obj.set_uint64(compat_version));
       CK (OB_NOT_NULL(pool = sql_proxy->get_pool()));
       OZ (pool->acquire(connection, nullptr));
       CK (OB_NOT_NULL(connection));
+      // must set ORACLE_MODE, otherwise can not use anonymous block to execute
       OZ (connection->set_session_variable("ob_compatibility_mode",
                                          ObCompatibilityMode::ORACLE_MODE));
       OX (connection->set_oracle_compat_mode());
+      OZ (static_cast<observer::ObInnerSQLConnection*>(connection)->get_session().
+                update_sys_variable_by_name("ob_compatibility_version", compat_obj));
       OZ (dropped_ref_objs.create(32, "PlRecompileJob"));
       OZ (get_recompile_pl_objs(sql_proxy, dropped_ref_objs, dep_objs, tenant_id, ctx.exec_ctx_->get_allocator()));
       OZ (update_dropped_obj(dropped_ref_objs, sql_proxy, tenant_id));
-      int64_t i = 0;
-      for (; OB_SUCC(ret) && i < dep_objs.count(); ++i) {
-        ObString ref_obj_name = dep_objs.at(i).ref_obj_name_;
-        bool need_check_dropped_ref_obj = !ref_obj_name.empty();
-        int64_t dropped_schema_version = 0;
-        int64_t cur_time = ObTimeUtility::current_time();
-        if (cur_time - recompile_start > 1680000000) {
-            // 28 * 60 * 1000000 us
-            break;
-        } else if (need_check_dropped_ref_obj) {
-          int64_t tmp_ret = dropped_ref_objs.get_refactored(ref_obj_name, dropped_schema_version);
-          ret = tmp_ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : tmp_ret;
-        }
-        if (OB_SUCC(ret)) {
-          if (dropped_schema_version != 0) {
-            // do nothing
-          } else if (dep_objs.at(i).fail_cnt_ < 3) {
-            OZ (recompile_single_obj(dep_objs.at(i), connection, tenant_id));
-          }
-        } else {
-          LOG_WARN("[PLRECOMPILE]: Unexpected error!", K(ret));
-        }
-      }
-      int tmp_ret = update_recomp_table(dep_objs, sql_proxy, tenant_id, max_schema_version, i);
+      OZ (batch_recompile_obj(sql_proxy, tenant_id, max_schema_version, connection,
+                            dep_objs, dropped_ref_objs, recompile_start));
       if (dropped_ref_objs.created()) {
         dropped_ref_objs.destroy();
       }
-      int tmp_ret_2 = OB_SUCCESS;
+      int tmp_ret = OB_SUCCESS;
       if (pool != nullptr && connection != nullptr) {
-        tmp_ret_2 = pool->release(connection, true);
+        tmp_ret = pool->release(connection, true);
       }
-      tmp_ret = OB_SUCCESS == tmp_ret ? tmp_ret_2 : tmp_ret;
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   int64_t end_time = ObTimeUtility::current_time();
-  LOG_INFO("[PLRECOMPILE]: finish pl background recompile task!", K(ret), K(end_time));
+  LOG_INFO("[PLRECOMPILE]: finish pl background recompile task!", K(ret), K(enable), K(end_time));
   return ret;
 }
 
