@@ -47,7 +47,7 @@ namespace oceanbase
 {
 namespace compaction
 {
-
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_MINOR_MERGE);
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[MERGE_TYPE_MAX]
   = { ObPartitionMergePolicy::get_minor_merge_tables,
       ObPartitionMergePolicy::get_hist_minor_merge_tables,
@@ -162,7 +162,18 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
 
 bool ObPartitionMergePolicy::is_sstable_count_not_safe(const int64_t minor_table_cnt)
 {
-  return minor_table_cnt + 1 /*major_sstable*/ >= MAX_SSTABLE_CNT_IN_STORAGE;
+  bool bret = minor_table_cnt + 1/*major*/ >= MAX_SSTABLE_CNT_IN_STORAGE;
+#ifdef ERRSIM
+  if (!bret) {
+    int ret = OB_SUCCESS;
+    ret = OB_E(EventTable::EN_COMPACTION_DIAGNOSE_TABLE_STORE_UNSAFE_FAILED) ret;
+    if (OB_FAIL(ret)) {
+      bret = true;
+      LOG_INFO("ERRSIM EN_COMPACTION_DIAGNOSE_TABLE_STORE_UNSAFE_FAILED with errsim", K(ret), K(bret), K(minor_table_cnt));
+    }
+  }
+#endif
+  return bret;
 }
 
 int ObPartitionMergePolicy::get_mini_merge_tables(
@@ -372,6 +383,9 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (ERRSIM_DISABLE_MINOR_MERGE) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Errsim ERRSIM_DISABLE_MINOR_MERGE", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
   } else if (OB_FAIL(find_minor_merge_tables(param,
                                              min_snapshot_version,
                                              max_snapshot_version,
@@ -1011,7 +1025,16 @@ int ObPartitionMergePolicy::check_need_medium_merge(
       }
     }
   }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && need_merge && can_merge) {
+    ret = OB_E(EventTable::EN_COMPACTION_DIAGNOSE_CANNOT_MAJOR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_DIAGNOSE_CANNOT_MAJOR", K(ret));
+      can_merge = false;
+      ret = OB_SUCCESS;
+    }
+  }
+#endif
   if (need_merge && !can_merge && REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
     LOG_INFO("check_need_medium_merge", K(ret), "ls_id", tablet.get_tablet_meta().ls_id_, K(tablet_id),
              K(need_merge), K(can_merge), K(medium_snapshot), K(is_tablet_data_status_complete));

@@ -110,7 +110,7 @@ bool ObDiagnoseTabletCompProgress::is_valid() const
   if (OB_UNLIKELY(!ObCompactionProgress::is_valid()
     || create_time_ <= 0
     || (share::ObIDag::DAG_STATUS_NODE_RUNNING == status_
-        && (start_time_ <= 0 || base_version_ <= 0 || snapshot_version_ <= 0)))) {
+        && (start_time_ <= 0 || base_version_ < 0 || snapshot_version_ <= 0)))) {
     bret = false;
   }
   return bret;

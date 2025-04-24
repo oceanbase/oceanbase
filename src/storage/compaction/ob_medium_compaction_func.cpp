@@ -578,7 +578,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
             if (OB_FAIL(choose_medium_schema_version(allocator_, medium_info.medium_snapshot_, *tablet, schema_version))) {
               LOG_WARN("failed to choose medium schema version", K(ret), K(tablet));
             } else {
-              FLOG_INFO("set schedule medium with errsim", KPC(this), K(medium_info), K(schema_version));
+              FLOG_INFO("set schedule medium with errsim", KPC(this), K(medium_info), K(schema_version), K(result));
             }
           }
         }
@@ -1154,7 +1154,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
   if (OB_FAIL(ret)) {
-    LOG_INFO("set create medium dag failed with errsim", K(ret));
+    FLOG_INFO("ERRSIM EN_MEDIUM_CREATE_DAG", K(ret));
     return ret;
   }
 #endif

@@ -338,7 +338,11 @@ int ObPartitionMergeProgress::get_progress_info(ObCompactionProgress &input_prog
 int ObPartitionMergeProgress::diagnose_progress(ObDiagnoseTabletCompProgress &input_progress)
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (ObTimeUtility::fast_current_time() - latest_update_ts_ > UPDATE_INTERVAL * 10) { // 20s
+#else
   if (ObTimeUtility::fast_current_time() - latest_update_ts_ > UPDATE_INTERVAL * NORMAL_UPDATE_PARAM) {
+#endif
     input_progress.is_suspect_abormal_ = true;
     input_progress.is_waiting_schedule_ = is_waiting_schedule_;
   }

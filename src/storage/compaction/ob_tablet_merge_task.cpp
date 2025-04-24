@@ -517,9 +517,11 @@ int ObTabletMergeDag::diagnose_compaction_info(compaction::ObDiagnoseTabletCompP
 
       if (OB_NOT_NULL(ctx_->merge_progress_)) {
         int64_t tmp_ret = OB_SUCCESS;
-        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ctx_->merge_progress_->get_progress_info(input_progress)))) {
+        if (OB_TMP_FAIL(ctx_->merge_progress_->get_progress_info(input_progress))) {
           LOG_WARN("failed to get progress info", K(tmp_ret), K(ctx_));
-        } else if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ctx_->merge_progress_->diagnose_progress(input_progress)))) {
+        } else if (OB_TMP_FAIL(ctx_->merge_progress_->diagnose_progress(input_progress))) {
+          LOG_INFO("failed to diagnose progress", K(tmp_ret), K(ctx_), K(input_progress));
+        } else {
           LOG_INFO("success to diagnose progress", K(tmp_ret), K(ctx_), K(input_progress));
         }
       }
@@ -1676,8 +1678,6 @@ int ObTabletMergeTask::process()
   }
 #endif
 
-  DEBUG_SYNC(MERGE_TASK_PROCESS);
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTabletMergeTask is not inited", K(ret));
@@ -1692,6 +1692,9 @@ int ObTabletMergeTask::process()
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "Unexpected null partition merger", K(ret));
   } else {
+    if (!ctx_->param_.tablet_id_.is_ls_inner_tablet()) {
+      DEBUG_SYNC(MERGE_TASK_PROCESS);
+    }
     if (OB_FAIL(merger_->merge_partition(*ctx_, idx_))) {
       if (is_major_merge_type(ctx_->param_.merge_type_) && OB_ENCODING_EST_SIZE_OVERFLOW == ret) {
         STORAGE_LOG(WARN, "failed to merge partition with possibly encoding error, "
