@@ -2269,7 +2269,7 @@ int ObMultiVersionDIMicroBlockRowScanner::open(
   return ret;
 }
 
-int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow *&ret_row)
+int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_compact_di_row(const ObDatumRow *&ret_row)
 {
   int ret = OB_SUCCESS;
   ret_row = nullptr;
@@ -2314,8 +2314,6 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow
       }
     }
   }
-  LOG_DEBUG("[MULTIVERSION MOW] get indexes of current rowkey from bitmap", K(ret), K_(macro_id), K_(is_prev_micro_row_valid),
-      K(insert_idx), K(delete_idx), K(meet_next_rowkey), K_(current));
 
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
     if (meet_next_rowkey) {
@@ -2323,6 +2321,8 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow
         LOG_WARN("fail to get rows of the same rowkey", K(ret), K_(macro_id), K(insert_idx), K(delete_idx), K(meet_next_rowkey));
       } else if (OB_ISNULL(ret_row)) {
         ret = OB_ITER_END;
+      } else {
+        is_prev_micro_row_valid_ = false;
       }
     } else {
       if (OB_FAIL(try_cache_unfinished_row(insert_idx, delete_idx))) {
@@ -2453,6 +2453,7 @@ int ObMultiVersionDIMicroBlockRowScanner::preprocess_di_rows()
           if (need_check_cached_rowkey) {
             if (prev_micro_row_.row_flag_.is_insert()) {
               prev_micro_row_.delete_version_ = 0;
+              prev_micro_row_.is_delete_filtered_ = false;
             }
           }
         } else {
@@ -2465,21 +2466,25 @@ int ObMultiVersionDIMicroBlockRowScanner::preprocess_di_rows()
         }
       }
     }
-    // only one unfinished rowkey, only need to check once
-    need_check_cached_rowkey = false;
     // set di bitmap and set cached di rows indexes
     if (OB_SUCC(ret) || OB_LIKELY(OB_ITER_END == ret)) {
-      if (-1 != insert_row_idx) {
-        if (OB_FAIL(di_bitmap_->set(insert_row_idx, true))) {
-          LOG_WARN("fail to set bitmap for the last insert row", K(ret), K_(macro_id), K(index), K(insert_row_idx));
-        } else if ((-1 != delete_row_idx) && (last_row_idx == delete_row_idx) && OB_FAIL(di_bitmap_->set(delete_row_idx, true))) {
-          LOG_WARN("fail to set bitmap for the first delete row", K(ret), K_(macro_id), K(index), K(delete_row_idx));
+      if (-1 != insert_row_idx && OB_FAIL(di_bitmap_->set(insert_row_idx, true))) {
+        LOG_WARN("fail to set bitmap for the last insert row", K(ret), K_(macro_id), K(index), K(insert_row_idx));
+      } else if (-1 != delete_row_idx) {
+        if ((-1 != insert_row_idx) || (need_check_cached_rowkey && prev_micro_row_.row_flag_.is_insert())) {
+          // the latest insert row exists, check whether the delete row is earliest row
+          if (last_row_idx == delete_row_idx) {
+            if (OB_FAIL(di_bitmap_->set(delete_row_idx, true))) {
+              LOG_WARN("fail to set bitmap for the first delete row", K(ret), K_(macro_id), K(index), K(delete_row_idx));
+            }
+          }
+        } else if (OB_FAIL(di_bitmap_->set(delete_row_idx, true))) {
+          LOG_WARN("fail to set bitmap for the delete row", K(ret), K_(macro_id), K(index), K(delete_row_idx));
         }
-      } else if ((-1 != delete_row_idx) && OB_FAIL(di_bitmap_->set(delete_row_idx, true))) {
-        LOG_WARN("fail to set bitmap for the delete row", K(ret), K_(macro_id), K(index), K(delete_row_idx));
       }
     }
-
+    // only one unfinished rowkey, only need to check once
+    need_check_cached_rowkey = false;
   }
   if (OB_LIKELY(OB_ITER_END == ret)) {
     ret = OB_SUCCESS;
@@ -2495,9 +2500,12 @@ int ObMultiVersionDIMicroBlockRowScanner::compact_rows_of_same_rowkey(
 {
   int ret = OB_SUCCESS;
   ret_row = nullptr;
+  ObDatumRow *insert_row = nullptr;
+  ObDatumRow *delete_row = nullptr;
+  int64_t delete_version = 0;
   if (-1 != insert_idx) {
     int64_t insert_version = 0;
-    if (OB_UNLIKELY(is_prev_micro_row_valid_)) {
+    if (OB_UNLIKELY(is_prev_micro_row_valid_ && prev_micro_row_.row_flag_.is_insert())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected insert row while cached row exists", K(ret), K_(macro_id), K(insert_idx), K_(prev_micro_row));
     } else if (OB_FAIL(get_trans_version(insert_version, insert_idx))) {
@@ -2509,29 +2517,41 @@ int ObMultiVersionDIMicroBlockRowScanner::compact_rows_of_same_rowkey(
     } else {
       row_.is_insert_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(insert_idx);
       row_.insert_version_ = insert_version;
-      ret_row = &row_;
+      insert_row = &row_;
     }
   }
 
+  if (OB_SUCC(ret) && is_prev_micro_row_valid_ && prev_micro_row_.row_flag_.is_insert()) {
+    insert_row = &prev_micro_row_;
+  }
+
   if (OB_SUCC(ret) && -1 != delete_idx) {
-    int64_t delete_version = 0;
     if (OB_FAIL(get_trans_version(delete_version, delete_idx))) {
       LOG_WARN("fail to get delete version", K(ret), K_(macro_id), K(delete_idx));
-    } else if (nullptr == ret_row) {
-      if (is_prev_micro_row_valid_ && prev_micro_row_.row_flag_.is_insert()) {
-        is_prev_micro_row_valid_ = false;
-        ret_row = &prev_micro_row_;
-      } else if (OB_FAIL(reader_->get_row(delete_idx, row_))) {
+    } else if (nullptr == insert_row) {
+      if (OB_FAIL(reader_->get_row(delete_idx, row_))) {
         LOG_WARN("micro block reader fail to get delete row", K(ret), K_(macro_id), K(delete_idx));
       } else {
-        ret_row = &row_;
+        row_.is_delete_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(delete_idx);
+        row_.delete_version_ = delete_version;
+        delete_row = &row_;
       }
-    }
-    if (OB_SUCC(ret)) {
-      const_cast<ObDatumRow*>(ret_row)->is_delete_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(delete_idx);
-      const_cast<ObDatumRow*>(ret_row)->delete_version_ = delete_version;
+    } else {
+      insert_row->is_delete_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(delete_idx);
+      insert_row->delete_version_ = delete_version;
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (nullptr != insert_row) {
+    ret_row = insert_row;
+  } else if (nullptr != delete_row) {
+    ret_row = delete_row;
+  } else if (is_prev_micro_row_valid_) {
+    // return cached delete row if insert_row and delete_row are null
+    ret_row = &prev_micro_row_;
+  }
+  LOG_DEBUG("[MULTIVERSION MOW] get compacted di row", K(ret), K_(macro_id), KPC(ret_row), K(insert_idx), K(delete_idx), K_(prev_micro_row));
   return ret;
 }
 
@@ -2650,14 +2670,14 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&
 {
   int ret = OB_SUCCESS;
   if (can_ignore_multi_version_) { // TODO(yuanzhe) refactor blockscan opt of multi version sstable
-    if (OB_FAIL(inner_get_next_row_direct(row))) {
+    if (OB_FAIL(inner_get_next_di_row(row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to inner get next row", K(ret), K_(start), K_(last), K_(current));
       }
     }
   } else {
     reuse_cur_micro_row();
-    if (OB_FAIL(inner_get_next_di_row(row))) {
+    if (OB_FAIL(inner_get_next_compact_di_row(row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to inner get next row", K(ret), K_(start), K_(last), K_(current));
       }
@@ -2668,7 +2688,7 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&
   return ret;
 }
 
-int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_row_direct(const ObDatumRow *&row)
+int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   row = nullptr;

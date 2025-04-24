@@ -424,8 +424,8 @@ public:
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override final;
 private:
-  int inner_get_next_row_direct(const ObDatumRow *&row);
-  int inner_get_next_di_row(const ObDatumRow *&ret_row);
+  int inner_get_next_di_row(const ObDatumRow *&row);
+  int inner_get_next_compact_di_row(const ObDatumRow *&ret_row);
   int inner_get_next_header_info(
     int64_t &index,
     bool &version_fit,

@@ -94,33 +94,23 @@ int clear_tx_data()
 struct MultiVersionDIResult
 {
   uint8_t row_flag_; // insert: 3, delete: 4, not_exists: 0 insert_delete: 131
+  int64_t insert_version_;
+  bool is_insert_filtered_;
   int64_t delete_version_;
+  bool is_delete_filtered_;
   int64_t col4_value_;
-  MultiVersionDIResult(uint8_t row_flag, int64_t delete_version, int64_t col4_value) :
-    row_flag_(row_flag), delete_version_(delete_version), col4_value_(col4_value) {}
+  MultiVersionDIResult(uint8_t row_flag, int64_t insert_version, bool is_insert_filtered, int64_t delete_version, bool is_delete_filtered, int64_t col4_value) :
+    row_flag_(row_flag), insert_version_(insert_version), is_insert_filtered_(is_insert_filtered), delete_version_(delete_version), is_delete_filtered_(is_delete_filtered), col4_value_(col4_value) {}
   bool operator== (const MultiVersionDIResult &other) const
   {
     return (row_flag_ == other.row_flag_)
+           && (insert_version_ == other.insert_version_)
+           && (is_insert_filtered_ == other.is_insert_filtered_)
            && (delete_version_ == other.delete_version_)
+           && (is_delete_filtered_ == other.is_delete_filtered_)
            && (col4_value_ == other.col4_value_);
   }
-  TO_STRING_KV(K_(row_flag), K_(delete_version), K_(col4_value));
-};
-
-struct MultiVersionDICachedRow
-{
-  bool is_prev_micro_row_valid_;
-  int64_t prev_micro_col4_value_;
-  int64_t prev_delete_version_;
-  MultiVersionDICachedRow(bool is_prev_micro_row_valid, int64_t prev_micro_col4_value, int64_t prev_delete_version) :
-    is_prev_micro_row_valid_(is_prev_micro_row_valid), prev_micro_col4_value_(prev_micro_col4_value), prev_delete_version_(prev_delete_version) {}
-  bool operator== (const MultiVersionDICachedRow &other) const
-  {
-    return (is_prev_micro_row_valid_ == other.is_prev_micro_row_valid_)
-           && (prev_micro_col4_value_ == other.prev_micro_col4_value_)
-           && (prev_delete_version_ == other.prev_delete_version_);
-  }
-  TO_STRING_KV(K_(is_prev_micro_row_valid), K_(prev_micro_col4_value), K_(prev_delete_version));
+  TO_STRING_KV(K_(row_flag), K_(insert_version), K_(is_insert_filtered), K_(delete_version), K_(is_delete_filtered), K_(col4_value));
 };
 
 const static int SCHEMA_ROWKEY_CNT = 2;
@@ -147,9 +137,9 @@ public:
   void test_preprocess_bitmap_basic();
   void test_preprocess_bitmap_version_range();
   void test_preprocess_bitmap_uncommitted();
-  void test_preprocess_bitmap_multi_micro();
   void test_get_next_compacted_row_basic();
-  void test_get_next_compacted_row_with_cached_row();
+  void test_get_next_compacted_row_with_cached_row1();
+  void test_get_next_compacted_row_with_cached_row2();
   void test_get_next_compacted_row_with_filtered_row();
   void test_meet_empty_range_block();
   void test_shadow_row_output();
@@ -310,11 +300,14 @@ void TestMultiVersionDeleteInsertBlockscan::prepare_filtered_result(ObIMicroBloc
         MOCK_FILTERED_BITMAP->set(idx, true);
       }
     }
-    ObBitmap *inner_bitmap = micro_scanner->bitmap_->get_inner_bitmap();
-    ASSERT_NE(nullptr, inner_bitmap);
-    OK(inner_bitmap->bit_and(*MOCK_FILTERED_BITMAP));
+    OK(micro_scanner->init_bitmap(micro_scanner->filter_bitmap_, true/*is_all_true*/));
+    micro_scanner->use_private_bitmap_ = true;
+    ObCGBitmap *bitmap = micro_scanner->filter_bitmap_;
+    ASSERT_NE(nullptr, bitmap);
+    OK(bitmap->bit_and(*MOCK_FILTERED_BITMAP));
     allocator_.free(MOCK_FILTERED_BITMAP);
     MOCK_FILTERED_BITMAP = nullptr;
+    int ret = OB_SUCCESS;
   }
 }
 
@@ -376,7 +369,7 @@ int TestMultiVersionDeleteInsertBlockscan::get_next_preprocessed_bitmap(ObCGBitm
   if (OB_FAIL(get_next_micro_scanner(micro_scanner))) {
     STORAGE_LOG(WARN, "fail to get next micro_scanner", K(ret));
   } else {
-    bitmap = scanner_.micro_scanner_->bitmap_;
+    bitmap = scanner_.micro_scanner_->di_bitmap_;
   }
   return ret;
 }
@@ -446,13 +439,11 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr1 = {true, false, false, false, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr1));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
 
-  // case 2: insert1, delete2, insert2, delete3 -> empty
+  // case 2: insert1, delete2, insert2, delete3 -> delete2
   micro_data[0] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag   trans_id\n"
       "1        var1  MIN      -100       9       1     DELETE    NORMAL        UCF                  trans_id_1\n"
@@ -466,11 +457,9 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(handle.get_sstable(sstable));
   prepare_query_param(trans_version_range);
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<bool> bitmap_arr2 = {false, false, false, false};
+  std::vector<bool> bitmap_arr2 = {false, false, true, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr2));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
 
@@ -492,9 +481,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr3 = {true, false, false, false, false, true};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr3));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
 
@@ -515,9 +502,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr4 = {false, false, false, false, true};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr4));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
 
@@ -544,9 +529,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr5 = {true, false, false, false, false, true, false, false, false, false, true};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr5));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
 
@@ -568,9 +551,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_basic()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr6 = {false, false, false, false, false, true};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr6));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   handle.reset();
   scanner_.reset();
   clear_tx_data();
@@ -613,16 +594,14 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_version_range
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr1 = {true, false, false, false, false, true, false, false, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr1));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   scanner_.reset();
   // case 2: downgrade snapshot version
   trans_version_range.base_version_ = 1;
   trans_version_range.snapshot_version_ = 28;
   prepare_query_param(trans_version_range);
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<bool> bitmap_arr2 = {false, false, false, false, false, false, false, false, false};
+  std::vector<bool> bitmap_arr2 = {false, false, false, false, false, false, false, true, false};
   OK(get_next_preprocessed_bitmap(bitmap));
   OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr2));
@@ -681,9 +660,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_uncommitted()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr1 = {false, false, false, false, false, false, false, false, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr1));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   scanner_.reset();
   clear_tx_data();
 
@@ -695,9 +672,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_uncommitted()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr2 = {true, false, false, false, false, false, false, false, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr2));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   scanner_.reset();
   clear_tx_data();
   handle.reset();
@@ -726,15 +701,664 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_uncommitted()
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<bool> bitmap_arr3 = {false, false, false, false, true, false, false, false, false};
   OK(get_next_preprocessed_bitmap(bitmap));
-  OK(dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->try_cache_unfinished_row(-1, -1));
   ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arr3));
-  ASSERT_EQ(true, dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_)->prev_micro_row_.row_flag_.is_not_exist());
   scanner_.reset();
   clear_tx_data();
   handle.reset();
 }
 
-void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_multi_micro()
+void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_basic()
+{
+  prepare_tx_data(5, 5);
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObDatumRange range;
+  range.set_whole_range();
+  const int64_t snapshot_version = 35;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_gts(1);
+  scn_range.end_scn_.convert_for_gts(30);
+  ObSSTable *sstable = nullptr;
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  prepare_block_row_store();
+  const ObDatumRow *row = nullptr;
+  ObIMicroBlockRowScanner *micro_scanner = nullptr;
+
+  const char *micro_data[10];
+  // case 1: with insert row and delete version
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n"
+      "1        var1  -10      DI_VERSION 48      47    INSERT    NORMAL        C\n"
+      "1        var1  -10      0          46      45    DELETE    NORMAL        CL\n";
+  // case 2: with insert row and without delete version
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "2        var2  -20      DI_VERSION 44      43    INSERT    NORMAL        CF\n"
+      "2        var2  -20      0          42      41    DELETE    NORMAL        C\n"
+      "2        var2  -10      0          42      41    INSERT    NORMAL        CL\n"
+      "3        var3  -20      0          40      39    INSERT    NORMAL        CLF\n";
+  // case 3: with delete row 1
+  micro_data[2] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "4        var4  MIN      -100       38      37    DELETE    NORMAL        UCF                 trans_id_2\n"
+      "4        var4  -10      0          38      37    INSERT    NORMAL        CL                  MIN\n";
+  // case 4: with delete row 2
+  micro_data[3] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "5        var5  -20      MIN        36      35    DELETE    INSERT_DELETE SCF                 MIN\n"
+      "5        var5  -20      0          36      35    DELETE    NORMAL        CL                  MIN\n"
+      "6        var6  MIN      -100       34      33    DELETE    NORMAL        UCFL                trans_id_2\n";
+  // case 5: insert row and delete row from another rowkey
+  micro_data[4] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "7        var7  -20      DI_VERSION 32      31    INSERT    NORMAL        CF\n"
+      "7        var7  -20      0          30      29    DELETE    NORMAL        CL\n"
+      "8        var8  -18      MIN        28      27    DELETE    INSERT_DELETE SCF\n"
+      "8        var8  -18      0          28      27    DELETE    NORMAL        CL\n";
+  // case 6: insert row and insert row from another rowkey
+  micro_data[5] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "9        var9  -20      DI_VERSION 26      25    INSERT    NORMAL        CF\n"
+      "9        var9  -20      0          24      23    DELETE    NORMAL        CL\n"
+      "10       var10 -10      DI_VERSION 22      21    INSERT    NORMAL        CF\n"
+      "10       var10 -10      0          20      19    DELETE    NORMAL        CL\n";
+  // case 7: delete row and delete row from another rowkey
+  micro_data[6] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "11       var11 MIN      -99        18      17    DELETE    NORMAL        UCFL                trans_id_2\n"
+      "12       var12 -10      MIN        16      15    DELETE    INSERT_DELETE SCF                 MIN\n"
+      "12       var12 -10      0          16      15    DELETE    NORMAL        CL                  MIN\n";
+  // case 8: delete row and insert row from another rowkey
+  micro_data[7] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "13       var13 -18      MIN        14      13    DELETE    INSERT_DELETE SCF\n"
+      "13       var13 -18      0          14      13    DELETE    NORMAL        CL\n"
+      "14       var14 -10      DI_VERSION 12      11    INSERT    NORMAL        CF\n"
+      "14       var14 -10      0          10      9     DELETE    NORMAL        CL\n";
+  // case 9: normal delete and insert rows
+  micro_data[8] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "15       var15 -25      0           8     8      DELETE    NORMAL        CLF\n"
+      "16       var17 -25      0           7     7      DELETE    NORMAL        CLF\n"
+      "17       var16 -25      0           6     6      INSERT    NORMAL        CLF\n"
+      "18       var17 -25      0           5     5      DELETE    NORMAL        CLF\n"
+      "19       var18 -25      0           4     4      INSERT    NORMAL        CLF\n"
+      "20       var18 -25      0           3     3      INSERT    NORMAL        CLF\n";
+  // case 10: with filtered rowkey and version not fit rowkey
+  micro_data[9] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "21       var19 -10      DI_VERSION  99    98     INSERT    NORMAL        CF\n"
+      "21       var19 -10      0           97    96     DELETE    NORMAL        CL\n"
+      "22       var20 -15      DI_VERSION  95    94     INSERT    NORMAL        CF\n"
+      "22       var20 -15      0           93    92     DELETE    NORMAL        CL\n"
+      "23       var20 -40      DI_VERSION  91    90     INSERT    NORMAL        CF\n"
+      "23       var20 -40      0           89    88     DELETE    NORMAL        CL\n"
+      "24       var21 -20      DI_VERSION  87    86     INSERT    NORMAL        CF\n"
+      "24       var21 -20      0           85    84     DELETE    NORMAL        CL\n";
+
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 10);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  std::vector<MultiVersionDIResult> results = {
+    MultiVersionDIResult(3, 20, false, 10, false, 50), MultiVersionDIResult(3, 20, false, 0, false, 44), MultiVersionDIResult(3, 20, false, 0, false, 40), MultiVersionDIResult(4, 0, false, 20, false, 38),
+    MultiVersionDIResult(4, 0, false, 20, false, 36), MultiVersionDIResult(4, 0, false, 20, false, 34), MultiVersionDIResult(3, 20, false, 20, false, 32),
+    MultiVersionDIResult(4, 0, false, 18, false, 28), MultiVersionDIResult(3, 20, false, 20, false, 26), MultiVersionDIResult(3, 10, false, 10, false, 22),
+    MultiVersionDIResult(4, 0, false, 20, false, 18), MultiVersionDIResult(4, 0, false, 10, false, 16), MultiVersionDIResult(4, 0, false, 18, false, 14),
+    MultiVersionDIResult(3, 10, false, 10, false, 12), MultiVersionDIResult(4, 0, false, 25, false, 8), MultiVersionDIResult(4, 0, false, 25, false, 7),
+    MultiVersionDIResult(3, 25, false, 0, false, 6), MultiVersionDIResult(4, 0, false, 25, false, 5), MultiVersionDIResult(3, 25, false, 0, false, 4),
+    MultiVersionDIResult(3, 25, false, 0, false, 3), MultiVersionDIResult(3, 10, false, 10, false, 99),
+    MultiVersionDIResult(3, 15, true, 15, true, 95), MultiVersionDIResult(3, 40, true, 40, true, 91), MultiVersionDIResult(3, 20, false, 20, false, 87)
+  };
+  std::vector<std::vector<bool>> bitmap_arrays = {
+    {true, true, true, true},
+    {true, true, true, true},
+    {true, true},
+    {true, true, true},
+    {true, true, true, true},
+    {true, true, true, true},
+    {true, true, true},
+    {true, true, true, true},
+    {true, true, true, true, true, true},
+    {true, true, false, false, false, false, true, true}
+  };
+  int64_t res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+  clear_tx_data();
+}
+
+void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cached_row1()
+{
+  prepare_tx_data(5, 5);
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObDatumRange range;
+  range.set_whole_range();
+  const int64_t snapshot_version = 35;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_gts(1);
+  scn_range.end_scn_.convert_for_gts(30);
+  ObSSTable *sstable = nullptr;
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 4;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  prepare_block_row_store();
+  const ObDatumRow *row = nullptr;
+  ObIMicroBlockRowScanner *micro_scanner = nullptr;
+
+  // case 1: with cached insert row and invalid delete version
+  const char *micro_data[3];
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  std::vector<MultiVersionDIResult> results = {
+    MultiVersionDIResult(3, 20, false, 0, false, 50)
+  };
+  std::vector<std::vector<bool>> bitmap_arrays;
+  bitmap_arrays = {
+    {true, true}, {true}
+  };
+
+  int64_t res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 1", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 2: with cached insert row and an delete row with different rowkey
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n"
+      "1        var1  -10      0          48      47    INSERT    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -8       0          46      45    DELETE    NORMAL        CL\n"
+      "2        var2  -10      MIN        44      43    DELETE    INSERT_DELETE SCF\n"
+      "2        var2  -10      0          44      43    DELETE    NORMAL        L\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(3, 20, false, 8, false, 50), MultiVersionDIResult(4, 0, false, 10, false, 44)
+  };
+  bitmap_arrays = {
+    {true, true, true}, {true, true, true}
+  };
+
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 2", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 3: with cached insert row and an insert row with different rowkey
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n"
+      "2        var2  -20      0          46      45    INSERT    NORMAL        CLF\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(3, 20, false, 0, false, 50), MultiVersionDIResult(3, 20, false, 0, false, 46)
+  };
+  bitmap_arrays = {
+    {true, true}, {true, true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 3", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 4: with cached insert row and meet iter end
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(3, 20, false, 0, false, 50)
+  };
+  bitmap_arrays = {
+    {true, true}, {true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 4", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 5: with cached insert row and multi micro blocks
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -10      DI_VERSION 48      47    INSERT    NORMAL        C\n"
+      "1        var1  -10      0          46      45    DELETE    NORMAL        C\n";
+  micro_data[2] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -8       DI_VERSION 46      45    INSERT    NORMAL        C\n"
+      "1        var1  -8       0          44      43    DELETE    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 3);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(3, 20, false, 8, false, 50)
+  };
+  bitmap_arrays = {
+    {true, true}, {true, true}, {true, true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 5", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 6: with cached delete row and output
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
+      "1        var1  -2       0          46      45    DELETE    NORMAL        CL                  MIN\n"
+      "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[2] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "2        var2  -2       DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
+      "2        var2  -2       0          42      41    DELETE    NORMAL        CL                  MIN\n"
+      "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 3);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(4, 0, false, 20, false, 48), MultiVersionDIResult(4, 0, false, 20, false, 44), MultiVersionDIResult(3, 20, false, 0, false, 40)
+  };
+  bitmap_arrays = {
+    {true}, {true, true, true}, {true, true, true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 6", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 7: with cached delete row and overwritten
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  -12      DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
+      "1        var1  -12      0          46      45    DELETE    NORMAL        CL                  MIN\n"
+      "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[2] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "2        var2  -12      DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
+      "2        var2  -12      0          42      41    DELETE    NORMAL        CL                  MIN\n"
+      "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 3);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(4, 0, false, 12, false, 46), MultiVersionDIResult(4, 0, false, 12, false, 42), MultiVersionDIResult(3, 20, false, 0, false, 40)
+  };
+  bitmap_arrays = {
+    {true}, {true, true, true}, {true, true, true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 7", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 8: with cached delete row and meet iter end
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C\n"
+      "1        var1  -2       0          46      45    DELETE    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(4, 0, false, 20, false, 48)
+  };
+  bitmap_arrays = {
+    {true}, {true, false}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 8", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 9: with cached delete row, multi micro blocks and outpur earliest delete row
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -18      DI_VERSION 48      47    INSERT    NORMAL        C\n"
+      "1        var1  -18      0          46      45    DELETE    NORMAL        C\n";
+  micro_data[2] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -12      DI_VERSION 46      45    INSERT    NORMAL        C\n"
+      "1        var1  -12      0          44      43    DELETE    NORMAL        C\n"
+      "1        var1  -10      0          44      43    INSERT    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 3);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(4, 0, false, 12, false, 44)
+  };
+  bitmap_arrays = {
+    {true}, {true, true}, {true, true, true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 9", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+
+  // case 10: with cached insert row and valid delete version
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
+      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
+  micro_data[1] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -2       0          48      47    INSERT    NORMAL        CL\n";
+  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 2);
+  prepare_data_end(handle);
+  OK(handle.get_sstable(sstable));
+  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
+  results = {
+    MultiVersionDIResult(3, 20, false, 20, false, 50)
+  };
+  bitmap_arrays = {
+    {true, true}, {true}
+  };
+  res_iter = 0;
+  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
+    OK(get_next_micro_scanner(micro_scanner));
+    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
+        ASSERT_EQ(OB_ITER_END, ret);
+      } else {
+        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
+                                    row->delete_version_,
+                                    row->is_delete_filtered_,
+                                    row->storage_datums_[4].get_int());
+        STORAGE_LOG(INFO, "check multi version di result for case 10", K(res_iter), K(results[res_iter]), K(result));
+        ASSERT_EQ(results[res_iter], result);
+        res_iter += 1;
+      }
+    }
+    ret = OB_SUCCESS;
+  }
+  ASSERT_EQ(results.size(), res_iter);
+  scanner_.reset();
+  handle.reset();
+  clear_tx_data();
+}
+
+void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cached_row2()
 {
   prepare_tx_data(5, 5);
   ObTableHandleV2 handle;
@@ -745,7 +1369,6 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_multi_micro()
   scn_range.start_scn_.convert_for_gts(1);
   scn_range.end_scn_.convert_for_gts(30);
   ObSSTable *sstable = nullptr;
-  ObCGBitmap *bitmap = nullptr;
   const char *micro_data[13];
 
   // case 1: with insert row to cache, with delete version
@@ -853,256 +1476,33 @@ void TestMultiVersionDeleteInsertBlockscan::test_preprocess_bitmap_multi_micro()
   trans_version_range.snapshot_version_ = 20;
   prepare_query_param(trans_version_range);
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<MultiVersionDICachedRow> results;
+  std::vector<MultiVersionDIResult> results;
   std::vector<std::vector<bool>> bitmap_arrays;
-  std::vector<std::vector<int64_t>> cached_idx_arrays;
-  ObMultiVersionDIMicroBlockRowScanner* di_scanner = nullptr;
+
   results = {
-    MultiVersionDICachedRow(true, 19, 20), MultiVersionDICachedRow(true, 9, 10), MultiVersionDICachedRow(false, -1, 0),
-    MultiVersionDICachedRow(true, 19, 18), MultiVersionDICachedRow(true, 29, 0), MultiVersionDICachedRow(true, 19, 20),
-    MultiVersionDICachedRow(false, -1, 0), MultiVersionDICachedRow(true, 19, 18), MultiVersionDICachedRow(true, 19, 12),
-    MultiVersionDICachedRow(false, -1, 0), MultiVersionDICachedRow(true, 19, 20), MultiVersionDICachedRow(true, 9, 16),
-    MultiVersionDICachedRow(false, -1, 0)
+    MultiVersionDIResult(3, 20, false, 0, false, 9), MultiVersionDIResult(3, 20, false, 8, false, 19), MultiVersionDIResult(4, 0, false, 6, false, 1),
+    MultiVersionDIResult(3, 20, false, 20, false, 19), MultiVersionDIResult(4, 0, false, 6, false, 1), MultiVersionDIResult(3, 20, false, 0, false, 29),
+    MultiVersionDIResult(3, 20, false, 12, false, 19), MultiVersionDIResult(3, 20, false, 20, false, 29), MultiVersionDIResult(3, 18, false, 10, false, 19),
+    MultiVersionDIResult(4, 0, false, 10, false, 1)
   };
   bitmap_arrays = {
-    {true, false, false, false, false, true, true},
-    {false, false, false, true, false, true},
-    {false, false, false, true, true, true, false, false},
-    {false, false, false, false, true},
-    {false, false, false, true, true, false, false},
-    {false, false, false, false, true, true},
-    {false, true, false, false, false, false},
-    {true, true, true, true},
-    {false, false, false, true},
-    {false, true},
-    {true},
-    {false, true},
-    {false, true}
-  };
-  cached_idx_arrays = {
-    {5, 6},
-    {-1, 5},
-    {-1, -1},
-    {-1, 4},
-    {4, -1},
-    {4, 5},
-    {-1, -1},
-    {2, 3},
-    {-1, 3},
-    {-1, -1},
-    {-1, 0},
-    {-1, 1},
-    {-1, -1}
-  };
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_preprocessed_bitmap(bitmap));
-    di_scanner = dynamic_cast<ObMultiVersionDIMicroBlockRowScanner*>(scanner_.micro_scanner_);
-    if (8 != index && 11 != index) {
-      di_scanner->is_prev_micro_row_valid_ = false;
-      di_scanner->prev_micro_row_.delete_version_ = 0;
-    }
-    OK(di_scanner->try_cache_unfinished_row(cached_idx_arrays[index][0], cached_idx_arrays[index][1]));
-    STORAGE_LOG(INFO, "check multi version bitmap", K(index), KPC(bitmap));
-    ASSERT_EQ(true, is_bitmap_equal(bitmap, bitmap_arrays[index]));
-    MultiVersionDICachedRow result(di_scanner->is_prev_micro_row_valid_,
-                                   di_scanner->is_prev_micro_row_valid_ ? di_scanner->prev_micro_row_.storage_datums_[4].get_int() : -1,
-                                   di_scanner->prev_micro_row_.delete_version_);
-    STORAGE_LOG(INFO, "check multi version di cached row", K(index), K(results[index]), K(result));
-    ASSERT_EQ(results[index], result);
-  }
-  scanner_.reset();
-  handle.reset();
-  clear_tx_data();
-}
-
-void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_basic()
-{
-  prepare_tx_data(5, 5);
-  int ret = OB_SUCCESS;
-  ObTableHandleV2 handle;
-  ObDatumRange range;
-  range.set_whole_range();
-  const int64_t snapshot_version = 35;
-  ObScnRange scn_range;
-  scn_range.start_scn_.convert_for_gts(1);
-  scn_range.end_scn_.convert_for_gts(30);
-  ObSSTable *sstable = nullptr;
-  ObVersionRange trans_version_range;
-  trans_version_range.base_version_ = 1;
-  trans_version_range.snapshot_version_ = INT64_MAX;
-  prepare_query_param(trans_version_range);
-  prepare_block_row_store();
-  const ObDatumRow *row = nullptr;
-  ObIMicroBlockRowScanner *micro_scanner = nullptr;
-
-  const char *micro_data[10];
-  // case 1: with insert row and delete version
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n"
-      "1        var1  -10      DI_VERSION 48      47    INSERT    NORMAL        C\n"
-      "1        var1  -10      0          46      45    DELETE    NORMAL        CL\n";
-  // case 2: with insert row and without delete version
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "2        var2  -20      DI_VERSION 44      43    INSERT    NORMAL        CF\n"
-      "2        var2  -20      0          42      41    DELETE    NORMAL        C\n"
-      "2        var2  -10      0          42      41    INSERT    NORMAL        CL\n"
-      "3        var3  -20      0          40      39    INSERT    NORMAL        CLF\n";
-  // case 3: with empty row
-  micro_data[2] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "4        var4  MIN      -100       38      37    DELETE    NORMAL        UCF                 trans_id_2\n"
-      "4        var4  -10      0          38      37    INSERT    NORMAL        CL                  MIN\n";
-  // case 4: with delete row
-  micro_data[3] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "5        var5  -20      MIN        36      35    DELETE    INSERT_DELETE SCF                 MIN\n"
-      "5        var5  -20      0          36      35    DELETE    NORMAL        CL                  MIN\n"
-      "6        var6  MIN      -100       34      33    DELETE    NORMAL        UCFL                trans_id_2\n";
-  // case 5: insert row and delete row from another rowkey
-  micro_data[4] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "7        var7  -20      DI_VERSION 32      31    INSERT    NORMAL        CF\n"
-      "7        var7  -20      0          30      29    DELETE    NORMAL        CL\n"
-      "8        var8  -18      MIN        28      27    DELETE    INSERT_DELETE SCF\n"
-      "8        var8  -18      0          28      27    DELETE    NORMAL        CL\n";
-  // case 6: insert row and insert row from another rowkey
-  micro_data[5] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "9        var9  -20      DI_VERSION 26      25    INSERT    NORMAL        CF\n"
-      "9        var9  -20      0          24      23    DELETE    NORMAL        CL\n"
-      "10       var10 -10      DI_VERSION 22      21    INSERT    NORMAL        CF\n"
-      "10       var10 -10      0          20      19    DELETE    NORMAL        CL\n";
-  // case 7: delete row and delete row from another rowkey
-  micro_data[6] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "11       var11 MIN      -99        18      17    DELETE    NORMAL        UCFL                trans_id_2\n"
-      "12       var12 -10      MIN        16      15    DELETE    INSERT_DELETE SCF                 MIN\n"
-      "12       var12 -10      0          16      15    DELETE    NORMAL        CL                  MIN\n";
-  // case 8: delete row and insert row from another rowkey
-  micro_data[7] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "13       var13 -18      MIN        14      13    DELETE    INSERT_DELETE SCF\n"
-      "13       var13 -18      0          14      13    DELETE    NORMAL        CL\n"
-      "14       var14 -10      DI_VERSION 12      11    INSERT    NORMAL        CF\n"
-      "14       var14 -10      0          10      9     DELETE    NORMAL        CL\n";
-  // case 9: normal delete and insert rows
-  micro_data[8] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "15       var15 -25      0           8     8      DELETE    NORMAL        CLF\n"
-      "16       var17 -25      0           7     7      DELETE    NORMAL        CLF\n"
-      "17       var16 -25      0           6     6      INSERT    NORMAL        CLF\n"
-      "18       var17 -25      0           5     5      DELETE    NORMAL        CLF\n"
-      "19       var18 -25      0           4     4      INSERT    NORMAL        CLF\n"
-      "20       var18 -25      0           3     3      INSERT    NORMAL        CLF\n";
-  // case 10: with filtered rowkey and version not fit rowkey
-  micro_data[9] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "21       var19 -10      DI_VERSION  99    98     INSERT    NORMAL        CF\n"
-      "21       var19 -10      0           97    96     DELETE    NORMAL        CL\n"
-      "22       var20 -15      DI_VERSION  95    94     INSERT    NORMAL        CF\n"
-      "22       var20 -15      0           93    92     DELETE    NORMAL        CL\n"
-      "23       var20 -40      DI_VERSION  91    90     INSERT    NORMAL        CF\n"
-      "23       var20 -40      0           89    88     DELETE    NORMAL        CL\n"
-      "24       var21 -20      DI_VERSION  87    86     INSERT    NORMAL        CF\n"
-      "24       var21 -20      0           85    84     DELETE    NORMAL        CL\n";
-
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 10);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<MultiVersionDIResult> results = {
-    MultiVersionDIResult(3, 10, 50), MultiVersionDIResult(3, 0, 44), MultiVersionDIResult(3, 0, 40),
-    MultiVersionDIResult(4, 20, 36), MultiVersionDIResult(4, 20, 34), MultiVersionDIResult(3, 20, 32),
-    MultiVersionDIResult(4, 18, 28), MultiVersionDIResult(3, 20, 26), MultiVersionDIResult(3, 10, 22),
-    MultiVersionDIResult(4, 20, 18), MultiVersionDIResult(4, 10, 16), MultiVersionDIResult(4, 18, 14),
-    MultiVersionDIResult(3, 10, 12), MultiVersionDIResult(4, 25, 8), MultiVersionDIResult(4, 25, 7),
-    MultiVersionDIResult(3, 0, 6), MultiVersionDIResult(4, 25, 5), MultiVersionDIResult(3, 0, 4),
-    MultiVersionDIResult(3, 0, 3), MultiVersionDIResult(3, 10, 99), MultiVersionDIResult(3, 20, 87)
-  };
-  std::vector<std::vector<bool>> bitmap_arrays = {
-    {true, false, false, true},
-    {true, false, false, true},
-    {false, false},
-    {false, true, true},
-    {true, true, false, true},
-    {true, true, true, true},
-    {true, false, true},
-    {false, true, true, true},
+    {true, true, true, true, true, true, true},
     {true, true, true, true, true, true},
-    {true, true, false, false, false, false, true, true}
+    {true, true, true, true, true, true, true, true},
+    {true, true, true, true, true},
+    {true, true, true, true, true, true, true},
+    {true, true, true, true, true, true},
+    {true, true, true, true, true, true},
+    {true, true, true, true},
+    {true, true, true, true},
+    {true, true},
+    {true},
+    {true, true},
+    {true, true}
   };
-  int64_t res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-  clear_tx_data();
-}
-
-void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cached_row()
-{
-  prepare_tx_data(5, 5);
   int ret = OB_SUCCESS;
-  ObTableHandleV2 handle;
-  ObDatumRange range;
-  range.set_whole_range();
-  const int64_t snapshot_version = 35;
-  ObScnRange scn_range;
-  scn_range.start_scn_.convert_for_gts(1);
-  scn_range.end_scn_.convert_for_gts(30);
-  ObSSTable *sstable = nullptr;
-  ObVersionRange trans_version_range;
-  trans_version_range.base_version_ = 4;
-  trans_version_range.snapshot_version_ = INT64_MAX;
-  prepare_query_param(trans_version_range);
-  prepare_block_row_store();
   const ObDatumRow *row = nullptr;
   ObIMicroBlockRowScanner *micro_scanner = nullptr;
-
-  // case 1: with cached insert row and invalid delete version
-  const char *micro_data[3];
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<MultiVersionDIResult> results = {
-    MultiVersionDIResult(3, 0, 50)
-  };
-  std::vector<std::vector<bool>> bitmap_arrays;
-  bitmap_arrays = {
-    {true, true}, {false}
-  };
-
   int64_t res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
     OK(get_next_micro_scanner(micro_scanner));
@@ -1112,412 +1512,12 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cac
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 1", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 2: with cached insert row and an delete row with different rowkey
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n"
-      "1        var1  -10      0          48      47    INSERT    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -8       0          46      45    DELETE    NORMAL        CL\n"
-      "2        var2  -10      MIN        44      43    DELETE    INSERT_DELETE SCF\n"
-      "2        var2  -10      0          44      43    DELETE    NORMAL        L\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(3, 8, 50), MultiVersionDIResult(4, 10, 44)
-  };
-  bitmap_arrays = {
-    {true, false, false}, {true, false, true}
-  };
-
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 2", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 3: with cached insert row and an insert row with different rowkey
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n"
-      "2        var2  -20      0          46      45    INSERT    NORMAL        CLF\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(3, 0, 50), MultiVersionDIResult(3, 0, 46)
-  };
-  bitmap_arrays = {
-    {true, true}, {false, true}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 3", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 4: with cached insert row and meet iter end
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -10      0          48      47    INSERT    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(3, 0, 50)
-  };
-  bitmap_arrays = {
-    {true, true}, {false}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 4", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 5: with cached insert row and multi micro blocks
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -10      DI_VERSION 48      47    INSERT    NORMAL        C\n"
-      "1        var1  -10      0          46      45    DELETE    NORMAL        C\n";
-  micro_data[2] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -8       DI_VERSION 46      45    INSERT    NORMAL        C\n"
-      "1        var1  -8       0          44      43    DELETE    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 3);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(3, 8, 50)
-  };
-  bitmap_arrays = {
-    {true, true}, {false, true}, {false, true}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 5", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 6: with cached delete row and output
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
-      "1        var1  -2       0          46      45    DELETE    NORMAL        CL                  MIN\n"
-      "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[2] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "2        var2  -2       DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
-      "2        var2  -2       0          42      41    DELETE    NORMAL        CL                  MIN\n"
-      "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 3);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(4, 20, 48), MultiVersionDIResult(4, 20, 44), MultiVersionDIResult(3, 0, 40)
-  };
-  bitmap_arrays = {
-    {true}, {false, false, true}, {false, false, true}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 6", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 7: with cached delete row and overwritten
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  -12      DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
-      "1        var1  -12      0          46      45    DELETE    NORMAL        CL                  MIN\n"
-      "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[2] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "2        var2  -12      DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
-      "2        var2  -12      0          42      41    DELETE    NORMAL        CL                  MIN\n"
-      "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 3);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(4, 12, 46), MultiVersionDIResult(4, 12, 42), MultiVersionDIResult(3, 0, 40)
-  };
-  bitmap_arrays = {
-    {true}, {false, true, true}, {false, true, true}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 7", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 8: with cached delete row and meet iter end
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C\n"
-      "1        var1  -2       0          46      45    DELETE    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(4, 20, 48)
-  };
-  bitmap_arrays = {
-    {true}, {false, false}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 8", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 9: with cached delete row, multi micro blocks and invalid delete row
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -18      DI_VERSION 48      47    INSERT    NORMAL        C\n"
-      "1        var1  -18      0          46      45    DELETE    NORMAL        C\n";
-  micro_data[2] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -12      DI_VERSION 46      45    INSERT    NORMAL        C\n"
-      "1        var1  -12      0          44      43    DELETE    NORMAL        C\n"
-      "1        var1  -10      0          44      43    INSERT    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 3);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = { };
-  bitmap_arrays = {
-    {true}, {false, true}, {false, false, false}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 9", K(res_iter), K(results[res_iter]), K(result));
-        ASSERT_EQ(results[res_iter], result);
-        res_iter += 1;
-      }
-    }
-    ret = OB_SUCCESS;
-  }
-  ASSERT_EQ(results.size(), res_iter);
-  scanner_.reset();
-  handle.reset();
-
-  // case 10: with cached insert row and valid delete version
-  micro_data[0] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
-      "1        var1  -20      0          48      47    DELETE    NORMAL        C\n";
-  micro_data[1] =
-      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
-      "1        var1  -2       0          48      47    INSERT    NORMAL        CL\n";
-  prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-  reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_data_end(handle);
-  OK(handle.get_sstable(sstable));
-  OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = {
-    MultiVersionDIResult(3, 20, 50)
-  };
-  bitmap_arrays = {
-    {true, true}, {false}
-  };
-  res_iter = 0;
-  for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
-    OK(get_next_micro_scanner(micro_scanner));
-    prepare_filtered_result(micro_scanner, bitmap_arrays[index]);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(micro_scanner->inner_get_next_row(row))) {
-        ASSERT_EQ(OB_ITER_END, ret);
-      } else {
-        MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
-                                    row->delete_version_,
-                                    row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 9", K(res_iter), K(results[res_iter]), K(result));
+        STORAGE_LOG(INFO, "check multi version di result for cached row 2", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
         res_iter += 1;
       }
@@ -1567,10 +1567,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<MultiVersionDIResult> results = {
-    MultiVersionDIResult(4, 10, 46)
+    MultiVersionDIResult(3, 20, true, 10, false, 50)
   };
   std::vector<std::vector<bool>> bitmap_arrays = {
-    {false, false}, {false, true}
+    {false, false}, {true, true}
   };
   int64_t res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1581,7 +1581,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for case 1", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
@@ -1594,7 +1597,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   scanner_.reset();
   handle.reset();
 
-  // case 2: with cached insert row filtered and an delete row with different rowkey
+  // case 2: with cached insert row filtered and a delete row with different rowkey
   micro_data[0] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
       "1        var1  -20      DI_VERSION 50      49    INSERT    NORMAL        CF\n"
@@ -1611,10 +1614,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   results = {
-    MultiVersionDIResult(4, 10, 46)
+    MultiVersionDIResult(3, 20, true, 0, false, 50), MultiVersionDIResult(4, 0, false, 10, false, 46)
   };
   bitmap_arrays = {
-    {false, false}, {false, false, true}
+    {false, false}, {true, true, true}
   };
   res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1625,7 +1628,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for case 2", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
@@ -1654,10 +1660,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   results = {
-    MultiVersionDIResult(3, 0, 46)
+    MultiVersionDIResult(3, 20, true, 0, false, 50), MultiVersionDIResult(3, 20, false, 0, false, 46)
   };
   bitmap_arrays = {
-    {false, false}, {false, true}
+    {false, false}, {true, true}
   };
   res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1668,7 +1674,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for case 3", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
@@ -1695,9 +1704,11 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   prepare_data_end(handle);
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  results = { };
+  results = {
+    MultiVersionDIResult(3, 20, true, 0, false, 50)
+  };
   bitmap_arrays = {
-    {false, false}, {false}
+    {false, false}, {true}
   };
   res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1708,7 +1719,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for case 4", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
@@ -1741,7 +1755,7 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   results = {
-    MultiVersionDIResult(4, 8, 42)
+    MultiVersionDIResult(3, 20, true, 8, false, 50)
   };
   bitmap_arrays = {
     {false, false}, {false, false}, {false, true}
@@ -1755,9 +1769,12 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_fil
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
-        STORAGE_LOG(INFO, "check multi version di result for case 4", K(res_iter), K(results[res_iter]), K(result));
+        STORAGE_LOG(INFO, "check multi version di result for case 5", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
         res_iter += 1;
       }
@@ -1811,8 +1828,8 @@ void TestMultiVersionDeleteInsertBlockscan::test_meet_empty_range_block()
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<MultiVersionDIResult> results = {
-    MultiVersionDIResult(3, 0, 50), MultiVersionDIResult(3, 0, 48), MultiVersionDIResult(3, 0, 46),
-    MultiVersionDIResult(3, 0, 44), MultiVersionDIResult(3, 20, 42)
+    MultiVersionDIResult(3, 20, false, 0, false, 50), MultiVersionDIResult(3, 20, false, 0, false, 48), MultiVersionDIResult(3, 20, false, 0, false, 46),
+    MultiVersionDIResult(3, 20, false, 0, false, 44), MultiVersionDIResult(3, 20, false, 20, false, 42)
   };
   std::vector<std::vector<bool>> bitmap_arrays = {
     {true, true, true, true, true, true}, {}
@@ -1826,7 +1843,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_meet_empty_range_block()
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for empty range block", K(res_iter), K(results[res_iter]), K(result));
         ASSERT_EQ(results[res_iter], result);
@@ -1917,10 +1937,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_shadow_row_output()
   prepare_data_end(handle);
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
-  std::vector<MultiVersionDIResult> results = { MultiVersionDIResult(131, 0, 50) };
+  std::vector<MultiVersionDIResult> results = { MultiVersionDIResult(131, 50, false, 0, false, 50) };
   std::vector<std::vector<bool>> bitmap_arrays = {
-    {true, false, false, false, false, false, false, false, false, false, false, false, false, false},
-    {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true}
+    {true, true, true, true, true, true, true, true, true, true, true, true, true, true},
+    {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true}
   };
   int64_t res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1931,7 +1951,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_shadow_row_output()
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for empty range block", K(res_iter), K(results[res_iter]), K(result), KPC(row));
         ASSERT_EQ(results[res_iter], result);
@@ -1981,10 +2004,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_with_uncommitted_lock_row()
   OK(handle.get_sstable(sstable));
   OK(scanner_.init(access_param_.iter_param_, context_, sstable, &range));
   std::vector<MultiVersionDIResult> results = {
-    MultiVersionDIResult(3, 10, 50), MultiVersionDIResult(3, 20, 44)
+    MultiVersionDIResult(3, 10, false, 10, false, 50), MultiVersionDIResult(3, 20, false, 20, false, 44)
   };
   std::vector<std::vector<bool>> bitmap_arrays = {
-    {true, true, false, true, true}
+    {true, true, true, true, true}
   };
   int64_t res_iter = 0;
   for (int64_t index = 0; index <= bitmap_arrays.size() - 1; index += 1) {
@@ -1995,7 +2018,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_with_uncommitted_lock_row()
         ASSERT_EQ(OB_ITER_END, ret);
       } else {
         MultiVersionDIResult result(row->row_flag_.get_serialize_flag(),
+                                    row->insert_version_,
+                                    row->is_insert_filtered_,
                                     row->delete_version_,
+                                    row->is_delete_filtered_,
                                     row->storage_datums_[4].get_int());
         STORAGE_LOG(INFO, "check multi version di result for uncommitted lock row", K(res_iter), K(results[res_iter]), K(result));
         EXPECT_EQ(results[res_iter], result);
@@ -2025,19 +2051,19 @@ TEST_F(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_uncommitted
   test_preprocess_bitmap_uncommitted();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_multi_micro)
-{
-  test_preprocess_bitmap_multi_micro();
-}
-
 TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_basic)
 {
   test_get_next_compacted_row_basic();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row)
+TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row1)
 {
-  test_get_next_compacted_row_with_cached_row();
+  test_get_next_compacted_row_with_cached_row1();
+}
+
+TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row2)
+{
+  test_get_next_compacted_row_with_cached_row2();
 }
 
 TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_filtered_row)
@@ -2066,7 +2092,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_multi_version_delete_insert_blockscan.log*");
   OB_LOGGER.set_file_name("test_multi_version_delete_insert_blockscan.log", true, true);
-  oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
