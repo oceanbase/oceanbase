@@ -1208,7 +1208,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
   int64_t update_rows = 0;
   int64_t insert_rows = 0;
   int64_t max_file_id = 0;// ObCSVTableRowIterator::MIN_EXTERNAL_TABLE_FILE_ID - 1
-  common::hash::ObHashMap<ObString, int64_t> hash_map;
+  common::hash::ObHashMap<ObString, std::pair<int64_t, int64_t>> hash_map;
   char file_url_buf[256] = { 0 };
   bool is_odps_external_table = false;
   if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, table_id, is_odps_external_table))) {
@@ -1217,28 +1217,31 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
   OZ(get_all_records_from_inner_table(allocator, tenant_id, table_id, partition_id, old_file_infos, old_file_ids));
   OZ(hash_map.create(std::max(file_infos.count(), old_file_infos.count()) + 1, "ExternalFile"));
   for (int64_t i = 0; OB_SUCC(ret) && i < old_file_infos.count(); i++) {
-    OZ(hash_map.set_refactored(old_file_infos.at(i).file_url_, old_file_ids.at(i)));
+    OZ(hash_map.set_refactored(old_file_infos.at(i).file_url_, {old_file_ids.at(i), old_file_infos.at(i).file_size_}));
     max_file_id = old_file_ids.at(i) > max_file_id ? old_file_ids.at(i) : max_file_id;
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < file_infos.count(); i++) {
     int64_t file_id = 0;
-    OZ(hash_map.get_refactored(file_infos.at(i).file_url_, file_id));
+    std::pair<int64_t, int64_t> file_id_file_size;
+    ret = hash_map.get_refactored(file_infos.at(i).file_url_, file_id_file_size);
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
       OZ(insert_file_infos.push_back(file_infos.at(i)));
       OZ(insert_file_ids.push_back(is_odps_external_table ? 0 : ++max_file_id)); // odps table's file_id is 0
-    } else if (ret == OB_SUCCESS) {
+    } else if (ret == OB_SUCCESS && file_id_file_size.second != file_infos.at(i).file_size_) {
       OZ(update_file_infos.push_back(file_infos.at(i)));
-      OZ(update_file_ids.push_back(file_id));
+      OZ(update_file_ids.push_back(file_id_file_size.first));
+    } else {
+      LOG_WARN("unexpected error", K(ret), K(i));
     }
   }
   OZ(hash_map.reuse());
   for (int64_t i = 0; OB_SUCC(ret) && i < file_infos.count(); i++) {
-    OZ(hash_map.set_refactored(file_infos.at(i).file_url_, is_odps_external_table ? 0 : 1)); // odps table's file_id is 0
+    OZ(hash_map.set_refactored(file_infos.at(i).file_url_, {is_odps_external_table ? 0 : 1, file_infos.at(i).file_size_})); // odps table's file_id is 0
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < old_file_infos.count(); i++) {
-    int64_t existed = 0;
+    std::pair<int64_t, int64_t> existed{0, 0};
     OZ(hash_map.get_refactored(old_file_infos.at(i).file_url_, existed));
     if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
