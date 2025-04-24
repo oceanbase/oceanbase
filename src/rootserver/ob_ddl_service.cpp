@@ -16021,19 +16021,11 @@ int ObDDLService::check_long_run_ddl_has_index_(const ObTableSchema *orig_table_
     LOG_WARN("check has index operation failed", KR(ret));
   } else if (OB_FAIL(check_alter_domain_column_allowed(alter_table_arg, orig_table_schema))) {
     LOG_WARN("failed to check domain operate column constraint", KR(ret));
-  // conflict with domain index offline ddl support?
-  /*
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                             tenant_id,
                                             table_id,
                                             has_fts_or_multivalue_index))) {
     LOG_WARN("check has fts index failed", KR(ret));
-  } else if (OB_FAIL(check_has_vec_domain_index(schema_guard,
-                                                tenant_id,
-                                                table_id,
-                                                has_vec_index))) {
-    LOG_WARN("fail to check has vec domain index", KR(ret));
-  */
   } else if (OB_FAIL(check_will_be_having_domain_index_operation(alter_table_arg,
                                                                   will_be_having_domain_index_operation))) {
     LOG_WARN("check will be having domain index operation failed", KR(ret));
@@ -16045,13 +16037,11 @@ int ObDDLService::check_long_run_ddl_has_index_(const ObTableSchema *orig_table_
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.");
-  }
-  // conflict with domain index offline ddl support?
-  /* else if (has_fts_or_multivalue_index || has_vec_index) {
+  } else if (has_fts_or_multivalue_index && GCTX.is_shared_storage_mode()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext/multivalue/vector index.");
-  } */
+    LOG_WARN("The DDL cannot be run, table with fulltext/multivalue/vector index in ss mode is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext/multivalue/vector index in ss mode");
+  }
   return ret;
 }
 
