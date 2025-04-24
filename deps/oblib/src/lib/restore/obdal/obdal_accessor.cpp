@@ -333,9 +333,10 @@ public:
     int ret = OB_SUCCESS;
     if (outcome != nullptr) {
       convert_obdal_error(outcome, ret);
+      ObString message(outcome->message.len, (char *) outcome->message.data);
       OB_LOG(WARN, "ObDal log error", K(ret),
           K(start_time_us_), K(timeout_us_), K(attempted_retries),
-          K(outcome->code), K((const char *)outcome->message.data));
+          K(outcome->code), K(message));
       ObDalWrapper::obdal_error_free(outcome);
     }
   }
@@ -483,7 +484,8 @@ public:
   static int obdal_operator_delete(const opendal_operator *op, const char *path)
   {
     int ret = OB_SUCCESS;
-    opendal_error *error = ObDalWrapper::obdal_operator_delete(op, path);
+    ObStorageObdalRetryStrategy<> strategy;
+    opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_operator_delete, op, path);
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }

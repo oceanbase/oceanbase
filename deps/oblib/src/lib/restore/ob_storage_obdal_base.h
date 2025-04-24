@@ -33,7 +33,7 @@ int init_obdal_env();
 void fin_obdal_env();
 
 static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count
-static constexpr int POOL_MAX_IDLE_TIME_S = 30;          // the max time of idle http client (unit s)
+static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
 static constexpr int MAX_OBDAL_ENDPOINT_LENGTH = 256;
