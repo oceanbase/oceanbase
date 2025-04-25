@@ -7822,6 +7822,7 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
   int ret = OB_SUCCESS;
   ObSelectStmt *view_stmt = NULL;
   ObArray<ObRawExpr *> shared_exprs;
+  ObArray<ObRawExpr *> rowid_exprs;
   ObArray<ObRawExpr *> column_exprs;
   ObArray<ObRawExpr *> select_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
@@ -7840,6 +7841,10 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
     LOG_WARN("failed to remove const exprs", K(ret));
   } else if (OB_FAIL(append(select_exprs, shared_exprs))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(extract_rowid_exprs(stmt, view_stmt->get_table_items(), rowid_exprs))) {
+    LOG_WARN("failed to extract rowid exprs", K(ret));
+  } else if (OB_FAIL(append(select_exprs, rowid_exprs))) {
+    LOG_WARN("failed to append rowid exprs", K(ret));
   } else if (select_exprs.empty()) {
     if (OB_FAIL(create_dummy_select_item(*view_stmt, ctx))) {
       LOG_WARN("Failed to create dummy select item", K(ret));
@@ -12373,6 +12378,44 @@ int ObTransformUtils::pullup_correlated_conditions(const ObIArray<ObExecParamRaw
   if (OB_SUCC(ret)) {
     if (OB_FAIL(exprs.assign(remain_exprs))) {
       LOG_WARN("failed to assign having exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_rowid_exprs(const ObDMLStmt *stmt,
+                                          ObIArray<TableItem*> &table_items,
+                                          ObIArray<ObRawExpr*> &rowid_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> relation_exprs;
+  ObSEArray<ObRawExpr*, 8> all_rowid_exprs;
+  ObSEArray<uint64_t, 8> table_ids;
+  ObSEArray<uint64_t, 2> expr_table_ids;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(extract_rowid_exprs(relation_exprs, all_rowid_exprs))) {
+    LOG_WARN("Failed to extract rowid exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
+    if (OB_ISNULL(table_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i));
+    } else if (OB_FAIL(table_ids.push_back(table_items.at(i)->table_id_))) {
+      LOG_WARN("failed to push back table id", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_rowid_exprs.count(); ++i) {
+    expr_table_ids.reuse();
+    if (OB_FAIL(ObRawExprUtils::extract_table_ids(all_rowid_exprs.at(i), expr_table_ids))) {
+      LOG_WARN("failed to extract table ids", K(ret), K(i));
+    } else if (ObOptimizerUtil::is_subset(expr_table_ids, table_ids)) {
+      if (OB_FAIL(rowid_exprs.push_back(all_rowid_exprs.at(i)))) {
+        LOG_WARN("failed to push back rowid expr", K(ret));
+      }
     }
   }
   return ret;
