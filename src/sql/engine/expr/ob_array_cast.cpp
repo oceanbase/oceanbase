@@ -689,88 +689,123 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
   return ret;
 }
 
-int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_type, bool is_binary)
 {
   int ret = OB_SUCCESS;
 
+  int len = arr_text.length();
   const char* begin = arr_text.ptr();
   const char* ptr = begin;
-  const char* end = ptr + arr_text.length();
+  const char* end = ptr + len;
   bool is_end_char = false;
+  const ObCollectionArrayType *vector_type = dynamic_cast<const ObCollectionArrayType *>(dst_type);
+  ObCollectionTypeBase *dst_elem_type = vector_type->element_type_;
 
   if (!arr_text.empty()) {
-    skip_whitespace(ptr, end);
-
-    if (ptr >= end) {
-    } else if (!is_vector_start(*ptr)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("failed to parse array text, No begin char found", K(ret), K(arr_text), K(ptr - begin));
+    if (is_binary) {
+      const ObCollectionBasicType *basic_type = dynamic_cast<const ObCollectionBasicType *>(dst_elem_type);
+      ObObjType elem_type = basic_type->basic_meta_.get_obj_type();
+      uint32_t dim_cnt = vector_type->dim_cnt_;
+      uint8_t elem_size = 0;
+      switch (elem_type) {
+        case ObFloatType: {
+          elem_size = 4;
+          break;
+        }
+        case ObUTinyIntType: {
+          elem_size = 2;
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("type not supported", K(elem_type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (len != dim_cnt * elem_size) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("length not correct", K(ret), K(len));
+        } else {
+          ObVectorF32Data *dst_arr = static_cast<ObVectorF32Data *>(dst);
+          float *data = static_cast<float *>(alloc.alloc(len));
+          MEMCPY(data, ptr, len);
+          dst_arr->set_data(data, len >> 2);
+        }
+      }
     } else {
-      ++ptr;
       skip_whitespace(ptr, end);
 
-      for (; OB_SUCC(ret) && ptr < end; ) {
-        double res = 0.0;
+      if (ptr >= end) {
+      } else if (!is_vector_start(*ptr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("failed to parse array text, No begin char found", K(ret), K(arr_text), K(ptr - begin));
+      } else {
+        ++ptr;
+        skip_whitespace(ptr, end);
 
-        bool is_neg_flag = is_negative(*ptr);
-        if (is_neg_flag || is_positive(*ptr)) {
-          ++ptr;
-        }
+        for (; OB_SUCC(ret) && ptr < end; ) {
+          double res = 0.0;
 
-        fast_float::from_chars_result parse_ret = fast_float::from_chars(ptr, end, res);
-        if (OB_UNLIKELY(parse_ret.ec != std::errc())) {
-          if (is_null_string_start(*ptr)) {
-            if (!is_null_const_string(ptr, end)) {
+          bool is_neg_flag = is_negative(*ptr);
+          if (is_neg_flag || is_positive(*ptr)) {
+            ++ptr;
+          }
+
+          fast_float::from_chars_result parse_ret = fast_float::from_chars(ptr, end, res);
+          if (OB_UNLIKELY(parse_ret.ec != std::errc())) {
+            if (is_null_string_start(*ptr)) {
+              if (!is_null_const_string(ptr, end)) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
+              } else {
+                ptr += NULL_STR_LEN;
+                if (OB_FAIL(dst->push_null())) {
+                  LOG_WARN("failed to push null array value", K(ret));
+                }
+              }
+            } else {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
-            } else {
-              ptr += NULL_STR_LEN;
-              if (OB_FAIL(dst->push_null())) {
-                LOG_WARN("failed to push null array value", K(ret));
-              }
+            }
+          } else {
+            ptr = parse_ret.ptr;
+            if (is_neg_flag) {
+              res *= -1;
+            }
+
+            if (OB_FAIL(add_vector_element(res, dst_elem_type, dst))) {
+              LOG_WARN("failed to push store array", K(ret));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (is_vector_finish(*ptr)) {
+            ++ptr;
+            is_end_char = true;
+            break;
+          } else {
+
+            skip_whitespace_and_spliter(ptr, end);
+
+            if (ptr < end && is_vector_finish(*ptr)) {
+              ++ptr;
+              is_end_char = true;
+              break;
+            }
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          if (is_end_char) {
+            skip_whitespace(ptr, end);
+            if (ptr < end && *ptr != 0) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
             }
           } else {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
           }
-        } else {
-          ptr = parse_ret.ptr;
-          if (is_neg_flag) {
-            res *= -1;
-          }
-
-          if (OB_FAIL(add_vector_element(res, dst_elem_type, dst))) {
-            LOG_WARN("failed to push store array", K(ret));
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (is_vector_finish(*ptr)) {
-          ++ptr;
-          is_end_char = true;
-          break;
-        } else {
-
-          skip_whitespace_and_spliter(ptr, end);
-
-          if (ptr < end && is_vector_finish(*ptr)) {
-            ++ptr;
-            is_end_char = true;
-            break;
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (is_end_char) {
-          skip_whitespace(ptr, end);
-          if (ptr < end && *ptr != 0) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
-          }
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
         }
       }
     }

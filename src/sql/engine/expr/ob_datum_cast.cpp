@@ -11511,6 +11511,8 @@ CAST_FUNC_NAME(string, collection)
       LOG_WARN("failed to get subschema meta", K(ret), K(dst_subschema_id));
     } else {
       ObString in_str = child_res->get_string();
+      ObObjType in_type = expr.args_[0]->datum_meta_.type_;
+      ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObIArrayType *arr_dst = NULL;
@@ -11520,10 +11522,13 @@ CAST_FUNC_NAME(string, collection)
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
                   expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
-      } else if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_coll_type, arr_dst))) {
+      } else if (dst_coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE && OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_coll_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
       } else if (dst_coll_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_))) {
+        bool is_binary = (in_type == ObHexStringType || cs_type == CS_TYPE_BINARY);
+        if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_coll_type, arr_dst, is_binary))) {
+          LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+        } else if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_coll_type, is_binary))) {
           LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
         }
       } else if (dst_coll_type->type_id_== ObNestedType::OB_ARRAY_TYPE) {

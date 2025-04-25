@@ -44,6 +44,7 @@ public:
   int push_back(T value);
   bool is_null(uint32_t idx) const { return false; }
   void set_scale(ObScale scale) { UNUSED(scale); }
+  void set_data(T *data, uint32_t length) { data_ = data; this->length_ = length;}
 
   uint32_t *get_offsets() const { return nullptr; }
   char *get_data() const { return reinterpret_cast<char*>(data_);}
