@@ -391,7 +391,10 @@ ObLockWaitMgr::Node* ObLockWaitMgr::next(Node*& iter, Node* target)
       node = (Node*)link_next(node);
     }
     if (NULL != node && node->hash() == target->hash()) {
-      target->set_block_sessid(node->sessid_);
+      target->set_block_sessid(sql::ObSQLSessionInfo::INVALID_SESSID ==
+                                       node->client_sid_
+                                   ? node->sessid_
+                                   : node->client_sid_);
     }
   } else {
     target = NULL;
@@ -603,9 +606,12 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
         }
         transaction::ObTransService *tx_service = nullptr;
         uint32_t holder_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
+        uint32_t client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
         if (OB_ISNULL(tx_service = MTL(transaction::ObTransService *))) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "ObTransService is null", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+        } else if (OB_FAIL(sql::ObBasicSessionInfo::get_client_sid(sess_id, client_sid))) {
+          TRANS_LOG(ERROR, "get client_sid failed", K(ret));
         } else if (OB_FAIL(tx_service->get_trans_start_session_id(ls_id, holder_tx_id, holder_session_id))) {
           TRANS_LOG(WARN, "get transaction start session_id failed", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
         } else {
@@ -624,6 +630,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                       total_trans_node_cnt,
                       row_key_str,  // just for virtual table display
                       sess_id,
+                      client_sid,
                       holder_session_id,
                       tx_id,
                       holder_tx_id,
@@ -680,9 +687,12 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     } else if (need_wait) {
       transaction::ObTransService *tx_service = nullptr;
       uint32_t holder_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
+      uint32_t client_sid = sql::ObSQLSessionInfo::INVALID_SESSID;
       if (OB_ISNULL(tx_service = MTL(transaction::ObTransService *))) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "ObTransService is null", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+      } else if (OB_FAIL(sql::ObBasicSessionInfo::get_client_sid(sess_id, client_sid))) {
+          TRANS_LOG(ERROR, "get client_sid failed", K(ret));
       } else if (OB_FAIL(tx_service->get_trans_start_session_id(ls_id, holder_tx_id, holder_session_id))) {
         TRANS_LOG(WARN, "get transaction start session_id failed", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
       } else {
@@ -695,6 +705,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                   total_trans_node_cnt,
                   lock_id_buf, // just for virtual table display
                   sess_id,
+                  client_sid,
                   holder_session_id,
                   tx_id,
                   holder_tx_id,

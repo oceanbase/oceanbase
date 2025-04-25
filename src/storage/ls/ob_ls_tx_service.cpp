@@ -138,7 +138,10 @@ int ObLSTxService::get_tx_start_session_id(const transaction::ObTransID &tx_id, 
       ret = OB_BAD_NULL_ERROR;
       TRANS_LOG(WARN, "get ctx is null", K(ret), K(tx_id), K(ls_id_));
     } else {
-      session_id = ctx->get_session_id();
+      session_id =
+          (sql::ObSQLSessionInfo::INVALID_SESSID == ctx->get_client_sid())
+              ? ctx->get_session_id()
+              : ctx->get_client_sid();
       if (OB_TMP_FAIL(mgr_->revert_tx_ctx(ctx))) {
         TRANS_LOG(ERROR, "fail to revert tx", K(ret), K(tmp_ret), K(tx_id), KPC(ctx));
       }
