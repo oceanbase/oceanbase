@@ -96,6 +96,18 @@ int ObMViewPurgeLogExecutor::resolve_arg(const ObMViewPurgeLogArg &arg)
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not exist", KR(ret), K(arg));
+    } else if (table_schema->is_materialized_view()) {
+      // when need to purge a materialized view, we need to purge its container table
+      const share::schema::ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, table_schema->get_data_table_id(),
+                                                   container_table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_),
+                 K(table_schema->get_data_table_id()));
+      } else {
+        table_schema = container_table_schema;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(OB_INVALID_ID == table_schema->get_mlog_tid())) {
       ret = OB_ERR_TABLE_NO_MLOG;
       LOG_WARN("table does not have materialized view log", KR(ret), KPC(table_schema));
