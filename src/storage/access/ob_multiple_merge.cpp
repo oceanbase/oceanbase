@@ -689,7 +689,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                   if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
                     LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
                              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC_(access_param));
-                  } else if (unprojected_row_.row_flag_.is_delete()) {
+                  } else if (unprojected_row_.row_flag_.is_delete() || unprojected_row_.is_insert_filtered_) {
                     vector_store->set_end();
                     break;
                   }
@@ -896,7 +896,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                   if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
                     LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
                              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC_(access_param));
-                  } else if (unprojected_row_.row_flag_.is_delete()) {
+                  } else if (unprojected_row_.row_flag_.is_delete() || unprojected_row_.is_insert_filtered_) {
                     break;
                   }
                 } else if (!iter_del_row_) {

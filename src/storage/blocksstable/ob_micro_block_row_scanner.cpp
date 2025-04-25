@@ -2706,26 +2706,23 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow
     if (OB_FAIL(reader_->get_row(current_, row_))) {
       LOG_WARN("micro block reader fail to get row.", K(ret), K_(macro_id));
     } else {
-      ObFilterResult res;
       int64_t trans_version = 0;
       int64_t sql_sequence = 0;
       const ObRowHeader *row_header = nullptr;
-      if (OB_FAIL(get_filter_result(res))) {
-        LOG_WARN("Failed to get pushdown filter result bitmap", K(ret));
-      } else if (OB_FAIL(reader_->get_multi_version_info(
-                         current_,
-                         read_info_->get_schema_rowkey_count(),
-                         row_header,
-                         trans_version,
-                         sql_sequence))) {
+      if (OB_FAIL(reader_->get_multi_version_info(
+                  current_,
+                  read_info_->get_schema_rowkey_count(),
+                  row_header,
+                  trans_version,
+                  sql_sequence))) {
         LOG_WARN("fail to get multi version info", K(ret), K_(current), KPC_(read_info),
                  K_(macro_id));
       } else if (row_.row_flag_.is_delete()) {
         row_.delete_version_ = trans_version;
-        row_.is_delete_filtered_ = !res.test(current_);
+        row_.is_delete_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(current_);
       } else {
         row_.insert_version_ = trans_version;
-        row_.is_insert_filtered_ = !res.test(current_);
+        row_.is_insert_filtered_ = use_private_bitmap_ && !filter_bitmap_->test(current_);
       }
     }
 

@@ -96,7 +96,6 @@ public:
   ObDatumRange range_;
   ObSEArray<ObDatumRange, 4> ranges_;
   ObSEArray<ObCSRange, 4> range_row_ids_;
-  ObCOPrefetcher co_prefetcher_;
   ObBlockRowStore block_row_store_;
   ObSSTableRowScanner<ObCOPrefetcher> scanner_;
   ObSSTableRowMultiScanner<ObCOPrefetcher> multi_scanner_;
@@ -132,6 +131,9 @@ void TestCOSSTableRowScanner::SetUp()
 
 void TestCOSSTableRowScanner::TearDown()
 {
+  block_row_store_.reset();
+  scanner_.reset();
+  multi_scanner_.reset();
   tablet_handle_.reset();
   TestIndexBlockDataPrepare::TearDown();
 }
