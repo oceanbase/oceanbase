@@ -1313,17 +1313,9 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           LOG_WARN("failed to encode extra info.", K(ret), K(param->extra_info_actual_size_));
         } else {
           lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
-          if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
-            TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);  // TODO@xiajin：remove this lock when vsag support hgraph
-            if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
-              ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
-              LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
-            }
-          } else if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW) {
-            if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
-              ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
-              LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
-            }
+          if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
+            ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+            LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
           }
         }
       }
@@ -1344,7 +1336,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
                                                        param->extra_info_actual_size_, num, extra_info_buf))) {
           LOG_WARN("failed to encode extra info.", K(ret), K(param->extra_info_actual_size_));
         } else {
-          TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);  // TODO@xiajin：remove this lock when vsag support hgraph
           if (snap_data_->has_build_sq_) {
             // directly write into index
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
@@ -1354,32 +1345,47 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
             } else {
               LOG_INFO("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
             }
-          } else if (OB_ISNULL(snap_data_->index_)) {
-            // frist: write into cache
-            for (int i = 0; OB_SUCC(ret) && i < num; i++) {
-              if (OB_FAIL(snap_data_->vid_array_->push_back(vids[i]))) {
-                LOG_WARN("failed to push back into vid array", K(ret));
+          } else {
+            TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+            if (OB_ISNULL(snap_data_->index_)) {
+              // frist: write into cache
+              for (int i = 0; OB_SUCC(ret) && i < num; i++) {
+                if (OB_FAIL(snap_data_->vid_array_->push_back(vids[i]))) {
+                  LOG_WARN("failed to push back into vid array", K(ret));
+                }
               }
-            }
-            for (int i = 0; OB_SUCC(ret) && i < num * dim; i++) {
-              if (OB_FAIL(snap_data_->vec_array_->push_back(vectors[i]))) {
-                LOG_WARN("failed to push back into vector array", K(ret));
+              for (int i = 0; OB_SUCC(ret) && i < num * dim; i++) {
+                if (OB_FAIL(snap_data_->vec_array_->push_back(vectors[i]))) {
+                  LOG_WARN("failed to push back into vector array", K(ret));
+                }
               }
-            }
-            if (OB_SUCC(ret) && OB_NOT_NULL(extra_info_buf)) {
-              if (OB_FAIL(snap_data_->extra_info_buf_->append(extra_info_buf, num * param->extra_info_actual_size_))) {
-                LOG_WARN("failed to append extra info buf", K(ret));
+              if (OB_SUCC(ret) && OB_NOT_NULL(extra_info_buf)) {
+                if (OB_FAIL(snap_data_->extra_info_buf_->append(extra_info_buf, num * param->extra_info_actual_size_))) {
+                  LOG_WARN("failed to append extra info buf", K(ret));
+                }
               }
-            }
-            LOG_INFO("HgraphIndex add into cache array success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]), K(snap_data_->vid_array_->count()));
+              LOG_INFO("HgraphIndex add into cache array success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]), K(snap_data_->vid_array_->count()));
 
-            // second: construct hnsw+sq index
-            ObVecIdxVidArray *vids_array = snap_data_->vid_array_;
-            if (OB_NOT_NULL(vids_array)
-                && vids_array->count() > VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD
-                && OB_ISNULL(snap_data_->index_)) {
-              if (OB_FAIL(build_hnswsq_index(param))) {
-                LOG_WARN("failed to build hnsw sq index.", K(ret), K(dim));
+              // second: construct hnsw+sq index
+              ObVecIdxVidArray *vids_array = snap_data_->vid_array_;
+              if (OB_NOT_NULL(vids_array)
+                  && vids_array->count() > VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD
+                  && OB_ISNULL(snap_data_->index_)) {
+                if (OB_FAIL(build_hnswsq_index(param))) {
+                  LOG_WARN("failed to build hnsw sq index.", K(ret), K(dim));
+                }
+              }
+            } else {
+              /* In a multithreading scenario, it is possible for threads a and b to simultaneously acquire a lock_guard.
+                 If thread a acquires the lock_guard and creates an index (i.e., snap_data_->index_ != null),
+                 then when thread b waits for thread a to release the lock_guard, it will find that snap_data_->index_ != null.
+                 At this point, thread a should call add_index to write the data; otherwise, the data will be lost. */
+              lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+              if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
+                ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+                LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
+              } else {
+                LOG_INFO("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
               }
             }
           } // end for No sq index was built
