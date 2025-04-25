@@ -130,13 +130,16 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
   }
 
   bool unused_is_skip_merge_index = false; // palceholder
+  ObSEArray<share::ObFreezeInfo, 4> freeze_infos;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_snapshot_version, schedule_snapshot, freeze_info))) {
+    freeze_infos.reuse();
+    if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_major_snapshot, schedule_snapshot, false/*include_equal*/, freeze_infos))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get freeze info", K(ret), K(tablet_id), K(schedule_snapshot));
       } else {
         ret = OB_NO_NEED_MERGE;
       }
+    } else if (FALSE_IT(freeze_info = freeze_infos.at(0))) {
     } else if (OB_UNLIKELY(freeze_info.schema_version_ <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema version is invalid", K(ret), K(freeze_info));

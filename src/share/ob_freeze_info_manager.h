@@ -120,9 +120,11 @@ public:
 
   int get_freeze_info_by_major_snapshot(
       const int64_t snapshot_version,
-      ObIArray<share::ObFreezeInfo> &info_list,
-      const bool need_all_behind_info);
-
+      share::ObFreezeInfo &frozen_status);
+  int get_freeze_info_behind_snapshot_version(
+      const int64_t snapshot_version,
+      const bool include_equal,
+      ObIArray<ObFreezeInfo> &freeze_infos);
   int get_freeze_info_compare_with_major_snapshot(
       const int64_t snapshot_version,
       const CmpType cmp_type,

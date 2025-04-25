@@ -295,6 +295,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObFreezeInfo, 4> freeze_infos;
   ObFreezeInfo next_freeze_info;
   const int64_t merge_inc_base_version = tablet.get_snapshot_version();
   const ObMergeType merge_type = param.merge_type_;
@@ -312,13 +313,15 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE, tablet);
   } else if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
-  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_snapshot_version(merge_inc_base_version, next_freeze_info))) {
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_major_snapshot(merge_inc_base_version, false/*include_equal*/, freeze_infos))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get freeze info behind snapshot version", K(ret), K(merge_inc_base_version));
     } else {
       ret = OB_SUCCESS;
       next_freeze_info.frozen_scn_ = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_scn();
     }
+  } else {
+    next_freeze_info = freeze_infos.at(0);
   }
 
   if (OB_FAIL(ret)) {
@@ -779,68 +782,67 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
 {
   int ret = OB_SUCCESS;
   int64_t hist_threshold = 0;
-  ObITable *first_major_table = nullptr;
-  max_snapshot_version = 0;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObITable *first_major = nullptr;
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  ObSEArray<share::ObFreezeInfo, 4> freeze_infos;
+
   if (FALSE_IT(hist_threshold = cal_hist_minor_merge_threshold(tablet.is_tablet_referenced_by_collect_mv()))) {
-  } else if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+  } else if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid())) {
+  } else if (OB_UNLIKELY(!wrapper.get_member()->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get unexpected invalid table store", K(ret), K(table_store_wrapper));
-  } else if (table_store_wrapper.get_member()->get_minor_sstables().count() < hist_threshold) {
+    LOG_ERROR("get unexpected invalid table store", K(ret), K(wrapper));
+  } else if (wrapper.get_member()->get_minor_sstables().count() < hist_threshold) {
     ret = OB_NO_NEED_MERGE;
-  } else if (OB_ISNULL(first_major_table = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false))) {
+  } else if (OB_ISNULL(first_major = wrapper.get_member()->get_major_sstables().get_boundary_table(false))) {
     // index table during building, need compat with continuous multi version
     if (0 == (max_snapshot_version = MTL(ObTenantFreezeInfoMgr*)->get_latest_frozen_version())) {
-      // no freeze info found, wait normal mini minor to free sstable
-      ret = OB_NO_NEED_MERGE;
-      LOG_WARN("No freeze range to do hist minor merge for buiding index", K(ret), K(PRINT_TS_WRAPPER(table_store_wrapper)));
+      ret = OB_NO_NEED_MERGE; // no freeze info, need to do normal minor merge
+      LOG_WARN("No freeze range to do hist minor merge for buiding index", K(ret), K(PRINT_TS_WRAPPER(wrapper)));
     }
-  } else {
-    ObSEArray<share::ObFreezeInfo, 8> freeze_infos;
-    if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_major_snapshot(
-                first_major_table->get_snapshot_version(),
-                freeze_infos))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_NO_NEED_MERGE;
-      } else {
-        LOG_WARN("Failed to get freeze infos behind major version", K(ret), KPC(first_major_table));
-      }
-    } else if (freeze_infos.count() <= 1) {
-      // only one major freeze found, wait normal mini minor to reduce table count
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_major_snapshot(first_major->get_snapshot_version(), true/*include_equal*/, freeze_infos))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_NO_NEED_MERGE;
-      LOG_DEBUG("No enough freeze range to do hist minor merge", K(ret), K(freeze_infos));
     } else {
-      int64_t table_cnt = 0;
-      int64_t min_minor_version = 0;
-      int64_t unused_max_minor_version = 0;
-      if (OB_FAIL(get_boundary_snapshot_version(
-              tablet, min_minor_version, unused_max_minor_version,
-              true /*check_table_cnt*/, true /*is_multi_version_merge*/))) {
-        LOG_WARN("fail to calculate boundary version", K(ret));
-      } else {
-        ObSSTable *table = nullptr;
-        const ObSSTableArray &minor_tables = table_store_wrapper.get_member()->get_minor_sstables();
-        for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
-          if (OB_ISNULL(table = static_cast<ObSSTable*>(minor_tables[i]))) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("table must not null", K(ret), K(i), K(table_store_wrapper));
-          } else if (table->get_upper_trans_version() <= min_minor_version) {
-            table_cnt++;
-          } else {
-            break;
-          }
-        }
+      LOG_WARN("Failed to get freeze infos behind major version", K(ret), KPC(first_major));
+    }
+  } else if (freeze_infos.count() <= 1 && 1 == wrapper.get_member()->get_major_sstables().count()) {
+    ret = OB_NO_NEED_MERGE; // only one freeze info, need to do normal minor merge
+    LOG_TRACE("No enough freeze info to do hist minor merge", K(ret), K(freeze_infos));
+  } else {
+    int64_t table_cnt = 0;
+    int64_t min_snapshot = 0;
+    int64_t placeholder = 0;
+    if (OB_FAIL(get_boundary_snapshot_version(tablet, min_snapshot, placeholder, true/*check_table_cnt*/, true/*is_multi_version_merge*/))) {
+      LOG_WARN("fail to calculate boundary version", K(ret));
+    }
 
-        if (OB_SUCC(ret)) {
-          if (1 < table_cnt) {
-            max_snapshot_version = min_minor_version;
-          } else {
-            ret = OB_NO_NEED_MERGE;
-          }
-        }
+    const ObSSTableArray &minor_tables = wrapper.get_member()->get_minor_sstables();
+    for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
+      if (OB_ISNULL(minor_tables[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("table must not null", K(ret), K(i), K(wrapper));
+      } else if (minor_tables[i]->get_upper_trans_version() <= min_snapshot) {
+        table_cnt++;
+      } else {
+        break;
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (table_cnt <= 1) {
+      ret = OB_NO_NEED_MERGE;
+    } else if (freeze_infos.count() <= 1) {
+      if (ObTimeUtility::fast_current_time() - tablet.get_multi_version_start() / 1000 < 60_min) {
+        if (table_cnt < hist_threshold * 2) {
+          ret = OB_NO_NEED_MERGE;
+        }
+      } else if (table_cnt < hist_threshold) {
+        ret = OB_NO_NEED_MERGE;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      max_snapshot_version = min_snapshot;
     }
   }
   return ret;

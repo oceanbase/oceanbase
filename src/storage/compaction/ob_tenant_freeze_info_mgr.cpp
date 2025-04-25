@@ -202,10 +202,10 @@ int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(ObFreezeInfo &freeze_in
 
 int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
     const int64_t major_snapshot_version,
+    const bool include_equal,
     ObIArray<ObFreezeInfo> &freeze_infos)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<share::ObFreezeInfo, 8> info_list;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
   RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
@@ -217,7 +217,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
   } else if (OB_UNLIKELY(major_snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to get freeze info", K(ret), K(major_snapshot_version));
-  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(major_snapshot_version, freeze_infos, true/*need_all*/))) {
+  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_behind_snapshot_version(major_snapshot_version, include_equal, freeze_infos))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "failed to get frozen status behind given snapshot version", K(ret), K(major_snapshot_version));
     }
@@ -230,7 +230,6 @@ int ObTenantFreezeInfoMgr::get_freeze_info_by_snapshot_version(
     ObFreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObFreezeInfo, 1> freeze_infos;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
   RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
@@ -242,27 +241,8 @@ int ObTenantFreezeInfoMgr::get_freeze_info_by_snapshot_version(
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(snapshot_version, freeze_infos, false/*need_all*/))) {
+  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(snapshot_version, freeze_info))) {
     STORAGE_LOG(WARN, "failed to get frozen status by snapshot", K(ret), K(snapshot_version));
-  } else {
-    freeze_info = freeze_infos.at(0);
-  }
-  return ret;
-}
-
-int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
-    const int64_t snapshot_version,
-    ObFreezeInfo &freeze_info)
-{
-  int ret = OB_SUCCESS;
-  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
-  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
-  if (OB_FAIL(ret)) {
-    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
-  } else if (OB_FAIL(get_freeze_info_compare_with_snapshot_version_(snapshot_version, share::ObFreezeInfoManager::CmpType::GREATER_THAN, freeze_info))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
-    }
   }
   return ret;
 }
