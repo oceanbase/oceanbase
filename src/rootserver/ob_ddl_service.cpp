@@ -6230,13 +6230,6 @@ int ObDDLService::drop_lob_caused_by_drop_column_online_if_need(
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", KR(ret));
-  } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("check compat mode failed", KR(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-      LOG_WARN("get min data version failed", KR(ret), K(tenant_id));
-  } else if (!share::schema::check_can_drop_column_instant(tenant_id, is_oracle_mode, tenant_data_version)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can not drop column instant", KR(ret), "table_id", origin_table_schema.get_table_id());
   } else if (has_lob_column_before && !has_lob_column_after) {
     ObDDLTaskRecord task_record;
     if (OB_FAIL(submit_drop_lob_task_(trans, new_table_schema, alter_table_arg, allocator, task_record))) {
@@ -14956,6 +14949,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                        obrpc::ObAlterTableRes &res,
                                        const uint64_t tenant_data_version)
 {
+  DEBUG_SYNC(BEFORE_ALTER_TABLE_IN_TRANS);
   int ret = OB_SUCCESS;
   ObDDLType &ddl_type = res.ddl_type_;
 
@@ -15079,10 +15073,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       } else if (OB_UNLIKELY(ObDDLType::DDL_DROP_COLUMN_INSTANT != ddl_type)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support to drop column instant under non-instant mode", KR(ret), K(alter_table_arg));
-      } else if (!share::schema::check_can_drop_column_instant(tenant_id, is_oracle_mode, tenant_data_version)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support to drop column instant under this version now", KR(ret), K(tenant_data_version), K(alter_table_arg));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop column instant under this version is");
       }
     }
 
@@ -16153,9 +16143,9 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
         ddl_type = ObDDLType::DDL_DROP_COLUMN_INSTANT;
         if (!share::schema::check_can_drop_column_instant(tenant_id, is_oracle_mode, tenant_data_version)) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported instant algorithm under this version", KR(ret), K(is_oracle_mode),
-                                                                         K(tenant_id), K(tenant_data_version));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop column instant under this version is");
+          LOG_WARN("can not drop column instant", KR(ret), K(is_oracle_mode),
+                                                  K(tenant_id), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop column instant is");
         } else if (OB_FAIL(check_fk_related_table_ddl(*orig_table_schema, ddl_type))) {
           LOG_WARN("check whether the foreign key related table is executing ddl failed", KR(ret));
         }
@@ -16171,9 +16161,10 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       // alter table drop unused column[s].
       ObArray<uint64_t> unused_column_ids;
       if (!share::schema::check_can_drop_column_instant(tenant_id, is_oracle_mode, tenant_data_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("alter table force can not do under this version", KR(ret), K(tenant_id), K(tenant_data_version),
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not alter table force", KR(ret), K(tenant_id), K(tenant_data_version),
                 "table_id", orig_table_schema->get_table_id());
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table force is");
       } else if (OB_FAIL(orig_table_schema->get_unused_column_ids(unused_column_ids))) {
         LOG_WARN("get unused column ids failed", KR(ret), KPC(orig_table_schema));
       } else {
