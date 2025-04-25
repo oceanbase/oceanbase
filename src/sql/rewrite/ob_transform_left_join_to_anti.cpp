@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_left_join_to_anti.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 namespace oceanbase
@@ -383,6 +382,49 @@ int ObTransformLeftJoinToAnti::get_column_ref_in_is_null_condition(const ObRawEx
   return ret;
 }
 
+int ObTransformLeftJoinToAnti::fill_not_null_context(ObIArray<JoinedTable*> &joined_tables,
+                                                     const JoinedTable *target_joined_table,
+                                                     ObNotNullContext &not_null_context)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(target_joined_table)
+      || OB_ISNULL(target_joined_table->left_table_)
+      ||OB_ISNULL(target_joined_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!target_joined_table->is_left_join())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected join type", K(ret), K(target_joined_table->joined_type_));
+  }
+  // add all null-side tables into not-null-context, but skip target_joined_table and its child
+  for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables.count(); ++i) {
+    JoinedTable *other_joined_table = joined_tables.at(i);
+    if (OB_ISNULL(other_joined_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(not_null_context.add_joined_table(other_joined_table, target_joined_table))) {
+      LOG_WARN("failed to add joined table to not-null context", K(ret));
+    }
+  }
+  // process target_joined_table.
+  // 1. if its left table or right table is a joined table, add null-side tables of them into not-null-context
+  // 2. add null reject join conditions into not-null-context
+  if (OB_SUCC(ret) && target_joined_table->left_table_->is_joined_table()) {
+    if (OB_FAIL(not_null_context.add_joined_table(static_cast<JoinedTable *>(target_joined_table->left_table_)))) {
+      LOG_WARN("failed to add joined table to not-null context", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && target_joined_table->right_table_->is_joined_table()) {
+    if (OB_FAIL(not_null_context.add_joined_table(static_cast<JoinedTable *>(target_joined_table->right_table_)))) {
+      LOG_WARN("failed to add joined table to not-null context", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(not_null_context.add_filter(target_joined_table->get_join_conditions()))) {
+    LOG_WARN("failed to add null reject conditions", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *expr,
                                                              ObDMLStmt *stmt,
                                                              const JoinedTable *joined_table,
@@ -411,24 +453,9 @@ int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *ex
        3. The `expr` is NOT NULL, unless the column(s) in right table are filled
           as NULL for a non-matched join row, and propagate the NULL result to the `expr`.
     */
-    for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables.count(); ++i) {
-      // other joined_table in stmt may produce NULL columns for a non-matched join row
-      // ane make `expr` NULL.
-      JoinedTable *other_joined_table = joined_tables.at(i);
-      if (OB_ISNULL(joined_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (other_joined_table == joined_table) {
-      } else if (OB_FAIL(not_null_context.add_joined_table(other_joined_table))) {
-        LOG_WARN("failed to add context", K(ret));
-      }
-    }
     if (OB_FAIL(ret)) {
-    } else if (right_table->is_joined_table() &&
-        OB_FAIL(not_null_context.add_joined_table(static_cast<JoinedTable *>(right_table)))) {
-      LOG_WARN("failed to add context", K(ret));
-    } else if (OB_FAIL(not_null_context.add_filter(joined_table->get_join_conditions()))) {
-      LOG_WARN("failed to add null reject conditions", K(ret));
+    } else if (OB_FAIL(fill_not_null_context(joined_tables, joined_table, not_null_context))) {
+      LOG_WARN("fail to fill not null context", K(ret));
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_context,
                                                           first_param,
                                                           first_expr_not_null,

@@ -2101,14 +2101,15 @@ int ObTransformUtils::get_having_filters_for_deduce(const ObSelectStmt *sel_stmt
   return ret;
 }
 
-int ObNotNullContext::add_joined_table(const JoinedTable *table) 
+int ObNotNullContext::add_joined_table(const JoinedTable *table,
+                                       const JoinedTable *skip_table /* NULL */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret), K(table));
   } else if (OB_FAIL(ObTransformUtils::get_outer_join_right_tables(
-                       *table, right_table_ids_))) {
+                       *table, skip_table, right_table_ids_))) {
     LOG_WARN("failed to get outer join right table", K(ret));
   } else if (OB_FAIL(ObDMLStmt::extract_equal_condition_from_joined_table(
                        table, filters_, true))) {
@@ -2156,6 +2157,7 @@ int ObNotNullContext::remove_having_filter(ObRawExpr *filter)
 }
 
 int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_table,
+                                                  const JoinedTable *skip_table,
                                                   ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
@@ -2165,14 +2167,15 @@ int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_tabl
       OB_ISNULL(right = joined_table.right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param table is null", K(ret));
+  } else if (OB_UNLIKELY(skip_table != NULL && (&joined_table) == skip_table)) {
   } else if (joined_table.is_inner_join()) {
     if (left->is_joined_table() &&
         OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*left), 
-                                                       table_ids)))) {
+                                                       skip_table, table_ids)))) {
       LOG_WARN("failed to visit left table", K(ret));
     } else if (right->is_joined_table() &&
-               OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*right), 
-                                                              table_ids)))) {
+               OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*right),
+                                                              skip_table, table_ids)))) {
       LOG_WARN("failed to visit right table", K(ret));
     }
   } else if (joined_table.is_full_join()){
@@ -2193,7 +2196,7 @@ int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_tabl
   } else if (joined_table.is_left_join()) {
     if (left->is_joined_table() &&
         OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*left),
-                                                       table_ids)))){
+                                                       skip_table, table_ids)))){
         LOG_WARN("failed to visit left table", K(ret));
     } else if (right->is_joined_table()) {
       if (OB_FAIL(append(table_ids, static_cast<JoinedTable *>(right)->single_table_ids_))) {
@@ -2205,7 +2208,7 @@ int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_tabl
   } else if (joined_table.is_right_join() || CONNECT_BY_JOIN == joined_table.joined_type_) {
     if (right->is_joined_table() &&
         OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*right),
-                                                       table_ids)))){
+                                                       skip_table, table_ids)))){
         LOG_WARN("failed to visit right table", K(ret));
     } else if (left->is_joined_table()) {
       if (OB_FAIL(append(table_ids, static_cast<JoinedTable *>(left)->single_table_ids_))) {
