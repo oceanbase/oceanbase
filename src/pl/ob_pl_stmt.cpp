@@ -1475,6 +1475,7 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                                   : COMPATIBLE_MYSQL_MODE;
   const ObSequenceSchema *sequence = NULL;
   const ObTriggerInfo *trigger_info = NULL;
+  const ObRoutineInfo *routine_info = NULL;
   if (!full_schema) {
   } else if (OB_FAIL(schema_guard.get_sequence_schema_with_name(tenant_id, object_db_id, object_name, sequence))
              || OB_ISNULL(sequence)) {
@@ -1500,32 +1501,50 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
       if (OB_FAIL(schema_guard.get_udt_id(
                   tenant_id, object_db_id, OB_INVALID_ID/*package_id*/, object_name, object_id))
           || OB_INVALID_ID == object_id) {
-        // try dblink synonym
-        ObString tmp_name;
-        uint64_t dblink_id = OB_INVALID_ID;
-        if (OB_FAIL(ob_write_string(resolve_ctx_.allocator_, object_name, tmp_name))) {
-          LOG_WARN("write string failed", K(ret));
-        } else {
-          ObString full_object_name = tmp_name.split_on('@');
-          bool exist = false;
-          if (!full_object_name.empty()) {
-            ObString obj_name;
-            // object_id is the synonym id
-            if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
-                || OB_INVALID_ID == dblink_id) {
-              LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(tmp_name));
-            } else if (OB_FAIL(schema_guard.get_object_with_synonym(tenant_id, cur_db_id, synonym_name, object_db_id,
-                                                                    object_id, obj_name, exist, true))) {
-              LOG_WARN("get synonym schema failed", K(ret), K(cur_db_id), K(synonym_name), K(object_name));
-            } else if (!exist || OB_INVALID_ID == object_id) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
+        if (OB_FAIL(schema_guard.get_standalone_procedure_info(tenant_id, object_db_id, object_name, routine_info))
+            || OB_ISNULL(routine_info)) {
+          if (OB_FAIL(schema_guard.get_standalone_function_info(tenant_id, object_db_id, object_name, routine_info))
+              || OB_ISNULL(routine_info)) {
+            // try dblink synonym
+            ObString tmp_name;
+            uint64_t dblink_id = OB_INVALID_ID;
+            if (OB_FAIL(ob_write_string(resolve_ctx_.allocator_, object_name, tmp_name))) {
+              LOG_WARN("write string failed", K(ret));
             } else {
-              type = DBLINK_PKG_NS;
+              ObString full_object_name = tmp_name.split_on('@');
+              bool exist = false;
+              if (!full_object_name.empty()) {
+                ObString obj_name;
+                // object_id is the synonym id
+                if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
+                    || OB_INVALID_ID == dblink_id) {
+                  LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(tmp_name));
+                } else if (OB_FAIL(schema_guard.get_object_with_synonym(tenant_id, cur_db_id, synonym_name, object_db_id,
+                                                                        object_id, obj_name, exist, true))) {
+                  LOG_WARN("get synonym schema failed", K(ret), K(cur_db_id), K(synonym_name), K(object_name));
+                } else if (!exist || OB_INVALID_ID == object_id) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
+                } else {
+                  type = DBLINK_PKG_NS;
+                }
+              } else {
+                LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(object_name));
+              }
             }
           } else {
-            LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(object_name));
+            object_id = routine_info->get_routine_id();
+            // udf/procedure will resolve later, here only avoid to resolve synonym
+            type = full_schema ? (routine_info->is_procedure() ? ObPLExternalNS::EXTERNAL_PROC
+                                                               : ObPLExternalNS::UDF_NS)
+                               : ObPLExternalNS::INVALID_VAR;
           }
+        } else {
+          object_id = routine_info->get_routine_id();
+          // udf/procedure will resolve later, here only avoid to resolve synonym
+          type = full_schema ? (routine_info->is_procedure() ? ObPLExternalNS::EXTERNAL_PROC
+                                                             : ObPLExternalNS::UDF_NS)
+                             : ObPLExternalNS::INVALID_VAR;
         }
       } else {
         OZ (add_dependency_obj(schema::ObSchemaType::UDT_SCHEMA, object_id, DEPENDENCY_TYPE, true, dep_table));
@@ -1593,8 +1612,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
     //first search package header var
     if (OB_NOT_NULL(parent_ns_)) {
       ObPLDependencyGuard guard(this, parent_ns_->get_external_ns());
-      if (OB_FAIL(
-          SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
+      if (OB_FAIL(SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
         LOG_WARN("resolve package symbol failed", K(ret));
       } else if (type == ObPLExternalNS::LOCAL_VAR) {
         type =
@@ -1861,9 +1879,9 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               object_db_id, object_name, type, parent_id, var_idx, name, db_id, dep_table, full_schema));
             if (synonym_checker.has_synonym() && OB_NOT_NULL(get_dependency_table())) {
               OZ (ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
-                                                                &resolve_ctx_.session_info_,
-                                                                synonym_checker,
-                                                                *get_dependency_table()));
+                                                                 &resolve_ctx_.session_info_,
+                                                                 synonym_checker,
+                                                                 *get_dependency_table()));
             }
           }
         }
