@@ -1524,7 +1524,8 @@ int ObMultiVersionMicroBlockRowScanner::open(
       read_row_direct_flag_ = true;
       can_ignore_multi_version_ = flat_reader_->single_version_rows()
                                   && is_last_multi_version_row_
-                                  && !reverse_scan_;
+                                  && !reverse_scan_
+                                  && !(0 == version_range_.base_version_ && IF_NEED_CHECK_BASE_VERSION_FILTER(context_));
       LOG_DEBUG("use direct read", K(ret), K(can_ignore_multi_version_),
                 KPC(block_data.get_micro_header()), K(context_->trans_version_range_));
     }
@@ -1784,6 +1785,13 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_directly(
       version_fit = false;
       row->row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
       LOG_DEBUG("is ghost row", K(ret), K(current_), K(is_ghost_row_flag), K_(macro_id));
+    } else if (OB_UNLIKELY(0 == version_range_.base_version_ &&
+                           IF_NEED_CHECK_BASE_VERSION_FILTER(context_))) {
+      if (OB_FAIL(context_->check_filtered_by_base_version(*row))) {
+        LOG_DEBUG("check base version filter fail", K(ret));
+      } else if (row->row_flag_.is_not_exist()) {
+        version_fit = false;
+      }
     } else {
       row->snapshot_version_ = 0;
       ret_row = row;
