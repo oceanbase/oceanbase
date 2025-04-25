@@ -4487,7 +4487,51 @@ int ObTablet::get_split_src_read_table_if_need(
     bool &succ_get_split_src_tables)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!tablet_meta_.table_store_flag_.with_major_sstable())) {
+  const ObTabletID &split_src_tablet_id = tablet_meta_.split_info_.get_split_src_tablet_id();
+  if (OB_UNLIKELY(split_src_tablet_id.is_valid())) {
+    if (OB_UNLIKELY(!tablet_meta_.table_store_flag_.with_major_sstable())) {
+      const ObLSID &ls_id = tablet_meta_.ls_id_;
+      ObLSService *ls_service = nullptr;
+      ObLSHandle ls_handle;
+      ObTabletHandle src_tablet_handle;
+      ObTablet *src_tablet = nullptr;
+      ObStorageMetaHandle *meta_handle = nullptr;
+      if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+      } else if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+        LOG_WARN("failed to get ls", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(split_src_tablet_id, src_tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+              ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("failed to get tablet", K(ret), K(split_src_tablet_id), K(ls_id));
+      } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet handle obj is nullptr", K(ret));
+      } else if (OB_UNLIKELY(src_tablet->is_empty_shell())) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("split src tablet becomes empty shell", K(ret), K(ls_id), K(split_src_tablet_id));
+      } else if (OB_FAIL(iter.add_split_extra_tablet_handle(src_tablet_handle))) {
+        LOG_WARN("fail to set split src tabelt handle", K(ret));
+      } else if (OB_FAIL(iter.table_store_iter_.alloc_split_extra_table_store_handle(meta_handle))) {
+        LOG_WARN("failed to alloc split extra table store handle", K(ret));
+      } else if (OB_ISNULL(meta_handle)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid meta handle", K(ret));
+      } else if (OB_FAIL(src_tablet->get_read_tables_(
+          snapshot_version,
+          iter.table_store_iter_,
+          *meta_handle,
+          ObGetReadTablesMode::NORMAL))) {
+        LOG_WARN("failed to get read tables from table store", K(ret), KPC(src_tablet));
+      } else {
+        succ_get_split_src_tables = true;
+      }
+#ifdef ENABLE_DEBUG_LOG
+      LOG_INFO("is split dst", K(ret), "tablet_id", tablet_meta_.tablet_id_, K(split_src_tablet_id));
+#endif
+    }
+  } else if (OB_UNLIKELY(!tablet_meta_.table_store_flag_.with_major_sstable())) {
+    //deprecated
     ObTabletSplitMdsUserData data;
     const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S;
     if (OB_FAIL(ObITabletMdsInterface::get_split_data(data, timeout))) {

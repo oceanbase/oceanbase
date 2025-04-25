@@ -233,7 +233,8 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state && ObTabletStatus::NORMAL == user_data.tablet_status_) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state &&
+        (ObTabletStatus::NORMAL == user_data.tablet_status_ || ObTabletStatus::SPLIT_DST == user_data.tablet_status_)) {
       tablet_status_cache.set_value(user_data);
       LOG_INFO("refresh tablet status cache", K(ret), K(ls_id), K(tablet_id), K(tablet_status_cache), K(snapshot_version));
     }

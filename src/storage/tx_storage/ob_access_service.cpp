@@ -633,8 +633,11 @@ int ObAccessService::construct_store_ctx_other_variables_(
       ret = OB_SCHEMA_EAGAIN;
       LOG_WARN("split src tablet has active memtable, retry", K(ret), K(tablet_id));
     } else if (OB_FAIL(tablet_service->get_tablet_with_timeout(
-            tablet_id, tablet_handle, timeout, ObMDSGetTabletMode::READ_ALL_COMMITED, share::SCN::max_scn()))) {
+            tablet_id, tablet_handle, timeout, ObMDSGetTabletMode::READ_WITHOUT_CHECK, share::SCN::max_scn()))) {
       LOG_WARN("failed to check and get tablet", K(ret), K(ls_id), K(tablet_id), K(timeout), K(snapshot));
+    } else if (OB_UNLIKELY(tablet_handle.get_obj()->is_empty_shell())) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("split src tablet is empty shell", K(ret), K(ls_id), K(tablet_id));
     }
   }
   return ret;

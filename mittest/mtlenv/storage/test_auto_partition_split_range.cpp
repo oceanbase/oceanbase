@@ -157,7 +157,7 @@ void FakeObTableScanRange::SetUp()
   need_set_split_end_key_ = false;
   split_info_.split_type_ = ObTabletSplitType::MAX_TYPE;
   split_info_.split_cnt_ = 1;
-  split_info_.src_tablet_handle_ = tablet_handle_;
+  split_info_.is_split_dst_ = true;
   split_info_.partkey_is_rowkey_prefix_ = true;
 }
 

@@ -678,6 +678,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_tablet_barrier_log.cpp
   ddl/ob_tablet_ddl_kv.cpp
   ddl/ob_tablet_ddl_kv_mgr.cpp
+  ddl/ob_tablet_split_cache.cpp
   ddl/ob_ddl_lock.cpp
   ddl/ob_ddl_replay_executor.cpp
   ddl/ob_ddl_heart_beat_task.cpp

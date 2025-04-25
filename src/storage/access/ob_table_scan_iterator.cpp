@@ -287,7 +287,7 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
     // there's no need to reset main_table_param_ and table_ctx
     // scan_param only reset query range fields in ObTableScan::rt_rescan()
     ObQRIterType rescan_iter_type = T_INVALID_ITER_TYPE;
-    ObTablet *tablet = get_table_param_.tablet_iter_.get_tablet_handle().get_obj();
+    const ObTablet *tablet = get_table_param_.tablet_iter_.get_tablet_handle().get_obj();
     bool is_tablet_spliting = false;
     if (OB_ISNULL(tablet)) {
       ret = OB_ERR_UNEXPECTED;
@@ -296,7 +296,7 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
       STORAGE_LOG(WARN, "Fail to get tablet spliting status", K(ret));
     } else if (OB_FAIL(main_table_ctx_.rescan_reuse(scan_param))) {
       STORAGE_LOG(WARN, "Failed to rescan reuse", K(ret));
-    } else if (OB_FAIL(table_scan_range_.init(*scan_param_, is_tablet_spliting))) {
+    } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
     } else if (OB_FAIL(rescan_for_iter())) {
       STORAGE_LOG(WARN, "Failed to switch param for iter", K(ret), K(*this));
@@ -329,7 +329,7 @@ int ObTableScanIterator::init(ObTableScanParam &scan_param, const ObTabletHandle
         K(tablet_handle));
   } else if (OB_FAIL(ObTabletSplitMdsHelper::get_is_spliting(*tablet_handle.get_obj(), is_tablet_spliting))) {
     STORAGE_LOG(WARN, "Fail to get tablet spliting status", K(ret));
-  } else if (OB_FAIL(table_scan_range_.init(scan_param, is_tablet_spliting))) {
+  } else if (OB_FAIL(table_scan_range_.init(scan_param, *tablet_handle.get_obj(), is_tablet_spliting))) {
     STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(scan_param));
   } else if (OB_FAIL(table_scan_range_.get_query_iter_type(current_iter_type_))) {
     STORAGE_LOG(WARN, "Failed to get query iter type", K(ret));
@@ -371,7 +371,7 @@ int ObTableScanIterator::switch_param(ObTableScanParam &scan_param, const ObTabl
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret), K(store_ctx), K(scan_param), K(tablet_handle));
   } else if (OB_FAIL(ObTabletSplitMdsHelper::get_is_spliting(*tablet_handle.get_obj(), is_tablet_spliting))) {
     STORAGE_LOG(WARN, "Fail to get tablet spliting status", K(ret));
-  } else if (OB_FAIL(table_scan_range_.init(scan_param, is_tablet_spliting))) {
+  } else if (OB_FAIL(table_scan_range_.init(scan_param, *tablet_handle.get_obj(), is_tablet_spliting))) {
     STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(scan_param));
   } else if (OB_FAIL(table_scan_range_.get_query_iter_type(rescan_iter_type))) {
     STORAGE_LOG(WARN, "Failed to get query iter type", K(ret));

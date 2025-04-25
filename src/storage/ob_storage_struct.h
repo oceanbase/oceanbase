@@ -643,12 +643,12 @@ public:
   void reset();
 
   TO_STRING_KV(K_(start_partkey),
-    K_(end_partkey), K_(src_tablet_handle), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
+    K_(end_partkey), K_(is_split_dst), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
 
 public:
   blocksstable::ObDatumRowkey start_partkey_;
   blocksstable::ObDatumRowkey end_partkey_;
-  ObTabletHandle src_tablet_handle_;
+  bool is_split_dst_;
   int64_t split_cnt_;
   ObTabletSplitType split_type_;
   bool partkey_is_rowkey_prefix_;

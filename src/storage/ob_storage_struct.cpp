@@ -739,7 +739,7 @@ void ObPartitionReadableInfo::reset()
 ObTabletSplitTscInfo::ObTabletSplitTscInfo()
   : start_partkey_(),
     end_partkey_(),
-    src_tablet_handle_(),
+    is_split_dst_(),
     split_cnt_(0),
     split_type_(ObTabletSplitType::MAX_TYPE),
     partkey_is_rowkey_prefix_(false)
@@ -750,7 +750,7 @@ bool ObTabletSplitTscInfo::is_split_dst_with_partkey() const
 {
   return start_partkey_.is_valid()
       && end_partkey_.is_valid()
-      && src_tablet_handle_.is_valid()
+      && is_split_dst_
       && split_type_ < ObTabletSplitType::MAX_TYPE;
 }
 
@@ -759,7 +759,7 @@ bool ObTabletSplitTscInfo::is_split_dst_without_partkey() const
 {
   return !start_partkey_.is_valid()
       && !end_partkey_.is_valid()
-      && src_tablet_handle_.is_valid()
+      && is_split_dst_
       && split_type_ < ObTabletSplitType::MAX_TYPE;
 }
 
@@ -767,7 +767,7 @@ void ObTabletSplitTscInfo::reset()
 {
   start_partkey_.reset();
   end_partkey_.reset();
-  src_tablet_handle_.reset();
+  is_split_dst_ = false;
   split_type_ = ObTabletSplitType::MAX_TYPE;
   split_cnt_ = 0;
   partkey_is_rowkey_prefix_ = false;

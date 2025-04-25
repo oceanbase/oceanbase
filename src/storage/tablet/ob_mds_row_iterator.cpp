@@ -69,7 +69,7 @@ int ObMdsRowIterator::init(
       LOG_WARN("fail to init access ctx", K(ret), K(scan_param), K(store_ctx), K(scan_param.read_version_range_));
     } else if (OB_FAIL(init_get_table_param(scan_param, tablet_handle))) {
       LOG_WARN("fail to init get table param", K(ret), K(scan_param));
-    } else if (OB_FAIL(table_scan_range_.init(scan_param, false/*is_tablet_spliting*/))) {
+    } else if (OB_FAIL(table_scan_range_.init(scan_param, *tablet_handle.get_obj(), false/*is_tablet_spliting*/))) {
       LOG_WARN("fail to init table scan range", K(ret), K(scan_param));
     } else if (OB_FAIL(init_and_open_iter(scan_param))) {
       LOG_WARN("fail to init and open iter", K(ret));

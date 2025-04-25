@@ -298,11 +298,14 @@ int ObTabletSplitMdsUserData::get_split_src_tablet(ObLS &ls, ObTabletHandle &src
   if (OB_FAIL(get_split_src_tablet_id(src_tablet_id))) {
     LOG_WARN("failed to get split src tablet id", K(ret));
   } else if (OB_FAIL(ls.get_tablet(src_tablet_id, src_tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
-          ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+          ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ret), K(src_tablet_id), K(ls.get_ls_id()));
   } else if (OB_ISNULL(src_tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet", K(ret), K(ls.get_ls_id()), K(src_tablet_id));
+  } else if (OB_UNLIKELY(src_tablet_handle.get_obj()->is_empty_shell())) {
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("split src tablet becomes empty shell", K(ret), K(ls.get_ls_id()), K(src_tablet_id));
   }
   return ret;
 }
@@ -335,13 +338,15 @@ int ObTabletSplitMdsUserData::get_tsc_split_info(
   int ret = OB_SUCCESS;
   split_info.reset();
   if (RANGE_PART_SPLIT_DST == status_) {
+    ObTabletHandle src_tablet_handle;
     ObTabletSplitMdsUserData src_data;
     int64_t timeout_us = 0;
-    if (OB_FAIL(get_split_src_tablet(ls, split_info.src_tablet_handle_))) {
+    split_info.is_split_dst_ = true;
+    if (OB_FAIL(get_split_src_tablet(ls, src_tablet_handle))) {
       LOG_WARN("failed to get src tablet handle", K(ret));
     } else if (OB_FAIL(ObTabletSplitMdsHelper::get_valid_timeout(abs_timeout_us, timeout_us))) {
       LOG_WARN("failed to get valid timeout", K(ret), K(abs_timeout_us));
-    } else if (OB_FAIL(split_info.src_tablet_handle_.get_obj()->ObITabletMdsInterface::get_split_data(src_data, timeout_us))) {
+    } else if (OB_FAIL(src_tablet_handle.get_obj()->ObITabletMdsInterface::get_split_data(src_data, timeout_us))) {
       LOG_WARN("failed to get split data", K(ret));
     } else {
       split_info.split_cnt_ = src_data.ref_tablet_ids_.count();
@@ -359,11 +364,15 @@ int ObTabletSplitMdsUserData::get_tsc_split_info(
             ObTabletHandle prev_dst_tablet_handle;
             ObTabletSplitMdsUserData prev_dst_data;
             ObTabletID prev_dst_tablet_id = src_data.ref_tablet_ids_.at(i-1);
-            if (OB_FAIL(ls.get_tablet(prev_dst_tablet_id, prev_dst_tablet_handle))) {
+            if (OB_FAIL(ls.get_tablet(prev_dst_tablet_id, prev_dst_tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+                    ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
               LOG_WARN("failed to get tablet", K(ret));
             } else if (OB_ISNULL(prev_dst_tablet_handle.get_obj())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("invalid tablet", K(ret));
+            } else if (OB_UNLIKELY(prev_dst_tablet_handle.get_obj()->is_empty_shell())) {
+              ret = OB_TABLET_NOT_EXIST;
+              LOG_WARN("split dst tablet becomes empty shell", K(ret), K(ls.get_ls_id()), K(prev_dst_tablet_id));
             } else if (OB_FAIL(ObTabletSplitMdsHelper::get_valid_timeout(abs_timeout_us, timeout_us))) {
               LOG_WARN("failed to get valid timeout", K(ret), K(abs_timeout_us));
             } else if (OB_FAIL(prev_dst_tablet_handle.get_obj()->ObITabletMdsInterface::get_split_data(prev_dst_data, timeout_us))) {
