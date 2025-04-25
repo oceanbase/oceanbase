@@ -3321,7 +3321,8 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       LOG_WARN("failed to create vid rowkey table iter", K(ret));
     } else if (OB_FAIL(create_das_scan_iter(alloc, com_aux_tbl_ctdef, com_aux_tbl_rtdef, com_aux_vec_iter))) {
       LOG_WARN("failed to create data table iter", K(ret));
-    } else if (OB_FAIL(create_das_scan_iter(alloc, rowkey_vid_ctdef, rowkey_vid_rtdef, rowkey_vid_table_iter))) {
+    } else if (OB_NOT_NULL(rowkey_vid_ctdef) && OB_NOT_NULL(rowkey_vid_rtdef)
+            && OB_FAIL(create_das_scan_iter(alloc, rowkey_vid_ctdef, rowkey_vid_rtdef, rowkey_vid_table_iter))) {
       LOG_WARN("failed to create rowkey vid table iter", K(ret));
     } else if (vec_aux_ctdef->vec_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
       && OB_FAIL(create_das_scan_iter(alloc, data_table_ctdef, data_table_rtdef, data_filter_iter))) {

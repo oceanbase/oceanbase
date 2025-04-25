@@ -56,7 +56,7 @@ int ObDASHNSWScanIter::do_table_scan()
 int ObDASHNSWScanIter::build_rowkey_vid_range()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(inv_idx_scan_iter_)) {
+  if (OB_ISNULL(inv_idx_scan_iter_) || OB_ISNULL(vec_aux_ctdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpeted error, data table iter or ctdef is nullptr", K(ret));
   } else {
@@ -65,18 +65,23 @@ int ObDASHNSWScanIter::build_rowkey_vid_range()
 
     const common::ObIArray<common::ObNewRange> &key_ranges = inv_idx_scan_iter->get_scan_param().key_ranges_;
     const common::ObIArray<common::ObNewRange> &ss_key_ranges = inv_idx_scan_iter->get_scan_param().ss_key_ranges_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
-      ObNewRange key_range = key_ranges.at(i);
-      key_range.table_id_ = rowkey_vid_ctdef->ref_table_id_;
-      if (OB_FAIL(rowkey_vid_scan_param_.key_ranges_.push_back(key_range))) {
-        LOG_WARN("fail to push back key range for rowkey vid scan param", K(ret), K(key_range));
+    if (OB_ISNULL(rowkey_vid_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey vid ctdef is null", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
+        ObNewRange key_range = key_ranges.at(i);
+        key_range.table_id_ = rowkey_vid_ctdef->ref_table_id_;
+        if (OB_FAIL(rowkey_vid_scan_param_.key_ranges_.push_back(key_range))) {
+          LOG_WARN("fail to push back key range for rowkey vid scan param", K(ret), K(key_range));
+        }
       }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ss_key_ranges.count(); ++i) {
-      ObNewRange ss_key_range = ss_key_ranges.at(i);
-      ss_key_range.table_id_ = rowkey_vid_ctdef->ref_table_id_;
-      if (OB_FAIL(rowkey_vid_scan_param_.ss_key_ranges_.push_back(ss_key_range))) {
-        LOG_WARN("fail to push back ss key range for rowkey vid scan param", K(ret), K(ss_key_range));
+      for (int64_t i = 0; OB_SUCC(ret) && i < ss_key_ranges.count(); ++i) {
+        ObNewRange ss_key_range = ss_key_ranges.at(i);
+        ss_key_range.table_id_ = rowkey_vid_ctdef->ref_table_id_;
+        if (OB_FAIL(rowkey_vid_scan_param_.ss_key_ranges_.push_back(ss_key_range))) {
+          LOG_WARN("fail to push back ss key range for rowkey vid scan param", K(ret), K(ss_key_range));
+        }
       }
     }
   }
@@ -796,7 +801,11 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   int ret = OB_SUCCESS;
   int64_t *brute_vids = nullptr;
   int brute_cnt = 0;
-  if (is_primary_pre_with_rowkey_with_filter_) {
+  const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+  if (OB_ISNULL(rowkey_vid_ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey vid ctdef is null.", K(ret));
+  } else if (is_primary_pre_with_rowkey_with_filter_) {
     if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
       LOG_WARN("hnsw pre filter(rowkey vid iter) failed to query result.", K(ret));
     }
