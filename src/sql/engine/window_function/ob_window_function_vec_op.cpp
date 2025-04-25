@@ -2228,7 +2228,7 @@ int ObWindowFunctionVecOp::compute_wf_values(WinFuncColExpr *end, int64_t &check
                    K(*input_stores_.cur_));
         } else if (OB_FAIL(it->reset_for_partition(batch_size, *wf_skip))) {
           LOG_WARN("reset for partition failed", K(ret));
-        } else if (it->wf_info_.can_push_down_ && MY_SPEC.is_push_down()) {
+        } else if (MY_SPEC.is_push_down()) {
           if (OB_FAIL(
                 detect_nullres_or_pushdown_rows(*it, *nullres_skip, *pushdown_skip, *wf_skip))) {
             // step.2 find nullres rows and bypass-pushdown rows
