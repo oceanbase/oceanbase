@@ -196,6 +196,10 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
     if (OB_FAIL(obvectorutil::fserialize(index, out))) {
       ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("fail to do vsag serialize", K(ret));
+      if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
+        ret = streambuf.get_error_code();
+        LOG_WARN("serialize streambuf has fail", K(ret));
+      }
     } else {
       streambuf.check_finish(); // do last callback to ensure all the data is written
       if (OB_FAIL(streambuf.get_error_code())) {
@@ -224,6 +228,10 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
     if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
       ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("fail to do vsag deserialize", K(ret));
+      if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
+        ret = streambuf.get_error_code();
+        LOG_WARN("deserialize streambuf has fail", K(ret));
+      }
     }
   }
   if (OB_FAIL(ret)) {
