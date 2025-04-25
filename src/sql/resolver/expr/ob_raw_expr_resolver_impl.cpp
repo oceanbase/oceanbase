@@ -3070,7 +3070,7 @@ int ObRawExprResolverImpl::process_prior_node(const ParseNode &node, ObRawExpr *
 int ObRawExprResolverImpl::mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < idx - 1; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && idx > 0 && i < idx - 1; ++i) {
     if(OB_FAIL(type_info.push_back(ObString(0, NULL)))) {
       LOG_WARN("fail to push back info", K(i), K(ret), K(idx));
     }
@@ -3303,16 +3303,20 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               result_type.set_length_semantics(session_info->get_actual_nls_length_semantics());
             }
             c_expr->set_result_type(result_type);
-            if (ob_is_enumset_inner_tc(param.get_type())) { // only in PL execute, enum or set paramters generate enumset_inner type param value
+            if (ob_is_enumset_inner_tc(c_expr->get_result_type().get_type())) { // only in PL execute, enum or set paramters generate enumset_inner type param value
               ObDatum datum;
               ObEnumSetInnerValue inner_value;
               ObSEArray<common::ObString, 64> type_info_value;
-              OZ (datum.from_obj(param));
-              OZ (datum.get_enumset_inner(inner_value));
-              if (ObEnumInnerType == param.get_type()) {
-                OZ (mock_enum_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+              if (ObNullType != param.get_type()) {
+                OZ (datum.from_obj(param));
+                OZ (datum.get_enumset_inner(inner_value));
+                if (ObEnumInnerType == c_expr->get_result_type().get_type()) {
+                  OZ (mock_enum_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+                } else {
+                  OZ (mock_set_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+                }
               } else {
-                OZ (mock_set_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+                OZ(type_info_value.push_back(ObString(0, NULL))); //mock null param type_info
               }
               if (OB_SUCC(ret)) {
                 ObSysFunRawExpr *out_expr = NULL;
