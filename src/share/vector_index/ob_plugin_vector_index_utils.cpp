@@ -227,34 +227,28 @@ int ObPluginVectorIndexUtils::read_object_from_vid_rowkey_table_iter(ObObj *inpu
   return ret;
 }
 
-int ObPluginVectorIndexUtils::get_extra_info_column_id(
-  ObSEArray<uint64_t, 4> &extra_column_ids,
-  uint64_t incr_index_table_id,
-  uint64_t data_table_id,
-  uint64_t tenant_id)
+int64_t ObPluginVectorIndexUtils::get_extra_column_count(const schema::ObTableParam &table_param,
+                                                         schema::ObIndexType type)
 {
-  INIT_SUCC(ret);
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *delta_buffer_schema = nullptr;
-  const ObTableSchema *table_schema = nullptr;
-  ObMultiVersionSchemaService *schema_service = MTL(schema::ObTenantSchemaService *)->get_schema_service();
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(schema_service));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("failed to get schema manager", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, incr_index_table_id, delta_buffer_schema))) {
-    LOG_WARN("failed to get table schema by index id.", K(ret), K(tenant_id), K(incr_index_table_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
-    LOG_WARN("failed to get data table scheam.", K(ret), K(data_table_id));
-  } else if (OB_ISNULL(delta_buffer_schema) || OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid index table schema.", K(ret), KP(delta_buffer_schema), KP(table_schema));
-  } else if (OB_FAIL(
-                 ObVectorIndexUtil::get_extra_info_column_id(*table_schema, *delta_buffer_schema, extra_column_ids))) {
-    LOG_WARN("failed to get extra info column id.", K(ret));
+  int64_t extra_column_count = 0;
+  // Note. if DELTA_BUFFER table change table definition, must change this!
+  if (type == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
+    extra_column_count = table_param.get_read_info().get_schema_column_count() -
+                         ObVecIndexBuilderUtil::OB_VEC_DELTA_BUFFER_TABLE_INDEX_COL_CNT -
+                         1;  // index_rowkey_column_cnt + common_col_cnt. The non-primary key columns of
+                             // delta_buffer_table and index_id_table are 1.
+  } else if (type == INDEX_TYPE_VEC_INDEX_ID_LOCAL) {
+    extra_column_count = table_param.get_read_info().get_schema_column_count() -
+                         ObVecIndexBuilderUtil::OB_VEC_INDEX_ID_TABLE_INDEX_COL_CNT - 1;
+  } else if (type == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL) {
+    extra_column_count =
+        table_param.get_read_info().get_schema_column_count() -
+        ObVecIndexBuilderUtil::OB_VEC_INDEX_SNAPSHOT_DATA_TABLE_INDEX_COL_CNT -
+        3;  // index_rowkey_column_cnt + common_col_cnt ,  The non-primary key columns of snapshot_data is 3
+  } else if (type == INDEX_TYPE_IS_NOT) {
+    extra_column_count = table_param.get_read_info().get_schema_rowkey_count();
   }
-  return ret;
+  return extra_column_count;
 }
 
 int ObPluginVectorIndexUtils::get_data_table_out_column_id(
@@ -725,6 +719,7 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
       ObAccessService *tsc_service = MTL(ObAccessService *);
       storage::ObTableScanParam inc_scan_param;
       schema::ObTableParam inc_table_param(allocator);
+      int64_t extra_info_actual_size = 0;
       if (OB_FAIL(read_local_tablet(ls_id,
                                     adapter,
                                     target_scn,
@@ -735,9 +730,15 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
                                     inc_table_param,
                                     delta_buf_iter))) {
         LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL), KPC(adapter));
+      } else if (OB_FAIL(adapter->get_extra_info_actual_size(extra_info_actual_size))) {
+        LOG_WARN("fail to get extra info actual size", K(ret), KPC(adapter));
       } else {
+        int64_t extra_info_column_count =
+            extra_info_actual_size > 0
+                ? ObPluginVectorIndexUtils::get_extra_column_count(inc_table_param, INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)
+                : 0;
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator);
+        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
         if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn))) {
           LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
         }

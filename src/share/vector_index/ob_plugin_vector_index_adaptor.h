@@ -221,10 +221,11 @@ public:
 class ObVectorQueryAdaptorResultContext {
 public:
   friend class ObPluginVectorIndexAdaptor;
-  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, ObIAllocator *allocator, ObIAllocator *tmp_allocator)
+  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, int64_t extra_column_count, ObIAllocator *allocator, ObIAllocator *tmp_allocator)
     : status_(PVQ_START),
       flag_(PVQP_MAX),
       tenant_id_(tenant_id),
+      extra_column_count_(extra_column_count),
       incr_iter_ctx_(nullptr),
       snap_iter_ctx_(nullptr),
       bitmaps_(nullptr),
@@ -247,7 +248,7 @@ public:
                                 ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE :
                                 vec_data_.count_ - vec_data_.curr_idx_; }
   int64_t get_dim() { return vec_data_.dim_; }
-  int64_t get_extra_column_count() { return vec_data_.extra_column_count_; }
+  int64_t get_extra_column_count() { return extra_column_count_; }
   int64_t get_count() { return vec_data_.count_; }
   bool if_next_batch() { return vec_data_.count_ > vec_data_.curr_idx_; }
   bool is_query_end() { return get_curr_idx() + get_vec_cnt() >= get_count();}
@@ -271,6 +272,7 @@ private:
   PluginVectorQueryResStatus status_;
   ObVectorQueryProcessFlag flag_;
   uint64_t tenant_id_;
+  int64_t extra_column_count_;
   void *incr_iter_ctx_;
   void *snap_iter_ctx_;
   ObVectorIndexRoaringBitMap *bitmaps_;

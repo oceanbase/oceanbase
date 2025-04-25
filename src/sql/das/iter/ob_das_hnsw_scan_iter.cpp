@@ -546,7 +546,7 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
 
   ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdapterGuard adaptor_guard;
-  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), &vec_op_alloc_, &allocator);
+  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), extra_column_count_, &vec_op_alloc_, &allocator);
   share::ObVectorIndexAcquireCtx index_ctx;
   index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
   index_ctx.vbitmap_tablet_id_ = index_id_tablet_id_;

@@ -88,8 +88,7 @@ public:
                                               int64_t extra_info_count,
                                               ObVecExtraInfoObj *output_extra_objs,
                                               bool &get_data);
-  static int get_extra_info_column_id(ObSEArray<uint64_t, 4> &extra_column_ids, uint64_t incr_index_table_id,
-                                      uint64_t data_table_id, uint64_t tenant_id);
+  static int64_t get_extra_column_count(const schema::ObTableParam &table_param, schema::ObIndexType type);
   static int get_data_table_out_column_id(ObSEArray<uint64_t, 4> &vector_column_ids,
                                           uint64_t incr_index_table_id,
                                           uint64_t data_table_id,

@@ -2105,8 +2105,7 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
       bool is_continue = true;
       int index = 0;
       int64_t dim = 0;
-      int64_t extra_info_actual_size = 0;
-      int64_t extra_column_count = 0;
+      int64_t extra_column_count = ctx->get_extra_column_count();
       ObObj *vids = nullptr;
       int64_t vector_cnt = bitmap_cnt > ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE ?
                            ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE : bitmap_cnt;
@@ -2121,8 +2120,6 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
         LOG_WARN("failed to create bitmap iter", K(ret));
       } else if (OB_FAIL(get_dim(dim))) {
         LOG_WARN("failed to get dim.", K(ret));
-      } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
-        LOG_WARN("failed to get extra_info_actual_size.", K(ret));
       } else if (OB_ISNULL(vids = static_cast<ObObj *>(ctx->tmp_allocator_->alloc(sizeof(ObObj) * bitmap_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
@@ -2135,13 +2132,8 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
         for (int64_t i = 0; OB_SUCC(ret) && i < vector_cnt; i++) {
           ctx->vec_data_.vectors_[i].set_null();
         }
-        if (OB_SUCC(ret) && extra_info_actual_size > 0) {
-          ObSEArray<uint64_t, 4> extra_column_ids;
-          if (OB_FAIL(ObPluginVectorIndexUtils::get_extra_info_column_id(extra_column_ids, inc_table_id_,
-                                                                         data_table_id_, tenant_id_))) {
-            LOG_WARN("failed to get extra column ids.", K(ret));
-          } else if (OB_FALSE_IT(extra_column_count = extra_column_ids.count())) {
-          } else if (OB_ISNULL(ctx->vec_data_.extra_info_objs_ =
+        if (OB_SUCC(ret) && extra_column_count > 0) {
+          if (OB_ISNULL(ctx->vec_data_.extra_info_objs_ =
                                    static_cast<ObVecExtraInfoObj *>(ctx->tmp_allocator_->alloc(
                                        sizeof(ObVecExtraInfoObj) * vector_cnt * extra_column_count)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
