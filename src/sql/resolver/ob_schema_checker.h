@@ -575,7 +575,8 @@ int flatten_udt_attributes(const uint64_t tenant_id,
                            ObString &qualified_name,
                            int64_t &schema_version,
                            ObIArray<ObString> &udt_qualified_names);
-  int get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos);
+  int get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id,
+                           uint64_t &attr_pos, int64_t &schema_version);
 
 
   int remove_tmp_cte_schemas(const ObString& cte_table_name);

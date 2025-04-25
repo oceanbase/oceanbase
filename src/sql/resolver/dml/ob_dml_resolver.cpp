@@ -861,7 +861,7 @@ int ObDMLResolver::transform_geo_dot_notation_attr(ParseNode &node, const ObStri
     if (!is_basic_attr) {
       ObString sub_name = raw_text.after(raw_text.reverse_find('.'));
       uint64_t attr_pos = 0;
-      if (OB_FAIL(schema_checker_->get_udt_attribute_id(udt_id, sub_name, sub_udt_id, attr_pos))) {
+      if (OB_FAIL(schema_checker_->get_udt_attribute_id(udt_id, sub_name, sub_udt_id, attr_pos, schema_version))) {
         LOG_WARN("fail to get tenant udt id", K(ret));
       } else if (sub_udt_id == OB_INVALID_ID || sub_udt_id <= ObMaxType) {
         ret = OB_ERR_BAD_FIELD_ERROR;
@@ -885,6 +885,7 @@ int ObDMLResolver::transform_geo_dot_notation_attr(ParseNode &node, const ObStri
       node.num_child_ = param_count;
       node.type_ = is_basic_attr ? T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS : T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT;
       node.children_ = param_vec;
+      LOG_TRACE("udt info: ", K(udt_id), K(sub_udt_id), K(attr_idx), K(is_basic_attr), K(schema_version));
     }
   }
 

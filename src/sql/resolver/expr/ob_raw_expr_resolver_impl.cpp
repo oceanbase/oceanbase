@@ -1545,6 +1545,8 @@ int ObRawExprResolverImpl::process_sql_udt_construct_node(const ParseNode *node,
               LOG_WARN("get udt construct schema version failed", K(ret));
             } else if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(udt_version))) {
               LOG_WARN("add udt type dependency failed", K(ret), K(udt_version));
+            } else {
+              LOG_TRACE("udt info: ", K(udt_version));
             }
           }
         } else {
