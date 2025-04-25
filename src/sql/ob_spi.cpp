@@ -6781,7 +6781,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
     } else {
       ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       bool old_client_return_rowid = session->is_client_return_rowid();
-      bool old_client_use_lob_locatorv2 = session->is_client_support_lob_locatorv2();
+      bool old_is_client_use_lob_locator = session->is_client_use_lob_locator();
+      bool old_is_client_support_lob_locatorv2 = session->is_client_support_lob_locatorv2();
       bool is_inner_session = session->is_inner();
       ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
       ObInnerSQLConnection *spi_conn = NULL;
@@ -6790,7 +6791,10 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       if (NULL != ctx->pl_ctx_) {
         session->set_client_return_rowid(false);
       }
-      if (lib::is_oracle_mode()) session->set_client_use_lob_locatorv2(true);
+      if (lib::is_oracle_mode()) {
+        session->set_client_use_lob_locator(true);
+        session->set_client_support_lob_locatorv2(true);
+      }
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
           if (exec_params.count() <= 0 && !sql.empty()) {
@@ -6825,7 +6829,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       !is_inner_session ? session->set_user_session() : (void)NULL;
       session->set_session_type(old_session_type);
       session->set_client_return_rowid(old_client_return_rowid);
-      session->set_client_use_lob_locatorv2(old_client_use_lob_locatorv2);
+      session->set_client_use_lob_locator(old_is_client_use_lob_locator);
+      session->set_client_support_lob_locatorv2(old_is_client_support_lob_locatorv2);
     }
   }
   return ret;

@@ -1238,12 +1238,19 @@ public:
     return capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR;
   }
 
+  // NOTICE: Don't use this function, this is only used in pl clob/blob for oracle tenant
+  inline void set_client_use_lob_locator(bool flag)
+  {
+    capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR = (flag ? 1 : 0);
+  }
+
   inline bool is_client_support_lob_locatorv2() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
   }
 
-  inline void set_client_use_lob_locatorv2(bool flag)
+  // NOTICE: Don't use this function, this is only used in pl clob/blob for oracle tenant
+  inline void set_client_support_lob_locatorv2(bool flag)
   {
     client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = (flag ? 1 : 0);
   }
