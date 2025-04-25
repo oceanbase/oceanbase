@@ -304,6 +304,7 @@ private:
       const ObIArray<ObTabletID> &dest_tablet_ids,
       const ObTabletHandle &src_tablet_handle,
       ObLS* ls);
+  int check_can_skip_replay(ObTabletHandle &handle, bool &can_skip);
 private:
   const ObTabletSplitFinishLog *log_;
 };

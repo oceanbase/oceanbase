@@ -2865,8 +2865,8 @@ int ObTabletSplitUtil::check_tablet_restore_status(
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_id.count(); ++i) {
       t_handle.reset();
       const ObTabletID &t_id = dest_tablets_id.at(i);
-      if (OB_FAIL(ls->get_tablet(t_id, t_handle))) {
-        LOG_WARN("failed to get table", K(ret), K(t_id));
+      if ((OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, t_id, t_handle, ObMDSGetTabletMode::READ_ALL_COMMITED)))) {
+        LOG_WARN("get tablet failed", K(ret), K(t_id));
       } else if (OB_ISNULL(tablet = t_handle.get_obj())) {
         ret = OB_NULL_CHECK_ERROR;
         LOG_WARN("unexpected null ptr of tablet", K(ret), KPC(tablet));
