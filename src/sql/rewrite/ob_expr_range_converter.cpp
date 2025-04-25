@@ -1063,7 +1063,8 @@ int ObExprRangeConverter::convert_in_expr(const ObRawExpr *expr, int64_t expr_de
              (l_expr->get_expr_type() == T_FUN_SYS_SET_COLLATION ||
               (l_expr->get_expr_type() == T_FUN_SYS_CAST &&
                l_expr->get_result_type().is_string_type()))) {
-    if (OB_FAIL(get_implicit_set_collation_in_range(l_expr, r_expr, expr->get_result_type(), expr_depth, range_node))) {
+    if (OB_FAIL(get_implicit_set_collation_in_range(l_expr, r_expr, expr->get_param_expr(0)->get_result_type(),
+                                                    expr_depth, range_node))) {
       LOG_WARN("failed to get implicit set collation range", K(ret));
     }
   }
@@ -3769,6 +3770,8 @@ int ObExprRangeConverter::get_implicit_set_collation_range(const ObRawExpr &l_ex
                                                            inner_expr,
                                                            can_extract))) {
       LOG_WARN("failed to check can extract implicit collation range", K(ret));
+    } else if (!can_extract) {
+      // do nothing
     } else if (OB_FAIL(get_basic_range_node(inner_expr,
                                             const_expr,
                                             cmp_type,
