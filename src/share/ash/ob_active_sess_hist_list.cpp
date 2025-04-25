@@ -93,7 +93,7 @@ int ObActiveSessHistList::resize_ash_size()
       LOG_WARN("failed to allocate ash buffer", KR(ret));
     } else {
       // copy old to new
-      ReverseIterator iter = create_reverse_iterator_no_lock();
+      ForwardIterator iter = create_forward_iterator_no_lock();
       while (iter.has_next()) {
         const ObActiveSessionStatItem &stat = iter.next();
         if (iter.distance() <= tmp->size()) {
