@@ -297,13 +297,20 @@ void ObDASTaskResultMgr::destory()
     while (bucket_it != mem_profile_map_.bucket_end()) {
       it_end = false;
       while (!it_end) {
-        MemProfileMap::hashtable::bucket_lock_cond blc(*bucket_it);
-        MemProfileMap::hashtable::readlocker locker(blc.lock());
-        MemProfileMap::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
-        if (node_it == bucket_it->node_end()) {
-          it_end = true;
-        } else {
-          destroy_mem_profile(node_it->first);
+        ObDASTCBMemProfileKey key;
+        {
+          MemProfileMap::hashtable::bucket_lock_cond blc(*bucket_it);
+          MemProfileMap::hashtable::readlocker locker(blc.lock());
+          MemProfileMap::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
+          if (node_it == bucket_it->node_end()) {
+            it_end = true;
+          } else {
+            key.init(node_it->first);
+          }
+        }
+
+        if (!it_end) {
+          destroy_mem_profile(key);
         }
       }
       ++ bucket_it;
