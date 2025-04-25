@@ -745,9 +745,6 @@ private:
   int calc_win_func_helper_with_hint(const ObLogicalOperator *op,
                                      WinFuncOpHelper &win_func_helper,
                                      bool &is_valid);
-  int check_win_dist_method_valid(const WinFuncOpHelper &win_func_helper,
-                                  bool &is_valid);
-
 int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                    ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
                                    ObIArray<CandidatePlan> &total_plans,

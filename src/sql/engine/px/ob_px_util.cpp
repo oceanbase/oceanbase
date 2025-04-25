@@ -3347,7 +3347,7 @@ int ObSlaveMapUtil::build_pwj_slave_map_mn_group(ObDfo &parent, ObDfo &child, ui
    */
   if (parent.get_sqcs_count() != child.get_sqcs_count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pwj must have some sqc count", K(ret));
+    LOG_WARN("pwj must have the same sqc count", K(ret), K(parent.get_sqcs_count()), K(child.get_sqcs_count()));
   } else if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
     LOG_WARN("failed to check dfo pair", K(ret));
   } else if (OB_FAIL(build_mn_channel_per_sqcs(

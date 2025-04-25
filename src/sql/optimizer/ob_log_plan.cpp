@@ -5577,20 +5577,24 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
   int ret = OB_SUCCESS;
   bool is_partition_wise = false;
   bool can_re_parallel = false;
+  bool force_slave_mapping = false;
   ObQueryCtx* query_ctx = NULL;
   group_dist_methods = DistAlgo::DIST_BASIC_METHOD |
                        DistAlgo::DIST_PARTITION_WISE |
                        DistAlgo::DIST_HASH_HASH |
                        DistAlgo::DIST_PULL_TO_LOCAL;
+  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
+    force_slave_mapping = true;
+  }
   if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(top), K(query_ctx));
   } else {
-    if (get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
+    if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) {
       group_dist_methods |= DistAlgo::DIST_HASH_HASH_LOCAL;
     }
     if (!get_optimizer_context().is_partition_wise_plan_enabled() &&
-        get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_2)) {
+        query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_2)) {
       group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       OPT_TRACE("ignore partition wise group operator by tenant config");
     }
@@ -5650,12 +5654,16 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
   }
 
   if (OB_SUCC(ret) && (group_dist_methods & DistAlgo::DIST_HASH_HASH_LOCAL)) {
-    if (!reduce_exprs.empty() &&
-        OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
-                                                                is_partition_wise))) {
+    if (NULL == top->get_strong_sharding()
+        || !top->get_strong_sharding()->is_distributed_with_table_location_and_partitioning()) {
+      group_dist_methods &= ~DistAlgo::DIST_HASH_HASH_LOCAL;
+      OPT_TRACE("group operator will not use hash local method, due to the sharding");
+    } else if (!reduce_exprs.empty() &&
+               OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
+                                                                       is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise &&
-               (top->is_parallel_more_than_part_cnt(2) ||
+               (top->is_parallel_more_than_part_cnt(2) || force_slave_mapping ||
                 DistAlgo::DIST_HASH_HASH_LOCAL == group_dist_methods)) {
       group_dist_methods = DistAlgo::DIST_HASH_HASH_LOCAL;
       OPT_TRACE("group operator will use hash local method and prune other method");
@@ -5672,7 +5680,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise) {
       if (top->is_parallel_more_than_part_cnt() &&
-          get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
+          query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
         OPT_TRACE("group operator will use partition wise method");
       } else {
         group_dist_methods = DistAlgo::DIST_PARTITION_WISE;
@@ -6000,16 +6008,7 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
       LOG_WARN("failed to calculate distinct", K(ret));
     } else { /* do nothing */ }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
-      if (!groupby_helper.force_basic_ &&
-          !groupby_helper.force_partition_wise_ &&
-          !groupby_helper.force_pull_to_local_ &&
-          !groupby_helper.force_dist_hash_) {
-        groupby_helper.force_hash_local_ = true;
-      }
-    }
-  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(compute_groupby_dop_by_auto_dop(group_exprs,
                                                      rollup_exprs,
@@ -6312,12 +6311,6 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
     LOG_WARN("failed to check can storage distinct pushdown", K(ret));
   } else if (OB_FAIL(check_basic_distinct_pushdown(distinct_helper.can_basic_pushdown_))) {
     LOG_WARN("failed to check can basic distinct pushdown", K(ret));
-  } else if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
-    if (!distinct_helper.force_basic_ &&
-        !distinct_helper.force_partition_wise_ &&
-        !distinct_helper.force_dist_hash_) {
-      distinct_helper.force_hash_local_ = true;
-    }
   }
 
   if (OB_SUCC(ret)) {

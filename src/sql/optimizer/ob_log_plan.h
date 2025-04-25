@@ -491,9 +491,9 @@ public:
                                                                   !force_pull_to_local_ &&
                                                                   !force_hash_local_); }
     inline bool allow_partition_wise() const { return ignore_hint_ || (!force_basic_ &&
-                                                                        !force_dist_hash_ &&
-                                                                        !force_pull_to_local_ &&
-                                                                        !force_hash_local_); }
+                                                                       !force_dist_hash_ &&
+                                                                       !force_pull_to_local_ &&
+                                                                       !force_hash_local_); }
     inline bool allow_pull_to_local() const { return ignore_hint_ || (!force_basic_ &&
                                                                       !force_dist_hash_ &&
                                                                       !force_partition_wise_ &&
@@ -502,9 +502,9 @@ public:
     inline bool force_basic() const { return ignore_hint_ ? false : force_basic_; }
 
     inline bool allow_hash_local() const { return ignore_hint_ || (!force_basic_ &&
-                                                                      !force_dist_hash_ &&
-                                                                      !force_partition_wise_ &&
-                                                                      !force_pull_to_local_); }
+                                                                   !force_dist_hash_ &&
+                                                                   !force_partition_wise_ &&
+                                                                   !force_pull_to_local_); }
 
     inline void reset_three_stage_info()
     {
