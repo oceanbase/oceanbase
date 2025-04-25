@@ -392,7 +392,7 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
           break;
         }
         case ObUInt64Type: {
-          ADD_SIGNED_FIXED_ARRAY_OBJ(int64_t);
+          ADD_UNSIGNED_FIXED_ARRAY_OBJ(uint64_t);
           break;
         }
         case ObDecimalIntType: {
