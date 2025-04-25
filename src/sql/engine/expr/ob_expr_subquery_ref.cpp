@@ -336,7 +336,8 @@ int ObExprSubQueryRef::expr_eval(
       obj->set_extend(reinterpret_cast<int64_t>(data), pl::PL_CURSOR_TYPE);
       expr_datum.from_obj(*obj);
       OX (cursor = reinterpret_cast<pl::ObPLCursorInfo*>(obj->get_ext()));
-      OX (cursor->set_ref_count(1));
+      OX (cursor->set_ref_count(0));
+      OX (cursor->set_is_returning(true)); //cursor expr is not referenced by any variable, like a returning cursor
     }
     CK (OB_NOT_NULL(cursor));
     CK (OB_NOT_NULL(session));

@@ -1628,6 +1628,7 @@ int ObPL::execute(ObExecContext &ctx,
         if (routine.get_out_args().has_member(i)) {
           if (pl.get_params().at(i).is_pl_extend()) {
             if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
+                && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
               OX (params->at(i) = pl.get_params().at(i));
               params->at(i).set_int(0);
@@ -1635,7 +1636,8 @@ int ObPL::execute(ObExecContext &ctx,
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
-            } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+            } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
+                       || pl.get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE) {
               ObObjParam &cursor_param = pl.get_params().at(i);
               const ObPLCursorInfo *cursor = NULL;
               OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
@@ -3296,7 +3298,8 @@ int ObPLExecState::final(int ret)
   for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); i++) {
     if (func_.get_out_args().has_member(i)
         && get_params().at(i).is_pl_extend()
-        && get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+        && (get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
+            || get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE)) {
       tmp_ret = ObSPIService::spi_add_ref_cursor_refcount(&get_exec_ctx(), &get_params().at(i), -1);
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("faild to dec ref count. ", K(tmp_ret), K(get_params().at(i)));

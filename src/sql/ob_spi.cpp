@@ -8197,6 +8197,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       } else {
         if (params->at(param_idx).is_pl_extend()
             && params->at(param_idx).get_ext() != 0
+            && params->at(param_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
+            && params->at(param_idx).get_meta().get_extend_type() != PL_CURSOR_TYPE
             && params->at(param_idx).get_ext() != calc_array->at(0).get_ext()) {
           OZ (ObUserDefinedType::destruct_objparam(*ctx->allocator_, params->at(param_idx), ctx->exec_ctx_->get_my_session()));
         }
@@ -8253,9 +8255,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           bool is_ref_cursor = false;
           is_ref_cursor = params->at(param_idx).is_ref_cursor_type();
           if (params->at(param_idx).is_pl_extend()) {
-            if (params->at(param_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-              ObUserDefinedType::destruct_objparam(*ctx->allocator_, params->at(param_idx), ctx->exec_ctx_->get_my_session());
-            }
+            //do nothing
           } else {
             void *ptr = params->at(param_idx).get_deep_copy_obj_ptr();
             if (nullptr != ptr) {
@@ -8263,7 +8263,12 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             }
             params->at(param_idx).set_null();
           }
-          OX (params->at(param_idx) = result);
+          if (is_ref_cursor   //cursor use spi_copy_ref_cursor to copy
+              || (params->at(param_idx).is_pl_extend() && (params->at(param_idx).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE || params->at(param_idx).get_meta().get_extend_type() == PL_CURSOR_TYPE))) {
+            OZ (spi_copy_ref_cursor(ctx, &ctx->exec_ctx_->get_allocator(), &result, &params->at(param_idx)));
+          } else {
+            OX (params->at(param_idx) = result);
+          }
           OX (params->at(param_idx).set_is_ref_cursor_type(is_ref_cursor));
           OX (params->at(param_idx).set_param_meta());
         }
