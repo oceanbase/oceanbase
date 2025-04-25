@@ -43,11 +43,11 @@ int ObVectorIndexUtil::parser_params_from_string(
   } else if (OB_FAIL(split_on(tmp_param_str, ',', tmp_param_strs))) {
     LOG_WARN("fail to split func expr", K(ret), K(tmp_param_str));
   } else if (index_type != ObVectorIndexType::VIT_SPIV_INDEX && tmp_param_strs.count() < 2) {  // at lease two params(distance, type) should be set
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid vector index param count", K(tmp_param_strs.count()));
   } else if (index_type == ObVectorIndexType::VIT_SPIV_INDEX && tmp_param_strs.count() != 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid vector index param count", K(tmp_param_strs.count()));
   } else {
     const int64_t default_m_value = 16;
     const int64_t default_ef_construction_value = 200;
@@ -61,8 +61,8 @@ int ObVectorIndexUtil::parser_params_from_string(
       if (OB_FAIL(split_on(one_tmp_param_str, '=', one_tmp_param_strs))) {
         LOG_WARN("fail to split one param str", K(ret), K(one_tmp_param_str));
       } else if (one_tmp_param_strs.count() != 2) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector index one param pair count", K(one_tmp_param_strs.count()));
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid vector index one param pair count", K(one_tmp_param_strs.count()));
       } else {
         ObString new_param_name = one_tmp_param_strs.at(0).trim();
         ObString new_param_value = one_tmp_param_strs.at(1).trim();
@@ -188,8 +188,8 @@ int ObVectorIndexUtil::parser_params_from_string(
             }
           }
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected vector index param name", K(ret), K(new_param_name));
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector index param name", K(ret), K(new_param_name));
         }
         if (index_type == ObVectorIndexType::VIT_SPIV_INDEX) {
           param.type_ = ObVectorIndexAlgorithmType::VIAT_SPIV;
@@ -334,6 +334,8 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
   } else if (OB_FAIL(parser_params_from_string(new_index_params, ObVectorIndexType::VIT_HNSW_INDEX, new_vec_param, set_default))) {
     LOG_WARN("fail to parse new index parsm", K(ret), K(new_index_params));
   } else {
+    bool new_distance_is_set = false;
+    bool new_type_is_set = false;
     char not_set_params_str[OB_MAX_TABLE_NAME_LENGTH];
     int64_t pos = 0;
     // set distance
@@ -342,6 +344,8 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
       if (new_vec_param.dist_algorithm_ != old_vec_param.dist_algorithm_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("distance must be same in rebuild now", K(ret), K(new_vec_param), K(old_vec_param));
+      } else {
+        new_distance_is_set = true;
       }
     } else {
       ObString tmp_distance;
@@ -393,6 +397,8 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
           (old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("it must be rebuild from hnsw <==> hnsw_sq now", K(ret), K(new_vec_param), K(old_vec_param));
+      } else {
+        new_type_is_set = true;
       }
     } else {
       ObString tmp_type;
@@ -439,6 +445,15 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
       // ef_construction is reset
     } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_CONSTRUCTION=%ld", old_vec_param.ef_construction_))) {
       LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_construction_));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (new_distance_is_set && new_type_is_set) {
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unexpected setting of vector index param, distance or type has not been set",
+        K(ret), K(new_distance_is_set), K(new_type_is_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance or type not set is");
     }
 
     if (OB_SUCC(ret)) {
