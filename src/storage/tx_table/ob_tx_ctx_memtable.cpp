@@ -233,7 +233,7 @@ int ObTxCtxMemtable::flush(SCN recycle_scn, const int64_t trace_id, bool need_fr
       int64_t cur_time_us = ObTimeUtility::current_time();
       share::SCN cur_time_scn;
       ObScnRange scn_range;
-      if (OB_FAIL(cur_time_scn.convert_from_ts(cur_time_us))) {
+      if (OB_FAIL(cur_time_scn.convert_for_tx(cur_time_us))) {
         TRANS_LOG(WARN, "failed to convert_from_ts", K(ret), K(cur_time_us));
       } else {
         scn_range.start_scn_.set_base();
