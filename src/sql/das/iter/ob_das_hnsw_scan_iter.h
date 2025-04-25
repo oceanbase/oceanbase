@@ -117,6 +117,26 @@ public:
   bool post_with_filter_;
 };
 class ObSimpleMaxHeap;
+
+class ObHnswSimpleCmpInfo
+{
+  public:
+  ObHnswSimpleCmpInfo()
+  : inited_(false),
+    filter_arg_(),
+    filter_expr_(nullptr) {}
+
+  ~ObHnswSimpleCmpInfo() {};
+  void reset() {
+    inited_ = false;
+    filter_expr_ = nullptr;
+  }
+
+  bool inited_;
+  ObObj filter_arg_;
+  ObExpr* filter_expr_;
+};
+
 class ObDASHNSWScanIter : public ObDASIter
 {
 public:
@@ -174,7 +194,8 @@ public:
       only_complete_data_(false),
       is_pre_filter_(false),
       post_with_filter_(false),
-      extra_column_count_(0) {
+      extra_column_count_(0),
+      simple_cmp_info_() {
       }
 
   virtual ~ObDASHNSWScanIter() {}
@@ -283,6 +304,8 @@ private:
   int get_extra_idx_in_outexprs(ObIArray<int64_t> &extra_in_rowkey_idxs);
   bool can_be_last_search(int64_t old_ef, int64_t need_cnt_next, float select_ratio);
   int init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVectorQueryAdaptorResultContext *ada_ctx);
+  int check_is_simple_cmp_filter();
+  int get_simple_cmp_filter_res(ObNewRow *row, bool& res);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
@@ -353,6 +376,7 @@ private:
   bool is_pre_filter_;
   bool post_with_filter_;
   int64_t extra_column_count_;
+  ObHnswSimpleCmpInfo simple_cmp_info_;
 };
 
 

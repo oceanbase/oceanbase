@@ -18,7 +18,7 @@
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_vector.h"
-
+#include "sql/engine/expr/ob_expr_operator.h"
 namespace oceanbase
 {
 using namespace common;
@@ -186,7 +186,8 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
       rowkey_vid_iter_->set_scan_param(rowkey_vid_scan_param_);
     }
   }
-
+  LOG_TRACE("vector index show basic hnsw search info", K(dim_), K(selectivity_), K(extra_column_count_), K(is_primary_pre_with_rowkey_with_filter_), K(is_pre_filter_),
+                                          K(data_filter_ctdef_), K(post_with_filter_), K(vec_aux_ctdef_->vec_type_));
   return ret;
 }
 
@@ -802,6 +803,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   } else if (OB_FAIL(process_adaptor_state_pre_filter_with_idx_filter(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
     LOG_WARN("hnsw pre filter(idx iter) failed to query result.", K(ret));
   }
+  LOG_TRACE("vector index show pre-filter query info", K(is_primary_pre_with_rowkey_with_filter_), K(go_brute_force_));
   if (OB_FAIL(ret)) {
   } else if (go_brute_force_) {
     bool need_complete_data = false;
@@ -1251,6 +1253,52 @@ bool ObDASHNSWScanIter::can_be_last_search(int64_t old_ef,
   return ret_bool;
 }
 
+/* simple_cmp_filter:
+1. only one filter (c1 > 1 and c2 < 2 is not supported);
+2. rowkey column only one；
+3. simple compare, including: >, <, >=, <=, =, !=;
+*/
+int ObDASHNSWScanIter::check_is_simple_cmp_filter()
+{
+  int ret = OB_SUCCESS;
+  const ObDASScanCtDef * rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+  if (OB_NOT_NULL(data_filter_ctdef_) && OB_NOT_NULL(data_filter_rtdef_) && OB_NOT_NULL(rowkey_vid_ctdef)
+      && extra_column_count_ == 1 && rowkey_vid_ctdef->rowkey_exprs_.count() == 1
+      && !data_filter_ctdef_->pd_expr_spec_.pushdown_filters_.empty()
+      && data_filter_ctdef_->pd_expr_spec_.pushdown_filters_.count() == 1) {
+    ObExpr* filter_expr = data_filter_ctdef_->pd_expr_spec_.pushdown_filters_.at(0);
+    if (OB_NOT_NULL(filter_expr) && filter_expr->arg_cnt_ == 2) {
+      ObExprOperatorType filter_type = filter_expr->type_;
+      if (T_OP_EQ == filter_type || T_OP_NE == filter_type
+        || T_OP_GT == filter_type || T_OP_LT == filter_type
+        || T_OP_GE == filter_type || T_OP_LE == filter_type) {
+        ObExpr *arg1 = filter_expr->args_[0];
+        ObExpr *arg2 = filter_expr->args_[1];
+        ObExpr* arg_col = (arg1->type_ == T_REF_COLUMN) ? arg1 : arg2;
+        ObExpr* arg_num = (arg1->type_ == T_REF_COLUMN) ? arg2 : arg1;
+        ObExpr *rowkey_expr = rowkey_vid_ctdef->rowkey_exprs_.at(0);
+        simple_cmp_info_.inited_ = false;
+        bool is_rowkey_filter = rowkey_expr == arg_col;
+        simple_cmp_info_.filter_expr_ = filter_expr;
+        ObDatum* filter_datum_ = nullptr;
+        if (!is_rowkey_filter) {
+          // do nothing
+        } else if (OB_UNLIKELY(OB_ISNULL(data_filter_rtdef_->eval_ctx_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("eval ctx is null", K(ret));
+        } else if (OB_UNLIKELY(OB_FAIL(arg_num->eval(*(data_filter_rtdef_->eval_ctx_), filter_datum_)))) {
+          LOG_WARN("eval filter arg failed", K(ret));
+        } else if (OB_FAIL(filter_datum_->to_obj(simple_cmp_info_.filter_arg_, arg_num->obj_meta_))) {
+          LOG_WARN("get filter obj failed", K(ret), K(arg_num->obj_meta_));
+        } else {
+          simple_cmp_info_.inited_ = OB_NOT_NULL(arg_col);
+        }
+      } // else not simple cmp
+    }
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::process_adaptor_state_post_filter(
     ObVectorQueryAdaptorResultContext *ada_ctx,
     ObPluginVectorIndexAdaptor* adaptor,
@@ -1264,7 +1312,12 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   if (post_with_filter_) {
     query_cond_.query_limit_ = static_cast<uint32_t>(std::ceil(query_cond_.query_limit_ * query_ratio));
     query_cond_.ef_search_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(query_cond_.query_limit_));
+    if (OB_FAIL(check_is_simple_cmp_filter())) {
+      LOG_WARN("failed to check can filter in hnsw.", K(ret));
+    }
   }
+  LOG_TRACE("vector index show post-filter query info", K(post_with_filter_), K(simple_cmp_info_.inited_), KPC(simple_cmp_info_.filter_expr_),
+  K(extra_column_count_), K(query_cond_.query_limit_), K(query_cond_.ef_search_), K(post_with_filter_));
   while (OB_SUCC(ret) && !end_search) {
     ++recycle_times;
     if (first_search && OB_FAIL(process_adaptor_state_post_filter_once(ada_ctx, adaptor))) {
@@ -1282,7 +1335,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
       end_search = true;
     }
   }
-  LOG_DEBUG("print hnsw search times", K(recycle_times));
+  LOG_TRACE("print hnsw search times", K(recycle_times));
   return ret;
 }
 
@@ -1325,6 +1378,49 @@ int ObDASHNSWScanIter::set_rowkey_by_vid(ObNewRow *row)
         LOG_WARN("failed to reuse com aux vec iter.", K(ret));
       } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(rowkey, data_filter_scan_param_, data_filter_ctdef_->ref_table_id_))) {
         LOG_WARN("failed to set lookup key", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASHNSWScanIter::get_simple_cmp_filter_res(ObNewRow *row, bool& res)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tmp_adaptor_vid_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("shouldn't be null.", K(ret), KPC(adaptor_vid_iter_), KPC(tmp_adaptor_vid_iter_));
+  } else {
+    int64_t extra_column_cnt = tmp_adaptor_vid_iter_->get_extra_column_count();
+    ObExpr* filter_expr = simple_cmp_info_.filter_expr_;
+    if (OB_ISNULL(row) || OB_ISNULL(filter_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("should not be null", K(ret), KPC(row), KPC(filter_expr));
+    } else if (row->get_count() < ObAdaptorIterRowIdx::ROWKEY_START_IDX + extra_column_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("should not be one row", K(row->get_count()), K(ret));
+    } else if (extra_column_cnt <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("shouldn't be null.", K(ret), K(extra_column_count_), K(extra_column_cnt));
+    } else {
+      int result = 0;
+      ObExpr *arg1 = filter_expr->args_[0];
+      ObExpr *arg2 = filter_expr->args_[1];
+      bool is_first_col = arg1->type_ == T_REF_COLUMN;
+      ObExprOperatorType filter_type = filter_expr->type_;
+      ObObj* obj1 = is_first_col? &row->get_cell(ObAdaptorIterRowIdx::ROWKEY_START_IDX) : &simple_cmp_info_.filter_arg_;
+      ObObj* obj2 = is_first_col? &simple_cmp_info_.filter_arg_ : &row->get_cell(ObAdaptorIterRowIdx::ROWKEY_START_IDX);
+      if (obj1->is_string_type() && obj2->is_string_type()) {
+        obj1->compare(*obj2, is_first_col? obj1->get_collation_type() : obj2->get_collation_type(), result);
+      } else {
+        obj1->compare(*obj2, result);
+      }
+      if (result == 0) {
+        res = (filter_type == T_OP_EQ || filter_type == T_OP_GE || filter_type == T_OP_LE);
+      } else if (result == 1) {
+        res = (filter_type == T_OP_NE || filter_type == T_OP_GT || filter_type == T_OP_GE);
+      } else if (result == -1) {
+        res = (filter_type == T_OP_NE || filter_type == T_OP_LT || filter_type == T_OP_LE);
       }
     }
   }
@@ -1380,6 +1476,15 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
             LOG_WARN("failed to get next next row from adaptor vid iter", K(ret), K(i));
           } else {
             ret = OB_SUCCESS;
+          }
+        } else if (simple_cmp_info_.inited_) { // use simpel cmp
+          bool filter_res = false;
+          if (OB_FAIL(get_simple_cmp_filter_res(row, filter_res))) {
+            LOG_WARN("failed to get simple cmp filter res.", K(ret), K(i));
+          } else if (filter_res && (OB_FAIL(adaptor_vid_iter_->add_result(
+                        unfiltered_vids[i], unfiltered_distance[i],
+                        unfiltered_extra_info.is_null() ? nullptr : unfiltered_extra_info[i])))) {
+            LOG_WARN("failed to add result", K(ret), K(i));
           }
         } else if (OB_FAIL(set_rowkey_by_vid(row))) {
           LOG_WARN("failed to set rowkey by vid.", K(ret), K(i));
@@ -1719,7 +1824,8 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     } else {
       query_cond.extra_column_count_ = extra_column_count_;
     }
-
+    LOG_TRACE("vector index show basic hnsw query cond", K(query_cond.only_complete_data_), K(query_cond.ef_search_), K(query_cond.query_limit_),
+                                            K(query_cond.extra_column_count_), K(query_cond.query_vector_));
   }
   return ret;
 }
