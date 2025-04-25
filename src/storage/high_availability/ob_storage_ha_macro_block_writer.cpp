@@ -141,10 +141,13 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
         break;
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(dag_id_, is_cancel))) {
         STORAGE_LOG(WARN, "failed to check is task canceled", K(ret), K_(dag_id));
-      } else if (is_cancel){
+      } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
           K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
+        break;
+      } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
+        STORAGE_LOG(WARN, "failed to check disk space", K(ret));
         break;
       }
       dag_yield();
