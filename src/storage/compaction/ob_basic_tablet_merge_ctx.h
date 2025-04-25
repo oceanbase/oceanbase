@@ -331,7 +331,7 @@ protected:
   virtual void after_update_tablet_for_major();
   virtual int collect_running_info() = 0;
   int swap_tablet();
-  int get_medium_compaction_info(); // for major
+  int prepare_from_medium_compaction_info(const ObMediumCompactionInfo *medium_info); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
   int get_meta_compaction_info(); // for meta major
   virtual int check_medium_info(

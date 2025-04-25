@@ -295,7 +295,13 @@ int ObStaticMergeParam::cal_major_merge_param(
     } else if (is_convert_co_major_merge(get_merge_type())) {
       co_base_snapshot_version_ = version_range_.snapshot_version_;
     } else if (is_major_merge_type(get_merge_type())) {
-      co_base_snapshot_version_ = sstable_meta_hdl.get_sstable_meta().get_basic_meta().get_co_base_snapshot_version();
+      if (data_version_ < DATA_VERSION_4_3_5_2) {
+        co_base_snapshot_version_ = sstable_meta_hdl.get_sstable_meta().get_basic_meta().get_co_base_snapshot_version();
+      } else if (base_table->is_row_store_major_sstable() && !schema_->is_row_store()) { // alter column group delayed
+        co_base_snapshot_version_ = version_range_.snapshot_version_;
+      } else {
+        co_base_snapshot_version_ = sstable_meta_hdl.get_sstable_meta().get_co_base_snapshot_version();
+      }
     } else {
       co_base_snapshot_version_ = 0;
     }
@@ -1221,22 +1227,16 @@ int ObBasicTabletMergeCtx::update_storage_schema_by_memtable(
   return ret;
 }
 
-int ObBasicTabletMergeCtx::get_medium_compaction_info()
+int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCompactionInfo *medium_info)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = get_tablet();
-  ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
-  ObMediumCompactionInfo *medium_info = nullptr;
-
-  if (OB_UNLIKELY(tablet->get_multi_version_start() > get_merge_version())) {
+  if (OB_UNLIKELY(get_tablet()->get_multi_version_start() > get_merge_version())) {
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_ERROR("multi version data is discarded, should not execute compaction now", K(ret),
         "param", get_dag_param(), KPC(this));
-  } else if (OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(),
-                                                                                  *tablet,
-                                                                                  temp_allocator,
-                                                                                  medium_info))) {
-    LOG_WARN("fail to get medium info with merge version", K(ret), K(get_merge_version()), KPC(tablet));
+  } else if (OB_ISNULL(medium_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid medium info", K(ret));
   } else if (medium_info->contain_parallel_range_
       && !parallel_merge_ctx_.is_valid()
       && OB_FAIL(parallel_merge_ctx_.init(*medium_info))) {
@@ -1282,8 +1282,6 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
       && OB_FAIL(filter_ctx_.mds_filter_info_.assign(mem_ctx_.get_allocator(), medium_info->mds_filter_info_))) {
     LOG_WARN("failed to assign mds filter info", KR(ret), KPC(medium_info));
   }
-  // always free medium info
-  ObTabletObjLoadHelper::free(temp_allocator, medium_info);
 
   return ret;
 }

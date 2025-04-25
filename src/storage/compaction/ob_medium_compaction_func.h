@@ -153,6 +153,7 @@ protected:
       const int64_t start_idx,
       const int64_t end_idx,
       const bool is_medium_checker,
+      ObTabletDataChecksumChecker &data_checksum_checker,
       ObIArray<ObCkmErrorTabletLSInfo> &error_pairs,
       int &check_ret);
   int choose_medium_snapshot(

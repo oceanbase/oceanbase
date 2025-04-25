@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_refresh_tablet_util.h"
@@ -460,9 +461,16 @@ int ObTabletMajorMergeCtx::prepare_schema()
   } else if (!MERGE_SCHEDULER_PTR->could_major_merge_start()) {
     ret = OB_CANCELED;
     LOG_INFO("Merge has been paused", KR(ret), "param", get_dag_param());
-  } else if (OB_FAIL(get_medium_compaction_info())) {
-    // have checked medium info inside
-    LOG_WARN("failed to get medium compaction info", KR(ret), KPC(this));
+  } else {
+    ObArenaAllocator allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObMediumCompactionInfo *medium_info = nullptr;
+    if (OB_FAIL(OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info)))) {
+    LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
+    } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) {
+      // have checked medium info inside
+      LOG_WARN("failed to get medium compaction info", KR(ret), KPC(this), KPC(medium_info));
+    }
+    ObTabletObjLoadHelper::free(allocator, medium_info);
   }
   return ret;
 }

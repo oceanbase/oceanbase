@@ -4284,7 +4284,8 @@ def_table_schema(
     ('data_checksum', 'int'),
     ('column_checksums', 'longtext', 'true'),
     ('b_column_checksums', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
-    ('data_checksum_type', 'int', 'false', 0)
+    ('data_checksum_type', 'int', 'false', 0),
+    ('co_base_snapshot_version', 'uint', 'false', 'OB_MAX_SCN_TS_NS')
   ],
 )
 
@@ -30601,12 +30602,18 @@ def_table_schema(
              CKM.DATA_CHECKSUM,
              CKM.B_COLUMN_CHECKSUMS,
              CKM.COMPACTION_SCN,
+             CKM.CO_BASE_SNAPSHOT_VERSION,
              M.REPLICA_TYPE
       FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM CKM
       JOIN OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE M
       ON CKM.TENANT_ID = M.TENANT_ID AND CKM.LS_ID = M.LS_ID AND CKM.SVR_IP = M.SVR_IP AND CKM.SVR_PORT = M.SVR_PORT
     ) J
-  GROUP BY J.TENANT_ID, J.TABLET_ID, J.COMPACTION_SCN, J.REPLICA_TYPE
+  GROUP BY J.TENANT_ID, J.TABLET_ID, J.COMPACTION_SCN,
+  CASE
+    WHEN J.REPLICA_TYPE = 1040 THEN 1040
+    ELSE 0
+  END,
+  J.CO_BASE_SNAPSHOT_VERSION
   HAVING MIN(J.DATA_CHECKSUM) != MAX(J.DATA_CHECKSUM)
          OR MIN(J.ROW_COUNT) != MAX(J.ROW_COUNT)
          OR MIN(J.B_COLUMN_CHECKSUMS) != MAX(J.B_COLUMN_CHECKSUMS)

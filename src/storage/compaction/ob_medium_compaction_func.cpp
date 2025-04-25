@@ -1300,6 +1300,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     const int64_t start_idx,
     const int64_t end_idx,
     const bool is_medium_checker,
+    ObTabletDataChecksumChecker &data_checksum_checker,
     ObIArray<ObCkmErrorTabletLSInfo> &error_pairs,
     int &check_ret)
 {
@@ -1312,7 +1313,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
   } else if (start_idx + 1 == end_idx) {
   } else {
     const ObTabletReplicaChecksumItem *prev_item = nullptr;
-    ObTabletDataChecksumChecker data_checksum_checker;
+    data_checksum_checker.reset();
     ObLSID prev_error_ls_id;
     for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
@@ -1381,6 +1382,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     ObLSID ls_id = checksum_items.at(0).ls_id_;
     ObSEArray<ObCkmErrorTabletLSInfo, 64> error_pairs;
     error_pairs.set_attr(ObMemAttr(MTL_ID(), "MedCkmErrs"));
+    ObTabletDataChecksumChecker data_checksum_checker;
 
     // [start_idx, end_idx share same tablet_id
     bool found_checksum_error = false;
@@ -1388,7 +1390,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
       while (end_idx < count && tablet_id == checksum_items.at(end_idx).tablet_id_) {
         end_idx++;
       }
-      if (OB_FAIL(check_tablet_checksum(checksum_items, start_idx, end_idx, true /*is_medium_checker*/, error_pairs, check_ret))) {
+      if (OB_FAIL(check_tablet_checksum(checksum_items, start_idx, end_idx, true /*is_medium_checker*/, data_checksum_checker, error_pairs, check_ret))) {
         LOG_WARN("failed to check tablet checksum", KR(ret), K(checksum_items), K(start_idx), K(end_idx), K(error_pairs));
       } else {
         // update medium compaction info

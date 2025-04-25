@@ -274,6 +274,7 @@ public:
 
   // TODO @hanhui so many table type judgement
   virtual bool is_sstable() const { return is_sstable(key_.table_type_); }
+  virtual bool is_row_store_major_sstable() const { return is_row_store_major_sstable(key_.table_type_); }
   virtual bool is_co_sstable() const { return is_co_sstable(key_.table_type_); }
   virtual bool is_rowkey_cg_sstable() const { return is_rowkey_cg_sstable(key_.table_type_); }
   virtual bool is_normal_cg_sstable() const { return is_normal_cg_sstable(key_.table_type_); }

@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #include "storage/compaction/ob_merge_ctx_func.h"
@@ -164,7 +165,7 @@ int ObCOTabletMergeCtx::init_tablet_merge_info()
   return ret;
 }
 
-int ObCOTabletMergeCtx::prepare_cs_replica_param()
+int ObCOTabletMergeCtx::prepare_cs_replica_param(const ObMediumCompactionInfo *medium_info)
 {
   int ret = OB_SUCCESS;
   static_param_.is_cs_replica_ = false;
@@ -183,9 +184,18 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
     } else if (is_convert_co_major_merge(get_merge_type())) {
       static_param_.is_cs_replica_ = true;
     } else {
+      bool is_row_store_medium_info = false;
+      if (is_medium_merge(get_merge_type()) || is_major_merge(get_merge_type())) {
+        if (OB_ISNULL(medium_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid medium info", K(ret));
+        } else {
+          is_row_store_medium_info = medium_info->storage_schema_.is_row_store();
+        }
+      }
       static_param_.is_cs_replica_ = static_param_.get_tablet_id().is_user_tablet()
                                   && schema_on_tablet->is_user_data_table()
-                                  && schema_on_tablet->is_row_store();
+                                  && (schema_on_tablet->is_row_store() || is_row_store_medium_info);
     }
 
     if (OB_FAIL(ret) || !static_param_.is_cs_replica_) {
@@ -290,8 +300,13 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
 int ObCOTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(prepare_cs_replica_param())) {
-    LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param));
+  const bool need_medium_info = is_medium_merge(get_merge_type()) || is_major_merge(get_merge_type());
+  ObArenaAllocator allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObMediumCompactionInfo *medium_info = nullptr;
+  if (need_medium_info && OB_FAIL(OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info)))) {
+    LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
+  } else if (OB_FAIL(prepare_cs_replica_param(medium_info))) {
+    LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param), KPC(medium_info));
   } else if (is_meta_major_merge(get_merge_type())) {
     if (OB_FAIL(get_meta_compaction_info())) {
       LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
@@ -300,9 +315,9 @@ int ObCOTabletMergeCtx::prepare_schema()
     if (OB_FAIL(get_convert_compaction_info())) {
       LOG_WARN("failed to get convert compaction info", K(ret), KPC(this));
     }
-  } else if (OB_FAIL(get_medium_compaction_info())) {
+  } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) {
     // have checked medium info inside
-    LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
+    LOG_WARN("failed to get medium compaction info", K(ret), KPC(this), KPC(medium_info));
   }
 
   if (FAILEDx(prepare_row_store_cg_schema())) {
@@ -313,6 +328,7 @@ int ObCOTabletMergeCtx::prepare_schema()
     LOG_INFO("[CS-Replica] finish prepare schema for co merge", K(ret),
              "is_cs_replica", static_param_.is_cs_replica_, KPC(this));
   }
+  ObTabletObjLoadHelper::free(allocator, medium_info);
   return ret;
 }
 

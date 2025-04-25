@@ -6240,6 +6240,7 @@ data_checksum	bigint(20)	NO		NULL
 column_checksums	longtext	YES		NULL	
 b_column_checksums	varbinary(65536)	YES		NULL	
 data_checksum_type	bigint(20)	NO		0	
+co_base_snapshot_version	bigint(20) unsigned	NO		4611686018427387903	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_replica_checksum;
 IF(count(*) >= 0, 1, 0)
 1

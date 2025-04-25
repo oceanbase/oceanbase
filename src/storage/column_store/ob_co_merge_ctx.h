@@ -152,7 +152,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
-  int prepare_cs_replica_param();
+  int prepare_cs_replica_param(const ObMediumCompactionInfo *medium_info);
   int handle_alter_cg_delayed_in_cs_replica();
   int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }

@@ -28,7 +28,7 @@ enum class ObCSReplicaTabletStatus : uint8_t {
   NO_MAJOR_SSTABLE       = 2,  // offline ddl or direct load data not finish
   NEED_CO_CONVERT_MERGE  = 3,  // lastest major is row store MAJOR
   NEED_CS_STORAGE_SCHEMA = 4,  // lastest major is column store CO_MAJOR but storage schema is row store.
-  NORMAL_CS_REPLICA      = 5,  // valid schema and valid major in cs replica
+  NORMAL_CS_REPLICA      = 5,  // valid schema and valid major in cs replica, not matter cs storage schema is constructed by cs replica or from alter cg delayed
   MAX_STATUS
 };
 
@@ -103,6 +103,7 @@ public:
       const ObLS &ls,
       const ObTablet &tablet,
       ObCSReplicaTabletStatus &cs_replica_status);
+  // don't take schema into consideration, need process for all user tablets in cs replica logstream
   static int check_need_process_cs_replica(
       const ObLS &ls,
       const ObTablet &tablet,

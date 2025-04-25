@@ -2286,6 +2286,25 @@ int ObInnerTableSchema::all_virtual_tablet_replica_checksum_schema(ObTableSchema
       data_checksum_type_default,
       data_checksum_type_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj co_base_snapshot_version_default;
+    co_base_snapshot_version_default.set_uint64(OB_MAX_SCN_TS_NS);
+    ADD_COLUMN_SCHEMA_T("co_base_snapshot_version", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      co_base_snapshot_version_default,
+      co_base_snapshot_version_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

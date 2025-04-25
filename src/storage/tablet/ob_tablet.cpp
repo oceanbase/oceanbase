@@ -54,6 +54,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_RECORD_TRUNCATE_CACHE);
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_DATA_CHECKSUM_ERROR);
+ERRSIM_POINT_DEF(EN_COMPACTION_DATA_CHECKSUM_CO_BASE_SNAPSHOT_VERSION);
 #define ALLOC_AND_INIT(allocator, addr, args...)                                  \
   do {                                                                            \
     if (OB_SUCC(ret)) {                                                           \
@@ -6743,6 +6744,7 @@ int ObTablet::get_tablet_report_info_by_ckm_info(
     tablet_checksum.row_count_ = major_ckm_info.get_row_count();
     tablet_checksum.data_checksum_ = major_ckm_info.get_data_checksum();
     tablet_checksum.set_data_checksum_type(false/*is_cs_replica*/, compaction_data_version);
+    tablet_checksum.co_base_snapshot_version_.set_min(); // when ss support cs replica, co base snapshot version should be reported
     LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), K(major_ckm_info), "report_status",
       tablet_meta_.report_status_, K(tablet_checksum));
   }
@@ -6768,6 +6770,7 @@ int ObTablet::get_tablet_report_info_by_sstable(
   ObArray<int64_t> column_checksums;
   column_checksums.set_attr(ObMemAttr(MTL_ID(), "tmpCkmArr"));
   ObSSTable *table = nullptr;
+  int64_t co_base_snapshot_version = OB_MAX_SCN_TS_NS;
   if (OB_UNLIKELY(nullptr == main_major || report_major_snapshot != main_major->get_snapshot_version())) {
     if (GCTX.is_shared_storage_mode()) {
       ret = OB_EAGAIN;
@@ -6782,6 +6785,7 @@ int ObTablet::get_tablet_report_info_by_sstable(
     data_size = main_major->is_co_sstable()
               ? static_cast<ObCOSSTableV2 *>(main_major)->get_cs_meta().occupy_size_
               : main_major_meta_hdl.get_sstable_meta().get_basic_meta().occupy_size_;
+    co_base_snapshot_version = main_major_meta_hdl.get_sstable_meta().get_co_base_snapshot_version();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_store.get_major_sstables().count(); ++i) {
     table = table_store.get_major_sstables().at(i);
@@ -6833,11 +6837,20 @@ int ObTablet::get_tablet_report_info_by_sstable(
     tablet_checksum.row_count_ = get_tablet_meta().report_status_.row_count_;
     tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_;
     tablet_checksum.set_data_checksum_type(is_cs_replica, compaction_data_version);
+    tablet_checksum.co_base_snapshot_version_.convert_for_inner_table_field(co_base_snapshot_version);
 #ifdef ERRSIM
     const ObTabletID errsim_tablet_id(-EN_COMPACTION_DATA_CHECKSUM_ERROR);
     if (get_tablet_id() == errsim_tablet_id) {
-      tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_ + GCTX.get_server_id();
-      LOG_INFO("ERRSIM EN_COMPACTION_DATA_CHECKSUM_ERROR", K(errsim_tablet_id));
+      int errsim_co_base_snapshot = EN_COMPACTION_DATA_CHECKSUM_CO_BASE_SNAPSHOT_VERSION;
+      if (errsim_co_base_snapshot) {
+        if (co_base_snapshot_version != 0) {
+          tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_ + GCTX.get_server_id();
+          LOG_INFO("ERRSIM EN_COMPACTION_DATA_CHECKSUM_CO_BASE_SNAPSHOT_VERSION", K(errsim_tablet_id), K(errsim_co_base_snapshot));
+        }
+      } else {
+        tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_ + GCTX.get_server_id();
+        LOG_INFO("ERRSIM EN_COMPACTION_DATA_CHECKSUM_ERROR", K(errsim_tablet_id));
+      }
     }
 #endif
     LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), "report_status",
