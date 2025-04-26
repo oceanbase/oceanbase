@@ -749,14 +749,14 @@ int ObVecIndexAsyncTaskUtil::add_sys_task(ObVecIndexAsyncTaskCtx *task)
     if (OB_FAIL(SYS_TASK_STATUS_MGR.add_task(sys_task_status))) {
       if (OB_ENTRY_EXIST == ret) {
         ret = OB_SUCCESS;
-        LOG_DEBUG("sys task already exist", K(sys_task_status.task_id_));
+        LOG_INFO("sys task already exist", K(sys_task_status.task_id_), KPC(task));
       } else {
         LOG_WARN("add task failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) { // if ret = OB_ENTRY_EXIST, return same sys_task_id to task
       task->sys_task_id_ = sys_task_status.task_id_;
-      LOG_INFO("add sys task", K(sys_task_status.task_id_));
+      LOG_INFO("add sys task", K(sys_task_status.task_id_), KPC(task));
     }
   }
 
@@ -775,7 +775,7 @@ int ObVecIndexAsyncTaskUtil::remove_sys_task(ObVecIndexAsyncTaskCtx *task)
       if (OB_FAIL(SYS_TASK_STATUS_MGR.del_task(task_id))) {
         LOG_WARN("del task failed", K(ret), K(task_id));
       } else {
-        LOG_INFO("remove sys task", K(task_id));
+        LOG_INFO("remove sys task", K(task_id), KPC(task));
       }
     }
   }
@@ -1460,12 +1460,12 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
               LOG_WARN("fail to init datum row", K(ret), K(new_snapshot_column_cnt), K(snapshot_column_count), K(datum_row));
             }
             for (int64_t row_id = 0; row_id < ctx.vals_.count() && OB_SUCC(ret); row_id++) {
-              if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_data_new_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
+              if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
                 LOG_WARN("fail to build vec snapshot key str", K(ret), K(index_type));
               } else if (index_type == VIAT_HGRAPH &&
                 OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hgraph_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
                 LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K(index_type));
-              } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_sq_data_new_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
+              } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_sq_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
                 LOG_WARN("fail to build sq vec snapshot key str", K(ret), K(index_type));
               } else if (index_type == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_hnsw_bq_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
                 LOG_WARN("fail to build bq vec snapshot key str", K(ret), K(index_type));

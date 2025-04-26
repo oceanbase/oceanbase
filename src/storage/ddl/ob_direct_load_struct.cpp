@@ -4250,7 +4250,7 @@ int ObVectorIndexSliceStore::get_next_vector_data_row(
     } else if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build vec snapshot key str", K(ret), K(index_type));
     } else if (index_type == VIAT_HGRAPH &&
-      OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_hgraph_data_part%05ld", tablet_id_.id(), cur_row_pos_))) {
+      OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hgraph_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K(index_type));
     } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_sq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
       LOG_WARN("fail to build sq vec snapshot key str", K(ret), K(index_type));

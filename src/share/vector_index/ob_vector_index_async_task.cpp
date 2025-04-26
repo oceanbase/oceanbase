@@ -334,7 +334,7 @@ int ObVecAsyncTaskExector::start_task()
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
-            } else if (task_ctx->retry_time_ <= 0 && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
+            } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
               LOG_WARN("add sys task failed", K(tmp_ret));
             }
             break;
