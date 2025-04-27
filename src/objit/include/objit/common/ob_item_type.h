@@ -2824,6 +2824,11 @@ typedef enum ObItemType
 
   T_FLUSH_TABLE_MOCK = 4844,
   T_TRIGGER_STORAGE_CACHE = 4845,
+
+  // logservice access point
+  T_BOOTSTRAP_INFO = 4846,
+  T_LOGSERVICE_ACCESS_POINT = 4847,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
