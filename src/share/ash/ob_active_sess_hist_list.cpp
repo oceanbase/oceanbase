@@ -57,7 +57,7 @@ int ObActiveSessHistList::init()
 {
   int ret = OB_SUCCESS;
   if (ash_buffer_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INIT_TWICE;
     LOG_WARN("ash buffer exist", KR(ret));
   } else if (OB_FAIL(mutex_.trylock())) {
     LOG_WARN("previous ash resize task is executing", KR(ret));

@@ -209,6 +209,7 @@ public:
 // record run-time stat for each OB session
 struct ObActiveSessionStat : public ObActiveSessionStatItem
 {
+  friend class ObBKGDSessInActiveGuard;
 public:
   ObActiveSessionStat()
       : ObActiveSessionStatItem(),
@@ -246,8 +247,10 @@ public:
                        const int64_t session_id,
                        const char* sql_id,
                        const int64_t plan_id,
-                       const int64_t plan_hash);
-  void set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &ash_buffer);
+                       const int64_t plan_hash,
+                       const int64_t stmt_type);
+  OB_INLINE void set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &ash_buffer);
+  OB_INLINE void set_fixup_buffer();
   void set_fixup_index(int64_t index)
   {
     fixup_index_ = index;
@@ -409,7 +412,8 @@ public:
                   const int64_t session_id,
                   const char* sql_id,
                   const int64_t plan_id,
-                  const int64_t plan_hash);
+                  const int64_t plan_hash,
+                  const int64_t stmt_type);
   int64_t write_pos() const { return write_pos_; }
   int64_t read_pos() const { return read_pos_; }
   int64_t size() const { return buffer_.size(); }

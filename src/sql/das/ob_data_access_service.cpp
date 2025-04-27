@@ -417,6 +417,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_server_sid();
+  remote_info.stmt_type_ = session->get_stmt_type();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
@@ -548,6 +549,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_server_sid();
   remote_info.plan_id_ = session->get_current_plan_id();
+  remote_info.stmt_type_ = session->get_stmt_type();
   if (das_ref.is_parallel_submit()) {
     if (OB_ISNULL(das_ref.get_das_parallel_ctx().get_tx_desc_bak())) {
       ret = OB_ERR_UNEXPECTED;

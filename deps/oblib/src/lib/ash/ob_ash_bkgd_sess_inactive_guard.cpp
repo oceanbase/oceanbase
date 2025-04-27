@@ -15,6 +15,7 @@
 #include "lib/ash/ob_ash_bkgd_sess_inactive_guard.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/stat/ob_diagnostic_info_util.h"
 
 using namespace oceanbase::common;
 

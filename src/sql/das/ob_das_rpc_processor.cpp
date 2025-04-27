@@ -63,7 +63,8 @@ int ObDASBaseAccessP<pcode>::before_process()
                                        di->get_ash_stat().session_id_,
                                        das_remote_info_.sql_id_,
                                        das_remote_info_.plan_id_,
-                                       das_remote_info_.plan_hash_);
+                                       das_remote_info_.plan_hash_,
+                                       das_remote_info_.stmt_type_);
   }
 
   {
