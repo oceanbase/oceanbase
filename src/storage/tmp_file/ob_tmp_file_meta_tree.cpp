@@ -235,6 +235,9 @@ int ObSharedNothingTmpFileMetaTree::insert_items(
                                         K(level_origin_page_write_counts), K(level_new_pages), KPC(this));
         }
       }
+      if (FAILEDx(level_page_range_array_.reserve(level_new_pages.count()))) {
+        STORAGE_LOG(WARN, "fail to reserve for level_page_range_array_", KR(ret), K(fd_), K(level_new_pages.count()));
+      }
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(finish_insert_(ret, level_origin_page_write_counts, level_new_pages))) {
         STORAGE_LOG(WARN, "fail to finish insert", KR(tmp_ret), KR(ret),
@@ -694,9 +697,6 @@ int ObSharedNothingTmpFileMetaTree::finish_insert_(
     STORAGE_LOG(ERROR, "unexpected new record level page infos", KR(ret), K(fd_),
                           K(level_origin_page_write_counts), K(level_page_range_array_));
   } else if (OB_SUCCESS == return_ret) {
-    if (OB_FAIL(level_page_range_array_.reserve(level_new_pages.count()))) {
-      STORAGE_LOG(WARN, "fail to reserve for level_page_range_array_", KR(ret), K(fd_), K(level_new_pages.count()));
-    }
     ARRAY_FOREACH_N(level_new_pages, level, level_cnt) {
       ARRAY_FOREACH_N(level_new_pages.at(level), i, new_page_cnt) {
         const uint32_t new_page_id = level_new_pages.at(level).at(i);
