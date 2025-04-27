@@ -207,6 +207,44 @@ int64_t ObLogPlan::to_string(char *buf,
   return pos;
 }
 
+int ObLogPlan::get_base_table_items(const ObDMLStmt *stmt,
+                                    ObIArray<TableItem*> &base_tables)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); ++i) {
+    TableItem *item = NULL;
+    if (OB_FAIL(stmt->get_from_table(i, item))) {
+      LOG_WARN("failed to get from table", K(ret), K(i));
+    } else if (OB_ISNULL(item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table item", K(ret));
+    } else if (!item->is_joined_table()) {
+      ret = base_tables.push_back(item);
+    } else {
+      JoinedTable *joined_table = static_cast<JoinedTable*>(item);
+      for (int64_t j = 0; OB_SUCC(ret) && j < joined_table->single_table_ids_.count(); ++j) {
+        TableItem *table = stmt->get_table_item_by_id(joined_table->single_table_ids_.at(j));
+        ret = base_tables.push_back(table);
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_info_size(); ++i) {
+    SemiInfo *semi_info = NULL;
+    if (OB_ISNULL(semi_info = stmt->get_semi_infos().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null semi info", K(ret), K(i));
+    } else {
+      TableItem *table = stmt->get_table_item_by_id(semi_info->right_table_id_);
+      ret = base_tables.push_back(table);
+    }
+  }
+  return ret;
+}
+
 //1. 添加基本表的ObJoinOrder结构到base level
 //2. 添加Semi Join的右支block到base level
 //3. 条件下推到基表
@@ -222,6 +260,7 @@ int ObLogPlan::generate_join_orders()
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> quals;
   ObSEArray<TableItem*, 8> from_table_items;
+  ObSEArray<TableItem*, 8> base_table_items;
   ObSEArray<ObSEArray<ObRawExpr*,4>, 8> baserel_filters;
   JoinOrderArray base_level;
   int64_t join_level = 0;
@@ -231,6 +270,8 @@ int ObLogPlan::generate_join_orders()
     LOG_WARN("unexpected NULL", K(stmt), K(ret));
   } else if (OB_FAIL(stmt->get_from_tables(from_table_items))) {
     LOG_WARN("failed to get table items", K(ret));
+  } else if (OB_FAIL(get_base_table_items(stmt, base_table_items))) {
+    LOG_WARN("failed to flatten table items", K(ret));
   } else if (OB_FAIL(append(quals, stmt->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(quals, get_pushdown_filters()))) {
@@ -253,14 +294,14 @@ int ObLogPlan::generate_join_orders()
                                   stmt->get_semi_infos(),
                                   quals))) {
       LOG_WARN("failed to distribute special quals", K(ret));
-    } else if (OB_FAIL(generate_base_level_join_order(stmt->get_table_items(),
+    } else if (OB_FAIL(generate_base_level_join_order(base_table_items,
                                                       base_level))) {
       LOG_WARN("fail to generate base level join order", K(ret));
-    } else if (OB_FAIL(init_function_table_depend_info(stmt->get_table_items()))) {
+    } else if (OB_FAIL(init_function_table_depend_info(base_table_items))) {
       LOG_WARN("failed to init function table depend infos", K(ret));
-    } else if (OB_FAIL(init_json_table_depend_info(stmt->get_table_items()))) {
+    } else if (OB_FAIL(init_json_table_depend_info(base_table_items))) {
       LOG_WARN("failed to init json table depend infos", K(ret));
-    } else if (OB_FAIL(init_lateral_table_depend_info(stmt->get_table_items()))) {
+    } else if (OB_FAIL(init_lateral_table_depend_info(base_table_items))) {
       LOG_WARN("failed to init lateral table depend info", K(ret));
     } else if (OB_FALSE_IT(conflict_detectors_.reuse())) {
     } else if (OB_FAIL(generator.generate_conflict_detectors(get_stmt(),

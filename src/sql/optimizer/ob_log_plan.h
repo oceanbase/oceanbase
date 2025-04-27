@@ -338,6 +338,9 @@ public:
   inline ObIArray<ObConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
   inline const ObIArray<ObConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
 
+  int get_base_table_items(const ObDMLStmt *stmt,
+                           ObIArray<TableItem*> &base_tables);
+
   int generate_base_level_join_order(const common::ObIArray<TableItem*> &table_items,
                                      common::ObIArray<ObJoinOrder*> &base_level);
 
@@ -1709,7 +1712,6 @@ protected:
   int process_join_pred(ObJoinOrder *left_tree,
                         ObJoinOrder *right_tree,
                         JoinInfo &join_info);
-
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
