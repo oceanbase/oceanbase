@@ -604,6 +604,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     LOG_WARN("fail to refresh table on demand", K(ret), K_(scan_state), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
   } else {
+    bool need_init_exprs_uniform_header = true;
     ObVectorStore *vector_store = reinterpret_cast<ObVectorStore *>(block_row_store_);
     int64_t batch_size = min(capacity, access_param_->get_op()->get_batch_size());
     vector_store->reuse_capacity(batch_size);
@@ -630,6 +631,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             } else if (!can_batch) {
               scan_state_ = ScanState::SINGLE_ROW;
               break;
+            } else if (FALSE_IT(need_init_exprs_uniform_header = true)) {
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next rows fast", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
@@ -644,6 +646,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
           case ScanState::DI_BASE: {
             if (!need_scan_di_base_) {
               scan_state_ = ScanState::SINGLE_ROW;
+            } else if (FALSE_IT(need_init_exprs_uniform_header = true)) {
             } else if (OB_FAIL(inner_get_next_rows())) {
               if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
                 LOG_WARN("fail to get next di base rows", K(ret), K_(delta_iter_end), K_(need_scan_di_base), K_(is_unprojected_row_valid),
@@ -711,10 +714,11 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             } else {
               // back to normal path
               ObDatumRow *out_row = nullptr;
-              if (0 == vector_store->get_row_count() &&
+              if (need_init_exprs_uniform_header && 0 == vector_store->get_row_count() &&
                   access_param_->get_op()->enable_rich_format_ &&
                   OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
                 LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+              } else if (FALSE_IT(need_init_exprs_uniform_header = false)) {
               } else if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
                 LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
               } else if (OB_FAIL(process_fuse_row(nullptr == access_param_->output_exprs_, unprojected_row_, out_row))) {
