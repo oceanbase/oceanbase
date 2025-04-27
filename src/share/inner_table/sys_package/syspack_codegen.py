@@ -197,6 +197,7 @@ def embed_syspack(syspack_config):
 syspack_config = [
     # Oracle
     SysPackConfig(SysPackGroup.ORACLE, "dbms_standard", "dbms_standard.sql", None, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "standard", "standard.sql", None, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_output", "dbms_output.sql", "dbms_output_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),

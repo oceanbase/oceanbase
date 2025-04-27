@@ -14676,7 +14676,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
     OZ (access_ident.extract_params(0, expr_params));
   }
 
-  if (database_name.empty() && package_name.empty() && 0 == routine_name.case_compare("RAISE_APPLICATION_ERROR")) {
+  if (database_name.empty() && (package_name.empty() || 0 == package_name.case_compare("DBMS_STANDARD")) && 0 == routine_name.case_compare("RAISE_APPLICATION_ERROR")) {
     ObObjAccessIdx access_idx;
     if (expr_params.count() != 2 && expr_params.count() != 3) {
       ret = OB_ERR_WRONG_TYPE_FOR_VAR;
