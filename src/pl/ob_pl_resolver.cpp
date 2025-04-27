@@ -4097,7 +4097,8 @@ int ObPLResolver::resolve_question_mark_node(
   CK (OB_NOT_NULL(current_block_->get_symbol_table()));
   CK (OB_NOT_NULL(var = current_block_->get_symbol_table()->get_symbol(into_node->value_)));
   CK (var->get_name().prefix_match(ANONYMOUS_ARG));
-  if (NULL != var && var->is_readonly() && var->is_referenced()) {
+  OX (const_cast<ObPLVar*>(var)->set_readonly(false)); // into value need set readonly false
+  if (OB_SUCC(ret) && var->is_referenced()) {
     OX (const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG));
   }
   OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, expr));
