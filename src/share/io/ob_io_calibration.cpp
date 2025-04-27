@@ -516,7 +516,7 @@ void ObIOBenchController::run1()
   const int64_t bench_start_size = 4096;
   const int64_t bench_thread_count = 16;
   ObIOAbility io_ability;
-  for (int64_t i = 0; OB_SUCC(ret) && !has_set_stop() && i < static_cast<int64_t>(ObIOMode::MAX_MODE); ++i) {
+  for (int64_t i = static_cast<int64_t>(ObIOMode::MAX_MODE) - 1; OB_SUCC(ret) && !has_set_stop() && i >= 0; i--) {
     for (int64_t size = bench_start_size; OB_SUCC(ret) && !has_set_stop() && size <= OB_DEFAULT_MACRO_BLOCK_SIZE; size *= 2) {
       LOG_INFO("execute disk io benchmark", K(size), "mode", i);
       ObIOBenchLoad load;
