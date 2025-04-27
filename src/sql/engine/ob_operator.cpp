@@ -60,19 +60,14 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
   } else {
     const char *payload = NULL;
     ObLength len = 0;
-    ObEvalCtx::TempAllocGuard alloc_guard(eval_ctx);
+    src_vec->get_payload(batch_idx, payload, len);
     ObDatum res;
-    if (src_->is_nested_expr()) {
-      ObIAllocator *allocator = (0 == dst_->res_buf_off_) ? &eval_ctx.get_expr_res_alloc() : &alloc_guard.get_allocator();
-      if (OB_FAIL(ObArrayExprUtils::get_collection_payload(*allocator, eval_ctx, *src_, batch_idx, payload, len))) {
-        LOG_WARN("get nested collection payload failed", K(ret));
-      }
-    } else {
-      src_vec->get_payload(batch_idx, payload, len);
-    }
-    if (OB_FAIL(ret)) {
-    } else if (src_vec->is_null(batch_idx)) {
+    if (src_vec->is_null(batch_idx)) {
       res.set_null();
+    } else if (src_->is_nested_expr() && !ObCollectionExprUtil::is_compact_fmt_cell(payload)) {
+      // vector_fmt not supported yet
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected data format", K(ret));
     } else {
       res.ptr_ = payload;
       res.len_ = len;
