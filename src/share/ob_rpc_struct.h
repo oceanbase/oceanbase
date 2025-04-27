@@ -6765,7 +6765,6 @@ public:
   int assign(const ObPhysicalRestoreTenantArg &other);
   int add_table_item(const ObTableItem &item);
   TO_STRING_KV(K_(tenant_name),
-               K_(uri),
                K_(restore_option),
                K_(restore_scn),
                K_(passwd_array),
