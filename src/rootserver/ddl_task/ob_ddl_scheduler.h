@@ -82,6 +82,7 @@ public:
   int update_task_ret_code(const ObDDLTaskID &task_id, const int ret_code);
   int abort_task(const ObDDLTaskID &task_id);
   int64_t get_task_cnt() const { return task_list_.get_size(); }
+  int get_split_task_cnt(int64_t &task_cnt);
   void destroy();
 private:
   typedef common::ObDList<ObDDLTask> TaskList;
@@ -243,6 +244,12 @@ class ObDDLScheduler : public rootserver::ObTenantThreadHelper,
                        public logservice::ObIReplaySubHandler
 {
 public:
+#ifdef ERRSIM
+    static const int64_t DDL_TASK_SCAN_PERIOD = 1000L * 1000L; // 1s
+#else
+    static const int64_t DDL_TASK_SCAN_PERIOD = 60 * 1000L * 1000L; // 60s
+#endif
+public:
   ObDDLScheduler();
   virtual ~ObDDLScheduler();
 
@@ -359,11 +366,6 @@ private:
   private:
     void runTimerTask() override;
   private:
-#ifdef ERRSIM
-    static const int64_t DDL_TASK_SCAN_PERIOD = 1000L * 1000L; // 1s
-#else
-    static const int64_t DDL_TASK_SCAN_PERIOD = 60 * 1000L * 1000L; // 60s
-#endif
     ObDDLScheduler &ddl_scheduler_;
     int tg_id_;
   };

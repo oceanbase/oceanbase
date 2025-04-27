@@ -18,6 +18,7 @@
 #include "rootserver/ob_root_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 
 namespace oceanbase
 {
@@ -392,22 +393,39 @@ int ObAutoSplitTaskCache::push_tasks(const ObArray<ObAutoSplitTask> &task_array)
   return ret;
 }
 
-int ObRsAutoSplitScheduler::pop_tasks(ObArray<ObAutoSplitTask> &task_array)
+int ObAutoSpTaskSchedEntry::assign(const ObAutoSpTaskSchedEntry &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    table_id_ = other.table_id_;
+    next_valid_schedule_time_ = other.next_valid_schedule_time_;
+    if (OB_FAIL(task_.assign(other.task_))) {
+      LOG_WARN("failed to assign", K(ret), K(task_), K(other.task_));
+    }
+  }
+  return ret;
+}
+
+int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array)
 {
   int ret = OB_SUCCESS;
   task_array.reuse();
   ObArray<ObArray<ObAutoSplitTask>> tenant_task_arrays;
+  int64_t num_tasks_pop_from_poll_mgr = MAX_SPLIT_TASK_DIRECT_CACHE_SIZE - task_direct_cache_.count();
   if (polling_mgr_.empty()) {
     //do nothing
-  } else if (OB_FAIL(polling_mgr_.pop_tasks(ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND, tenant_task_arrays))) {
+  } else if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, tenant_task_arrays))) {
     LOG_WARN("fail to pop tasks from tree", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_task_arrays.count(); ++i) {
-      ObArray<ObAutoSplitTask> &tmp_array = tenant_task_arrays.at(i);
-      if (OB_FAIL(task_array.push_back(tmp_array))) {
-        LOG_WARN("push tasks failed", K(ret));
-      }
-    }
+  } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
+    LOG_WARN("failed to push to direct cache", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
+    LOG_WARN("failed ot pop from direct cache", K(ret));
   }
   return ret;
 }
@@ -590,6 +608,95 @@ int ObRsAutoSplitScheduler::gc_deleted_tenant_caches()
   int ret = OB_SUCCESS;
   if (OB_FAIL(polling_mgr_.gc_deleted_tenant_caches())) {
     LOG_WARN("failed to gc deleted tenant caches", K(ret));
+  }
+  return ret;
+}
+
+int ObRsAutoSplitScheduler::pop_from_direct_cache(const int64_t num_tasks_can_pop, ObIArray<ObAutoSplitTask> &task_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t budget = num_tasks_can_pop;
+  ObSEArray<ObAutoSpTaskSchedEntry, MAX_SPLIT_TASK_DIRECT_CACHE_SIZE> unavailable_tasks;
+  if (num_tasks_can_pop < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(num_tasks_can_pop));
+  } else {
+    int64_t cur_time = ObTimeUtility::current_time();
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_direct_cache_.count(); ++i) {
+      ObAutoSpTaskSchedEntry &task_record = task_direct_cache_.at(i);
+      if (task_record.next_valid_schedule_time_ > cur_time || budget == 0) {
+        if (OB_FAIL(unavailable_tasks.push_back(task_record))) {
+          LOG_WARN("failed to push back", K(ret), K(task_record));
+        }
+      } else if (OB_FAIL(task_array.push_back(task_record.task_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        --budget;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    task_direct_cache_.reuse();
+    if (OB_FAIL(append(task_direct_cache_, unavailable_tasks))) {
+      LOG_WARN("failed to append", K(ret), K(task_direct_cache_), K(unavailable_tasks));
+    }
+  }
+  return ret;
+}
+
+int ObRsAutoSplitScheduler::push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask>> &tenant_task_arrays)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, MAX_SPLIT_TASKS_ONE_ROUND> tablet_ids;
+  ObSEArray<uint64_t, MAX_SPLIT_TASKS_ONE_ROUND> table_ids;
+  uint64_t tenant_id = OB_INVALID_ID;
+  ObAutoSpTaskSchedEntry split_task_sched_entry;
+  const int64_t cur_time = ObTimeUtility::current_time();
+  const int64_t redundancy_time = 1L * 1000L * 1000L;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_task_arrays.count(); ++i) {
+    ObArray<ObAutoSplitTask> &split_task_array = tenant_task_arrays.at(i);
+    tablet_ids.reuse();
+    table_ids.reuse();
+    for (int64_t j = 0; OB_SUCC(ret) && j < split_task_array.count(); ++j) {
+      ObAutoSplitTask &auto_split_task = split_task_array.at(j);
+      tenant_id = auto_split_task.tenant_id_;
+      if (OB_FAIL(tablet_ids.push_back(auto_split_task.tablet_id_))) {
+        LOG_WARN("failed to push back", K(ret), K(tablet_ids));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObAutoSplitArgBuilder::acquire_table_id_of_tablets(tenant_id, tablet_ids, table_ids))) {
+      LOG_WARN("failed to acquire table ids", K(ret));
+    } else if (OB_UNLIKELY(tablet_ids.count() != split_task_array.count() || table_ids.count() != split_task_array.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(tablet_ids), K(split_task_array), K(table_ids));
+    } else {
+      for (int64_t m = 0; OB_SUCC(ret) && m < split_task_array.count(); ++m) {
+        ObAutoSplitTask &auto_split_task = split_task_array.at(m);
+        split_task_sched_entry.reset();
+        split_task_sched_entry.tenant_id_ = auto_split_task.tenant_id_;
+        split_task_sched_entry.table_id_ = table_ids.at(m);
+        split_task_sched_entry.next_valid_schedule_time_ = cur_time;
+        if (OB_FAIL(split_task_sched_entry.task_.assign(auto_split_task))) {
+          LOG_WARN("failed to assgin auto split task", K(ret), K(auto_split_task));
+        }
+        bool duplicated = false;
+        for (int64_t n = 0; !duplicated && OB_SUCC(ret) && n < task_direct_cache_.count(); ++n) {
+          ObAutoSpTaskSchedEntry &entry_in_cache = task_direct_cache_.at(n);
+          if (split_task_sched_entry == entry_in_cache) {
+            split_task_sched_entry.next_valid_schedule_time_ = entry_in_cache.next_valid_schedule_time_ + rootserver::ObDDLScheduler::DDL_TASK_SCAN_PERIOD + redundancy_time;
+            if (split_task_sched_entry.task_.tablet_id_ == entry_in_cache.task_.tablet_id_) {
+              duplicated = true;
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!duplicated && OB_FAIL(task_direct_cache_.push_back(split_task_sched_entry))) {
+          LOG_WARN("faied to push back", K(ret), K(split_task_sched_entry));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -960,25 +1067,25 @@ int ObAutoSplitTaskPollingMgr::pop_tasks_from_tenant_cache(const int64_t num_tas
   return ret;
 }
 
-int ObAutoSplitTaskPollingMgr::pop_tasks(const int64_t num_tasks_to_pop, ObArray<ObArray<ObAutoSplitTask>> &task_array)
+int ObAutoSplitTaskPollingMgr::pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObArray<ObAutoSplitTask>> &task_array)
 {
   int ret = OB_SUCCESS;
   task_array.reuse();
   ObArray<ObAutoSplitTask> tmp_array;
   ObLockGuard<ObSpinLock> guard(lock_);
-  int64_t total_tasks_pop_budge = num_tasks_to_pop;
+  int64_t total_tasks_pop_budge = num_tasks_can_pop;
   int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_));
-  } else if (num_tasks_to_pop <= 0) {
+  } else if (num_tasks_can_pop <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(num_tasks_to_pop));
+    LOG_WARN("invalid argument", K(ret), K(num_tasks_can_pop));
   } else if (OB_UNLIKELY(get_total_tenants() == 0)) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_DEBUG("no task exist", K(ret));
   } else if ((!is_root_server_) &&
-      OB_TMP_FAIL(pop_tasks_from_tenant_cache(1/*num_tasks_to_pop*/, tmp_array, MTL(ObAutoSplitTaskCache*)))) {
+      OB_TMP_FAIL(pop_tasks_from_tenant_cache(1/*num_tasks_can_pop*/, tmp_array, MTL(ObAutoSplitTaskCache*)))) {
     LOG_WARN("pop tasks from tenant cache failed", K(tmp_ret));
   } else if (tmp_array.count() == 0) {
   } else if (tmp_array.count() > 0 && OB_TMP_FAIL(task_array.push_back(tmp_array))) {
@@ -1221,12 +1328,19 @@ int ObAutoSplitArgBuilder::acquire_schema_info_of_tablet_(const uint64_t tenant_
   share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
   uint64_t table_id = OB_INVALID_ID;
   uint64_t db_id = OB_INVALID_ID;
-
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSEArray<uint64_t, 1> table_ids;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(acquire_table_id_of_tablet_(tenant_id, tablet_id, table_id))) {
+  } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+    LOG_WARN("failed to push back", K(ret), K(tablet_id));
+  } else if (OB_FAIL(acquire_table_id_of_tablets(tenant_id, tablet_ids, table_ids))) {
     LOG_WARN("fail to acquire tablet info", KR(ret), K(tablet_id));
+  } else if (table_ids.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count of the table_ids", K(ret), K(table_ids));
+  } else if (OB_FALSE_IT(table_id = table_ids.at(0))) {
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, guard))){
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(guard.get_table_schema(tenant_id, table_id, table_schema))){
@@ -1247,38 +1361,75 @@ int ObAutoSplitArgBuilder::acquire_schema_info_of_tablet_(const uint64_t tenant_
   return ret;
 }
 
-int ObAutoSplitArgBuilder::acquire_table_id_of_tablet_(const uint64_t tenant_id,
-                                                       const ObTabletID tablet_id,
-                                                       uint64_t& table_id)
+int ObAutoSplitArgBuilder::acquire_table_id_of_tablets(const uint64_t tenant_id,
+                                                       const ObIArray<ObTabletID> &tablet_ids,
+                                                       ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
-
+  table_ids.reuse();
+  if (OB_UNLIKELY(tablet_ids.count() > ObDDLUtil::MAX_BATCH_COUNT)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("batch size should not be grater than ObDDLUtil::MAX_BATCH_COUNT(128)", K(ret), K(tablet_ids));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+    if (OB_UNLIKELY(!tablet_ids.at(i).is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(tablet_ids));
+    }
+  }
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult* sql_result = nullptr;
     if (OB_ISNULL(mysql_proxy)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", KR(ret));
-    } else if (OB_FAIL(sql.assign_fmt("SELECT table_id FROM oceanbase.%s "
-                                      "WHERE tablet_id = %lu",
-                                      share::OB_ALL_TABLET_TO_LS_TNAME,
-                                      tablet_id.id()))) {
+    } else if (OB_FAIL(sql.assign_fmt("SELECT table_id, tablet_id FROM oceanbase.%s "
+                                      "WHERE tablet_id in (",
+                                      share::OB_ALL_TABLET_TO_LS_TNAME))) {
       LOG_WARN("failed to assign sql", KR(ret));
-    } else if (OB_FAIL(mysql_proxy->read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("execute sql failed", KR(ret), K(sql));
-    } else if (OB_ISNULL(sql_result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", KR(ret), K(sql));
     } else {
-      // tablet_id is pk, at most one row can be selected
-      if (OB_SUCC(sql_result->next())) {
-        EXTRACT_INT_FIELD_MYSQL(*sql_result, "table_id", table_id, int64_t);
-      } else if (OB_UNLIKELY(OB_ITER_END == ret)) {
-        ret = OB_TABLET_NOT_EXIST;
-        LOG_WARN("the tablet_id does not exist", KR(ret), K(tablet_id), K(sql));
+      for (int64_t idx = 0; OB_SUCC(ret) && (idx < tablet_ids.count()); ++idx) {
+        if (OB_FAIL(sql.append_fmt(
+          "%lu%s",
+          tablet_ids.at(idx).id(),
+          ((idx == tablet_ids.count() - 1) ? ")" : ",")))) {
+          LOG_WARN("assign sql string failed", K(ret), K(tenant_id), K(tablet_ids.at(idx).id()));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mysql_proxy->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(sql_result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql));
+      } else if (OB_FAIL(table_ids.prepare_allocate(tablet_ids.count()))) {
+        LOG_WARN("failed to prepare_allocate", K(ret), K(tablet_ids.count()));
+      } else if (table_ids.count() != tablet_ids.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected diff length of table_ids and tablet_ids", K(ret), K(table_ids), K(tablet_ids));
       } else {
-        LOG_WARN("failed to find result", KR(ret), K(tablet_id), K(sql));
+        while (OB_SUCC(ret)) {
+          uint64_t table_id = OB_INVALID_ID;
+          uint64_t tablet_id = OB_INVALID_ID;
+          if (OB_FAIL(sql_result->next())) {
+            if (OB_ITER_END && table_ids.count() == tablet_ids.count()) {
+              //overwrite ret
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next result", K(ret), K(table_ids), K(tablet_ids));
+            }
+          } else {
+            EXTRACT_INT_FIELD_MYSQL(*sql_result, "table_id", table_id, uint64_t);
+            EXTRACT_INT_FIELD_MYSQL(*sql_result, "tablet_id", tablet_id, uint64_t);
+            for (int64_t i = 0; i < tablet_ids.count(); ++i) {
+              if (tablet_ids.at(i).id() == tablet_id) {
+                table_ids.at(i) = table_id;
+              }
+            }
+          }
+        }
       }
     }
   }

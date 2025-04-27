@@ -224,6 +224,10 @@ public:
                                            const ObTimeZoneInfo *tz_info,
                                            ObIAllocator &allocator,
                                            ObString &rowkey_str);
+
+  static int acquire_table_id_of_tablets(const uint64_t tenant_id,
+                                         const ObIArray<ObTabletID> &tablet_ids,
+                                         ObIArray<uint64_t> &table_ids);
 private:
   int acquire_schema_info_of_tablet_(const uint64_t tenant_id,
                                      const ObTabletID tablet_id,
@@ -231,9 +235,6 @@ private:
                                      const share::schema::ObSimpleDatabaseSchema *&db_schema,
                                      share::schema::ObSchemaGetterGuard &guard,
                                      obrpc::ObAlterTableArg &arg);
-  int acquire_table_id_of_tablet_(const uint64_t tenant_id,
-                                  const ObTabletID tablet_id,
-                                  uint64_t &table_id);
   int build_arg_(const uint64_t tenant_id,
                  const ObString &db_name,
                  const share::schema::ObTableSchema &table_schema,
@@ -268,14 +269,46 @@ private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };
 
+class ObAutoSpTaskSchedEntry final
+{
+public:
+  ObAutoSpTaskSchedEntry()
+    : tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID), next_valid_schedule_time_(OB_INVALID_TIMESTAMP), task_()
+    {}
+  ~ObAutoSpTaskSchedEntry() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_TIMESTAMP != next_valid_schedule_time_ && OB_INVALID_ID != table_id_ && task_.is_valid();
+  }
+  bool operator ==(const ObAutoSpTaskSchedEntry &other) const
+  {
+    return tenant_id_ == other.tenant_id_ && table_id_ == other.table_id_;
+  }
+  int assign(const ObAutoSpTaskSchedEntry&other);
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    table_id_ = OB_INVALID_ID;
+    next_valid_schedule_time_ = OB_INVALID_TIMESTAMP;
+    task_.reset();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(next_valid_schedule_time), K_(task));
+public:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  int64_t next_valid_schedule_time_;
+  ObAutoSplitTask task_;
+};
 
 class ObRsAutoSplitScheduler final
 {
 public:
+  const static int64_t MAX_SPLIT_TASKS_ONE_ROUND = 5;
+public:
   static ObRsAutoSplitScheduler &get_instance();
   inline bool is_busy() { return polling_mgr_.is_busy(); }
   int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
-  int pop_tasks(ObArray<ObAutoSplitTask> &task_array);
+  int pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array);
   bool can_retry(const ObAutoSplitTask &task, const int ret);
   int init() { return polling_mgr_.init(); }
   void reset() { polling_mgr_.reset(); }
@@ -286,10 +319,16 @@ private:
     : polling_mgr_(true/*is_root_server*/)
     {}
   ~ObRsAutoSplitScheduler () {}
+  int pop_from_direct_cache(const int64_t num_tasks_can_pop, ObIArray<ObAutoSplitTask> &task_array);
+  int push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask>> &tenant_task_arrays);
+
 private:
-  const static int64_t MAX_SPLIT_TASKS_ONE_ROUND = 5;
   const static int64_t MAX_TIMES_TASK_RETRY = 5;
+  const static int64_t MAX_SPLIT_TASK_DIRECT_CACHE_SIZE = 10;
+  const static int64_t SINGLE_TABLE_SCHEDULE_TIME_INTERVAL = 5L * 1000L * 1000L; //5s
   ObAutoSplitTaskPollingMgr polling_mgr_;
+  // to help avoid schedule too much times of split on a single table in a short time interval
+  ObSEArray<ObAutoSpTaskSchedEntry, MAX_SPLIT_TASK_DIRECT_CACHE_SIZE> task_direct_cache_;
 };
 
 class ObServerAutoSplitScheduler final

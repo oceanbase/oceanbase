@@ -400,6 +400,23 @@ int ObDDLTaskQueue::abort_task(const ObDDLTaskID &task_id)
   return ret;
 }
 
+int ObDDLTaskQueue::get_split_task_cnt(int64_t &task_cnt)
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = common::OB_NOT_INIT;
+    LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
+  } else {
+    task_cnt = 0;
+    DLIST_FOREACH(cur_task, task_list_) {
+      const share::ObDDLType &task_type = cur_task->get_task_type();
+      task_cnt += (share::is_tablet_split(task_type) ? 1 : 0);
+    }
+  }
+  return ret;
+}
+
 ObDDLTaskHeartBeatMananger::ObDDLTaskHeartBeatMananger()
   : is_inited_(false), bucket_lock_()
 {}
@@ -1729,10 +1746,15 @@ int ObDDLScheduler::schedule_auto_split_task()
   ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
   ObArray<ObAutoSplitTask> task_array;
   int tmp_ret = OB_SUCCESS;
+  int64_t cur_running_split_task = 0;
   if (OB_TMP_FAIL(split_task_scheduler.gc_deleted_tenant_caches())) {
     LOG_WARN("failed to gc split tasks", K(tmp_ret));
   }
-  if (OB_FAIL(split_task_scheduler.pop_tasks(task_array))) {
+  if (OB_FAIL(task_queue_.get_split_task_cnt(cur_running_split_task))) {
+    LOG_WARN("failed to get current split task count", K(ret));
+  } else if (cur_running_split_task >= ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND) {
+    //do nothing
+  } else if (OB_FAIL(split_task_scheduler.pop_tasks(ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND - cur_running_split_task/*num_tasks_to_pop*/, task_array))) {
     LOG_WARN("fail to pop tasks from auto_split_task_tree");
   } else if (task_array.count() == 0) {
     //do nothing
