@@ -1401,7 +1401,6 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     }
   } else {
     need_cast = !(IS_COMPARISON_OP(parent_expr->get_expr_type()) ||
-                  T_OP_ROW == parent_expr->get_expr_type() ||
                   parent_expr->is_query_ref_expr());
   }
   return ret;

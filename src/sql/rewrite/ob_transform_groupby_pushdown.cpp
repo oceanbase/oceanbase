@@ -917,6 +917,9 @@ int ObTransformGroupByPushdown::get_new_select_expr_of_non_basic_child(
       LOG_WARN("unexpected aggr_func_type:", K(ret), K(param.aggr_func_type_));
     }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(new_expr) && OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize new expr", K(ret));
+  }
   return ret;
 }
 

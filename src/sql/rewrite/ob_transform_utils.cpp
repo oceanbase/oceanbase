@@ -15031,24 +15031,24 @@ public:
       ObConstRawExpr *const_zero = NULL;
       if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(expr_factory, 0, const_zero))) {
         LOG_WARN("failed to replace count with 0", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory,
-                                                                 session_,
-                                                                 *const_zero,
-                                                                 old_expr->get_result_type(),
-                                                                 new_expr))) {
-        LOG_WARN("failed to add cast expr above", K(ret));
+      } else if (OB_FALSE_IT(new_expr = const_zero)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(expr_factory,
+                                                                        old_expr,
+                                                                        new_expr,
+                                                                        session_))) {
+        LOG_WARN("failed to add cast", K(ret));
       }
     } else if (old_expr->is_column_ref_expr() || old_expr->is_aggr_expr()) {
       // replace with NULL
       ObRawExpr *null_expr = NULL;
       if (OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, null_expr))) {
         LOG_WARN("failed to replace variable with null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory,
-                                                                 session_,
-                                                                 *null_expr,
-                                                                 old_expr->get_result_type(),
-                                                                 new_expr))) {
-        LOG_WARN("failed to add cast expr above", K(ret));
+      } else if (OB_FALSE_IT(new_expr = null_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(expr_factory,
+                                                                        old_expr,
+                                                                        new_expr,
+                                                                        session_))) {
+        LOG_WARN("failed to add cast", K(ret));
       }
     } else if (old_expr->is_const_or_param_expr()) {
       if (OB_FAIL(expr_factory.create_raw_expr(old_expr->get_expr_class(),
@@ -15114,12 +15114,12 @@ int ObTransformUtils::deduce_query_values(ObTransformerCtx &ctx,
       } else if (OB_ISNULL(case_when_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("case when expr is null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx.expr_factory_,
-                                                                 ctx.session_info_,
-                                                                 *case_when_expr,
-                                                                 view_columns.at(i)->get_result_type(),
-                                                                 real_values.at(i)))) {
-        LOG_WARN("failed to add cast expr", K(ret));
+      } else if (OB_FALSE_IT(real_values.at(i) = case_when_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx.expr_factory_,
+                                                                        view_columns.at(i),
+                                                                        real_values.at(i),
+                                                                        ctx.session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       }
     }
   }

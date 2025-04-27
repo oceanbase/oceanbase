@@ -995,19 +995,18 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
     ObRawExpr *null_expr = NULL;
     ObRawExpr *cast_expr = NULL;
     ObRawExpr *case_when_expr = NULL;
+    ObRawExpr *case_when_with_cast = NULL;
     ObRawExprFactory *factory = ctx_->expr_factory_;
     if (OB_FAIL(ObRawExprUtils::build_null_expr(*factory, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
     } else if (OB_ISNULL(null_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                          ctx_->expr_factory_,
-                          ctx_->session_info_,
-                          *null_expr,
-                          expr->get_result_type(),
-                          cast_expr))) {
-      LOG_WARN("try add cast expr above failed", K(ret));
+    } else if (OB_FALSE_IT(cast_expr = null_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, cast_expr,
+                                                                      ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
     } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(child_stmt,
                                                               not_null_column,
                                                               expr,
@@ -1018,12 +1017,13 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
     } else if (OB_ISNULL(case_when_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("case when expr is null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                               ctx_->session_info_,
-                                                               *case_when_expr,
-                                                               expr->get_result_type(),
-                                                               expr))) {
-      LOG_WARN("failed to add cast expr", K(ret));
+    } else if (OB_FALSE_IT(case_when_with_cast = case_when_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, case_when_with_cast,
+                                                                      ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
+    } else {
+      expr = case_when_with_cast;
     }
   }
   return ret;

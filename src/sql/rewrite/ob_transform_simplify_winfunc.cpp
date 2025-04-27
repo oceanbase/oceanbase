@@ -459,15 +459,12 @@ int ObTransformSimplifyWinfunc::transform_aggr_win_to_common_expr(ObSelectStmt *
     //尝试添加类型转化
     if (OB_FAIL(ret)) {
       /*do nothing*/
-    } else if (OB_ISNULL(param_expr)) {
+    } else if (OB_ISNULL(new_expr = param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                               ctx_->session_info_,
-                                                               *param_expr,
-                                                               expr->get_result_type(),
-                                                               new_expr))) {
-      LOG_WARN("try add cast expr above failed", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, expr,
+                                                                      new_expr, ctx_->session_info_))) {
+      LOG_WARN("add cast for replace if need failed", K(ret));
     } else if (OB_ISNULL(new_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));

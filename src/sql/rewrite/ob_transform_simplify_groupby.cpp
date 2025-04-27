@@ -310,13 +310,11 @@ int ObTransformSimplifyGroupby::remove_child_stmts_group_by(ObArray<ObSelectStmt
                    T_FUN_SYS_BIT_AND == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_OR == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_XOR == expr->get_expr_type()) {
-          ObRawExpr *cast_expr;
-          if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                              ctx_->session_info_,
-                                                              *expr->get_param_expr(0),
-                                                              expr->get_result_type(),
-                                                              cast_expr))) {
-            LOG_WARN("try add cast expr above failed", K(ret));
+          ObRawExpr *cast_expr = expr->get_param_expr(0);
+          if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, cast_expr,
+                                                                      ctx_->session_info_))) {
+            LOG_WARN("failed to add cast", K(ret));
           } else {
             stmt->get_select_item(i).expr_ = cast_expr;
           }

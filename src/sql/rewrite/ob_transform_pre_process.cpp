@@ -9104,13 +9104,12 @@ int ObTransformPreProcess::create_select_items_for_semi_join(ObDMLStmt *stmt,
       } else if (OB_ISNULL(null_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                            ctx_->expr_factory_,
-                            ctx_->session_info_,
-                            *null_expr,
-                            output_select_items.at(i).expr_->get_result_type(),
-                            cast_expr))) {
-        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (OB_FALSE_IT(cast_expr = null_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        output_select_items.at(i).expr_,
+                                                                        cast_expr,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       } else {
         output_select_items.at(i).expr_ = cast_expr;
       }
