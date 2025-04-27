@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 #define OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 
+#include "share/allocator/ob_lob_ext_info_log_allocator.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "lib/json_type/ob_json_diff.h"
 
@@ -190,6 +191,14 @@ private:
       const transaction::ObTxSEQ &seq_no_cur,
       const ObLobId &lob_id,
       ObString &data);
+
+  int append_callback_with_retry(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
+      ObString &data);
+  int check_is_during_freeze(bool &is_during_freeze);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));

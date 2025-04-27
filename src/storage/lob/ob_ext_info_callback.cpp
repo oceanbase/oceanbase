@@ -12,9 +12,13 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ext_info_callback.h"
+#include "share/interrupt/ob_global_interrupt_call.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/blocksstable/ob_row_writer.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "storage/ls/ob_ls.h"
+#include "storage/ls/ob_freezer.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -313,7 +317,7 @@ int ObExtInfoCbRegister::register_cb(
       // need throttle for each append, or may be too fash if has very large lob
       // each data is as most 1.5MB, so not affect performance
       ObLobExtInfoLogThrottleGuard throttle_guard(timeout, &(lob_mngr->get_ext_info_log_throttle_tool()));
-      if (OB_FAIL(append_callback(store_ctx, dml_flag, seq_no_cur, lob_id, data))) {
+      if (OB_FAIL(append_callback_with_retry(store_ctx, dml_flag, seq_no_cur, lob_id, data))) {
         LOG_WARN("set row callback failed", K(ret), K(cb_cnt));
       } else {
         seq_no_cur = seq_no_cur + 1;
@@ -513,6 +517,39 @@ int ObExtInfoCbRegister::get_lob_id(ObObj &index_data, ObLobId &lob_id)
   return ret;
 }
 
+int ObExtInfoCbRegister::append_callback_with_retry(
+    storage::ObStoreCtx &store_ctx,
+    const blocksstable::ObDmlFlag dml_flag,
+    const transaction::ObTxSEQ &seq_no_cur,
+    const ObLobId &lob_id,
+    ObString &data)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t SLEEP_INTERVAL = 10000; //10ms
+  static const int64_t tigger_sleep_retry_cnt = 5;
+  int64_t retry_cnt = 0;
+  do {
+    if (retry_cnt > tigger_sleep_retry_cnt) {
+      ob_usleep(OB_MIN(SLEEP_INTERVAL * (retry_cnt - tigger_sleep_retry_cnt), THIS_WORKER.get_timeout_remain()));
+    }
+    ++retry_cnt;
+    if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("worker timeout", KR(ret), K(THIS_WORKER.get_timeout_ts()), K(retry_cnt));
+    } else if (IS_INTERRUPTED()) {
+      common::ObInterruptCode code = GET_INTERRUPT_CODE();
+      ret = code.code_;
+      LOG_WARN("received a interrupt", K(code), K(ret), K(retry_cnt));
+    } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
+      ret = OB_KILLED_BY_THROTTLING;
+      LOG_INFO("retry is interrupted by worker check wait", K(ret), K(retry_cnt));
+    } else if (OB_FAIL(append_callback(store_ctx, dml_flag, seq_no_cur, lob_id, data))) {
+      LOG_WARN("set row callback failed", K(ret), K(dml_flag), K(seq_no_cur), K(lob_id), K(retry_cnt));
+    }
+  } while (OB_NEED_RETRY == ret);
+  return ret;
+}
+
 int ObExtInfoCbRegister::append_callback(
     storage::ObStoreCtx &store_ctx,
     const blocksstable::ObDmlFlag dml_flag,
@@ -523,7 +560,15 @@ int ObExtInfoCbRegister::append_callback(
   int ret = OB_SUCCESS;
   memtable::ObMvccWriteGuard guard(false);
   storage::ObExtInfoCallback *cb = nullptr;
-  if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
+  bool is_during_freeze = false;
+  if (OB_FAIL(check_is_during_freeze(is_during_freeze))) {
+    LOG_WARN("check is during freeze failed", K(ret));
+  } else if (is_during_freeze) {
+    ret = OB_NEED_RETRY;
+    if (REACH_TIME_INTERVAL(100 * 1000)) {
+      LOG_WARN("during freeze, we need wait freeze finished", K(ret));
+    }
+  } else if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc row callback failed", K(ret));
   } else if (OB_FAIL(cb->set(tmp_allocator_, dml_flag, seq_no_cur, lob_id, data))) {
@@ -540,6 +585,23 @@ int ObExtInfoCbRegister::append_callback(
     // append callback fail, need free to avoid memory leak
     mvcc_ctx_->free_ext_info_callback(cb);
     LOG_WARN("append fail, free callback", K(ret), K(seq_no_cur));
+  }
+  return ret;
+}
+
+int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  is_during_freeze = false;
+  if (OB_ISNULL(lob_param_)) { // if lob_param_ is null, means this is not outrow lob reading, so no need check
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(lob_param_->ls_id_,
+                                                ls_handle,
+                                                ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("get ls handle failed", KR(ret), K(lob_param_->ls_id_));
+  } else {
+    ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
+    is_during_freeze = freezer->is_freeze(freezer->get_freeze_flag());
   }
   return ret;
 }
