@@ -305,7 +305,7 @@ int ObPLCompilerUtils::compile_udt(ObExecContext &ctx,
     OZ (package_guard.init());
     OZ (ctx.get_sql_ctx()->schema_guard_->get_udt_info(tenant_id, database_id, OB_INVALID_ID, udt_name, udt_info));
     CK (OB_NOT_NULL(udt_info));
-    if (0 < udt_info->get_object_type_infos().count()) {
+    if (OB_SUCC(ret) && 0 < udt_info->get_object_type_infos().count()) {
       spec_info = udt_info->get_object_type_infos().at(0);
       if (OB_NOT_NULL(spec_info)) {
         OZ (spec_info->to_package_info(package_info));
