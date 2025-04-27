@@ -236,6 +236,38 @@ struct ObLogPrintErrNoMsg
   int errno_;
 };
 
+struct ObLogPrintSensitiveStr
+{
+  explicit ObLogPrintSensitiveStr(const char *s) : str_(s)
+  {}
+  ~ObLogPrintSensitiveStr()
+  {}
+  int64_t to_string(char *buf, const int64_t len) const
+  {
+    int64_t pos = 0;
+    if (OB_LIKELY(nullptr != buf) && OB_LIKELY(len > 0)) {
+      if (OB_ISNULL(str_)) {
+        (void)logdata_printf(buf, len, pos, "NULL");
+      } else {
+        const char *start_pos = strcasestr(str_, "access_key");
+        if (OB_ISNULL(start_pos)) {
+          (void)logdata_printf(buf, len, pos, "%s", str_);
+        } else {
+          const int32_t prefix_length = start_pos - str_;
+          (void)logdata_printf(buf, len, pos, "%.*s", MIN(prefix_length, static_cast<int32_t>(len)), str_);
+          (void)logdata_printf(buf, len, pos, "access_key={hidden_access_key}");
+          const char *end_pos = STRCHR(start_pos, '&');
+          if (end_pos != nullptr) {
+            logdata_printf(buf, len, pos, "%s", end_pos);
+          }
+        }
+      }
+    }
+    return pos;
+  }
+  const char *str_;
+};
+
 // print object with to_string() member
 template<class T>
 int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const T &obj, FalseType)

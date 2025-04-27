@@ -57,7 +57,7 @@ int validate_uri_type(const common::ObString &uri)
       !uri.prefix_match(OB_FILE_PREFIX) &&
       !uri.prefix_match(OB_HDFS_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri.ptr()));
   }
   return ret;  
 }
@@ -77,9 +77,9 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_FILE;
   } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
     type = OB_STORAGE_HDFS;
-  }else {
+  } else {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri.ptr()));
   }
   return ret;
 }
