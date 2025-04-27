@@ -1066,8 +1066,10 @@ protected:
 
 
   // for storage cache policy
-  int check_storage_cache_policy(ObStorageCachePolicy &storage_cache_policy, const bool has_partition_info = false);
+  int check_storage_cache_policy(ObStorageCachePolicy &storage_cache_policy, const ObTableSchema *tbl_schema);
   int check_and_set_default_storage_cache_policy();
+  int check_create_stmt_storage_cache_policy(const ObString &storage_cache_policy_str, const ObTableSchema *tbl_schema);
+  int check_alter_stmt_storage_cache_policy(const ObTableSchema *ori_table_schema);
   int set_default_storage_cache_policy(const bool is_alter_add_index = false);
   int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params);
   int resolve_storage_cache_time_attribute(const ParseNode *node, ObResolverParams &params, ObStorageCachePolicy &cache_policy);

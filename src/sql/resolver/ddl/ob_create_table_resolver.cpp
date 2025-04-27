@@ -928,19 +928,9 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     // check storage cache policy for partitioned table
     // because we only know the if the table is partitioned table after resolve_table_options
     if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && is_mysql_mode) {
-      uint64_t tenant_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
-        LOG_WARN("failed to get data version", K(ret));
-      } else if (tenant_version >= DATA_VERSION_4_3_5_2) {
-        ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-        if (!is_storage_cache_policy_default(table_schema.get_storage_cache_policy())) {
-          ObStorageCachePolicy storage_cache_policy;
-          if (OB_FAIL(storage_cache_policy.load_from_string(table_schema.get_storage_cache_policy()))) {
-            LOG_WARN("failed to load storage cache policy", K(ret));
-          } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, true/*has_partition_info*/))) {
-            LOG_WARN("failed to check storage cache policy", K(ret));
-          }
-        }
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      if (OB_FAIL(check_create_stmt_storage_cache_policy(table_schema.get_storage_cache_policy(), &table_schema))) {
+        LOG_WARN("fail to check storage cache policy", K(ret), K(table_schema.get_storage_cache_policy()));;
       }
     }
 

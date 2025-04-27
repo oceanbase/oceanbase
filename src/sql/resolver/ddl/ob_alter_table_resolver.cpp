@@ -366,6 +366,15 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
+      // Version validation is included in check_alter_stmt_storage_cache_policy
+      if (OB_FAIL(check_alter_stmt_storage_cache_policy(table_schema_))) {
+        LOG_WARN("check alter stmt storage cache policy failed", K(ret));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(resolve_hints(parse_tree.children_[ALTER_HINT],
           *alter_table_stmt, nullptr == index_schema_ ? *table_schema_ : *index_schema_))) {
@@ -2091,17 +2100,6 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                   SQL_RESV_LOG(WARN, "failed to resolve table options!", K(ret));
                 } else if (has_index_using_type_) {
                   create_index_arg->index_using_type_ = index_using_type_;
-                }
-              }
-              if (OB_FAIL(ret)) {
-              } else if (GCTX.is_shared_storage_mode() && is_mysql_mode() && storage_cache_policy_.empty()) {
-                uint64_t tenant_data_version = 0;
-                if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-                  LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
-                } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
-                  if (OB_FAIL(set_default_storage_cache_policy(true/*is_alter_add_index*/))) {
-                    SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
-                  }
                 }
               }
             }

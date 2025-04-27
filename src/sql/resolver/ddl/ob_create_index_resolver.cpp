@@ -803,7 +803,18 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-  if (OB_SUCC(ret) &&
+  // Check storage cache policy for index
+  if (OB_FAIL(ret)) {
+  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
+    ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+    // Version validation is included in check_and_set_default_storage_cache_policy
+    if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy_, &index_schema))) {
+      LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy_));;
+    }
+  }
+
+
+if (OB_SUCC(ret) &&
       OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
           data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {
     LOG_WARN("fail to check supportability for building index",
