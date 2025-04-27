@@ -197,6 +197,7 @@ public:
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
   int64_t get_max_macro_block_count(int64_t reserved_size) const;
+  int get_limited_iter_macro_ids(ObArray<MacroBlockId> &ids_array, int max_iteration);
 
   int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
   int get_bad_block_infos(common::ObIArray<ObBadBlockInfo> &bad_block_infos);
@@ -254,6 +255,24 @@ private:
   private:
     int ret_code_;
     common::ObIArray<MacroBlockId> &block_ids_;
+  };
+
+  class LimitedIterGetBlockFunctor final
+  {
+  public:
+    LimitedIterGetBlockFunctor(common::ObIArray<MacroBlockId> &block_ids, int64_t max_iteration)
+        : ret_code_(common::OB_SUCCESS), block_ids_(block_ids), max_iteration_(max_iteration)
+    {}
+    ~LimitedIterGetBlockFunctor() = default;
+
+    bool operator()(const MacroBlockId &key, const BlockInfo &value);
+    int get_ret_code() const
+    {
+      return ret_code_;
+    }
+    int ret_code_;
+    common::ObIArray<MacroBlockId> &block_ids_;
+    int64_t max_iteration_;
   };
 
 private:
