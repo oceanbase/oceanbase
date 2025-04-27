@@ -3196,16 +3196,28 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     }
     case T_TIMESTAMP: {
       ObString time_str(static_cast<int32_t>(node->str_len_), node->str_value_);
-      int64_t time_val = 0;
       ObDateSqlMode date_sql_mode;
       ObTimeConvertCtx cvrt_ctx(tz_info, false);
       if (FALSE_IT(date_sql_mode.init(sql_mode))) {
       } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
-      } else if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, time_val, &scale, date_sql_mode))) {
-        ret = OB_ERR_WRONG_VALUE;
-        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATETIME", to_cstring(time_str));
+      } else if (enable_mysql_compatible_dates) {
+        ObMySQLDateTime mdt;
+        if( OB_FAIL(ObTimeConverter::str_to_mdatetime(time_str, cvrt_ctx, mdt, &scale, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATETIME", to_cstring(time_str));
+        } else {
+          val.set_mysql_datetime(mdt);
+        }
       } else {
-        val.set_datetime(time_val);
+        int64_t time_val = 0;
+        if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, time_val, &scale, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATETIME", to_cstring(time_str));
+        } else {
+          val.set_datetime(time_val);
+        }
+      }
+      if (OB_SUCC(ret)) {
         val.set_scale(scale);
         val.set_param_meta(val.get_meta());
         literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
