@@ -1324,7 +1324,7 @@ int ObDbmsXplan::get_plan_info_by_session_id(sql::ObExecContext &ctx,
                               SUM(OUTPUT_ROWS) REAL_CARD,\
                               MAX(DB_TIME) CPU_COST, \
                               MAX(USER_IO_WAIT_TIME) IO_COST, \
-                              (MAX(LAST_CHANGE_TIME) - MIN(FIRST_CHANGE_TIME))*1000000 REAL_COST\
+                              (UNIX_TIMESTAMP(MAX(LAST_CHANGE_TIME)) - UNIX_TIMESTAMP(MIN(FIRST_CHANGE_TIME)))*1000000 REAL_COST\
                               FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN_MONITOR B,\
                                     (SELECT TRACE_ID\
                                     FROM OCEANBASE.__ALL_VIRTUAL_PROCESSLIST \
