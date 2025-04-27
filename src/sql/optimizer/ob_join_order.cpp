@@ -4513,7 +4513,9 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using match against expr, vector index is");
   } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
-  } else if (stmt->has_vec_approx() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1 && OB_FALSE_IT(add_only_vec_index_id = true)) {
+  } else if (stmt->has_vec_approx()
+            && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1 || helper.filters_.count() == 0)
+            && OB_FALSE_IT(add_only_vec_index_id = true)) {
   } else if (add_only_vec_index_id) {
     // for compatibility: versions prior to 435bp1 do not have a pre-filter.
     // if GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1, only add vector index (post-filter)
