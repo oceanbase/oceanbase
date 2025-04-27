@@ -264,9 +264,9 @@ int ObMViewRefreshRunStats::dec_num_mvs_current(ObISQLClient &sql_client, uint64
       LOG_WARN("fail to assign sql", KR(ret));
     } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    } else if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+    } else if (OB_UNLIKELY(!(is_single_row(affected_rows) || is_zero_row(affected_rows)))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected_rows unexpected to be one", KR(ret), K(affected_rows));
+      LOG_WARN("affected_rows unexpected to be one or zero", KR(ret), K(affected_rows));
     }
   }
   return ret;
