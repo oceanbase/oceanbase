@@ -47,6 +47,7 @@ struct node_s
     }
     return ret;
   }
+  TO_STRING_KV(K(magic), K(key));
 };
 
 typedef ObRbTree<node_t, ObDummyCompHelper<node_t>> tree_t;

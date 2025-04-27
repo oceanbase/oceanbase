@@ -19,6 +19,7 @@
 #include "share/table/ob_table_rpc_struct.h"
 #include <stdint.h>
 #include "share/schema/ob_table_schema.h"
+#include "lib/container/ob_rbtree.h"
 
 namespace oceanbase
 {

@@ -19,7 +19,6 @@
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/alloc/alloc_interface.h"
 #include "lib/lock/ob_mutex.h"
-#include "lib/container/ob_rbtree.h"
 
 namespace oceanbase
 {
