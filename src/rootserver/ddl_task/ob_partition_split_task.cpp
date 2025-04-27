@@ -1591,10 +1591,12 @@ int ObPartitionSplitTask::delete_stat_info(common::ObMySQLTransaction &trans,
   return ret;
 }
 
-int ObPartitionSplitTask::delete_src_part_stat_info(const uint64_t table_id,
-                                                    const int64_t src_part_id,
-                                                    const ObIArray<uint64_t> &local_index_table_ids,
-                                                    const ObIArray<int64_t> &src_local_index_part_ids)
+int ObPartitionSplitTask::copy_and_delete_src_part_stat_info(const uint64_t table_id,
+                                                             const int64_t src_part_id,
+                                                             const ObIArray<uint64_t> &local_index_table_ids,
+                                                             const ObIArray<int64_t> &src_local_index_part_ids,
+                                                             const ObSArray<int64_t> &dest_part_ids,
+                                                             const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids)
 {
   int ret = OB_SUCCESS;
   if (local_index_table_ids.count() != src_local_index_part_ids.count()) {
@@ -1610,6 +1612,8 @@ int ObPartitionSplitTask::delete_src_part_stat_info(const uint64_t table_id,
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
     } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("fail to start transaction", K(ret));
+    } else if (OB_FAIL(copy_src_part_stat_info_to_dest(trans, table_id, src_part_id, partition_split_arg_.local_index_table_ids_, src_local_index_part_ids, dest_part_ids, dest_local_index_part_ids))) {
+      LOG_WARN("failed to delete the info of source partition from tables ", K(ret), K(table_id), K(src_part_id), K(partition_split_arg_.local_index_table_ids_), K(src_local_index_part_ids), K(dest_local_index_part_ids));
     // if the table is none-partitioned-table before spliting, then __all_table_stat fill the partition_id with it's table_id
     // and we need to remove those records, if there exist
     } else if (OB_FAIL(delete_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, table_id))) {
@@ -1652,10 +1656,106 @@ int ObPartitionSplitTask::delete_src_part_stat_info(const uint64_t table_id,
   return ret;
 }
 
+// get table schema from table, exclude partition_id
+const char *ObPartitionSplitTask::get_table_schema(const char *table_name)
+{
+  const char *ret_table_schema = "UNKNOWN_TABLE_NAME";
+  if (OB_ALL_TABLE_STAT_TNAME == table_name) {
+    ret_table_schema = "gmt_create, gmt_modified, tenant_id, table_id, object_type, last_analyzed, sstable_row_cnt, sstable_avg_row_len, macro_blk_cnt, micro_blk_cnt, memtable_row_cnt, memtable_avg_row_len, row_cnt, avg_row_len, global_stats, user_stats, stattype_locked, stale_stats, spare1, spare2, spare3, spare4, spare5, spare6, index_type";
+  } else if (OB_ALL_COLUMN_STAT_TNAME == table_name) {
+    ret_table_schema = "gmt_create, gmt_modified, tenant_id, table_id, column_id, object_type, last_analyzed, distinct_cnt, null_cnt, max_value, b_max_value, min_value, b_min_value, avg_len, distinct_cnt_synopsis, distinct_cnt_synopsis_size, sample_size, density, bucket_cnt, histogram_type, global_stats, user_stats, spare1, spare2, spare3, spare4, spare5, spare6, cg_macro_blk_cnt, cg_micro_blk_cnt, cg_skip_rate";
+  } else if (OB_ALL_HISTOGRAM_STAT_TNAME == table_name) {
+    ret_table_schema = "gmt_create, gmt_modified, tenant_id, table_id, column_id, endpoint_num, object_type, endpoint_normalized_value, endpoint_value, b_endpoint_value, endpoint_repeat_cnt";
+  }
+  return ret_table_schema;
+}
+
+int ObPartitionSplitTask::copy_stat_info(common::ObMySQLTransaction &trans,
+                                         const char *table_name,
+                                         const uint64_t table_id,
+                                         const uint64_t src_part_id,
+                                         const uint64_t dest_part_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObSqlString sql_string;
+  // pre-check
+  if (OB_ISNULL(table_name) || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parameter invalid", K(ret), KP(table_name), K(table_id), K(src_part_id), K(dest_part_id));
+  } else if (OB_FAIL(sql_string.assign_fmt("REPLACE INTO %s (partition_id, %s)"
+                                           "SELECT %ld, %s FROM %s "
+                                           " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld;",
+                                           table_name,get_table_schema(table_name),
+                                           dest_part_id, get_table_schema(table_name), table_name,
+                                           0l /*tenant_id*/, table_id, src_part_id))) {
+    LOG_WARN("failed to assign sql string", K(ret), K(table_name), K(table_id), K(dest_part_id));
+  } else if (OB_FAIL(trans.write(tenant_id_, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("failed to delete source_partition information from ", K(ret), K(sql_string));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObPartitionSplitTask::copy_src_part_stat_info_to_dest(common::ObMySQLTransaction &trans,
+                                                          const uint64_t table_id,
+                                                          const int64_t src_part_id,
+                                                          const ObIArray<uint64_t> &local_index_table_ids,
+                                                          const ObIArray<int64_t> &src_local_index_part_ids,
+                                                          const ObSArray<int64_t> &dest_part_ids,
+                                                          const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (local_index_table_ids.count() != src_local_index_part_ids.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("size mismatch of local_index_table_ids and src_local_index_part_ids", K(ret), K(local_index_table_ids), K(local_index_table_ids));
+  } else if (OB_INVALID_ID == table_id || OB_INVALID_ID == src_part_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parameter invalid", K(ret), K(table_id), K(src_part_id));
+  } else {
+    if (!trans.is_started()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("transaction is not started", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dest_part_ids.count(); i++) {
+        int64_t dest_part_id = dest_part_ids.at(i);
+        if (OB_FAIL(copy_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, table_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, table_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_COLUMN_STAT_TNAME));
+        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, table_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_HISTOGRAM_STAT_TNAME));
+        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_COLUMN_STAT_TNAME));
+        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
+          LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_HISTOGRAM_STAT_TNAME));
+        } else {
+          ObSArray<int64_t> dest_local_index_part_id = dest_local_index_part_ids.at(i);
+          for (int64_t j = 0; OB_SUCC(ret) && j < dest_local_index_part_id.count(); j++) {
+            if (OB_INVALID_ID == local_index_table_ids.at(j) || OB_INVALID_ID == dest_local_index_part_id.at(j)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("parameter invalid", K(ret), K(local_index_table_ids.at(j)), K(dest_local_index_part_id.at(j)));
+            } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, local_index_table_ids.at(j),src_local_index_part_ids.at(j), dest_local_index_part_id.at(j)))) {
+              LOG_WARN("failed to copy the data of source local index partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPartitionSplitTask::init_sync_stats_info(const ObTableSchema* const table_schema,
                                                 ObSchemaGetterGuard &schema_guard,
                                                 int64_t &src_partition_id, /* OUTPUT */
-                                                ObSArray<int64_t> &src_local_index_partition_ids /* OUTPUT */)
+                                                ObSArray<int64_t> &src_local_index_partition_ids, /* OUTPUT */
+                                                ObSArray<int64_t> &dest_partition_ids, /* OUTPUT */
+                                                ObSArray<ObSArray<int64_t>> &dest_local_index_partition_ids /* OUTPUT */)
 {
   // get necessary information: src_partition_id and src_local_index_partition_ids
   int ret = OB_SUCCESS;
@@ -1703,6 +1803,45 @@ int ObPartitionSplitTask::init_sync_stats_info(const ObTableSchema* const table_
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    dest_partition_ids.reset();
+    dest_local_index_partition_ids.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_split_arg_.dest_tablet_ids_.count(); i++) {
+      const ObTabletID &dest_tablet_id = partition_split_arg_.dest_tablet_ids_.at(i);
+      int64_t part_id = OB_INVALID_INDEX;
+      int64_t sub_part_id = OB_INVALID_INDEX;
+      if (OB_FAIL(table_schema->get_part_id_by_tablet(dest_tablet_id, part_id, sub_part_id))) {
+        LOG_WARN("fail to get partition info by dest tablet id", K(ret), K(dest_tablet_id));
+      } else if (OB_FAIL(dest_partition_ids.push_back(part_id))) {
+        LOG_WARN("fail to push_back", K(ret), K(dest_tablet_id), K(part_id), KPC(this));
+      } else {
+        ObSArray<int64_t> dest_local_index_partition_ids_tmp;
+        for (int64_t j = 0; OB_SUCC(ret) && j < partition_split_arg_.dest_local_index_tablet_ids_.count(); j++) {
+          const ObTabletID &dest_local_index_tablet_id = partition_split_arg_.dest_local_index_tablet_ids_.at(j).at(i);
+          uint64_t index_table_id = partition_split_arg_.local_index_table_ids_.at(j);
+          int64_t local_index_part_id = OB_INVALID_INDEX;
+          int64_t local_index_sub_part_id = OB_INVALID_INDEX;
+          const ObTableSchema *index_table_schema = nullptr;
+          // get the index_table_schema and get the dest_local_index_part_id
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_id, index_table_schema))) {
+            LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
+          } else if (OB_ISNULL(index_table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("error unexpected, index table schema not exist", K(ret), K(index_table_id));
+          } else if (OB_FAIL(index_table_schema->get_part_id_by_tablet(dest_local_index_tablet_id, local_index_part_id, local_index_sub_part_id))) {
+            LOG_WARN("fail to get partition info by dest local index tablet id", K(ret), K(dest_local_index_tablet_id), K(partition_split_arg_.dest_local_index_tablet_ids_), K(partition_split_arg_.src_local_index_tablet_ids_));
+          } else if (OB_FAIL(dest_local_index_partition_ids_tmp.push_back(local_index_part_id))) {
+            LOG_WARN("fail to push_back", K(ret), K(dest_local_index_tablet_id), K(local_index_part_id), KPC(this));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(dest_local_index_partition_ids.push_back(dest_local_index_partition_ids_tmp))) {
+            LOG_WARN("fail to push_back", K(ret), K(dest_local_index_partition_ids_tmp), KPC(this));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -1713,6 +1852,8 @@ int ObPartitionSplitTask::sync_stats_info()
     const uint64_t data_table_id = object_id_;
     int64_t src_partition_id = 0;
     ObSArray<int64_t> src_local_index_partition_ids;
+    ObSArray<int64_t> dest_partition_ids;
+    ObSArray<ObSArray<int64_t>> dest_local_index_partition_ids;
     src_local_index_partition_ids.reset();
     {
       const ObTableSchema *data_table_schema = nullptr;
@@ -1727,7 +1868,7 @@ int ObPartitionSplitTask::sync_stats_info()
       } else if (OB_ISNULL(data_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(data_table_id));
-      } else if (OB_FAIL(init_sync_stats_info(data_table_schema, schema_guard, src_partition_id, src_local_index_partition_ids))) {
+      } else if (OB_FAIL(init_sync_stats_info(data_table_schema, schema_guard, src_partition_id, src_local_index_partition_ids, dest_partition_ids, dest_local_index_partition_ids))) {
         LOG_WARN("failed to init the necessary info, like part_ids", K(ret));
       }
     }
@@ -1735,7 +1876,7 @@ int ObPartitionSplitTask::sync_stats_info()
       if (has_synced_stats_info_ && OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(delete_src_part_stat_info(data_table_id, src_partition_id, partition_split_arg_.local_index_table_ids_, src_local_index_partition_ids))) {
+    } else if (OB_FAIL(copy_and_delete_src_part_stat_info(data_table_id, src_partition_id, partition_split_arg_.local_index_table_ids_, src_local_index_partition_ids, dest_partition_ids, dest_local_index_partition_ids))) {
       LOG_WARN("failed to delete the info of source partition from tables ", K(ret));
     }
   }

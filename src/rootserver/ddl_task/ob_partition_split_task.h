@@ -145,10 +145,27 @@ private:
                        const char *table_name,
                        const uint64_t table_id,
                        const uint64_t src_part_id);
-  int delete_src_part_stat_info(const uint64_t table_id,
-                                const int64_t src_part_id,
-                                const ObIArray<uint64_t> &local_index_table_ids,
-                                const ObIArray<int64_t> &src_local_index_part_ids);
+  int copy_and_delete_src_part_stat_info(const uint64_t table_id,
+                                         const int64_t src_part_id,
+                                         const ObIArray<uint64_t> &local_index_table_ids,
+                                         const ObIArray<int64_t> &src_local_index_part_ids,
+                                         const ObSArray<int64_t> &dest_part_ids,
+                                         const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids);
+
+  const char *get_table_schema(const char *table_name);
+  int copy_stat_info(common::ObMySQLTransaction &trans,
+                     const char *table_name,
+                     const uint64_t table_id,
+                     const uint64_t src_part_id,
+                     const uint64_t dest_part_id);
+
+  int copy_src_part_stat_info_to_dest(common::ObMySQLTransaction &trans,
+                                      const uint64_t table_id,
+                                      const int64_t src_part_id,
+                                      const ObIArray<uint64_t> &local_index_table_ids,
+                                      const ObIArray<int64_t> &src_local_index_part_ids,
+                                      const ObSArray<int64_t> &dest_part_ids,
+                                      const ObSArray<ObSArray<int64_t>> &dest_local_index_part_ids);
   int take_effect(const share::ObDDLTaskStatus next_task_status);
   int succ();
   int wait_recovery_task_finish(const share::ObDDLTaskStatus next_task_status);
@@ -190,7 +207,9 @@ private:
   int init_sync_stats_info(const ObTableSchema* const table_schema,
                            ObSchemaGetterGuard &schema_guard,
                            int64_t &src_partition_id, /* OUTPUT */
-                           ObSArray<int64_t> &src_local_index_partition_ids /* OUTPUT */);
+                           ObSArray<int64_t> &src_local_index_partition_ids, /* OUTPUT */
+                           ObSArray<int64_t> &dest_partition_ids, /* OUTPUT */
+                           ObSArray<ObSArray<int64_t>> &dest_local_index_partition_ids /* OUTPUT */);
   int update_message_row_progress_(const oceanbase::share::ObDDLTaskStatus status,
                                    const bool task_submitted,
                                    int64_t &pos);
