@@ -8216,7 +8216,11 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                     PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
             ObIAllocator *tmp_alloc = PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type() ? ctx->allocator_
                                                                                                        : &ctx->exec_ctx_->get_allocator();
-            OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
+            if (PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
+              OX (result = calc_array->at(0));  //ref cursor need to shallow copy
+            } else {
+              OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
+            }
             if (OB_SUCC(ret) && PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
                 ObPLCursorInfo *cursor_info = reinterpret_cast<ObPLCursorInfo*>(result.get_ext());
                 if (cursor_info->isopen() && !cursor_info->is_server_cursor()) {
@@ -8676,7 +8680,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
           ObObj& obj = tmp_row.get_cell(i);
           ObObj tmp;
-          if (obj.is_pl_extend()) {
+          if (obj.is_pl_extend() && pl::PL_REF_CURSOR_TYPE != obj.get_meta().get_extend_type()) {
             if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
               LOG_WARN("failed to copy pl extend", K(ret));
             } else {
