@@ -5129,7 +5129,8 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         case ObIndexArg::RENAME_INDEX:
         case ObIndexArg::ALTER_INDEX_TABLESPACE: {
           // offline ddl cannot appear at the same time with other ddl
-          if (orig_table_schema.is_heap_organized_table() && OB_FAIL(check_alter_heap_table_index(type, orig_table_schema, index_arg))) {
+          if (orig_table_schema.is_heap_organized_table() && ObIndexArg::ALTER_INDEX_TABLESPACE != type &&
+              OB_FAIL(check_alter_heap_table_index(type, orig_table_schema, index_arg))) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("Alter heap table index failed", K(ret));
           }
