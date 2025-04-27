@@ -208,20 +208,18 @@ void ObEliminateTask::runTimerTask()
         }
         last_time_allocated = allocator->allocated();
       }
+
+      int64_t end_time = ObTimeUtility::current_time();
+      LOG_INFO("sql audit evict task end", K(request_manager_->get_tenant_id()),
+               K(evict_high_mem_level), K(evict_high_size_level),
+               K(evict_batch_count), "elapse_time", end_time - start_time,
+               "size_used", request_manager_->get_size_used(), "mem_used",
+               allocator->allocated());
     }
 
     //如果sql_audit_memory_limit改变, 则需要将ObConcurrentFIFOAllocator中total_limit_更新;
     if (true == is_change) {
       allocator->set_total_limit(config_mem_limit_);
     }
-    int64_t end_time = ObTimeUtility::current_time();
-    LOG_INFO("sql audit evict task end",
-             K(request_manager_->get_tenant_id()),
-             K(evict_high_mem_level),
-             K(evict_high_size_level),
-             K(evict_batch_count),
-             "elapse_time", end_time - start_time,
-             "size_used",request_manager_->get_size_used(),
-             "mem_used", allocator->allocated());
   }
 }
