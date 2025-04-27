@@ -1532,50 +1532,86 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
 int ObPartitionMinorRowMergeIter::compact_old_row()
 {
   int ret = OB_SUCCESS;
+  if (is_delete_insert_merge_) {
+    if (OB_FAIL(compact_old_row_for_delete_insert())) {
+      LOG_WARN("Failed to compact old row for delete insert merge", K(ret));
+    }
+  } else {
+    row_queue_.reuse();
+    obj_copy_allocator_.reuse();
+    if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+      LOG_WARN("Failed to add empty row into row queue", K(ret));
+    }
+    while(OB_SUCC(ret)) {
+      if (curr_row_->is_shadow_row()) {
+      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
+        LOG_WARN("Failed to compact first row", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (curr_row_->is_last_multi_version_row()) { // meet L flag
+        row_queue_.get_last()->set_last_multi_version_row();
+        if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {
+          LOG_WARN("Failed to get next row from row_queue", K(ret));
+        }
+        break;
+      } else if (OB_FAIL(inner_next(true /*open_macro*/))) {
+        LOG_WARN("Failed to inner next for compact first row", K(ret));
+      }
+    } // end of while
+  }
+  return ret;
+}
+
+int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
+{
+  int ret = OB_SUCCESS;
+  // the latest dml row is in the left side, which should always be output to avoid transaction version rollback in the case of overlapping sstable data
+  // case 1. delete1 -> insert1 -> delete0 -> insert0, output delete1
+  // case 2. delete2 -> insert1 -> delete1 -> insert0 -> delete0, output delete2 -> insert1 -> delete0
+  // case 3. insert1 -> delete1 -> insert0 -> delete0, output insert1 -> delete0
+  // case 4. insert1 -> delete1 -> insert0, output insert1
   row_queue_.reuse();
   tmp_compaction_row_.reuse();
   tmp_compaction_row_.count_ = 0;
   tmp_compaction_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   obj_copy_allocator_.reuse();
-  if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
-    LOG_WARN("Failed to add empty row into row queue", K(ret));
-  }
-  while(OB_SUCC(ret)) {
+  while (OB_SUCC(ret)) {
     if (curr_row_->is_shadow_row()) {
-    } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
-      LOG_WARN("Failed to compact first row", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (curr_row_->is_last_multi_version_row()) { // meet L flag
-      if (is_delete_insert_merge_) {
-        const ObDmlRowFlag first_row_flag = row_queue_.get_first()->row_flag_;
-        const ObDmlRowFlag last_row_flag = tmp_compaction_row_.row_flag_;
-        bool need_add_last_row = (first_row_flag.is_insert() && last_row_flag.is_delete());
-        bool need_reset_first_row = (first_row_flag.is_delete() && last_row_flag.is_delete());
-        if (need_add_last_row) {
-          if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
-            LOG_WARN("Failed to add empty row into row queue", K(ret));
-          } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
-            LOG_WARN("Failed to compact last row", K(ret));
-          }
-        } else if (need_reset_first_row) {
-          row_queue_.get_first()->reuse();
-          row_queue_.get_first()->count_ = 0;
-          row_queue_.get_first()->row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
-          if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
-            LOG_WARN("Failed to compact first row", K(ret));
-          }
-        }
+      // skip shadow row
+    } else if (0 == row_queue_.count() || // add placeholder for the latest row
+               (1 == row_queue_.count() && row_queue_.get_first()->row_flag_.is_delete() && curr_row_->row_flag_.is_insert())) { // add placeholder for the extra insert row for case 2
+      if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+        LOG_WARN("Failed to add empty row into row queue", K(ret));
+      } else if (OB_FAIL(row_queue_.compact_border_row(curr_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
+        LOG_WARN("Failed to compact last row", K(ret));
       }
-      row_queue_.get_last()->set_last_multi_version_row();
-      if (FAILEDx(row_queue_.get_next_row(curr_row_))) {
-        LOG_WARN("Failed to get next row from row_queue", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (curr_row_->is_last_multi_version_row()) {
+      const ObDmlRowFlag &first_row_flag = row_queue_.get_first()->row_flag_;
+      const ObDmlRowFlag &last_row_flag = tmp_compaction_row_.row_flag_;
+      if ((first_row_flag.is_insert() && last_row_flag.is_delete())
+          || (first_row_flag.is_delete() && last_row_flag.is_delete())) {
+        if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
+          LOG_WARN("Failed to add empty row into row queue", K(ret));
+        } else if (OB_FAIL(row_queue_.compact_border_row(&tmp_compaction_row_, true/*last_row*/, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
+          LOG_WARN("Failed to compact last row", K(ret));
+        }
+      } else if (first_row_flag.is_delete() && last_row_flag.is_insert()) {
+        row_queue_.pop_last();
+      }
+
+      if (OB_SUCC(ret)) {
+        row_queue_.get_last()->set_last_multi_version_row();
+        if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {
+          LOG_WARN("Failed to get next row from row_queue", K(ret));
+        }
       }
       break;
     } else if (OB_FAIL(inner_next(true /*open_macro*/))) {
       LOG_WARN("Failed to inner next for compact first row", K(ret));
-    } else if (is_delete_insert_merge_
-               && -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int() > access_context_.trans_version_range_.base_version_) {
+    } else if (-curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int() > access_context_.trans_version_range_.base_version_) {
       if (OB_FAIL(tmp_compaction_row_.deep_copy(*curr_row_, obj_copy_allocator_))) {
         LOG_WARN("Fail to deep copy curr row", K(ret), KPC_(curr_row));
       }

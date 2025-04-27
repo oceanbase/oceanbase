@@ -2353,7 +2353,6 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_header_info(
   version_fit = true;
   final_result = false;
   const ObRowHeader *row_header = nullptr;
-  ObMultiVersionRowFlag mvcc_row_flag;
   if (ObIMicroBlockReaderInfo::INVALID_ROW_INDEX == index || index > last_) {
     ret = OB_ITER_END;
   } else if (read_row_direct_flag_) {
@@ -2361,7 +2360,7 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_header_info(
     if (OB_FAIL(reader_->get_row_header(index, row_header))) {
       LOG_WARN("micro block reader fail to get row header", K(ret), K_(macro_id), K(index));
     } else {
-      mvcc_row_flag = row_header->get_mvcc_row_flag();
+      const ObMultiVersionRowFlag &mvcc_row_flag = row_header->get_row_multi_version_flag();
       row_flag = row_header->get_row_flag();
       is_last_multi_version_row_ = mvcc_row_flag.is_last_multi_version_row();
       if (OB_FAIL(ObGhostRowUtil::is_ghost_row(mvcc_row_flag, is_ghost_row_flag))) {
@@ -2382,14 +2381,13 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_header_info(
       LOG_WARN("fail to check foreign key", K(ret), K_(macro_id), K(index), K(trans_version), K(sql_sequence));
     } else {
       row_flag = row_header->get_row_flag();
-      mvcc_row_flag = row_header->get_mvcc_row_flag();
-      is_last_multi_version_row_ = mvcc_row_flag.is_last_multi_version_row();
+      is_last_multi_version_row_ = row_header->get_row_multi_version_flag().is_last_multi_version_row();
     }
   }
   if (OB_SUCC(ret)) {
     index = index + 1;
     LOG_DEBUG("[MULTIVERSION MOW] inner get next header info", K(ret), K_(macro_id), K(index),
-        K(version_fit), K(row_flag), K(mvcc_row_flag), K_(read_row_direct_flag), K_(is_last_multi_version_row));
+        K(version_fit), K(row_flag), K_(read_row_direct_flag), K_(is_last_multi_version_row));
   }
   return ret;
 }

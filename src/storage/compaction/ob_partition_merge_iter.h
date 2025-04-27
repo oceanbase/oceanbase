@@ -344,6 +344,8 @@ protected:
   }
   int skip_ghost_row();
   int compact_old_row();
+private:
+  int compact_old_row_for_delete_insert();
 protected:
   common::ObArenaAllocator obj_copy_allocator_;
   storage::ObNopPos *nop_pos_[ObRowQueue::QI_MAX];

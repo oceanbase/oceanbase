@@ -4011,7 +4011,9 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
 
   const char *result1 =
     "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
-    "1        var1  -45       MIN              40      40      DELETE    INSERT_DELETE   SCF\n"
+    "1        var1  -60       MIN              55      55      DELETE    INSERT_DELETE   SCF\n"
+    "1        var1  -60       0                55      55      DELETE    NORMAL   C\n"
+    "1        var1  -55       DI_VERSION       50      50      INSERT    NORMAL   C\n"
     "1        var1  -45       0                40      40      DELETE    NORMAL   C\n"
     "1        var1  -40       DI_VERSION       40      40      INSERT    NORMAL   C\n"
     "1        var1  -35       0                30      30      DELETE    NORMAL   C\n"
@@ -4237,6 +4239,395 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
+TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] =
+      "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745565103366455000     MIN          20      20      INSERT    NORMAL    SCF\n"
+      "1        var1  -1745565103366455000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565103366455000     0            20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745564984513289000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745564984513289000     0            20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745564862088425000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745564862088425000     0            20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745564841050055000     DI_VERSION   20      20      INSERT    NORMAL    CL\n";
+
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 1745565132272214002;
+  share::ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(1745565132272214002);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745565523125912000      MIN         20      20      INSERT    NORMAL    SCF\n"
+      "1        var1  -1745565523125912000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565439870560000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565432452719000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565403991954000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565304482379000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565304482379000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565296623304000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565296623304000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565239306510002      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    CL\n";
+
+  snapshot_version = 1745565526899601005;
+  scn_range.start_scn_.convert_for_tx(1745565132272214002);
+  scn_range.end_scn_.convert_for_tx(1745565526899601005);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTableHandleV2 handle3;
+  const char *micro_data3[1];
+  micro_data3[0] =
+      "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745565646412642000      MIN         20      20      DELETE    NORMAL    SCF\n"
+      "1        var1  -1745565646412642000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565557130273000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565557130273000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565523125912000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    CL\n";
+
+  snapshot_version = 1745566502778393003;
+  scn_range.start_scn_.convert_for_tx(1745565526899601005);
+  scn_range.end_scn_.convert_for_tx(1745566502778393003);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data3, 1);
+  prepare_data_end(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
+  STORAGE_LOG(INFO, "finish prepare sstable3");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 1745566502778393003;
+  trans_version_range.multi_version_start_ = 1745565771840454000;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745565646412642000      MIN         20      20      DELETE    NORMAL    SCF\n"
+      "1        var1  -1745565646412642000      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565557130273000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565523125912000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    C\n"
+      "1        var1  -1745565103366455000     DI_VERSION   20      20      INSERT    NORMAL    CL\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  handle3.reset();
+  merger.reset();
+}
+
+TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  // 1. new sstable output insert+delete, old sstable output insert+delete
+  // 2. new sstable output insert+delete, old sstable output insert
+  // 3. new sstable output insert+delete, old sstable output delete
+  // 4. new sstable output insert+delete, old sstable output delete+insert+delete
+  // 5. new sstable output insert, old sstable output insert+delete
+  // 6. new sstable output insert, old sstable output insert
+  // 7. new sstable output insert, old sstable output delete
+  // 8. new sstable output insert, old sstable output delete+insert+delete
+  // 9. new sstable output delete+insert+delete, old sstable output insert+delete
+  // 10. new sstable output delete+insert+delete, old sstable output insert
+  // 11. new sstable output delete+insert+delete, old sstable output delete
+  // 12. new sstable output delete+insert+delete, old sstable output delete+insert+delete
+  // 13. new sstable output delete, old sstable output insert+delete
+  // 14. new sstable output delete, old sstable output insert
+  // 15. new sstable output delete, old sstable output delete
+  // 16. new sstable output delete, old sstable output delete+insert+delete
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] =
+      "bigint   var   bigint    bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -20      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "1        var1  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "2        var2  -20      DI_VERSION          20      20      INSERT    NORMAL    CLF\n"
+      "3        var3  -30      0                   20      20      DELETE    NORMAL    CLF\n"
+      "4        var4  -30      0                   20      20      DELETE    NORMAL    CF\n"
+      "4        var4  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "4        var4  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "5        var5  -20      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "5        var5  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "6        var6  -20      DI_VERSION          20      20      INSERT    NORMAL    CLF\n"
+      "7        var7  -30      0                   20      20      DELETE    NORMAL    CLF\n"
+      "8        var8  -30      0                   20      20      DELETE    NORMAL    CF\n"
+      "8        var8  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "8        var8  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "9        var9  -20      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "9        var9  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "10       var10 -20      DI_VERSION          20      20      INSERT    NORMAL    CLF\n"
+      "11       var11 -30      0                   20      20      DELETE    NORMAL    CLF\n"
+      "12       var12 -30      0                   20      20      DELETE    NORMAL    CF\n"
+      "12       var12 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "12       var12 -10      DI_VERSION          20      20      DELETE    NORMAL    CL\n"
+      "13       var13 -20      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "13       var13 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "14       var14 -20      DI_VERSION          20      20      INSERT    NORMAL    CLF\n"
+      "15       var15 -30      0                   20      20      DELETE    NORMAL    CLF\n"
+      "16       var16 -30      0                   20      20      DELETE    NORMAL    CF\n"
+      "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "16       var16 -10      0                   20      20      DELETE    NORMAL    CL\n";
+
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 10;
+  share::ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint    bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "1        var1  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "1        var1  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "1        var1  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "2        var2  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "2        var2  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "2        var2  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "2        var2  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "3        var3  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "3        var3  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "3        var3  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "3        var3  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "4        var4  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "4        var4  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "4        var4  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "4        var4  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "5        var5  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "5        var5  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "5        var5  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "5        var5  -10      0                   20      20      DELETE    NORMAL    C\n"
+      "5        var5  -5       0                   20      20      INSERT    NORMAL    CL\n"
+      "6        var6  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "6        var6  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "6        var6  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "6        var6  -10      0                   20      20      DELETE    NORMAL    C\n"
+      "6        var6  -5       0                   20      20      INSERT    NORMAL    CL\n"
+      "7        var7  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "7        var7  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "7        var7  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "7        var7  -10      0                   20      20      DELETE    NORMAL    C\n"
+      "7        var7  -5       0                   20      20      INSERT    NORMAL    CL\n"
+      "8        var8  -40      DI_VERSION          20      20      INSERT    NORMAL    CF\n"
+      "8        var8  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "8        var8  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "8        var8  -10      0                   20      20      DELETE    NORMAL    C\n"
+      "8        var8  -5       0                   20      20      INSERT    NORMAL    CL\n"
+      "9        var9  -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "9        var9  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "9        var9  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "9        var9  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "9        var9  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "10       var10 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "10       var10 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "10       var10 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "10       var10 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "10       var10 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "11       var11 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "11       var11 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "11       var11 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "11       var11 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "11       var11 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "12       var12 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "12       var12 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "12       var12 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "12       var12 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "12       var12 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "13       var13 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "13       var13 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "13       var13 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "13       var13 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "13       var13 -10      0                   20      20      DELETE    NORMAL    C\n"
+      "13       var13 -5       DI_VERSION          20      20      INSERT    NORMAL    CL\n"
+      "14       var14 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "14       var14 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "14       var14 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "14       var14 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "14       var14 -10      0                   20      20      DELETE    NORMAL    C\n"
+      "14       var14 -5       DI_VERSION          20      20      INSERT    NORMAL    CL\n"
+      "15       var15 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "15       var15 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "15       var15 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "15       var15 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "15       var15 -10      0                   20      20      DELETE    NORMAL    C\n"
+      "15       var15 -5       DI_VERSION          20      20      INSERT    NORMAL    CL\n"
+      "16       var16 -50      0                   20      20      DELETE    NORMAL    CF\n"
+      "16       var16 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "16       var16 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "16       var16 -10      0                   20      20      DELETE    NORMAL    C\n"
+      "16       var16 -5       DI_VERSION          20      20      INSERT    NORMAL    CL\n";
+
+  snapshot_version = 20;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(20);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 90;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "1        var1  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "1        var1  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "1        var1  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "2        var2  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "2        var2  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "2        var2  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "2        var2  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "3        var3  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "3        var3  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "3        var3  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "3        var3  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "4        var4  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "4        var4  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "4        var4  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "4        var4  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "4        var4  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "5        var5  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "5        var5  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "5        var5  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "5        var5  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "6        var6  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "6        var6  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "6        var6  -20      DI_VERSION          20      20      INSERT    NORMAL    CL\n"
+      "7        var7  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "7        var7  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "7        var7  -30      0                   20      20      DELETE    NORMAL    CL\n"
+      "8        var8  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
+      "8        var8  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "8        var8  -30      0                   20      20      DELETE    NORMAL    C\n"
+      "8        var8  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "8        var8  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "9        var9  -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "9        var9  -50      0                   20      20      DELETE    NORMAL    C\n"
+      "9        var9  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "9        var9  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "9        var9  -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "10       var10 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "10       var10 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "10       var10 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "10       var10 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "10       var10 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "11       var11 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "11       var11 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "11       var11 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "11       var11 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "11       var11 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "12       var12 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "12       var12 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "12       var12 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "12       var12 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "12       var12 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "12       var12 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "13       var13 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "13       var13 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "13       var13 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "13       var13 -10      0                   20      20      DELETE    NORMAL    CL\n"
+      "14       var14 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "14       var14 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "14       var14 -20      DI_VERSION          20      20      INSERT    NORMAL    CL\n"
+      "15       var15 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "15       var15 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "15       var15 -30      0                   20      20      DELETE    NORMAL    CL\n"
+      "16       var16 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
+      "16       var16 -50      0                   20      20      DELETE    NORMAL    C\n"
+      "16       var16 -30      0                   20      20      DELETE    NORMAL    C\n"
+      "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
+      "16       var16 -10      0                   20      20      DELETE    NORMAL    CL\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();

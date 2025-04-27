@@ -58,6 +58,12 @@ public:
     }
     return row;
   }
+  OB_INLINE void pop_last()
+  {
+    if (cur_pos_ < rows_.count()) {
+      rows_.pop_back();
+    }
+  }
   OB_INLINE int64_t count() const { return rows_.count(); }
   int compact_border_row(const ObDatumRow *row,
                          const bool last_row,
