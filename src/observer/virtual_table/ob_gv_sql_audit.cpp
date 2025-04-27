@@ -1148,6 +1148,15 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case PLSQL_COMPILE_TIME: {
           cells[cell_idx].set_int(record.data_.plsql_compile_time_);
         } break;
+        case CCL_RULE_ID: {
+          cells[cell_idx].set_int(0);
+        } break;
+        case CCL_MATCH_TIME: {
+          cells[cell_idx].set_int(0);
+        } break;
+        case INSERT_DUPLICATE_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.insert_update_or_replace_duplicate_row_count_);
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

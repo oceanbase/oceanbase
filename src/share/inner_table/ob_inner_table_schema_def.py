@@ -8716,7 +8716,10 @@ def_table_schema(
     ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
     ('user_client_port', 'int'),
     ('trans_status', 'varchar:256'),
-    ('plsql_compile_time', 'int')
+    ('plsql_compile_time', 'int'),
+    ('ccl_rule_id', 'int', 'true'),
+    ('ccl_match_time', 'int', 'true'),
+    ('insert_duplicate_row_count', 'int', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -16867,7 +16870,8 @@ def_table_schema(
                          seq_num as SEQ_NUM,
                          plsql_compile_time as PLSQL_COMPILE_TIME,
                          user_client_port as USER_CLIENT_PORT,
-                         trans_status as TRANS_STATUS
+                         trans_status as TRANS_STATUS,
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -17284,7 +17288,8 @@ def_table_schema(
     SEQ_NUM,
     PLSQL_COMPILE_TIME,
     USER_CLIENT_PORT,
-    TRANS_STATUS
+    TRANS_STATUS,
+    INSERT_DUPLICATE_ROW_COUNT
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -57485,7 +57490,8 @@ def_table_schema(
                          seq_num as SEQ_NUM,
                          plsql_compile_time as PLSQL_COMPILE_TIME,
                          user_client_port as USER_CLIENT_PORT,
-                         trans_status as TRANS_STATUS
+                         trans_status as TRANS_STATUS,
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -57605,7 +57611,9 @@ PROXY_USER,
 SEQ_NUM,
 PLSQL_COMPILE_TIME,
 USER_CLIENT_PORT,
-TRANS_STATUS FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+TRANS_STATUS,
+INSERT_DUPLICATE_ROW_COUNT
+FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 

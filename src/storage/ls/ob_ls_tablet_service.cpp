@@ -2877,6 +2877,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
         bool has_duplicate = false;
+        int64_t dup_row_count = 0;
         ObRelativeTable &relative_table = run_ctx.relative_table_;
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           ObStoreRow reserved_row;
@@ -2914,6 +2915,11 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
               LOG_WARN("fail to assign rows", K(ret), K(row_count));
             } else if (OB_FAIL(insert_rows_to_tablet(tablet_handle, run_ctx, rows_info, afct_num))) {
               if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+                for (int64_t i = 0; i < row_count; i++) {
+                  if (rows_info.is_row_duplicate(i)) {
+                    dup_row_count++;
+                  }
+                }
                 has_duplicate = true;
                 ret = OB_SUCCESS;
                 int tmp_ret = OB_SUCCESS;
@@ -2946,6 +2952,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
 
         if (OB_ITER_END == ret) {
           ret = has_duplicate ? OB_ERR_PRIMARY_KEY_DUPLICATE : OB_SUCCESS; // recover the duplicate key error
+          EVENT_ADD(ObStatEventIds::SQL_INSERT_DUPLICATE_COUNT, dup_row_count);
         }
       } else {
         LOG_WARN("Failed to allocate ObRowsInfo", K(ret));

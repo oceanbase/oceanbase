@@ -457,6 +457,7 @@ struct ObAuditRecordData {
   int64_t *sql_memory_used_;
   int64_t plsql_compile_time_;
   ObTransStatus trans_status_;
+  int64_t insert_update_or_replace_duplicate_row_count_;
 };
 
 } //namespace sql
