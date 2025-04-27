@@ -240,29 +240,8 @@ int ObTabletTableIterator::assign(const ObTabletTableIterator& other)
     }
 
     if (OB_FAIL(ret)) {
-    } else {
-      if (OB_UNLIKELY(nullptr != other.split_extra_tablet_handles_)) {
-        if (nullptr == split_extra_tablet_handles_) {
-          void *tablet_hdl_buf = ob_malloc(sizeof(SplitExtraTabletHandleArray), ObMemAttr(MTL_ID(), "PartSplitTblH"));
-          if (OB_ISNULL(tablet_hdl_buf)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocator memory for handle", K(ret));
-          } else {
-            split_extra_tablet_handles_ = new (tablet_hdl_buf) SplitExtraTabletHandleArray();
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(split_extra_tablet_handles_->assign(*other.split_extra_tablet_handles_))) {
-            LOG_WARN("failed to assign", K(ret));
-          }
-        }
-      } else {
-        if (nullptr != split_extra_tablet_handles_) {
-          split_extra_tablet_handles_->~ObIArray<ObTabletHandle>();
-          ob_free(split_extra_tablet_handles_);
-          split_extra_tablet_handles_ = nullptr;
-        }
-      }
+    } else if (OB_FAIL(split_extra_tablet_handles_.assign(other.split_extra_tablet_handles_))) {
+      LOG_WARN("failed to assign", K(ret));
     }
   }
   return ret;
@@ -311,19 +290,8 @@ int ObTabletTableIterator::set_transfer_src_tablet_handle(const ObTabletHandle &
 int ObTabletTableIterator::add_split_extra_tablet_handle(const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == split_extra_tablet_handles_) {
-    void *tablet_hdl_buf = ob_malloc(sizeof(SplitExtraTabletHandleArray), ObMemAttr(MTL_ID(), "PartSplitTblH"));
-    if (OB_ISNULL(tablet_hdl_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocator memory for handles", K(ret));
-    } else {
-      split_extra_tablet_handles_ = new (tablet_hdl_buf) SplitExtraTabletHandleArray();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(split_extra_tablet_handles_->push_back(tablet_handle))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
+  if (OB_FAIL(split_extra_tablet_handles_.push_back(tablet_handle))) {
+    LOG_WARN("failed to push back", K(ret));
   }
   return ret;
 }

@@ -285,7 +285,7 @@ void TestDeleteInsertRowScan::prepare_scan_param(
   get_table_param_.tablet_iter_.tablet_handle_ = tablet_handle;
   get_table_param_.tablet_iter_.table_store_iter_.assign(table_store_iter);
   get_table_param_.tablet_iter_.transfer_src_handle_ = nullptr;
-  get_table_param_.tablet_iter_.split_extra_tablet_handles_ = nullptr;
+  get_table_param_.tablet_iter_.split_extra_tablet_handles_.reset();
 
   int64_t schema_column_count = full_read_info_.get_schema_column_count();
   int64_t schema_rowkey_count = full_read_info_.get_schema_rowkey_count();

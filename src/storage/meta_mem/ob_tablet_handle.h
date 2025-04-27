@@ -72,10 +72,10 @@ class ObTabletTableIterator final
 {
   friend class ObTablet;
   friend class ObLSTabletService;
-  typedef ObSEArray<ObTabletHandle, 2> SplitExtraTabletHandleArray;
+  typedef ObSEArray<ObTabletHandle, 1> SplitExtraTabletHandleArray;
 public:
-  ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr), split_extra_tablet_handles_(nullptr) {}
-  explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr), split_extra_tablet_handles_(nullptr) {}
+  ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr), split_extra_tablet_handles_() {}
+  explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr), split_extra_tablet_handles_() {}
   int assign(const ObTabletTableIterator& other);
   ~ObTabletTableIterator() { reset(); }
   void reset()
@@ -87,11 +87,7 @@ public:
       ob_free(transfer_src_handle_);
       transfer_src_handle_ = nullptr;
     }
-    if (nullptr != split_extra_tablet_handles_) {
-      split_extra_tablet_handles_->~ObIArray<ObTabletHandle>();
-      ob_free(split_extra_tablet_handles_);
-      split_extra_tablet_handles_ = nullptr;
-    }
+    split_extra_tablet_handles_.reset();
   }
   bool is_valid() const { return tablet_handle_.is_valid() || table_store_iter_.is_valid(); }
   ObTableStoreIterator *table_iter();
@@ -100,7 +96,7 @@ public:
   ObTablet *get_tablet() { return tablet_handle_.get_obj(); }
   const ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
   const ObTabletHandle *get_tablet_handle_ptr() const { return &tablet_handle_; }
-  const ObIArray<ObTabletHandle> *get_split_extra_tablet_handles_ptr() const { return split_extra_tablet_handles_; }
+  const ObIArray<ObTabletHandle> *get_split_extra_tablet_handles_ptr() const { return split_extra_tablet_handles_.empty() ? nullptr : &split_extra_tablet_handles_; }
   int set_tablet_handle(const ObTabletHandle &tablet_handle);
   int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
   int add_split_extra_tablet_handle(const ObTabletHandle &tablet_handle);
@@ -123,7 +119,7 @@ private:
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator table_store_iter_;
   ObTabletHandle *transfer_src_handle_;
-  ObIArray<ObTabletHandle> *split_extra_tablet_handles_;
+  SplitExtraTabletHandleArray split_extra_tablet_handles_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableIterator);
 };
 
