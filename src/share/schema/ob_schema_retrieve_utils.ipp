@@ -1548,7 +1548,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, semistruct_encoding_type, table_schema,
         int64_t, true/*skip null error*/, ignore_column_error, 0);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, dynamic_partition_policy, table_schema, true, ignore_column_error, "");
+      result, dynamic_partition_policy, table_schema, true/*skip_null_error*/, true/*skip_column_error*/, "");
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
@@ -4650,7 +4650,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
 
     ObString dynamic_partition_policy;
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
-      result, "dynamic_partition_policy", dynamic_partition_policy, true, ignore_column_error, "");
+      result, "dynamic_partition_policy", dynamic_partition_policy, true/*skip_null_error*/, true/*skip_column_error*/, "");
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !dynamic_partition_policy.empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
