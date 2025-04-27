@@ -6636,11 +6636,18 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
       LOG_WARN("failed to push back column", K(ret));
     }
     /*do not push down when filters contain pl udf*/
+    bool contains_part_id_columnref = false;
     for (int64_t i = 0; OB_SUCC(ret) && can_push && i < filters.count(); i++) {
       if (OB_ISNULL(filters.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (filters.at(i)->has_flag(ObExprInfoFlag::CNT_PL_UDF)) {
+        can_push = false;
+      } else if (OB_FAIL(ObOptimizerUtil::check_contain_part_id_columnref_expr(filters.at(i),
+                          contains_part_id_columnref))) {
+          LOG_WARN("check_contain_part_id_columnref_expr failed", K(ret));
+      } else if (contains_part_id_columnref){
+        /*do not push down when filters contain pseudo column ref expr*/
         can_push = false;
       }
     }
