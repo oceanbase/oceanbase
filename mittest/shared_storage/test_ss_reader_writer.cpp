@@ -826,6 +826,7 @@ TEST_F(TestSSReaderWriter, read_when_disable_micro_cache)
   ASSERT_EQ(read_info_.size_, object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, object_handle.get_buffer(), read_info_.size_));
   object_handle.reset();
+  micro_cache->enable_cache();
 }
 
 static void get_random_io_info(ObIOInfo &io_info)
