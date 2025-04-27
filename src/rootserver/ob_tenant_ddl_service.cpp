@@ -2164,6 +2164,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_mysql_compatible_dates("true");
   ObString config_name_immediate_check_unique("_ob_immediate_row_conflict_check");
   ObString config_value_immediate_check("False");
+  ObString config_name_system_trig_enabled("_system_trig_enabled");
+  ObString config_value_system_trig_enabled("false");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -2177,6 +2179,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_mysql_compatible_dates), K(config_value_mysql_compatible_dates));
       } else if (OB_FAIL(parallel_table_config.add_config(config_name_immediate_check_unique, config_value_immediate_check))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_immediate_check_unique), K(config_value_immediate_check));
+      } else if (OB_FAIL(parallel_table_config.add_config(config_name_system_trig_enabled, config_value_system_trig_enabled))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_system_trig_enabled), K(config_value_system_trig_enabled));
       }
     }
   }

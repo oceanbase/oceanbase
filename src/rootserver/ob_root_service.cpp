@@ -11455,6 +11455,7 @@ int ObRootService::set_config_after_bootstrap_()
     {"_bloom_filter_ratio", "3"},
     {"_enable_mysql_compatible_dates", "true"},
     {"_ob_enable_pl_dynamic_stack_check", "true"},
+    {"_system_trig_enabled", "false"},
   };
   if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
     LOG_WARN("failed to assign sql string", KR(ret));
