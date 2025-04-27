@@ -847,7 +847,7 @@ void ObCompactionDiagnoseMgr::diagnose_tenant_ls(
   (void) get_and_set_suspect_info(MINI_MERGE, ls_status.ls_id_, UNKNOW_TABLET_ID);
 
   // check ls suspect info for ls locality change
-  if (ls_status.is_leader_ && MTL(ObTenantMediumChecker*)->locality_cache_empty()) {
+  if (diagnose_major_flag && ls_status.is_leader_ && MTL(ObTenantMediumChecker*)->locality_cache_empty()) {
     if (OB_TMP_FAIL(ADD_DIAGNOSE_INFO(
             MEDIUM_MERGE,
             ls_status.ls_id_,
