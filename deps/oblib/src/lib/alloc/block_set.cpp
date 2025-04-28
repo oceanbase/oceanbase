@@ -13,6 +13,8 @@
 
 #include "block_set.h"
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
+#include "lib/alloc/ob_malloc_allocator.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -34,6 +36,22 @@ BlockSet::~BlockSet()
 
 bool BlockSet::check_has_unfree()
 {
+#ifdef FATAL_ERROR_HANG
+  SANITY_DISABLE_CHECK_RANGE();
+  if (NULL != clist_ && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+    int64_t size = clist_->aligned();
+    ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0);
+    AChunk *chunk = NULL;
+    if (ObCtxIds::CO_STACK != attr_.ctx_id_) {
+      chunk = ta->alloc_chunk(size, ObMemAttr(OB_SERVER_TENANT_ID, "has_unfree"));
+    }
+    if (NULL != chunk) {
+      MEMCPY(chunk, clist_, size);
+    }
+    fprintf(stderr, "tenant memory leak, tallocator=%p, tenant_id=%lu, ctx_id=%lu, clist=%p, chunk=%p, block_set=%p, lbt=%s\n",
+        tallocator_, attr_.tenant_id_, attr_.ctx_id_, clist_, chunk, this, lbt());
+  }
+#endif
   return clist_ != NULL;
 }
 
