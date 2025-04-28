@@ -392,6 +392,7 @@ int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
 static const ObSysPackageFile oracle_syspack_file_list[] = {
 #ifdef OB_BUILD_ORACLE_PL
   {"dbms_standard", "dbms_standard.sql", nullptr},
+  {"standard", "standard.sql", nullptr},
   {"dbms_output", "dbms_output.sql", "dbms_output_body.sql"},
   {"dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql"},
   {"dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql"},
