@@ -327,6 +327,9 @@ int ObTableOpWrapper::process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOpera
   // 1.do update first;
   tb_ctx.set_inc_append_stage(ObTableIncAppendStage::TABLE_INCR_APPEND_UPDATE);
   if (OB_FAIL(process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, op_result))) {
+    if (tb_ctx.is_inc() && ret == OB_ERR_TRUNCATED_WRONG_VALUE) {
+      ret = OB_INVALID_NUMERIC;
+    }
     LOG_WARN("fail to process update operation", K(ret));
   } else if (op_result.get_affected_rows() == 0) {
     // 2.if return empty result, do insert;

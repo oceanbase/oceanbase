@@ -461,14 +461,6 @@ int ObTableApiExecuteP::try_process()
     // init_tb_ctx will return some replaceable error code
     result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
-
-    if (OB_NOT_NULL(group_single_op_)) {
-      // In group commit scene:
-      // ret != OB_SUCCESS mean we should response packet by the responser in rpc processor
-      // and here we should free group_single_op_ in hand
-      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
-      group_single_op_ = nullptr;
-    }
   }
 
 #ifndef NDEBUG
@@ -617,6 +609,15 @@ int ObTableApiExecuteP::before_response(int error_code)
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
   if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
     result_.set_entity(result_entity_);
+  }
+  if (error_code != OB_SUCCESS) {
+    if (OB_NOT_NULL(group_single_op_)) {
+      // In group commit scene:
+      // fail maybe from try_process or process_with_retry
+      // and here we should free group_single_op_ in hand
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
+    }
   }
   return ObTableRpcProcessor::before_response(error_code);
 }
