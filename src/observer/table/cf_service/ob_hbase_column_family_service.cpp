@@ -662,7 +662,9 @@ int ObHbaseMultiCFService::query(const ObHbaseQuery &query, ObTableExecCtx &exec
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(tmp_result_iter->init())) {
-    LOG_WARN("fail to init result iter", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to init result iter", K(ret));
+    }
   } else {
     result_iter = tmp_result_iter;
   }

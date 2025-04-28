@@ -76,14 +76,20 @@ int ObIModel::prepare(ObTableExecCtx &ctx,
   int ret = OB_SUCCESS;
   bool is_same_ls = false;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
+  ObTablePartClipType clip_type = req.query_.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
   ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(req.query_.get_tablet_ids());
   ObTablePartCalculator calculator(ctx.get_allocator(),
                                    ctx.get_sess_guard(),
                                    ctx.get_schema_cache_guard(),
-                                   ctx.get_schema_guard());
+                                   ctx.get_schema_guard(),
+                                   nullptr,/*simple_schema*/
+                                   clip_type);
 
   if (OB_FAIL(calculator.calc(ctx.get_table_id(), req.query_.get_scan_ranges(), tablet_ids))) {
     LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(req.query_.get_scan_ranges()));
+  } else if (tablet_ids.empty()) {
+    ret = OB_ITER_END;
+    LOG_DEBUG("all partitions are clipped", K(ret), K(req.query_));
   } else if (OB_FAIL(check_same_ls(tablet_ids, is_same_ls, ls_id))) {
     LOG_WARN("fail to check same ls", K(ret), K(tablet_ids));
   } else {
@@ -144,6 +150,17 @@ int ObIModel::init_ls_id_tablet_op_map(const TabletIdOpsMap &tablet_map,
   return ret;
 }
 
+ObTablePartClipType ObIModel::get_clip_type(ObTableExecCtx &ctx, bool hot_only)
+{
+  ObTablePartClipType clip_type = ObTablePartClipType::NONE;
+  bool is_table_group = ObHTableUtils::is_tablegroup_req(ctx.get_table_name(),  ObTableEntityType::ET_HKV);
+  // table group request clip in cf service
+  if (!is_table_group && hot_only) {
+    clip_type = ObTablePartClipType::HOT_ONLY;
+  }
+  return clip_type;
+}
+
 int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
                                      const ObTableLSOpRequest &req,
                                      TabletIdOpsMap &map)
@@ -159,6 +176,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should only has one tablet op", K(ret), K(req.ls_op_->count()));
   } else {
+    bool all_parts_are_clipped = true;
     bool only_one_ls = true;
     ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
     ObLSID curr_ls_id(ObLSID::INVALID_LS_ID);
@@ -179,13 +197,16 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("query is null", K(ret));
         } else {
+          ObTablePartClipType clip_type = get_clip_type(ctx, query->is_hot_only());
+          calculator.set_clip_type(clip_type);
           ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(query->get_tablet_ids());
           if (OB_FAIL(calculator.calc(ctx.get_table_id(), query->get_scan_ranges(), tablet_ids))) {
             LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(query->get_scan_ranges()));
           } else if (tablet_ids.empty()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tablet ids is empty", K(ret));
+            // maybe all partitions are clipped
+            LOG_DEBUG("tablet ids is empty", KPC(query));
           } else {
+            all_parts_are_clipped = false;
             tablet_id = tablet_ids.at(0);
             bool is_same_ls = false;
             if (only_one_ls && OB_FAIL(check_same_ls(tablet_ids, is_same_ls, curr_ls_id))) {
@@ -200,6 +221,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
         if (OB_FAIL(calculator.calc(table_id, entity, tablet_id))) {
           LOG_WARN("fail to calc tablet id", K(ret), K(table_id), K(entity));
         } else {
+          all_parts_are_clipped = false;
           const_cast<ObITableEntity&>(entity).set_tablet_id(tablet_id);
           bool is_same_ls = false;
           if (only_one_ls && OB_FAIL(get_ls_id(tablet_id, curr_ls_id))) {
@@ -208,7 +230,7 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
         }
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && tablet_id.is_valid()) {
         if (i == 0) {
           first_ls_id = curr_ls_id;
         }
@@ -220,6 +242,11 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
         }
       }
     } // end for
+
+    if (OB_SUCC(ret) && all_parts_are_clipped) {
+      ret = OB_ITER_END;
+      LOG_DEBUG("all paritions are clipped", K(req));
+    }
 
     if (OB_SUCC(ret)) {
       if (only_one_ls && first_ls_id.is_valid()) {
@@ -247,12 +274,14 @@ int ObIModel::calc_single_op_tablet_id(ObTableExecCtx &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query is null", K(ret));
     } else {
+      ObTablePartClipType clip_type = get_clip_type(ctx, query->is_hot_only());
+      calculator.set_clip_type(clip_type);
       ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(query->get_tablet_ids());
       if (OB_FAIL(calculator.calc(ctx.get_table_id(), query->get_scan_ranges(), tablet_ids))) {
         LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(query->get_scan_ranges()));
       } else if (tablet_ids.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet ids is empty", K(ret));
+        // maybe all partitions are clipped
+        LOG_DEBUG("tablet ids is empty", KPC(query));
       } else {
         tablet_id = tablet_ids.at(0);
       }
@@ -455,7 +484,9 @@ int ObIModel::alloc_and_init_request_result(ObTableExecCtx &ctx,
   LsIdTabletOpsMap ls_map;
 
   if (OB_FAIL(init_tablet_id_ops_map(ctx, src_req, tablet_map))) {
-    LOG_WARN("fail to init TabletIdOpsMap", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to init TabletIdOpsMap", K(ret));
+    }
   } else if (OB_FAIL(init_ls_id_tablet_op_map(tablet_map, ls_map))) {
     LOG_WARN("fail to init LsIdTabletOpsMap", K(ret));
   } else if (OB_FAIL(alloc_requests_and_results(ctx.get_allocator(), ls_map.size(), new_reqs_, new_results_))) {
@@ -620,7 +651,8 @@ new_res_ls2:
     ...
 src_res: [0][1][2][...][n]
 */
-int ObIModel::init_result(const ObTableLSOpRequest &src_req,
+int ObIModel::init_result(ObTableExecCtx &ctx,
+                          const ObTableLSOpRequest &src_req,
                           ObTableLSOpResult &src_res)
 {
   int ret = OB_SUCCESS;
@@ -672,6 +704,63 @@ int ObIModel::init_result(const ObTableLSOpRequest &src_req,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_result(ctx, src_req, src_res))) {
+      LOG_WARN("fail to check final result", K(ret), K(src_res), K(ctx));
+    }
+  }
+
+  return ret;
+}
+
+int ObIModel::check_result(ObTableExecCtx &ctx,
+                           const ObTableLSOpRequest &src_req,
+                           ObTableLSOpResult &src_res)
+{
+  int ret = OB_SUCCESS;
+  ObITableEntityFactory *entity_factory = ctx.get_entity_factory();
+
+  if (OB_ISNULL(entity_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity_factory is null", K(ret));
+  } else if (OB_ISNULL(src_req.ls_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls op is null", K(ret));
+  } else if (1 != src_res.count() || 1 != src_req.ls_op_->count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should only has one tablet result", K(ret), K(src_res.count()), K(src_req.ls_op_->count()));
+  } else if (src_res.at(0).count() != src_req.ls_op_->at(0).count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid result count", K(ret), K(src_res.count()), K(src_req.ls_op_->at(0).count()));
+  } else {
+    const ObTableTabletOp &src_tablet_op = src_req.ls_op_->at(0);
+    ObTableTabletOpResult &src_tablet_res = src_res.at(0);
+    for (int64_t i = 0; i < src_tablet_res.count() && OB_SUCC(ret); i++) {
+      ObTableSingleOpResult &single_res = src_tablet_res.at(i);
+      if (OB_ISNULL(single_res.get_entity())) { // maybe some keys not exist when do batch get, need fill empty entity.
+        if (src_tablet_op.get_single_ops().empty() || src_tablet_op.get_single_ops().at(0).get_entities().empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid count", K(src_tablet_op));
+        } else {
+          const ObTableSingleOpEntity &req_entity = src_tablet_op.get_single_ops().at(0).get_entities().at(0);
+          ObTableSingleOpEntity *entity = static_cast<ObTableSingleOpEntity *>(entity_factory->alloc());
+          if (OB_ISNULL(entity)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc entity", K(ret));
+          } else {
+            entity->set_dictionary(&src_res.get_rowkey_names(), &src_res.get_properties_names());
+            if (OB_FAIL(entity->construct_names_bitmap(req_entity))) { // directly use request bitmap as result bitmap
+              LOG_WARN("fail to construct name bitmap", K(ret), K(req_entity));
+            } else {
+              single_res.set_entity(entity);
+              single_res.set_err(OB_SUCCESS);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -700,14 +789,15 @@ void ObIModel::free_requests_and_results(ObTableExecCtx &ctx)
   }
 }
 
-int ObIModel::prepare_allocate_and_init_result(const ObTableLSOpRequest &req,
+int ObIModel::prepare_allocate_and_init_result(ObTableExecCtx &ctx,
+                                               const ObTableLSOpRequest &req,
                                                ObTableLSOpResult &res)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(prepare_allocate_result(req, res))) {
     LOG_WARN("fail to prepate allocate result", K(ret), K(req));
-  } else if (OB_FAIL(init_result(req, res))) {
+  } else if (OB_FAIL(init_result(ctx, req, res))) {
     LOG_WARN("fail to init result", K(ret), K(req));
   }
 
@@ -731,9 +821,9 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
   if (OB_FAIL(ObTableQueryASyncMgr::check_query_type(query_type))) {
     LOG_WARN("query type is invalid", K(ret), K(query_type));
   } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_session_id(real_sessid, arg_sessid, query_type))) {
-    LOG_WARN("fail to get query session id", K(ret), K(arg_sessid));
+    LOG_WARN("fail to get query session id", K(ret), K(arg_sessid), K(query_type));
   } else if (OB_FAIL(get_query_session(real_sessid, query_type, query_session_))) {
-    LOG_WARN("fail to get query session", K(ret), K(real_sessid));
+    LOG_WARN("fail to get query session", K(ret), K(real_sessid), K(query_type));
   } else if (ObQueryOperationType::QUERY_START == query_type) {
     if (OB_FAIL(query_session_->init_query_ctx(table_id, tablet_id, table_name,
                                                ObHTableUtils::is_tablegroup_req(table_name,
@@ -761,12 +851,18 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
         ctx->set_table_id(table_id);
         ctx->set_table_name(tmp_table_name);
         ctx->set_timeout_ts(arg_ctx.get_timeout_ts());
+        ObTablePartClipType clip_type = get_clip_type(arg_ctx, req.query_.is_hot_only());
         ObTablePartCalculator calculator(arg_ctx.get_allocator(),
                                          ctx->get_sess_guard(),
                                          ctx->get_schema_cache_guard(),
-                                         ctx->get_schema_guard());
+                                         ctx->get_schema_guard(),
+                                         nullptr,/*simple_schema*/
+                                         clip_type);
         if (OB_FAIL(calculator.calc(table_id, req.query_.get_scan_ranges(), tablet_ids))) {
           LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(req.query_.get_scan_ranges()));
+        } else if (tablet_ids.empty()) {
+          ret = OB_ITER_END;
+          LOG_DEBUG("all paritions are clipped", K(ret), K(req.query_));
         } else if (OB_FAIL(check_same_ls(tablet_ids, is_same_ls, ls_id))) {
           LOG_WARN("fail to check same ls", K(ret), K(tablet_ids));
         } else {

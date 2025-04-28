@@ -1136,7 +1136,9 @@ int ObTableQueryAsyncP::new_try_process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("model is null", K(ret));
   } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_, ctx))) {
-    LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    }
   } else if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ctx", K(ret));
@@ -1176,6 +1178,10 @@ int ObTableQueryAsyncP::new_try_process()
     stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
   } else {
     stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;
+  }
+
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS; // cover ret
   }
   return ret;
 }

@@ -1153,7 +1153,9 @@ int ObTableLSExecuteP::new_try_process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("model is null", K(ret));
       } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, cb_result))) {
-        LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+        }
       } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                      arg_.consistency_level_,
                                      exec_ctx_.get_ls_id(),
@@ -1164,7 +1166,9 @@ int ObTableLSExecuteP::new_try_process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("request or result is empty", K(ret), K(model->get_new_requests().count()));
       } else if (OB_FAIL(model->work(exec_ctx_, model->get_new_requests(), model->get_new_results()))) {
-        LOG_WARN("model fail to work", K(ret), K(model->get_new_requests()), K(model->get_new_results()));
+        if (ret != OB_ITER_END) {
+          LOG_WARN("model fail to work", K(ret), K(model->get_new_requests()), K(model->get_new_results()));
+        }
       } else if (OB_FAIL(model->after_work(exec_ctx_, arg_, cb_result))) {
         LOG_WARN("model fail to after work", K(ret), K_(arg));
       } else if (OB_FAIL(cb->assign_dependent_results(model->get_new_results(), model->is_alloc_from_pool()))) {
@@ -1194,6 +1198,10 @@ int ObTableLSExecuteP::new_try_process()
   }
 
   cb_functor_.reset();
+
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS; // cover ret
+  }
   return ret;
 }
 

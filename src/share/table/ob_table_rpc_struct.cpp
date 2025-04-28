@@ -139,7 +139,8 @@ OB_SERIALIZE_MEMBER(ObTableLSOpRequest, // FARM COMPAT WHITELIST
                     consistency_level_,
                     *ls_op_);
 
-OB_DEF_SERIALIZE(ObTableLSOpResult) {
+OB_DEF_SERIALIZE(ObTableLSOpResult)
+{
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(properties_names_);
   if (OB_SUCC(ret)) {

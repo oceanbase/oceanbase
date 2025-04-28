@@ -73,7 +73,9 @@ namespace table
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("hbase query is null", K(ret));
       } else if (OB_FAIL(cf_service->query(*hbase_query_, exec_ctx, result_iter_))) {
-        LOG_WARN("failed to get query result iter", K(ret), KPC_(hbase_query));
+        if (ret != OB_ITER_END) {
+          LOG_WARN("failed to get query result iter", K(ret), KPC_(hbase_query));
+        }
       } else if (OB_FAIL(result.deep_copy_property_names(query_.get_select_columns()))) {
         LOG_WARN("fail to deep copy property names", K(ret), K(query_.get_select_columns()));
       } else if (OB_FAIL(result_iter_->get_next_result(result))) {

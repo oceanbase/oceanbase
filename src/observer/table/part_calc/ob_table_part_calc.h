@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_TABLE_PART_CALC_H_
 #define OCEANBASE_OBSERVER_OB_TABLE_PART_CALC_H_
 #include "observer/table/ob_table_cache.h"
+#include "ob_table_part_clip.h"
 
 namespace oceanbase
 {
@@ -27,13 +28,15 @@ public:
                                  ObTableApiSessGuard &sess_guard,
                                  ObKvSchemaCacheGuard &kv_schema_guard,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
-                                 const share::schema::ObSimpleTableSchemaV2 *simple_schema = nullptr)
+                                 const share::schema::ObSimpleTableSchemaV2 *simple_schema = nullptr,
+                                 ObTablePartClipType clip_type = ObTablePartClipType::NONE)
       : allocator_(allocator),
         sess_guard_(sess_guard),
         kv_schema_guard_(kv_schema_guard),
         schema_guard_(schema_guard),
         tb_ctx_(nullptr),
-        simple_schema_(simple_schema)
+        simple_schema_(simple_schema),
+        clip_type_(clip_type)
   {}
   ~ObTablePartCalculator()
   {
@@ -69,13 +72,14 @@ public:
   // 计算多个 range 的 tablet id
   int calc(uint64_t table_id,
            const common::ObIArray<ObNewRange> &ranges,
-           ObIArray<ObTabletID> &tablet_ids);
+           common::ObIArray<common::ObTabletID> &tablet_ids);
   // 计算多个 range 的 tablet id
   int calc(const common::ObString table_name,
            const common::ObIArray<ObNewRange> &ranges,
-           ObIArray<ObTabletID> &tablet_ids);
-  void clear_evaluated_flag();
+           common::ObIArray<common::ObTabletID> &tablet_ids);
+  OB_INLINE void set_clip_type(ObTablePartClipType clip_type) { clip_type_ = clip_type; }
 private:
+  void clear_evaluated_flag();
   int init_tb_ctx(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
                   const ObITableEntity &entity,
                   bool need_das_ctx);
@@ -149,6 +153,8 @@ private:
   int construct_series_entity(const ObITableEntity &entity,
                               ObTableEntity &series_entity);
   bool is_single_rowkey(const common::ObNewRange &range) const;
+  int clip(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
+           common::ObIArray<common::ObTabletID> &tablet_ids);
 private:
   common::ObIAllocator &allocator_;
   ObTableApiSessGuard &sess_guard_;
@@ -159,6 +165,7 @@ private:
   observer::ObReqTimeGuard req_time_guard_; // libcache relies on ObReqTimeGuard for elimination
   ObTableApiCacheGuard cache_guard_;
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
+  ObTablePartClipType clip_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartCalculator);
 };

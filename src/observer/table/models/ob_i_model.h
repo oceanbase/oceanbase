@@ -295,15 +295,20 @@ protected:
                              TabletIdOpsMap &map);
   int init_ls_id_tablet_op_map(const TabletIdOpsMap &tablet_map,
                                LsIdTabletOpsMap &ls_map);
-  int prepare_allocate_and_init_result(const ObTableLSOpRequest &req,
+  int prepare_allocate_and_init_result(ObTableExecCtx &ctx,
+                                       const ObTableLSOpRequest &req,
                                        ObTableLSOpResult &res);
   void free_requests_and_results(ObTableExecCtx &ctx);
   int pre_init_results(ObTableExecCtx &ctx,
                        const ObTableLSOpRequest &src_req,
                        ObTableLSOpResult &src_res,
                        common::ObIArray<ObTableLSOpResult*> &results);
-  int init_result(const ObTableLSOpRequest &src_req,
+  int init_result(ObTableExecCtx &ctx,
+                  const ObTableLSOpRequest &src_req,
                   ObTableLSOpResult &src_res);
+  int check_result(ObTableExecCtx &ctx,
+                   const ObTableLSOpRequest &src_req,
+                   ObTableLSOpResult &src_res);
   int alloc_requests_and_results(common::ObIAllocator &allocator,
                                  const int64_t count,
                                  common::ObIArray<ObTableLSOpRequest*> &reqs,
@@ -316,6 +321,7 @@ protected:
                     bool &is_same,
                     share::ObLSID &ls_id);
   int get_ls_id(const common::ObTabletID &tablet_id, share::ObLSID &ls_id);
+  ObTablePartClipType get_clip_type(ObTableExecCtx &ctx, bool hot_only);
 protected:
   virtual int get_query_session(uint64_t sessid, const ObQueryOperationType query_type, ObTableNewQueryAsyncSession *&query_session) { return OB_NOT_IMPLEMENT; }
 protected:

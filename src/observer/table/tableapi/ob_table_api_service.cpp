@@ -286,10 +286,16 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
     if (OB_FAIL(init_tablet_ids_array(ctx, size, tablet_ids))) {
       LOG_WARN("fail to init tablet ids array", K(ret), K(size));
     } else {
+      ObTablePartClipType clip_type = ObTablePartClipType::NONE;
+      if (OB_NOT_NULL(ctx.get_query()) && ctx.get_query()->is_hot_only()) {
+        clip_type = ObTablePartClipType::HOT_ONLY;
+      }
       ObTablePartCalculator part_calc(ctx.get_allocator(),
                                       *ctx.get_sess_guard(),
                                       *ctx.get_schema_cache_guard(),
-                                      *ctx.get_schema_guard());
+                                      *ctx.get_schema_guard(),
+                                      nullptr,/*simple_schema*/
+                                      clip_type);
       if (OB_FAIL(part_calc.calc(ctx.get_index_table_id(), ranges, *tablet_ids))) {
         LOG_WARN("fail to calc tablet_ids", K(ret), K(ctx.get_table_id()));
       } else {

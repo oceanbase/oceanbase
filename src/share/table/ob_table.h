@@ -1121,7 +1121,8 @@ public:
       scan_range_columns_(),
       aggregations_(),
       ob_params_(),
-      tablet_ids_()
+      tablet_ids_(),
+      flag_(0)
   {
     tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "QryTbltIds"));
   }
@@ -1215,6 +1216,8 @@ public:
       tablet_ids_.at(i) = ObTabletID(ObTabletID::INVALID_TABLET_ID);
     }
   }
+  OB_INLINE bool is_hot_only() const { return hot_only_; }
+
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),
@@ -1228,7 +1231,8 @@ public:
                K_(scan_range_columns),
                K_(aggregations),
                K_(ob_params),
-               K_(tablet_ids)
+               K_(tablet_ids),
+               K_(hot_only)
                );
 
 public:
@@ -1251,6 +1255,14 @@ protected:
   ObSEArray<ObTableAggregation, 8> aggregations_;
   ObKVParams ob_params_;
   common::ObSEArray<common::ObTabletID, 1> tablet_ids_; // no need serialization
+  union
+  {
+    int64_t flag_;
+    struct {
+      bool hot_only_ : 1;
+      bool reserved_ : 63;
+    };
+  };
 };
 
 /// result for ObTableQuery

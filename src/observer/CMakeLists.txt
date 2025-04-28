@@ -248,6 +248,7 @@ ob_set_subtarget(ob_server table
   table/models/ob_redis_model.cpp
   table/tableapi/ob_table_api_service.cpp
   table/part_calc/ob_table_part_calc.cpp
+  table/part_calc/ob_table_part_clip.cpp
   table/trans/ob_table_trans_ctrl.cpp
   table/common/ob_table_sequential_grouper.cpp
   table/async_query/ob_hbase_async_query_iter.cpp

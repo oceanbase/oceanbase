@@ -950,6 +950,8 @@ int ObTablePartCalculator::calc(const ObString table_name,
     }
   } else if (OB_FAIL(calc(*table_schema, range, tablet_ids))) {
     LOG_WARN("fail to calc part", K(ret), K(range));
+  } else if (OB_FAIL(clip(*table_schema, tablet_ids))) {
+    LOG_WARN("fail to clip part", K(ret), K(tablet_ids));
   }
 
   return ret;
@@ -973,6 +975,12 @@ int ObTablePartCalculator::calc(uint64_t table_id,
       if (OB_FAIL(calc(*table_schema, ranges.at(i), tablet_ids))) {
         LOG_WARN("fail to calc part", K(ret), K(i), K(ranges.at(i)));
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(clip(*table_schema, tablet_ids))) {
+      LOG_WARN("fail to clip part", K(ret), K(tablet_ids));
     }
   }
 
@@ -1000,6 +1008,12 @@ int ObTablePartCalculator::calc(const ObString table_name,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(clip(*table_schema, tablet_ids))) {
+      LOG_WARN("fail to clip part", K(ret), K(tablet_ids));
+    }
+  }
+
   return ret;
 }
 
@@ -1015,6 +1029,28 @@ bool ObTablePartCalculator::is_single_rowkey(const common::ObNewRange &range) co
     bret = true;
   }
   return bret;
+}
+
+int ObTablePartCalculator::clip(const ObSimpleTableSchemaV2 &simple_schema,
+                                ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (clip_type_ == ObTablePartClipType::NONE) {
+    // do nothing
+  } else {
+    ObSEArray<ObTabletID, 32> src_tablet_ids;
+    if (OB_FAIL(src_tablet_ids.assign(tablet_ids))) {
+      LOG_WARN("fail to assign tablet_ids", K(ret), K(tablet_ids));
+    } else {
+      tablet_ids.reset();
+      if (OB_FAIL(ObTablePartClipper::clip(simple_schema, clip_type_, src_tablet_ids, tablet_ids))) {
+        LOG_WARN("fail to clip partition", K(ret), K_(clip_type), K(src_tablet_ids));
+      }
+    }
+  }
+
+  return ret;
 }
 
 } // end namespace table

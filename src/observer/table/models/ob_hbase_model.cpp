@@ -223,13 +223,16 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
   if (is_user_specific_T) {
     // do nothing, tablet is correct when T is user specified
   } else {
+    const ObTableQuery &query = req.query_and_mutate_.get_query();
     bool is_same_ls = false;
     ObLSID ls_id(ObLSID::INVALID_LS_ID);
+    ObTablePartClipType clip_type = query.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
     ObTablePartCalculator calculator(ctx.get_allocator(),
                                      ctx.get_sess_guard(),
                                      ctx.get_schema_cache_guard(),
-                                     ctx.get_schema_guard());
-    const ObTableQuery &query = req.query_and_mutate_.get_query();
+                                     ctx.get_schema_guard(),
+                                     nullptr,/*simple_schema*/
+                                     clip_type);
     ObTableBatchOperation &batch_op = const_cast<ObTableBatchOperation&>(req.query_and_mutate_.get_mutations());
     ObTabletID mutation_tablet_id(ObTabletID::INVALID_TABLET_ID);
     if (OB_FAIL(calculator.calc(ctx.get_table_id(), query.get_scan_ranges(), tablet_ids))) {
@@ -334,7 +337,9 @@ int ObHBaseModel::prepare(ObTableExecCtx &ctx,
   } else if (!is_batch_get && OB_FAIL(replace_timestamp(ctx, const_cast<ObTableLSOpRequest&>(req)))) {
     LOG_WARN("fail to replace timestamp", K(ret), K(req));
   } else if (!is_mix_batch && OB_FAIL(alloc_and_init_request_result(ctx, req, res))) {
-    LOG_WARN("fail to alloc and init request and result", K(ret), K(ctx), K(req), K(res));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to alloc and init request and result", K(ret), K(ctx), K(req), K(res));
+    }
   } else if (is_mix_batch && OB_FAIL(alloc_and_init_request_result_for_mix_batch(ctx, req, res))) {
     LOG_WARN("fail to alloc and init request and result for hyper batch", K(ret), K(ctx), K(req), K(res));
   } else if (!is_batch_get && OB_FAIL(lock_rows(ctx, req))) {
@@ -350,7 +355,9 @@ int ObHBaseModel::prepare(ObTableExecCtx &arg_ctx,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObIModel::prepare(arg_ctx, req, res, ctx))) {
-    LOG_WARN("fail to prepare", K(ret), K(arg_ctx), K(req), K(res), K(ctx));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to prepare", K(ret), K(arg_ctx), K(req), K(res), K(ctx));
+    }
   } else if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObTableExecCtx is null", K(ret));
@@ -398,7 +405,9 @@ int ObHBaseModel::work(ObTableExecCtx &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("req or res is null", K(ret), KPC(req), KPC(res));
     } else if (OB_FAIL(work(ctx, *req, *res))) {
-      LOG_WARN("fail to work", K(ret), KPC(req), KPC(res), K(i));
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to work", K(ret), KPC(req), KPC(res), K(i));
+      }
     }
   }
 
@@ -465,7 +474,9 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTab
               break;
             case ObTableOperationType::SCAN:
               if (OB_FAIL(process_scan_group(ctx, *group, *cf_service, res))) {
-                LOG_WARN("failed to process scan group", K(ret), K(group));
+                if (ret != OB_ITER_END) {
+                  LOG_WARN("failed to process scan group", K(ret), K(group));
+                }
               }
               break;
             default:
@@ -498,7 +509,9 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableQueryRequest &req, ObTa
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create column family service", K(ret));
   } else if (OB_FAIL(sync_query(ctx, &query, cf_service, res))) {
-    LOG_WARN("failed to execute sync query", K(ret), K(query));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("failed to execute sync query", K(ret), K(query));
+    }
   }
   return ret;
 }
@@ -542,7 +555,7 @@ int ObHBaseModel::work(ObTableExecCtx &ctx,
 int ObHBaseModel::after_work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)
 {
   UNUSED(ctx);
-  return prepare_allocate_and_init_result(req, res);
+  return prepare_allocate_and_init_result(ctx, req, res);
 }
 
 int ObHBaseModel::before_response(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)
@@ -568,7 +581,9 @@ int ObHBaseModel::sync_query(ObTableExecCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("query is null", K(ret));
   } else if (OB_FAIL(cf_service->query(*query, ctx, iter))) {
-    LOG_WARN("failed to create iterator", K(ret), KP(query));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("failed to create iterator", K(ret), KP(query));
+    }
   } else if (OB_ISNULL(iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null query iterator", K(ret), KP(query));
@@ -1022,7 +1037,9 @@ int ObHBaseModel::process_scan_group(ObTableExecCtx &ctx,
     ObTableSingleOpResult single_op_result;
     ObHbaseQueryResultIterator *iter = nullptr;
     if (OB_FAIL(cf_service.query(*queries.at(i), ctx, iter))) {
-      LOG_WARN("failed to process query", K(ret), KP(queries.at(i)));
+      if (ret != OB_ITER_END) {
+        LOG_WARN("failed to process query", K(ret), KP(queries.at(i)));
+      }
     } else if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ObHbaseQueryResultIterator", K(ret));
@@ -1117,10 +1134,13 @@ int ObHBaseModel::construct_del_query(ObHbaseTableCells &table_cells,
   int ret = OB_SUCCESS;
   const ObIArray<ObHbaseTabletCells *> &tablet_cells_arr = table_cells.get_tablet_cells_array();
   ObTableQuery &table_query = query.get_query();
+  ObTablePartClipType clip_type = table_query.is_hot_only() ? ObTablePartClipType::HOT_ONLY : ObTablePartClipType::NONE;
   ObTablePartCalculator calculator(exec_ctx.get_allocator(),
                                    exec_ctx.get_sess_guard(),
                                    exec_ctx.get_schema_cache_guard(),
-                                   exec_ctx.get_schema_guard());
+                                   exec_ctx.get_schema_guard(),
+                                   nullptr,/*simple_schema*/
+                                   clip_type);
   uint64_t table_id = exec_ctx.get_table_id();
   query.set_table_id(table_id);
   for (int64_t i = 0; i < tablet_cells_arr.count(); i++) {
@@ -1726,7 +1746,9 @@ int ObHBaseModel::prepare(ObTableExecCtx &ctx, const ObTableQueryRequest &req, O
   if (OB_FAIL(check_mode_defense(ctx, req))) {
     LOG_WARN("fail to check mode defense", K(ret), K(ctx));
   } else if (OB_FAIL(ObIModel::prepare(ctx, req, res))) {
-    LOG_WARN("fail to prepare", K(ret), K(ctx), K(req));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to prepare", K(ret), K(ctx), K(req));
+    }
   } else if (OB_FAIL(add_query_columns(ctx, res))) {
     LOG_WARN("fail to add query columns into result", K(ret), K(ctx));
   }
