@@ -188,11 +188,6 @@ int ObTxLogCb::on_success()
       if (OB_FAIL(part_ctx->on_success(this))) {
         TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id), K(ls_id), K(log_ts));
       }
-      if (!bk_is_reserved) {
-        ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
-                                                ObTimeUtility::fast_current_time() - bk_submit_ts,
-                                                bk_submit_ts);
-      }
     }
   }
 
@@ -220,11 +215,6 @@ int ObTxLogCb::on_failure()
     } else {
       if (OB_FAIL(part_ctx->on_failure(this))) {
         TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(tx_id), K(ls_id), K(log_ts));
-      }
-      if (!bk_is_reserved) {
-        ObTxLogCbPool::finish_syncing_with_stat(bk_group_ptr, bk_log_size,
-                                                ObTimeUtility::fast_current_time() - bk_submit_ts,
-                                                bk_submit_ts);
       }
     }
     TRANS_LOG(INFO, "ObTxLogCb::on_failure end", KR(ret), K(tx_id), K(ls_id), K(log_ts));
