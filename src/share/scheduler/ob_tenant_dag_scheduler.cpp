@@ -2420,43 +2420,10 @@ int ObDagPrioScheduler::rank_compaction_dags_()
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (need_adaptive_schedule) {
-    try_update_adaptive_task_limit_(batch_size);
-  } else {
+  if (OB_SUCC(ret)) {
     adaptive_task_limit_ = limits_;
   }
-
   return ret;
-}
-
-// should be called under prio_lock_
-void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_size)
-{
-  int tmp_ret = OB_SUCCESS;
-  double min_cpu = 0.0;
-  double max_cpu = 0.0;
-  const int64_t adaptive_worker_limit = limits_ * 2;
-
-  if (!is_compaction_dag_prio()) {
-    // do nothing
-  } else if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
-    adaptive_task_limit_ = limits_; // dag count is OK, reset to the default value
-  } else if (adaptive_task_limit_ >= adaptive_worker_limit) {
-    // adaptive limit reached the limit, cannot inc
-  } else if (OB_TMP_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu, max_cpu))) {
-    COMMON_LOG_RET(WARN, tmp_ret, "failed to get tenant cpu count");
-  } else if (std::round(max_cpu) * ADAPTIVE_PERCENT <= adaptive_task_limit_) {
-    // reaches the 40% cpu, no need to expand
-  } else {
-    // we assume all compaction tasks are serial
-    const int64_t estimate_mem_per_thread = compaction::ObCompactionEstimator::MAX_MEM_PER_THREAD;
-    const int64_t mem_allow_max_thread = lib::get_tenant_memory_remain(MTL_ID()) * ADAPTIVE_PERCENT / estimate_mem_per_thread;
-    if (mem_allow_max_thread >= adaptive_task_limit_ * 5) {
-      ++adaptive_task_limit_;
-      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_), K(adaptive_worker_limit), K(max_cpu));
-    }
-  }
 }
 
 // under prio_lock_
