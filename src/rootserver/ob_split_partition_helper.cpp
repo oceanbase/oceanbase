@@ -129,6 +129,7 @@ int ObSplitPartitionHelper::check_allow_split(
   common::ObArray<const ObSimpleTableSchemaV2 *> table_schemas_in_tg;
   const uint64_t tablegroup_id = table_schema.get_tablegroup_id();
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  ObArray<uint64_t> lob_col_idxs;
   if (OB_UNLIKELY(table_schema.is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("the table is in recyclebin.", KR(ret), K(table_schema));
@@ -142,6 +143,11 @@ int ObSplitPartitionHelper::check_allow_split(
   } else if (OB_UNLIKELY(!table_schema.is_user_table() && !table_schema.is_global_index_table())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported table type", K(ret), K(table_schema));
+  } else if (OB_FAIL(ObDDLUtil::get_table_lob_col_idx(table_schema, lob_col_idxs))) {
+    LOG_WARN("failed to get tabel lob col idx", K(ret), K(table_schema));
+  } else if (lob_col_idxs.empty() && table_schema.has_lob_aux_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can not support split table with lob aux table on gen column", K(ret), K(table_schema));
   }
 
   if (OB_FAIL(ret)) {

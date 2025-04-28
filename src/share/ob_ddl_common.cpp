@@ -2087,6 +2087,23 @@ int ObDDLUtil::write_defensive_and_obtain_snapshot(
   return ret;
 }
 
+int ObDDLUtil::get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs)
+{
+  int ret = OB_SUCCESS;
+  lob_col_idxs.reuse();
+  ObArray<ObColDesc> all_column_ids;
+  if (OB_FAIL(table_schema.get_store_column_ids(all_column_ids))) {
+    LOG_WARN("failed to get column ids", K(ret), K(table_schema));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_column_ids.count(); ++i) {
+    if (all_column_ids.at(i).col_type_.is_lob_storage() &&
+        OB_FAIL(lob_col_idxs.push_back(i))) {
+      LOG_WARN("failed to push back lob idx", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::check_and_cancel_single_replica_dag(
     rootserver::ObDDLTask* task,
     const uint64_t table_id,

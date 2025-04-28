@@ -1247,14 +1247,8 @@ int ObPartitionSplitTask::setup_lob_idxs_arr(ObSArray<uint64_t> &lob_col_idxs)
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret),
         K(table_id));
-  } else if (OB_FAIL(table_schema->get_store_column_ids(all_column_ids))) {
-    LOG_WARN("failed to get column ids", K(ret), K(table_id));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_column_ids.count(); ++i) {
-    if (all_column_ids.at(i).col_type_.is_lob_storage() &&
-        OB_FAIL(lob_col_idxs.push_back(i))) {
-      LOG_WARN("failed to push back lob idx", K(ret));
-    }
+  } else if (OB_FAIL(ObDDLUtil::get_table_lob_col_idx(*table_schema, lob_col_idxs))) {
+    LOG_WARN("failed to get lob column ids", K(ret), KPC(table_schema));
   }
   return ret;
 }

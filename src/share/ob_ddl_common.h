@@ -1444,6 +1444,8 @@ public:
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
 
+  static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
+
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,
