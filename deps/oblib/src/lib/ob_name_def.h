@@ -1140,4 +1140,13 @@
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
 #define N_TO_PINYIN                         "to_pinyin"
+#define N_INNER_INFO_COLS_COLUMN_DEF_PRINTER "inner_info_cols_column_def_printer"
+#define N_INNER_INFO_COLS_CHAR_LEN_PRINTER "inner_info_cols_char_len_printer"
+#define N_INNER_INFO_COLS_CHAR_NAME_PRINTER "inner_info_cols_char_name_printer"
+#define N_INNER_INFO_COLS_COLL_NAME_PRINTER "inner_info_cols_coll_name_printer"
+#define N_INNER_INFO_COLS_PRIV_PRINTER "inner_info_cols_priv_printer"
+#define N_INNER_INFO_COLS_EXTRA_PRINTER "inner_info_cols_extra_printer"
+#define N_INNER_INFO_COLS_DATA_TYPE_PRINTER "inner_info_cols_data_type_printer"
+#define N_INNER_INFO_COLS_COLUMN_TYPE_PRINTER "inner_info_cols_column_type_printer"
+#define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

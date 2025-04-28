@@ -285,7 +285,7 @@ int ObLinkScanOp::inner_open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session or plan_ctx or dblink_proxy_ or dblink_proxy_ is NULL", K(ret), KP(session), KP(plan_ctx), KP(phy_plan), KP(dblink_proxy_));
   } else if (FALSE_IT(tenant_id_ = session->get_effective_tenant_id())) {
-  } else if (FALSE_IT(sessid_ = session->get_sessid())) {
+  } else if (FALSE_IT(sessid_ = session->get_server_sid())) {
   } else if (FALSE_IT(tm_sessid_ = plan_ctx->get_tm_sessid())) {
   } else if (OB_FAIL(set_next_sql_req_level())) {
     LOG_WARN("failed to set next sql req level", K(ret));
@@ -302,7 +302,7 @@ int ObLinkScanOp::inner_open()
       LOG_WARN("fail to get reverse_link", K(ret));
     } else if (NULL == reverse_link_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("reverse_link_ is NULL", K(ret), KP(reverse_link_), K(session->get_sessid()));
+      LOG_WARN("reverse_link_ is NULL", K(ret), KP(reverse_link_), K(session->get_server_sid()));
     } else if (OB_FAIL(reverse_link_->open(next_sql_req_level_))) {
       LOG_WARN("failed to open reverse_link", K(ret));
     }

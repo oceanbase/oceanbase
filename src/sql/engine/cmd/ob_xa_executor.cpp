@@ -91,7 +91,7 @@ int ObXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     if (OB_FAIL(ObXaExecutorUtil::build_tx_param(my_session, tx_param))) {
       LOG_WARN("build tx param failed", K(ret));
     } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_start_for_mysql(xid,
-            flags, my_session->get_sessid(), tx_param, tx_desc))) {
+            flags, my_session->get_server_sid(), my_session->get_sid(), tx_param, tx_desc))) {
       LOG_WARN("mysql xa start failed", K(ret), K(tx_param));
       my_session->get_trans_result().reset();
       my_session->reset_tx_variable();
@@ -485,7 +485,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     if (OB_FAIL(MTL(transaction::ObXAService*)->xa_start(xid,
                                                          flags,
                                                          my_session->get_xa_end_timeout_seconds(),
-                                                         my_session->get_sessid(),
+                                                         my_session->get_server_sid(),
+                                                         my_session->get_sid(),
                                                          tx_param,
                                                          tx_desc,
                                                          my_session->get_data_version()))) {

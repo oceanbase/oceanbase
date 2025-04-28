@@ -200,7 +200,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         break;
       }
       case SID: {
-        cur_row_->cells_[i].set_int(sess_info.get_sessid());
+        cur_row_->cells_[i].set_int(sess_info.get_sid());
         break;
       }
       case USER_NAME: {
@@ -334,7 +334,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
         break;
       }
       case SID: {
-        cur_row_->cells_[i].set_int(sess_info.get_sessid());
+        cur_row_->cells_[i].set_int(sess_info.get_sid());
         break;
       }
       case USER_NAME: {

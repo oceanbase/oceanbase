@@ -284,7 +284,7 @@ int ObGVTxLockStat::process_curr_tenant(ObNewRow *&row)
         break;
       case OB_APP_MIN_COLUMN_ID + 8:
         // session_id
-        cur_row_.cells_[i].set_int(tx_lock_stat.get_session_id());
+        cur_row_.cells_[i].set_int(tx_lock_stat.get_client_sid());
         break;
       case OB_APP_MIN_COLUMN_ID + 9:
         // proxy_session_id

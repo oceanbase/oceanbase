@@ -1535,6 +1535,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
 
             if (OB_SUCC(ret)) {
               session_table->set_addr(addr_);
+              session_table->set_session_mgr(GCTX.session_mgr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(session_table);
             }
             break;
@@ -1557,6 +1558,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
 
             if (OB_SUCC(ret)) {
               session_wait_table->set_addr(addr_);
+              session_wait_table->set_session_mgr(GCTX.session_mgr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(session_wait_table);
             }
             break;
@@ -1580,6 +1582,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
 
             if (OB_SUCC(ret)) {
               session_wait_history_table->set_addr(addr_);
+              session_wait_history_table->set_session_mgr(GCTX.session_mgr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(session_wait_history_table);
             }
             break;
@@ -1602,6 +1605,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
 
             if (OB_SUCC(ret)) {
               session_stat_table->set_addr(addr_);
+              session_stat_table->set_session_mgr(GCTX.session_mgr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(session_stat_table);
             }
             break;

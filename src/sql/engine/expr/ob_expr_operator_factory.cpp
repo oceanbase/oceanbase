@@ -429,6 +429,7 @@
 #include "sql/engine/expr/ob_expr_ora_login_user.h"
 #include "sql/engine/expr/ob_expr_to_pinyin.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_inner_info_cols_printer.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1084,6 +1085,15 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprEnhancedAesDecrypt);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
     REG_OP(ObExprToPinyin);
+    REG_OP(ObExprInnerInfoColsColumnDefPrinter);
+    REG_OP(ObExprInnerInfoColsCharLenPrinter);
+    REG_OP(ObExprInnerInfoColsCharNamePrinter);
+    REG_OP(ObExprInnerInfoColsCollNamePrinter);
+    REG_OP(ObExprInnerInfoColsPrivPrinter);
+    REG_OP(ObExprInnerInfoColsExtraPrinter);
+    REG_OP(ObExprInnerInfoColsDataTypePrinter);
+    REG_OP(ObExprInnerInfoColsColumnTypePrinter);
+    REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

@@ -1271,7 +1271,7 @@ int TriggerHandle::set_logoff_mark(ObSQLSessionInfo &session)
     OZ (is_enabled_system_trigger(is_enable));
     if (OB_SUCC(ret) && is_enable) {
       ObSessionVariable log_mark;
-      log_mark.value_.set_uint32(session.get_sessid());
+      log_mark.value_.set_uint32(session.get_server_sid());
       log_mark.meta_.set_meta(log_mark.value_.meta_);
       OZ (session.replace_user_variable(OB_LOGOFF_TRIGGER_MARK, log_mark));
     }
@@ -1310,7 +1310,7 @@ int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
     do_trigger = need_fire;
   } else if (need_fire && SYS_TRIGGER_LOGOFF == trigger_event) {
     const ObObj *log_mark = session.get_user_variable_value(OB_LOGOFF_TRIGGER_MARK);
-    if (log_mark != NULL && log_mark->get_uint32() == session.get_sessid()) {
+    if (log_mark != NULL && log_mark->get_uint32() == session.get_server_sid()) {
       do_trigger = true;
     }
   } else if (need_fire && SYS_TRIGGER_LOGON == trigger_event) {

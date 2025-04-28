@@ -1712,7 +1712,7 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.key_.key_id_ = package_id;
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
-          ? resolve_ctx.session_info_.get_sessid() : 0;
+          ? resolve_ctx.session_info_.get_server_sid() : 0;
       pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
       ObString sql;
@@ -1774,7 +1774,7 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       pc_ctx.key_.key_id_ = package_id;
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
-          ? resolve_ctx.session_info_.get_sessid() : 0;
+          ? resolve_ctx.session_info_.get_server_sid() : 0;
       pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 

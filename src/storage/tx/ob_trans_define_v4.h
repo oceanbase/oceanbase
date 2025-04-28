@@ -582,6 +582,7 @@ protected:
   ObTxSEQ snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
   uint32_t assoc_sess_id_;             // the session which associated with
+  uint32_t client_sid_;                // client session id, which is produced by proxy
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
   uint64_t op_sn_;                     // Tx level operation sequence No

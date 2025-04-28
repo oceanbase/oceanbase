@@ -36,9 +36,13 @@ public:
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
   virtual int set_ip(common::ObAddr *addr);
+  inline void set_session_mgr(sql::ObSQLSessionMgr *session_mgr) { session_mgr_ = session_mgr; }
+
 
 protected:
   virtual int get_all_diag_info();
+  inline sql::ObSQLSessionMgr* get_session_mgr() const { return session_mgr_; }
+
   ObWrapperAllocator alloc_wrapper_;
   common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect>,
   8, ObWrapperAllocator&> session_status_;
@@ -70,6 +74,7 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   uint32_t session_iter_;
+  sql::ObSQLSessionMgr *session_mgr_;
   common::ObDISessionCollect *collect_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSessionWait);
 };

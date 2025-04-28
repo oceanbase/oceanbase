@@ -76,7 +76,7 @@ int ObMPStmtReset::process()
     int64_t param_num = 0;
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
+    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
 
     // get stmt info
     if (OB_NOT_NULL(session->get_ps_cache())) {
@@ -113,7 +113,7 @@ int ObMPStmtReset::process()
     // close cursor
     if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
       if (OB_FAIL(session->close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
       }
     }
 

@@ -32,6 +32,7 @@ public:
   int64_t epoch_;
   uint32_t session_id_;
   uint32_t associated_session_id_;
+  uint32_t client_sid_;
   transaction::ObTxState tx_state_;
   share::SCN trans_version_;
   share::SCN prepare_version_;

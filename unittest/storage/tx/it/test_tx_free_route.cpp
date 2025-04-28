@@ -467,15 +467,18 @@ int MockObServer::handle(ObReq &req, ObResp &resp)
     int64_t len = s.data_.length();
     int64_t pos = 0;
     switch(s.type_) {
-#define TX_STATE_UPDATE__(T, tn)                                        \
-      case SyncTxState::T:                                              \
-        if (OB_SUCC(ret) &&                                             \
-            OB_FAIL(tx_node_.txn_free_route__update_##tn##_state(session_.get_sessid(), tx_desc, free_route_ctx, buf, len, pos, session_.get_data_version()))) { \
-          TRANS_LOG(ERROR, "update txn state fail", K(ret), "type", #T); \
-        } else if (pos != len) {                                        \
-          TRANS_LOG(WARN, "[maybe] pos != len, consume buffer incomplete", K(ret), K(pos), K(len), "state_type", #T); \
-        }                                                               \
-        break;
+#define TX_STATE_UPDATE__(T, tn)                                               \
+  case SyncTxState::T:                                                         \
+    if (OB_SUCC(ret) &&                                                        \
+        OB_FAIL(tx_node_.txn_free_route__update_##tn##_state(                  \
+            session_.get_server_sid(), session_.get_client_sid(), tx_desc,     \
+            free_route_ctx, buf, len, pos, session_.get_data_version()))) {    \
+      TRANS_LOG(ERROR, "update txn state fail", K(ret), "type", #T);           \
+    } else if (pos != len) {                                                   \
+      TRANS_LOG(WARN, "[maybe] pos != len, consume buffer incomplete", K(ret), \
+                K(pos), K(len), "state_type", #T);                             \
+    }                                                                          \
+    break;
 #define TX_STATE_UPDATE_(T, tn) TX_STATE_UPDATE__(T, tn)
 #define TX_STATE_UPDATE(T) TX_STATE_UPDATE_(T, CONCAT(LOWER_, T))
       LST_DO(TX_STATE_UPDATE, (), STATIC, DYNAMIC, PARTS, EXTRA);
@@ -519,7 +522,7 @@ int MockObServer::do_handle_(ObReq &req, ObResp &resp)
   // call tx_node's read/write/start_tx/commit_tx/rollback_tx ...
   auto &tx_desc = session_.get_tx_desc();
   if (!tx_desc) {
-    ret = tx_node_.acquire_tx(tx_desc, session_.get_sessid());
+    ret = tx_node_.acquire_tx(tx_desc, session_.get_server_sid(), session_.get_sid());
     if (OB_FAIL(ret)) {
       resp.ret_ = ret;
       TRANS_LOG(WARN, "acquire tx failed", K(ret));
@@ -591,7 +594,7 @@ int MockObServer::assign_resp_tx_state_(ObResp &resp, ObTxDesc *tx_desc, ObTxnFr
     int64_t len = tx_node_.txn_free_route__get_##t##_state_serialize_size(tx_desc, ctx); \
     char *buf = (char*)ob_malloc(len, ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST));                                  \
     int64_t pos = 0;                                                    \
-    if (OB_FAIL(tx_node_.txn_free_route__serialize_##t##_state(session_.get_sessid(), tx_desc, ctx, buf, len, pos))) { \
+    if (OB_FAIL(tx_node_.txn_free_route__serialize_##t##_state(session_.get_server_sid(), tx_desc, ctx, buf, len, pos))) { \
       TRANS_LOG(ERROR, "serialize fail", K(ret), K(tx_desc));           \
     } else {                                                            \
       SyncTxState state;                                                \
@@ -780,7 +783,7 @@ public:
 #define CHECK_ALIVE(server)                                             \
   do {                                                                  \
     auto &session = server.session_;                                    \
-    A_OK(server.tx_node_.tx_free_route_check_alive(session.txn_free_route_ctx_, *session.tx_desc_, session.get_sessid())); \
+    A_OK(server.tx_node_.tx_free_route_check_alive(session.txn_free_route_ctx_, *session.tx_desc_, session.get_server_sid())); \
   } while(0)
 #define WRAP_BLOCK(x) { x; }
 #define EXPECT_PROXY(hk, ...)                                           \

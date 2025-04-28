@@ -1351,7 +1351,7 @@ void ObLockWaitMgr::check_wait_node_session_stat_(Node *iter,
       bool ac = false, has_explicit_start_tx = session_info->has_explicit_start_trans();
       session_info->get_autocommit(ac);
       if (OB_ISNULL(tx_desc) && (!ac || has_explicit_start_tx)) {
-        uint32_t session_id = session_info->get_sessid();
+        uint32_t session_id = session_info->get_server_sid();
         const common::ObCurTraceId::TraceId &trace_id = session_info->get_current_trace_id();
         TRANS_LOG(WARN, "LOG_MGR: found session ac = 0 or has_explicit_start_trans but txDesc was released!",
                   K(session_id), K(trace_id), K(ac), K(has_explicit_start_tx));

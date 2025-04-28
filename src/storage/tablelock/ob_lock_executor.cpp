@@ -334,11 +334,11 @@ bool ObLockExecutor::proxy_is_support(sql::ObSQLSessionInfo *session)
   } else {
     is_support = ((session->is_feedback_proxy_info_support() && session->is_client_sessid_support())
                   || !session->is_obproxy_mode())
-                 && session->get_client_sessid() != INVALID_SESSID;
+                 && session->get_client_sid() != INVALID_SESSID;
     if (!is_support) {
       LOG_WARN_RET(OB_NOT_SUPPORTED,
                    "proxy is not support this feature",
-                   K(session->get_sessid()),
+                   K(session->get_server_sid()),
                    K(session->is_feedback_proxy_info_support()),
                    K(session->is_client_sessid_support()));
     }
@@ -697,12 +697,12 @@ void ObLockExecutor::mark_lock_session_(sql::ObSQLSessionInfo *session,
                                         const bool is_lock_session)
 {
   if (session->is_lock_session() != is_lock_session) {
-    LOG_INFO("mark lock_session", K(session->get_sessid()), K(is_lock_session));
+    LOG_INFO("mark lock_session", K(session->get_server_sid()), K(is_lock_session));
     session->set_is_lock_session(is_lock_session);
     session->set_need_send_feedback_proxy_info(true);
   } else {
     LOG_DEBUG("the lock_session status on the session won't be changed, no need to mark again",
-              K(session->get_sessid()),
+              K(session->get_server_sid()),
               K(session->is_lock_session()),
               K(session->is_need_send_feedback_proxy_info()));
   }
@@ -875,9 +875,9 @@ int ObLockExecutor::check_need_reroute_(ObLockContext &ctx,
       } else if (OB_SUCCESS == ret) {
         OV (lock_session_addr == GCTX.self_addr(), OB_ERR_PROXY_REROUTE, lock_session_addr, GCTX.self_addr());
         // can not reroute in one observer, so just return OB_SUCCESS
-        OV (lock_session_id == session->get_sessid(), OB_SUCCESS, lock_session_id, session->get_sessid());
+        OV (lock_session_id == session->get_server_sid(), OB_SUCCESS, lock_session_id, session->get_server_sid());
         // to avoid this session wasn't marked as lock_session before
-        if (lock_session_addr == GCTX.self_addr() && lock_session_id == session->get_sessid()) {
+        if (lock_session_addr == GCTX.self_addr() && lock_session_id == session->get_server_sid()) {
           mark_lock_session_(session, true);
         }
       }
@@ -909,7 +909,7 @@ int ObUnLockExecutor::execute(ObExecContext &ctx,
   uint64_t client_session_create_ts = 0;
   bool is_rollback = false;
   OZ (ObLockContext::valid_execute_context(ctx));
-  OX (client_session_id = ctx.get_my_session()->get_client_sessid());
+  OX (client_session_id = ctx.get_my_session()->get_client_sid());
   OX (client_session_create_ts = ctx.get_my_session()->get_client_create_time());
   OZ (execute_(ctx,
                client_session_id,

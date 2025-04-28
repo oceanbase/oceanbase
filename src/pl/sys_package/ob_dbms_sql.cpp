@@ -1655,7 +1655,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OX (new_cursor->open(spi_cursor));
   if (OB_FAIL(ret) && NULL != spi_cursor) {
     spi_cursor->~ObSPICursor();
-    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_sessid()));
+    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_server_sid()));
   }
 
   // 3. set old cursor invalid

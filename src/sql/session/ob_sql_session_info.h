@@ -1058,7 +1058,7 @@ public:
       ret = OB_HASH_NOT_EXIST;
       SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
     } else if (OB_FAIL(ps_session_info_map_.read_atomic<Visitor>(stmt_id, visitor))) {
-      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_server_sid()));
       if (ret == OB_HASH_NOT_EXIST) {
         ret = OB_EER_UNKNOWN_STMT_HANDLER;
       }
@@ -1073,7 +1073,7 @@ public:
       ret = OB_HASH_NOT_EXIST;
       SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
     } else if (OB_FAIL(ps_session_info_map_.atomic_refactored<T>(stmt_id, update))) {
-      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_server_sid()));
       if (ret == OB_HASH_NOT_EXIST) {
         ret = OB_EER_UNKNOWN_STMT_HANDLER;
       }
@@ -1967,14 +1967,14 @@ inline bool ObSQLSessionInfo::is_terminate(int &ret) const
     bret = true;
     SQL_ENG_LOG(WARN, "query interrupted session",
                 "query", get_current_query_string(),
-                "key", get_sessid(),
+                "key", get_server_sid(),
                 "proxy_sessid", get_proxy_sessid());
     ret = common::OB_ERR_QUERY_INTERRUPTED;
   } else if (QUERY_DEADLOCKED == get_session_state()) {
     bret = true;
     SQL_ENG_LOG(WARN, "query deadlocked",
                 "query", get_current_query_string(),
-                "key", get_sessid(),
+                "key", get_server_sid(),
                 "proxy_sessid", get_proxy_sessid());
     ret = common::OB_DEAD_LOCK;
   } else if (SESSION_KILLED == get_session_state()) {

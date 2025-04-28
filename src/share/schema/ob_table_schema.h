@@ -1646,6 +1646,10 @@ public:
   int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
                            uint64_t column_id,
                            bool &is_uni) const;
+  int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
+                           uint64_t column_id,
+                           bool &is_uni,
+                           bool &is_first_notnull_unique) const;
   int is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
                              uint64_t column_id,
                              bool &is_mul) const;

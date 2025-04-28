@@ -83,6 +83,7 @@ static void statistics_for_standby()
 int ObPartTransCtx::init(const uint64_t tenant_id,
                          const common::ObAddr &scheduler,
                          const uint32_t session_id,
+                         const uint32_t client_sid,
                          const uint32_t associated_session_id,
                          const ObTransID &trans_id,
                          const int64_t trans_expired_time,
@@ -135,6 +136,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     tenant_id_ = tenant_id;
     session_id_ = session_id;
+    client_sid_ = client_sid;
     associated_session_id_ = associated_session_id;
     addr_ = trans_service->get_server();
     trans_id_ = trans_id;
@@ -1006,6 +1008,7 @@ int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
                                     get_ls_id(),
                                     memtable_key_info_arr.at(i),
                                     get_session_id(),
+                                    get_client_sid(),
                                     0,
                                     get_trans_id(),
                                     get_ctx_create_time(),

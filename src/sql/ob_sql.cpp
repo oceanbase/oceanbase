@@ -213,8 +213,8 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   FLTSpanGuard(sql_compile);
   ObTruncatedString trunc_stmt(stmt);
 #ifndef NDEBUG
-  LOG_INFO("Begin to handle text statement", K(trunc_stmt),
-           "sess_id", result.get_session().get_sessid(),
+  LOG_INFO("Begin to handle text statement",
+           "sess_id", result.get_session().get_server_sid(),
            "proxy_sess_id", result.get_session().get_proxy_sessid(),
            "tenant_id", result.get_session().get_effective_tenant_id(),
            "execution_id", result.get_session().get_current_execution_id());
@@ -1159,7 +1159,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
         result.set_statement_id(client_stmt_id);
         result.set_stmt_type(info_ctx.stmt_type_);
         LOG_TRACE("add ps session info", K(ret), K(*ref_stmt_info), K(client_stmt_id),
-                                        K(*ps_stmt_item), K(session.get_sessid()));
+                                        K(*ps_stmt_item), K(session.get_server_sid()));
       }
     }
     if (OB_FAIL(ret) || duplicate_prepare) { //dec ref count
@@ -1847,7 +1847,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ectx.set_is_ps_prepare_stage(true);
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare statement", "sess_id", session.get_sessid(),
+    LOG_INFO("Begin to handle prepare statement", "sess_id", session.get_server_sid(),
              "proxy_sess_id", session.get_proxy_sessid(), K(stmt));
 #endif
 
@@ -2385,7 +2385,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       context.cur_sql_ = sql;
       context.raw_sql_ = ps_info->get_ps_sql();
 #ifndef NDEBUG
-      LOG_INFO("Begin to handle execute statement", "sess_id", session.get_sessid(),
+      LOG_INFO("Begin to handle execute statement", "sess_id", session.get_server_sid(),
                "proxy_sess_id", session.get_proxy_sessid(), K(sql));
 #endif
 
@@ -2519,7 +2519,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
   } else {
 #ifndef NDEBUG
   LOG_INFO("Begin to handle remote statement",
-           K(remote_sql_info), "sess_id", session->get_sessid(),
+           K(remote_sql_info), "sess_id", session->get_server_sid(),
            "proxy_sess_id", session->get_proxy_sessid(),
            "execution_id", session->get_current_execution_id());
 #endif
@@ -5831,7 +5831,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
           || (!das_ctx.is_partition_hit() && !das_ctx.get_table_loc_list().empty()));
     // check inject reroute for test
     if (!should_reroute) {
-      const uint32_t sessid = session.get_sessid();
+      const uint32_t sessid = session.get_server_sid();
       const int reroute_retry_cnt = OB_E(EventTable::EN_LOCK_CONFLICT_RETRY_THEN_REROUTE, sessid) OB_SUCCESS;
       if (OB_UNLIKELY(reroute_retry_cnt)) {
         int last_query_retry_err = session.get_retry_info().get_last_query_retry_err();

@@ -285,6 +285,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
                         log_block_.get_header().get_org_cluster_id(),
                         cluster_version,
                         0, /*session_id*/
+                        0, /*client_sid*/
                         0, /*associated_session_id*/
                         scheduler,
                         INT64_MAX,         /*trans_expired_time_*/

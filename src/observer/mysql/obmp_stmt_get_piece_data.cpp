@@ -122,7 +122,7 @@ int ObMPStmtGetPieceData::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowd for the session", K_(stmt_id), K(ret));

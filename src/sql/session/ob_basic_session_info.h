@@ -693,13 +693,13 @@ public:
   void eval_sys_var_config_hash_val();
   int gen_sys_var_in_pc_str();
   int gen_configs_in_pc_str();
-  uint32_t get_sessid() const { return sessid_; }
+  uint32_t get_server_sid() const { return sessid_; }
   // Used for view or function compatibility display.
-  uint32_t get_compatibility_sessid() const
+  uint32_t get_sid() const
   {
     return client_sessid_ == INVALID_SESSID ? sessid_ : client_sessid_;
   }
-  uint32_t get_client_sessid() const { return client_sessid_; }
+  uint32_t get_client_sid() const { return client_sessid_; }
   inline void set_client_sessid(uint32_t client_sessid)
   {
     client_sessid_ = client_sessid;
@@ -709,8 +709,9 @@ public:
   {
     client_create_time_ = client_create_time;
   }
+  static int get_client_sid(uint32_t server_sid, uint32_t& client_sid); // get client sid by server sid
   uint64_t get_proxy_sessid() const { return proxy_sessid_; }
-  uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sessid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
+  uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
   uint32_t get_master_sessid() const { return master_sessid_; }
   inline const common::ObString get_sess_bt() const { return ObString::make_string(sess_bt_buff_); }
   inline int32_t get_sess_ref_cnt() const { return sess_ref_cnt_; }

@@ -35,7 +35,7 @@ int ObOptStatTaskInfo::init(common::ObIAllocator &allocator,
     LOG_WARN("alloc memory failed", K(ret), K(trace_id_buf));
   } else {
     tenant_id_ = session->get_effective_tenant_id();
-    session_id_ = session->get_sessid();
+    session_id_ = session->get_sid();
     int64_t len = session->get_current_trace_id().to_string(trace_id_buf, max_trace_id_len);
     trace_id_.assign_ptr(trace_id_buf, static_cast<int32_t>(len));
     task_id_ = task_id;

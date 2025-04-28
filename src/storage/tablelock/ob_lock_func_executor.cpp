@@ -38,8 +38,8 @@ int ObGetLockExecutor::execute(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = ctx.get_my_session();
-  uint32_t client_session_id = sess->get_client_sessid();
-  uint32_t server_session_id = sess->get_sessid();
+  uint32_t client_session_id = sess->get_client_sid();
+  uint32_t server_session_id = sess->get_server_sid();
   uint64_t client_session_create_ts = sess->get_client_create_time();
   uint64_t lock_id = 0;
   bool is_rollback = false;
@@ -226,7 +226,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
   OZ (ObLockContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
     SMART_VAR(ObLockContext, stack_ctx) {
-      client_session_id = ctx.get_my_session()->get_client_sessid();
+      client_session_id = ctx.get_my_session()->get_client_sid();
       client_session_create_ts = ctx.get_my_session()->get_client_create_time();
       OZ (stack_ctx.init(ctx));
       if (OB_SUCC(ret)) {

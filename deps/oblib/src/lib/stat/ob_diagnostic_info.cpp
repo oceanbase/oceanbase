@@ -206,6 +206,7 @@ int ObDiagnosticInfo::init(
     // If this is a genuine proxy connection, the proxy_sid will be corrected by the
     // deliver_mysql_request interface
     ash_stat_.proxy_sid_ = session_id;
+    ash_stat_.client_sid_ = INVALID_SESSID;
     ash_stat_.last_touch_ts_ = rdtsc();
     ash_stat_.last_inactive_ts_ = ash_stat_.last_touch_ts_;
     pool_ = &pool;

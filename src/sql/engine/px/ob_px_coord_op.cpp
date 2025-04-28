@@ -846,7 +846,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     ObSQLSessionInfo *session = ctx_.get_my_session();
     session->get_trans_result().set_incomplete();
     LOG_WARN("collect trans_result fail", K(ret),
-             "session_id", session->get_sessid(),
+             "session_id", session->get_server_sid(),
              "trans_result", session->get_trans_result());
 
   }

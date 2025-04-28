@@ -89,6 +89,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
           if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
             pair.first = di->get_session_id();
             pair.second.session_id_ = di->get_session_id();
+            pair.second.client_sid_ = di->get_client_sid();
             pair.second.base_value_.set_tenant_id(di->get_tenant_id());
             pair.second.base_value_.set_curr_wait(di->get_curr_wait());
             pair.second.base_value_.get_add_stat_stats().add(di->get_add_stat_stats());

@@ -367,7 +367,7 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
 
   if (!OB_SUCC(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
-  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("deserialize_string_array failed", K(ret));
   } else if (OB_FAIL(deep_copy_obj(orig_default_value, orig_default_value_))) {
     LOG_WARN("Fail to deep copy orig_default_value, ", K(ret), K_(orig_default_value));
@@ -727,7 +727,7 @@ int ObColumnSchemaV2::deserialize_extended_type_info(const char *buf,
                                                       int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_))) {
+  if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, get_allocator()))) {
     LOG_WARN("fail to deserialize extended type info", K(ret));
   }
   return ret;

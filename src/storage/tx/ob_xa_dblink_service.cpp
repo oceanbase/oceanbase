@@ -238,6 +238,7 @@ int ObXAService::xa_start_for_tm_promotion_(const int64_t flags,
 int ObXAService::xa_start_for_tm(const int64_t flags,
                                  const int64_t timeout_seconds,
                                  const uint32_t session_id,
+                                 const uint32_t client_sid,
                                  const ObTxParam &tx_param,
                                  ObTxDesc *&tx_desc,
                                  ObXATransID &xid,
@@ -255,7 +256,7 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   } else {
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_START)) {
-      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id,
+      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, client_sid,
               tx_param, tx_desc, xid, data_version))) {
         TRANS_LOG(WARN, "xa start promotion failed", K(ret), K(flags), K(xid));
       }
@@ -279,6 +280,7 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
 int ObXAService::xa_start_for_tm_(const int64_t flags,
                                   const int64_t timeout_seconds,
                                   const uint32_t session_id,
+                                  const uint32_t client_sid,
                                   const ObTxParam &tx_param,
                                   ObTxDesc *&tx_desc,
                                   ObXATransID &xid,
@@ -316,7 +318,7 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
     // the first xa start for xa trans with this xid
     // therefore tx_desc should be allocated
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, data_version))) {
+      if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, client_sid, data_version))) {
         TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
       } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
         TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));

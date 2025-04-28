@@ -1306,12 +1306,16 @@ public:
   void reset_allocator();
   int get_assign_ret() {return error_ret_;}
   inline int get_err_ret() const { return error_ret_; }
+  static int deserialize_string_array(const char *buf, const int64_t data_len, int64_t &pos,
+                                      common::ObArrayHelper<common::ObString> &str_array,
+                                      common::ObIAllocator *alloc);
 protected:
   static const int64_t STRING_ARRAY_EXTEND_CNT = 7;
   void *alloc(const int64_t size);
   void free(void *ptr);
   int deep_copy_str(const char *src, common::ObString &dest);
   int deep_copy_str(const common::ObString &src, common::ObString &dest);
+  static int deep_copy_str(const common::ObString &src, common::ObString &dest, ObIAllocator &alloc);
   int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
   int deep_copy_string_array(const common::ObIArray<common::ObString> &src,
                              common::ObArrayHelper<common::ObString> &dst);
@@ -1319,8 +1323,6 @@ protected:
                           common::ObArrayHelper<common::ObString> &str_array);
   int serialize_string_array(char *buf, const int64_t buf_len, int64_t &pos,
                              const common::ObArrayHelper<common::ObString> &str_array) const;
-  int deserialize_string_array(const char *buf, const int64_t data_len, int64_t &pos,
-                               common::ObArrayHelper<common::ObString> &str_array);
   int64_t get_string_array_serialize_size(
       const common::ObArrayHelper<common::ObString> &str_array) const;
   void reset_string(common::ObString &str);

@@ -135,8 +135,17 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
             break;
           }
         case SESSION_ID:
-          cur_row_.cells_[i].set_int(node_iter_->sessid_);
-          break;
+          {
+            uint32_t client_sid = INVALID_SESSID;
+            if (OB_FAIL(sql::ObBasicSessionInfo::get_client_sid(node_iter_->sessid_, client_sid))) {
+              SERVER_LOG(ERROR, "get client_sid failed", K(ret));
+            } else {
+              cur_row_.cells_[i].set_int(
+                client_sid == INVALID_SESSID ? node_iter_->sessid_ : client_sid
+              );
+            }
+            break;
+          }
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;

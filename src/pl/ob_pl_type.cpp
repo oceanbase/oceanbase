@@ -249,7 +249,7 @@ int ObPLDataType::get_synonym_object(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
   ObSynonymChecker synonym_checker;
-  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
+  OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
   OZ (ObResolverUtils::resolve_synonym_object_recursively(
     schema_checker, synonym_checker,
     tenant_id, owner_id, object_name, owner_id, object_name, exist));
@@ -2372,7 +2372,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
 int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_sessid()));
+  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_server_sid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
     if (is_streaming()) {
       ObSPIResultSet *spi_result = get_cursor_handler();

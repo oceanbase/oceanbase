@@ -3276,7 +3276,7 @@ bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key,
         ret = OB_SUCCESS;
         ATOMIC_STORE(&obs_->need_ctas_cleanup_, true); //1, The current session is in use, there is suspicion, need to continue to check in the next scheduling
         LOG_DEBUG("try lock query fail with code OB_EGAIN",
-            K(sess_info->get_sessid()), K(sess_info->get_sessid_for_table()));
+            K(sess_info->get_server_sid()), K(sess_info->get_sessid_for_table()));
       }
       set_drop_flag(false);
     } else if (ObCTASCleanUp::CTAS_RULE == get_cleanup_type()) { //2, Query build table cleanup
@@ -3330,7 +3330,7 @@ bool ObServer::ObRefreshTime::operator()(sql::ObSQLSessionMgr::Key key,
     } else {
       ret = OB_SUCCESS;
       LOG_WARN("try lock query fail with code OB_EGAIN",
-          K(sess_info->get_sessid()), K(sess_info->get_sessid_for_table()));
+          K(sess_info->get_server_sid()), K(sess_info->get_sessid_for_table()));
     }
   } else {
     sess_info->refresh_temp_tables_sess_active_time();

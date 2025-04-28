@@ -44,6 +44,8 @@
 #include "share/ob_compatibility_control.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "observer/ob_server.h"
+
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -844,7 +846,7 @@ int ObBasicSessionInfo::check_and_init_retry_info(const ObCurTraceId::TraceId &c
   if (last_query_trace_id_.equals(cur_trace_id)) { // 是重试query的包
     if (OB_UNLIKELY(!retry_info_.is_inited())) {
       LOG_ERROR("is retry packet, but retry info is not inited, will init it",
-                K(last_query_trace_id_), K(cur_trace_id), K(retry_info_), K(get_sessid()), K(sql));
+                K(last_query_trace_id_), K(cur_trace_id), K(retry_info_), K(get_server_sid()), K(sql));
       if (OB_FAIL(retry_info_.init())) {
         LOG_WARN("fail to init retry info", K(ret), K(retry_info_), K(sql));
       }
@@ -4648,7 +4650,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               effective_tenant_id_,
               is_changed_to_temp_tenant_,
               user_id_,
-              is_master_session() ? get_compatibility_sessid() : master_sessid_,
+              is_master_session() ? get_sid() : master_sessid_,
               capability_.capability_,
               thread_data_.database_name_);
   // 序列化需要序列化的用户变量和系统变量
@@ -5262,7 +5264,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               effective_tenant_id_,
               is_changed_to_temp_tenant_,
               user_id_,
-              is_master_session() ? get_compatibility_sessid() : master_sessid_,
+              is_master_session() ? get_sid() : master_sessid_,
               capability_.capability_,
               thread_data_.database_name_);
 
@@ -7142,6 +7144,24 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
       LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
     }
+  }
+  return ret;
+}
+
+// server_sid must be valid, e.g. expected session on current server
+int ObBasicSessionInfo::get_client_sid(uint32_t server_sid, uint32_t& client_sid)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionMgr &session_mgr = OBSERVER.get_sql_session_mgr();
+  ObSQLSessionInfo *sess_info = NULL;
+  if (OB_FAIL(session_mgr.get_session(server_sid, sess_info))) {
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(sess_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret), K(client_sid));
+  } else {
+    client_sid = sess_info->get_client_sid();
+    session_mgr.revert_session(sess_info);
   }
   return ret;
 }

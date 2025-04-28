@@ -240,6 +240,12 @@ public:
   {
     return session_id_;
   }
+
+  uint32_t get_client_sid() const
+  {
+    return (ash_stat_.session_type_ == 0) ? ash_stat_.client_sid_
+                                          : INVALID_SESSID;
+  }
   void set_summary_slot(ObDiagnosticInfoSlot *slot)
   {
     summary_slot_ = slot;

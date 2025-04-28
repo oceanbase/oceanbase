@@ -359,7 +359,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
         if (is_contain_tmp_tbl()) {
           //临时表的行为取决于用户创建的session，而对于远程执行而言，远程的session id是一个临时的session_id
           //因此这里统一应该使用master session id，来保证匹配计划一直使用的是用户session
-          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();
+          sessid_ = pc_ctx.sql_ctx_.session_info_->get_sid();
           sess_create_time_ = pc_ctx.sql_ctx_.session_info_->get_sess_create_time();
           // 获取临时表的表名
           pc_ctx.tmp_table_names_.reset();

@@ -56,7 +56,7 @@ int ObRenameTableResolver::resolve(const ParseNode &parser_tree)
   if (OB_SUCC(ret)) {
     int64_t count = node->num_child_;
     rename_table_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
-    rename_table_stmt->set_client_session_info(session_info_->get_client_sessid(),
+    rename_table_stmt->set_client_session_info(session_info_->get_client_sid(),
                                                session_info_->get_client_create_time());
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       ParseNode *rename_node = node->children_[i];

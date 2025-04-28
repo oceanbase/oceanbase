@@ -1142,7 +1142,7 @@ int ObExprCast::cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
   if (OB_ISNULL(op_cg_ctx.schema_guard_) || OB_ISNULL(op_cg_ctx.session_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(op_cg_ctx.schema_guard_), K(op_cg_ctx.session_));
-  } else if (OB_FAIL(schema_checker.init(*op_cg_ctx.schema_guard_, op_cg_ctx.session_->get_sessid()))) {
+  } else if (OB_FAIL(schema_checker.init(*op_cg_ctx.schema_guard_, op_cg_ctx.session_->get_server_sid()))) {
     LOG_WARN("init schema checker failed", K(ret));
   } else if (OB_FAIL(schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info))) {
     LOG_WARN("failed to get udt info", K(ret));

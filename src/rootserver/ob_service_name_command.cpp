@@ -53,7 +53,7 @@ bool ObServiceNameKillSessionFunctor::operator()(sql::ObSQLSessionMgr::Key key, 
         KP(killed_connection_list_));
   } else if (sess_info->get_effective_tenant_id() == tenant_id_
       && sess_info->get_service_name().equal_to(service_name_)) {
-    uint64_t sess_id = sess_info->get_sessid();
+    uint64_t sess_id = sess_info->get_server_sid();
     if (OB_FAIL(GCTX.session_mgr_->kill_session(*sess_info))) {
       LOG_WARN("fail to kill session", KR(ret), K(sess_id));
     } else if (OB_FAIL(killed_connection_list_->push_back(sess_id))) {

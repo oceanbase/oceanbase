@@ -971,7 +971,7 @@ int ObExecContext::check_extra_status()
       if (OB_SUCCESS != (tmp_ret = it->check())) {
         SQL_ENG_LOG(WARN, "extra check failed", K(tmp_ret), "check_name", it->name(),
                     "query", my_session_->get_current_query_string(),
-                    "key", my_session_->get_sessid(),
+                    "key", my_session_->get_server_sid(),
                     "proxy_sessid", my_session_->get_proxy_sessid());
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }

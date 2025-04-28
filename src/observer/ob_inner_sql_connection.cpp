@@ -1300,7 +1300,7 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
            KP(this),
            K(local_execute),
            K(get_resource_conn_id()),
-           K(get_session().get_sessid()),
+           K(get_session().get_server_sid()),
            KPC(get_session().get_tx_desc()));
   return ret;
 }
@@ -1689,7 +1689,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       }
     }
     if (tenant_id < OB_MAX_RESERVED_TENANT_ID) {  //only print log for sys table
-      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql), K(get_session().get_sessid()));
+      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql), K(get_session().get_server_sid()));
     }
   }
 

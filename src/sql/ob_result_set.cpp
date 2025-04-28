@@ -138,7 +138,7 @@ OB_INLINE int ObResultSet::open_plan()
           //session has been killed some moment ago
           ret = OB_ERR_SESSION_INTERRUPTED;
           LOG_WARN("session has been killed", K(ret), K(my_session_.get_session_state()),
-                  K(my_session_.get_sessid()), "proxy_sessid", my_session_.get_proxy_sessid());
+                  K(my_session_.get_server_sid()), "proxy_sessid", my_session_.get_proxy_sessid());
         } else {
           if (OB_SUCC(ret)) {
             do {

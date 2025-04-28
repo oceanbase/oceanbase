@@ -1333,6 +1333,26 @@ int ObSchema::deep_copy_str(const ObString &src, ObString &dest)
   return ret;
 }
 
+int ObSchema::deep_copy_str(const ObString &src, ObString &dest, ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  if (src.length() > 0) {
+    int64_t len = src.length() + 1;
+    if (NULL == (buf = static_cast<char*>(alloc.alloc(len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory, ", K(len), K(ret));
+    } else {
+      MEMCPY(buf, src.ptr(), len - 1);
+      buf[len - 1] = '\0';
+      dest.assign_ptr(buf, static_cast<ObString::obstr_size_t> (len - 1));
+    }
+  } else {
+    dest.reset();
+  }
+  return ret;
+}
+
 int ObSchema::deep_copy_obj(const ObObj &src, ObObj &dest)
 {
   int ret = OB_SUCCESS;
@@ -1476,7 +1496,8 @@ int ObSchema::serialize_string_array(char *buf, const int64_t buf_len, int64_t &
 }
 
 int ObSchema::deserialize_string_array(const char *buf, const int64_t data_len, int64_t &pos,
-                                       common::ObArrayHelper<common::ObString> &str_array)
+                                       common::ObArrayHelper<common::ObString> &str_array,
+                                       ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
   int64_t temp_pos = pos;
@@ -1485,6 +1506,9 @@ int ObSchema::deserialize_string_array(const char *buf, const int64_t data_len, 
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0) || OB_UNLIKELY(pos > data_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf should not be null", K(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_ISNULL(alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get alloc", K(ret));
   } else if (pos == data_len) {
     //do nothing
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
@@ -1494,7 +1518,7 @@ int ObSchema::deserialize_string_array(const char *buf, const int64_t data_len, 
   } else {
     void *array_buf = NULL;
     const int64_t alloc_size = count * static_cast<int64_t>(sizeof(ObString));
-    if (NULL == (array_buf = alloc(alloc_size))) {
+    if (NULL == (array_buf = alloc->alloc(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc memory failed", K(alloc_size), K(ret));
     } else {
@@ -1504,7 +1528,7 @@ int ObSchema::deserialize_string_array(const char *buf, const int64_t data_len, 
         ObString copy_str;
         if (OB_FAIL(str.deserialize(buf, data_len, pos))) {
           LOG_WARN("string deserialize failed", K(ret));
-        } else if (OB_FAIL(deep_copy_str(str, copy_str))) {
+        } else if (OB_FAIL(deep_copy_str(str, copy_str, *alloc))) {
           LOG_WARN("deep_copy_str failed", K(ret));
         } else if (OB_FAIL(str_array.push_back(copy_str))) {
           LOG_WARN("push_back failed", K(ret));
@@ -2148,7 +2172,7 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
               read_only_, locality_str_, previous_locality_str_);
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
-  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, zone_list_))) {
+  } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, zone_list_, get_allocator()))) {
     LOG_WARN("deserialize_string_array failed", K(ret));
   }
   LST_DO_CODE(OB_UNIS_DECODE,

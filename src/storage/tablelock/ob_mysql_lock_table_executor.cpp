@@ -48,8 +48,8 @@ int ObMySQLLockTableExecutor::execute(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = ctx.get_my_session();
-  uint32_t client_session_id = sess->get_client_sessid();
-  uint32_t server_session_id = sess->get_sessid();
+  uint32_t client_session_id = sess->get_client_sid();
+  uint32_t server_session_id = sess->get_server_sid();
   uint64_t client_session_create_ts = sess->get_client_create_time();
   bool is_rollback = false;
   ObTxParam tx_param;

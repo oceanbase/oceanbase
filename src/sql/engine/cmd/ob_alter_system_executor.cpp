@@ -2117,7 +2117,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
         ObSQLSessionMgr *session_mgr = ctx.get_session_mgr();
-        uint32_t session_id = session_info->get_sessid();
+        uint32_t session_id = session_info->get_server_sid();
         if (OB_ISNULL(session_mgr)) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_WARN("session_mgr is null", KR(ret), KR(tmp_ret));

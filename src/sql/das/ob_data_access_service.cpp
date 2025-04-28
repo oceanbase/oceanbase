@@ -416,7 +416,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
-  remote_info.session_id_ = session->get_sessid();
+  remote_info.session_id_ = session->get_server_sid();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
@@ -527,7 +527,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
-  remote_info.session_id_ = session->get_sessid();
+  remote_info.session_id_ = session->get_server_sid();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();

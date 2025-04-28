@@ -214,7 +214,7 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
                    "scanner_trans_result", scanner->get_trans_result());
         } else {
           lock_wait_mgr->on_lock_conflict(
-              const_cast<ObSArray<storage::ObRowConflictInfo>&>(result.get_conflict_info_array()), NULL, session->get_sessid());
+              const_cast<ObSArray<storage::ObRowConflictInfo>&>(result.get_conflict_info_array()), NULL, session->get_server_sid());
           LOG_TRACE("ac = 1 remote report tx result",
                     "scanner_trans_result", session->get_trans_result());
         }

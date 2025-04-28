@@ -83,7 +83,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_FAIL(alter_table_stmt->set_lock_priority(session_info_))) {
       SQL_RESV_LOG(WARN, "set lock priority failed", K(ret), K(session_info_->get_effective_tenant_id()));
     } else {
-      alter_table_stmt->set_client_session_info(session_info_->get_client_sessid(),
+      alter_table_stmt->set_client_session_info(session_info_->get_client_sid(),
                                                 session_info_->get_client_create_time());
       stmt_ = alter_table_stmt;
     }

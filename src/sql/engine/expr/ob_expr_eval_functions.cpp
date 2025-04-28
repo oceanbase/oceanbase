@@ -361,6 +361,7 @@
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "ob_expr_ora_login_user.h"
 #include "ob_expr_to_pinyin.h"
+#include "ob_expr_inner_info_cols_printer.h"
 
 namespace oceanbase
 {
@@ -1277,6 +1278,34 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
   NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
   ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,               /* 820 */
+  NULL, // ObExprIsNot::json_is_not_false,                            /* 821 */
+  NULL, // ObExprIsNot::json_is_not_true,                             /* 822 */
+  NULL, // ObExprArrayExcept::eval_array_except,                      /* 823 */
+  NULL, // ObExprArrayIntersect::eval_array_intersect,                /* 824 */
+  NULL, // ObExprArrayUnion::eval_array_union,                        /* 825 */
+  NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
+  NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
+  NULL, // ObExprCurrentCatalog::eval_current_catalog,                /* 828 */
+  ObExprInnerInfoColsColumnDefPrinter::eval_column_def,               /* 829 */
+  ObExprInnerInfoColsCharLenPrinter::eval_column_char_len,            /* 830 */
+  ObExprInnerInfoColsCharNamePrinter::eval_column_char_name,          /* 831 */
+  ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name,     /* 832 */
+  ObExprInnerInfoColsPrivPrinter::eval_column_priv,                   /* 833 */
+  ObExprInnerInfoColsExtraPrinter::eval_column_extra,                 /* 834 */
+  ObExprInnerInfoColsDataTypePrinter::eval_column_data_type,          /* 835 */
+  ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type,      /* 836 */
+  NULL, // ObExprRbOrCardinalityAggregate::eval_rb_or_cardinality_aggregate, /* 837 */
+  NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
+  NULL, // ObExprRbToArray::eval_rb_to_array,                          /* 839 */
+  NULL, // ObExprRbContains::eval_rb_contains,                         /* 840 */
+  NULL, // ObExprCurrentCatalog::eval_current_catalog,                 /* 841 */
+  NULL, // ObExprCheckCatalogAccess::eval_check_catalog_access,        /* 842 */
+  NULL, // ObExprMap::eval_map,                                        /* 843 */
+  NULL, // ObExprSpivValue::generate_spiv_value,                       /* 844 */
+  NULL, // ObExprMapKeys::eval_map_keys,                               /* 845 */
+  NULL, // ObExprMapValues::eval_map_values,                           /* 846 */
+  NULL, // ObExprSpivDim::generate_spiv_dim,                           /* 847 */
+  ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
