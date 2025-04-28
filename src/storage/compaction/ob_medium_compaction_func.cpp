@@ -695,7 +695,16 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
     if (FAILEDx(init_schema_changed(meta_handle.get_sstable_meta(), medium_info))) {
       STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), "sstable_meta", meta_handle.get_sstable_meta());
     }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE) ret;
+    if (OB_FAIL(ret)) {
+      expected_task_count = 64;
+      LOG_INFO("ERRSIM EN_COMPACTION_MEDIUM_INIT_LARGE_PARALLEL_RANGE", KPC(this), K(expected_task_count));
+      ret = OB_SUCCESS;
+    }
+  }
+#endif
     if (OB_FAIL(ret)) {
     } else if (expected_task_count <= 1) {
       medium_info.clear_parallel_range();

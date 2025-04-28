@@ -22,6 +22,7 @@
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scn.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -163,6 +164,10 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
             already_launch_ = true;
             LOG_INFO("launch major freeze by duty time", K_(tenant_id),
                      "duty_time", tenant_config->major_freeze_duty_time);
+#ifdef ERRSIM
+            SERVER_EVENT_SYNC_ADD("merge_errsim", "daily_merge", K_(tenant_id),
+                "duty_time", tenant_config->major_freeze_duty_time);
+#endif
           }
 
           // launcher will retry when error code is OB_EAGAIN

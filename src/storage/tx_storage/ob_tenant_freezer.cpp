@@ -1716,7 +1716,10 @@ int ObTenantFreezer::do_major_if_need_(const bool need_freeze)
     if (OB_FAIL(do_major_freeze_(curr_frozen_scn))) {
       LOG_WARN("[TenantFreezer] fail to do major freeze", K(tmp_ret));
     } else {
-      // do nothing
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "major_compact_trigger",
+        "freeze_cnt", tenant_info_.freeze_cnt_);
+#endif
     }
   }
   return ret;
