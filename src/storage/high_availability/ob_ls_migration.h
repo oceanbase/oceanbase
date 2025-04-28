@@ -476,6 +476,7 @@ private:
   int inner_generate_check_co_convert_dag(ObLS *ls);
   int try_remove_unneeded_tablets_();
   int try_offline_ls_();
+  int check_tx_data_continue_();
   int record_server_event_();
 
 private:
