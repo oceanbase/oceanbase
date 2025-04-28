@@ -544,6 +544,8 @@ int ObTableRedefinitionTask::copy_table_indexes()
         ObSchemaGetterGuard new_schema_guard;
         if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(dst_tenant_id_, new_schema_guard))) {
           LOG_WARN("failed to refresh schema guard", K(ret));
+        } else if (OB_FAIL(check_and_do_sync_tablet_autoinc_seq(new_schema_guard))) {
+          LOG_WARN("failed to check and do sync tablet autoinc seq", K(ret), K(task_id_));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	

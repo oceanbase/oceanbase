@@ -2376,6 +2376,26 @@ int ObDDLRedefinitionTask::generate_sync_column_partition_level_stats_sql(const 
   return ret;
 }
 
+int ObDDLRedefinitionTask::check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGuard &new_schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  bool has_fts_index = false;
+  if (OB_FAIL(new_schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_), K(target_object_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
+  } else if (OB_FAIL(table_schema->check_has_fts_index(new_schema_guard, has_fts_index))) {
+    LOG_WARN("failed to check has fts index", K(ret), KPC(table_schema));
+  } else if (has_fts_index && table_schema->is_table_with_hidden_pk_column()
+      && !(DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)
+      && OB_FAIL(sync_tablet_autoinc_seq())) {
+    LOG_WARN("fail to sync tablet autoinc seq", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLRedefinitionTask::sync_tablet_autoinc_seq()
 {
   int ret = OB_SUCCESS;

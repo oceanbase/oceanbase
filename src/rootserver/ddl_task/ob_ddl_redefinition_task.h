@@ -252,6 +252,7 @@ protected:
 
   bool check_need_sync_stats_history();
   bool check_need_sync_stats();
+  int check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGuard &new_schema_guard);
   int sync_tablet_autoinc_seq();
   int check_need_rebuild_constraint(const ObTableSchema &table_schema,
                                     ObIArray<uint64_t> &constraint_ids,
