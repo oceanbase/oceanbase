@@ -108,6 +108,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
       OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
     }
   }
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -232,6 +233,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   if (need_subschema_ctx_) {
     OB_UNIS_DECODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
   }
+  OB_UNIS_DECODE(detectable_id_);
   return ret;
 }
 
@@ -297,6 +299,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
       OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
     }
   }
+  OB_UNIS_ADD_LEN(detectable_id_);
   return len;
 }
 
@@ -358,12 +361,12 @@ int ObIDASTaskOp::end_das_task()
   //release op，then rollback transcation
   if (task_started_) {
     if (OB_SUCCESS != (tmp_ret = release_op())) {
-      LOG_WARN("release das task op failed", K(ret), K_(errcode));
+      LOG_WARN("release das task op failed", K(tmp_ret), K_(errcode));
     }
     ret = COVER_SUCC(tmp_ret);
   }
+
   task_started_ = false;
-  ret = COVER_SUCC(tmp_ret);
   errcode_ = OB_SUCCESS;
   return ret;
 }

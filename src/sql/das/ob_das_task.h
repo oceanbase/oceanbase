@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_DAS_OB_DAS_TASK_H_
 #include "share/ob_define.h"
 #include "share/ob_encryption_struct.h"
+#include "share/detect/ob_detectable_id.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -37,6 +38,7 @@ class ObExprFrameInfo;
 class ObDASScanOp;
 class ObDASTaskFactory;
 class ObDasAggregatedTask;
+struct ObDASTCBInterruptInfo;
 
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
@@ -102,6 +104,7 @@ public:
       session_id_(0),
       plan_id_(0),
       plan_hash_(0),
+      detectable_id_(),
       tsc_monitor_info_(nullptr)
   {
     sql_id_[0] = '\0';
@@ -137,6 +140,7 @@ public:
   uint64_t session_id_;
   uint64_t plan_id_;
   uint64_t plan_hash_;
+  ObDetectableId detectable_id_;
   ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
@@ -204,7 +208,7 @@ public:
     UNUSED(memory_limit);
     return OB_NOT_IMPLEMENT;
   }
-  virtual int fill_extra_result()
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
   {
     return common::OB_NOT_IMPLEMENT;
   }
@@ -605,6 +609,7 @@ public:
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
+  int64_t get_task_id() const { return task_id_; }
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store),
                K_(io_read_bytes), K_(ssstore_read_bytes),
                K_(ssstore_read_row_cnt), K_(memstore_read_row_cnt));

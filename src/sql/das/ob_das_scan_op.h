@@ -24,6 +24,56 @@ namespace sql
 {
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
+struct ObDASTCBInterruptInfo;
+
+struct ObDASTCBMemProfileKey {
+  ObDASTCBMemProfileKey(): fake_unique_id_(0), timestamp_(0)
+  {}
+
+  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id)
+  {
+    timestamp_ = timestamp;
+    // [op_id (32bit), thread_id (32bit)]
+    fake_unique_id_ = (((uint64_t)op_id) << 32) | ((uint64_t)0xffffffff & thread_id);
+  }
+
+  void init(const ObDASTCBMemProfileKey &key)
+  {
+    timestamp_ = key.timestamp_;
+    fake_unique_id_ = key.fake_unique_id_;
+  }
+
+  void reset()
+  {
+    fake_unique_id_ = 0;
+    timestamp_ = 0;
+  }
+
+  inline uint64_t hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val = common::murmurhash(&fake_unique_id_, sizeof(uint64_t), 0);
+    hash_val = common::murmurhash(&timestamp_, sizeof(uint64_t), hash_val);
+    return hash_val;
+  }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
+  inline bool operator==(const ObDASTCBMemProfileKey& key) const
+  {
+    return fake_unique_id_ == key.fake_unique_id_ && timestamp_ == key.timestamp_;
+  }
+
+  inline bool is_valid()
+  {
+    return (fake_unique_id_ > 0) && (timestamp_ > 0);
+  }
+
+  uint64_t fake_unique_id_;
+  uint64_t timestamp_;
+
+  TO_STRING_KV(K(fake_unique_id_), K(timestamp_));
+  OB_UNIS_VERSION(1);
+};
 
 struct ObDASScanCtDef : ObDASBaseCtDef
 {
@@ -123,7 +173,12 @@ public:
       scan_allocator_("TableScanAlloc"),
       sample_info_(nullptr),
       is_for_foreign_check_(false),
-      tsc_monitor_info_(nullptr)
+      tsc_monitor_info_(nullptr),
+      task_count_(1),
+      scan_op_id_(common::OB_INVALID_ID),
+      scan_rows_size_(common::OB_INVALID_ID),
+      row_width_(common::OB_INVALID_ID),
+      das_tasks_key_()
   { }
 
   virtual ~ObDASScanRtDef();
@@ -140,8 +195,10 @@ public:
                        K_(tx_lock_timeout),
                        K_(sql_mode),
                        K_(scan_flag),
-                       K_(tsc_monitor_info));
-
+                       K_(tsc_monitor_info),
+                       K_(scan_op_id),
+                       K_(scan_rows_size),
+                       K_(das_tasks_key));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -164,6 +221,12 @@ public:
   const common::SampleInfo *sample_info_; //Block(Row)SampleScan, only support local das scan
   bool is_for_foreign_check_;
   ObTSCMonitorInfo *tsc_monitor_info_;
+  int64_t task_count_;  // not use
+  uint64_t scan_op_id_;
+  int64_t scan_rows_size_;
+  int64_t row_width_;   // no use
+  ObDASTCBMemProfileKey das_tasks_key_;
+
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
@@ -191,7 +254,7 @@ public:
 
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
-  virtual int fill_extra_result() override;
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return scan_ctdef_; }
