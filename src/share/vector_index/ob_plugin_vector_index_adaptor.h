@@ -294,7 +294,8 @@ public:
       query_vector_(),
       query_scn_(),
       row_iter_(nullptr),
-      is_last_search_(false) {};
+      is_last_search_(false),
+      scan_param_(nullptr) {};
   ~ObVectorQueryConditions() { query_vector_.reset(); }
   bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
   void reset() {
@@ -315,6 +316,7 @@ public:
   common::ObNewRowIterator *row_iter_; // index_snapshot_data_table iter
   int64_t extra_column_count_;
   bool is_last_search_;
+  ObTableScanParam *scan_param_;  // scan param of row_iter_
 };
 
 struct ObVidBound {
@@ -676,6 +678,7 @@ public:
 
   ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
   int set_snapshot_key_prefix(ObString &key_prefix) { return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_); }
+  int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
   int get_vid_bound(ObVidBound &bound);

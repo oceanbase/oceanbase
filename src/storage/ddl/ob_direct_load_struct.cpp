@@ -3425,7 +3425,7 @@ int ObDirectLoadSliceWriter::inner_fill_hnsw_vector_index_data(
     LOG_WARN("invalid argument", K(ret), K(vec_idx_slice_store), KP(storage_schema), K(snapshot_version));
   } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(tablet_direct_load_mgr_->get_ls_id(), false/*is_for_read*/, timeout_us, tx_desc))) {
     LOG_WARN("fail to get tx_desc", K(ret));
-  } else if (OB_FAIL(vec_idx_slice_store.serialize_vector_index(&allocator_, tx_desc, lob_inrow_threshold, index_type))) {
+  } else if (OB_FAIL(vec_idx_slice_store.serialize_vector_index(&allocator_, tx_desc, lob_inrow_threshold, index_type, snapshot_version))) {
     LOG_WARN("fail to do vector index snapshot data serialize", K(ret));
   } else if (OB_FAIL(inner_fill_vector_index_data(macro_block_slice_store, &vec_idx_slice_store, snapshot_version, storage_schema, start_scn, index_type, insert_monitor))) {
     LOG_WARN("fail to inner fill vector index data", K(ret));
@@ -4148,7 +4148,8 @@ int ObVectorIndexSliceStore::serialize_vector_index(
     ObIAllocator *allocator,
     ObTxDesc *tx_desc,
     int64_t lob_inrow_threshold,
-    ObVectorIndexAlgorithmType &type)
+    ObVectorIndexAlgorithmType &type,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   tmp_allocator_.reuse();
@@ -4190,6 +4191,8 @@ int ObVectorIndexSliceStore::serialize_vector_index(
       ObPluginVectorIndexAdaptor *adp = adaptor_guard.get_adatper();
       if (OB_FAIL(adp->check_snap_hnswsq_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
+      } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), snapshot_version, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
+        LOG_WARN("failed to set snapshot key prefix", K(ret), K(tablet_id_.id()), K(snapshot_version));
       } else if (OB_FAIL(adp->serialize(allocator, param, cb))) {
         if (OB_NOT_INIT == ret) {
           // ignore // no data in slice store

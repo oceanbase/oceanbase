@@ -598,7 +598,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid row", K(ret), K(row));
-    } else if (adapter->get_snapshot_key_prefix().compare(row->storage_datums_[0].get_string()) != 0) {
+    } else if (adapter->get_snapshot_key_prefix().empty() ||
+               !row->storage_datums_[0].get_string().prefix_match(adapter->get_snapshot_key_prefix())) {
       ObString key_prefix;
       if (OB_ISNULL(vector_index_service)) {
         ret = OB_ERR_UNEXPECTED;
@@ -642,7 +643,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         ObVectorIndexSerializer index_seri(tmp_allocator);
         ObVectorIndexMemData *snap_memdata = new_adapter->get_snap_data_();
         // name rule: TabletID_SCN_hnsw_(sq_)data_partn, we need TabletID_SCN
-        key_prefix = key_prefix.split_on("_hnsw_");
+        key_prefix = key_prefix.split_on("_hnsw_");  // hgraph?
         if (OB_ISNULL(snap_memdata)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("snap memdata is null", K(ret));
