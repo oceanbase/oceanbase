@@ -6201,8 +6201,7 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
       if (OB_SUCC(ret)) {
         if (lib::is_mysql_mode()) {
           for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
-            if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_ ||
-                DEPENDENCY_SEQUENCE == prepare_result.ref_objects_.at(i).object_type_) {
+            if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_) {
               // do nothing, no need collect table schema in mysql mode
             } else if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
               LOG_WARN("add dependency object failed", K(ret));
@@ -6211,17 +6210,13 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
         } else {
             // sql contain package var or package udf
           for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
-            if (DEPENDENCY_SEQUENCE == prepare_result.ref_objects_.at(i).object_type_) {
-              // do nothing, no need collect sequence schema
-            } else {
-                if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
-                    DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
-                    DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
-                  OX (func.set_external_state());
-                }
-                if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
-                  LOG_WARN("add dependency object failed", K(ret));
+              if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
+                  DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
+                  DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
+                OX (func.set_external_state());
               }
+              if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
+                LOG_WARN("add dependency object failed", K(ret));
             }
           }
           OX (static_sql.set_row_desc(record_type));
@@ -8064,8 +8059,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
     if (OB_SUCC(ret)) {
       if (lib::is_mysql_mode()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
-          if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_ ||
-              DEPENDENCY_SEQUENCE == prepare_result.ref_objects_.at(i).object_type_) {
+          if (DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_) {
             // do nothing, no need collect table schema in mysql mode
           } else if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
             LOG_WARN("add dependency object failed", K(ret));
@@ -8074,17 +8068,13 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
       } else {
         // sql contain package var or package udf
         for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
-          if (DEPENDENCY_SEQUENCE == prepare_result.ref_objects_.at(i).object_type_) {
-            // do nothing, no need collect sequence schema
-          } else {
-            if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
-                DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
-                DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
-              OX (func.set_external_state());
-            }
-            if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
-              LOG_WARN("add dependency object failed", K(ret));
-            }
+          if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
+              DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
+              DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
+            OX (func.set_external_state());
+          }
+          if (OB_FAIL(func.add_dependency_object(prepare_result.ref_objects_.at(i)))) {
+            LOG_WARN("add dependency object failed", K(ret));
           }
         }
       }
