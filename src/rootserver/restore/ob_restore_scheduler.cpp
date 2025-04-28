@@ -410,7 +410,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (OB_FAIL(wait_sys_job_ready_(job_info, is_sys_ready))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_CREATE_STANDBY_TENANT_FAILED;
+      ret = OB_RESTORE_TENANT_FAILED;
       LOG_WARN("sys restore job has failed, set user restore job in failure too", K(ret), K(job_info));
     } else {
       LOG_WARN("fail to wait sys job ready", K(ret), K(job_info));
@@ -429,7 +429,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
   }
 
-  if (OB_IO_ERROR == ret || OB_CREATE_STANDBY_TENANT_FAILED == ret ||  OB_SUCC(ret)) {
+  if (OB_IO_ERROR == ret || OB_RESTORE_TENANT_FAILED == ret ||  OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
       LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
@@ -476,6 +476,9 @@ int ObRestoreScheduler::wait_sys_job_ready_(const ObPhysicalRestoreJob &job, boo
       LOG_WARN("failed to init restore op", KR(ret));
     } else if (OB_FAIL(restore_op.get_job(job.get_initiator_job_id(), sys_job))) {
       LOG_WARN("failed to get sys restore job history", KR(ret), K(job));
+    } else if (PHYSICAL_RESTORE_FAIL == sys_job.get_status()) {
+      ret = OB_RESTORE_TENANT_FAILED;
+      LOG_WARN("sys restore job has failed", KR(ret), K(sys_job));
     } else if (PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH == sys_job.get_status()) {
       is_ready = true;
     }
