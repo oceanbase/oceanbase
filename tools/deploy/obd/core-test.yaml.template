@@ -3,8 +3,8 @@ oceanbase-ce:
   tag: latest
   include: obd/observer.include.yaml
   global: 
-    memory_limit: '8G'
-    system_memory: '1G'
+    memory_limit: '10G'
+    system_memory: '2G'
     datafile_size: '20G'
     cpu_count: '24'
     _system_tenant_limit_mode: '2'
