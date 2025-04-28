@@ -217,6 +217,8 @@ int ObTxLogCbPool::free_log_cb_group(ObTxLogCbGroup *group_ptr)
   } else if (OB_FAIL(group_ptr->check_and_reset_log_cbs(false))) {
     TRANS_LOG(WARN, "There are some busy log cbs in the group", K(ret), KPC(group_ptr), KPC(this));
   } else {
+    TRANS_LOG(INFO, "[Log Cb Group Life] return a log cb group", K(ret), K(occupy_tx_id),
+              K(start_occupy_ts), KPC(group_ptr), KPC(this));
     stat_.revert_group(ObTimeUtility::fast_current_time() - start_occupy_ts, start_occupy_ts);
 
     SpinWLockGuard free_list_guard(free_list_lock_);
@@ -224,11 +226,6 @@ int ObTxLogCbPool::free_log_cb_group(ObTxLogCbGroup *group_ptr)
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "insert into free group list failed", K(ret), KPC(group_ptr), KPC(this));
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    TRANS_LOG(INFO, "[Log Cb Group Life] return a log cb group", K(ret), K(occupy_tx_id),
-              K(start_occupy_ts), KPC(group_ptr), KPC(this));
   }
 
   return ret;
