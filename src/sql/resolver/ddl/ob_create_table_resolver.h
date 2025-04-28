@@ -157,6 +157,7 @@ private:
   common::hash::ObHashSet<share::schema::ObIndexNameHashWrapper> index_aux_name_set_;
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
+  common::ObSEArray<ObString, 16> cols_with_nullable_specified_;//store cols with explicitly specified defination for CTAS
 
   uint64_t cur_udt_set_id_;
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;

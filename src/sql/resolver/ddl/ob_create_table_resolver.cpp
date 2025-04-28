@@ -14,6 +14,7 @@
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 #include "share/ob_index_builder_util.h"
 #include "observer/ob_server.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
@@ -1690,6 +1691,23 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           }
 
           if (OB_SUCC(ret)) {
+            if (is_mysql_mode()) {
+              // In MySQL mode, when column definitions are provided in a CTAS,
+              // they are always complete (name,type,attri,...) and will ignore the deduced attributes from SELECT statement.
+              if (OB_FAIL(cols_with_nullable_specified_.push_back(column.get_column_name_str()))) {
+                SQL_RESV_LOG(WARN, "push back column with defination", K(ret));
+              }
+            } else if (is_oracle_mode) {
+              if (!stat.is_set_not_null_ && !stat.is_set_null_) {
+                // In Oracle mode, the column definitions provided in CTAS are incomplete (cannot specify column types).
+                // When column attributes are not explicitly specified, the values are derived from the SELECT statement.
+              } else if (OB_FAIL(cols_with_nullable_specified_.push_back(column.get_column_name_str()))) {
+                SQL_RESV_LOG(WARN, "push back column with defination", K(ret));
+              }
+            }
+          }
+
+          if (OB_SUCC(ret)) {
             if (stat.is_unique_key_) {
               //consider column with unique_key as a special index node,
               //then resolve it in resolve_index_node()
@@ -2317,30 +2335,36 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               }
             }
             if (OB_SUCC(ret)) {
-              ObColumnSchemaV2 *org_column =
-                  table_schema.get_column_schema_by_idx(i + hidden_column_num);
-              org_column->set_meta_type(column.get_meta_type());
-              org_column->set_charset_type(column.get_charset_type());
-              org_column->set_collation_type(column.get_collation_type());
-              org_column->set_accuracy(column.get_accuracy());
-              // nullable property of org_column instead of column should be set.
-              if (OB_FAIL(set_nullable_for_cta_column(select_stmt,
-                                                      *org_column,
-                                                      expr,
-                                                      table_name_,
-                                                      *allocator_,
-                                                      stmt_))) {
-                LOG_WARN("failed to check and set nullable for cta.", K(ret));
-              } else if (column.is_enum_or_set()) {
-                if (OB_FAIL(org_column->set_extended_type_info(column.get_extended_type_info()))) {
-                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
-                }
-              } else if (is_oracle_mode() && column.is_xmltype()) {
-                org_column->set_sub_data_type(T_OBJ_XML);
-                // udt column is varbinary used for null bitmap
-                org_column->set_udt_set_id(gen_udt_set_id());
-                if (OB_FAIL(add_udt_hidden_column(table_schema, *org_column))) {
-                  LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
+              ObColumnSchemaV2 *org_column = table_schema.get_column_schema_by_idx(i + hidden_column_num);
+              if (OB_ISNULL(org_column)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("org_column is null", K(ret));
+              } else {
+                org_column->set_meta_type(column.get_meta_type());
+                org_column->set_charset_type(column.get_charset_type());
+                org_column->set_collation_type(column.get_collation_type());
+                org_column->set_accuracy(column.get_accuracy());
+                bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_,
+                                                                     org_column->get_column_name_str());
+                // nullable property of org_column instead of column should be set.
+                if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt,
+                                                                             *org_column,
+                                                                             expr,
+                                                                             table_name_,
+                                                                             *allocator_,
+                                                                             stmt_))) {
+                  LOG_WARN("failed to check and set nullable for cta.", K(ret));
+                } else if (column.is_enum_or_set()) {
+                  if (OB_FAIL(org_column->set_extended_type_info(column.get_extended_type_info()))) {
+                    LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                  }
+                } else if (is_oracle_mode() && column.is_xmltype()) {
+                  org_column->set_sub_data_type(T_OBJ_XML);
+                  // udt column is varbinary used for null bitmap
+                  org_column->set_udt_set_id(gen_udt_set_id());
+                  if (OB_FAIL(add_udt_hidden_column(table_schema, *org_column))) {
+                    LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
+                  }
                 }
               }
             }
@@ -2350,6 +2374,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_column_id(gen_column_id());
             ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
             if (OB_NOT_NULL(org_column)) {
+              bool need_set_nullable = !ObOptimizerUtil::find_item(cols_with_nullable_specified_,
+                                                                   org_column->get_column_name_str());
               //同名列存在, 为了和mysql保持一致, 需要调整原列的顺序
               ObColumnSchemaV2 new_column;
               if (OB_FAIL(new_column.assign(*org_column))) {
@@ -2362,15 +2388,20 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               if (OB_FAIL(ret)) {
               } else if (1 == table_schema.get_column_count()) {
                 //do nothing, 只有一列就不用调整了
-                if (OB_FAIL(set_nullable_for_cta_column(select_stmt, *org_column, expr, table_name_, *allocator_, stmt_))) {
+                if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt,
+                                                                             *org_column,
+                                                                             expr,
+                                                                             table_name_,
+                                                                             *allocator_,
+                                                                             stmt_))) {
                   LOG_WARN("failed to check and set nullable for cta.", K(ret));
                 }
-              } else if (OB_FAIL(set_nullable_for_cta_column(select_stmt,
-                                                            new_column,
-                                                            expr,
-                                                            table_name_,
-                                                            *allocator_,
-                                                            stmt_))) {
+              } else if (need_set_nullable && OB_FAIL(set_nullable_for_cta_column(select_stmt,
+                                                                                  new_column,
+                                                                                  expr,
+                                                                                  table_name_,
+                                                                                  *allocator_,
+                                                                                  stmt_))) {
                 LOG_WARN("failed to check and set nullable for cta.", K(ret));
               } else if (OB_FAIL(table_schema.delete_column(org_column->get_column_name_str()))) {
                 LOG_WARN("delete column failed", K(ret), K(new_column.get_column_name_str()));
