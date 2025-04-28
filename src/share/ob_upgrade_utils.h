@@ -186,7 +186,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 30;
+  static const int64_t DATA_VERSION_NUM = 31;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -360,6 +360,8 @@ public:
 private:
   int post_upgrade_for_dynamic_partition();
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 0)
 
 /* =========== special upgrade processor end   ============= */
 
