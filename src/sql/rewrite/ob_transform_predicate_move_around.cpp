@@ -42,7 +42,10 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
 {
   int ret = OB_SUCCESS;
   UNUSED(parent_stmts);
-  if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ctx", K(ret));
+  } else if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
     LOG_WARN("failed to do transform_predicate_move_around", K(ret));
   } else if (transed_stmts_.empty() || !trans_happened) {
   // transform not happened actually
@@ -50,8 +53,14 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
     LOG_WARN("sort sort transed stmts failed", K(ret));
   } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
     LOG_WARN("add transform hint failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, null_constraints_))) {
+    LOG_WARN("add param null constraint failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, not_null_constraints_))) {
+    LOG_WARN("add param not null constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->equal_param_constraints_, equal_param_constraints_))) {
+    LOG_WARN("add param equal constraint failed", K(ret));
   }
-  transed_stmts_.reuse();
+  reset();
   return ret;
 }
 
@@ -271,7 +280,10 @@ int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(
                                                             bool &trans_happened) {
   int ret = OB_SUCCESS;
   UNUSED(parent_stmts);
-  if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ctx", K(ret));
+  } else if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
     LOG_WARN("failed to do transform_predicate_move_around", K(ret));
   } else if (transed_stmts_.empty() || !trans_happened) {
     LOG_TRACE("outline data trans not happened");
@@ -279,10 +291,16 @@ int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(
     LOG_WARN("sort sort transed stmts failed", K(ret));
   } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
     LOG_WARN("add transform hint failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, null_constraints_))) {
+    LOG_WARN("add param null constraint failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, not_null_constraints_))) {
+    LOG_WARN("add param not null constraint failed", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(ctx_->equal_param_constraints_, equal_param_constraints_))) {
+    LOG_WARN("add param equal constraint failed", K(ret));
   } else {
     ctx_->trans_list_loc_ += transed_stmts_.count();
   }
-  transed_stmts_.reuse();
+  reset();
   return ret;
 }
 
@@ -833,7 +851,7 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
         LOG_WARN("push back preds failed", K(ret));
       } else {/*do nothing*/}
     }
-    if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
+    if (FAILEDx(append(equal_param_constraints_, context.equal_param_info_))) {
       LOG_WARN("append equal param info failed", K(ret));
     } else {/*do nothing*/}
   } else if (stmt->get_set_op() == ObSelectStmt::INTERSECT) {
@@ -864,7 +882,7 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
         LOG_WARN("push back preds failed", K(ret));
       } else {/*do nothing*/}
     }
-    if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
+    if (FAILEDx(append(equal_param_constraints_, context.equal_param_info_))) {
       LOG_WARN("append equal param info failed", K(ret));
     } else {/*do nothing*/}
   } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
@@ -3717,7 +3735,7 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
           LOG_WARN("formalize equal expr failed", K(ret));
         } else {
           for (int64_t j = 0; j < constraints.count(); ++j) {
-            if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, constraints.at(j)))) {
+            if (OB_FAIL(null_constraints_.push_back(constraints.at(j)))) {
               LOG_WARN("failed to add param null constraint", K(ret));
             }
           }
@@ -3754,7 +3772,7 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
         LOG_WARN("failed to copy expr", K(ret));
       } else if (OB_FAIL(del_upd_stmt->get_sharding_conditions().push_back(sharding_expr))) {
         LOG_WARN("failed to add condition expr", K(ret));
-      } else if (is_not_null && OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
+      } else if (is_not_null && OB_FAIL(append(not_null_constraints_, constraints))) {
         LOG_WARN("failed to add param not null constraint", K(ret));
       } else if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, static_cast<ObDMLStmt *>(del_upd_stmt)))) {
         LOG_WARN("append failed", K(ret));
@@ -3826,7 +3844,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_dual_stmt(
           LOG_WARN("is_null expr is null", K(ret));
         } else if (OB_FAIL(equal_expr->formalize(ctx_->session_info_))) {
           LOG_WARN("formalize equal expr failed", K(ret));
-        } else if (!sel_expr->is_const_raw_expr() && OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, sel_expr))) {
+        } else if (!sel_expr->is_const_raw_expr() && OB_FAIL(null_constraints_.push_back(sel_expr))) {
           LOG_WARN("failed to add param null constraint", K(ret));
         } else {}
       } else if (OB_ISNULL(column_expr = stmt.get_column_expr_by_id(view.table_id_,
@@ -3851,7 +3869,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_dual_stmt(
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(preds.push_back(equal_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (is_not_null && OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
+      } else if (is_not_null && OB_FAIL(append(not_null_constraints_, constraints))) {
         LOG_WARN("failed to add param not null constraint", K(ret));
       }
     }
@@ -4278,4 +4296,24 @@ int ObTransformPredicateMoveAround::filter_lateral_correlated_preds(TableItem &t
     }
   }
   return ret;
+}
+
+void ObTransformPredicateMoveAround::reset()
+{
+  for (int64_t i = 0; i < stmt_pullup_preds_.count(); ++i) {
+    if (NULL != stmt_pullup_preds_.at(i)) {
+      stmt_pullup_preds_.at(i)->~PullupPreds();
+      stmt_pullup_preds_.at(i) = NULL;
+    }
+  }
+  stmt_pullup_preds_.reset();
+  temp_table_infos_.reset();
+  stmt_map_.reuse();
+  transed_stmts_.reset();
+  applied_hints_.reset();
+  temp_table_infos_.reset();
+  null_constraints_.reset();
+  not_null_constraints_.reset();
+  equal_param_constraints_.reset();
+  real_happened_ = false;
 }
