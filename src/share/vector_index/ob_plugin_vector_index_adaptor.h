@@ -786,7 +786,7 @@ private:
   constexpr static uint32_t VEC_INDEX_ADAPTER_MAX_IDLE_COUNT = 3;
   constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
   constexpr static uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
-  constexpr static int64_t  VSAG_MAX_EF_SEARCH = 4096;
+  constexpr static int64_t  VSAG_MAX_EF_SEARCH = 1000;
   constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
     "l2",
     "ip",
