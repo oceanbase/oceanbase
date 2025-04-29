@@ -2828,6 +2828,7 @@ typedef enum ObItemType
   // logservice access point
   T_BOOTSTRAP_INFO = 4846,
   T_LOGSERVICE_ACCESS_POINT = 4847,
+  T_UNIT_LIST = 4848,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
