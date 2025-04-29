@@ -2239,6 +2239,11 @@ int ObTableLockService::process_obj_lock_with_prio_(ObTableLockCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("can not push lock", K(ret), K(ctx));
   } else {
+    if (ctx.task_type_ == ObTableLockTaskType::LOCK_ALONE_TABLET) {
+      ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE_WITHOUT_CHECK;
+    } else {
+      ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE;
+    }
     ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE;
     if (OB_FAIL(process_obj_lock_(ctx, lock_mode, lock_owner, ls_lock_map))) {
       LOG_WARN("process_obj_lock_ failed", K(ret), K(ctx));

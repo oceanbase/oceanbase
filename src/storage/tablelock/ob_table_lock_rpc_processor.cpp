@@ -58,7 +58,8 @@ int check_exist(const ObLockTaskBatchRequest &arg,
   mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
   share::SCN unused_trans_version;// will be removed later
   if (ObTableLockTaskType::LOCK_ALONE_TABLET == arg.task_type_ ||
-      ObTableLockTaskType::UNLOCK_ALONE_TABLET == arg.task_type_) {
+      ObTableLockTaskType::UNLOCK_ALONE_TABLET == arg.task_type_ ||
+      ObTableLockTaskType::ADD_LOCK_INTO_QUEUE_WITHOUT_CHECK == arg.task_type_) {
     // alone tablet does not check exist
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -280,7 +281,8 @@ int ObBatchLockTaskP::process()
         ret = BATCH_PROCESS(arg_, pre_check_lock, result_);
         break;
       }
-      case ObTableLockTaskType::ADD_LOCK_INTO_QUEUE: {
+      case ObTableLockTaskType::ADD_LOCK_INTO_QUEUE:
+      case ObTableLockTaskType::ADD_LOCK_INTO_QUEUE_WITHOUT_CHECK: {
         ret = BATCH_PROCESS(arg_, add_lock_into_queue, result_);
         break;
       }
