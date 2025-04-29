@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "src/observer/ob_server.h"
 #include "src/share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/share/stat/ob_opt_stat_manager.h"
 #include "lib/random/ob_random.h"
 #include "share/stat/ob_opt_stat_manager.h"
 
@@ -1587,11 +1588,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
   } else {
     SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, saved_value) {
       int64_t nested_count = -1;
-      ObSqlString old_db_name;
-      int64_t old_db_id = -1;
       int64_t old_trx_lock_timeout = -1;
       bool need_restore_session = false;
-      bool need_reset_default_database = false;
       bool need_reset_trx_lock_timeout = false;
       common::sqlclient::ObISQLConnection *conn = NULL;
       ctx.set_is_online_stats_gathering(true);
@@ -1603,11 +1601,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                                          schema_guard,
                                                                          saved_value,
                                                                          nested_count,
-                                                                         old_db_name,
-                                                                         old_db_id,
                                                                          old_trx_lock_timeout,
                                                                          need_restore_session,
-                                                                         need_reset_default_database,
                                                                          need_reset_trx_lock_timeout,
                                                                          conn))) {
         LOG_WARN("failed to prepare conn and store session for online stats", K(ret));
@@ -1659,10 +1654,7 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
         if (OB_SUCCESS != (tmp_ret = restore_session_for_online_stat(ctx.get_my_session(),
                                                                      saved_value,
                                                                      nested_count,
-                                                                     old_db_name,
-                                                                     old_db_id,
                                                                      old_trx_lock_timeout,
-                                                                     need_reset_default_database,
                                                                      need_reset_trx_lock_timeout))) {
           ret = COVER_SUCC(tmp_ret);
           LOG_WARN("failed to restore session", K(tmp_ret));
@@ -1686,11 +1678,8 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
                                                                          share::schema::ObSchemaGetterGuard *schema_guard,
                                                                          sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                                                          int64_t &nested_count,
-                                                                         ObSqlString &old_db_name,
-                                                                         int64_t &old_db_id,
                                                                          int64_t &old_trx_lock_timeout,
                                                                          bool &need_restore_session,
-                                                                         bool &need_reset_default_database,
                                                                          bool &need_reset_trx_lock_timeout,
                                                                          sqlclient::ObISQLConnection *&conn)
 {
@@ -1709,44 +1698,31 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
     session->set_query_start_time(ObTimeUtility::current_time());
     session->set_inner_session();
     session->set_nested_count(-1);
-    if (OB_FAIL(old_db_name.append(session->get_database_name()))) {
-      LOG_WARN("failed to append", K(ret));
+    //2.2 modify seesion compatible mode
+    ObObj mysql_mode;
+    mysql_mode.set_int(0);
+    if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
+      LOG_WARN("failed to update sys variable for compatibility mode", K(ret));
     } else {
-      old_db_id = session->get_database_id();
-      //2.2 modify seesion compatible mode
-      ObObj mysql_mode;
-      mysql_mode.set_int(0);
-      if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
-        LOG_WARN("failed to update sys variable for compatibility mode", K(ret));
+      //2.3.modify session database name and database id and catalog id
+      if (OB_FAIL(session->set_internal_catalog_db())) {
+        LOG_WARN("failed to set session catalog and database", K(ret));
       } else {
-        //2.3.modify session database name and database id
-        const share::schema::ObDatabaseSchema *db_schema = NULL;
-        if (OB_FAIL(schema_guard->get_database_schema(MTL_ID(), OB_SYS_DATABASE_ID, db_schema))) {
-          LOG_WARN("failed to get database schema", K(ret));
-        } else if (OB_ISNULL(db_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(db_schema));
-        } else if (OB_FAIL(session->set_default_database(db_schema->get_database_name_str()))) {
-          LOG_WARN("faile to set default database", K(ret));
+        //2.4 modify session trx lock timeout
+        old_trx_lock_timeout = session->get_trx_lock_timeout();
+        ObObj trx_lock_timeout;
+        trx_lock_timeout.set_int(0);
+        if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRX_LOCK_TIMEOUT, trx_lock_timeout))) {
+          LOG_WARN("failed to update sys variable for trx lock timeout", K(ret));
         } else {
-          session->set_database_id(db_schema->get_database_id());
-          need_reset_default_database = true;
-          //2.3 modify session trx lock timeout
-          old_trx_lock_timeout = session->get_trx_lock_timeout();
-          ObObj trx_lock_timeout;
-          trx_lock_timeout.set_int(0);
-          if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRX_LOCK_TIMEOUT, trx_lock_timeout))) {
-            LOG_WARN("failed to update sys variable for trx lock timeout", K(ret));
-          } else {
-            need_reset_trx_lock_timeout = true;
-            //3.get conn to update stats
-            observer::ObInnerSQLConnectionPool *pool = NULL;
-            if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected error", K(ret), K(pool));
-            } else if (OB_FAIL(pool->acquire(session, conn))) {
-              LOG_WARN("failed to acquire conn", K(ret));
-            }
+          need_reset_trx_lock_timeout = true;
+          //3.get conn to update stats
+          observer::ObInnerSQLConnectionPool *pool = NULL;
+          if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(pool));
+          } else if (OB_FAIL(pool->acquire(session, conn))) {
+            LOG_WARN("failed to acquire conn", K(ret));
           }
         }
       }
@@ -1758,10 +1734,7 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
 int ObDbmsStatsExecutor::restore_session_for_online_stat(sql::ObSQLSessionInfo *session,
                                                          sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                                          int64_t nested_count,
-                                                         ObSqlString &old_db_name,
-                                                         int64_t old_db_id,
                                                          int64_t old_trx_lock_timeout,
-                                                         bool need_reset_default_database,
                                                          bool need_reset_trx_lock_timeout)
 {
   int ret = OB_SUCCESS;
@@ -1785,17 +1758,7 @@ int ObDbmsStatsExecutor::restore_session_for_online_stat(sql::ObSQLSessionInfo *
         LOG_WARN("failed to update sys variable for compatibility mode", K(tmp_ret));
       }
     }
-    //3.restore session database name and database id
-    if (need_reset_default_database) {
-      int tmp_ret = session->set_default_database(old_db_name.string());
-      if (tmp_ret != OB_SUCCESS) {
-        ret = COVER_SUCC(tmp_ret);
-        LOG_WARN("failed to reset default database", K(tmp_ret), K(old_db_name));
-      } else {
-        session->set_database_id(old_db_id);
-      }
-    }
-    //4.restore trx lock timeout
+    //3.restore trx lock timeout
     if (need_reset_trx_lock_timeout) {
       ObObj trx_lock_timeout;
       trx_lock_timeout.set_int(old_trx_lock_timeout);

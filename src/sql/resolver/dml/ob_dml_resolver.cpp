@@ -45,6 +45,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/ob_sql_mock_schema_utils.h"
 #include "sql/resolver/dml/ob_transpose_resolver.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
@@ -7559,12 +7560,14 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
 int ObDMLResolver::expand_view(TableItem &view_item)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool is_oracle_mode = lib::is_oracle_mode();
   int64_t org_session_id = 0;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   uint64_t database_id = OB_INVALID_ID;
   ObString old_database_name;
   uint64_t old_database_id = OB_INVALID_ID;
+  share::ObSwitchCatalogHelper switch_catalog_helper;
   if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(session_info_)
       || OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7599,6 +7602,11 @@ int ObDMLResolver::expand_view(TableItem &view_item)
       } else {
         session_info_->set_database_id(database_id);
       }
+    } else {
+      if (session_info_->is_in_external_catalog()
+          && OB_FAIL(session_info_->set_internal_catalog_db(&switch_catalog_helper))) {
+        LOG_WARN("failed to set catalog", K(ret));
+      }
     }
     if (OB_SUCC(ret) && OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
@@ -7606,11 +7614,16 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     params_.is_expanding_view_ = false;
     if (!is_oracle_mode) {
       params_.schema_checker_->get_schema_guard()->set_session_id(org_session_id);
+      if (switch_catalog_helper.is_set()) {
+        if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
+        }
+      }
     } else {
-      int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
         ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-        LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+        LOG_WARN("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
       } else {
         session_info_->set_database_id(old_database_id);
       }

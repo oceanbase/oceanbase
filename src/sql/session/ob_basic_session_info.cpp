@@ -24,6 +24,7 @@
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "observer/ob_server.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 
 using namespace oceanbase::common;
@@ -883,6 +884,49 @@ int ObBasicSessionInfo::set_driver_version(const ObString &driver_version)
     LOG_WARN("failed to write driver_version to string_buf_", K(ret));
   } else {}
   return ret;
+}
+
+int ObBasicSessionInfo::set_default_catalog_db(uint64_t catalog_id,
+                                               uint64_t db_id,
+                                               const common::ObString &database_name,
+                                               share::ObSwitchCatalogHelper* switch_catalog_helper)
+{
+  int ret = OB_SUCCESS;
+  ObObj catalog_id_obj;
+  catalog_id_obj.set_uint64(catalog_id);
+  if (switch_catalog_helper != NULL
+      && OB_FAIL(switch_catalog_helper->set(get_current_default_catalog(),
+                                            get_database_id(),
+                                            get_database_name(),
+                                            this))) {
+    LOG_WARN("failed to set switch catalog helper", K(ret));
+  } else if (OB_FAIL(update_sys_variable(share::SYS_VAR__CURRENT_DEFAULT_CATALOG, catalog_id_obj))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(set_default_database(database_name))) {
+    LOG_WARN("faile to set default database", K(ret));
+  } else {
+    set_database_id(db_id);
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_internal_catalog_db(share::ObSwitchCatalogHelper* switch_catalog_helper)
+{
+  int ret = OB_SUCCESS;
+  return set_default_catalog_db(OB_INTERNAL_CATALOG_ID,
+                                OB_SYS_DATABASE_ID,
+                                OB_SYS_DATABASE_NAME,
+                                switch_catalog_helper);
+}
+
+bool ObBasicSessionInfo::is_in_internal_catalog()
+{
+  return get_current_default_catalog() == OB_INTERNAL_CATALOG_ID;
+}
+
+bool ObBasicSessionInfo::is_in_external_catalog()
+{
+  return get_current_default_catalog() != OB_INTERNAL_CATALOG_ID;
 }
 
 int ObBasicSessionInfo::set_default_database(const ObString &database_name,
@@ -6420,7 +6464,10 @@ int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) cons
   return OB_SUCCESS;
 }
 
-uint64_t ObBasicSessionInfo::get_current_default_catalog() const { return sys_vars_cache_.get_current_default_catalog(); }
+uint64_t ObBasicSessionInfo::get_current_default_catalog() const
+{
+  return sys_vars_cache_.get_current_default_catalog();
+}
 
 int ObBasicSessionInfo::get_security_version(uint64_t &security_version) const
 {

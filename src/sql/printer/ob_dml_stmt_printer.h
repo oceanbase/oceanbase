@@ -43,7 +43,7 @@ namespace sql
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
-      if (!catalog_name.empty() && !ObCatalogUtils::is_internal_catalog_name(catalog_name)) { \
+      if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
         PRINT_IDENT_WITH_QUOT(catalog_name);                               \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
@@ -150,6 +150,11 @@ public:
   int print_search_and_cycle(const ObSelectStmt *sub_select_stmt);
   bool is_root_stmt() const { return is_root_; }
   int print_with();
+  void set_is_print_view_definition(bool is_print_view_definition) {
+    print_params_.print_view_definition_ = is_print_view_definition;
+  }
+  bool is_print_view_definition() { return print_params_.print_view_definition_; }
+  bool need_print_catalog_name(const ObString& catalog_name);
 private:
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);

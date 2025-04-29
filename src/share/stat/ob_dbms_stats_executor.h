@@ -168,21 +168,15 @@ private:
                                                              share::schema::ObSchemaGetterGuard *schema_guard,
                                                              sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                                              int64_t &nested_count,
-                                                             ObSqlString &old_db_name,
-                                                             int64_t &old_db_id,
                                                              int64_t &old_trx_lock_timeout,
                                                              bool &need_restore_session,
-                                                             bool &need_reset_default_database,
                                                              bool &need_reset_trx_lock_timeout,
                                                              sqlclient::ObISQLConnection *&conn);
 
   static int restore_session_for_online_stat(sql::ObSQLSessionInfo *session,
                                              sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                              int64_t nested_count,
-                                             ObSqlString &old_db_name,
-                                             int64_t old_db_id,
                                              int64_t old_trx_lock_timeout,
-                                             bool need_reset_default_database,
                                              bool need_reset_trx_lock_timeout);
 
   static int64_t get_column_histogram_size(const ObIArray<ObColumnStatParam> &column_params);

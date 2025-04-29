@@ -258,7 +258,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
           ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-          LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+          LOG_WARN("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
         } else {
           session_info_->set_database_id(old_database_id);
         }
@@ -1063,6 +1063,7 @@ int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
                                       obj_print_params, true);
       stmt_printer.set_column_list(column_list);
       stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
+      stmt_printer.set_is_print_view_definition(true); // do not print internal catalog name
       if (OB_FAIL(stmt_printer.do_print())) {
         if (OB_SIZE_OVERFLOW == ret && buf_len < OB_MAX_PACKET_LENGTH) {
           buf_len = std::min(buf_len * 2, OB_MAX_PACKET_LENGTH);
