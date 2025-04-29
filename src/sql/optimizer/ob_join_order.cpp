@@ -16387,6 +16387,8 @@ int ObJoinOrder::generate_force_inner_path(const ObIArray<ObRawExpr *> &join_con
       LOG_WARN("failed to append exprs", K(ret));
     } else if (OB_FAIL(inner_path_info.inner_paths_.push_back(inner_path))) {
       LOG_WARN("failed to push back path", K(ret));
+    } else if (NULL != inner_path->log_op_ && OB_FAIL(inner_path->estimate_cost())) {
+      LOG_WARN("failed to estimate cost", K(ret));
     } else {
       inner_path->is_inner_path_ = true;
       inner_path->inner_row_count_ = right_tree.get_output_rows();
