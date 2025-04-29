@@ -222,7 +222,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
 #ifdef ENABLE_DEBUG_LOG
       if (spin_cnt > 2300) {
         // at least wait 600s
-        ob_abort();
+        TRANS_LOG(ERROR, "the tx desc's ref not clean more than 10 minutes, maybe threads hange", K(tx));
       }
 #endif
     }
