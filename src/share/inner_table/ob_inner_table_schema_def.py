@@ -10923,6 +10923,10 @@ def_table_schema(
 
 # 11122: __all_virtual_ss_tablet_upload_stat
 # 11123: __all_virtual_ss_tablet_compact_stat
+# 11124: __all_virtual_ss_tablet_meta
+# 11125: __all_virtual_ss_ls_meta
+# 11126: __all_virtual_ss_sstable_mgr
+
 
 ################################################################
 # INFORMATION SCHEMA
