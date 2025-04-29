@@ -444,35 +444,46 @@ bool ObKVCacheStore::wash()
       tmp_washbale_size_info_.reuse();
       //sort mb_handles to wash
       HazptrHolder hazptr_holder;
-      bool protect_success;
+      bool protect_success = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_mb_num_; ++i) {
         do {
           ret = hazptr_holder.protect(protect_success, &mb_handles_[i]);
         } while (OB_UNLIKELY(OB_ALLOCATE_MEMORY_FAILED == ret));
         if (OB_FAIL(ret)) {
           COMMON_LOG(WARN, "failed to protect mb_handle");
-        }
-        if (protect_success) {
-          enum ObKVMBHandleStatus status = mb_handles_[i].get_status();
-          uint64_t tenant_id = mb_handles_[i].inst_->tenant_id_;
-          if (OB_SUCC(tenant_wash_map_.get(tenant_id, tenant_wash_info))) {
-            if (FULL == status) {
-              if (OB_TMP_FAIL(tmp_washbale_size_info_.add_washable_size(tenant_id,
-                                mb_handles_[i].mem_block_->get_hold_size()))) {
-                COMMON_LOG(WARN, "Fail to add tenant washable size", K(tmp_ret), K(tenant_id));
-              }
-              if (OB_FAIL(tenant_wash_info->add(&mb_handles_[i]))) {
-                COMMON_LOG(WARN, "add failed", K(ret));
-              }
-            }
-          } else if (OB_ENTRY_NOT_EXIST == ret) {
-            COMMON_LOG(INFO, "Wash memory of tenant not exist, ",
-              "tenant_id", mb_handles_[i].inst_->tenant_id_,
-              "cache id", mb_handles_[i].inst_->cache_id_, 
-              "wash_size", mb_handles_[i].mem_block_->get_hold_size());
-            wash_mb(&mb_handles_[i]);
+        } else if (protect_success) {
+          if (OB_ISNULL(mb_handles_[i].inst_)) {
+            COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mb_handle.inst_ is null!", K(mb_handles_[i]));
           } else {
-            COMMON_LOG(ERROR, "Unexpected error, ", K(ret));
+            enum ObKVMBHandleStatus status = mb_handles_[i].get_status();
+            uint64_t tenant_id = mb_handles_[i].inst_->tenant_id_;
+            if (OB_SUCC(tenant_wash_map_.get(tenant_id, tenant_wash_info))) {
+              if (FULL == status) {
+                if (OB_TMP_FAIL(tmp_washbale_size_info_.add_washable_size(
+                        tenant_id,
+                        mb_handles_[i].mem_block_->get_hold_size()))) {
+                  COMMON_LOG(WARN,
+                             "Fail to add tenant washable size",
+                             K(tmp_ret),
+                             K(tenant_id));
+                }
+                if (OB_FAIL(tenant_wash_info->add(&mb_handles_[i]))) {
+                  COMMON_LOG(WARN, "add failed", K(ret));
+                }
+              }
+            } else if (OB_ENTRY_NOT_EXIST == ret) {
+              COMMON_LOG(INFO,
+                         "Wash memory of tenant not exist, ",
+                         "tenant_id",
+                         mb_handles_[i].inst_->tenant_id_,
+                         "cache id",
+                         mb_handles_[i].inst_->cache_id_,
+                         "wash_size",
+                         mb_handles_[i].mem_block_->get_hold_size());
+              wash_mb(&mb_handles_[i]);
+            } else {
+              COMMON_LOG(ERROR, "Unexpected error, ", K(ret));
+            }
           }
           //any error should not break washing, so reset ret to OB_SUCCESS
           ret = OB_SUCCESS;
