@@ -78,7 +78,7 @@ struct ObNotNullContext
       
   int generate_stmt_context(int64_t stmt_context = NULLABLE_SCOPE::NS_TOP);
   
-  int add_joined_table(const JoinedTable *table);
+  int add_joined_table(const JoinedTable *table, const JoinedTable *skip_table = NULL);
   
   int add_filter(const ObIArray<ObRawExpr *> &filters);
 
@@ -1008,6 +1008,7 @@ public:
   static int get_from_item(ObDMLStmt *stmt, TableItem *table, FromItem &from);
   
   static int get_outer_join_right_tables(const JoinedTable &joined_table,
+                                         const JoinedTable *skip_table,
                                          ObIArray<uint64_t> &table_ids);
 
   /**
