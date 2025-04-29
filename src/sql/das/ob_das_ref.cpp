@@ -453,11 +453,16 @@ bool ObDASRef::check_rcode_can_retry(int ret)
 
 int ObDASRef::get_detectable_id(ObDetectableId &detectable_id) {
   int ret = OB_SUCCESS;
-  if (detectable_id_.is_invalid() && OB_FAIL(ObDetectManagerUtils::das_task_register_detectable_id_into_dm(detectable_id_,
-                                                 get_exec_ctx().get_my_session()->get_effective_tenant_id()))) {
-      LOG_WARN("register detectable id into dm failed", K(ret));
+  if (OB_LIKELY(GCONF._enable_px_fast_reclaim)) {
+    if (detectable_id_.is_invalid() &&
+        OB_FAIL(ObDetectManagerUtils::das_task_register_detectable_id_into_dm(detectable_id_,
+                    get_exec_ctx().get_my_session()->get_effective_tenant_id()))) {
+        LOG_WARN("register detectable id into dm failed", K(ret));
+    } else {
+      detectable_id = detectable_id_;
+    }
   } else {
-    detectable_id = detectable_id_;
+    detectable_id.reset();
   }
   return ret;
 }
