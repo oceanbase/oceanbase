@@ -226,15 +226,15 @@ int ObPhysicalRestoreUriParser::parse(
       ObString path(tok);
       const ObString actual_path = path.trim();
       if (OB_FAIL(validate_uri_type(actual_path))) {
-        LOG_WARN("invalid uri", KR(ret), K(path), K(actual_path));
+        LOG_WARN("invalid uri", KR(ret));
         LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, tok);
       } else if (OB_FAIL(find_repeat_(uri_list, actual_path, is_repeat))) {
-        LOG_WARN("failed to find repeat", KR(ret), K(actual_path), K(uri_list));
+        LOG_WARN("failed to find repeat", KR(ret), K(uri_list));
       } else if (is_repeat) {
         // skip repeat path
-        LOG_INFO("skip repeat path", K(actual_path));
+        LOG_INFO("skip repeat path");
       } else if (OB_FAIL(uri_list.push_back(actual_path))) {
-        LOG_WARN("failed to push back", KR(ret), K(actual_path));
+        LOG_WARN("failed to push back", KR(ret));
       }
     }
   }
