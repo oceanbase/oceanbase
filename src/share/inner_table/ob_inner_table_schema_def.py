@@ -38105,6 +38105,7 @@ def_table_schema(
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
       AND B.DATA_TABLE_ID = D.TABLE_ID
+      AND B.TENANT_ID = D.TENANT_ID
 """.replace("\n", " ")
 )
 
