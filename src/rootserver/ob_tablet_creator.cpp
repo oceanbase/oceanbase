@@ -218,8 +218,7 @@ int ObBatchCreateTabletHelper::add_table_schema_(
      * So we need to sort column array by column id for heap table when creating tablet.
      *
      * testcases:
-     * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key.test
-     * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key_oracle.test
+     * - tools/obtest/t/errsim_storage_compaction/column_store_replica/test_drop_heap_table_primary_key.test
      * - tools/obtest/t/errsim_storage_compaction/column_store_replica/test_rebuild_heap_table_migrate_major.test
      */
     if (OB_FAIL(table_schema.sort_column_array_by_column_id())) {
