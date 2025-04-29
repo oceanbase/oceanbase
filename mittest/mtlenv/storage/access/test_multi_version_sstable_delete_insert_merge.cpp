@@ -4718,24 +4718,29 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   ObTableHandleV2 handle1;
   const char *micro_data[1];
   micro_data[0] =
-      "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
-      "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
-      "1        var1  -30          0            20      20      DELETE    NORMAL    C\n"
-      "1        var1  -20          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "1        var1  -10          0            20      20      DELETE    NORMAL    C\n"
-      "1        var1  -5           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
-      "3        var1  -40          0            20      20      DELETE    NORMAL    CF\n"
-      "3        var1  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "3        var1  -20          0            20      20      DELETE    NORMAL    C\n"
-      "3        var1  -10          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "3        var1  -5           0            20      20      DELETE    NORMAL    CL\n"
-      "5        var1  -4           0            20      20      DELETE    NORMAL    CF\n"
-      "5        var1  -3           DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "5        var1  -2           0            20      20      DELETE    NORMAL    C\n"
-      "5        var1  -1           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
-      "6        var1  -3           DI_VERSION   20      20      INSERT    NORMAL    CF\n"
-      "6        var1  -2           0            20      20      DELETE    NORMAL    C\n"
-      "6        var1  -1           DI_VERSION   20      20      INSERT    NORMAL    CL\n";
+      "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "1        var1  -30          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "1        var1  -20          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "1        var1  -10          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "1        var1  -5           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "3        var3  -40          0            20      20      DELETE    NORMAL    CF  trans_id_0\n"
+      "3        var3  -30          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "3        var3  -20          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "3        var3  -10          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "3        var3  -5           0            20      20      DELETE    NORMAL    CL  trans_id_0\n"
+      "5        var5  -4           0            20      20      DELETE    NORMAL    CF  trans_id_0\n"
+      "5        var5  -3           DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "5        var5  -2           0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "5        var5  -1           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "6        var6  -3           DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "6        var6  -2           0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "6        var6  -1           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "7        var7  MIN          -9           20      20      DELETE    NORMAL    UCF  trans_id_1\n"
+      "7        var7  MIN          -8           20      20      INSERT    NORMAL    UC   trans_id_1\n"
+      "7        var7  MIN          -7           20      20      DELETE    NORMAL    UCL  trans_id_1\n"
+      "8        var8  -40          DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "8        var8  -40          0            20      20      DELETE    NORMAL    CL  trans_id_0\n";
   int schema_rowkey_cnt = 2;
   int64_t snapshot_version = 25;
   share::ObScnRange scn_range;
@@ -4752,22 +4757,22 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   const char *micro_data2[1];
   micro_data2[0] =
       "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
-      "2        var1  -30          0            20      20      DELETE    NORMAL    CF\n"
-      "2        var1  -20          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "2        var1  -10          0            20      20      DELETE    NORMAL    C\n"
-      "2        var1  -5           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
-      "4        var1  -50          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
-      "4        var1  -40          0            20      20      DELETE    NORMAL    C\n"
-      "4        var1  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "4        var1  -20          0            20      20      DELETE    NORMAL    C\n"
-      "4        var1  -10          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "4        var1  -5           0            20      20      DELETE    NORMAL    CL\n"
-      "5        var1  -40          0            20      20      DELETE    NORMAL    CF\n"
-      "5        var1  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "5        var1  -20          0            20      20      DELETE    NORMAL    C\n"
-      "5        var1  -10          DI_VERSION   20      20      INSERT    NORMAL    CL\n"
-      "6        var1  -30          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
-      "6        var1  -20          0            20      20      DELETE    NORMAL    CL\n";
+      "2        var2  -30          0            20      20      DELETE    NORMAL    CF\n"
+      "2        var2  -20          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "2        var2  -10          0            20      20      DELETE    NORMAL    C\n"
+      "2        var2  -5           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "4        var4  -50          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "4        var4  -40          0            20      20      DELETE    NORMAL    C\n"
+      "4        var4  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "4        var4  -20          0            20      20      DELETE    NORMAL    C\n"
+      "4        var4  -10          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "4        var4  -5           0            20      20      DELETE    NORMAL    CL\n"
+      "5        var5  -40          0            20      20      DELETE    NORMAL    CF\n"
+      "5        var5  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "5        var5  -20          0            20      20      DELETE    NORMAL    C\n"
+      "5        var5  -10          DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "6        var6  -30          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "6        var6  -20          0            20      20      DELETE    NORMAL    CL\n";
   snapshot_version = 50;
   scn_range.start_scn_.convert_for_tx(25);
   scn_range.end_scn_.convert_for_tx(50);
@@ -4777,6 +4782,27 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard tx_table_guard;
+  get_tx_table_guard(tx_table_guard);
+  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
+
+  for (int64_t i = 1; i <= 1; i++) {
+    ObTxData *tx_data = new ObTxData();
+    transaction::ObTransID tx_id = i;
+
+    // fill in data
+    tx_data->tx_id_ = tx_id;
+    tx_data->commit_version_.convert_for_tx(i * 10);
+    tx_data->start_scn_.convert_for_tx(i);
+    tx_data->end_scn_ = tx_data->commit_version_;
+    tx_data->state_ = ObTxData::COMMIT;
+
+    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+    delete tx_data;
+  }
+
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -4793,17 +4819,20 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
       "1        var1  -10          0            20      20      DELETE    NORMAL    CL\n"
-      "2        var1  -30          0            20      20      DELETE    NORMAL    CF\n"
-      "2        var1  -10          0            20      20      DELETE    NORMAL    CL\n"
-      "3        var1  -40          0            20      20      DELETE    NORMAL    CLF\n"
-      "4        var1  -50          DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
-      "5        var1  -40          MIN          20      20      DELETE    NORMAL    SCF\n"
-      "5        var1  -40          0            20      20      DELETE    NORMAL    C\n"
-      "5        var1  -4           0            20      20      DELETE    NORMAL    CL\n"
-      "6        var1  -30          MIN          20      20      INSERT    NORMAL    SCF\n"
-      "6        var1  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
-      "6        var1  -20          0            20      20      DELETE    NORMAL    C\n"
-      "6        var1  -3           DI_VERSION   20      20      INSERT    NORMAL    CL\n";
+      "2        var2  -30          0            20      20      DELETE    NORMAL    CF\n"
+      "2        var2  -10          0            20      20      DELETE    NORMAL    CL\n"
+      "3        var3  -40          0            20      20      DELETE    NORMAL    CLF\n"
+      "4        var4  -50          DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
+      "5        var5  -40          MIN          20      20      DELETE    NORMAL    SCF\n"
+      "5        var5  -40          0            20      20      DELETE    NORMAL    C\n"
+      "5        var5  -4           0            20      20      DELETE    NORMAL    CL\n"
+      "6        var6  -30          MIN          20      20      INSERT    NORMAL    SCF\n"
+      "6        var6  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "6        var6  -20          0            20      20      DELETE    NORMAL    C\n"
+      "6        var6  -3           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "7        var7  -10          0            20      20      DELETE    NORMAL    CLF\n"
+      "8        var8  -40          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "8        var8  -40          0            20      20      DELETE    NORMAL    CL\n";
 
   ObMockIterator res_iter;
   ObStoreRowIterator *scanner = NULL;
