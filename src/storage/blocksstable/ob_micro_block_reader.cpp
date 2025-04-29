@@ -716,6 +716,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
   int ret = OB_SUCCESS;
   allocator_.reuse();
   ObStorageDatum *datum_buf = pd_filter_info.datum_buf_;
+  ObStorageDatum *tmp_datum_buf = pd_filter_info.tmp_datum_buf_;
   const int64_t col_capacity = pd_filter_info.col_capacity_;
   const storage::ObTableIterParam *param = pd_filter_info.param_;
   storage::ObTableAccessContext *context = pd_filter_info.context_;
@@ -746,22 +747,23 @@ int ObMicroBlockReader::filter_pushdown_filter(
       } else if (nullptr != parent && parent->can_skip_filter(offset)) {
         continue;
       } else if (0 < col_count) {
-        ObStorageDatum tmp_datum; // used for deep copy decimalint
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
           ObStorageDatum &datum = datum_buf[i];
           const int64_t col_idx = cols_index.at(col_offsets.at(i));
           const ObObjType obj_type = cols_desc.at(col_offsets.at(i)).col_type_.get_type();
           const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
+          ObStorageDatum *tmp_datum = ob_is_decimal_int(obj_type) ? tmp_datum_buf + i : datum_buf + i;
           datum.reuse();
+          tmp_datum_buf[i].reuse();
           if (OB_FAIL(flat_row_reader_.read_column(
               data_begin_ + index_data_[row_idx],
               index_data_[row_idx + 1] - index_data_[row_idx],
               col_idx,
-              tmp_datum))) {
+              *tmp_datum))) {
             LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
           } else if (OB_UNLIKELY(trans_col_idx == col_idx)) {
-            datum.set_int(-tmp_datum.get_int());
-          } else if (tmp_datum.is_nop_value()) {
+            datum.set_int(-tmp_datum->get_int());
+          } else if (tmp_datum->is_nop_value()) {
             if (OB_UNLIKELY(default_datums.at(i).is_nop())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("Unexpected nop value", K(ret), K(col_idx), K(row_idx),
@@ -769,8 +771,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
             } else if (OB_FAIL(datum.from_storage_datum(default_datums.at(i), map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(default_datums.at(i)), K(obj_type), K(map_type));
             }
-          } else if (OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
-            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(tmp_datum), K(obj_type), K(map_type));
+          } else if (ob_is_decimal_int(obj_type) && OB_FAIL(datum.from_storage_datum(*tmp_datum, map_type))) {
+            LOG_WARN("Failed to convert storage datum", K(ret), K(i), KPC(tmp_datum), K(obj_type), K(map_type));
           }
           if (OB_FAIL(ret) || nullptr == col_params.at(i) || datum.is_null()) {
           } else if (need_padding(filter.is_padding_mode(), col_params.at(i)->get_meta_type())) {

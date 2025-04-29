@@ -3020,6 +3020,10 @@ void PushdownFilterInfo::reset()
       allocator_->free(datum_buf_);
       datum_buf_ = nullptr;
     }
+    if (nullptr != tmp_datum_buf_) {
+      allocator_->free(tmp_datum_buf_);
+      tmp_datum_buf_ = nullptr;
+    }
     if (nullptr != cell_data_ptrs_) {
       allocator_->free(cell_data_ptrs_);
       cell_data_ptrs_ = nullptr;
@@ -3094,6 +3098,10 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));
   } else if (FALSE_IT(datum_buf_ = new (buf) blocksstable::ObStorageDatum[out_col_cnt]())) {
+  } else if (OB_ISNULL((buf = alloc.alloc(sizeof(blocksstable::ObStorageDatum) * out_col_cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));
+  } else if (FALSE_IT(tmp_datum_buf_ = new (buf) blocksstable::ObStorageDatum[out_col_cnt]())) {
   } else {
     filter_ = iter_param.pushdown_filter_;
     col_capacity_ = out_col_cnt;
