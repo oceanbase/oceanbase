@@ -593,7 +593,8 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
       if (has_exist_in_array(part_key_col_ids, as.column_expr_->get_column_id())) {
         update_with_vector_index = true;
       }
-    } else if (has_extra_info && !update_with_vector_index && !row_key_col_ids.empty()) {
+    }
+    if (OB_SUCC(ret) && has_extra_info && !update_with_vector_index && !row_key_col_ids.empty()) {
       // check if has extra_info, update with row key should also update vid
       if (has_exist_in_array(row_key_col_ids, as.column_expr_->get_column_id())) {
         update_with_vector_index = true;
