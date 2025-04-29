@@ -13,13 +13,14 @@
 #define USING_LOG_PREFIX SQL
 
 #include "ob_catalog_properties.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/string/ob_hex_utils_base.h"
+
 #include "deps/oblib/src/lib/list/ob_dlist.h"
-#include "src/share/ob_define.h"
+#include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_hex_utils_base.h"
+#include "lib/utility/ob_print_utils.h"
 #include "share/ob_encryption_util.h"
 #include "share/rc/ob_tenant_base.h"
+#include "src/share/ob_define.h"
 
 namespace oceanbase
 {
@@ -27,10 +28,9 @@ using namespace common;
 using namespace sql;
 namespace share
 {
-const char * ObCatalogProperties::CATALOG_TYPE_STR[] = {
-  "ODPS"
-};
-static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == ObCatalogProperties::MAX_TYPE, "Not enough initializer for ObCatalogProperties");
+const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {"ODPS"};
+static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == static_cast<size_t>(ObCatalogProperties::CatalogType::MAX_TYPE), "Not enough initializer for ObCatalogProperties");
+static_assert(array_elements(ObODPSCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObODPSCatalogProperties");
 
 int ObCatalogProperties::to_string_with_alloc(ObString &str, ObIAllocator &allocator) const
 {
@@ -41,7 +41,7 @@ int ObCatalogProperties::to_string_with_alloc(ObString &str, ObIAllocator &alloc
   do {
     buf_len *= 2;
     ret = OB_SUCCESS;
-    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
     } else if (OB_FAIL(to_string(buf, buf_len, pos))) {
@@ -61,12 +61,18 @@ int64_t ObCatalogProperties::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObCatalogProperties::to_string(char* buf, const int64_t buf_len, int64_t &pos) const
+int ObCatalogProperties::to_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  bool is_valid_format = type_ > INVALID_TYPE && type_ < MAX_TYPE;
+  bool is_valid_format = type_ > CatalogType::INVALID_TYPE && type_ < CatalogType::MAX_TYPE;
   OZ(J_OBJ_START());
-  OZ(databuff_print_kv(buf, buf_len, pos, "\"TYPE\"", is_valid_format ? ObCatalogProperties::CATALOG_TYPE_STR[type_] : "INVALID"));
+  OZ(databuff_print_kv(buf,
+                       buf_len,
+                       pos,
+                       R"("TYPE")",
+                       is_valid_format
+                           ? ObCatalogProperties::CATALOG_TYPE_STR[static_cast<size_t>(type_)]
+                           : "INVALID"));
   if (is_valid_format) {
     OZ(to_json_kv_string(buf, buf_len, pos));
   }
@@ -111,7 +117,7 @@ int ObCatalogProperties::parse_catalog_type(const ObString &str, CatalogType &ty
 int ObCatalogProperties::resolve_catalog_type(const ParseNode &node, CatalogType &type)
 {
   int ret = OB_SUCCESS;
-  type = INVALID_TYPE;
+  type = CatalogType::INVALID_TYPE;
   const ParseNode *type_node = NULL;
   bool is_type_set = false;
   for (int32_t i = 0; OB_SUCC(ret) && !is_type_set && i < node.num_child_; ++i) {
@@ -122,13 +128,13 @@ int ObCatalogProperties::resolve_catalog_type(const ParseNode &node, CatalogType
         LOG_WARN("unexpected parse node", K(ret));
       } else {
         ObString string_v = ObString(type_node->children_[0]->str_len_, type_node->children_[0]->str_value_).trim_space_only();
-        for (int i = 0; !is_type_set && i < MAX_TYPE; i++) {
+        for (int i = 0; !is_type_set && i < static_cast<int>(CatalogType::MAX_TYPE); i++) {
           if (0 == string_v.case_compare(CATALOG_TYPE_STR[i])) {
             type = static_cast<CatalogType>(i);
             is_type_set = true;
           }
         }
-        if (INVALID_TYPE == type) {
+        if (CatalogType::INVALID_TYPE == type) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "this catalog type");
           LOG_WARN("catalog type is not supported yet", K(ret), K(string_v));
@@ -180,7 +186,7 @@ int ObCatalogProperties::encrypt_str(ObString &src, ObString &dst, ObIAllocator 
 int ObCatalogProperties::decrypt_str(ObString &src, ObString &dst, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-#if defined (OB_BUILD_TDE_SECURITY)
+#if defined(OB_BUILD_TDE_SECURITY)
   const uint64_t tenant_id = MTL_ID();
   if (src.empty()) {
     dst = src;
@@ -261,25 +267,75 @@ int ObODPSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len,
   int ret = OB_SUCCESS;
 
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[ACCESSTYPE], to_cstring(ObHexStringWrap(access_type_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSTYPE)],
+                     to_cstring(ObHexStringWrap(access_type_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[ACCESSID], to_cstring(ObHexStringWrap(access_id_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSID)],
+                     to_cstring(ObHexStringWrap(access_id_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[ACCESSKEY], to_cstring(ObHexStringWrap(access_key_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSKEY)],
+                     to_cstring(ObHexStringWrap(access_key_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[STSTOKEN], to_cstring(ObHexStringWrap(sts_token_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::STSTOKEN)],
+                     to_cstring(ObHexStringWrap(sts_token_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[ENDPOINT], to_cstring(ObHexStringWrap(endpoint_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ENDPOINT)],
+                     to_cstring(ObHexStringWrap(endpoint_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[TUNNEL_ENDPOINT], to_cstring(ObHexStringWrap(tunnel_endpoint_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::TUNNEL_ENDPOINT)],
+                     to_cstring(ObHexStringWrap(tunnel_endpoint_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[PROJECT_NAME], to_cstring(ObHexStringWrap(project_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::PROJECT_NAME)],
+                     to_cstring(ObHexStringWrap(project_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[QUOTA_NAME], to_cstring(ObHexStringWrap(quota_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::QUOTA_NAME)],
+                     to_cstring(ObHexStringWrap(quota_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[COMPRESSION_CODE], to_cstring(ObHexStringWrap(compression_code_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::COMPRESSION_CODE)],
+                     to_cstring(ObHexStringWrap(compression_code_))));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[REGION], to_cstring(ObHexStringWrap(region_))));
+  OZ(databuff_printf(buf,
+                     buf_len,
+                     pos,
+                     R"("%s":"%s")",
+                     OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::REGION)],
+                     to_cstring(ObHexStringWrap(region_))));
 
   return ret;
 }
@@ -304,91 +360,91 @@ int ObODPSCatalogProperties::load_from_string(const ObString &str, ObIAllocator 
     LOG_WARN("error json value", K(ret), KPC(data));
   } else {
     node = node->get_next();
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[ACCESSTYPE])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSTYPE)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         access_type_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[ACCESSID])
+    if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSID)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         access_id_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[ACCESSKEY])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSKEY)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         access_key_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[STSTOKEN])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::STSTOKEN)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         sts_token_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[ENDPOINT])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ENDPOINT)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         endpoint_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[TUNNEL_ENDPOINT])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::TUNNEL_ENDPOINT)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         tunnel_endpoint_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[PROJECT_NAME])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::PROJECT_NAME)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         project_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[QUOTA_NAME])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::QUOTA_NAME)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         quota_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[COMPRESSION_CODE])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::COMPRESSION_CODE)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         compression_code_ = obj.get_string();
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[REGION])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::REGION)])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
-      OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
       if (OB_SUCC(ret) && !obj.is_null()) {
         region_ = obj.get_string();
       }
@@ -410,8 +466,7 @@ int ObODPSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
       LOG_WARN("invalid parse node", K(ret));
     } else {
       switch (child->type_) {
-        case T_EXTERNAL_FILE_FORMAT_TYPE:
-        {
+        case T_EXTERNAL_FILE_FORMAT_TYPE: {
           // do nothing
           break;
         }
@@ -419,13 +474,11 @@ int ObODPSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
           access_type_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_ACCESSID:
-        {
+        case T_ACCESSID: {
           access_id_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_ACCESSKEY:
-        {
+        case T_ACCESSKEY: {
           access_key_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
@@ -433,23 +486,19 @@ int ObODPSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
           sts_token_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_ENDPOINT:
-        {
+        case T_ENDPOINT: {
           endpoint_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_TUNNEL_ENDPOINT:
-        {
+        case T_TUNNEL_ENDPOINT: {
           tunnel_endpoint_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_PROJECT:
-        {
+        case T_PROJECT: {
           project_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        case T_QUOTA:
-        {
+        case T_QUOTA: {
           quota_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
@@ -461,8 +510,7 @@ int ObODPSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
           region_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
-        default:
-        {
+        default: {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid catalog option", K(ret), K(child->type_));
         }
@@ -472,5 +520,5 @@ int ObODPSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
   return ret;
 }
 
-}
-}
+} // namespace share
+} // namespace oceanbase

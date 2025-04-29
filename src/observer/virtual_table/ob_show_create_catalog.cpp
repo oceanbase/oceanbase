@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_create_catalog.h"
+
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -24,19 +25,11 @@ namespace oceanbase
 namespace observer
 {
 
-ObShowCreateCatalog::ObShowCreateCatalog()
-    : ObVirtualTableScannerIterator()
-{
-}
+ObShowCreateCatalog::ObShowCreateCatalog() : ObVirtualTableScannerIterator() {}
 
-ObShowCreateCatalog::~ObShowCreateCatalog()
-{
-}
+ObShowCreateCatalog::~ObShowCreateCatalog() {}
 
-void ObShowCreateCatalog::reset()
-{
-  ObVirtualTableScannerIterator::reset();
-}
+void ObShowCreateCatalog::reset() { ObVirtualTableScannerIterator::reset(); }
 
 int ObShowCreateCatalog::inner_get_next_row(common::ObNewRow *&row)
 {
@@ -106,8 +99,7 @@ int ObShowCreateCatalog::calc_show_catalog_id(uint64_t &show_catalog_id)
   return ret;
 }
 
-int ObShowCreateCatalog::fill_row_cells(uint64_t show_catalog_id,
-                                        const ObString &catalog_name)
+int ObShowCreateCatalog::fill_row_cells(uint64_t show_catalog_id, const ObString &catalog_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_row_.cells_)
@@ -130,7 +122,7 @@ int ObShowCreateCatalog::fill_row_cells(uint64_t show_catalog_id,
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
       uint64_t col_id = output_column_ids_.at(i);
-      switch(col_id) {
+      switch (col_id) {
         case OB_APP_MIN_COLUMN_ID: {
           // catalog_id
           cur_row_.cells_[cell_idx].set_int(show_catalog_id);
@@ -193,14 +185,26 @@ int ObShowCreateCatalog::print_catalog_definition(const uint64_t tenant_id,
   } else if (OB_ISNULL(catalog_schema)) {
     ret = OB_CATALOG_NOT_EXIST;
     LOG_WARN("catalog not exists", K(ret), K(catalog_id));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
                                      is_oracle_mode ? "CREATE CATALOG "
                                                     : "CREATE CATALOG IF NOT EXISTS "))) {
-    LOG_WARN("failed to print create catalog prefix", K(ret), K(catalog_schema->get_catalog_name()));
-  } else if (OB_FAIL(schema_printer.print_identifier(buf, buf_len, pos, catalog_schema->get_catalog_name(), is_oracle_mode))) {
-    LOG_WARN("failed to print create catalog prefix", K(ret), K(catalog_schema->get_catalog_name()));
+    LOG_WARN("failed to print create catalog prefix",
+             K(ret),
+             K(catalog_schema->get_catalog_name()));
+  } else if (OB_FAIL(schema_printer.print_identifier(buf,
+                                                     buf_len,
+                                                     pos,
+                                                     catalog_schema->get_catalog_name(),
+                                                     is_oracle_mode))) {
+    LOG_WARN("failed to print create catalog prefix",
+             K(ret),
+             K(catalog_schema->get_catalog_name()));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES = (\n"))) {
-    LOG_WARN("failed to print create catalog prefix", K(ret), K(catalog_schema->get_catalog_name()));
+    LOG_WARN("failed to print create catalog prefix",
+             K(ret),
+             K(catalog_schema->get_catalog_name()));
   }
   if (OB_FAIL(ret)) {
   } else if (catalog_id == OB_INTERNAL_CATALOG_ID) {
@@ -215,13 +219,16 @@ int ObShowCreateCatalog::print_catalog_definition(const uint64_t tenant_id,
     } else if (catalog_type == ObCatalogProperties::CatalogType::INVALID_TYPE) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid catalog type", K(ret), K(catalog_type));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObCatalogProperties::CATALOG_TYPE_STR[catalog_type]))) {
+    } else if (OB_FAIL(databuff_printf(
+                   buf,
+                   buf_len,
+                   pos,
+                   "  TYPE = '%s',",
+                   ObCatalogProperties::CATALOG_TYPE_STR[static_cast<size_t>(catalog_type)]))) {
       LOG_WARN("failed to print TYPE", K(ret));
     } else {
-      switch (catalog_type)
-      {
-        case ObCatalogProperties::CatalogType::ODPS_TYPE:
-        {
+      switch (catalog_type) {
+        case ObCatalogProperties::CatalogType::ODPS_TYPE: {
           ObODPSCatalogProperties properties;
           if (OB_FAIL(properties.load_from_string(properties_string, allocator))) {
             LOG_WARN("failed to load from string", K(ret));
@@ -230,8 +237,7 @@ int ObShowCreateCatalog::print_catalog_definition(const uint64_t tenant_id,
           }
           break;
         }
-        default:
-        {
+        default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid catalog type", K(ret), K(catalog_type));
         }
@@ -250,45 +256,99 @@ int ObShowCreateCatalog::print_odps_catalog_definition(const ObODPSCatalogProper
   int ret = OB_SUCCESS;
   ObString scret_str("********");
   int64_t option_names_idx = 0;
-  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                              ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::ACCESSTYPE],
-                              odps.access_type_.length(), odps.access_type_.ptr()))) {
+  if (OB_FAIL(databuff_printf(buf,
+                              buf_len,
+                              pos,
+                              "\n  %s = '%.*s',",
+                              ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                  ObODPSCatalogProperties::ObOdpsCatalogOptions::ACCESSTYPE)],
+                              odps.access_type_.length(),
+                              odps.access_type_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::ACCESSID],
-                                     scret_str.length(), scret_str.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  %s = '%.*s',",
+                                     ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                         ObODPSCatalogProperties::ObOdpsCatalogOptions::ACCESSID)],
+                                     scret_str.length(),
+                                     scret_str.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::ACCESSKEY],
-                                     scret_str.length(), scret_str.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  %s = '%.*s',",
+                                     ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                         ObODPSCatalogProperties::ObOdpsCatalogOptions::ACCESSKEY)],
+                                     scret_str.length(),
+                                     scret_str.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::STSTOKEN],
-                                     scret_str.length(), scret_str.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  %s = '%.*s',",
+                                     ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                         ObODPSCatalogProperties::ObOdpsCatalogOptions::STSTOKEN)],
+                                     scret_str.length(),
+                                     scret_str.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::ENDPOINT],
-                                     odps.endpoint_.length(), odps.endpoint_.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  %s = '%.*s',",
+                                     ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                         ObODPSCatalogProperties::ObOdpsCatalogOptions::ENDPOINT)],
+                                     odps.endpoint_.length(),
+                                     odps.endpoint_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::TUNNEL_ENDPOINT],
-                                     odps.tunnel_endpoint_.length(), odps.tunnel_endpoint_.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(
+                 buf,
+                 buf_len,
+                 pos,
+                 "\n  %s = '%.*s',",
+                 ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                     ObODPSCatalogProperties::ObOdpsCatalogOptions::TUNNEL_ENDPOINT)],
+                 odps.tunnel_endpoint_.length(),
+                 odps.tunnel_endpoint_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::PROJECT_NAME],
-                                     odps.project_.length(), odps.project_.ptr()))) {
+  } else if (OB_FAIL(
+                 databuff_printf(buf,
+                                 buf_len,
+                                 pos,
+                                 "\n  %s = '%.*s',",
+                                 ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                     ObODPSCatalogProperties::ObOdpsCatalogOptions::PROJECT_NAME)],
+                                 odps.project_.length(),
+                                 odps.project_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::QUOTA_NAME],
-                                     odps.quota_.length(), odps.quota_.ptr()))) {
+  } else if (OB_FAIL(
+                 databuff_printf(buf,
+                                 buf_len,
+                                 pos,
+                                 "\n  %s = '%.*s',",
+                                 ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                     ObODPSCatalogProperties::ObOdpsCatalogOptions::QUOTA_NAME)],
+                                 odps.quota_.length(),
+                                 odps.quota_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                                     ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::COMPRESSION_CODE],
-                                     odps.compression_code_.length(), odps.compression_code_.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(
+                 buf,
+                 buf_len,
+                 pos,
+                 "\n  %s = '%.*s',",
+                 ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                     ObODPSCatalogProperties::ObOdpsCatalogOptions::COMPRESSION_CODE)],
+                 odps.compression_code_.length(),
+                 odps.compression_code_.ptr()))) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
-  } else if (databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',",
-                             ObODPSCatalogProperties::OPTION_NAMES[ObODPSCatalogProperties::REGION],
-                             odps.region_.length(), odps.region_.ptr())) {
+  } else if (databuff_printf(buf,
+                             buf_len,
+                             pos,
+                             "\n  %s = '%.*s',",
+                             ObODPSCatalogProperties::OPTION_NAMES[static_cast<size_t>(
+                                 ObODPSCatalogProperties::ObOdpsCatalogOptions::REGION)],
+                             odps.region_.length(),
+                             odps.region_.ptr())) {
     LOG_WARN("failed to print ODPS_INFO", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -300,5 +360,5 @@ int ObShowCreateCatalog::print_odps_catalog_definition(const ObODPSCatalogProper
   return ret;
 }
 
-}/* ns observer*/
-}/* ns oceanbase */
+} // namespace observer
+} // namespace oceanbase
