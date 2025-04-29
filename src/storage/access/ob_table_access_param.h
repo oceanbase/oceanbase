@@ -142,11 +142,19 @@ public:
   OB_INLINE bool is_skip_scan() const
   { return ss_rowkey_prefix_cnt_ > 0; }
   OB_INLINE void disable_blockscan()
-  { pd_storage_flag_.set_blockscan_pushdown(false); }
+  {
+    pd_storage_flag_.set_blockscan_pushdown(false);
+    is_delete_insert_ = false;
+  }
   OB_INLINE bool enable_pd_blockscan() const
   { return pd_storage_flag_.is_blockscan_pushdown(); }
   OB_INLINE bool enable_pd_filter() const
   { return pd_storage_flag_.is_filter_pushdown(); }
+  OB_INLINE void disable_pd_filter()
+  {
+    pd_storage_flag_.set_filter_pushdown(false);
+    is_delete_insert_ = false;
+  }
   OB_INLINE void disable_pd_aggregate()
   { pd_storage_flag_.set_aggregate_pushdown(false); }
   OB_INLINE bool enable_pd_aggregate() const // just indicate scalar agg
