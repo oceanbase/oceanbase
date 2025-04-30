@@ -2690,8 +2690,8 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
           LOG_WARN("append sql failed", KR(ret));
         }
       } else {
-        // for upgrading and obcdc compatibility, lateral join is not supported when cluster version < 4.2.2
-        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+        // for upgrading and obcdc compatibility, lateral join may be not supported in lower version
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_4) {
           ObSqlString table_id_list;
           for (int64_t i = 0; OB_SUCC(ret) && i < table_ids_size; i++) {
             if (OB_FAIL(table_id_list.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, table_ids[i])))) {
@@ -5002,8 +5002,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         LOG_WARN("append sql failed", KR(ret));
       }
     } else {
-      // for upgrading and obcdc compatibility, lateral join is not supported when cluster version < 4.2.2
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+      // for upgrading and obcdc compatibility, lateral join may be not supported in lower version
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_4) {
         ObSqlString table_id_list;
         for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; i++) {
           if (OB_FAIL(table_id_list.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, schema_keys[i].table_id_)))) {
