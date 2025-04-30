@@ -47,6 +47,7 @@ struct ObStorageSnapshotInfo
     SNAPSHOT_FOR_LS_RESERVED,
     SNAPSHOT_FOR_MIN_MEDIUM,
     SNAPSHOT_FOR_SPLIT,
+    SNAPSHOT_FOR_SS_GC,
     SNAPSHOT_MAX,
   };
   ObStorageSnapshotInfo();
