@@ -994,29 +994,33 @@ void ObHbaseRowIterator::set_need_verify_cell_ttl(bool need_verify_cell_ttl) {
 int ObHbaseRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
   int ret = OB_SUCCESS;
-  if (!is_timeseries_table_ && !is_cur_row_expired_) {
-    if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
-      LOG_WARN("failed to is cell ttl expired", K(ret));
-    } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
-                                          column_tracker_->is_expired(cell.get_timestamp()))) {
-      is_cur_row_expired_ = true;
-      MTL(ObHTableRowkeyMgr *)
-          ->record_htable_rowkey(
-              INVALID_LS, hbase_query_.get_table_id(), tablet_ids_, cell.get_rowkey());
-    }
-  }
+  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which
+  // maybe not work in secondary-part scenarios
+  // if (!is_timeseries_table_ && !is_cur_row_expired_) {
+  //   if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
+  //     LOG_WARN("failed to is cell ttl expired", K(ret));
+  //   } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
+  //                                         column_tracker_->is_expired(cell.get_timestamp()))) {
+  //     is_cur_row_expired_ = true;
+  //     MTL(ObHTableRowkeyMgr *)
+  //         ->record_htable_rowkey(
+  //             INVALID_LS, hbase_query_.get_table_id(), tablet_ids_, cell.get_rowkey());
+  //   }
+  // }
   return ret;
 }
 
 void ObHbaseRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
-  if (!is_timeseries_table_ && max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
-    is_cur_row_expired_ = true;
-    MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(INVALID_LS,
-                                                  hbase_query_.get_table_id(),
-                                                  tablet_ids_,
-                                                  rowkey);
-  }
+  // TODO: rowkeyTTL should be collected and exeucte on LS leader, which
+  // maybe not work in secondary-part scenarios
+  // if (!is_timeseries_table_ && max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
+  //   is_cur_row_expired_ = true;
+  //   MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(INVALID_LS,
+  //                                                 hbase_query_.get_table_id(),
+  //                                                 tablet_ids_,
+  //                                                 rowkey);
+  // }
 }
 
 ObHbaseCFIterator::ObHbaseCFIterator(const ObHbaseQuery &hbase_query, ObTableExecCtx &exec_ctx)
