@@ -104,6 +104,7 @@ private:
                               const ObIArray<uint64_t> &rowkey_ids,
                               ObObj *rowkey_cells,
                               ObIArray<int64_t> &indexs);
+  static int compare_rowkey(ObRowkey &storage_rowkey, ObRowkey &request_rowkey, bool &is_equal);
   static int check_legality(ObTableBatchCtx &ctx,
                             const common::ObIArray<ObTableOperation> &ops,
                             common::ObIArray<ObTableOperationResult> &results);

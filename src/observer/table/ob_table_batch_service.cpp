@@ -257,13 +257,48 @@ int ObTableBatchService::get_result_index(
     const ObITableEntity &entity = ops.at(i).entity();
     ObRowkey entity_rowkey = entity.get_rowkey();
     bool equal = false;
-    if (OB_FAIL(row_rowkey.equal(entity_rowkey, equal))) {
-      LOG_WARN("fail to compare rowkey", K(row_rowkey), K(entity_rowkey));
+    if (OB_FAIL(compare_rowkey(row_rowkey, entity_rowkey, equal))) {
+      LOG_WARN("fail to compare rowkey", K(ret), K(row_rowkey), K(entity_rowkey));
     } else if (equal && OB_FAIL(indexs.push_back(i))) {
       LOG_WARN("fail to push_back index", K(row_rowkey), K(indexs), K(i));
     }
   }
 
+  return ret;
+}
+
+int ObTableBatchService::compare_rowkey(ObRowkey &storage_rowkey, ObRowkey &request_rowkey, bool &is_equal) {
+  int ret = OB_SUCCESS;
+  if (storage_rowkey.get_obj_ptr() == request_rowkey.get_obj_ptr()) {
+    is_equal = (storage_rowkey.get_obj_cnt() == request_rowkey.get_obj_cnt());
+  } else if (storage_rowkey.get_obj_cnt() != request_rowkey.get_obj_cnt()){
+    is_equal = false;
+  } else {
+    for (int64_t i = 0; i < request_rowkey.get_obj_cnt() && OB_SUCC(ret); i++) {
+      ObObj &req_obj = request_rowkey.get_obj_ptr()[i];
+      ObObj &storage_obj = storage_rowkey.get_obj_ptr()[i]; // its rowkey cells is allocated for temperally use so that we can modify
+      if (ob_is_mysql_date_tc(req_obj.get_type()) && ob_is_date_tc(storage_obj.get_type())) {
+        ObMySQLDate mdate = 0;
+        if (OB_FAIL(ObTimeConverter::date_to_mdate(storage_obj.get_date(), mdate))) {
+          LOG_WARN("fail to convert date to mysql date", K(ret), K(storage_obj));
+        } else {
+          storage_obj.set_mysql_date(mdate);
+        }
+      } else if (ob_is_mysql_datetime(req_obj.get_type()) && ob_is_datetime(storage_obj.get_type())) {
+        ObMySQLDateTime mdatetime = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(storage_obj.get_datetime(), mdatetime))) {
+          LOG_WARN("fail to convert datetime to mysql datetime", K(ret), K(storage_obj));
+        } else {
+          storage_obj.set_mysql_datetime(mdatetime);
+        }
+      }
+    } // end for
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(storage_rowkey.equal(request_rowkey, is_equal))) {
+        LOG_WARN("fail to compare rowkey", K(storage_rowkey), K(request_rowkey));
+      }
+    }
+  }
   return ret;
 }
 
