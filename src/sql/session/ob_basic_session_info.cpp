@@ -289,7 +289,7 @@ void ObBasicSessionInfo::destroy()
   total_stmt_tables_.reset();
   cur_stmt_tables_.reset();
 #ifdef OB_BUILD_ORACLE_PL
-  pl::ObPlJsonTypeManager::release(get_json_pl_mngr());
+  pl::ObPlJsonTypeManager::release(json_pl_mngr_);
 #endif
 }
 
