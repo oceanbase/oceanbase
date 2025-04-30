@@ -15,6 +15,7 @@
 #include "ob_direct_load_mem_context.h"
 #include "src/storage/direct_load/ob_direct_load_mem_worker.h"
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
+#include "observer/table_load/ob_table_load_service.h"
 
 namespace oceanbase
 {
@@ -136,10 +137,7 @@ void ObDirectLoadMemContext::reset()
   mem_chunk_queue_.pop_all(chunk_array);
   for (int64_t i = 0; i < chunk_array.count(); i ++) {
     ObDirectLoadExternalMultiPartitionRowChunk *chunk = chunk_array.at(i);
-    if (chunk != nullptr) {
-      chunk->~ObDirectLoadExternalMultiPartitionRowChunk();
-      ob_free(chunk);
-    }
+    release_chunk(chunk);
   }
   chunk_array.reset();
 
@@ -191,6 +189,53 @@ int ObDirectLoadMemContext::add_tables_from_table_compactor(
     }
   }
   return ret;
+}
+
+int ObDirectLoadMemContext::acquire_chunk(ChunkType *&chunk)
+{
+  int ret = OB_SUCCESS;
+  while (fly_mem_chunk_count_ >= max_mem_chunk_count_ && OB_LIKELY(!has_error_)) {
+    usleep(50000);
+  }
+  if (OB_UNLIKELY(has_error_)) {
+    ret = OB_CANCELED;
+  } else {
+    chunk = nullptr;
+    ObMemAttr mem_attr(MTL_ID(), "TLD_MemChunk");
+    int64_t sort_memory = 0;
+    if (exe_mode_ == observer::ObTableLoadExeMode::MAX_TYPE) {
+      sort_memory = mem_chunk_size_;
+    } else if (OB_FAIL(observer::ObTableLoadService::get_sort_memory(sort_memory))) {
+      LOG_WARN("fail to get sort memory", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(chunk = OB_NEW(ChunkType, mem_attr))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadExternalMultiPartitionRowChunk", KR(ret));
+      } else if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
+        LOG_WARN("fail to init external sort", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != chunk) {
+        OB_DELETE(ChunkType, mem_attr, chunk);
+        chunk = nullptr;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ATOMIC_INC(&fly_mem_chunk_count_);
+    }
+  }
+  return ret;
+}
+
+void ObDirectLoadMemContext::release_chunk(ChunkType *chunk)
+{
+  if (chunk != nullptr) {
+    chunk->~ChunkType();
+    ob_free(chunk);
+    ATOMIC_DEC(&fly_mem_chunk_count_);
+  }
 }
 
 } // namespace storage

@@ -78,17 +78,8 @@ int ObDirectLoadMemLoader::work()
           ret = OB_SUCCESS;
           break;
         }
-      } else if (chunk == nullptr) {
-        // 等待内存空出
-        while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->max_mem_chunk_count_ &&
-               OB_LIKELY(!mem_ctx_->has_error_)) {
-          usleep(500000);
-        }
-        if (OB_UNLIKELY(mem_ctx_->has_error_)) {
-          break;
-        } else if (OB_FAIL(acquire_chunk(chunk))) {
-          LOG_WARN("fail to acquire chunk", KR(ret));
-        }
+      } else if (nullptr == chunk && OB_FAIL(mem_ctx_->acquire_chunk(chunk))) {
+        LOG_WARN("fail to acquire chunk", KR(ret));
       }
       if (OB_SUCC(ret)) {
         row = *external_row;
@@ -119,39 +110,9 @@ int ObDirectLoadMemLoader::work()
   }
 
   if (chunk != nullptr) {
-    chunk->~ChunkType();
-    ob_free(chunk);
-    chunk = nullptr;
+    mem_ctx_->release_chunk(chunk);
   }
 
-  return ret;
-}
-
-int ObDirectLoadMemLoader::acquire_chunk(ChunkType *&chunk)
-{
-  int ret = OB_SUCCESS;
-  chunk = nullptr;
-  ObMemAttr mem_attr(MTL_ID(), "TLD_MemChunk");
-  int64_t sort_memory = 0;
-  if (mem_ctx_->exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
-    sort_memory = mem_ctx_->mem_chunk_size_;
-  } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
-    LOG_WARN("fail to get sort memory", KR(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(chunk = OB_NEW(ChunkType, mem_attr))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadExternalMultiPartitionRowChunk", KR(ret));
-    } else if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
-      LOG_WARN("fail to init external sort", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != chunk) {
-      OB_DELETE(ChunkType, mem_attr, chunk);
-      chunk = nullptr;
-    }
-  }
   return ret;
 }
 
@@ -170,9 +131,7 @@ int ObDirectLoadMemLoader::close_chunk(ChunkType *&chunk)
   }
 
   if (chunk != nullptr) {
-    chunk->~ChunkType();
-    ob_free(chunk);
-    chunk = nullptr;
+    mem_ctx_->release_chunk(chunk);
   }
   return ret;
 }

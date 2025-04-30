@@ -51,6 +51,7 @@ private:
 class ObDirectLoadMemContext
 {
 public:
+  typedef ObDirectLoadExternalMultiPartitionRowChunk ChunkType;
   ObDirectLoadMemContext() : datum_utils_(nullptr),
                              dml_row_handler_(nullptr),
                              file_mgr_(nullptr),
@@ -78,6 +79,8 @@ public:
   void reset();
   int add_tables_from_table_builder(ObIDirectLoadPartitionTableBuilder &builder);
   int add_tables_from_table_compactor(ObIDirectLoadTabletTableCompactor &compactor);
+  int acquire_chunk(ChunkType *&chunk);
+  void release_chunk(ChunkType *chunk);
 
 public:
   static const int64_t MIN_MEM_LIMIT = 8LL * 1024 * 1024; // 8MB
