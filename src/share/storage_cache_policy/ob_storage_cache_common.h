@@ -139,6 +139,9 @@ public:
   void reset();
   int to_json_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_string(const common::ObString &str);
+  bool is_none_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::NONE_POLICY; };
+  bool is_hot_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY; };
+  bool is_auto_policy() const { return global_policy_ == ObStorageCacheGlobalPolicy::AUTO_POLICY; };
   bool is_global_policy() const
   { return global_policy_ == ObStorageCacheGlobalPolicy::HOT_POLICY
         || global_policy_ == ObStorageCacheGlobalPolicy::AUTO_POLICY
