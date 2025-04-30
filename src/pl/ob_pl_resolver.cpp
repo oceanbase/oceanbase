@@ -157,7 +157,7 @@ int ObPLResolver::init_default_expr(
     ObPLSymbolTable &symbol_table = func_ast.get_symbol_table();
     const ObPLVar *var = symbol_table.get_symbol(idx);
     CK (OB_NOT_NULL(var));
-    OZ (init_default_expr(func_ast, param, var->get_type()));
+    OZ (SMART_CALL(init_default_expr(func_ast, param, var->get_type())));
     OX ((const_cast<ObPLVar *>(var))->set_default(func_ast.get_expr_count() - 1));
   }
   return ret;
@@ -5040,7 +5040,7 @@ int ObPLResolver::check_use_idx_illegal(ObRawExpr* expr, int64_t idx)
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        OZ (check_use_idx_illegal(expr->get_param_expr(i), idx));
+        OZ (SMART_CALL(check_use_idx_illegal(expr->get_param_expr(i), idx)));
       }
     }
   }
@@ -5130,7 +5130,7 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
       bool inner_modify = false;
       bool inner_can_array_binding = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        OZ (check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify, inner_can_array_binding));
+        OZ (SMART_CALL(check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify, inner_can_array_binding)));
         if (inner_modify) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not supported yet", K(ret), K(expr));
@@ -5989,7 +5989,7 @@ int ObPLResolver::replace_plsql_line(
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         if (OB_NOT_NULL(node->children_[i])) {
-          OZ (replace_plsql_line(allocator, node->children_[i], sql, new_sql));
+          OZ (SMART_CALL(replace_plsql_line(allocator, node->children_[i], sql, new_sql)));
         }
       }
     }
@@ -7985,8 +7985,8 @@ int ObPLResolver::replace_cursor_formal_params(const ObIArray<int64_t> &src_form
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
       ObRawExpr *param = expr.get_param_expr(i);
       CK (OB_NOT_NULL(param));
-      OZ (replace_cursor_formal_params(
-        src_formal_exprs, dst_formal_exprs, src_package_id, dst_package_id, *param));
+      OZ (SMART_CALL(replace_cursor_formal_params(
+        src_formal_exprs, dst_formal_exprs, src_package_id, dst_package_id, *param)));
     }
   }
   return ret;
@@ -9263,7 +9263,7 @@ int ObPLResolver::add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("child expr is null", K(ret));
-    } else if (OB_FAIL(add_pl_integer_checker_expr(expr_factory, child, need_replace))) {
+    } else if (OB_FAIL(SMART_CALL(add_pl_integer_checker_expr(expr_factory, child, need_replace)))) {
       LOG_WARN("failed to add pl integer checker expr", K(ret));
     } else if (need_replace) {
       expr->get_param_expr(i) = child;
@@ -9454,7 +9454,7 @@ int ObPLResolver::replace_source_string(
                                            &resolve_ctx_.allocator_);
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < new_node->num_child_; ++i) {
-      OZ (replace_source_string(old_sql, new_node->children_[i]));
+      OZ (SMART_CALL(replace_source_string(old_sql, new_node->children_[i])));
     }
   }
   return ret;
@@ -10238,7 +10238,7 @@ int ObPLResolver::formalize_expr(ObRawExpr &expr,
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
     ObRawExpr *child_expr = expr.get_param_expr(i);
     if (OB_NOT_NULL(child_expr)) {
-      OZ (formalize_expr(*child_expr, session_info, ns));
+      OZ (SMART_CALL(formalize_expr(*child_expr, session_info, ns)));
       if (OB_SUCC(ret) && expr.is_udf_expr()) {
         ObUDFRawExpr &udf_expr = static_cast<ObUDFRawExpr&>(expr);
         ObIArray<ObExprResType>& params_type = udf_expr.get_params_type();
@@ -10256,7 +10256,7 @@ int ObPLResolver::set_cm_warn_on_fail(ObRawExpr *&expr)
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-    OZ (set_cm_warn_on_fail(expr->get_param_expr(i)));
+    OZ (SMART_CALL(set_cm_warn_on_fail(expr->get_param_expr(i))));
   }
   if (OB_SUCC(ret)) {
     if (T_FUN_SYS_CAST == expr->get_expr_type()) {
@@ -10288,7 +10288,7 @@ int ObPLResolver::check_access_external_state(ObRawExpr *&expr,
          !has_access_external_state &&
          i < expr->get_param_count();
          ++i) {
-      OZ (check_access_external_state(expr->get_param_expr(i), has_access_external_state));
+      OZ (SMART_CALL(check_access_external_state(expr->get_param_expr(i), has_access_external_state)));
     }
   }
   return ret;
@@ -10313,7 +10313,7 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
          (!unit_ast.is_rps() || !unit_ast.is_external_state()) &&
          i < expr->get_param_count();
          ++i) {
-      OZ (analyze_expr_type(expr->get_param_expr(i), unit_ast));
+      OZ (SMART_CALL(analyze_expr_type(expr->get_param_expr(i), unit_ast)));
     }
   }
   return ret;
@@ -10916,7 +10916,7 @@ int ObPLResolver::check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc)
     pre_calc = false;
   }
   for (int64_t i = 0; OB_SUCC(ret) && pre_calc && i < expr->get_param_count(); ++i) {
-    OZ (check_expr_can_pre_calc(expr->get_param_expr(i), pre_calc));
+    OZ (SMART_CALL(check_expr_can_pre_calc(expr->get_param_expr(i), pre_calc)));
   }
   LOG_DEBUG("check_expr_can_pre_calc", K(pre_calc), K(ret), KPC(expr));
   return ret;
@@ -11623,7 +11623,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
     PROCESS_CPARAM_LIST_NODE(node.children_[1]);
 
     if (OB_SUCC(ret) && T_SP_OBJ_ACCESS_REF == node.children_[1]->type_) {
-      OZ (resolve_obj_access_idents(*(node.children_[1]), expr_factory, obj_access_idents, session_info));
+      OZ (SMART_CALL(resolve_obj_access_idents(*(node.children_[1]), expr_factory, obj_access_idents, session_info)));
     }
   }
   if (OB_FAIL(ret)) {
@@ -13854,9 +13854,9 @@ int ObPLResolver::get_subprogram_ns(
     subprogram_ns = &current_ns;
   } else if (OB_NOT_NULL(current_ns.get_external_ns())
              && OB_NOT_NULL(current_ns.get_external_ns()->get_parent_ns())) {
-    OZ (get_subprogram_ns(
+    OZ (SMART_CALL(get_subprogram_ns(
       *(const_cast<ObPLBlockNS *>(current_ns.get_external_ns()->get_parent_ns())),
-      subprogram_id, subprogram_ns));
+      subprogram_id, subprogram_ns)));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not found subprogram namespace",
@@ -18902,7 +18902,7 @@ int ObPLResolver::recursive_replace_expr(ObRawExpr *expr,
     } else if (expr->get_param_expr(i) == qualified_name.ref_expr_) {
       expr->get_param_expr(i) = real_expr;
     } else if (expr->get_param_expr(i)->get_param_count() > 0) {
-      OZ (recursive_replace_expr(expr->get_param_expr(i), qualified_name, real_expr));
+      OZ (SMART_CALL(recursive_replace_expr(expr->get_param_expr(i), qualified_name, real_expr)));
     }
   }
   return ret;

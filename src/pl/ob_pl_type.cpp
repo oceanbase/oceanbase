@@ -2136,22 +2136,22 @@ bool ObObjAccessIdx::has_same_collection_access(const ObRawExpr *expr, const ObO
   return ret;
 }
 
-bool ObObjAccessIdx::has_collection_access(const ObRawExpr *expr)
+int ObObjAccessIdx::has_collection_access(const ObRawExpr *expr, bool &collection_access)
 {
-  bool ret = false;
+  int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr)) {
     if (expr->is_obj_access_expr()) {
       const ObObjAccessRawExpr *access_expr = static_cast<const ObObjAccessRawExpr*>(expr);
       for (int64_t i = access_expr->get_access_idxs().count() - 1; i >= 0; --i) {
         if (access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
-          ret = true;
+          collection_access = true;
           break;
         }
       }
     } else {
-      for (int64_t i = 0; i < expr->get_param_count(); ++i) {
-        if (has_collection_access(expr->get_param_expr(i))) {
-          ret = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        OZ (SMART_CALL(has_collection_access(expr->get_param_expr(i), collection_access)));
+        if (OB_SUCC(ret) && collection_access) {
           break;
         }
       }
@@ -2189,17 +2189,23 @@ int ObObjAccessIdx::datum_need_copy(const ObRawExpr *into, const ObRawExpr *valu
     //如果源数据来源于NestedTable，那么一定要重新copy
     if (OB_SUCC(ret)
         && IS_INVALID == alloc_scop
-        && OB_NOT_NULL(value)
-        && has_collection_access(value)) {
-      alloc_scop = IS_LOCAL;
+        && OB_NOT_NULL(value)) {
+      bool collection_access = false;
+      OZ (has_collection_access(value, collection_access));
+      if (OB_SUCC(ret) && collection_access) {
+        alloc_scop = IS_LOCAL;
+      }
     }
 
     //如果目的端是NestedTable，那么一定要重新copy
     if (OB_SUCC(ret)
         && IS_INVALID == alloc_scop
-        && into->is_obj_access_expr()
-        && has_collection_access(into)) {
-      alloc_scop = IS_LOCAL;
+        && into->is_obj_access_expr()) {
+      bool collection_access = false;
+      OZ (has_collection_access(into, collection_access));
+      if (OB_SUCC(ret) && collection_access) {
+          alloc_scop = IS_LOCAL;
+      }
     }
 
     //如果源数据和目的端不同属于一个Allocator Scope，那么也要copy
