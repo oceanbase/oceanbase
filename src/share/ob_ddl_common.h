@@ -1495,6 +1495,10 @@ public:
       const storage::ObCOSSTableV2 *co_sstable,
       const storage::ObStorageSchema *storage_schema,
       bool &is_rowkey_based);
+  static int get_co_column_checksums_if_need(
+      const ObTabletHandle &tablet_handle,
+      const blocksstable::ObSSTable *sstable,
+      ObIArray<int64_t> &column_checksum_array);
 };
 
 

@@ -5472,7 +5472,39 @@ int ObCODDLUtil::is_rowkey_based_co_sstable(
   return ret;
 }
 
-
+int ObCODDLUtil::get_co_column_checksums_if_need(
+    const ObTabletHandle &tablet_handle,
+    const blocksstable::ObSSTable *sstable,
+    ObIArray<int64_t> &column_checksum_array)
+{
+  int ret = OB_SUCCESS;
+  column_checksum_array.reset();
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || nullptr == sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_handle), KP(sstable));
+  } else if (!sstable->is_co_sstable()) {
+    // do nothing
+  } else {
+    bool is_rowkey_based_co_sstable = false;
+    ObStorageSchema *storage_schema = nullptr;
+    ObArenaAllocator arena("co_ddl_cksm", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(arena, storage_schema))) {
+      LOG_WARN("load storage schema failed", K(ret));
+    } else if (OB_FAIL(ObCODDLUtil::is_rowkey_based_co_sstable(
+            static_cast<const ObCOSSTableV2 *>(sstable), storage_schema, is_rowkey_based_co_sstable))) {
+      LOG_WARN("check is rowkey based co sstable failed", K(ret));
+    } else if (is_rowkey_based_co_sstable) {
+      if (OB_FAIL(ObCODDLUtil::get_column_checksums(
+                static_cast<const ObCOSSTableV2 *>(sstable),
+                storage_schema,
+                column_checksum_array))) {
+        LOG_WARN("get column checksum from co sstable failed", K(ret));
+      }
+    }
+    ObTabletObjLoadHelper::free(arena, storage_schema);
+  }
+  return ret;
+}
 
 int ObCODDLUtil::need_column_group_store(const storage::ObStorageSchema &table_schema, bool &need_column_group)
 {
