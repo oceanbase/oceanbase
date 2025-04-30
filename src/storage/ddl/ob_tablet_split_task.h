@@ -477,13 +477,7 @@ public:
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
       bool &is_tablet_status_need_to_split);
-  static int build_lost_medium_mds_sstable(
-      common::ObArenaAllocator &allocator,
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
-      const ObTabletID &dest_tablet_id,
-      ObTableHandleV2 &medium_mds_table_handle);
-  static int build_truncate_info_mds_sstable(
+  static int build_mds_sstable(
       common::ObArenaAllocator &allocator,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
