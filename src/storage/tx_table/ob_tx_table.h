@@ -339,6 +339,8 @@ public:
 
   const char* get_state_string(const int64_t state) const;
 
+  int get_tx_data_sstable_recycle_scn(share::SCN &recycle_scn);
+
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(epoch),

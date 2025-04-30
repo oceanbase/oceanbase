@@ -244,6 +244,8 @@ public:  // ObTxDataTable
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd);
 
+  int get_sstable_recycle_scn(share::SCN &recycle_scn);
+
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(is_started),

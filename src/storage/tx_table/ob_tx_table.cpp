@@ -1189,6 +1189,19 @@ const char *ObTxTable::get_state_string(const int64_t state) const
   return STATE_TO_CHAR[int(state)];
 }
 
+int ObTxTable::get_tx_data_sstable_recycle_scn(share::SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  recycle_scn.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tx table is not init.", KR(ret));
+  } else if (OB_FAIL(tx_data_table_.get_sstable_recycle_scn(recycle_scn))) {
+    TRANS_LOG(WARN, "get recycle scn from tx data table failed.", KR(ret));
+  }
+  return ret;
+}
+
 // *********************** ObTxTable end. ************************
 
 }  // namespace storage

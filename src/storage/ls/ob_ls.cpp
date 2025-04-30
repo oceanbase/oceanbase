@@ -1184,10 +1184,14 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
   bool archive_force = false;
   bool archive_ignore = false;
   const ObLSID &id = get_ls_id();
+  share::SCN tx_data_recycle_scn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(get_tx_data_sstable_recycle_scn(tx_data_recycle_scn))) {
+    LOG_WARN("failed to get tx data recycle scn", K(ret));
   } else {
+    meta_package.tx_data_recycle_scn_ = tx_data_recycle_scn;
     meta_package.ls_meta_ = ls_meta_;
     palf::LSN curr_lsn = meta_package.ls_meta_.get_clog_base_lsn();
     ObTimeGuard time_guard("get_ls_meta_package", cost_time);
@@ -2054,6 +2058,7 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
     const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f)
 {
   int ret = OB_SUCCESS;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -2073,7 +2078,6 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
     } else if (OB_FAIL(ls_tablet_svr_.ha_scan_all_tablets(handle_tablet_meta_f))) {
       LOG_WARN("failed to scan all tablets", K(ret), K_(ls_meta));
     }
-
     tablet_gc_handler_.enable_gc();
   }
 
