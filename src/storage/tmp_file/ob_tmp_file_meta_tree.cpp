@@ -393,7 +393,7 @@ int ObSharedNothingTmpFileMetaTree::try_to_fill_rightmost_leaf_page_(
         STORAGE_LOG(WARN, "fail to read item", KR(ret), K(fd_), KP(leaf_page_buff), K(page_header));
       } else if (OB_UNLIKELY(data_items.at(0).virtual_page_id_ != origin_last_item.virtual_page_id_ + origin_last_item.physical_page_num_)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "unexpected data_items or origin_last_item", KR(ret), K(fd_), K(data_items), K(origin_last_item));
+        STORAGE_LOG(WARN, "unexpected data_items or origin_last_item", KR(ret), K(fd_), K(data_items), K(origin_last_item));
       }
     }
     if (OB_SUCC(ret)) {
