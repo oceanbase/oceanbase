@@ -13041,11 +13041,24 @@ int ObLogPlan::get_cached_hash_sharding_info(const ObIArray<ObRawExpr*> &hash_ex
 {
   int ret = OB_SUCCESS;
   cached_sharding = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == cached_sharding && i < hash_dist_info_.count(); i++) {
+  EqualSets dummy_equal_sets;
+  bool find_exact_match = false;
+  // Prefer using sharding where partition keys and hash exprs are completely consistent.
+  // Otherwise, the sharding key retrieved from the cache in the outline path may differ from the regular path,
+  // which may lead to inconsistencies in determining whether the sharding can be inherited by upper-level operators.
+  // e.g. join: col1 = cast(col2) group by: col2
+  for (int64_t i = 0; OB_SUCC(ret) && !find_exact_match && i < hash_dist_info_.count(); i++) {
     ObShardingInfo *temp_sharding = NULL;
     if (OB_ISNULL(temp_sharding = hash_dist_info_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
+    } else if (ObOptimizerUtil::is_exprs_equivalent(hash_exprs,
+                                                    temp_sharding->get_partition_keys(),
+                                                    dummy_equal_sets)) {
+      find_exact_match = true;
+      cached_sharding = temp_sharding;
+    } else if (OB_NOT_NULL(cached_sharding)) {
+      // do nothing
     } else if (ObOptimizerUtil::is_exprs_equivalent(hash_exprs,
                                                     temp_sharding->get_partition_keys(),
                                                     equal_sets)) {

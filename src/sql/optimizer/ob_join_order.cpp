@@ -8872,10 +8872,12 @@ int JoinPath::compute_hash_hash_sharding_info()
   int ret = OB_SUCCESS;
   ObLogPlan *log_plan = NULL;
   ObIAllocator *allocator = NULL;
+  ObShardingInfo *target_sharding = NULL;
   if (OB_ISNULL(left_path_) || OB_ISNULL(left_path_->parent_) || OB_ISNULL(parent_) ||
       OB_ISNULL(allocator = left_path_->parent_->get_allocator()) ||
       OB_ISNULL(log_plan = left_path_->parent_->get_plan()) ||
-      OB_ISNULL(log_plan->get_optimizer_context().get_query_ctx())) {
+      OB_ISNULL(log_plan->get_optimizer_context().get_query_ctx()) ||
+      OB_ISNULL(right_path_->parent_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_path_), K(allocator), K(log_plan), K(ret));
   } else if (OB_UNLIKELY(JoinAlgo::NESTED_LOOP_JOIN == join_algo_)) {
@@ -8969,50 +8971,61 @@ int JoinPath::compute_hash_hash_sharding_info()
       if (use_hybrid_hash_dm_) {
         // fix issue/45941566
         strong_sharding_ = log_plan->get_optimizer_context().get_distributed_sharding();
-      } else if (use_left || use_right) {
-        ObShardingInfo *target_sharding = NULL;
-        if (use_left && OB_FAIL(log_plan->get_cached_hash_sharding_info(left_join_exprs,
-                                                                        parent_->get_output_equal_sets(),
-                                                                        target_sharding))) {
+      } else if (use_left) {
+        if (OB_FAIL(log_plan->get_cached_hash_sharding_info(left_join_exprs,
+                                                            left_path_->parent_->get_output_equal_sets(),
+                                                            target_sharding))) {
           LOG_WARN("failed to get cached sharding info", K(ret));
-        } else if (use_right && NULL == target_sharding &&
-                   OB_FAIL(log_plan->get_cached_hash_sharding_info(right_join_exprs,
-                                                                   parent_->get_output_equal_sets(),
-                                                                   target_sharding))) {
-          LOG_WARN("failed to get cached sharding info", K(ret));
-        } else if (NULL != target_sharding) {
-          if (is_weak_sharding) {
-            if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
-              LOG_WARN("failed to push back sharding", K(ret));
-            }
+        } else if (OB_ISNULL(target_sharding)) {
+          if (OB_ISNULL(target_sharding = reinterpret_cast<ObShardingInfo*>(
+                                          allocator->alloc(sizeof(ObShardingInfo))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory", K(ret));
           } else {
-            strong_sharding_ = target_sharding;
+            target_sharding = new (target_sharding) ObShardingInfo();
+            target_sharding->set_distributed();
+            if (OB_FAIL(target_sharding->get_partition_keys().assign(left_join_exprs))) {
+              LOG_WARN("failed to assign expr", K(ret));
+            } else if (OB_FAIL(log_plan->get_hash_dist_info().push_back(target_sharding))) {
+              LOG_WARN("failed to push back sharding info", K(ret));
+            }
           }
-        } else if (OB_ISNULL(target_sharding = reinterpret_cast<ObShardingInfo*>(
-                                        allocator->alloc(sizeof(ObShardingInfo))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (is_weak_sharding) {
+          if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
+            LOG_WARN("failed to push back sharding", K(ret));
+          }
         } else {
-          target_sharding = new (target_sharding) ObShardingInfo();
-          target_sharding->set_distributed();
-          if (use_left) {
-            ret = target_sharding->get_partition_keys().assign(left_join_exprs);
-          } else if (use_right) {
-            ret = target_sharding->get_partition_keys().assign(right_join_exprs);
-          } else { /*do nothing*/ }
-          if (OB_FAIL(ret)) {
-            /*do nothing*/
-          } else if (OB_FAIL(log_plan->get_hash_dist_info().push_back(target_sharding))) {
-            LOG_WARN("failed to push back sharding info", K(ret));
+          strong_sharding_ = target_sharding;
+        }
+      } else if (use_right) {
+        if (OB_FAIL(log_plan->get_cached_hash_sharding_info(right_join_exprs,
+                                                            right_path_->parent_->get_output_equal_sets(),
+                                                            target_sharding))) {
+          LOG_WARN("failed to get cached sharding info", K(ret));
+        } else if (OB_ISNULL(target_sharding)) {
+          if (OB_ISNULL(target_sharding = reinterpret_cast<ObShardingInfo*>(
+                                          allocator->alloc(sizeof(ObShardingInfo))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory", K(ret));
           } else {
-            if (is_weak_sharding) {
-              if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
-                LOG_WARN("failed to push back sharding", K(ret));
-              }
-            } else {
-              strong_sharding_ = target_sharding;
+            target_sharding = new (target_sharding) ObShardingInfo();
+            target_sharding->set_distributed();
+            if (OB_FAIL(target_sharding->get_partition_keys().assign(right_join_exprs))) {
+              LOG_WARN("failed to assign expr", K(ret));
+            } else if (OB_FAIL(log_plan->get_hash_dist_info().push_back(target_sharding))) {
+              LOG_WARN("failed to push back sharding info", K(ret));
             }
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (is_weak_sharding) {
+          if (OB_FAIL(weak_sharding_.push_back(target_sharding))) {
+            LOG_WARN("failed to push back sharding", K(ret));
+          }
+        } else {
+          strong_sharding_ = target_sharding;
         }
       } else {
         strong_sharding_ = log_plan->get_optimizer_context().get_distributed_sharding();
