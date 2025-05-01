@@ -181,7 +181,7 @@ int ObMultipleMultiScanMerge::construct_iters(const bool is_refresh)
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
-    bool use_cache_iter = iters_.count() > 0; // rescan with the same iters and different range
+    bool use_cache_iter = iters_.count() > 0 || di_base_iters_.count() > 0; // rescan with the same iters and different range
     const int64_t table_cnt = tables_.count() - 1;
 
     // for delete_insert scenario, handle no major before and major sstable generated after refresh
