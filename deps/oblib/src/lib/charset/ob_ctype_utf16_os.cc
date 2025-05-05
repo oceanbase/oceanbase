@@ -1002,7 +1002,8 @@ ob_like_range_generic(const ObCharsetInfo *cs,
                       char escape_char, char w_one, char w_many,
                       size_t res_length,
                       char *min_str,char *max_str,
-                      size_t *min_length,size_t *max_length)
+                      size_t *min_length,size_t *max_length,
+                      size_t *prefix_length)
 {
   const char *min_org = min_str;
   const char *max_org = max_str;
@@ -1063,6 +1064,7 @@ ob_like_range_generic(const ObCharsetInfo *cs,
         continue;
       }
     } else if ((ob_wc_t) w_many == wc) {
+      *prefix_length = (size_t) (min_str - min_org);
       *min_length= ((cs->state & OB_CS_BINSORT) ? (size_t) (min_str - min_org) : res_length);
       *max_length= res_length;
       goto PAD_MIN_MAX;
@@ -1116,6 +1118,7 @@ ob_like_range_generic(const ObCharsetInfo *cs,
   }
 
 PAD_SET_LEN:
+  *prefix_length = (size_t) (min_str - min_org);
   *min_length= (size_t) (min_str - min_org);
   *max_length= (size_t) (max_str - max_org);
 

@@ -507,6 +507,11 @@ public:
   MbrFilterArray &ut_get_mbr_filter() { return mbr_filters_; }
   ColumnIdInfoMap &ut_get_columnId_map() { return columnId_map_; }
   bool is_contain_geo_filters() const { return contain_geo_filters_; }
+  // get prefix string (without wildcards) length of like pattern
+  static int get_pattern_prefix_len(const ObCollationType &cs_type,
+                                    const ObString &escape_str,
+                                    const ObString &pattern_str,
+                                    int32_t &pattern_prefix_len);
 private:
 
   int init_query_range_ctx(common::ObIAllocator &allocator,

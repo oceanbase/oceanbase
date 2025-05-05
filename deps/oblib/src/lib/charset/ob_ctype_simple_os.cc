@@ -690,7 +690,8 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
 			     pbool escape_char, pbool w_one, pbool w_many,
 			     size_t res_len,
 			     char *min_str,char *max_str,
-			     size_t *min_len, size_t *max_len)
+			     size_t *min_len, size_t *max_len,
+           size_t *prefix_len)
 {
   const char *end= ptr + ptr_len;
   char *min_org=min_str;
@@ -707,6 +708,7 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
       *max_str++= (char) cs->max_sort_char;
       continue;
     } else if (*ptr == w_many) {
+      *prefix_len = min_str - min_org;
       *min_len= ((cs->state & OB_CS_BINSORT) ?
                     (size_t) (min_str - min_org) :
                     res_len);
@@ -720,7 +722,7 @@ bool ob_like_range_simple(const ObCharsetInfo *cs,
     *min_str++= *max_str++ = *ptr;
   }
 
-  *min_len= *max_len = (size_t) (min_str - min_org);
+  *min_len= *max_len= *prefix_len = (size_t) (min_str - min_org);
   while (min_str != min_end) {
     *min_str++= *max_str++ = ' ';        
   }

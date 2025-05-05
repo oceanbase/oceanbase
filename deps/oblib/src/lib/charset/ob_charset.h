@@ -343,7 +343,8 @@ public:
                         size_t *min_str_len,
                         char *max_str,
                         size_t *max_str_len,
-                        bool is_like_range_support_non_bmp_chars = false);
+                        bool is_like_range_support_non_bmp_chars = false,
+                        size_t *prefix_len = NULL);
   static size_t strlen_char(ObCollationType collation_type,
                             const char *str,
                             int64_t str_len);
