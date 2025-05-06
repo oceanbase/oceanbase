@@ -66,7 +66,7 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
         uint8x16_t data_vec = vld1q_u8(ref_arr + i * 16);
         uint8x16_t cmp_res_ref = neon_cmp_int<uint8x16_t, uint8x16_t, CMP_TYPE>(data_vec, dict_ref_vec);
-        uint8x16_t cmp_res_cnt = neon_cmp_int<uint8x16_t, uint8x16_t, CMP_TYPE>(data_vec, dict_cnt_vec);
+        uint8x16_t cmp_res_cnt = neon_cmp_int<uint8x16_t, uint8x16_t, sql::WHITE_OP_GE>(data_vec, dict_cnt_vec);
         uint8x16_t cmp_res = cmp_res_ref & (~cmp_res_cnt);
         // generate result bitmap from compare result
         uint64x2_t bi_mask = vpaddlq_u32(vpaddlq_u16(vpaddlq_u8(vandq_u8(cmp_res, power_vec))));
@@ -75,7 +75,9 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
       }
 
       for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
-        if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
+        if (value_cmp_t<uint8_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
+          // null value
+        } else if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
       }
@@ -120,7 +122,7 @@ struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
       for (int64_t i = 0; i < row_cnt / 8; ++i) {
         uint16x8_t data_vec = vld1q_u16(ref_arr + i * 8);
         uint16x8_t cmp_res_ref = neon_cmp_int<uint16x8_t, uint16x8_t, CMP_TYPE>(data_vec, dict_ref_vec);
-        uint16x8_t cmp_res_cnt = neon_cmp_int<uint16x8_t, uint16x8_t, CMP_TYPE>(data_vec, dict_cnt_vec);
+        uint16x8_t cmp_res_cnt = neon_cmp_int<uint16x8_t, uint16x8_t, sql::WHITE_OP_GE>(data_vec, dict_cnt_vec);
         uint16x8_t cmp_res = cmp_res_ref & (~cmp_res_cnt);
         // generate result bitmap from compare result
         uint64_t mask = vpaddd_u64(vpaddlq_u32(vpaddlq_u16(vandq_u16(cmp_res, power_vec))));
@@ -128,7 +130,9 @@ struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
       }
 
       for (int64_t row_id = row_cnt / 8 * 8; row_id < row_cnt; ++row_id) {
-        if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
+        if (value_cmp_t<uint16_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
+          // null value
+        } else if (value_cmp_t<uint16_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
       }
