@@ -477,7 +477,7 @@ DEFINE_ERROR(OB_IO_TIMEOUT, -4404, 4012, "HY000", "IO timeout");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_LICENSE, -4405, -1, "HY000", "license is invalid", "license is invalid because: %s");
 DEFINE_ERROR(OB_LICENSE_EXPIRED, -4406, -1, "HY000", "license is expired");
 DEFINE_ERROR_EXT_DEP(OB_LICENSE_SCOPE_EXCEEDED, -4407, -1, "HY000", "current license does not allow this operation", "current license does not allow this operation: %s");
-
+DEFINE_ERROR(OB_MIGRATE_TX_DATA_NOT_CONTINUES, -4408, -1, "HY000", "migrate tx data not continues");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 通用错误码值域[-4000, -4500)，含sstable等

@@ -1354,6 +1354,54 @@ bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSI
 
 share::ObLSID ObTxDataTable::get_ls_id() { return ls_id_; }
 
+int ObTxDataTable::get_sstable_recycle_scn(share::SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  recycle_scn.set_max();
+  ObTableStoreIterator iter;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tx data table is not init.", KR(ret), KP(this));
+  } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id_, tablet_handle))) {
+    STORAGE_LOG(WARN, "get tablet from ls tablet service fail.", KR(ret), KP(this), K(tablet_id_));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+  } else if (OB_FAIL(tablet->get_all_minor_sstables(iter))) {
+    LOG_WARN("failed to get all minor sstables", K(ret), KPC(tablet));
+  } else if (0 == iter.count()) {
+    recycle_scn.set_min();
+  } else {
+    bool is_first_sstable = true;
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      if (OB_FAIL(iter.get_next(table))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to iterate minor tables", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(table) || !table->is_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("minor sstable should not be NULL or table type is unexpected", K(ret), KP(table), K(iter));
+      } else {
+        ObSSTable *sstable = static_cast<ObSSTable *>(table);
+        if (is_first_sstable) {
+          recycle_scn = sstable->get_filled_tx_scn();
+          is_first_sstable = false;
+        } else if (sstable->get_filled_tx_scn() > sstable->get_start_scn()) {
+          recycle_scn = MAX(recycle_scn, sstable->get_filled_tx_scn());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace storage
 
 }  // namespace oceanbase

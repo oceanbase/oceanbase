@@ -341,6 +341,8 @@ public:
   void disable_upper_trans_calculation();
   void enable_upper_trans_calculation(const share::SCN latest_transfer_scn);
 
+  int get_tx_data_sstable_recycle_scn(share::SCN &recycle_scn);
+
   TO_STRING_KV(KP(this),
                K_(ls_id),
                K_(is_inited),
