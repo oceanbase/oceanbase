@@ -8,73 +8,36 @@ connection sys;
 use test;
 --source mysql_test/test_suite/histogram/include/gather_sys_table_stat.inc
 let $tenant_id = 1;
-let $cnt = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_type = 1, cnt, 1);
 
-let $idx = 1;
-while ($idx <= $cnt)
-{
-let $database_name = query_get_value(select d.database_name from oceanbase.__all_virtual_table as t join oceanbase.__all_virtual_database as d on t.tenant_id = d.tenant_id and t.database_id = d.database_id where t.tenant_id = $tenant_id and table_type = 1 order by t.table_id, database_name, $idx);
-let $table_name = query_get_value(select table_name from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_type = 1 order by table_id, table_name, $idx);
-eval desc $database_name.$table_name;
+let $check_tenant_id=$tenant_id;
+connect (connection_sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+connect (connection_tenant,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+let $query_type_2_str='|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V\$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|';
+let $query_type_3_str='|CDB_OB_SERVER_SPACE_USAGE|';
+--source mysql_test/test_suite/inner_table/t/desc_all_views.inc
 
-let $query_type = 1;
-if ($table_name == 'CDB_IND_COLUMNS')
+--disable_query_log
+--disable_result_log
+let $check_time = 120;
+while ($check_time > 0)
 {
-let $query_type = 2;
+  connection sys;
+  let $view_not_compiled=query_get_value(select count(*) a from oceanbase.__all_virtual_table where table_id > 20000 and table_id < 25000 and tenant_id = $tenant_id and table_id not in (select distinct table_id from oceanbase.__all_virtual_column where tenant_id = $tenant_id), a, 1);
+  if ($view_not_compiled == 0)
+  {
+    let $check_time = 0;
+  }
+  --source mysql_test/test_suite/inner_table/t/desc_all_views.inc
+  dec $check_time;
+  sleep 1;
 }
-if ($table_name == 'CDB_PART_KEY_COLUMNS')
-{
-let $query_type = 2;
-}
-if ($table_name == 'CDB_SUBPART_KEY_COLUMNS')
-{
-let $query_type = 2;
-}
-if ($table_name == 'CDB_TAB_COL_STATISTICS')
-{
-let $query_type = 2;
-}
-if ($table_name == 'CDB_TAB_COLS')
-{
-let $query_type = 2;
-}
-if ($table_name == 'CDB_TAB_COLS_V$')
-{
-let $query_type = 2;
-}
-if ($table_name == 'KEY_COLUMN_USAGE')
-{
-let $query_type = 2;
-}
-if ($table_name == 'DBA_TAB_COL_STATISTICS')
-{
-let $query_type = 2;
-}
-if ($table_name == 'CDB_OB_SERVER_SPACE_USAGE')
-{
-let $query_type = 3;
-}
+--enable_query_log
+--enable_result_log
 
-if ($query_type == 1)
+if ($view_not_compiled != 0)
 {
---replace_column 1 1
-eval select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from $database_name.$table_name limit 1);
-}
-
-if ($query_type == 2)
-{
-eval select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
-}
-
-if ($query_type == 3)
-{
---disable_warnings
---replace_column 1 1
-eval select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from $database_name.$table_name limit 1);
---enable_warnings
-}
-
-inc $idx;
+  --echo there is view not compiled
+  --exit
 }
 
 connection sys;
