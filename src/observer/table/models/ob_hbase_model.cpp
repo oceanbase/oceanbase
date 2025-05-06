@@ -542,7 +542,7 @@ int ObHBaseModel::work(ObTableExecCtx &ctx,
 int ObHBaseModel::after_work(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)
 {
   UNUSED(ctx);
-  return prepare_allocate_and_init_result(req, res);
+  return prepare_allocate_and_init_result(ctx, req, res);
 }
 
 int ObHBaseModel::before_response(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, ObTableLSOpResult &res)

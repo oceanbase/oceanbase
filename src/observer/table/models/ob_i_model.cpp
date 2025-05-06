@@ -620,7 +620,8 @@ new_res_ls2:
     ...
 src_res: [0][1][2][...][n]
 */
-int ObIModel::init_result(const ObTableLSOpRequest &src_req,
+int ObIModel::init_result(ObTableExecCtx &ctx,
+                          const ObTableLSOpRequest &src_req,
                           ObTableLSOpResult &src_res)
 {
   int ret = OB_SUCCESS;
@@ -672,6 +673,63 @@ int ObIModel::init_result(const ObTableLSOpRequest &src_req,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_result(ctx, src_req, src_res))) {
+      LOG_WARN("fail to check final result", K(ret), K(src_res), K(ctx));
+    }
+  }
+
+  return ret;
+}
+
+int ObIModel::check_result(ObTableExecCtx &ctx,
+                           const ObTableLSOpRequest &src_req,
+                           ObTableLSOpResult &src_res)
+{
+  int ret = OB_SUCCESS;
+  ObITableEntityFactory *entity_factory = ctx.get_entity_factory();
+
+  if (OB_ISNULL(entity_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity_factory is null", K(ret));
+  } else if (OB_ISNULL(src_req.ls_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls op is null", K(ret));
+  } else if (1 != src_res.count() || 1 != src_req.ls_op_->count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should only has one tablet result", K(ret), K(src_res.count()), K(src_req.ls_op_->count()));
+  } else if (src_res.at(0).count() != src_req.ls_op_->at(0).count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid result count", K(ret), K(src_res.count()), K(src_req.ls_op_->at(0).count()));
+  } else {
+    const ObTableTabletOp &src_tablet_op = src_req.ls_op_->at(0);
+    ObTableTabletOpResult &src_tablet_res = src_res.at(0);
+    for (int64_t i = 0; i < src_tablet_res.count() && OB_SUCC(ret); i++) {
+      ObTableSingleOpResult &single_res = src_tablet_res.at(i);
+      if (OB_ISNULL(single_res.get_entity())) { // maybe some keys not exist when do batch get, need fill empty entity.
+        if (src_tablet_op.get_single_ops().empty() || src_tablet_op.get_single_ops().at(0).get_entities().empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid count", K(src_tablet_op));
+        } else {
+          const ObTableSingleOpEntity &req_entity = src_tablet_op.get_single_ops().at(0).get_entities().at(0);
+          ObTableSingleOpEntity *entity = static_cast<ObTableSingleOpEntity *>(entity_factory->alloc());
+          if (OB_ISNULL(entity)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc entity", K(ret));
+          } else {
+            entity->set_dictionary(&src_res.get_rowkey_names(), &src_res.get_properties_names());
+            if (OB_FAIL(entity->construct_names_bitmap(req_entity))) { // directly use request bitmap as result bitmap
+              LOG_WARN("fail to construct name bitmap", K(ret), K(req_entity));
+            } else {
+              single_res.set_entity(entity);
+              single_res.set_err(OB_SUCCESS);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -700,14 +758,15 @@ void ObIModel::free_requests_and_results(ObTableExecCtx &ctx)
   }
 }
 
-int ObIModel::prepare_allocate_and_init_result(const ObTableLSOpRequest &req,
+int ObIModel::prepare_allocate_and_init_result(ObTableExecCtx &ctx,
+                                               const ObTableLSOpRequest &req,
                                                ObTableLSOpResult &res)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(prepare_allocate_result(req, res))) {
     LOG_WARN("fail to prepate allocate result", K(ret), K(req));
-  } else if (OB_FAIL(init_result(req, res))) {
+  } else if (OB_FAIL(init_result(ctx, req, res))) {
     LOG_WARN("fail to init result", K(ret), K(req));
   }
 
