@@ -442,11 +442,14 @@ int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::s
   return OB_SUCCESS;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_MERGE_ENGINE_DELETE_INSERT);
 int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
-  if (OB_LIKELY(tenant_config.is_valid())) {
+  if (ERRSIM_SET_MERGE_ENGINE_DELETE_INSERT) {
+    table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  } else if (OB_LIKELY(tenant_config.is_valid())) {
     const char *delete_insert = ObMergeEngineStoreFormat::get_merge_engine_type_name(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
     if (0 == tenant_config->default_table_merge_engine.case_compare(delete_insert)) {
       table_schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
