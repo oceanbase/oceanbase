@@ -28,7 +28,6 @@ public:
   bool protect(ObKVMemBlockHandle* mb_handle);
   ObKVMemBlockHandle* get_mb_handle() const;
   void reset_protect(ObKVMemBlockHandle* mb_handle);
-  void reset_protect_seq_cst(ObKVMemBlockHandle* mb_handle);
   void release();
   HazardPointer* get_next() const;
   HazardPointer* get_next_atomic() const;

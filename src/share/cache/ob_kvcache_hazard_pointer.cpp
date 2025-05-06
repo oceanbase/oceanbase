@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/alloc/alloc_struct.h"
-#define USING_LOG_PREFIX STORAGE
 
 #include "share/cache/ob_kvcache_struct.h"
 #include "share/cache/ob_kvcache_hazard_pointer.h"
@@ -25,7 +23,8 @@ bool HazardPointer::protect(ObKVMemBlockHandle* mb_handle, int32_t seq_num)
   if (seq_num != mb_handle->get_seq_num()) {
     b_ret = false;
   } else {
-    reset_protect_seq_cst(mb_handle);
+    reset_protect(mb_handle);
+    MEM_BARRIER();
     if (seq_num != ATOMIC_LOAD_RLX(&mb_handle->seq_num_)) {
       release();
       b_ret = false;
@@ -40,7 +39,8 @@ bool HazardPointer::protect(ObKVMemBlockHandle* mb_handle)
   if (ObKVMBHandleStatus::FREE == mb_handle->get_status()) {
     b_ret = false;
   } else {
-    reset_protect_seq_cst(mb_handle);
+    reset_protect(mb_handle);
+    MEM_BARRIER();
     if (ObKVMBHandleStatus::FREE == ATOMIC_LOAD_RLX(&mb_handle->status_)) {
       release();
       b_ret = false;
@@ -58,12 +58,6 @@ void HazardPointer::reset_protect(ObKVMemBlockHandle* mb_handle)
 {
   ObKVMemBlockHandle** addr = &this->mb_handle_;
   ATOMIC_STORE_RLX(addr, mb_handle);
-}
-
-void HazardPointer::reset_protect_seq_cst(ObKVMemBlockHandle* mb_handle)
-{
-  ObKVMemBlockHandle** addr = &this->mb_handle_;
-  ATOMIC_STORE(addr, mb_handle);
 }
 
 void HazardPointer::release()
