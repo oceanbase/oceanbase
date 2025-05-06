@@ -2170,9 +2170,6 @@ int ObMicroBlockDecoder::get_distinct_count(const int32_t group_by_col, int64_t&
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMicroBlockDecoder is not init", K(ret));
-  } else if (OB_UNLIKELY(group_by_col >= header_->column_count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(group_by_col), K(header_->column_count_));
   } else {
      ret = decoders_[group_by_col].get_distinct_count(distinct_cnt);
   }
