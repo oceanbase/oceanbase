@@ -251,6 +251,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
     if (task_arg_.sqc_task_ptr_ != NULL) {
       task_arg_.sqc_task_ptr_->set_task_state(SQC_TASK_EXIT);
     }
+    ObInterruptUtil::update_schema_error_code(task_arg_.exec_ctx_, ret, task_arg_.task_.px_worker_execute_start_schema_version_);
     (void) ObInterruptUtil::interrupt_qc(task_arg_.task_, ret, task_arg_.exec_ctx_);
   }
 
