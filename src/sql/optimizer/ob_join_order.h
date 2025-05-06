@@ -864,10 +864,10 @@ class Path
 
   public:
     ObIndexMergeType node_type_;
-    common::ObSEArray<ObIndexMergeNode*, 2> children_;
-    common::ObSEArray<ObRawExpr*, 2> filter_; // filters handled by all child node of this node
+    common::ObSEArray<ObIndexMergeNode*, 2, common::ModulePageAllocator, true> children_;
+    common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> filter_; // filters handled by all child node of this node
     uint64_t index_tid_;
-    common::ObSEArray<uint64_t, 1> candicate_index_tids_; // only used when building index merge tree
+    common::ObSEArray<uint64_t, 1, common::ModulePageAllocator, true> candicate_index_tids_; // only used when building index merge tree
     AccessPath *ap_;
     int64_t scan_node_idx_;
   };
