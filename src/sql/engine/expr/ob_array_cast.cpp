@@ -689,6 +689,48 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
   return ret;
 }
 
+int ObArrayCastUtils::string_cast_array( ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+{
+  int ret = OB_SUCCESS;
+
+  int len = arr_text.length();
+  const char* begin = arr_text.ptr();
+  const char* ptr = begin;
+  const char* end = ptr + len;
+
+  if (dst_elem_type->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support binary cast to nested array", K(dst_elem_type->type_id_), K(ret));
+  } else {
+    const ObCollectionBasicType *basic_type = dynamic_cast<const ObCollectionBasicType *>(dst_elem_type);
+    ObObjType elem_type = basic_type->basic_meta_.get_obj_type();
+    switch (elem_type) {
+      case ObFloatType: {
+        if ((len & 0x03) != 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("length not sopported", K(len), K(ret));
+        } else {
+          while (ptr < end && OB_SUCC(ret)) {
+            const float *val_ptr = reinterpret_cast<const float *>(ptr);
+            float val = *val_ptr;
+            ObArrayFixedSize<float> *dst_arr = static_cast<ObArrayFixedSize<float> *>(dst);
+            if (OB_FAIL(dst_arr->push_back(static_cast<float>(val)))) {
+              LOG_WARN("failed to push back array value", K(ret));
+            }
+            ptr += sizeof(float);
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("type not supported", K(elem_type), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_type, bool is_binary)
 {
   int ret = OB_SUCCESS;

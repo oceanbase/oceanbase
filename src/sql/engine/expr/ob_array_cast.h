@@ -98,6 +98,7 @@ public:
   static int cast_add_element(common::ObIAllocator &alloc, ObObj &src_elem,  ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type, ObCastMode mode);
   static int add_json_node_to_array(common::ObIAllocator &alloc, ObJsonNode &j_node, const ObCollectionTypeBase *elem_type, ObIArrayType *dst);
   static int add_vector_element(const double value, const ObCollectionTypeBase *elem_type, ObIArrayType *dst);
+  static int string_cast_array(ObString &arr_text, ObIArrayType *&dst, const ObCollectionTypeBase *dst_type);
 public:
   static const int32_t NULL_STR_LEN = 4;
 };
