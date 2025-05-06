@@ -78,7 +78,7 @@ public:
   TestMdsTransactionTest() : ObSimpleClusterTestBase("test_mds_transaction_") {}
   virtual void SetUp() override {
     ObSimpleClusterTestBase::SetUp();
-    OB_LOGGER.set_log_level("TRACE");
+    OB_LOGGER.set_log_level("INFO");
   }
   virtual void TearDown() override {
     OB_LOGGER.set_log_level("WDIAG");
