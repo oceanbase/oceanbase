@@ -16,6 +16,9 @@
 #include "sql/parser/parse_node_hash.h"
 #include "sql/parser/sql_parser_base.h"
 #include "sql/executor/ob_memory_tracker_wrapper.h"
+#if defined(__GNUC__) && defined(__x86_64__)
+#include <immintrin.h>
+#endif
 extern const char *get_type_name(int type);
 
 #ifdef SQL_PARSER_COMPILATION
@@ -555,6 +558,26 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
     } else {
       //for odd number, we have copy the first char,  so we should minus 2;
       const char *end = src + len - (is_odd ? 2 : 1);
+#if defined(__GNUC__) && defined(__x86_64__)
+      if (__builtin_cpu_supports("avx512f") || __builtin_cpu_supports("avx512bw") || __builtin_cpu_supports("avx512vl")) {
+        __m512i zero = _mm512_set1_epi8('0');
+        __m512i nine = _mm512_set1_epi8('9');
+        __m512i extra = _mm512_set1_epi8(9);
+        __m512i low_mask = _mm512_set1_epi16(0x00FF);
+        __m512i high_mask = _mm512_set1_epi16(0xFF00);
+        __m512i low_nibble_mask = _mm512_set1_epi8(0x0F);
+
+        for (; src + 64 <= end; src += 64, dest += 32) {
+          __m512i input = _mm512_loadu_si512((__m512i*)src);
+          __m512i rawbytes = _mm512_add_epi64(_mm512_and_si512(input, low_nibble_mask),
+                                              _mm512_maskz_loadu_epi8(~(_mm512_cmpge_epu8_mask(input, zero) & _mm512_cmple_epu8_mask(input, nine)), &extra));
+          __m512i low_bytes = _mm512_slli_epi16(_mm512_and_si512(rawbytes, low_mask), 4);
+          __m512i high_bytes = _mm512_srli_epi16(_mm512_and_si512(rawbytes, high_mask), 8);
+          __m256i tmp = _mm512_cvtepi16_epi8(_mm512_or_si512(low_bytes, high_bytes));
+          _mm256_storeu_si256((__m256i*)dest, tmp);
+        }
+      }
+#endif
       for (; src <= end; src += 2)
       {
         *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
