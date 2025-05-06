@@ -35,7 +35,9 @@ void ObActiveSessionStat::fixup_last_stat(const ObWaitEventDesc &desc)
   if (fixup_index_ != -1) {
     if (OB_LIKELY(fixup_ash_buffer_.is_valid())) {
       common::ObSharedGuard<ObAshBuffer> tmp_buffer = fixup_ash_buffer_; // copy on write
-      tmp_buffer->fixup_stat(fixup_index_, desc);
+      if (tmp_buffer.is_valid()) {
+        tmp_buffer->fixup_stat(fixup_index_, desc);
+      }
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
     }
@@ -45,14 +47,21 @@ void ObActiveSessionStat::fixup_last_stat(const ObCurTraceId::TraceId &trace_id,
                                           const int64_t session_id,
                                           const char* sql_id,
                                           const int64_t plan_id,
-                                          const int64_t plan_hash)
+                                          const int64_t plan_hash,
+                                          const int64_t stmt_type)
 {
-  if (fixup_index_ != -1) {
-    if (OB_LIKELY(fixup_ash_buffer_.is_valid())) {
-      common::ObSharedGuard<ObAshBuffer> tmp_buffer = fixup_ash_buffer_; // copy on write
-      tmp_buffer->fixup_stat(fixup_index_, trace_id, session_id, sql_id, plan_id, plan_hash);
-    } else {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
+  if (sql_id[0] == '\0' && plan_id == 0 && plan_hash == 0) {
+    // do nothing, skip fixup
+  } else {
+    if (fixup_index_ != -1) {
+      if (OB_LIKELY(fixup_ash_buffer_.is_valid())) {
+        common::ObSharedGuard<ObAshBuffer> tmp_buffer = fixup_ash_buffer_; // copy on write
+        if (tmp_buffer.is_valid()) {
+          tmp_buffer->fixup_stat(fixup_index_, trace_id, session_id, sql_id, plan_id, plan_hash, stmt_type);
+        }
+      } else {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
+      }
     }
   }
 }
@@ -62,8 +71,30 @@ void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &a
 {
   // fixup buffer can only hold one ash buffer. Cannot switch it.
   // Otherwise core would happened when set_fixup_buffer coincide with session's reset fixup buffer.
-  if (OB_LIKELY(!fixup_ash_buffer_.is_valid())) {
+  if (OB_LIKELY(!fixup_ash_buffer_.is_valid()) && ash_buffer.is_valid()) {
     fixup_ash_buffer_ = ash_buffer;
+  }
+}
+
+void ObActiveSessionStat::set_fixup_buffer()
+{
+  if (OB_NOT_NULL(lib_get_ash_list_instance())) {
+    if (!fixup_ash_buffer_.is_valid()) {
+      // fixup_ash_buffer is not init
+      common::ObSharedGuard<ObAshBuffer> buffer = lib_get_ash_list_instance()->get_ash_buffer();
+      if (buffer.is_valid()) {
+        set_fixup_buffer(buffer);
+        LOG_DEBUG("succ to fixup buffer");
+      }
+    } else if (fixup_ash_buffer_.get_ptr() != lib_get_ash_list_instance()->get_ash_buffer().get_ptr()) {
+      // process resize ash buffer
+      common::ObSharedGuard<ObAshBuffer> buffer = lib_get_ash_list_instance()->get_ash_buffer();
+      if (buffer.is_valid()) {
+        fixup_index_ = -1;
+        set_fixup_buffer(buffer);
+        LOG_DEBUG("succ to fixup buffer");
+      }
+    }
   }
 }
 
@@ -75,21 +106,7 @@ void ObActiveSessionStat::set_sess_active()
     if (trace_id_.is_invalid()) {
       trace_id_ = *common::ObCurTraceId::get_trace_id();
     }
-
-    if (OB_NOT_NULL(lib_get_ash_list_instance())) {
-      common::ObSharedGuard<ObAshBuffer> buffer = lib_get_ash_list_instance()->get_ash_buffer();
-      if (buffer.is_valid()) {
-        set_fixup_buffer(buffer);
-      } else {
-        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-          LOG_WARN_RET(OB_ERR_UNEXPECTED,"failed to set fixup buffer, the buffer is is_valid", K(ret), K(lib_get_ash_list_instance()), K(lbt()));
-        }
-      }
-    } else {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        LOG_WARN_RET(OB_ERR_UNEXPECTED,"failed to set fixup buffer, the buffer is nullptr", K(ret), K(lib_get_ash_list_instance()), K(lbt()));
-      }
-    }
+    set_fixup_buffer();
   }
 
   if (id_ > 10) {
@@ -401,7 +418,8 @@ void ObAshBuffer::fixup_stat(int64_t index,
                              const int64_t session_id,
                              const char* sql_id,
                              const int64_t plan_id,
-                             const int64_t plan_hash)
+                             const int64_t plan_hash,
+                             const int64_t stmt_type)
 {
   if (OB_UNLIKELY(index < 0 || index >= write_pos_)) {
     // index invalid for fixup, do noting.
@@ -419,6 +437,10 @@ void ObAshBuffer::fixup_stat(int64_t index,
 
       if (last_stat.plan_hash_ == 0) {
         last_stat.plan_hash_ = plan_hash;
+      }
+
+      if (last_stat.stmt_type_ == 0) {
+        last_stat.stmt_type_ = stmt_type;
       }
     }
   }
