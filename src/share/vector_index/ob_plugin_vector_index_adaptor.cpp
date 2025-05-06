@@ -3317,8 +3317,10 @@ void ObPluginVectorIndexAdaptor::inc_ref()
 bool ObPluginVectorIndexAdaptor::dec_ref_and_check_release()
 {
   int64_t ref_count = ATOMIC_SAF(&ref_cnt_, 1);
-  // LOG_INFO("dec ref count", K(ref_count), KP(this), KPC(this), K(lbt()));
-  return (ref_count == 0);
+  if (ref_count <= 0) {
+    LOG_INFO("dec ref count", K(ref_count), KP(this), KPC(this), K(lbt()));
+  }
+  return (ref_count <= 0);
 }
 
 int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool &need_sync)
