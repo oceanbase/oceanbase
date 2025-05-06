@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2021 OceanBase
+	/**
+	 * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -2829,6 +2829,8 @@ typedef enum ObItemType
   T_BOOTSTRAP_INFO = 4846,
   T_LOGSERVICE_ACCESS_POINT = 4847,
   T_UNIT_LIST = 4848,
+
+  T_SP_SYS_DISPATCH_CALL = 4849,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
