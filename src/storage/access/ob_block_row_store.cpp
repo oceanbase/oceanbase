@@ -116,7 +116,7 @@ int ObBlockRowStore::open(ObTableIterParam &iter_param)
     LOG_WARN("Failed to init pushdown filter evaluated datums", K(ret));
   } else {
     if (OB_UNLIKELY(!filter_valid)) {
-      iter_param.pd_storage_flag_.set_filter_pushdown(false);
+      iter_param.disable_pd_filter();
       pd_filter_info_.is_pd_filter_ = false;
     }
     if (iter_param.is_use_column_store()) {
