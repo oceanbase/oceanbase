@@ -2304,6 +2304,11 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     mt_ctx_.remove_callbacks_for_fast_commit(log_cb->get_callbacks());
     fast_commit_time = ObTimeUtility::fast_current_time() - before_fast_commit_ts;
   }
+  ObTxLogCbPool::finish_syncing_with_stat(log_cb->get_group_ptr(),
+                                          log_cb->get_log_size(),
+                                          ObTimeUtility::fast_current_time()
+                                              - log_cb->get_submit_ts(),
+                                          log_cb->get_submit_ts());
   if (need_return_log_cb) {
     return_log_cb_(log_cb);
   }
@@ -2927,6 +2932,11 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
           mt_ctx_.elr_trans_revoke();
         }
       }
+      ObTxLogCbPool::finish_syncing_with_stat(log_cb->get_group_ptr(),
+                                              log_cb->get_log_size(),
+                                              ObTimeUtility::fast_current_time()
+                                                  - log_cb->get_submit_ts(),
+                                              log_cb->get_submit_ts());
       busy_cbs_.remove(log_cb);
       return_log_cb_(log_cb, true);
       log_cb = NULL;
