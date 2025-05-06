@@ -660,6 +660,7 @@ ob_set_subtarget(ob_storage access
   access/ob_global_iterator_pool.cpp
   access/ob_where_optimizer.cpp
   access/ob_skip_index_sortedness.cpp
+  access/ob_old_row_check_dumper.cpp
 )
 
 ob_set_subtarget(ob_storage ddl

@@ -48,6 +48,7 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_old_row_check_dumper.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -5365,9 +5366,6 @@ int ObLSTabletService::process_old_rows(
               KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_,
       tablet_handle, run_ctx, row_count, old_rows, error_row_idx))) {
-    if (OB_ERR_DEFENSIVE_CHECK == ret) {
-      dump_diag_info_for_old_row_loss(run_ctx, old_rows[error_row_idx]);
-    }
     LOG_WARN("check old row legitimacy failed", K(error_row_idx), K(old_rows[error_row_idx]));
   } else if (OB_FAIL(process_old_rows_lob_col(tablet_handle, run_ctx, row_count, old_rows))){
     LOG_WARN("failed to process old rows lob col", K(ret));
@@ -5461,9 +5459,6 @@ int ObLSTabletService::process_old_row(
     LOG_ERROR("Unexpected delete insert status", K(ret), K(store_ctx.mvcc_acc_ctx_.write_flag_),
               KPC(tablet_handle.get_obj()), K(run_ctx.dml_param_.table_param_->get_data_table()));
   } else if (OB_FAIL(check_old_row_legitimacy_wrap(run_ctx.cmp_funcs_, tablet_handle, run_ctx, 1, &datum_row, error_row_idx))) {
-    if (OB_ERR_DEFENSIVE_CHECK == ret) {
-      dump_diag_info_for_old_row_loss(run_ctx, datum_row);
-    }
     LOG_WARN("check old row legitimacy failed", K(ret), K(datum_row));
   } else if (OB_FAIL(process_old_row_lob_col(tablet_handle, run_ctx, datum_row))){
     LOG_WARN("failed to process old row lob col", K(ret), K(datum_row));
@@ -6121,9 +6116,6 @@ int ObLSTabletService::delete_rows_in_tablet(
 
   if (OB_FAIL(check_old_row_legitimacy_wrap(
       datum_utils.get_cmp_funcs(), tablet_handle, run_ctx, row_count, rows, error_row_idx))) {
-    if (OB_ERR_DEFENSIVE_CHECK == ret) {
-      dump_diag_info_for_old_row_loss(run_ctx, rows[error_row_idx]);
-    }
     LOG_WARN("check old row legitimacy failed", K(rows_info));
   } else if (OB_FAIL(process_old_rows_lob_col(tablet_handle, run_ctx, row_count, rows))){
     LOG_WARN("failed to process old rows lob col", K(ret));
@@ -6229,165 +6221,6 @@ int ObLSTabletService::prepare_scan_table_param(
     }
   }
   return ret;
-}
-
-void ObLSTabletService::dump_diag_info_for_old_row_loss(
-    ObDMLRunningCtx &run_ctx,
-    const blocksstable::ObDatumRow &datum_row)
-{
-  int ret = OB_SUCCESS;
-  ObStoreCtx &store_ctx = run_ctx.store_ctx_;
-  ObRelativeTable &data_table = run_ctx.relative_table_;
-  ObColDescIArray &col_descs = const_cast<ObColDescIArray&>(*run_ctx.col_descs_);
-  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "DumpDIAGInfo"));
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
-  ObSEArray<int32_t, 16> out_col_pros;
-  ObDatumRowkey datum_rowkey;
-  ObDatumRowkeyHelper rowkey_helper(allocator);
-  const int64_t schema_rowkey_cnt = data_table.get_rowkey_column_num();
-  ObTableStoreIterator &table_iter = *data_table.tablet_iter_.table_iter();
-  ObQueryFlag query_flag(ObQueryFlag::Forward,
-      false, /*is daily merge scan*/
-      false, /*is read multiple macro block*/
-      false, /*sys task scan, read one macro block in single io*/
-      false /*is full row scan?*/,
-      false,
-      false);
-  query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
-  common::ObVersionRange trans_version_rang;
-  trans_version_rang.base_version_ = 0;
-  trans_version_rang.multi_version_start_ = 0;
-  trans_version_rang.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
-
-  const share::schema::ObTableSchemaParam *schema_param = data_table.get_schema_param();
-  const ObITableReadInfo *read_info = &schema_param->get_read_info();
-  for (int64_t i = 0; OB_SUCC(ret) && i < read_info->get_request_count(); i++) {
-    if (OB_FAIL(out_col_pros.push_back(i))) {
-      STORAGE_LOG(WARN, "Failed to push back col project", K(ret), K(i));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(rowkey_helper.prepare_datum_rowkey(datum_row, schema_rowkey_cnt, col_descs, datum_rowkey))) {
-    LOG_WARN("Failed to prepare rowkey", K(ret), K(datum_row), K(datum_rowkey));
-  } else if (OB_FAIL(access_ctx.init(query_flag, store_ctx, allocator, trans_version_rang))) {
-    LOG_WARN("Fail to init access ctx", K(ret));
-  } else {
-    access_param.is_inited_ = true;
-    access_param.iter_param_.table_id_ = data_table.get_table_id();
-    access_param.iter_param_.tablet_id_ = data_table.tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    if (nullptr != data_table.tablet_iter_.get_tablet()) {
-      access_param.iter_param_.ls_id_ = data_table.tablet_iter_.get_tablet()->get_tablet_meta().ls_id_;
-    }
-    access_param.iter_param_.read_info_ = read_info;
-    access_param.iter_param_.cg_read_infos_ = schema_param->get_cg_read_infos();
-    access_param.iter_param_.out_cols_project_ = &out_col_pros;
-    access_param.iter_param_.set_tablet_handle(data_table.get_tablet_handle());
-    access_param.iter_param_.need_trans_info_ = true;
-
-    ObStoreRowIterator *getter = nullptr;
-    ObITable *table = nullptr;
-    const ObDatumRow *row = nullptr;
-
-    FLOG_INFO("Try to find the specified rowkey within all the sstable", K(datum_row), K(table_iter));
-    FLOG_INFO("Prepare the diag env to dump the rows", K(store_ctx), K(datum_rowkey),
-        K(access_ctx.trans_version_range_));
-
-    table_iter.resume();
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(table_iter.get_next(table))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("failed to get next tables", K(ret));
-        }
-      } else if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table must not be null", K(ret), K(table_iter));
-      } else if (OB_FAIL(table->get(access_param.iter_param_, access_ctx, datum_rowkey, getter))) {
-        LOG_WARN("Failed to get param", K(ret), KPC(table));
-      } else if (OB_FAIL(getter->get_next_row(row))) {
-        LOG_WARN("Failed to get next row", K(ret), KPC(table));
-      } else if (row->row_flag_.is_not_exist() || row->row_flag_.is_delete()){
-        FLOG_INFO("Cannot found rowkey in the table", KPC(row), KPC(table));
-      } else if (table->is_sstable()) {
-        FLOG_INFO("Found rowkey in the sstable",
-            KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
-      } else if (table->is_data_memtable()) {
-        FLOG_INFO("Found rowkey in the memtable",
-            KPC(row), KPC(static_cast<memtable::ObMemtable*>(table)));
-      } else if (table->is_direct_load_memtable()) {
-        FLOG_INFO("Found rowkey in the direct load memtable",
-            KPC(row), KPC(static_cast<ObITabletMemtable*>(table)));
-      }
-      if (OB_SUCC(ret) && table->is_sstable()) {
-        FLOG_INFO("Dump rowkey from sstable without row cache", KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
-        access_ctx.query_flag_.set_not_use_row_cache();
-        getter->reuse();
-        if (OB_FAIL(getter->init(access_param.iter_param_, access_ctx, table, &datum_rowkey))) {
-          LOG_WARN("Failed to init getter", K(ret));
-        } else if (OB_FAIL(getter->get_next_row(row))) {
-          LOG_WARN("Failed to get next row", K(ret), KPC(table));
-        } else if (row->row_flag_.is_not_exist() || row->row_flag_.is_delete()){
-          FLOG_INFO("Cannot found rowkey in the table without row cache", KPC(row), KPC(table));
-        } else {
-          FLOG_INFO("Found rowkey in the sstable without row cache",
-              KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
-        }
-        access_ctx.query_flag_.set_use_row_cache();
-      }
-
-      // ignore error in the loop
-      if (OB_FAIL(ret) && OB_ITER_END != ret) {
-        ret = OB_SUCCESS;
-      }
-      if (OB_NOT_NULL(getter)) {
-        getter->~ObStoreRowIterator();
-        getter = nullptr;
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-
-    if (OB_SUCC(ret)) {
-      FLOG_INFO("prepare to use single merge to find row", K(datum_rowkey), K(access_param));
-      ObSingleMerge *get_merge = nullptr;
-      ObGetTableParam get_table_param;
-      ObDatumRow *row = nullptr;
-      void *buf = nullptr;
-      if (OB_FAIL(get_table_param.tablet_iter_.assign(data_table.tablet_iter_))) {
-        LOG_WARN("Failed to assign tablet iterator", K(ret));
-      } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSingleMerge)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc memory for single merge", K(ret));
-      } else if (FALSE_IT(get_merge = new(buf)ObSingleMerge())) {
-      } else if (OB_FAIL(get_merge->init(access_param, access_ctx, get_table_param))) {
-        LOG_WARN("Failed to init single get merge", K(ret));
-      } else if (OB_FAIL(get_merge->open(datum_rowkey))) {
-        LOG_WARN("Failed to open single merge", K(ret));
-      } else if (FALSE_IT(get_merge->disable_fill_default())) {
-      } else {
-        while (OB_SUCC(get_merge->get_next_row(row))) {
-          FLOG_INFO("Found one row for the rowkey", KPC(row));
-        }
-        FLOG_INFO("Finish to find rowkey with single merge", K(ret), K(datum_rowkey));
-      }
-      if (OB_NOT_NULL(get_merge)) {
-        get_merge->~ObSingleMerge();
-        get_merge = nullptr;
-      }
-    }
-#ifdef ENABLE_DEBUG_LOG
-    // print single row check info
-    if (store_ctx.mvcc_acc_ctx_.tx_id_.is_valid()) {
-      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
-      if (OB_NOT_NULL(trx)
-          && NULL != trx->get_defensive_check_mgr()) {
-        (void)trx->get_defensive_check_mgr()->dump(store_ctx.mvcc_acc_ctx_.tx_id_);
-      }
-    }
-#endif
-  }
 }
 
 int ObLSTabletService::prepare_dml_running_ctx(
@@ -8248,6 +8081,13 @@ int ObLSTabletService::check_old_row_legitimacy_wrap(
       }
     } else {
       error_row_idx = i;
+    }
+  }
+  if (OB_ERR_DEFENSIVE_CHECK == ret) {
+    int tmp_ret = OB_SUCCESS;
+    ObOldRowCheckDumper dumper(run_ctx, old_rows[error_row_idx]);
+    if (OB_TMP_FAIL(dumper.dump_diag_log())) {
+      LOG_WARN("Failed to dump diag log for defensive check", KR(tmp_ret));
     }
   }
   return ret;
