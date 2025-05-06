@@ -1177,10 +1177,14 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
   bool contain_inner_table = false;
   bool contain_lateral_table = false;
   bool allow_distinct = false;
+  bool is_enabled = ctx_->is_groupby_placement_enabled_;
   is_valid = true;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if(!is_enabled && !stmt->get_stmt_hint().has_enable_hint(T_PLACE_GROUP_BY)) {
+    is_valid = false;
+    OPT_TRACE("system variable disables group by pushdown");
   } else if (OB_FAIL(stmt->check_if_contain_inner_table(contain_inner_table))) {
     LOG_WARN("failed to check if contain inner table", K(ret));
   } else if (contain_inner_table && !stmt->get_stmt_hint().has_enable_hint(T_PLACE_GROUP_BY)) {
@@ -1910,20 +1914,29 @@ int ObTransformGroupByPushdown::merge_params_by_cross_joins(ObSelectStmt *stmt,
       break;
     }
   }
+  bool hint_force_pushdown = false;
+  bool is_hint_valid = false;
   if (OB_SUCC(ret)) {
     if (has_distinct && !has_cross_join) {
       is_valid = false;
+      OPT_TRACE("group by pushdown not valid as has distinct");
     }
-    bool hint_force_pushdown = false;
-    if (OB_SUCC(ret) && OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
-                                      params,
-                                      hint_force_pushdown,
-                                      is_valid))) {
-      LOG_WARN("check hint failed", K(ret));
-    } else if (!is_valid) {
-      OPT_TRACE("hint disable group by pushdown or has distinct or not valid");
+    if (OB_SUCC(ret) && is_valid) {
+      if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
+                                    has_cross_join ? cross_join_params : params,
+                                    hint_force_pushdown,
+                                    is_hint_valid))) {
+        LOG_WARN("check hint failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!is_hint_valid) {
+      is_valid = false;
+      OPT_TRACE("hint disable group by pushdown not valid");
     } else if (!ctx_->is_groupby_placement_enabled_ && !hint_force_pushdown) {
       OPT_TRACE("system variable disable group by pushdown");
+      is_valid = false;
     }
   }
   LOG_TRACE("transform params after merge", K(params), K(cross_join_params), K(has_distinct));
@@ -2470,7 +2483,9 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
       LOG_WARN("failed to create multiple expr", K(ret));
     }
   }
-
+  if (OB_SUCC(ret) && OB_FAIL(new_count_star_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  }
   // inline view for crossjoin pull up
   // step 3 pull up cross joins through agg
   // in this step, we should new a view contains all tables (except cross_join tables) in current stmt
@@ -2916,7 +2931,9 @@ int ObTransformGroupByPushdown::push_down_group_by_into_view(ObSelectStmt *stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < params.having_exprs_.count(); ++i) {
     /// get count_star_expr from sub_stmt
     ObRawExpr *having_expr = params.having_exprs_.at(i);
-    if (OB_FAIL(sub_stmt->add_having_expr(having_expr))) {
+    if (OB_FAIL(having_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize having expr", K(ret));
+    } else if (OB_FAIL(sub_stmt->add_having_expr(having_expr))) {
       LOG_WARN("failed to add having expr", K(ret));
     }
   }
