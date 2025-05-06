@@ -20,6 +20,7 @@
 #include "common/storage/ob_device_common.h"
 #include "lib/atomic/ob_atomic.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/string/ob_sensitive_string.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,7 @@ int validate_uri_type(const common::ObString &uri)
       !uri.prefix_match(OB_S3_PREFIX) &&
       !uri.prefix_match(OB_FILE_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
   }
   return ret;  
 }
@@ -82,7 +83,7 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_FILE;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
   }
   return ret;
 }

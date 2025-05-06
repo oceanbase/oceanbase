@@ -1441,5 +1441,8 @@ extern const char *ob_strerror(const int oberr);
 #define ERRNOMSG(num) ::oceanbase::common::ObLogPrintErrNoMsg(num)
 #define KERRNOMSG(num) "errmsg", ::oceanbase::common::ObLogPrintErrNoMsg(num)
 
+// Used to print a string containing sensitive information (object storage secret key) that will be hidden when printed
+#define KS(x) #x, ::oceanbase::common::ObSensitiveString(x)
+
 
 #endif
