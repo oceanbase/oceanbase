@@ -1296,63 +1296,83 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("group_concat");
       }
       DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
-      // distinct
-      if (OB_SUCC(ret)) {
-        if (expr->is_param_distinct()) {
-          DATA_PRINTF("distinct ");
-        }
-      }
-      // expr list
-      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_real_param_count(); ++i) {
-        PRINT_EXPR(expr->get_real_param_exprs().at(i));
-        DATA_PRINTF(",");
-      }
-      if (OB_SUCC(ret)) {
-        --*pos_;
-      }
-      if (lib::is_oracle_mode() && type == T_FUN_GROUP_CONCAT
-          && 0 == expr->get_order_items().count()) { // oracle 模式 listagg 支持无 within group
-        /* do nothing */
-      } else {
-        if (lib::is_oracle_mode()) {
-          DATA_PRINTF(") within group (");
-        }
-        // order by
-        if (OB_SUCC(ret)) {
-          const ObIArray<OrderItem> &order_items = expr->get_order_items();
-          int64_t order_item_size = order_items.count();
-          if (order_item_size > 0) {
-            DATA_PRINTF(" order by ");
-            for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
-              const OrderItem &order_item = order_items.at(i);
-              PRINT_EXPR(order_item.expr_);
-              if (OB_SUCC(ret)) {
-                if (lib::is_mysql_mode()) {
-                  if (is_descending_direction(order_item.order_type_)) {
-                    DATA_PRINTF(" desc ");
-                  }
-                } else if (order_item.order_type_ == NULLS_FIRST_ASC) {
-                  DATA_PRINTF(" asc nulls first ");
-                } else if (order_item.order_type_ == NULLS_LAST_ASC) {//use default value
-                  /*do nothing*/
-                } else if (order_item.order_type_ == NULLS_FIRST_DESC) {//use default value
-                  DATA_PRINTF(" desc ");
-                } else if (order_item.order_type_ == NULLS_LAST_DESC) {
-                  DATA_PRINTF(" desc nulls last ");
-                } else {/*do nothing*/}
-              }
-              DATA_PRINTF(",");
-            }
-            if (OB_SUCC(ret)) {
-              --*pos_;
-            }
+      if (lib::is_mysql_mode() && type == T_FUN_GROUP_PERCENTILE_CONT) {
+        // mysql: percentile_cont(expr, percentile_num)
+        const ObIArray<OrderItem> &order_items = expr->get_order_items();
+        int64_t order_item_size = order_items.count();
+        if (order_item_size != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+        } else {
+          const OrderItem &order_item = order_items.at(0);
+          PRINT_EXPR(order_item.expr_);
+          DATA_PRINTF(",");
+          if (OB_UNLIKELY(expr->get_real_param_count() != 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+          } else {
+            PRINT_EXPR(expr->get_real_param_exprs().at(0));
           }
         }
-        // separator
+      } else {
+        // distinct
         if (OB_SUCC(ret)) {
-          if (expr->get_separator_param_expr()) {
-            DATA_PRINTF(" separator ");
-            PRINT_EXPR(expr->get_separator_param_expr());
+          if (expr->is_param_distinct()) {
+            DATA_PRINTF("distinct ");
+          }
+        }
+        // expr list
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_real_param_count(); ++i) {
+          PRINT_EXPR(expr->get_real_param_exprs().at(i));
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --*pos_;
+        }
+        if (lib::is_oracle_mode() && type == T_FUN_GROUP_CONCAT
+            && 0 == expr->get_order_items().count()) { // oracle 模式 listagg 支持无 within group
+          /* do nothing */
+        } else {
+          if (lib::is_oracle_mode()) {
+            DATA_PRINTF(") within group (");
+          }
+          // order by
+          if (OB_SUCC(ret)) {
+            const ObIArray<OrderItem> &order_items = expr->get_order_items();
+            int64_t order_item_size = order_items.count();
+            if (order_item_size > 0) {
+              DATA_PRINTF(" order by ");
+              for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
+                const OrderItem &order_item = order_items.at(i);
+                PRINT_EXPR(order_item.expr_);
+                if (OB_SUCC(ret)) {
+                  if (lib::is_mysql_mode()) {
+                    if (is_descending_direction(order_item.order_type_)) {
+                      DATA_PRINTF(" desc ");
+                    }
+                  } else if (order_item.order_type_ == NULLS_FIRST_ASC) {
+                    DATA_PRINTF(" asc nulls first ");
+                  } else if (order_item.order_type_ == NULLS_LAST_ASC) {//use default value
+                    /*do nothing*/
+                  } else if (order_item.order_type_ == NULLS_FIRST_DESC) {//use default value
+                    DATA_PRINTF(" desc ");
+                  } else if (order_item.order_type_ == NULLS_LAST_DESC) {
+                    DATA_PRINTF(" desc nulls last ");
+                  } else {/*do nothing*/}
+                }
+                DATA_PRINTF(",");
+              }
+              if (OB_SUCC(ret)) {
+                --*pos_;
+              }
+            }
+          }
+          // separator
+          if (OB_SUCC(ret)) {
+            if (expr->get_separator_param_expr()) {
+              DATA_PRINTF(" separator ");
+              PRINT_EXPR(expr->get_separator_param_expr());
+            }
           }
         }
       }

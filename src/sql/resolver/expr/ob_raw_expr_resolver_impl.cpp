@@ -5017,6 +5017,9 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     ParseNode *expr_list_node = node->children_[1];
+    if (lib::is_mysql_mode() && T_FUN_GROUP_PERCENTILE_CONT == node->type_) {
+      expr_list_node = node->children_[2];
+    }
     if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
       LOG_WARN("failed to add member", K(ret));
     } else if (OB_ISNULL(expr_list_node) || OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)
@@ -5081,7 +5084,36 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
 
     if (OB_SUCC(ret)) {
       //解析order by
-      if (NULL != node->children_[2]) {
+      if (is_mysql_mode() && T_FUN_GROUP_PERCENTILE_CONT == node->type_) {
+        const ParseNode *column_node = node->children_[1];
+        if (OB_ISNULL(column_node)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("column_node is null or invalid", KP(column_node), K(column_node->type_));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "percentile_cont");
+        } else {
+          OrderItem order_item;
+          order_item.order_type_ = NULLS_FIRST_ASC;
+          if (column_node->type_ == T_COLUMN_REF) {
+            if (OB_FAIL(SMART_CALL(recursive_resolve(column_node->children_[2], order_item.expr_)))) {
+              LOG_WARN("fail to recursive resolve order item expr", K(ret));
+            }
+          } else {
+            if (OB_FAIL(SMART_CALL(recursive_resolve(column_node, order_item.expr_)))) {
+              LOG_WARN("fail to recursive resolve order item expr", K(ret));
+            }
+          }
+          OZ(not_row_check(order_item.expr_));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(agg_expr->add_order_item(order_item))) {
+            LOG_WARN("fail to add order item to agg expr", K(ret));
+          } else {
+            if (T_FUN_GROUP_PERCENTILE_CONT == node->type_
+                 && OB_FAIL(reset_aggr_sort_nulls_first(agg_expr->get_order_items_for_update()))) {
+              LOG_WARN("failed to reset median aggr sort direction", K(ret), K(node));
+            }
+          }
+        }
+      } else if (NULL != node->children_[2]) {
         const ParseNode *order_by_node = node->children_[2];
         if (OB_ISNULL(order_by_node)
             || OB_UNLIKELY(order_by_node->type_ != T_ORDER_BY)
