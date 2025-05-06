@@ -2905,7 +2905,7 @@ int ObTabletSplitUtil::build_mds_sstable(
     HEAP_VARS_2 ((ObTableScanParam, medium_info_scan_param),
                  (ObTabletMediumInfoReader, medium_info_reader)) {
     HEAP_VARS_2 ((ObTableScanParam, truncate_info_scan_param),
-                 (ObTabletMediumInfoReader, truncate_info_reader)) {
+                 (ObTabletTruncateInfoReader, truncate_info_reader)) {
       ObMdsReadInfoCollector unused_collector;
       if (OB_FAIL(check_and_build_mds_sstable_merge_ctx(ls_handle, dest_tablet_handle, tablet_merge_ctx))) {
         LOG_WARN("prepare medium mds merge ctx failed", K(ret), K(ls_handle), K(dest_tablet_id));
