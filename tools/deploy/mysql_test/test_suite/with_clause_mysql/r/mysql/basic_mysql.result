@@ -1163,8 +1163,8 @@ Query Plan
 -----------------------------
 |0 |SORT               |    |
 |1 |└─HASH JOIN        |    |
-|2 |  ├─TABLE FULL SCAN|t2  |
-|3 |  └─TABLE FULL SCAN|t1  |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
 =============================
 Outputs & filters:
 -------------------------------------
@@ -1172,14 +1172,14 @@ Outputs & filters:
       sort_keys([t1.c1, ASC])
   1 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c21]), other_conds([t2.c21 != t1.c1])
-  2 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=16
-      access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=16
+      access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 with
   cte1 AS( select * from t1)
 select * from cte1 left join t2 on cte1.c1=t2.c21 where t2.c21 != cte1.c1 order by cte1.c1;

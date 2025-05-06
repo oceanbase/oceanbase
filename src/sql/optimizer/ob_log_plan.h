@@ -374,6 +374,9 @@ public:
   inline ObIArray<ConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
   inline const ObIArray<ConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
 
+  int get_base_table_items(const ObDMLStmt *stmt,
+                           ObIArray<TableItem*> &base_tables);
+
   int generate_base_level_join_order(const common::ObIArray<TableItem*> &table_items,
                                      common::ObIArray<ObJoinOrder*> &base_level);
 
