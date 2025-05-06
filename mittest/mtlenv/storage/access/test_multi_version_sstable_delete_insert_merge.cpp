@@ -4013,7 +4013,6 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_complex_env)
     "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
     "1        var1  -60       MIN              55      55      DELETE    INSERT_DELETE   SCF\n"
     "1        var1  -60       0                55      55      DELETE    NORMAL   C\n"
-    "1        var1  -55       DI_VERSION       50      50      INSERT    NORMAL   C\n"
     "1        var1  -45       0                40      40      DELETE    NORMAL   C\n"
     "1        var1  -40       DI_VERSION       40      40      INSERT    NORMAL   C\n"
     "1        var1  -35       0                30      30      DELETE    NORMAL   C\n"
@@ -4339,7 +4338,6 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_checkorder_error)
       "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
       "1        var1  -1745565646412642000      MIN         20      20      DELETE    NORMAL    SCF\n"
       "1        var1  -1745565646412642000      0           20      20      DELETE    NORMAL    C\n"
-      "1        var1  -1745565557130273000      DI_VERSION  20      20      INSERT    NORMAL    C\n"
       "1        var1  -1745565523125912000     DI_VERSION   20      20      INSERT    NORMAL    C\n"
       "1        var1  -1745565239306510002      0           20      20      DELETE    NORMAL    C\n"
       "1        var1  -1745565103366455000     DI_VERSION   20      20      INSERT    NORMAL    CL\n";
@@ -4377,19 +4375,19 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
   // 1. new sstable output insert+delete, old sstable output insert+delete
   // 2. new sstable output insert+delete, old sstable output insert
   // 3. new sstable output insert+delete, old sstable output delete
-  // 4. new sstable output insert+delete, old sstable output delete+insert+delete
+  // 4. new sstable output insert+delete, old sstable output delete+delete
   // 5. new sstable output insert, old sstable output insert+delete
   // 6. new sstable output insert, old sstable output insert
   // 7. new sstable output insert, old sstable output delete
-  // 8. new sstable output insert, old sstable output delete+insert+delete
-  // 9. new sstable output delete+insert+delete, old sstable output insert+delete
-  // 10. new sstable output delete+insert+delete, old sstable output insert
-  // 11. new sstable output delete+insert+delete, old sstable output delete
-  // 12. new sstable output delete+insert+delete, old sstable output delete+insert+delete
+  // 8. new sstable output insert, old sstable output delete+delete
+  // 9. new sstable output delete+delete, old sstable output insert+delete
+  // 10. new sstable output delete+delete, old sstable output insert
+  // 11. new sstable output delete+delete, old sstable output delete
+  // 12. new sstable output delete+delete, old sstable output delete+delete
   // 13. new sstable output delete, old sstable output insert+delete
   // 14. new sstable output delete, old sstable output insert
   // 15. new sstable output delete, old sstable output delete
-  // 16. new sstable output delete, old sstable output delete+insert+delete
+  // 16. new sstable output delete, old sstable output delete+delete
   ObTableHandleV2 handle1;
   const char *micro_data[1];
   micro_data[0] =
@@ -4558,7 +4556,6 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
       "4        var4  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
       "4        var4  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "4        var4  -30      0                   20      20      DELETE    NORMAL    C\n"
-      "4        var4  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "4        var4  -10      0                   20      20      DELETE    NORMAL    CL\n"
       "5        var5  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
       "5        var5  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
@@ -4573,28 +4570,22 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
       "8        var8  -40      MIN                 20      20      INSERT    NORMAL    SCF\n"
       "8        var8  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "8        var8  -30      0                   20      20      DELETE    NORMAL    C\n"
-      "8        var8  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "8        var8  -10      0                   20      20      DELETE    NORMAL    CL\n"
       "9        var9  -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "9        var9  -50      0                   20      20      DELETE    NORMAL    C\n"
-      "9        var9  -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "9        var9  -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "9        var9  -10      0                   20      20      DELETE    NORMAL    CL\n"
       "10       var10 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "10       var10 -50      0                   20      20      DELETE    NORMAL    C\n"
-      "10       var10 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "10       var10 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "10       var10 -10      0                   20      20      DELETE    NORMAL    CL\n"
       "11       var11 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "11       var11 -50      0                   20      20      DELETE    NORMAL    C\n"
-      "11       var11 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "11       var11 -30      0                   20      20      DELETE    NORMAL    C\n"
       "11       var11 -10      0                   20      20      DELETE    NORMAL    CL\n"
       "12       var12 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "12       var12 -50      0                   20      20      DELETE    NORMAL    C\n"
-      "12       var12 -40      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "12       var12 -30      0                   20      20      DELETE    NORMAL    C\n"
-      "12       var12 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "12       var12 -10      0                   20      20      DELETE    NORMAL    CL\n"
       "13       var13 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "13       var13 -50      0                   20      20      DELETE    NORMAL    C\n"
@@ -4609,7 +4600,6 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
       "16       var16 -50      MIN                 20      20      DELETE    NORMAL    SCF\n"
       "16       var16 -50      0                   20      20      DELETE    NORMAL    C\n"
       "16       var16 -30      0                   20      20      DELETE    NORMAL    C\n"
-      "16       var16 -20      DI_VERSION          20      20      INSERT    NORMAL    C\n"
       "16       var16 -10      0                   20      20      DELETE    NORMAL    CL\n";
 
   ObMockIterator res_iter;
@@ -4633,8 +4623,240 @@ TEST_F(TestMultiVersionDIMerge, crossed_range_sstable_merge)
   handle2.reset();
   merger.reset();
 }
+
+TEST_F(TestMultiVersionDIMerge, compact_old_row_check_order_error)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] =
+      "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745818547933984005     DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
+      "3        var3  -1745818547933984005     DI_VERSION   20      20      INSERT    NORMAL    CLF\n";
+
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 1745818547933984005;
+  share::ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(1745818547933984005);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint                 bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "2        var2  -1745818788284569004      MIN         20      20      DELETE    NORMAL    SCF\n"
+      "2        var2  -1745818788284569004      0           20      20      DELETE    NORMAL    C\n"
+      "2        var2  -1745818547933984005      DI_VERSION  20      20      INSERT    NORMAL    C\n"
+      "2        var2  -1745818547933984005      0           20      20      DELETE    NORMAL    CL\n";
+
+  snapshot_version = 1745565526899601005;
+  scn_range.start_scn_.convert_for_tx(1745818547933984005);
+  scn_range.end_scn_.convert_for_tx(1745818788284569004);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 1745820760811606007;
+  trans_version_range.multi_version_start_ = 1745820062414483000;
+  trans_version_range.base_version_ = 1745818585511053007;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -1745818547933984005      DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
+      "2        var2  -1745818788284569004      0           20      20      DELETE    NORMAL    CLF\n"
+      "3        var3  -1745818547933984005      DI_VERSION  20      20      INSERT    NORMAL    CLF\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
 }
+
+TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] =
+      "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "1        var1  -30          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "1        var1  -20          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "1        var1  -10          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "1        var1  -5           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "3        var3  -40          0            20      20      DELETE    NORMAL    CF  trans_id_0\n"
+      "3        var3  -30          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "3        var3  -20          0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "3        var3  -10          DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "3        var3  -5           0            20      20      DELETE    NORMAL    CL  trans_id_0\n"
+      "5        var5  -4           0            20      20      DELETE    NORMAL    CF  trans_id_0\n"
+      "5        var5  -3           DI_VERSION   20      20      INSERT    NORMAL    C   trans_id_0\n"
+      "5        var5  -2           0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "5        var5  -1           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "6        var6  -3           DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "6        var6  -2           0            20      20      DELETE    NORMAL    C   trans_id_0\n"
+      "6        var6  -1           DI_VERSION   20      20      INSERT    NORMAL    CL  trans_id_0\n"
+      "7        var7  MIN          -9           20      20      DELETE    NORMAL    UCF  trans_id_1\n"
+      "7        var7  MIN          -8           20      20      INSERT    NORMAL    UC   trans_id_1\n"
+      "7        var7  MIN          -7           20      20      DELETE    NORMAL    UCL  trans_id_1\n"
+      "8        var8  -40          DI_VERSION   20      20      INSERT    NORMAL    CF  trans_id_0\n"
+      "8        var8  -40          0            20      20      DELETE    NORMAL    CL  trans_id_0\n";
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 25;
+  share::ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(25);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint       bigint        bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "2        var2  -30          0            20      20      DELETE    NORMAL    CF\n"
+      "2        var2  -20          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "2        var2  -10          0            20      20      DELETE    NORMAL    C\n"
+      "2        var2  -5           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "4        var4  -50          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "4        var4  -40          0            20      20      DELETE    NORMAL    C\n"
+      "4        var4  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "4        var4  -20          0            20      20      DELETE    NORMAL    C\n"
+      "4        var4  -10          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "4        var4  -5           0            20      20      DELETE    NORMAL    CL\n"
+      "5        var5  -40          0            20      20      DELETE    NORMAL    CF\n"
+      "5        var5  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "5        var5  -20          0            20      20      DELETE    NORMAL    C\n"
+      "5        var5  -10          DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "6        var6  -30          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "6        var6  -20          0            20      20      DELETE    NORMAL    CL\n";
+  snapshot_version = 50;
+  scn_range.start_scn_.convert_for_tx(25);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard tx_table_guard;
+  get_tx_table_guard(tx_table_guard);
+  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
+
+  for (int64_t i = 1; i <= 1; i++) {
+    ObTxData *tx_data = new ObTxData();
+    transaction::ObTransID tx_id = i;
+
+    // fill in data
+    tx_data->tx_id_ = tx_id;
+    tx_data->commit_version_.convert_for_tx(i * 10);
+    tx_data->start_scn_.convert_for_tx(i);
+    tx_data->end_scn_ = tx_data->commit_version_;
+    tx_data->state_ = ObTxData::COMMIT;
+
+    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+    delete tx_data;
+  }
+
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 80;
+  trans_version_range.base_version_ = 9;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "1        var1  -40          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "1        var1  -10          0            20      20      DELETE    NORMAL    CL\n"
+      "2        var2  -30          0            20      20      DELETE    NORMAL    CF\n"
+      "2        var2  -10          0            20      20      DELETE    NORMAL    CL\n"
+      "3        var3  -40          0            20      20      DELETE    NORMAL    CLF\n"
+      "4        var4  -50          DI_VERSION   20      20      INSERT    NORMAL    CLF\n"
+      "5        var5  -40          MIN          20      20      DELETE    NORMAL    SCF\n"
+      "5        var5  -40          0            20      20      DELETE    NORMAL    C\n"
+      "5        var5  -4           0            20      20      DELETE    NORMAL    CL\n"
+      "6        var6  -30          MIN          20      20      INSERT    NORMAL    SCF\n"
+      "6        var6  -30          DI_VERSION   20      20      INSERT    NORMAL    C\n"
+      "6        var6  -20          0            20      20      DELETE    NORMAL    C\n"
+      "6        var6  -3           DI_VERSION   20      20      INSERT    NORMAL    CL\n"
+      "7        var7  -10          0            20      20      DELETE    NORMAL    CLF\n"
+      "8        var8  -40          DI_VERSION   20      20      INSERT    NORMAL    CF\n"
+      "8        var8  -40          0            20      20      DELETE    NORMAL    CL\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
 }
+} // namespace storage
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {
