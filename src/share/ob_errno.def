@@ -2860,6 +2860,10 @@ DEFINE_ERROR_EXT(OB_CCL_RULE_EXIST, -11085, -1, "HY000", "CCL rule already exist
 DEFINE_ERROR_EXT(OB_CCL_RULE_NOT_EXIST, -11086, -1, "HY000", "CCL rule not exist", "CCL rule '%.*s' doesn\'t exist");
 DEFINE_ERROR_EXT(OB_REACH_MAX_CCL_CONCURRENT_NUM, -11087, -1, "HY000", "SQL reach max ccl concurrent num", "SQL reach max ccl rule %s, concurrent num %ld");
 DEFINE_ERROR_EXT(OB_REACH_DIAGNOSIS_ERROR_LIMIT, -11088, -1, "HY000", "reject limit reached", "reject limit %ld reached");
+DEFINE_ERROR(OB_LOCATION_IN_USE, -11089, -1, "HY000", "Location is still in use");
+DEFINE_ERROR(OB_ERR_LOCATION_ACCESS_DENIED, -11090, -1, "HY000", "Location access denied");
+DEFINE_ERROR_EXT(OB_LOCATION_OBJ_EXIST, -11091, -1, "HY000", "Can't create location;location exists", "Can't create location '%.*s'; location exists");
+DEFINE_ERROR_EXT(OB_LOCATION_OBJ_NOT_EXIST, -11092, -1, "HY000", "location not exists", "location '%.*s' doesn\'t exist");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

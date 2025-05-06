@@ -362,6 +362,15 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_CCL_RULE, = 2102)                            \
   ACT(OB_DDL_DROP_CCL_RULE, = 2103)                              \
   ACT(OB_DDL_CCL_RULE_OPERATION_END, = 2110)                     \
+  ACT(OB_DDL_LOCATION_OPERATION_BEGIN, = 2111)                   \
+  ACT(OB_DDL_CREATE_LOCATION, )                                  \
+  ACT(OB_DDL_ALTER_LOCATION, )                                   \
+  ACT(OB_DDL_DROP_LOCATION, )                                    \
+  ACT(OB_DDL_LOCATION_OPERATION_END, = 2120)                     \
+  ACT(OB_DDL_OBJ_MYSQL_PRIV_OPERATION_BEGIN, = 2121)             \
+  ACT(OB_DDL_GRANT_OBJ_MYSQL_PRIV, )                             \
+  ACT(OB_DDL_DEL_OBJ_MYSQL_PRIV, )                               \
+  ACT(OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END, = 2130)               \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -459,6 +468,7 @@ public:
     uint64_t routine_type_;
     uint64_t column_priv_id_;
     uint64_t catalog_id_;
+    uint64_t obj_type_;
   };
   union {
     common::ObString table_name_;
@@ -470,6 +480,7 @@ public:
     common::ObString mock_fk_parent_table_name_;
     common::ObString routine_name_;
     common::ObString catalog_name_;
+    common::ObString obj_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;

@@ -955,6 +955,7 @@ typedef enum ObItemType
   T_FUN_SYS_CHECK_CATALOG_ACCESS = 1916,
   T_FUN_SYS_SPIV_DIM = 1917,  // sparse vector index
   T_FUN_SYS_SPIV_VALUE = 1918,
+  T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -2832,6 +2833,17 @@ typedef enum ObItemType
 
   T_SP_SYS_DISPATCH_CALL = 4849,
 
+  // location object
+  T_CREATE_LOCATION = 4850,
+  T_ALTER_LOCATION = 4851,
+  T_DROP_LOCATION = 4852,
+  T_LOCATION_OBJECT = 4853,
+  T_CREDENTIAL_OPTION_LIST = 4854,
+  T_CREDENTIAL_OPTION = 4855,
+  T_SHOW_LOCATIONS = 4856,
+  T_SHOW_CREATE_LOCATION = 4857,
+  T_LOCATION_UTILS_LIST = 4858,
+  T_LOCATION_UTILS = 4859,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

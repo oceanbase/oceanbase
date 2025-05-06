@@ -1737,6 +1737,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
+      external_location_id_ = src_schema.external_location_id_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -1761,6 +1762,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
         LOG_WARN("deep copy external_properties failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_sub_path_, external_sub_path_))) {
+        LOG_WARN("deep copy external_sub_path failed", K(ret));
       }
       //view schema
       if (OB_SUCC(ret)) {
@@ -3765,6 +3768,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += storage_cache_policy_.length() + 1;
   convert_size += semistruct_encoding_type_.get_deep_copy_size();
   convert_size += dynamic_partition_policy_.length() + 1;
+  convert_size += external_sub_path_.length() + 1;
   return convert_size;
 }
 
@@ -3873,6 +3877,8 @@ void ObTableSchema::reset()
   storage_cache_policy_.reset();
   semistruct_encoding_type_.reset();
   dynamic_partition_policy_.reset();
+  external_location_id_ = OB_INVALID_ID;
+  external_sub_path_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -7410,6 +7416,8 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(merge_engine_type_);
   OB_UNIS_ENCODE(semistruct_encoding_type_);
   OB_UNIS_ENCODE(dynamic_partition_policy_);
+  OB_UNIS_ENCODE(external_location_id_);
+  OB_UNIS_ENCODE(external_sub_path_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7656,6 +7664,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(merge_engine_type_);
   OB_UNIS_DECODE(semistruct_encoding_type_);
   OB_UNIS_DECODE_AND_FUNC(dynamic_partition_policy_, deep_copy_str);
+  OB_UNIS_DECODE(external_location_id_);
+  OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7802,6 +7812,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(merge_engine_type_);
   OB_UNIS_ADD_LEN(semistruct_encoding_type_);
   OB_UNIS_ADD_LEN(dynamic_partition_policy_);
+  OB_UNIS_ADD_LEN(external_location_id_);
+  OB_UNIS_ADD_LEN(external_sub_path_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

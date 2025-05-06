@@ -2379,6 +2379,8 @@ protected:
   ObMergeEngineType merge_engine_type_;
   ObSemiStructEncodingType semistruct_encoding_type_;
   common::ObString dynamic_partition_policy_;
+  uint64_t external_location_id_;
+  common::ObString external_sub_path_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

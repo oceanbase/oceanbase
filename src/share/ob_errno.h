@@ -1979,6 +1979,10 @@ constexpr int OB_CCL_RULE_EXIST = -11085;
 constexpr int OB_CCL_RULE_NOT_EXIST = -11086;
 constexpr int OB_REACH_MAX_CCL_CONCURRENT_NUM = -11087;
 constexpr int OB_REACH_DIAGNOSIS_ERROR_LIMIT = -11088;
+constexpr int OB_LOCATION_IN_USE = -11089;
+constexpr int OB_ERR_LOCATION_ACCESS_DENIED = -11090;
+constexpr int OB_LOCATION_OBJ_EXIST = -11091;
+constexpr int OB_LOCATION_OBJ_NOT_EXIST = -11092;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4403,6 +4407,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CCL_RULE_NOT_EXIST__USER_ERROR_MSG "CCL rule '%.*s' doesn\'t exist"
 #define OB_REACH_MAX_CCL_CONCURRENT_NUM__USER_ERROR_MSG "SQL reach max ccl rule %s, concurrent num %ld"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__USER_ERROR_MSG "reject limit %ld reached"
+#define OB_LOCATION_IN_USE__USER_ERROR_MSG "Location is still in use"
+#define OB_ERR_LOCATION_ACCESS_DENIED__USER_ERROR_MSG "Location access denied"
+#define OB_LOCATION_OBJ_EXIST__USER_ERROR_MSG "Can't create location '%.*s'; location exists"
+#define OB_LOCATION_OBJ_NOT_EXIST__USER_ERROR_MSG "location '%.*s' doesn\'t exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9240,6 +9248,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_REACH_MAX_CCL_CONCURRENT_NUM__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11087, SQL reach max ccl rule %s, concurrent num %ld"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11088, reject limit %ld reached"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11088, reject limit %ld reached"
+#define OB_LOCATION_IN_USE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11089, Location is still in use"
+#define OB_LOCATION_IN_USE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11089, Location is still in use"
+#define OB_ERR_LOCATION_ACCESS_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11090, Location access denied"
+#define OB_ERR_LOCATION_ACCESS_DENIED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11090, Location access denied"
+#define OB_LOCATION_OBJ_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11091, Can't create location '%.*s'; location exists"
+#define OB_LOCATION_OBJ_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11091, Can't create location '%.*s'; location exists"
+#define OB_LOCATION_OBJ_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11092, location '%.*s' doesn\'t exist"
+#define OB_LOCATION_OBJ_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11092, location '%.*s' doesn\'t exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9259,7 +9275,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2420];
+extern int g_all_ob_errnos[2424];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

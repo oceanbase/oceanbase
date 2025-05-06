@@ -1296,6 +1296,8 @@ typedef enum {
   COLUMN_PRIV = 42,
   CATALOG_SCHEMA = 43,
   CCL_RULE_SCHEMA = 44,
+  LOCATION_SCHEMA = 45,
+  OBJ_MYSQL_PRIV = 46,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -1486,6 +1488,7 @@ enum class ObObjectType {
   SYS_PACKAGE_ONLY_OBJ_PRIV = 15,
   CONTEXT         = 16,
   CATALOG         = 17,
+  LOCATION        = 18,
   MAX_TYPE,
 };
 struct ObSchemaObjVersion
@@ -5900,6 +5903,7 @@ enum ObPrivLevel
   OB_PRIV_OBJ_ORACLE_LEVEL,   /* oracle-mode object privilege */
   OB_PRIV_ROUTINE_LEVEL,
   OB_PRIV_CATALOG_LEVEL,
+  OB_PRIV_OBJECT_LEVEL,
   OB_PRIV_MAX_LEVEL,
 };
 

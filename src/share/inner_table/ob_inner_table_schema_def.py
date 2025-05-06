@@ -327,6 +327,8 @@ all_table_def = dict(
       ('merge_engine_type', 'int', 'false', '0'),
       ('semistruct_encoding_type', 'int', 'false', '0'),
       ('dynamic_partition_policy', 'varchar:OB_MAX_DYNAMIC_PARTITION_POLICY_LENGTH', 'false', ''),
+      ('external_location_id', 'int', 'false', 'OB_INVALID_ID'),
+      ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
     ],
 )
 
@@ -8142,6 +8144,10 @@ def_table_schema(
 # 547: __all_ccl_rule
 # 548: __all_ccl_rule_history
 # 549: __all_balance_job_description
+# 550: __all_tenant_location
+# 551: __all_tenant_location_history
+# 552: __all_tenant_objauth_mysql
+# 553: __all_tenant_objauth_mysql_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16253,6 +16259,12 @@ def_table_schema(
 # 12538 __all_virtual_ss_notify_tasks_stat
 # 12539 __all_virtual_ss_notify_tablets_stat
 # 12540: __all_virtual_balance_job_description
+# 12541: __all_virtual_tenant_location
+# 12542: __all_virtual_tenant_location_history
+# 12543: __all_virtual_objauth_mysql
+# 12544: __all_virtual_objauth_mysql_history
+# 12545: __tenant_virtual_show_create_location
+# 12546: __tenant_virtual_list_file
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16803,6 +16815,12 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keyword
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
 # 15510: __all_virtual_balance_job_description
+# 15511: __all_virtual_tenant_location
+# 15512: __all_virtual_tenant_objauth_mysql
+# 15513: idx_location_name_real_agent
+# 15514: idx_objauth_mysql_user_id_real_agent
+# 15515: idx_objauth_mysql_obj_name_real_agent
+# 15516: __tenant_virtual_list_file
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -75393,6 +75411,7 @@ def_table_schema(
 
 # 28275: GV$OB_RESULT_CACHE_OBJECTS
 # 28276: V$OB_RESULT_CACHE_OBJECTS
+# 28277: ALL_LOCATIONS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -76402,6 +76421,9 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_catalog_privilege'])
 
 # 101115: __all_ccl_rule
+# 101116: idx_location_name
+# 101117: idx_objauth_mysql_user_id
+# 101118: idx_objauth_mysql_obj_name
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################

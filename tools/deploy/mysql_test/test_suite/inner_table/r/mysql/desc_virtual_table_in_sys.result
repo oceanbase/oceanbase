@@ -1011,6 +1011,8 @@ storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}
 merge_engine_type	bigint(20)	NO		0	
 semistruct_encoding_type	bigint(20)	NO		0	
 dynamic_partition_policy	varchar(4096)	NO			
+external_location_id	bigint(20)	NO		-1	
+external_sub_path	varbinary(1048576)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2847,6 +2849,8 @@ storage_cache_policy	varchar(1048576)	NO		{"GLOBAL":"AUTO"}
 merge_engine_type	bigint(20)	NO		0	
 semistruct_encoding_type	bigint(20)	NO		0	
 dynamic_partition_policy	varchar(4096)	NO			
+external_location_id	bigint(20)	NO		-1	
+external_sub_path	varbinary(1048576)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2950,6 +2954,8 @@ storage_cache_policy	varchar(1048576)	YES		{"GLOBAL":"AUTO"}
 merge_engine_type	bigint(20)	YES		0	
 semistruct_encoding_type	bigint(20)	YES		0	
 dynamic_partition_policy	varchar(4096)	YES			
+external_location_id	bigint(20)	YES		-1	
+external_sub_path	varbinary(1048576)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1

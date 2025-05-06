@@ -78,6 +78,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "EVENT",                      // index 49
     "CREATE CATALOG",             // index 50
     "USE CATALOG",                // index 51
+    "CREATE LOCATION",            // index 52
 };
 
 ObPrivMgr::ObPrivMgr()

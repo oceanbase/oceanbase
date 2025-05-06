@@ -1270,172 +1270,173 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
   int8_t is_offline_rebuild = 0;
-  obrpc::ObCreateIndexArg tmp_arg;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                  nullptr == buf ||
-                  data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
-                                                                buf,
-                                                                data_len,
-                                                                pos))) {
-    LOG_WARN("ObDDLTask deserlize failed", K(ret));
-  } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
-    LOG_WARN("deserialize table failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
-    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
-  } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
-    LOG_WARN("deep copy create index arg failed", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len, pos, rowkey_vid_aux_table_id_))) {
-    LOG_WARN("fail to deserialize rowkey vid table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           vid_rowkey_aux_table_id_))) {
-    LOG_WARN("fail to deserialize vid rowkey table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           delta_buffer_table_id_))) {
-    LOG_WARN("fail to deserialize delta buf index aux table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           index_id_table_id_))) {
-    LOG_WARN("fail to deserialize index id table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           index_snapshot_data_table_id_))) {
-    LOG_WARN("fail to deserialize snapthot table id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &rowkey_vid_submitted))) {
-    LOG_WARN("fail to deserialize rowkey vid task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &vid_rowkey_submitted))) {
-    LOG_WARN("fail to deserialize vid rowkey task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &delta_buffer_task_submitted))) {
-    LOG_WARN("fail to deserialize vid index aux task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &index_id_task_submitted))) {
-    LOG_WARN("fail to deserialize index id task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &index_snapshot_data_task_submitted))) {
-    LOG_WARN("fail to deserialize snapshot task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &rowkey_vid_task_id_))) {
-    LOG_WARN("fail to deserialize rowkey vid task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &vid_rowkey_task_id_))) {
-    LOG_WARN("fail to deserialize vid rowkey task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &delta_buffer_task_id_))) {
-    LOG_WARN("fail to deserialize delta buffer index aux task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &index_id_task_id_))) {
-    LOG_WARN("fail to deserialize index id task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &index_snapshot_task_id_))) {
-    LOG_WARN("fail to deserialize index sanpshot id task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &drop_index_submitted))) {
-    LOG_WARN("fail to deserialize drop vec index task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &drop_index_task_id_))) {
-    LOG_WARN("fail to deserialize drop vec index task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_rebuild_index))) {
-    LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_offline_rebuild))) {
-    LOG_WARN("fail to deserialize is_offline_rebuild", K(ret));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
-                                                       lib::ObLabel("DepTasMap")))) {
-    LOG_WARN("create dependent task map failed", K(ret));
-  } else {
-    rowkey_vid_task_submitted_ = rowkey_vid_submitted;
-    vid_rowkey_task_submitted_ = vid_rowkey_submitted;
-    delta_buffer_task_submitted_ = delta_buffer_task_submitted;
-    index_id_task_submitted_ = index_id_task_submitted;
-    index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
-    drop_index_task_submitted_ = drop_index_submitted;
-    is_rebuild_index_ = is_rebuild_index;
-    is_offline_rebuild_ = is_offline_rebuild;
-    if (rowkey_vid_task_id_ > 0) {
-      share::ObDomainDependTaskStatus rowkey_vid_status;
-      rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_vid_aux_table_id_,
-                                                            rowkey_vid_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(rowkey_vid_aux_table_id_),
-            K(rowkey_vid_status));
+  SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
+    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+                    nullptr == buf ||
+                    data_len <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+    } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
+                                                                  buf,
+                                                                  data_len,
+                                                                  pos))) {
+      LOG_WARN("ObDDLTask deserlize failed", K(ret));
+    } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize table failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+      LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
+    } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
+      LOG_WARN("deep copy create index arg failed", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len, pos, rowkey_vid_aux_table_id_))) {
+      LOG_WARN("fail to deserialize rowkey vid table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            vid_rowkey_aux_table_id_))) {
+      LOG_WARN("fail to deserialize vid rowkey table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            delta_buffer_table_id_))) {
+      LOG_WARN("fail to deserialize delta buf index aux table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            index_id_table_id_))) {
+      LOG_WARN("fail to deserialize index id table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            index_snapshot_data_table_id_))) {
+      LOG_WARN("fail to deserialize snapthot table id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_vid_submitted))) {
+      LOG_WARN("fail to deserialize rowkey vid task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &vid_rowkey_submitted))) {
+      LOG_WARN("fail to deserialize vid rowkey task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &delta_buffer_task_submitted))) {
+      LOG_WARN("fail to deserialize vid index aux task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &index_id_task_submitted))) {
+      LOG_WARN("fail to deserialize index id task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &index_snapshot_data_task_submitted))) {
+      LOG_WARN("fail to deserialize snapshot task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_vid_task_id_))) {
+      LOG_WARN("fail to deserialize rowkey vid task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &vid_rowkey_task_id_))) {
+      LOG_WARN("fail to deserialize vid rowkey task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &delta_buffer_task_id_))) {
+      LOG_WARN("fail to deserialize delta buffer index aux task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &index_id_task_id_))) {
+      LOG_WARN("fail to deserialize index id task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &index_snapshot_task_id_))) {
+      LOG_WARN("fail to deserialize index sanpshot id task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_submitted))) {
+      LOG_WARN("fail to deserialize drop vec index task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_task_id_))) {
+      LOG_WARN("fail to deserialize drop vec index task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_rebuild_index))) {
+      LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_offline_rebuild))) {
+      LOG_WARN("fail to deserialize is_offline_rebuild", K(ret));
+    } else if (!dependent_task_result_map_.created() &&
+              OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
+                                                        lib::ObLabel("DepTasMap")))) {
+      LOG_WARN("create dependent task map failed", K(ret));
+    } else {
+      rowkey_vid_task_submitted_ = rowkey_vid_submitted;
+      vid_rowkey_task_submitted_ = vid_rowkey_submitted;
+      delta_buffer_task_submitted_ = delta_buffer_task_submitted;
+      index_id_task_submitted_ = index_id_task_submitted;
+      index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
+      drop_index_task_submitted_ = drop_index_submitted;
+      is_rebuild_index_ = is_rebuild_index;
+      is_offline_rebuild_ = is_offline_rebuild;
+      if (rowkey_vid_task_id_ > 0) {
+        share::ObDomainDependTaskStatus rowkey_vid_status;
+        rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_vid_aux_table_id_,
+                                                              rowkey_vid_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(rowkey_vid_aux_table_id_),
+              K(rowkey_vid_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && vid_rowkey_task_id_ > 0) {
-      share::ObDomainDependTaskStatus vid_rowkey_status;
-      vid_rowkey_status.task_id_ = vid_rowkey_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(vid_rowkey_aux_table_id_,
-                                                            vid_rowkey_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(vid_rowkey_aux_table_id_),
-            K(vid_rowkey_status));
+      if (OB_SUCC(ret) && vid_rowkey_task_id_ > 0) {
+        share::ObDomainDependTaskStatus vid_rowkey_status;
+        vid_rowkey_status.task_id_ = vid_rowkey_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(vid_rowkey_aux_table_id_,
+                                                              vid_rowkey_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(vid_rowkey_aux_table_id_),
+              K(vid_rowkey_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && delta_buffer_task_id_ > 0) {
-      share::ObDomainDependTaskStatus delta_buf_aux_status;
-      delta_buf_aux_status.task_id_ = delta_buffer_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(delta_buffer_table_id_,
-                                                            delta_buf_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(delta_buffer_table_id_),
-            K(delta_buf_aux_status));
+      if (OB_SUCC(ret) && delta_buffer_task_id_ > 0) {
+        share::ObDomainDependTaskStatus delta_buf_aux_status;
+        delta_buf_aux_status.task_id_ = delta_buffer_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(delta_buffer_table_id_,
+                                                              delta_buf_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(delta_buffer_table_id_),
+              K(delta_buf_aux_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && index_id_task_id_ > 0) {
-      share::ObDomainDependTaskStatus index_id_aux_status;
-      index_id_aux_status.task_id_ = index_id_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(index_id_table_id_,
-                                                            index_id_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(index_id_table_id_),
-            K(index_id_aux_status));
+      if (OB_SUCC(ret) && index_id_task_id_ > 0) {
+        share::ObDomainDependTaskStatus index_id_aux_status;
+        index_id_aux_status.task_id_ = index_id_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(index_id_table_id_,
+                                                              index_id_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(index_id_table_id_),
+              K(index_id_aux_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && index_snapshot_task_id_ > 0) {
-      share::ObDomainDependTaskStatus index_snapshot_aux_status;
-      index_snapshot_aux_status.task_id_ = index_snapshot_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(index_snapshot_data_table_id_,
-                                                            index_snapshot_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(index_snapshot_data_table_id_),
-            K(index_snapshot_aux_status));
+      if (OB_SUCC(ret) && index_snapshot_task_id_ > 0) {
+        share::ObDomainDependTaskStatus index_snapshot_aux_status;
+        index_snapshot_aux_status.task_id_ = index_snapshot_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(index_snapshot_data_table_id_,
+                                                              index_snapshot_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(index_snapshot_data_table_id_),
+              K(index_snapshot_aux_status));
+        }
       }
     }
   }

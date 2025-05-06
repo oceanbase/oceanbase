@@ -1344,170 +1344,171 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
   int8_t is_domain_aux_succ = false;
   int8_t is_fts_doc_word_succ = false;
   int8_t is_retryable_ddl = true;
-  obrpc::ObCreateIndexArg tmp_arg;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                  nullptr == buf ||
-                  data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
-                                                                buf,
-                                                                data_len,
-                                                                pos))) {
-    LOG_WARN("ObDDLTask deserlize failed", K(ret));
-  } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
-    LOG_WARN("deserialize table failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
-    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
-  } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
-    LOG_WARN("deep copy create index arg failed", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len, pos, rowkey_doc_aux_table_id_))) {
-    LOG_WARN("fail to deserialize rowkey doc table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           doc_rowkey_aux_table_id_))) {
-    LOG_WARN("fail to deserialize doc rowkey table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           domain_index_aux_table_id_))) {
-    LOG_WARN("fail to deserialize fts index aux table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           fts_doc_word_aux_table_id_))) {
-    LOG_WARN("fail to deserialize fts doc word table id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &rowkey_doc_submitted))) {
-    LOG_WARN("fail to deserialize rowkey doc task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &doc_rowkey_submitted))) {
-    LOG_WARN("fail to deserialize doc rowkey task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &fts_index_aux_submitted))) {
-    LOG_WARN("fail to deserialize fts index aux task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &fts_doc_word_submitted))) {
-    LOG_WARN("fail to deserialize fts doc word task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &rowkey_doc_task_id_))) {
-    LOG_WARN("fail to deserialize rowkey doc task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &doc_rowkey_task_id_))) {
-    LOG_WARN("fail to deserialize doc rowkey task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &domain_index_aux_task_id_))) {
-    LOG_WARN("fail to deserialize fts index aux task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &fts_doc_word_task_id_))) {
-    LOG_WARN("fail to deserialize fts doc word task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &drop_index_submitted))) {
-    LOG_WARN("fail to deserialize drop fts index task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &drop_index_task_id_))) {
-    LOG_WARN("fail to deserialize drop fts index task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_rowkey_doc_succ))) {
-    LOG_WARN("fail to deserialize rowkey doc task succ", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_doc_rowkey_succ))) {
-    LOG_WARN("fail to deserialize doc rowkey task succ", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_domain_aux_succ))) {
-    LOG_WARN("fail to deserialize fts index aux task succ", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_fts_doc_word_succ))) {
-    LOG_WARN("fail to deserialize fts doc word task succ", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_retryable_ddl))) {
-    LOG_WARN("fail to deserialize is retryable ddl", K(ret));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
-                                                       lib::ObLabel("DepTasMap")))) {
-    LOG_WARN("create dependent task map failed", K(ret));
-  } else {
-    if (OB_SUCC(ret) && rowkey_doc_task_id_ > 0) {
-      DependTaskStatus rowkey_doc_status;
-      rowkey_doc_status.task_id_ = rowkey_doc_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_doc_aux_table_id_,
-                                                            rowkey_doc_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(rowkey_doc_aux_table_id_),
-            K(rowkey_doc_status));
+  SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
+    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+                    nullptr == buf ||
+                    data_len <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+    } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
+                                                                  buf,
+                                                                  data_len,
+                                                                  pos))) {
+      LOG_WARN("ObDDLTask deserlize failed", K(ret));
+    } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize table failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+      LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
+    } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
+      LOG_WARN("deep copy create index arg failed", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len, pos, rowkey_doc_aux_table_id_))) {
+      LOG_WARN("fail to deserialize rowkey doc table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            doc_rowkey_aux_table_id_))) {
+      LOG_WARN("fail to deserialize doc rowkey table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            domain_index_aux_table_id_))) {
+      LOG_WARN("fail to deserialize fts index aux table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            fts_doc_word_aux_table_id_))) {
+      LOG_WARN("fail to deserialize fts doc word table id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_doc_submitted))) {
+      LOG_WARN("fail to deserialize rowkey doc task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &doc_rowkey_submitted))) {
+      LOG_WARN("fail to deserialize doc rowkey task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &fts_index_aux_submitted))) {
+      LOG_WARN("fail to deserialize fts index aux task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &fts_doc_word_submitted))) {
+      LOG_WARN("fail to deserialize fts doc word task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_doc_task_id_))) {
+      LOG_WARN("fail to deserialize rowkey doc task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &doc_rowkey_task_id_))) {
+      LOG_WARN("fail to deserialize doc rowkey task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &domain_index_aux_task_id_))) {
+      LOG_WARN("fail to deserialize fts index aux task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &fts_doc_word_task_id_))) {
+      LOG_WARN("fail to deserialize fts doc word task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_submitted))) {
+      LOG_WARN("fail to deserialize drop fts index task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_task_id_))) {
+      LOG_WARN("fail to deserialize drop fts index task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_rowkey_doc_succ))) {
+      LOG_WARN("fail to deserialize rowkey doc task succ", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_doc_rowkey_succ))) {
+      LOG_WARN("fail to deserialize doc rowkey task succ", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_domain_aux_succ))) {
+      LOG_WARN("fail to deserialize fts index aux task succ", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_fts_doc_word_succ))) {
+      LOG_WARN("fail to deserialize fts doc word task succ", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_retryable_ddl))) {
+      LOG_WARN("fail to deserialize is retryable ddl", K(ret));
+    } else if (!dependent_task_result_map_.created() &&
+              OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
+                                                        lib::ObLabel("DepTasMap")))) {
+      LOG_WARN("create dependent task map failed", K(ret));
+    } else {
+      if (OB_SUCC(ret) && rowkey_doc_task_id_ > 0) {
+        DependTaskStatus rowkey_doc_status;
+        rowkey_doc_status.task_id_ = rowkey_doc_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_doc_aux_table_id_,
+                                                              rowkey_doc_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(rowkey_doc_aux_table_id_),
+              K(rowkey_doc_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && doc_rowkey_task_id_ > 0) {
-      DependTaskStatus doc_rowkey_status;
-      doc_rowkey_status.task_id_ = doc_rowkey_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(doc_rowkey_aux_table_id_,
-                                                            doc_rowkey_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(doc_rowkey_aux_table_id_),
-            K(doc_rowkey_status));
+      if (OB_SUCC(ret) && doc_rowkey_task_id_ > 0) {
+        DependTaskStatus doc_rowkey_status;
+        doc_rowkey_status.task_id_ = doc_rowkey_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(doc_rowkey_aux_table_id_,
+                                                              doc_rowkey_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(doc_rowkey_aux_table_id_),
+              K(doc_rowkey_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && domain_index_aux_task_id_ > 0) {
-      DependTaskStatus fts_index_aux_status;
-      fts_index_aux_status.task_id_ = domain_index_aux_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(domain_index_aux_table_id_,
-                                                            fts_index_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(domain_index_aux_table_id_),
-            K(fts_index_aux_status));
+      if (OB_SUCC(ret) && domain_index_aux_task_id_ > 0) {
+        DependTaskStatus fts_index_aux_status;
+        fts_index_aux_status.task_id_ = domain_index_aux_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(domain_index_aux_table_id_,
+                                                              fts_index_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(domain_index_aux_table_id_),
+              K(fts_index_aux_status));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (!is_fts_task() ) {
-      fts_doc_word_submitted = true;
-    } else if (fts_doc_word_task_id_ > 0) {
-      DependTaskStatus fts_doc_word_status;
-      fts_doc_word_status.task_id_ = fts_doc_word_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(fts_doc_word_aux_table_id_,
-                                                            fts_doc_word_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(fts_doc_word_aux_table_id_),
-            K(fts_doc_word_status));
+      if (OB_FAIL(ret)) {
+      } else if (!is_fts_task() ) {
+        fts_doc_word_submitted = true;
+      } else if (fts_doc_word_task_id_ > 0) {
+        DependTaskStatus fts_doc_word_status;
+        fts_doc_word_status.task_id_ = fts_doc_word_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(fts_doc_word_aux_table_id_,
+                                                              fts_doc_word_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(fts_doc_word_aux_table_id_),
+              K(fts_doc_word_status));
+        }
       }
+      rowkey_doc_task_submitted_ = rowkey_doc_submitted;
+      doc_rowkey_task_submitted_ = doc_rowkey_submitted;
+      domain_index_aux_task_submitted_ = fts_index_aux_submitted;
+      fts_doc_word_task_submitted_ = fts_doc_word_submitted;
+      drop_index_task_submitted_ = drop_index_submitted;
+      is_rowkey_doc_succ_ = is_rowkey_doc_succ;
+      is_doc_rowkey_succ_ = is_doc_rowkey_succ;
+      is_domain_aux_succ_ = is_domain_aux_succ;
+      is_fts_doc_word_succ_ = is_fts_doc_word_succ;
+      is_retryable_ddl_ = is_retryable_ddl;
     }
-    rowkey_doc_task_submitted_ = rowkey_doc_submitted;
-    doc_rowkey_task_submitted_ = doc_rowkey_submitted;
-    domain_index_aux_task_submitted_ = fts_index_aux_submitted;
-    fts_doc_word_task_submitted_ = fts_doc_word_submitted;
-    drop_index_task_submitted_ = drop_index_submitted;
-    is_rowkey_doc_succ_ = is_rowkey_doc_succ;
-    is_doc_rowkey_succ_ = is_doc_rowkey_succ;
-    is_domain_aux_succ_ = is_domain_aux_succ;
-    is_fts_doc_word_succ_ = is_fts_doc_word_succ;
-    is_retryable_ddl_ = is_retryable_ddl;
   }
   return ret;
 }
