@@ -8482,13 +8482,22 @@ struct ObBootstrapArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObBootstrapArg() : server_list_(), cluster_role_(common::PRIMARY_CLUSTER), shared_storage_info_() {}
+  ObBootstrapArg() :
+    server_list_(),
+    cluster_role_(common::PRIMARY_CLUSTER),
+    shared_storage_info_(),
+    logservice_access_point_() {}
   ~ObBootstrapArg() {}
-  TO_STRING_KV(K_(server_list), K_(cluster_role), K_(shared_storage_info));
+  TO_STRING_KV(
+    K_(server_list),
+    K_(cluster_role),
+    K_(shared_storage_info),
+    "logservice_access_point_is_empty", logservice_access_point_.empty());
   int assign(const ObBootstrapArg &arg);
   ObServerInfoList server_list_;
   common::ObClusterRole cluster_role_;
   ObString shared_storage_info_;
+  ObString logservice_access_point_;
 };
 
 struct ObForceSetLSAsSingleReplicaArg

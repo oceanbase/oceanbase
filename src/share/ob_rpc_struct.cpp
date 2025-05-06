@@ -7147,7 +7147,12 @@ bool ObTablespaceDDLArg::is_valid() const
       && (CREATE_TABLESPACE == type_ || DROP_TABLESPACE == type_ || ALTER_TABLESPACE == type_);
 }
 
-OB_SERIALIZE_MEMBER(ObBootstrapArg, server_list_, cluster_role_, shared_storage_info_);
+OB_SERIALIZE_MEMBER(
+  ObBootstrapArg,
+  server_list_,
+  cluster_role_,
+  shared_storage_info_,
+  logservice_access_point_);
 
 int ObBootstrapArg::assign(const ObBootstrapArg &arg)
 {
@@ -7156,6 +7161,7 @@ int ObBootstrapArg::assign(const ObBootstrapArg &arg)
     LOG_WARN("fail to assign", KR(ret), K(arg));
   } else {
     shared_storage_info_ = arg.shared_storage_info_;
+    logservice_access_point_ = arg.logservice_access_point_;
     cluster_role_ = arg.cluster_role_;
   }
   return ret;
