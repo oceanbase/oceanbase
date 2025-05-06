@@ -178,8 +178,13 @@ int ObMemtableBlockReader::filter_pushdown_filter(
             } else if (OB_FAIL(datum.from_storage_datum(default_datums.at(i), map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(default_datums.at(i)), K(obj_type), K(map_type));
             }
-          } else if (OB_FAIL(datum.from_storage_datum(src_datum, map_type))) {
-            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(src_datum), K(obj_type), K(map_type));
+          } else if (ob_is_decimal_int(obj_type)) {
+            // deep copy for decimal int
+            if (OB_FAIL(datum.from_storage_datum(src_datum, map_type))) {
+              LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(src_datum), K(obj_type), K(map_type));
+            }
+          } else {
+            datum.shallow_copy_from_datum(src_datum);
           }
           if (OB_FAIL(ret) || nullptr == col_params.at(i) || datum.is_null()) {
           } else if (need_padding(filter.is_padding_mode(), col_params.at(i)->get_meta_type())) {

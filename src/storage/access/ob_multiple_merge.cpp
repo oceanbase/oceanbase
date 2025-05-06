@@ -1767,8 +1767,10 @@ int ObMultipleMerge::refresh_table_on_demand()
 #else
   } else if (need_refresh) {
 #endif
+    bool refreshed = false;
     if (ScanState::BATCH == scan_state_) {
-      STORAGE_LOG(INFO, "in vectorize batch scan, do refresh at next time");
+      STORAGE_LOG(INFO, "in vectorize batch scan, do refresh at next time",
+                  "table_id", access_param_->iter_param_.table_id_);
       if (OB_NOT_NULL(block_row_store_)) {
         block_row_store_->disable();
       }
@@ -1794,10 +1796,12 @@ int ObMultipleMerge::refresh_table_on_demand()
                OB_FAIL(prepare_truncate_filter())) {
       LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (nullptr != block_row_store_ && FALSE_IT(block_row_store_->reuse())) {
+    } else {
+      refreshed = true;
     }
 
-    if (OB_SUCC(ret)) {
-      STORAGE_LOG(INFO, "table need to be refresh", "table_id", access_param_->iter_param_.table_id_,
+    if (OB_SUCC(ret) && refreshed) {
+      STORAGE_LOG(INFO, "table refreshed", "table_id", access_param_->iter_param_.table_id_,
                   K(curr_scan_index_), K(di_base_curr_scan_index_), K(scan_state_),
                   K(need_scan_di_base_), K(delta_iter_end_), K(di_base_border_rowkey_), K_(major_table_version));
     }
