@@ -220,6 +220,10 @@ int ObDASHNSWScanIter::inner_reuse()
     LOG_WARN("failed to reuse vid rowkey iter", K(ret));
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
   }
+  if (!data_filter_iter_first_scan_ && OB_FAIL(reuse_filter_data_table_iter())) {
+    LOG_WARN("failed to reuse data filter iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+  }
 
   // return first error code
   if (tmp_ret != OB_SUCCESS) {
@@ -1369,14 +1373,13 @@ int ObDASHNSWScanIter::set_rowkey_by_vid(ObNewRow *row)
       if (OB_ISNULL(data_filter_iter_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data scan iter is null", K(ret));
-      } else if (OB_FAIL(get_rowkey_from_vid_rowkey_table(mem_context_->get_arena_allocator(), vid_row, rowkey))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("failed to get rowkey.", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-        }
       } else if (!data_filter_iter_first_scan_ && OB_FAIL(reuse_filter_data_table_iter())) {
         LOG_WARN("failed to reuse com aux vec iter.", K(ret));
+      } else if (OB_FAIL(get_rowkey_from_vid_rowkey_table(mem_context_->get_arena_allocator(), vid_row, rowkey))) {
+        // do not overwrite ret code, in case search data_table by wrong rowkey
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get rowkey.", K(ret));
+        }
       } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(*rowkey, data_filter_scan_param_, data_filter_ctdef_->ref_table_id_))) {
         LOG_WARN("failed to set lookup key", K(ret));
       }
@@ -1496,14 +1499,18 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
             LOG_WARN("failed to add result", K(ret), K(i));
           }
         } else if (OB_FAIL(set_rowkey_by_vid(row))) {
-          LOG_WARN("failed to set rowkey by vid.", K(ret), K(i));
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to set rowkey by vid.", K(unfiltered_vids[i]), K(ret), K(i));
+          } else {
+            ret = OB_SUCCESS;
+          }
         } else if (OB_FAIL(do_aux_table_scan(data_filter_iter_first_scan_,
                                             data_filter_scan_param_,
                                             data_filter_ctdef_,
                                             data_filter_rtdef_,
                                             data_filter_iter_,
                                             com_aux_vec_tablet_id_))) {
-          LOG_WARN("failed to do inv idx table scan.", K(ret), K(i));
+          LOG_WARN("failed to do data filter table scan.", K(ret), K(i), K(data_filter_iter_first_scan_));
         } else if (OB_FAIL(get_single_row_from_data_filter_iter(is_vectorized))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to scan vid rowkey iter", K(unfiltered_vids[i]), K(ret), K(i));
