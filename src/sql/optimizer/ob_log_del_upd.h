@@ -203,6 +203,7 @@ public:
   ObLogDelUpd(ObDelUpdLogPlan &plan);
   virtual ~ObLogDelUpd() = default;
   int assign_dml_infos(const ObIArray<IndexDMLInfo *> &index_dml_infos);
+  int add_index_dml_info(IndexDMLInfo *index_dml_info);
 
   int add_table_columns_to_ctx(ObAllocExprContext &ctx,
                                const ObIArray<IndexDMLInfo> &index_dml_infos);

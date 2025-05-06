@@ -1024,6 +1024,21 @@ int ObLogDelUpd::assign_dml_infos(const ObIArray<IndexDMLInfo *> &index_dml_info
   return ret;
 }
 
+int ObLogDelUpd::add_index_dml_info(IndexDMLInfo *index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_dml_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index dml info is null", K(ret));
+  } else if (OB_FAIL(index_dml_infos_.push_back(index_dml_info))) {
+    LOG_WARN("push back failed", K(ret));
+  } else if (index_dml_info->is_primary_index_ &&
+               OB_FAIL(loc_table_list_.push_back(index_dml_info->loc_table_id_))) {
+    LOG_WARN("failed to add loc table id", K(ret));
+  }
+  return ret;
+}
+
 int ObLogDelUpd::get_index_dml_infos(uint64_t loc_table_id,
                                      ObIArray<const IndexDMLInfo *> &index_infos) const
 {
