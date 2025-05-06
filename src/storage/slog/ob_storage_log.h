@@ -20,6 +20,8 @@
 #include "share/ob_unit_getter.h"
 #include "storage/ls/ob_ls_meta.h"
 #include "storage/tx/ob_dup_table_base.h"
+#include "storage/meta_mem/ob_tablet_attr.h"
+#include "storage/meta_store/ob_startup_accelerate_info.h"
 
 namespace oceanbase
 {
@@ -213,6 +215,12 @@ public:
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
+  int64_t ls_epoch_;
+  int64_t tablet_meta_version_;
+  ObPendingFreeTabletStatus status_;
+  int64_t free_time_;
+  GCTabletType gc_type_;
+  int64_t tablet_transfer_seq_;
 };
 
 struct ObUpdateTabletLog : public ObIBaseStorageLogEntry
@@ -231,6 +239,9 @@ public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObMetaDiskAddr disk_addr_;
+  int64_t ls_epoch_;
+  storage::ObTabletAttr tablet_attr_;
+  storage::ObStartupTabletAccelerateInfo accelerate_info_;
 };
 
 struct ObEmptyShellTabletLog : public ObIBaseStorageLogEntry

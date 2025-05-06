@@ -228,6 +228,7 @@ private:
   ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
   ObMajorMVMergeInfo major_mv_merge_info_;
   common::ObLSStoreFormat store_format_;    // set on initialization and then remain unchanged
+  int64_t ls_epoch_;
 };
 
 }  // namespace storage

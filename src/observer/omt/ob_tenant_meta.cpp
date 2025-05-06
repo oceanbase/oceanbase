@@ -19,7 +19,7 @@ namespace oceanbase
 namespace omt
 {
 
-OB_SERIALIZE_MEMBER(ObTenantMeta, unit_, super_block_, create_status_);
+OB_SERIALIZE_MEMBER(ObTenantMeta, unit_, super_block_, create_status_, epoch_);
 
 int ObTenantMeta::build(const share::ObUnitInfoGetter::ObTenantConfig &unit,
                         const storage::ObTenantSuperBlock &super_block)

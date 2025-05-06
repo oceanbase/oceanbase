@@ -26,6 +26,13 @@ namespace storage
 //errsim def
 ERRSIM_POINT_DEF(EN_RELEASE_MDS_NODE_FAILED);
 
+template <typename T, std::size_t expected_size, std::size_t real_size = sizeof(T)>
+void check_size()
+{
+  static_assert(expected_size == real_size,
+      "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+}
+
 ObTabletPointer::ObTabletPointer()
   : phy_addr_(),
     obj_(),
@@ -43,7 +50,7 @@ ObTabletPointer::ObTabletPointer()
     auto_part_size_(OB_INVALID_SIZE)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 360, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  check_size<ObTabletPointer, 408>();
 #endif
 }
 

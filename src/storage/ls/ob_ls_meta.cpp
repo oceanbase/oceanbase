@@ -1193,7 +1193,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     rebuild_info_,
                     transfer_meta_info_,
                     major_mv_merge_info_,
-                    store_format_);
+                    store_format_,
+                    ls_epoch_);
 
 }
 }

@@ -402,6 +402,8 @@ public:
   OB_UNIS_VERSION(1);
 
 public:
+  share::ObLSID ls_id_;
+  int64_t ls_epoch_;
   common::ObSEArray<ObPendingFreeTabletItem, 16> items_;
 };
 

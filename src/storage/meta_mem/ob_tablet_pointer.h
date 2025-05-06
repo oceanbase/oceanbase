@@ -15,6 +15,7 @@
 
 #include "lib/lock/ob_mutex.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
+#include "storage/meta_mem/ob_tablet_attr.h"
 #include "storage/multi_data_source/runtime_utility/mds_lock.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -31,62 +32,6 @@ class ObTablet;
 class ObTabletDDLKvMgr;
 struct ObTabletResidentInfo;
 typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
-
-struct ObTabletAttr final
-{
-public:
-  ObTabletAttr()
-    :v_(0),
-     ha_status_(0),
-     all_sstable_data_occupy_size_(0),
-     all_sstable_data_required_size_(0),
-     tablet_meta_size_(0),
-     ss_public_sstable_occupy_size_(0),
-     backup_bytes_(0)
-    {}
-  ~ObTabletAttr() { reset(); }
-  void reset()
-  {
-    v_ = 0;
-    ha_status_ = 0;
-    all_sstable_data_occupy_size_ = 0;
-    all_sstable_data_required_size_ = 0;
-    tablet_meta_size_ = 0;
-    ss_public_sstable_occupy_size_ = 0;
-    backup_bytes_ = 0;
-  }
-  bool is_valid() const { return valid_; }
-  TO_STRING_KV(K_(valid), K_(is_empty_shell), K_(has_transfer_table),
-      K_(has_next_tablet), K_(has_nested_table), K_(ha_status),
-      K_(all_sstable_data_occupy_size), K_(all_sstable_data_required_size), K_(tablet_meta_size),
-      K_(ss_public_sstable_occupy_size), K_(backup_bytes)
-      );
-public:
-  union {
-    int64_t v_;
-    struct {
-        bool valid_ : 1; // valid_ = true means attr is filled
-        bool is_empty_shell_ : 1;
-        bool has_transfer_table_ : 1;
-        bool has_next_tablet_ : 1;
-        bool has_nested_table_: 1;
-    };
-  };
-
-  int64_t ha_status_;
-  // all sstable data occupy_size, include major sstable
-  // <data_block real_size> + <small_sstable_nest_size (in share_nothing)>
-  int64_t all_sstable_data_occupy_size_;
-  // all sstable data requred_size, data_block_count * 2MB, include major sstable
-  int64_t all_sstable_data_required_size_;
-  // meta_size in shared_nothing, meta_block_count * 2MB
-  int64_t tablet_meta_size_;
-  // major sstable data occupy_size
-  // which is same as major_sstable_required_size_;
-  // because the alignment size is 1B in object_storage.
-  int64_t ss_public_sstable_occupy_size_;
-  int64_t backup_bytes_;
-};
 
 class ObTabletPointer final
 {
@@ -208,11 +153,11 @@ public:
   : attr_(attr), tablet_addr_(tablet_addr), ls_id_(ls_id), tablet_id_(tablet_id)
     {}
   ~ObTabletResidentInfo() { reset(); };
-  bool is_valid() const { return attr_.valid_ && tablet_id_.is_valid() && tablet_addr_.is_valid(); }
-  bool has_transfer_table() const { return attr_.has_transfer_table_; }
-  bool is_empty_shell() const { return attr_.is_empty_shell_; }
-  bool has_next_tablet() const { return attr_.has_next_tablet_; }
-  bool has_nested_table() const { return attr_.has_nested_table_; }
+  bool is_valid() const { return attr_.is_valid() && tablet_id_.is_valid() && tablet_addr_.is_valid(); }
+  bool has_transfer_table() const { return attr_.has_transfer_table(); }
+  bool is_empty_shell() const { return attr_.is_empty_shell(); }
+  bool has_next_tablet() const { return attr_.has_next_tablet(); }
+  bool has_nested_table() const { return attr_.has_nested_table(); }
   int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
   int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }
   uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }

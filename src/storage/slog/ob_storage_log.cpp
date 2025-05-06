@@ -195,7 +195,7 @@ bool ObDeleteTabletLog::is_valid() const
   return ls_id_.is_valid() && tablet_id_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObDeleteTabletLog, ls_id_, tablet_id_);
+OB_SERIALIZE_MEMBER(ObDeleteTabletLog, ls_id_, tablet_id_, ls_epoch_, tablet_meta_version_, status_, free_time_, gc_type_, tablet_transfer_seq_);
 
 DEF_TO_STRING(ObDeleteTabletLog)
 {
@@ -221,7 +221,13 @@ bool ObUpdateTabletLog::is_valid() const
   return ls_id_.is_valid() && tablet_id_.is_valid() && disk_addr_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObUpdateTabletLog, ls_id_, tablet_id_, disk_addr_);
+OB_SERIALIZE_MEMBER(ObUpdateTabletLog,
+                    ls_id_,
+                    tablet_id_,
+                    disk_addr_,
+                    ls_epoch_,
+                    tablet_attr_,
+                    accelerate_info_);
 
 DEF_TO_STRING(ObUpdateTabletLog)
 {

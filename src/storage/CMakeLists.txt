@@ -172,6 +172,7 @@ ob_set_subtarget(ob_storage meta_store
   meta_store/ob_tenant_storage_meta_persister.cpp
   meta_store/ob_tenant_storage_meta_replayer.cpp
   meta_store/ob_tenant_seq_generator.cpp
+  meta_store/ob_startup_accelerate_info.cpp
 )
 
 ob_set_subtarget(ob_storage tmp_file
@@ -741,6 +742,7 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_flying_tablet_pointer_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
   meta_mem/ob_storage_meta_cache.cpp
+  meta_mem/ob_tablet_attr.cpp
   meta_mem/ob_tablet_handle.cpp
   meta_mem/ob_tablet_leak_checker.cpp
   meta_mem/ob_tablet_map_key.cpp

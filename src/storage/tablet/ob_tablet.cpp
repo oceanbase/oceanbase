@@ -7276,9 +7276,8 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
 {
   int ret = OB_SUCCESS;
   attr.reset();
-  attr.has_transfer_table_ = tablet_meta_.has_transfer_table();
-  attr.is_empty_shell_ = table_store_addr_.addr_.is_none();
-  attr.has_next_tablet_ = tablet_meta_.has_next_tablet_;
+  attr.iter_attr_.has_transfer_table_ = tablet_meta_.has_transfer_table();
+  attr.iter_attr_.is_empty_shell_ = table_store_addr_.addr_.is_none();
   attr.ha_status_ = tablet_meta_.ha_status_.get_ha_status();
 
   // calc space_usage
@@ -7288,11 +7287,11 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   attr.ss_public_sstable_occupy_size_ = tablet_meta_.space_usage_.ss_public_sstable_occupy_size_;
   attr.backup_bytes_ = tablet_meta_.space_usage_.backup_bytes_;
 
-  attr.has_nested_table_ = false;
+  attr.iter_attr_.has_nested_table_ = false;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const ObTabletTableStore *table_store = nullptr;
   ObTableStoreIterator table_iter;
-  if (attr.is_empty_shell_) { // skip empty shell
+  if (attr.is_empty_shell()) { // skip empty shell
   } else if (OB_FAIL(fetch_table_store(wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(wrapper.get_member(table_store))) {
@@ -7305,7 +7304,7 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
       if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
         ret = OB_ERR_UNEXPECTED;
       } else if (static_cast<ObSSTable *>(table)->is_small_sstable()) {
-        attr.has_nested_table_ = true;
+        attr.iter_attr_.has_nested_table_ = true;
         break;
       }
     }
@@ -7316,7 +7315,7 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   }
 
   if (OB_SUCC(ret)) {
-    attr.valid_ = true;
+    attr.iter_attr_.valid_ = true;
   } else {
     attr.reset();
   }
