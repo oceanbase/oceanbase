@@ -331,7 +331,7 @@ int ObDDLResolver::check_and_set_default_storage_cache_policy()
       }
     }
   }
-  FLOG_INFO("[SCP] check and set default storage cache policy", KR(ret), K(need_set_default_storage_cache_policy));
+  LOG_TRACE("[SCP] check and set default storage cache policy", KR(ret), K(need_set_default_storage_cache_policy));
 
   if (OB_SUCC(ret) && need_set_default_storage_cache_policy) {
     if (OB_ISNULL(storage_cache_policy_) && OB_FAIL(set_default_storage_cache_policy())) {
