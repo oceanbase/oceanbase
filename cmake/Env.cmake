@@ -207,11 +207,11 @@ if (OB_USE_CLANG)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
 
   if (OB_USE_ASAN)
-    ob_define(CMAKE_ASAN_FLAG "-fstack-protector-strong -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
+    ob_define(CMAKE_ASAN_FLAG "-mllvm -asan-stack=0 -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
   endif()
 
   if (OB_USE_LLD)
-    set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
+    set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld -Wno-unused-command-line-argument")
     set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
     set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
