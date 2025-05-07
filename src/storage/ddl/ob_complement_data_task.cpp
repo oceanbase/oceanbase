@@ -1560,6 +1560,8 @@ int ObComplementMergeTask::process()
   ObTablet *tablet = nullptr;
   ObArray<int64_t> report_col_checksums;
   ObArray<int64_t> report_col_ids;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
   if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
@@ -1572,7 +1574,18 @@ int ObComplementMergeTask::process()
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     const ObSSTable *first_major_sstable = nullptr;
     ObSSTableMetaHandle sst_meta_hdl;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+    } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls is null", K(ret), K(ls_handle));
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, param_->dest_tablet_id_, tablet_handle,
+      ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+      LOG_WARN("get tablet handle failed", K(ret), K(ls_id), KPC_(param));
+    } else if (OB_UNLIKELY(nullptr == tablet_handle.get_obj())) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("tablet handle is null", K(ret), K(ls_id), KPC_(param));
+    } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(
         param_->dest_ls_id_, param_->dest_tablet_id_, first_major_sstable, table_store_wrapper))) {
       LOG_WARN("check if major sstable exist failed", K(ret), K(*param_));
     } else if (OB_ISNULL(first_major_sstable)) {
@@ -1580,17 +1593,25 @@ int ObComplementMergeTask::process()
       LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
     } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
-    } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->dest_ls_id_,
-                                                            param_->dest_tablet_id_,
-                                                            param_->dest_table_id_,
-                                                            1 /* execution_id */,
-                                                            param_->task_id_,
-                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum(),
-                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt(),
-                                                            param_->data_format_version_))) {
-      LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
-    } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(param_->dest_ls_id_, param_->dest_tablet_id_))) {
-      LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
+    } else {
+      const int64_t *column_checksums = sst_meta_hdl.get_sstable_meta().get_col_checksum();
+      const int64_t column_count = sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt();
+      ObArray<int64_t> co_column_checksums;
+      co_column_checksums.set_attr(ObMemAttr(MTL_ID(), "Comp_Ccc"));
+      if (OB_FAIL(ObCODDLUtil::get_co_column_checksums_if_need(tablet_handle, first_major_sstable, co_column_checksums))) {
+        LOG_WARN("get column checksum from co sstable failed", K(ret));
+      } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->dest_ls_id_,
+                                                         param_->dest_tablet_id_,
+                                                         param_->dest_table_id_,
+                                                         1 /* execution_id */,
+                                                         param_->task_id_,
+                                                         co_column_checksums.empty() ? column_checksums : co_column_checksums.get_data(),
+                                                         co_column_checksums.empty() ? column_count : co_column_checksums.count(),
+                                                         param_->data_format_version_))) {
+        LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
+      } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(param_->dest_ls_id_, param_->dest_tablet_id_))) {
+        LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
+      }
     }
   } else if (param_->use_new_checksum() && OB_FAIL(context_->get_column_checksum(report_col_checksums, report_col_ids))) {
     LOG_WARN("get column checksum failed", K(ret));
@@ -1635,7 +1656,6 @@ int ObComplementMergeTask::process()
   add_ddl_event(param_, "complement merge task");
   return ret;
 }
-
 
 ObComplementCalcRangeTask::ObComplementCalcRangeTask()
   : ObITask(TASK_TYPE_COMPLEMENT_CALC_RANGE), is_inited_(false), param_(nullptr), context_(nullptr)
