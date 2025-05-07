@@ -1165,7 +1165,7 @@ int ObDelUpdLogPlan::allocate_pdml_delete_as_top(ObLogicalOperator *&top,
                                    get_log_op_factory().allocate(*this, LOG_DELETE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate delete operator", K(ret));
-  } else if (OB_FAIL(delete_op->get_index_dml_infos().push_back(index_dml_info))) {
+  } else if (OB_FAIL(delete_op->add_index_dml_info(index_dml_info))) {
     LOG_WARN("failed to add index dml info", K(ret));
   } else {
     delete_op->set_is_pdml(true);
@@ -1516,7 +1516,7 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
   } else if (OB_ISNULL(insert_op = static_cast<ObLogInsert*>(log_op_factory_.allocate(*this, LOG_INSERT)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate insert operator", K(ret));
-  } else if (OB_FAIL(insert_op->get_index_dml_infos().push_back(dml_info))) {
+  } else if (OB_FAIL(insert_op->add_index_dml_info(dml_info))) {
     LOG_WARN("failed to add index dml info", K(ret));
   } else {
     insert_op->set_child(ObLogicalOperator::first_child, top);
@@ -1680,7 +1680,7 @@ int ObDelUpdLogPlan::allocate_pdml_update_as_top(ObLogicalOperator *&top,
   } else if (OB_ISNULL(update_op = static_cast<ObLogUpdate*>(log_op_factory_.allocate(*this, LOG_UPDATE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate update operator", K(ret));
-  } else if (OB_FAIL(update_op->get_index_dml_infos().push_back(index_dml_info))) {
+  } else if (OB_FAIL(update_op->add_index_dml_info(index_dml_info))) {
     LOG_WARN("failed to add index dml info", K(ret));
   } else {
     const ObUpdateStmt *update_stmt = static_cast<const ObUpdateStmt*>(get_stmt());

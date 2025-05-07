@@ -628,33 +628,44 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
       const ObInsertStmt &insert_stmt = static_cast<const ObInsertStmt &>(pdml_stmt);
       uint64_t ref_table_id = insert_stmt.get_insert_table_info().ref_table_id_;
       share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
-      ObSEArray<uint64_t, 8> unique_index_ids;
+      ObSEArray<const ObSimpleTableSchemaV2 *, 8> index_schema;
       if (OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null", K(ret));
       } else if (OB_INVALID_ID == ref_table_id) {
         // do nothing.
-      } else if (OB_FAIL(schema_guard->get_all_unique_index(session.get_effective_tenant_id(),
-                                                      ref_table_id, unique_index_ids))) {
+      } else if (OB_FAIL(schema_guard->get_index_schemas_with_data_table_id(session.get_effective_tenant_id(),
+                                                      ref_table_id, index_schema))) {
         LOG_WARN("get unique index ids failed", K(ret), K(ref_table_id));;
-      } else if (!unique_index_ids.empty()) {
-        // disable pdml
-        LOG_TRACE("disable pdml insert on duplicate because of unique index", K(ref_table_id),
-                  K(unique_index_ids));
       } else {
-        const ObIArray<ObAssignment> &assignments = insert_stmt.get_table_assignments();
-        bool update_unique_key = false;
-        for (int64_t i = 0; i < assignments.count() && OB_SUCC(ret); i++) {
-          const ObColumnRefRawExpr *col_expr = assignments.at(i).column_expr_;
-          if (OB_ISNULL(col_expr)) {
+        bool has_unique_or_global_idx = false;
+        for (int64_t i = 0; i < index_schema.count() && !has_unique_or_global_idx && OB_SUCC(ret); i++) {
+          const ObSimpleTableSchemaV2 *index = NULL;
+          if (OB_ISNULL(index = index_schema.at(i))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column ref raw expr is null");
-          } else if (col_expr->is_rowkey_column() || col_expr->is_unique_key_column()) {
-            update_unique_key = true;
-            break;
+            LOG_WARN("schema is null", K(ret));
+          } else if ((index->is_unique_index() || index->is_global_index_table())
+                     && index->get_index_type() != INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY) {
+            has_unique_or_global_idx = true;
           }
         }
-        is_use_pdml = !update_unique_key;
+        if (OB_SUCC(ret) && !has_unique_or_global_idx) {
+          const ObIArray<ObAssignment> &assignments = insert_stmt.get_table_assignments();
+          bool update_unique_key = false;
+          for (int64_t i = 0; i < assignments.count() && OB_SUCC(ret); i++) {
+            const ObColumnRefRawExpr *col_expr = assignments.at(i).column_expr_;
+            if (OB_ISNULL(col_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column ref raw expr is null");
+            } else if (col_expr->is_rowkey_column() || col_expr->is_unique_key_column()) {
+              update_unique_key = true;
+              break;
+            }
+          }
+          is_use_pdml = !update_unique_key;
+        }
+        LOG_TRACE("check whether enable pdml insert on duplicate", K(ref_table_id),
+                  K(index_schema));
       }
     }
   }
