@@ -76,13 +76,7 @@ int ObTableLoadMemChunkManager::get_chunk(int64_t &chunk_node_id, ChunkType *&ch
       } else if (!chunk_node.is_used() && chunk_node.set_used()) {
         if (nullptr == chunk_node.chunk_) {
           // 等待内存空出
-          while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->max_mem_chunk_count_ &&
-                 OB_LIKELY(!mem_ctx_->has_error_)) {
-            usleep(50000);
-          }
-          if (OB_UNLIKELY(mem_ctx_->has_error_)) {
-            // do nothing
-          } else if (OB_FAIL(acquire_chunk(chunk_node.chunk_))) {
+          if (OB_FAIL(mem_ctx_->acquire_chunk(chunk_node.chunk_))) {
             LOG_WARN("fail to acquire chunk", KR(ret));
           } else {
             chunk_node_id = cur_chunk_node_id;
@@ -205,44 +199,11 @@ int ObTableLoadMemChunkManager::close_and_acquire_chunk(int64_t chunk_node_id, C
       LOG_WARN("fail to push", KR(ret));
     } else {
       chunk_node.chunk_ = nullptr;
-      while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->max_mem_chunk_count_ && OB_LIKELY(!mem_ctx_->has_error_)) {
-        usleep(50000);
-      }
-      if (OB_UNLIKELY(mem_ctx_->has_error_)) {
-        ret = store_ctx_->get_error_code();
-      } else if (OB_FAIL(acquire_chunk(chunk_node.chunk_))) {
+      if (OB_FAIL(mem_ctx_->acquire_chunk(chunk_node.chunk_))) {
         LOG_WARN("fail to acquire chunk", KR(ret));
       } else {
         chunk = chunk_node.chunk_;
       }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadMemChunkManager::acquire_chunk(ChunkType *&chunk)
-{
-  int ret = OB_SUCCESS;
-  chunk = nullptr;
-  ObMemAttr mem_attr(MTL_ID(), "TLD_MemChunk");
-  int64_t sort_memory = 0;
-  if (mem_ctx_->exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
-    sort_memory = mem_ctx_->mem_chunk_size_;
-  } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
-    LOG_WARN("fail to get sort memory", KR(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(chunk = OB_NEW(ChunkType, mem_attr))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadExternalMultiPartitionRowChunk", KR(ret));
-    } else if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
-      LOG_WARN("fail to init external sort", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != chunk) {
-      OB_DELETE(ChunkType, mem_attr, chunk);
-      chunk = nullptr;
     }
   }
   return ret;

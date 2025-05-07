@@ -87,7 +87,7 @@ int ObDirectLoadMemSample::do_work()
   chunks.set_tenant_id(MTL_ID());
   ranges.set_tenant_id(MTL_ID());
   mem_ctx_->mem_chunk_queue_.pop_all(chunks);
-  if (OB_FAIL(ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle(context_ptr))) {
+  if (OB_FAIL(ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle(context_ptr, mem_ctx_))) {
     LOG_WARN("fail to make handle", KR(ret));
   } else if (FALSE_IT(context_ptr->sub_dump_count_ = range_count_)) {
   } else if (OB_FAIL(context_ptr->init())) {
@@ -99,10 +99,7 @@ int ObDirectLoadMemSample::do_work()
     context_ptr->mem_chunk_array_.reset();
     for (int64_t i = 0; i < chunks.count(); i ++) {
       ChunkType *chunk = chunks.at(i);
-      if (chunk != nullptr) {
-        chunk->~ChunkType();
-        ob_free(chunk);
-      }
+      mem_ctx_->release_chunk(chunk);
     }
   }
 

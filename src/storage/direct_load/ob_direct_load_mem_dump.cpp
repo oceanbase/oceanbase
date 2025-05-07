@@ -33,11 +33,12 @@ using namespace observer;
  * Context
  */
 
-ObDirectLoadMemDump::Context::Context()
+ObDirectLoadMemDump::Context::Context(ObDirectLoadMemContext *mem_ctx)
   : allocator_("TLD_MemDumpCtx"),
     safe_allocator_(allocator_),
     finished_sub_dump_count_(0),
-    sub_dump_count_(0)
+    sub_dump_count_(0),
+    mem_ctx_(mem_ctx)
 {
   allocator_.set_tenant_id(MTL_ID());
   mem_chunk_array_.set_tenant_id(MTL_ID());
@@ -48,10 +49,7 @@ ObDirectLoadMemDump::Context::~Context()
   all_tables_.reset();
   for (int64_t i = 0; i < mem_chunk_array_.count(); i++) {
     ChunkType *chunk = mem_chunk_array_.at(i);
-    if (chunk != nullptr) {
-      chunk->~ChunkType();
-      ob_free(chunk);
-    }
+    mem_ctx_->release_chunk(chunk);
   }
 }
 
@@ -451,7 +449,6 @@ int ObDirectLoadMemDump::do_dump()
       if (OB_FAIL(compact_tables())) {
         LOG_WARN("fail to compact tables", KR(ret));
       }
-      ATOMIC_AAF(&(mem_ctx_->fly_mem_chunk_count_), -context_ptr_->mem_chunk_array_.count());
     }
   }
   ATOMIC_AAF(&(mem_ctx_->running_dump_task_cnt_), -1);
