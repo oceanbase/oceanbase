@@ -11,6 +11,7 @@
  */
 #include "malloc_hook.h"
 #include "deps/oblib/src/lib/hash/ob_hashmap.h"
+#include <dlfcn.h>
 
 #define OBMALLOC_ATTR(s) __attribute__((s))
 #define OBMALLOC_EXPORT __attribute__((visibility("default")))
@@ -268,5 +269,17 @@ void *__libc_malloc(size_t size) LIBC_ALIAS(malloc);
 void *__libc_realloc(void* ptr, size_t size) LIBC_ALIAS(realloc);
 void __libc_free(void* ptr) LIBC_ALIAS(free);
 void *__libc_memalign(size_t align, size_t s) LIBC_ALIAS(memalign);
+
+int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
+{
+  // pthread_getattr_np has lock and will allocate memory
+  // add in_hook to avoid deadlock with backtrace get_stackattr
+  bool in_hook_bak = in_hook();
+  in_hook() = true;
+  DEFER(in_hook() = in_hook_bak);
+  static int (*real_pthread_getattr_np)(pthread_t thread, pthread_attr_t *attr) =
+      (typeof(real_pthread_getattr_np))dlsym(RTLD_NEXT, "pthread_getattr_np");
+  return real_pthread_getattr_np(thread, attr);
+}
 
 EXTERN_C_END
