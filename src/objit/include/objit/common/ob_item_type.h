@@ -2631,6 +2631,7 @@ typedef enum ObItemType
   T_PUSH_SUBQ = 4823,
   T_NO_PUSH_SUBQ = 4824,
 
+  T_SP_SYS_DISPATCH_CALL = 4849,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

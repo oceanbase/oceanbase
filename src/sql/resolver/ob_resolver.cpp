@@ -146,6 +146,8 @@
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #endif
+#include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -1278,6 +1280,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_FLASHBACK_STANDBY_LOG: {
         REGISTER_STMT_RESOLVER(FlashbackStandbyLog);
+        break;
+      }
+      case T_SP_SYS_DISPATCH_CALL: {
+        REGISTER_STMT_RESOLVER(SysDispatchCall);
         break;
       }
       default: {

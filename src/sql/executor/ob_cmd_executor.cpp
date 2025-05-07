@@ -171,6 +171,8 @@
 #include "sql/resolver/ddl/ob_audit_stmt.h"
 #include "sql/engine/cmd/ob_audit_executor.h"
 #endif
+#include "sql/resolver/cmd/ob_sys_dispatch_call_stmt.h"
+#include "sql/engine/cmd/ob_sys_dispatch_call_executor.h"
 
 namespace oceanbase
 {
@@ -1138,6 +1140,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_LOAD_LICENSE: {
         DEFINE_EXECUTE_CMD(ObLoadLicenseStmt, ObLoadLicenseExecutor);
+        break;
+      }
+      case stmt::T_SYS_DISPATCH_CALL: {
+        DEFINE_EXECUTE_CMD(ObSysDispatchCallStmt, ObSysDispatchCallExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:
