@@ -7368,6 +7368,26 @@ def_table_schema(
 )
 
 def_table_schema(
+  owner = 'linqiucen.lqc',
+  table_name    = '__all_tenant_flashback_log_scn',
+  table_id = '541',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('switchover_epoch', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('op_type', 'varchar:64', 'false'),
+    ('flashback_log_scn', 'uint', 'false', '0'),
+  ],
+)
+
+def_table_schema(
   owner = 'gengli.wzy',
   table_id = '543',
   table_name = '__all_license',
@@ -14833,6 +14853,12 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sql_plan_aux_key2snapshot']))
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12522',
+  table_name = '__all_virtual_tenant_flashback_log_scn',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_flashback_log_scn']))
+
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15312,7 +15338,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15488'
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keywords['__all_virtual_tablet_pointer_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15490', all_def_keywords['__all_object_balance_weight'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492', all_def_keywords['__all_virtual_wr_sql_plan_aux_key2snapshot'])))
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15502', all_def_keywords['__all_virtual_tenant_flashback_log_scn'])))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -19794,7 +19820,12 @@ SELECT A.TENANT_ID,
        COMPATIBLE,
        (CASE
             WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
-            ELSE B.MAX_LS_ID END) AS MAX_LS_ID
+            ELSE B.MAX_LS_ID END) AS MAX_LS_ID,
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
+            ELSE E.LATEST_FLASHBACK_LOG_SCN
+        END) AS FLASHBACK_LOG_SCN
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -19816,6 +19847,10 @@ LEFT JOIN
      WHERE NAME = 'compatible'
      GROUP BY TENANT_ID) AS D
     ON A.TENANT_ID = D.TENANT_ID
+LEFT JOIN
+    (SELECT TENANT_ID, MAX(FLASHBACK_LOG_SCN) AS LATEST_FLASHBACK_LOG_SCN
+     FROM OCEANBASE.__ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN GROUP BY TENANT_ID) AS E
+     ON A.TENANT_ID = E.TENANT_ID
 """.replace("\n", " ")
 )
 
@@ -37371,6 +37406,48 @@ def_table_schema(
 )
 
 def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_TENANT_FLASHBACK_LOG_SCN',
+  table_id        = '21637',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS TIMESTAMP,
+    SWITCHOVER_EPOCH,
+    OP_TYPE,
+    FLASHBACK_LOG_SCN
+  FROM oceanbase.__all_virtual_tenant_flashback_log_scn
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'CDB_OB_TENANT_FLASHBACK_LOG_SCN',
+  table_id        = '21638',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS TIMESTAMP,
+    SWITCHOVER_EPOCH,
+    OP_TYPE,
+    FLASHBACK_LOG_SCN
+  FROM oceanbase.__all_virtual_tenant_flashback_log_scn
+  """.replace("\n", " ")
+)
+
+def_table_schema(
     owner = 'gengli.wzy',
     table_name     = 'DBA_OB_LICENSE',
     table_id       = '21639',
@@ -54703,7 +54780,12 @@ SELECT A.TENANT_ID,
        COMPATIBLE,
        (CASE
             WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
-            ELSE B.MAX_LS_ID END) AS MAX_LS_ID
+            ELSE B.MAX_LS_ID END) AS MAX_LS_ID,
+
+       (CASE
+          WHEN A.TENANT_ID = 1 THEN NULL
+          WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
+          ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -54725,6 +54807,10 @@ LEFT JOIN
      WHERE NAME = 'compatible'
      GROUP BY TENANT_ID) D
     ON A.TENANT_ID = D.TENANT_ID
+LEFT JOIN
+    (SELECT TENANT_ID, MAX(FLASHBACK_LOG_SCN) AS LATEST_FLASHBACK_LOG_SCN
+     FROM SYS.ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN GROUP BY TENANT_ID) E
+     ON A.TENANT_ID = E.TENANT_ID
 WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
@@ -57414,6 +57500,30 @@ def_table_schema(
     CONNECT_CREDENTIAL_NAME
     FROM DBA_SCHEDULER_JOBS WHERE OWNER = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_TENANT_FLASHBACK_LOG_SCN',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25306',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS TIMESTAMP,
+    SWITCHOVER_EPOCH,
+    OP_TYPE,
+    FLASHBACK_LOG_SCN
+  FROM SYS.ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
 )
 
 #

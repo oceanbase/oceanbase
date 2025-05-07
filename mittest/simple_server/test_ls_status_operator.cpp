@@ -156,12 +156,22 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   create_scn.set_min();
 
+  ret = status_operator.get_all_ls_status_by_order(tenant_id_, ls_array,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(2, ls_array.count());
+
   //创建新日志流
   ObLSID ls_id(1002);
   ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = status_operator.get_all_ls_status_by_order_for_flashback_log(tenant_id_, ls_array,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(2, ls_array.count()); // CREATING 无member list 被考虑
 
   //设置初始成员列表
   ObMemberList member_list;
@@ -171,14 +181,48 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObAddr server2(common::ObAddr::IPV4, "127.1.1.1", 3882);
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server1));
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server2));
+  ObMySQLTransaction trans;
+  ret = trans.start(&get_curr_simple_server().get_observer().get_mysql_proxy(), gen_meta_tenant_id(tenant_id_));
+  ASSERT_EQ(OB_SUCCESS, ret);
   ret = status_operator.update_init_member_list(tenant_id_, ls_id, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
+      trans, arb_member, learner_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trans.end(OB_SUCC(ret));
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLSStatusInfo new_status_info;
   ObMemberList new_list;
   ret = status_operator.get_ls_init_member_list(tenant_id_, ls_id, new_list, new_status_info,
       get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
   ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = status_operator.get_all_ls_status_by_order_for_flashback_log(tenant_id_, ls_array,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, ls_array.count()); // CREATING 有member list 被考虑
+
+
+  ObLSID ls_idx(1010);
+  ret = info.init(tenant_id_, ls_idx, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = status_operator.update_ls_status(tenant_id_, ls_idx, share::OB_LS_CREATING, share::OB_LS_CREATED, share::NORMAL_SWITCHOVER_STATUS,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = status_operator.get_all_ls_status_by_order_for_flashback_log(tenant_id_, ls_array,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(4, ls_array.count()); // CREATED 被考虑
+
+  ret = status_operator.update_ls_status(tenant_id_, ls_idx, share::OB_LS_CREATED, share::OB_LS_CREATE_ABORT, share::NORMAL_SWITCHOVER_STATUS,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = status_operator.get_all_ls_status_by_order_for_flashback_log(tenant_id_, ls_array,
+    get_curr_simple_server().get_observer().get_mysql_proxy());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, ls_array.count()); // CREATE_ABORT不被考虑
 
   //创建新日志流
   ObLSStatusInfo new_status_info2;
@@ -190,9 +234,12 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObAddr server4(common::ObAddr::IPV4, "127.1.1.1", 4882);
   ObMember arb_member2(server4, 0);
   common::GlobalLearnerList learner_list2;
-
+  ret = trans.start(&get_curr_simple_server().get_observer().get_mysql_proxy(), gen_meta_tenant_id(tenant_id_));
+  ASSERT_EQ(OB_SUCCESS, ret);
   ret = status_operator.update_init_member_list(tenant_id_, ls_id3, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member2, learner_list2);
+    trans, arb_member2, learner_list2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trans.end(OB_SUCC(ret));
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLSStatusInfo new_status_info3;
   ObMemberList new_list2;
@@ -276,6 +323,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
+
 
 /*
 TEST_F(TestLSStatusOperator, add_tenant)

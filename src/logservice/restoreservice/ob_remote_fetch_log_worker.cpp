@@ -114,7 +114,9 @@ void ObRemoteFetchWorker::destroy()
     allocator_ = NULL;
     log_ext_handler_.destroy();
     inited_ = false;
+    ObThreadPool::destroy();
   }
+  LOG_INFO("ObRemoteFetchWorker destroy success");
 }
 
 int ObRemoteFetchWorker::start()

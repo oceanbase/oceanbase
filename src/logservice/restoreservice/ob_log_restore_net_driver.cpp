@@ -109,6 +109,8 @@ void ObLogRestoreNetDriver::destroy()
 int ObLogRestoreNetDriver::start()
 {
   // fetcher will be build and start on demand
+  WLockGuard guard(lock_);
+  stop_flag_ = false;
   return OB_SUCCESS;
 }
 

@@ -21,7 +21,7 @@ inner_lob_map_t inner_lob_map;
 bool lob_mapping_init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_lob_map.create(298, ObModIds::OB_INNER_LOB_HASH_SET))) {
+  if (OB_FAIL(inner_lob_map.create(299, ObModIds::OB_INNER_LOB_HASH_SET))) {
     SERVER_LOG(WARN, "fail to create inner lob map", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(lob_aux_table_mappings); ++i) {

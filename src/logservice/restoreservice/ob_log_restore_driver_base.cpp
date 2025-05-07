@@ -119,6 +119,7 @@ int ObLogRestoreDriverBase::check_replica_status_(storage::ObLS &ls, bool &can_f
 
 // Restore log need be under control, otherwise log disk may be full as single ls restore log too fast
 // NB: Logs can be replayed only if its scn not bigger than replayable_point
+ERRSIM_POINT_DEF(ERRSIM_CANCEL_FETCH_LOG_LIMIT);
 int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -133,6 +134,10 @@ int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
   } else {
     share::SCN advance_scn = share::SCN::plus(replayable_point, FETCH_LOG_AHEAD_THRESHOLD_NS);
     scn = global_recovery_scn_ <= advance_scn ? global_recovery_scn_ : advance_scn;
+    if (OB_UNLIKELY(ERRSIM_CANCEL_FETCH_LOG_LIMIT)) {
+      scn = global_recovery_scn_;
+      LOG_WARN("ERRSIM_CANCEL_FETCH_LOG_LIMIT opened", KR(ret));
+    }
   }
   return ret;
 }

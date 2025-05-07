@@ -441,6 +441,13 @@ int ObStandbyService::do_recover_tenant(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant role is not STANDBY", K(tenant_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant role is not STANDBY, recover is");
+  } else if (OB_UNLIKELY(tenant_info.get_switchover_status().is_flashback_and_stay_standby_status()
+      && obrpc::ObRecoverTenantArg::RecoverType::CANCEL != recover_type)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("recover when the tenant's switchover_status is not allowed",
+        KR(ret), K(recover_type), K(tenant_info));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,"Recover when the tenant's switchover_status is "
+        "'FLASHBACK AND STAY STANDBY' is");
   } else if (tenant_info.get_switchover_status() != working_sw_status) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("unexpected tenant switchover status", KR(ret), K(working_sw_status), K(tenant_info));

@@ -352,6 +352,7 @@
 # 528: __all_ncomp_dll_v2
 # 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
+# 541: __all_tenant_flashback_log_scn
 # 543: __all_license
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1120,6 +1121,8 @@
 # 12509: __all_object_balance_weight  # BASE_TABLE_NAME
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12511: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
+# 12522: __all_virtual_tenant_flashback_log_scn
+# 12522: __all_tenant_flashback_log_scn  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1765,6 +1768,9 @@
 # 15492: ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT
 # 15492: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME1
+# 15502: ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN
+# 15502: __all_tenant_flashback_log_scn  # BASE_TABLE_NAME
+# 15502: __all_virtual_tenant_flashback_log_scn  # BASE_TABLE_NAME1
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2249,6 +2255,8 @@
 # 21628: proc
 # 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
+# 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
+# 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 # 21639: DBA_OB_LICENSE
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
@@ -2518,6 +2526,7 @@
 # 25302: DBA_OB_SERVICES
 # 25304: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 25305: USER_SCHEDULER_JOBS
+# 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE

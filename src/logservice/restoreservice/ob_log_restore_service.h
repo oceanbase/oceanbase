@@ -68,6 +68,7 @@ public:
            ObLogService *log_service);
   void destroy();
   int start();
+  int restart();
   void stop();
   void wait();
   void signal();
@@ -105,6 +106,11 @@ private:
   ObLogRestoreAllocator allocator_;
   ObLogRestoreScheduler scheduler_;
   common::ObCond cond_;
+  // for restart
+  common::ObSpinLock lock_;
+  rpc::frame::ObReqTransport *init_transport_;
+  ObLSService *init_ls_svr_;
+  ObLogService *init_log_service_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreService);

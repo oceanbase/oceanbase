@@ -133,6 +133,7 @@
 #include "sql/resolver/cmd/ob_service_name_resolver.h"
 #include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
 #include "sql/resolver/backup/ob_backup_change_external_storage_dest_resolver.h"
+#include "sql/resolver/cmd/ob_flashback_standby_log_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -1273,6 +1274,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_GRANT_PROXY:
       case T_REVOKE_PROXY: {
         REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_FLASHBACK_STANDBY_LOG: {
+        REGISTER_STMT_RESOLVER(FlashbackStandbyLog);
         break;
       }
       default: {

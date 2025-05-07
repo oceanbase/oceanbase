@@ -230,6 +230,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_alter_ls_executor.cpp
   engine/cmd/ob_service_name_executor.cpp
   engine/cmd/ob_transfer_partition_executor.cpp
+  engine/cmd/ob_flashback_standby_log_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -1066,6 +1067,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_alter_ls_resolver.cpp
   resolver/cmd/ob_service_name_resolver.cpp
   resolver/cmd/ob_transfer_partition_resolver.cpp
+  resolver/cmd/ob_flashback_standby_log_resolver.cpp
   resolver/cmd/ob_event_resolver.cpp
   resolver/cmd/ob_event_stmt.cpp
 )

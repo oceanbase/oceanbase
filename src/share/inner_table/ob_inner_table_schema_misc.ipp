@@ -548,6 +548,7 @@ case OB_ALL_VIRTUAL_TABLET_META_TABLE_TID:
 case OB_ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM_TID:
 case OB_ALL_VIRTUAL_TASK_OPT_STAT_GATHER_HISTORY_TID:
 case OB_ALL_VIRTUAL_TENANT_EVENT_HISTORY_TID:
+case OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TID:
 case OB_ALL_VIRTUAL_TENANT_INFO_TID:
 case OB_ALL_VIRTUAL_TENANT_PARAMETER_TID:
 case OB_ALL_VIRTUAL_TENANT_USER_FAILED_LOGIN_STAT_TID:
@@ -1601,6 +1602,22 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_TENANT_FLASHBACK_LOG_SCN_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_TENANT_INFO_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1840,7 +1857,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -4878,6 +4897,9 @@ case OB_ALL_TASK_OPT_STAT_GATHER_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_TENANT_EVENT_HISTORY_TID:
 case OB_ALL_TENANT_EVENT_HISTORY_AUX_LOB_META_TID:
 case OB_ALL_TENANT_EVENT_HISTORY_AUX_LOB_PIECE_TID:
+case OB_ALL_TENANT_FLASHBACK_LOG_SCN_TID:
+case OB_ALL_TENANT_FLASHBACK_LOG_SCN_AUX_LOB_META_TID:
+case OB_ALL_TENANT_FLASHBACK_LOG_SCN_AUX_LOB_PIECE_TID:
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID:
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_IDX_XA_TRANS_ID_TID:
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_AUX_LOB_META_TID:

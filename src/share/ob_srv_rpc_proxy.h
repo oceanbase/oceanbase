@@ -26,6 +26,7 @@
 #include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
 #include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 #include "share/ls/ob_alter_ls_struct.h"
+#include "share/ob_flashback_standby_log_struct.h"
 
 namespace oceanbase
 {

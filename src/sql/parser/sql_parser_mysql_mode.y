@@ -548,6 +548,7 @@ END_P SET_VAR DELIMITER
 %type <node_opt_parens> select_clause_set select_clause_set_body
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node> module_name info_type opt_infile
+%type <node> flashback_standby_log_stmt
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -711,6 +712,7 @@ stmt:
   | alter_ls_stmt              { $$ = $1; check_question_mark($$, result); }
   | mock_stmt                  { $$ = $1; check_question_mark($$, result); }
   | service_name_stmt          { $$ = $1; check_question_mark($$, result); }
+  | flashback_standby_log_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -21095,6 +21097,22 @@ CREATE
   $$->value_ = 4;
 }
 ;
+
+/*===========================================================
+ *
+ * 租户 FLASHBACK STANDBY LOG
+ *
+ *===========================================================*/
+
+flashback_standby_log_stmt:
+alter_with_opt_hint SYSTEM FLASHBACK STANDBY LOG TO SCN COMP_EQ INTNUM opt_tenant_name
+{
+  (void)($1);
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_STANDBY_LOG, 2, $9, $10);
+}
+;
+
 /*===========================================================
  *
  *	Name classification

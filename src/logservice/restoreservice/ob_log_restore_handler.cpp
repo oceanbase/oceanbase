@@ -424,9 +424,11 @@ int ObLogRestoreHandler::update_max_fetch_info(const int64_t proposal_id,
             K(id_), K(role_), K(task_delay), K(cur_delay), K(lsn), K(scn), K(stat));
       }
     }
-    if (parent_->set_to_end(scn)) {
-      // To stop and clear all restore log tasks and restore context, reset context and advance issue version
-      CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+    if (OB_NOT_NULL(parent_)) {
+      if (parent_->set_to_end(scn)) {
+        // To stop and clear all restore log tasks and restore context, reset context and advance issue version
+        CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+      }
     }
   }
   return ret;

@@ -87,7 +87,7 @@
 #include "rootserver/ob_alter_ls_command.h"
 #include "logservice/data_dictionary/ob_data_dict_service.h" // for ObDataDictService
 #include "share/backup/ob_backup_connectivity.h"
-
+#include "rootserver/standby/ob_flashback_standby_log_command.h"
 
 namespace oceanbase
 {
@@ -3260,6 +3260,15 @@ int ObRPcTriggerDumpDataDictP::process()
   }
 
   LOG_INFO("trigger dump data dict processor", KR(ret), K_(arg));
+  return ret;
+}
+
+int ObClearFetchedLogCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rootserver::ObFlashbackStandbyLogCommand::clear_local_fetched_log_cache(arg_, result_))) {
+    COMMON_LOG(WARN, "fail to clear_local_fetched_log_cache", KR(ret), K(arg_));
+  }
   return ret;
 }
 

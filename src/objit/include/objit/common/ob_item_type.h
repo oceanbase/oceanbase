@@ -2624,6 +2624,7 @@ typedef enum ObItemType
   T_UNIT_GROUP = 4759,
   T_LOAD_TIME_ZONE_INFO = 4764,
   T_SP_OBJ_PERSISTABLE = 4797,
+  T_FLASHBACK_STANDBY_LOG = 4798,
   T_LOAD_LICENSE = 4808,
 
   // optimizer hint
