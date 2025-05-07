@@ -278,6 +278,8 @@ public:
   ~ObResourceGroup() {}
 
   bool is_inited() const { return inited_; }
+  bool is_deleted() const { return deleted_; }
+  void set_deleted(bool deleted) { deleted_ = deleted; }
   void atomic_inc_recv_cnt() { ATOMIC_INC(&recv_req_cnt_); }
   uint64_t get_recv_req_cnt() const { return recv_req_cnt_; }
   int64_t min_worker_cnt() const;
@@ -313,6 +315,7 @@ private:
   common::ObPriorityQueue2<0, 1> req_queue_;
   ObMultiLevelQueue multi_level_queue_;
   bool inited_;                                  // Mark whether the container has threads and queues allocated
+  bool deleted_;
   volatile uint64_t recv_req_cnt_ CACHE_ALIGNED; // Statistics requested to enqueue
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t token_change_ts_;
@@ -477,6 +480,8 @@ public:
   {
     return (!OB_ISNULL(t1) && !OB_ISNULL(t2) && t1->id_ == t2->id_);
   }
+
+  int mark_group_deleted(uint64_t group_id);
 
   void lq_end(ObThWorker &w);
   // called each checkpoint for worker of this tenant.

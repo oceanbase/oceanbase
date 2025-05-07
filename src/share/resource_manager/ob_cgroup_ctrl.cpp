@@ -254,26 +254,27 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
 int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
 {
   int ret = OB_SUCCESS;
-  char group_task_path[PATH_BUFSIZE];
-  char target_task_path[PATH_BUFSIZE];
-  snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
-  if (is_delete_group) {
-    snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
-    FILE *group_task_file = nullptr;
-    if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
-    } else {
-      char tid_buf[VALUE_BUFSIZE];
-      int tmp_ret = OB_SUCCESS;
-      while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-        if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
-          LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
-        }
-      }
-      fclose(group_task_file);
-    }
-  }
+  /* Do not move thread */
+  // char group_task_path[PATH_BUFSIZE];
+  // char target_task_path[PATH_BUFSIZE];
+  // snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
+  // if (is_delete_group) {
+  //   snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
+  //   FILE *group_task_file = nullptr;
+  //   if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
+  //     ret = OB_IO_ERROR;
+  //     LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
+  //   } else {
+  //     char tid_buf[VALUE_BUFSIZE];
+  //     int tmp_ret = OB_SUCCESS;
+  //     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
+  //       if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
+  //         LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
+  //       }
+  //     }
+  //     fclose(group_task_file);
+  //   }
+  // }
   if (OB_SUCCESS != ret) {
   } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));

@@ -358,8 +358,7 @@ int ObTenantBase::pre_run()
     // add thread to tenant OBCG_DEFAULT cgroup
     ret = cgroup_ctrl->add_self_to_cgroup_(id_);
   }
-
-  LOG_DEBUG("tenant thread pre_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
+  LOG_INFO("tenant thread pre_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
   return ret;
 }
 
@@ -374,7 +373,7 @@ int ObTenantBase::end_run()
     thread_list_.remove(node);
   }
   ATOMIC_DEC(&thread_count_);
-  LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));
+  LOG_INFO("tenant thread end_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));
   return ret;
 }
 
