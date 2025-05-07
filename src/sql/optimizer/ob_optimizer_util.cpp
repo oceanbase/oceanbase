@@ -4557,7 +4557,7 @@ int ObOptimizerUtil::convert_rownum_filter_as_offset(ObRawExprFactory &expr_fact
       LOG_WARN("failed to floor number as offset value", K(ret));
     }
   } else if (T_OP_GE == filter_type) {
-    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GE,
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(ctx, const_expr, T_OP_GT,
                                                                     0, offset_is_not_neg))) {
       LOG_WARN("offset value is negative calc failed", K(ret));
     } else if (!offset_is_not_neg) {
