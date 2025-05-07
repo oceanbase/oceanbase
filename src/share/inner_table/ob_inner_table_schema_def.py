@@ -4350,6 +4350,8 @@ def_table_schema(
     ('data_source_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
     ('data_source_svr_port', 'int', 'true'),
     ('is_manual', 'bool', 'true', '0'),
+    ('config_version', 'varchar:128', 'true', ""),
+    ('bconfig_version', 'varchar:1024', 'true', ""),
   ],
 )
 
@@ -7500,6 +7502,8 @@ def_table_schema(
     ('finish_time', 'timestamp:6', 'false', 0),
     ('execute_result', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('config_version', 'varchar:128', 'true', ""),
+    ('bconfig_version', 'varchar:1024', 'true', ""),
   ],
 )
 
@@ -13865,6 +13869,7 @@ def_table_schema(
     ('task_exec_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
     ('task_exec_svr_port', 'int', 'true'),
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('config_version', 'varchar:128', 'true', ""),
   ],
   vtable_route_policy = 'local',
 )
@@ -31321,7 +31326,8 @@ def_table_schema(
          CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
          CAST(SCHEDULE_TIME AS DATETIME) AS START_TIME,
          CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
-         COMMENT
+         COMMENT,
+         CONFIG_VERSION
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -31374,7 +31380,8 @@ def_table_schema(
          CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
          CAST(SCHEDULE_TIME AS DATETIME) AS START_TIME,
          CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
-         COMMENT
+         COMMENT,
+         CONFIG_VERSION
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK
   )
   """.replace("\n", " "),
@@ -31413,7 +31420,8 @@ def_table_schema(
               ELSE SOURCE_REPLICA_TYPE END) AS SOURCE_REPLICA_TYPE,
          TASK_EXEC_SVR_IP,
          TASK_EXEC_SVR_PORT,
-         COMMENT
+         COMMENT,
+         CONFIG_VERSION
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_PLAN
   )
   """.replace("\n", " "),
@@ -37836,7 +37844,8 @@ def_table_schema(
          (CASE EXECUTE_RESULT
               WHEN "" THEN NULL
               ELSE EXECUTE_RESULT END) AS EXECUTE_RESULT,
-         COMMENT
+         COMMENT,
+         CONFIG_VERSION
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
   )
@@ -37892,7 +37901,8 @@ def_table_schema(
          (CASE EXECUTE_RESULT
               WHEN "" THEN NULL
               ELSE EXECUTE_RESULT END) AS EXECUTE_RESULT,
-         COMMENT
+         COMMENT,
+         CONFIG_VERSION
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
   )
   """.replace("\n", " "),
@@ -59816,7 +59826,8 @@ def_table_schema(
          CAST(GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
          CAST(SCHEDULE_TIME AS TIMESTAMP(6)) AS START_TIME,
          CAST(GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
-         "COMMENT"
+         "COMMENT",
+         CONFIG_VERSION
   FROM SYS.ALL_VIRTUAL_LS_REPLICA_TASK
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -59858,7 +59869,8 @@ def_table_schema(
               ELSE SOURCE_REPLICA_TYPE END AS SOURCE_REPLICA_TYPE,
          TASK_EXEC_SVR_IP,
          TASK_EXEC_SVR_PORT,
-         "COMMENT"
+         "COMMENT",
+         CONFIG_VERSION
   FROM SYS.ALL_VIRTUAL_LS_REPLICA_TASK_PLAN
   )
   """.replace("\n", " "),
@@ -62556,7 +62568,8 @@ def_table_schema(
          CASE EXECUTE_RESULT
               WHEN '' THEN NULL
               ELSE EXECUTE_RESULT END AS EXECUTE_RESULT,
-         "COMMENT"
+         "COMMENT",
+         CONFIG_VERSION
   FROM SYS.ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()

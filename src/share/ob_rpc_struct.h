@@ -5280,6 +5280,19 @@ public:
   common::ObMemberList member_list_;
 };
 
+enum class ObDRTaskType : int64_t
+{
+  LS_MIGRATE_REPLICA = 0,
+  LS_ADD_REPLICA,
+  LS_BUILD_ONLY_IN_MEMBER_LIST,
+  LS_TYPE_TRANSFORM,
+  LS_REMOVE_PAXOS_REPLICA,
+  LS_REMOVE_NON_PAXOS_REPLICA,
+  LS_MODIFY_PAXOS_REPLICA_NUMBER,
+  LS_REPLACE_REPLICA,
+  MAX_TYPE,
+};
+
 struct ObDRTaskReplyResult
 {
 public:
@@ -5289,7 +5302,8 @@ public:
     : task_id_(),
       tenant_id_(OB_INVALID_ID),
       ls_id_(),
-      result_(common::OB_SUCCESS) {}
+      result_(common::OB_SUCCESS),
+      task_type_(ObDRTaskType::MAX_TYPE) {}
 public:
   int assign(
       const ObDRTaskReplyResult &that);
@@ -5316,6 +5330,7 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   int result_;
+  ObDRTaskType task_type_;
 };
 
 struct ObDRTaskExistArg final

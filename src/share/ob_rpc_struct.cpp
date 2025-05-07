@@ -4695,7 +4695,8 @@ OB_SERIALIZE_MEMBER(ObDRTaskReplyResult,
                     task_id_,
                     tenant_id_,
                     ls_id_,
-                    result_);
+                    result_,
+                    task_type_);
 
 int ObDRTaskReplyResult::assign(
     const ObDRTaskReplyResult &that)
@@ -4705,6 +4706,7 @@ int ObDRTaskReplyResult::assign(
   tenant_id_ = that.tenant_id_;
   ls_id_ = that.ls_id_;
   result_ = that.result_;
+  task_type_ = that.task_type_;
   return ret;
 }
 

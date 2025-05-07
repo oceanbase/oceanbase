@@ -1281,6 +1281,8 @@ PCODE_DEF(OB_TRIGGER_STORAGE_CACHE, 0x1655)
 
 // mysql obj priv
 // PCODE_DEF(OB_REVOKE_OBJECT, 0x165D)
+
+// PCODE_DEF(OB_DETECT_SSLOG_LS, 0x165E)
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

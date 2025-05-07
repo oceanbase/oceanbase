@@ -170,6 +170,7 @@ int ObAllVirtualLSReplicaTaskPlan::get_full_row_(
     ADD_COLUMN(set_varchar, table, "task_exec_svr_ip", execute_ip_str, columns);
     ADD_COLUMN(set_int, table, "task_exec_svr_port", execute_port, columns);
     ADD_COLUMN(set_varchar, table, "comment", task_stat.get_comment().string(), columns);
+    ADD_COLUMN(set_varchar, table, "config_version", "", columns);
   }
   return ret;
 }

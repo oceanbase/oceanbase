@@ -86,7 +86,7 @@ namespace rootserver
   ObDRTaskKey task_key;                                                                                                     \
   common::ObAddr execute_server_key;                                                                                        \
   common::ObZone execute_zone;                                                                                              \
-  rootserver::ObDRTaskType task_type = rootserver::ObDRTaskType::MAX_TYPE;                                                  \
+  ObDRTaskType task_type = ObDRTaskType::MAX_TYPE;                                                  \
   ObSqlString comment_to_set;                                                                                               \
   ObSqlString task_id_sqlstring_format;                                                                                     \
   share::ObTaskId task_id_to_set;                                                                                           \
@@ -194,6 +194,8 @@ static const char* disaster_recovery_task_ret_comment_strs[] = {
   "[rs] task can not execute because replica is not in service",
   "[rs] task can not execute because server is permanent offline",
   "[rs] task can not persist because conflict with clone operation",
+  "[rs] task can not execute because destination has no sslog LS replica",
+  "[rs] task can not execute because config version not match",
   ""/*default max*/
 };
 
@@ -242,12 +244,12 @@ static const char* disaster_recovery_task_type_strs[] = {
   "MAX_TYPE"
 };
 
-const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType type)
+const char *ob_disaster_recovery_task_type_strs(const ObDRTaskType type)
 {
-  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)rootserver::ObDRTaskType::MAX_TYPE + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)ObDRTaskType::MAX_TYPE + 1,
                 "type string array size mismatch with enum ObDRTaskType count");
   const char *str = NULL;
-  if (type >= rootserver::ObDRTaskType::LS_MIGRATE_REPLICA && type < rootserver::ObDRTaskType::MAX_TYPE) {
+  if (type >= ObDRTaskType::LS_MIGRATE_REPLICA && type < ObDRTaskType::MAX_TYPE) {
     str = disaster_recovery_task_type_strs[static_cast<int64_t>(type)];
   } else {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTask type", K(type));
@@ -257,15 +259,15 @@ const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType t
 
 int parse_disaster_recovery_task_type_from_string(
     const ObString &task_type_str,
-    rootserver::ObDRTaskType& task_type)
+    ObDRTaskType& task_type)
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)rootserver::ObDRTaskType::MAX_TYPE + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)ObDRTaskType::MAX_TYPE + 1,
                 "disaster_recovery_task_type_strs string array size mismatch enum ObDRTaskType count");
   for (int64_t i = 0; i < ARRAYSIZEOF(disaster_recovery_task_type_strs) && !found; i++) {
     if (0 == task_type_str.case_compare(disaster_recovery_task_type_strs[i])) {
-      task_type = static_cast<rootserver::ObDRTaskType>(i);
+      task_type = static_cast<ObDRTaskType>(i);
       found = true;
     }
   }
@@ -304,7 +306,7 @@ int ObDRTaskKey::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const common::ObZone &task_execute_zone,
-    const ObDRTaskType &task_type)
+    const obrpc::ObDRTaskType &task_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)

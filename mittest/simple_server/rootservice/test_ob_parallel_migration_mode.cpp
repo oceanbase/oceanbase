@@ -129,48 +129,48 @@ TEST_F(TestParallelMigrationMode, test_task_type)
   ObString modify("MODIFY PAXOS REPLICA NUMBER");
   ObString max("MAX_TYPE");
   ObString no_valid("NOT_VALID_TYPE");
-  rootserver::ObDRTaskType task_type = rootserver::ObDRTaskType::MAX_TYPE;
-  ret = parse_disaster_recovery_task_type_from_string(migrate, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_MIGRATE_REPLICA, task_type);
+  obrpc::ObDRTaskType task_type = obrpc::ObDRTaskType::MAX_TYPE;
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(migrate, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_MIGRATE_REPLICA, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(add, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_ADD_REPLICA, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(add, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_ADD_REPLICA, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(build, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_BUILD_ONLY_IN_MEMBER_LIST, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(build, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_BUILD_ONLY_IN_MEMBER_LIST, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(transform, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_TYPE_TRANSFORM, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(transform, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_TYPE_TRANSFORM, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(remove_paxos, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(remove_paxos, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(remove_non_paxos, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(remove_non_paxos, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(modify, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(modify, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(max, task_type);
-  ASSERT_EQ(rootserver::ObDRTaskType::MAX_TYPE, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(max, task_type);
+  ASSERT_EQ(obrpc::ObDRTaskType::MAX_TYPE, task_type);
   ASSERT_EQ(OB_SUCCESS, ret);
-  task_type = rootserver::ObDRTaskType::MAX_TYPE;
+  task_type = obrpc::ObDRTaskType::MAX_TYPE;
 
-  ret = parse_disaster_recovery_task_type_from_string(no_valid, task_type);
+  ret = rootserver::parse_disaster_recovery_task_type_from_string(no_valid, task_type);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 }
 

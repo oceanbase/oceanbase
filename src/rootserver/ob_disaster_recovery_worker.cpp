@@ -68,7 +68,7 @@ void ObLSReplicaTaskDisplayInfo::reset()
 int ObLSReplicaTaskDisplayInfo::init(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     const ObDRTaskPriority &task_priority,
     const common::ObAddr &target_server,
     const common::ObReplicaType &target_replica_type,
@@ -3390,7 +3390,7 @@ int ObDRWorker::check_other_inactive_server_count_(
 int ObDRWorker::generate_task_key(
     const DRLSInfo &dr_ls_info,
     const common::ObAddr &task_exe_server,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     ObDRTaskKey &task_key) const
 {
   int ret = OB_SUCCESS;
@@ -3519,7 +3519,7 @@ int ObDRWorker::check_can_generate_task(
     const bool need_check_has_leader_while_remove_replica,
     const ObAddr &server_addr,
     DRLSInfo &dr_ls_info,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     bool &can_generate)
 {
   int ret = OB_SUCCESS;
