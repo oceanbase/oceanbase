@@ -377,6 +377,8 @@ int ObVecAsyncTaskExector::load_task()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  ObVecIndexTaskStatusArray task_status_array;
+  uint64_t trace_base_num = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", KR(ret));
@@ -384,8 +386,7 @@ int ObVecAsyncTaskExector::load_task()
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else {
-    ObVecIndexTaskStatusArray task_status_array;
-    uint64_t trace_base_num = 0;
+    RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
     FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
       ObTabletID tablet_id = iter->first;
       ObPluginVectorIndexAdaptor *adapter = iter->second;
@@ -444,10 +445,10 @@ int ObVecAsyncTaskExector::load_task()
         }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_new_task(task_status_array))) {
-      LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
-    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(insert_new_task(task_status_array))) {
+    LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }
   return ret;
 }
