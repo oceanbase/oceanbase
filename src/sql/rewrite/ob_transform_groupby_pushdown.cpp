@@ -1177,6 +1177,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
   bool contain_inner_table = false;
   bool contain_lateral_table = false;
   bool allow_distinct = false;
+  ObSEArray<ObRawExpr *, 4> group_cols;
   bool is_enabled = ctx_->is_groupby_placement_enabled_;
   is_valid = true;
   if (OB_ISNULL(stmt)) {
@@ -1203,6 +1204,12 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     // select sum(t1_cnt * t2_cnt) from (select c1, count(*) from t1 group by c1),
     //                                  (select c1, count(*) from t2 group by c1);
     //                                  where t1.c1 = t2.c1;
+    is_valid = false;
+    LOG_TRACE("invalid stmt for eager aggregation", K(is_valid));
+    OPT_TRACE("invalid stmt for eager aggregation");
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt->get_group_exprs(), group_cols))) {
+    LOG_WARN("failed to extract group columns", K(ret));
+  } else if (group_cols.empty()) {
     is_valid = false;
     LOG_TRACE("invalid stmt for eager aggregation", K(is_valid));
     OPT_TRACE("invalid stmt for eager aggregation");
@@ -1917,9 +1924,9 @@ int ObTransformGroupByPushdown::merge_params_by_cross_joins(ObSelectStmt *stmt,
   bool hint_force_pushdown = false;
   bool is_hint_valid = false;
   if (OB_SUCC(ret)) {
-    if (has_distinct && !has_cross_join) {
-      is_valid = false;
-      OPT_TRACE("group by pushdown not valid as has distinct");
+    if (!has_cross_join) {
+      is_valid = is_valid && !has_distinct && get_valid_eager_aggr_num(params) > 0;
+      OPT_TRACE("group by pushdown not valid as has distinct or no valid params");
     }
     if (OB_SUCC(ret) && is_valid) {
       if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
