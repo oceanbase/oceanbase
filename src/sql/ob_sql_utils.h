@@ -667,12 +667,6 @@ public:
   static bool is_external_files_on_local_disk(const common::ObString &url);
   static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
 
-#ifdef OB_BUILD_SPM
-  static int handle_plan_baseline(const ObAuditRecordData &audit_record,
-                                  ObPhysicalPlan *plan,
-                                  const int ret_code,
-                                  ObSqlCtx &sql_ctx);
-#endif
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,

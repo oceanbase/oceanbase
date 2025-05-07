@@ -493,7 +493,28 @@ struct ObTableRowCount
   OB_UNIS_VERSION(1);
 };
 
+struct ObPlanExecutingStat
+{
+  static const int32_t MAX_EXECUTING_SIZE = 100;
 
+  int get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const;
+  int set_executing_record(const int64_t exec_start_timestamp);
+  int erase_executing_record(const int64_t exec_start_timestamp);
+
+  ObPlanExecutingStat()
+    : exec_cnt_(0)
+    {
+      MEMSET(exec_start_timestamps_, 0, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  ObPlanExecutingStat(const ObPlanExecutingStat &other)
+    : exec_cnt_(other.exec_cnt_)
+    {
+      MEMCPY(exec_start_timestamps_, other.exec_start_timestamps_, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  private:
+  int64_t exec_cnt_;
+  int64_t exec_start_timestamps_[MAX_EXECUTING_SIZE];
+};
 
 struct ObPlanStat
 {
@@ -582,7 +603,7 @@ struct ObPlanStat
   bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
-  bool enable_plan_expiration_;
+  uint64_t enable_plan_expiration_;
   int64_t first_exec_row_count_;
   int64_t first_exec_usec_;
   int64_t sample_times_;
@@ -621,7 +642,8 @@ struct ObPlanStat
   common::ObString outline_data_;
   common::ObString hints_info_;
   bool hints_all_worked_;
-
+  ObPlanExecutingStat executing_stat_;
+  uint64_t gen_plan_usec_;  // plan generation time cost
 
   ObPlanStat()
     : plan_id_(0),
@@ -673,7 +695,7 @@ struct ObPlanStat
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
       is_expired_(false),
-      enable_plan_expiration_(false),
+      enable_plan_expiration_(0),
       first_exec_row_count_(-1),
       first_exec_usec_(0),
       sample_times_(0),
@@ -697,7 +719,9 @@ struct ObPlanStat
       block_cache_miss_cnt_(0),
       pre_cal_expr_handler_(NULL),
       plan_hash_value_(0),
-      hints_all_worked_(true)
+      hints_all_worked_(true),
+      executing_stat_(),
+      gen_plan_usec_(0)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -775,7 +799,8 @@ struct ObPlanStat
       block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
       pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
       plan_hash_value_(rhs.plan_hash_value_),
-      hints_all_worked_(rhs.hints_all_worked_)
+      hints_all_worked_(rhs.hints_all_worked_),
+      executing_stat_(rhs.executing_stat_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);

@@ -370,7 +370,6 @@ public:
                                const PlanIdArray &plan_ids,
                                int64_t &pos,
                                uint64_t &load_count);
-  int check_baseline_finish();
 #endif
   void destroy();
   common::ObAddr &get_host() { return host_; }

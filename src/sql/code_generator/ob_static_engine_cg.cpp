@@ -7463,6 +7463,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   ObSqlCtx *sql_ctx;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
+  uint64_t opt_version = 0;
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid exec_ctx_", K(ret));
@@ -7480,6 +7481,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
              || OB_ISNULL(exec_ctx->get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid query_ctx", K(ret));
+  } else if (OB_FAIL(my_session->get_optimizer_features_enable_version(opt_version))) {
+    // get opt feature version from session, do not use ObQueryCtx::optimizer_features_enable_version_
+    LOG_WARN("failed to get optimizer features enable version", K(ret));
   } else {
     ret = phy_plan.set_params_info(*(log_plan.get_optimizer_context().get_params()));
   }
@@ -7516,6 +7520,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_need_consistent_snapshot(log_plan.need_consistent_read());
     phy_plan.set_is_inner_sql(my_session->is_inner());
     phy_plan.set_is_batch_params_execute(sql_ctx->is_batch_params_execute());
+    phy_plan.set_optimizer_features_enable_version(opt_version);
     // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
       phy_plan.set_enable_px_fast_reclaim(GCONF._enable_px_fast_reclaim);

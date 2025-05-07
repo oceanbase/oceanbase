@@ -109,17 +109,19 @@ public:
   int check_baseline_exists(ObSpmCacheCtx& spm_ctx,
                             const uint64_t plan_hash,
                             bool& is_exists,
-                            bool& need_add_baseline);
+                            bool& is_accepted,
+                            bool& is_fixed);
   int get_best_baseline(ObSpmCacheCtx& spm_ctx,
                         ObCacheObjGuard& obj_guard);
-  int add_baseline(ObSpmCacheCtx& spm_ctx,
-                   ObPlanCacheCtx& pc_ctx,
-                   ObPhysicalPlan* plan);
-  int update_plan_baseline_statistic(EvolutionTaskResult& result);
-  int update_statistic_for_evolve(EvolutionTaskResult& result);
-  int update_statistic_for_confirm(EvolutionTaskResult& result);
+  int add_unaccepted_baseline(ObSpmCacheCtx& spm_ctx,
+                              ObPlanCacheCtx& pc_ctx,
+                              ObPhysicalPlan* plan);
   int check_and_update_plan_baseline(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
-  int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
+  int update_plan_baseline_statistic(EvolutionTaskResult& result);
+  int update_statistic_for_baseline(EvolutionTaskResult& result);
+  static int update_baseline_item(const ObEvolutionStat &stat,
+                                  const bool is_verified,
+                                  ObPlanBaselineItem *item);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
   int sync_baseline_from_inner_table();
   int sync_baseline_from_server();
@@ -137,8 +139,7 @@ public:
                          const uint64_t parallel,
                          int64_t &baseline_affected);
   int load_baseline(ObSpmBaselineLoader &baseline_loader);
-  int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
-  int check_evolution_task();
+  int purge_baselines(const uint64_t tenant_id, int64_t &baseline_affected);
   int handle_spm_evo_record(const uint64_t tenant_id);
 private:
   int init(uint64_t tenant_id);
