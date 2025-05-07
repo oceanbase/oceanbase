@@ -35,6 +35,7 @@
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
 #include "share/table/ob_redis_importer.h"
+#include "share/ob_timezone_importer.h"
 
 namespace oceanbase
 {
@@ -1812,18 +1813,6 @@ int ObBootstrapExecutor::execute(ObExecContext &ctx, ObBootstrapStmt &stmt)
 	}
 	return ret;
 }
-int ObRefreshTimeZoneInfoExecutor::execute(ObExecContext &ctx, ObRefreshTimeZoneInfoStmt &stmt)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(stmt);
-  // 226改为定时刷新tz_map, RS与其他server间也不再同步tz_version
-  // 所以不再需要执行refresh timezone info触发RS刷新tz map
-  ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter system refresh time_zone_info ");
-
-  return ret;
-}
 
 int ObEnableSqlThrottleExecutor::execute(ObExecContext &ctx, ObEnableSqlThrottleStmt &stmt)
 {
@@ -3097,11 +3086,18 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
         }
         break;
       }
+      case table::ObModuleDataArg::TIMEZONE: {
+        table::ObTimezoneImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+        break;
+      }
       // add other module before here
       default: {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "module except 'redis'");
-        LOG_WARN("modules except 'redis' are not supported yet", K(ret), K(arg.module_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified module");
+        LOG_WARN("modules except 'redis'/'gis'/'timezone' are not supported yet", K(ret), K(arg.module_));
       }
     }
   }

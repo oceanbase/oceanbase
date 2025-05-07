@@ -4363,27 +4363,6 @@ int ObSwitchRSRoleResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObRefreshTimeZoneInfoResolver::resolve(const ParseNode &parse_tree)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(T_REFRESH_TIME_ZONE_INFO != parse_tree.type_)
-      || OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type is not T_REFRESH_TIME_ZONE_INFO", "type", get_type_name(parse_tree.type_),
-              K(session_info_));
-  } else {
-    ObRefreshTimeZoneInfoStmt *refresh_time_zone_info_stmt = create_stmt<ObRefreshTimeZoneInfoStmt>();
-    if (OB_UNLIKELY(NULL == refresh_time_zone_info_stmt)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create ObRefreshTimeZoneInfoStmt failed", K(ret));
-    } else {
-      refresh_time_zone_info_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
-      stmt_ = refresh_time_zone_info_stmt;
-    }
-  }
-  return ret;
-}
-
 //
 //                           /- T_INT(priority)
 //                          /|

@@ -675,20 +675,6 @@ private:
   obrpc::ObUpgradeJobArg rpc_arg_;
 };
 
-class ObRefreshTimeZoneInfoStmt : public ObSystemCmdStmt
-{
-public:
-  ObRefreshTimeZoneInfoStmt() : ObSystemCmdStmt(stmt::T_REFRESH_TIME_ZONE_INFO),
-                                tenant_id_(OB_INVALID_TENANT_ID)
-  { }
-  virtual ~ObRefreshTimeZoneInfoStmt() {}
-  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
-  uint64_t get_tenant_id() { return tenant_id_; }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id));
-
-  uint64_t tenant_id_;
-};
-
 class ObCancelTaskStmt : public ObSystemCmdStmt
 {
 public:
