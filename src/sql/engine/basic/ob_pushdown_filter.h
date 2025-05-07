@@ -1432,7 +1432,6 @@ struct PushdownFilterInfo
       col_capacity_(0),
       batch_size_(0),
       datum_buf_(nullptr),
-      tmp_datum_buf_(nullptr),
       filter_(nullptr),
       di_bitmap_(nullptr),
       cell_data_ptrs_(nullptr),
@@ -1508,7 +1507,6 @@ struct PushdownFilterInfo
   int64_t col_capacity_;
   int64_t batch_size_;
   blocksstable::ObStorageDatum *datum_buf_;
-  blocksstable::ObStorageDatum *tmp_datum_buf_;
   sql::ObPushdownFilterExecutor *filter_;
   common::ObBitmap *di_bitmap_;
   // for black filter vectorize
