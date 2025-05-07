@@ -981,6 +981,7 @@ int ObFtsIndexBuilderUtil::generate_doc_id_column(
         column_schema.set_data_type(ObVarcharType);
         column_schema.set_data_length(OB_DOC_ID_COLUMN_BYTE_LENGTH);
         column_schema.set_collation_type(CS_TYPE_BINARY);
+        column_schema.set_charset_type(ObCharset::charset_type_by_coll(CS_TYPE_BINARY));
         column_schema.set_prev_column_id(UINT64_MAX);
         column_schema.set_next_column_id(UINT64_MAX);
         if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
@@ -1225,6 +1226,7 @@ int ObFtsIndexBuilderUtil::generate_word_count_column(
           column_schema.set_is_hidden(true);
           column_schema.set_data_type(ObUInt64Type);
           column_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          column_schema.set_charset_type(ObCharset::charset_type_by_coll(CS_TYPE_UTF8MB4_GENERAL_CI));
           column_schema.set_prev_column_id(UINT64_MAX);
           column_schema.set_next_column_id(UINT64_MAX);
           if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
@@ -1337,6 +1339,7 @@ int ObFtsIndexBuilderUtil::generate_doc_length_column(
           column_schema.set_is_hidden(true);
           column_schema.set_data_type(ObUInt64Type);
           column_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          column_schema.set_charset_type(ObCharset::charset_type_by_coll(CS_TYPE_UTF8MB4_GENERAL_CI));
           column_schema.set_prev_column_id(UINT64_MAX);
           column_schema.set_next_column_id(UINT64_MAX);
           if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
@@ -1881,7 +1884,7 @@ int ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(
   if (index_schema.is_fts_index_aux() || index_schema.is_fts_doc_word_aux()) {
     bool need_to_load_dic = false;
     uint64_t tenant_id = index_schema.get_tenant_id();
-    ObCharsetType charset_type = ObCharsetType::CHARSET_UTF8MB4;
+    ObCharsetType charset_type = ObCharsetType::CHARSET_INVALID;
     const ObString &parser_name = index_schema.get_parser_name();
     ObTableSchema::const_column_iterator tmp_begin = index_schema.column_begin();
     ObTableSchema::const_column_iterator tmp_end = index_schema.column_end();
@@ -1893,14 +1896,15 @@ int ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(
         if (OB_ISNULL(col)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get column schema", K(ret));
-        } else if (ObCharsetType::CHARSET_UTF8MB4 == charset_type
-                   && ObCharsetType::CHARSET_ANY != col->get_charset_type()
-                   && ObCharsetType::CHARSET_INVALID != col->get_charset_type()
-                   && ObCharsetType::CHARSET_UTF8MB4 != col->get_charset_type()) {
-          charset_type = col->get_charset_type();
+        } else if (col->is_word_segment_column()) {
+            charset_type = col->get_charset_type();
+            break;
         }
       }
-
+      if (OB_SUCC(ret) && ObCharsetType::CHARSET_INVALID == charset_type) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get charset type", K(ret), K(index_schema));
+      }
       if (OB_SUCC(ret)) {
         ObTenantDicLoaderHandle dic_loader_handle;
         if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
