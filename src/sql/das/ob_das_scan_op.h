@@ -105,6 +105,7 @@ public:
       external_file_format_str_(alloc),
       partition_infos_(alloc),
       external_object_ctx_(alloc),
+      external_pushdown_filters_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
       rowkey_exprs_(alloc),
@@ -190,6 +191,7 @@ public:
   ObExternalFileFormat::StringData external_file_format_str_;
   share::ObExternalTablePartInfoArray partition_infos_; // FARM COMPAT WHITELIST
   share::ObExternalObjectCtx external_object_ctx_;
+  ObExternalFileFormat::StringList external_pushdown_filters_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup

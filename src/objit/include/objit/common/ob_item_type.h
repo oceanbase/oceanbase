@@ -2847,6 +2847,11 @@ typedef enum ObItemType
 
   T_LOG_ERROR=4860,
   T_READ_ERROR_LOG=4861,
+
+  T_PLUGIN_PROPERTIES = 4862,
+  T_GENERAL_PROPERTY  = 4863,
+  T_PLUGIN_NAME       = 4864,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

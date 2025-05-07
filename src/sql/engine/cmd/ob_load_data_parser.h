@@ -1040,6 +1040,7 @@ struct ObExternalFileFormat
     PARQUET_FORMAT,
     ODPS_FORMAT,
     ORC_FORMAT,
+    PLUGIN_FORMAT,
     MAX_FORMAT
   };
 
