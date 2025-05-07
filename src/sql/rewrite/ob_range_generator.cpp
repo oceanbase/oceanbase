@@ -2070,7 +2070,13 @@ int ObRangeGenerator::generate_fast_nlj_range(const ObPreRangeGraph &pre_range_g
       range->start_key_.assign(starts, node->column_cnt_);
       range->end_key_.assign(ends, node->column_cnt_);
     } else {
-      range->set_false_range();
+      // always false
+      for (int i = 0; OB_SUCC(ret) && i < node->column_cnt_; ++i) {
+        starts[i].set_max_value();
+        ends[i].set_min_value();
+      }
+      range->start_key_.assign(starts, node->column_cnt_);
+      range->end_key_.assign(ends, node->column_cnt_);
     }
   }
   return ret;
