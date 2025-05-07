@@ -117,27 +117,23 @@ public:
 
     // callback function callled when find new partition in one balance group
     // NOTE: partitions in same partition group will output successively.
-    //       You can check 'in_new_partition_group' to find whether new partition group found
     //
     // @param [in]  bg                        balance group
-    // @param [in]  table_id                  table id of partition
-    // @param [in]  part_object_id            partition object id: part id for one-level part table, subpart id for two-level part table
-    // @param [in]  tablet_id                 tablet id
+    // @param [in]  table_schema              table schema of the table which this partition belongs to
+    // @param [in]  part_object_id            partition object id: part id for one-level part table,
+    //                                        subpart id for two-level part table
     // @param [in]  src_ls_id                 the LS that partition is current located
     // @param [in]  dest_ls_id                the LS that partition should be located
     // @param [in]  tablet_size               tablet data size
-    // @param [in]  in_new_partition_group    is this partition in new partition group
     // @param [in]  part_group_uid            partition group unique id
     // @param [in]  balance_weight            balance weight of the partition
     virtual int on_new_partition(
         const ObBalanceGroup &bg,
-        const common::ObObjectID table_id,
+        const share::schema::ObSimpleTableSchemaV2 &table_schema,
         const common::ObObjectID part_object_id,
-        const common::ObTabletID tablet_id,
         const share::ObLSID &src_ls_id,
         const share::ObLSID &dest_ls_id,
         const int64_t tablet_size,
-        const bool in_new_partition_group,
         const uint64_t part_group_uid,
         const int64_t balance_weight) = 0;
   };
@@ -196,8 +192,7 @@ private:
   int get_dup_to_normal_dest_ls_id_(share::ObLSID &dest_ls_id);
   int add_part_to_bg_for_tablegroup_sharding_none_(
       const ObBalanceGroup &bg,
-      const ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
-      bool &in_new_pg);
+      const ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas);
   int get_global_indexes_of_tables_(
       const ObArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
       ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &global_index_schemas);

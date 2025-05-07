@@ -30,7 +30,6 @@ class ObTransferTaskKey;
 }
 namespace rootserver
 {
-class ObTransferPartGroup;
 
 class ObLSDesc
 {
