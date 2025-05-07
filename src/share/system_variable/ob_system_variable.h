@@ -252,6 +252,7 @@ public:
   inline bool is_global_scope() const { return 0 != (flags_ & ObSysVarFlag::GLOBAL_SCOPE); }
   inline bool is_session_scope() const { return 0 != (flags_ & ObSysVarFlag::SESSION_SCOPE); }
   inline bool is_influence_plan() const { return 0 != (flags_ & ObSysVarFlag::INFLUENCE_PLAN); }
+  inline bool is_influence_pl() const { return 0 != (flags_ & ObSysVarFlag::INFLUENCE_PL); }
   inline bool is_oracle_only() const { return 0 != (flags_ & ObSysVarFlag::ORACLE_ONLY); }
   inline bool is_enum_type() const { return is_enum_type_; }
   inline bool is_mysql_only() const { return 0 != (flags_ & ObSysVarFlag::MYSQL_ONLY); }

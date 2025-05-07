@@ -447,7 +447,7 @@ static struct VarsInit{
       ObSysVars[25].data_type_ = ObIntType ;
       ObSysVars[25].min_val_ = "0" ;
       ObSysVars[25].max_val_ = "30" ;
-      ObSysVars[25].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[25].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[25].id_ = SYS_VAR_DIV_PRECISION_INCREMENT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DIV_PRECISION_INCREMENT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_DIV_PRECISION_INCREMENT] = 25 ;
@@ -2344,7 +2344,7 @@ static struct VarsInit{
       ObSysVars[164].info_ = "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS." ;
       ObSysVars[164].name_ = "nls_length_semantics" ;
       ObSysVars[164].data_type_ = ObVarcharType ;
-      ObSysVars[164].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[164].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[164].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_length_semantics_is_valid" ;
       ObSysVars[164].id_ = SYS_VAR_NLS_LENGTH_SEMANTICS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_LENGTH_SEMANTICS)) ;
@@ -3660,7 +3660,7 @@ static struct VarsInit{
       ObSysVars[259].name_ = "ob_compatibility_version" ;
       ObSysVars[259].data_type_ = ObUInt64Type ;
       ObSysVars[259].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_version" ;
-      ObSysVars[259].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[259].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[259].base_class_ = "ObVersionSysVar" ;
       ObSysVars[259].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_version" ;
       ObSysVars[259].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_compat_version" ;
@@ -5757,7 +5757,7 @@ static struct VarsInit{
       ObSysVars[407].info_ = "control wether to enable old charset aggregation rule" ;
       ObSysVars[407].name_ = "_enable_old_charset_aggregation" ;
       ObSysVars[407].data_type_ = ObIntType ;
-      ObSysVars[407].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[407].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PL ;
       ObSysVars[407].id_ = SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION] = 407 ;
