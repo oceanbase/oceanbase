@@ -17,9 +17,6 @@
 #include "lib/worker.h"
 #include "sql/parser/parse_malloc.h"
 #include "common/ob_target_specific.h"
-#if defined(__GNUC__) && defined(__x86_64__)
-#include <immintrin.h>
-#endif
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1514,48 +1511,6 @@ inline void ObFastParserBase::lex_store_param(ParseNode *node, char *buf)
   param_num_++;
 }
 
-OB_DECLARE_AVX512_SPECIFIC_CODE(
-  OB_INLINE static int get_first_non_hex_char_avx512(oceanbase::sql::ObRawSql& raw_sql)
-  {
-    int ret = OB_SUCCESS;
-    __m512i zero = _mm512_set1_epi8('0');
-    __m512i nine = _mm512_set1_epi8('9');
-    __m512i a = _mm512_set1_epi8('a');
-    __m512i f = _mm512_set1_epi8('f');
-    __m512i A = _mm512_set1_epi8('A');
-    __m512i F = _mm512_set1_epi8('F');
-
-    int64_t hex_pos = raw_sql.cur_pos_;
-    while (hex_pos + 64 <= raw_sql.raw_sql_len_) {
-      __m512i chars = _mm512_loadu_si512((__m512i *)(raw_sql.raw_sql_ + hex_pos));
-      __mmask64 mask = (_mm512_cmpge_epu8_mask(chars, zero) & _mm512_cmple_epu8_mask(chars, nine)) |
-                      (_mm512_cmpge_epu8_mask(chars, a) & _mm512_cmple_epu8_mask(chars, f)) |
-                      (_mm512_cmpge_epu8_mask(chars, A) & _mm512_cmple_epu8_mask(chars, F));
-
-      if (mask != 0xFFFFFFFFFFFFFFFF) {
-        raw_sql.cur_pos_ = hex_pos + _tzcnt_u64(~mask);
-        return ret;
-      }
-
-      hex_pos += 64;
-    }
-
-    for (; hex_pos < raw_sql.raw_sql_len_; ++hex_pos) {
-      char ch = raw_sql.raw_sql_[hex_pos];
-      if (!(ch != INVALID_CHAR && HEX_FLAGS[static_cast<uint8_t>(ch)])) {
-        break;
-      }
-    }
-
-    raw_sql.cur_pos_ = hex_pos;
-    if (hex_pos >= raw_sql.raw_sql_len_) {
-      raw_sql.search_end_ = true;
-      raw_sql.cur_pos_ = raw_sql.raw_sql_len_;
-    }
-    return ret;
-  }
-)
-
 /**
  * The hexadecimal number in mysql mode has the following two representations:
  * x'([0-9A-F])*' or 0x([0-9A-F])+
@@ -1569,20 +1524,9 @@ int ObFastParserBase::process_hex_number(bool is_quote)
   char next_ch = raw_sql_.scan();
   if (is_quote) {
     // X'([0-9A-F])*'
-#if defined(__GNUC__) && defined(__x86_64__)
-    if (__builtin_cpu_supports("avx512f") || __builtin_cpu_supports("avx512bw") || __builtin_cpu_supports("avx512vl")) {
-      ret = ::specific::avx512::get_first_non_hex_char_avx512(raw_sql_);
-      next_ch = raw_sql_.char_at(raw_sql_.cur_pos_);
-    } else {
-      while (is_hex(next_ch)) {
-        next_ch = raw_sql_.scan();
-      }
-    }
-#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
-#endif
     if ('\'' == next_ch) {
       cur_token_type_ = PARAM_TOKEN;
       next_ch = raw_sql_.scan();
@@ -1598,19 +1542,9 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
-#if defined(__GNUC__) && defined(__x86_64__)
-    if (__builtin_cpu_supports("avx512f") || __builtin_cpu_supports("avx512bw") || __builtin_cpu_supports("avx512vl")) {
-      ret = ::specific::avx512::get_first_non_hex_char_avx512(raw_sql_);
-    } else {
-      while (is_hex(next_ch)) {
-        next_ch = raw_sql_.scan();
-      }
-    }
-#else
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
     }
-#endif
     int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
     if (-1 != next_idf_pos) {
       // it is possible that the next token is a string and needs to fall back to

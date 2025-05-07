@@ -143,24 +143,12 @@ if (BUILD_CDC_ONLY)
   set_target_properties(ob_sql_proxy_parser_objects PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(ob_sql_proxy_parser_objects
-    PRIVATE
-      -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512vl -mavx512bw -mavx512f
-  )
-endif()
 
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT
   ${ob_inner_sql_parser_object_list}
   ${ob_extra_sql_parser_object_list})
 
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(ob_sql_server_parser_objects
-    PRIVATE
-      -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512vl -mavx512bw -mavx512f
-  )
-endif()
 
 target_link_libraries(ob_sql_proxy_parser_objects PUBLIC ob_base ob_sql_parser_base)
 target_link_libraries(ob_sql_server_parser_objects PUBLIC ob_base)
@@ -177,23 +165,11 @@ add_library(ob_sql_proxy_parser_static
   STATIC
   EXCLUDE_FROM_ALL)
 
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(ob_sql_proxy_parser_static
-    PRIVATE
-      -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512vl -mavx512bw -mavx512f
-  )
-endif()
 
 add_library(ob_sql_server_parser_static
   STATIC
   EXCLUDE_FROM_ALL)
 
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(ob_sql_server_parser_static
-    PRIVATE
-      -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512vl -mavx512bw -mavx512f
-  )
-endif()
 
 target_link_libraries(ob_sql_proxy_parser_static
   PUBLIC
