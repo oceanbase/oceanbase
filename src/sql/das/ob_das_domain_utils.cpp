@@ -228,6 +228,7 @@ int ObDASDomainUtils::generate_spatial_index_rows(
 
 int ObDASDomainUtils::build_ft_doc_word_infos(
     const share::ObLSID &ls_id,
+    const transaction::ObTxDesc *trans_desc,
     const transaction::ObTxReadSnapshot *snapshot,
     const common::ObIArray<const ObDASBaseCtDef *> &related_ctdefs,
     const common::ObIArray<common::ObTabletID> &related_tablet_ids,
@@ -252,11 +253,9 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
       doc_word_info.doc_word_tablet_id_ = related_tablet_ids.at(i);
       doc_word_info.doc_word_schema_version_ = related_ctdef->table_param_.get_data_table().get_schema_version();
       doc_word_info.doc_word_found_ = true;
-      doc_word_info.snapshot_ = snapshot;
     } else if (related_ctdef->table_param_.get_data_table().is_fts_index_aux()) {
       doc_word_info.table_id_ = related_ctdef->table_param_.get_data_table().get_table_id();
       doc_word_info.doc_word_found_ = false;
-      doc_word_info.snapshot_ = snapshot;
       int nwrite = 0;
       const common::ObString &index_name = related_ctdef->table_param_.get_data_table().get_index_name();
       const int64_t buf_size = OB_MAX_TABLE_NAME_BUF_LENGTH;
@@ -284,8 +283,12 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
             K(doc_word_info), K(related_tablet_ids), K(related_ctdefs));
       }
     }
-    if (FAILEDx(doc_word_infos.push_back(doc_word_info))) {
+    if (FAILEDx(doc_word_info.snapshot_.assign(*snapshot))) {
+      LOG_WARN("fail to assign snapshot", K(ret), K(i), KPC(related_ctdef), K(doc_word_info));
+    } else if (OB_FAIL(doc_word_infos.push_back(doc_word_info))) {
       LOG_WARN("fail to push back doc word info", K(ret), K(i), KPC(related_ctdef), K(doc_word_info));
+    } else if (OB_FAIL(doc_word_infos.at(doc_word_infos.count()-1).snapshot_.refresh_seq_no(trans_desc->get_seq_base()))) {
+      LOG_WARN("fail to refresh seq no", K(ret), K(i), KPC(related_ctdef), K(doc_word_info));
     }
   }
   LOG_TRACE("build_ft_doc_word_infos", K(ret), K(ls_id), K(snapshot), K(doc_word_infos), K(related_ctdefs),
@@ -928,7 +931,7 @@ int ObFTDMLIterator::rewind()
       } else if (OB_FAIL(ft_doc_word_iter_.init(doc_word_info_->doc_word_table_id_,
                                                 doc_word_info_->doc_word_ls_id_,
                                                 doc_word_info_->doc_word_tablet_id_,
-                                                doc_word_info_->snapshot_,
+                                                &doc_word_info_->snapshot_,
                                                 doc_word_info_->doc_word_schema_version_))) {
         LOG_WARN("fail to init doc word iter", K(ret), KPC(doc_word_info_));
       }
@@ -963,7 +966,7 @@ int ObFTDMLIterator::init(
         } else if (OB_FAIL(ft_doc_word_iter_.init(doc_word_info_->doc_word_table_id_,
                                                   doc_word_info_->doc_word_ls_id_,
                                                   doc_word_info_->doc_word_tablet_id_,
-                                                  doc_word_info_->snapshot_,
+                                                  &doc_word_info_->snapshot_,
                                                   doc_word_info_->doc_word_schema_version_))) {
           LOG_WARN("fail to init doc word iter", K(ret), KPC(doc_word_info_));
         }
@@ -1026,7 +1029,7 @@ int ObFTDMLIterator::change_domain_dml_mode(const ObDomainDMLMode &mode)
         } else if (OB_FAIL(ft_doc_word_iter_.init(doc_word_info_->doc_word_table_id_,
                                                   doc_word_info_->doc_word_ls_id_,
                                                   doc_word_info_->doc_word_tablet_id_,
-                                                  doc_word_info_->snapshot_,
+                                                  &doc_word_info_->snapshot_,
                                                   doc_word_info_->doc_word_schema_version_))) {
           LOG_WARN("fail to init doc word iter", K(ret), KPC(doc_word_info_));
         }
