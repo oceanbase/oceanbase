@@ -13539,7 +13539,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_not_support,/*mysql date*/
     cast_not_support,/*mysql datetime*/
-    cast_not_expected,/*roaringbitmap*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*mysql date-> xxx*/
@@ -13572,7 +13572,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     cast_identity,/*mysql date*/
     mdate_mdatetime,/*mysql datetime*/
-    cast_not_expected,/*roaringbitmap*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*mysql datetime-> xxx*/
@@ -13605,7 +13605,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*collection*/
     mdatetime_mdate,/*mysql date*/
     cast_identity,/*mysql datetime*/
-    cast_not_expected,/*roaringbitmap*/
+    cast_not_support,/*roaringbitmap*/
   },
   {
     /*roaringbitmap-> xxx*/
@@ -13635,7 +13635,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected, /*udt*/
     cast_not_support,/*decimalint*/
-    cast_not_expected,/*collection*/
+    cast_not_support,/*collection*/
     cast_not_support,/*mysql date*/
     cast_not_support,/*mysql datetime*/
     cast_identity,/*roaringbitmap*/
