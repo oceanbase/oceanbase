@@ -37,7 +37,7 @@ public:
     aggregates_(allocator_, aggr_infos.count()),
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
     cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()),
-    row_selector_(nullptr), cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr)
+    cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr)
   {
     agg_ctx_.op_monitor_info_ = &monitor_info;
   }
@@ -299,7 +299,6 @@ private:
   char *extra_rt_info_buf_;
   int32_t cur_extra_rt_info_idx_;
   ObFixedArray<add_one_row_fn, ObIAllocator> add_one_row_fns_;
-  uint16_t *row_selector_;
   int64_t cur_batch_group_idx_;
   char *cur_batch_group_buf_;
   // ObFixedArray<typename T>

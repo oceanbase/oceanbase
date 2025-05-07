@@ -27,16 +27,7 @@ int Processor::init()
   if (inited_) {
     LOG_DEBUG("already inited, do nothing");
   } else {
-    if (OB_ISNULL(row_selector_ = (uint16_t *)allocator_.alloc(
-                    sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      MEMSET(row_selector_, 0, sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (agg_ctx_.aggr_infos_.count() <= 0) {
+    if (agg_ctx_.aggr_infos_.count() <= 0) {
       // do nothing
     } else if (OB_UNLIKELY(agg_ctx_.aggr_infos_.count() >= MAX_SUPPORTED_AGG_CNT)) {
       ret = OB_NOT_SUPPORTED;
@@ -88,7 +79,6 @@ void Processor::destroy()
   }
   fast_single_row_aggregates_.reset();
   allocator_.reset();
-  row_selector_ = nullptr;
   cur_batch_group_idx_ = 0;
   cur_batch_group_buf_ = nullptr;
   inited_ = false;
