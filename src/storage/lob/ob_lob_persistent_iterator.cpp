@@ -113,7 +113,7 @@ int ObLobMetaBaseIterator::revert_scan_iter()
   return ret;
 }
 
-int ObLobMetaBaseIterator::scan(ObLobAccessParam &param, const bool is_get, ObIAllocator *scan_allocator)
+int ObLobMetaBaseIterator::scan(ObLobAccessParam &param, const bool is_get, ObIAllocator *stmt_allocator, ObIAllocator *scan_allocator)
 {
   int ret = OB_SUCCESS;
   ObAccessService *oas = MTL(ObAccessService*);
@@ -124,7 +124,7 @@ int ObLobMetaBaseIterator::scan(ObLobAccessParam &param, const bool is_get, ObIA
     LOG_WARN("prepare_lob_tablet_id fail", K(ret));
   } else if (OB_FAIL(adaptor_->prepare_scan_param_schema_version(param, scan_param_))) {
     LOG_WARN("prepare_lob_tablet_id fail", K(ret));
-  } else if (OB_FAIL(adaptor_->prepare_table_scan_param(param, is_get, scan_param_, scan_allocator))) {
+  } else if (OB_FAIL(adaptor_->prepare_table_scan_param(param, is_get, scan_param_, stmt_allocator, scan_allocator))) {
     LOG_WARN("build common scan param fail", K(ret), K(is_get), K(param), KPC(this));
   } else if (OB_FAIL(oas->table_scan(scan_param_, row_iter_))) {
     LOG_WARN("do table scan fail", K(ret), K(is_get), K(param), KPC(this));
@@ -162,7 +162,7 @@ int ObLobMetaBaseIterator::rescan(ObLobAccessParam &param)
   return ret;
 }
 
-int ObLobMetaIterator::open(ObLobAccessParam &param, ObPersistentLobApator* adaptor, ObIAllocator *scan_allocator)
+int ObLobMetaIterator::open(ObLobAccessParam &param, ObPersistentLobApator* adaptor, ObIAllocator *stmt_allocator)
 {
   int ret = OB_SUCCESS;
   ObNewRange range;
@@ -174,7 +174,7 @@ int ObLobMetaIterator::open(ObLobAccessParam &param, ObPersistentLobApator* adap
     LOG_WARN("build_range fail", KR(ret), K(param));
   } else if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
     LOG_WARN("push key range fail", K(ret), K(scan_param_), K(range), K(param));
-  } else if (OB_FAIL(scan(param, param.has_single_chunk(), scan_allocator))) {
+  } else if (OB_FAIL(scan(param, param.has_single_chunk(), stmt_allocator, &scan_allocator_))) {
     LOG_WARN("scan fail", K(ret), K(param), KPC(this));
   }
   return ret;
@@ -193,7 +193,7 @@ int ObLobMetaIterator::rescan(ObLobAccessParam &param)
   // update timeout
   scan_param_.timeout_ = param.timeout_;
   scan_param_.for_update_wait_timeout_ = scan_param_.timeout_;
-
+  scan_allocator_.reuse();
   if (OB_FAIL(build_range(param, rowkey_objs_, range))) {
     LOG_WARN("build_range fail", K(ret), K(param), KPC(this));
   } else if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
@@ -229,6 +229,8 @@ int ObLobMetaIterator::reset()
   int ret = OB_SUCCESS;
   if (OB_FAIL(revert_scan_iter())) {
     LOG_WARN("revert_scan_iter fail", K(ret), KPC(this));
+  } else {
+    scan_allocator_.reset();
   }
   return ret;
 }
@@ -268,7 +270,7 @@ int ObLobMetaSingleGetter::get_next_row(ObString &seq_id, ObLobMetaInfo &info)
     if (OB_FAIL(rescan(*param_))) {
       LOG_WARN("rescan fali", K(ret), K(range), KPC(this));
     }
-  } else if (OB_FAIL(scan(*param_, true /*is_get*/, param_->allocator_))) {
+  } else if (OB_FAIL(scan(*param_, true /*is_get*/, param_->allocator_, param_->allocator_))) {
     LOG_WARN("scan fali", K(ret), K(range), KPC(this));
   }
 

@@ -283,11 +283,28 @@ int ObPersistentLobApator::get_lob_tablet_schema(
   return ret;
 }
 
+int ObPersistentLobApator::prepare_table_scan_param(
+    const ObLobAccessParam &param,
+    const bool is_get,
+    ObTableScanParam &scan_param,
+    ObIAllocator *stmt_allocator,
+    ObIAllocator *scan_allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(build_common_scan_param(param, is_get, ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param, stmt_allocator, scan_allocator))) {
+    LOG_WARN("build common scan param fail", K(ret));
+  } else if (OB_FAIL(prepare_table_param(param, scan_param))) {
+    LOG_WARN("prepare lob meta table param fail", K(ret));
+  }
+  return ret;
+}
+
 int ObPersistentLobApator::build_common_scan_param(
     const ObLobAccessParam &param,
     const bool is_get,
     uint32_t col_num,
     ObTableScanParam& scan_param,
+    ObIAllocator *stmt_allocator,
     ObIAllocator *scan_allocator)
 {
   int ret = OB_SUCCESS;
@@ -334,7 +351,7 @@ int ObPersistentLobApator::build_common_scan_param(
     }
     scan_param.sql_mode_ = param.sql_mode_;
     // common set
-    scan_param.allocator_ = scan_allocator;
+    scan_param.allocator_ = stmt_allocator;
     scan_param.for_update_ = false;
     scan_param.for_update_wait_timeout_ = scan_param.timeout_;
     scan_param.scan_allocator_ = scan_allocator;
@@ -547,21 +564,6 @@ int ObPersistentLobApator::prepare_scan_param_schema_version(
     LOG_WARN("get lob meta tablet fail", K(ret), K(param));
   } else {
     scan_param.schema_version_ = lob_meta_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
-  }
-  return ret;
-}
-
-int ObPersistentLobApator::prepare_table_scan_param(
-    const ObLobAccessParam &param,
-    const bool is_get,
-    ObTableScanParam &scan_param,
-    ObIAllocator *scan_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(build_common_scan_param(param, is_get, ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param, scan_allocator))) {
-    LOG_WARN("build common scan param fail", K(ret));
-  } else if (OB_FAIL(prepare_table_param(param, scan_param))) {
-    LOG_WARN("prepare lob meta table param fail", K(ret));
   }
   return ret;
 }

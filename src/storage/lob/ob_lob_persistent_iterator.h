@@ -50,7 +50,7 @@ protected:
   int build_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range);
 
 
-  int scan(ObLobAccessParam &param, const bool is_get, ObIAllocator *scan_allocator);
+  int scan(ObLobAccessParam &param, const bool is_get, ObIAllocator *stmt_allocator, ObIAllocator *scan_allocator);
   int rescan(ObLobAccessParam &param);
   int revert_scan_iter();
 
@@ -92,6 +92,7 @@ class ObLobMetaIterator : public ObLobMetaBaseIterator
 public:
   ObLobMetaIterator(const ObLobAccessCtx *access_ctx):
     ObLobMetaBaseIterator(),
+    scan_allocator_("LobScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     access_ctx_(access_ctx)
   {}
 
@@ -109,6 +110,7 @@ public:
       KP(this), KP_(access_ctx));
 
 private:
+  ObArenaAllocator scan_allocator_;
   const ObLobAccessCtx *access_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLobMetaIterator);
