@@ -13951,7 +13951,7 @@ int ObPLResolver::check_variable_accessible(
       CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
       OV (OB_NOT_NULL(var = const_cast<ObPLVar *>(symbol_table->get_symbol(idx))), OB_ERR_UNEXPECTED, K(idx));
       OX (var->set_is_referenced(true));
-      if (var->get_name().prefix_match(ANONYMOUS_ARG) && !var->is_readonly()) {
+      if (OB_SUCC(ret) && var->get_name().prefix_match(ANONYMOUS_ARG) && !var->is_readonly()) {
         OX (var->set_name(ANONYMOUS_INOUT_ARG));
       }
     }
