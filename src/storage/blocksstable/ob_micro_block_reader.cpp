@@ -752,7 +752,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
           const int64_t col_idx = cols_index.at(col_offsets.at(i));
           const ObObjType obj_type = cols_desc.at(col_offsets.at(i)).col_type_.get_type();
           const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
-          ObStorageDatum *tmp_datum = ob_is_decimal_int(obj_type) ? tmp_datum_buf + i : datum_buf + i;
+          ObStorageDatum *tmp_datum = ob_is_decimal_int(obj_type) || (trans_col_idx == col_idx) ? tmp_datum_buf + i : datum_buf + i;
           datum.reuse();
           tmp_datum_buf[i].reuse();
           if (OB_FAIL(flat_row_reader_.read_column(
