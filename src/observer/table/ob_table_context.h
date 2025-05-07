@@ -548,7 +548,7 @@ public:
   OB_INLINE void set_schema_cache_guard(ObKvSchemaCacheGuard *schema_cache_guard) { schema_cache_guard_ = schema_cache_guard; }
   OB_INLINE void set_ls_id(share::ObLSID &ls_id) { ls_id_ = ls_id; }
   OB_INLINE void set_audit_ctx(ObTableAuditCtx *ctx) { audit_ctx_ = ctx; }
-  OB_INLINE void set_tablet_id(common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+  OB_INLINE void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
   OB_INLINE void set_index_tablet_id(common::ObTabletID &tablet_id) { index_tablet_id_ = tablet_id; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
