@@ -2844,6 +2844,9 @@ typedef enum ObItemType
   T_SHOW_CREATE_LOCATION = 4857,
   T_LOCATION_UTILS_LIST = 4858,
   T_LOCATION_UTILS = 4859,
+
+  T_LOG_ERROR=4860,
+  T_READ_ERROR_LOG=4861,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
