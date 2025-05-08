@@ -583,7 +583,9 @@ int ObLSActiveTabletArray::assign(const ObLSActiveTabletArray &other)
 }
 
 OB_SERIALIZE_MEMBER(ObPendingFreeTabletItem, tablet_id_, tablet_meta_version_, status_, free_time_, gc_type_, tablet_transfer_seq_);
-OB_SERIALIZE_MEMBER(ObLSPendingFreeTabletArray, items_);
+OB_SERIALIZE_MEMBER(ObLSPendingFreeTabletArray,
+                    ls_epoch_, // FARM COMPAT WHITELIST
+                    items_);
 
 int ObLSPendingFreeTabletArray::assign(const ObLSPendingFreeTabletArray &other)
 {
