@@ -295,6 +295,7 @@ ObRoutineInfo &ObRoutineInfo::operator =(const ObRoutineInfo &src_schema)
     type_id_ = src_schema.type_id_;
     tg_timing_event_ = src_schema.tg_timing_event_;
     dblink_id_ = src_schema.dblink_id_;
+    external_routine_type_ = src_schema.external_routine_type_;
     if (OB_FAIL(deep_copy_str(src_schema.routine_name_, routine_name_))) {
       LOG_WARN("deep copy name failed", K(ret), K_(src_schema.routine_name));
     } else if (OB_FAIL(deep_copy_str(src_schema.priv_user_, priv_user_))) {
@@ -313,7 +314,14 @@ ObRoutineInfo &ObRoutineInfo::operator =(const ObRoutineInfo &src_schema)
       LOG_WARN("deep copy dblink database name failed", K(ret), K(src_schema.dblink_db_name_));
     } else if (OB_FAIL(deep_copy_str(src_schema.dblink_pkg_name_, dblink_pkg_name_))) {
       LOG_WARN("deep copy dblink pkg name failed", K(ret), K(src_schema.dblink_pkg_name_));
+    } else if (OB_FAIL(deep_copy_str(src_schema.external_routine_entry_, external_routine_entry_))){
+      LOG_WARN("deep copy external routine entry failed", K(ret), K(src_schema.external_routine_entry_));
+    } else if (OB_FAIL(deep_copy_str(src_schema.external_routine_url_, external_routine_url_))) {
+      LOG_WARN("deep copy external routine url failed", K(ret), K(src_schema.external_routine_url_));
+    } else if (OB_FAIL(deep_copy_str(src_schema.external_routine_resource_, external_routine_resource_))) {
+      LOG_WARN("deep copy external routine resource failed", K(ret), K(src_schema.external_routine_resource_));
     }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < src_schema.routine_params_.count(); ++i) {
       if (OB_ISNULL(src_schema.routine_params_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -390,6 +398,10 @@ void ObRoutineInfo::reset()
   reset_string(dblink_pkg_name_);
   // routine_params_.set_allocator(get_allocator());
   // routine_params_.set_capacity(OB_MAX_PROC_PARAM_COUNT+1); //one more ret type param for function
+  external_routine_type_ = ObExternalRoutineType::INTERNAL_ROUTINE;
+  reset_string(external_routine_entry_);
+  reset_string(external_routine_url_);
+  reset_string(external_routine_resource_);
 }
 
 int64_t ObRoutineInfo::get_convert_size() const
@@ -411,6 +423,9 @@ int64_t ObRoutineInfo::get_convert_size() const
       len += routine_params_.at(i)->get_convert_size();
     }
   }
+  len += external_routine_entry_.length() + 1;
+  len += external_routine_url_.length() + 1;
+  len += external_routine_resource_.length() + 1;
   return len;
 }
 
@@ -578,6 +593,13 @@ OB_DEF_SERIALIZE(ObRoutineInfo)
       LOG_WARN("serialize routine param failed", K(ret));
     }
   }
+
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return ret;
 }
 
@@ -617,6 +639,13 @@ OB_DEF_DESERIALIZE(ObRoutineInfo)
       LOG_WARN("add routine param failed", K(ret));
     }
   }
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return ret;
 }
 
@@ -651,6 +680,13 @@ OB_DEF_SERIALIZE_SIZE(ObRoutineInfo)
       len += routine_params_.at(i)->get_serialize_size();
     }
   }
+
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return len;
 }
 }  // namespace schema

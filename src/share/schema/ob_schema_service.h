@@ -371,6 +371,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_OBJ_MYSQL_PRIV, )                             \
   ACT(OB_DDL_DEL_OBJ_MYSQL_PRIV, )                               \
   ACT(OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END, = 2130)               \
+  ACT(OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN, = 2131)          \
+  ACT(OB_DDL_CREATE_EXTERNAL_RESOURCE, = 2132)                   \
+  ACT(OB_DDL_DROP_EXTERNAL_RESOURCE, = 2133)                     \
+  ACT(OB_DDL_EXTERNAL_RESOURCE_OPERATION_END, = 2140)            \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);

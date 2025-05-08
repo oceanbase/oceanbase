@@ -8152,6 +8152,8 @@ def_table_schema(
 # 551: __all_tenant_location_history
 # 552: __all_tenant_objauth_mysql
 # 553: __all_tenant_objauth_mysql_history
+# 554: __all_external_resource
+# 555: __all_external_resource_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16270,6 +16272,8 @@ def_table_schema(
 # 12544: __all_virtual_objauth_mysql_history
 # 12545: __tenant_virtual_show_create_location
 # 12546: __tenant_virtual_list_file
+# 12547: __all_virtual_external_resource
+# 12548: __all_virtual_external_resource_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -42093,6 +42097,9 @@ def_table_schema(
   FROM oceanbase.__all_virtual_dynamic_partition_table;
 """.replace("\n", " ")
 )
+
+# 21658: DBA_OB_EXTERNAL_RESOURCES
+# 21659: CDB_OB_EXTERNAL_RESOURCES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -76440,6 +76447,8 @@ def_sys_index_table(
 # 101116: idx_location_name
 # 101117: idx_objauth_mysql_user_id
 # 101118: idx_objauth_mysql_obj_name
+# 101119: idx_name_dbid_external_resource
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################

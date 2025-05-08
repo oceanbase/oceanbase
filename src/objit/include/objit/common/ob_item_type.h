@@ -2852,6 +2852,10 @@ typedef enum ObItemType
   T_GENERAL_PROPERTY  = 4863,
   T_PLUGIN_NAME       = 4864,
 
+
+  T_UDF_PROPERTY = 4865,
+  T_UDF_PROPERTY_LIST = 4866,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
