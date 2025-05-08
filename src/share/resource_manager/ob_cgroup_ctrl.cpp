@@ -251,7 +251,7 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
   return ret;
 }
 
-int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
+int ObCgroupCtrl::remove_dir_(const char *curr_dir)
 {
   int ret = OB_SUCCESS;
   /* Do not move thread */
@@ -350,7 +350,7 @@ int ObCgroupCtrl::remove_cgroup_(const uint64_t tenant_id, uint64_t group_id, co
   if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, is_background))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
   } else if (is_valid_group(group_id)) {
-    ret = remove_dir_(group_path, true /* is_delete_group */);
+    ret = remove_dir_(group_path);
   } else {
     ret = recursion_remove_group_(group_path);
   }
@@ -1019,10 +1019,10 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
   int64_t write_size = -1;
   if ((fd = ::open(filename, O_WRONLY)) < 0) {
     ret = OB_IO_ERROR;
-    LOG_ERROR("open file error", K(filename), K(errno), KERRMSG, K(ret));
+    LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
-    LOG_WARN("write file error",
+    LOG_ERROR("write file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing

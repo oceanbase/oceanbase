@@ -213,7 +213,7 @@ private:
   int recursion_remove_group_(const char *curr_path, bool if_remove_top = true);
   int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
   int remove_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
-  static int remove_dir_(const char *curr_dir, bool is_delete_group = false);
+  static int remove_dir_(const char *curr_dir);
   static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   int set_cpu_shares_(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
