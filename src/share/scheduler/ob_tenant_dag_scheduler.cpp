@@ -45,7 +45,7 @@ namespace lib
 namespace share
 {
 ERRSIM_POINT_DEF(EN_SKIP_LOOP_BLOCKING_DAG);
-
+ERRSIM_POINT_DEF(EN_FINISH_DAG_FAILURE);
 #define DEFINE_TASK_ADD_KV(n)                                                               \
   template <LOG_TYPENAME_TN##n>                                                                  \
   int ADD_TASK_INFO_PARAM(char *buf, const int64_t buf_size, LOG_PARAMETER_KV##n)                  \
@@ -753,7 +753,7 @@ int ObIDag::finish_task(ObITask &task)
     ObMutexGuard guard(lock_);
     if (OB_ISNULL(task_list_.remove(&task))) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "failed to remove finished task from task_list", K(ret));
+      COMMON_LOG(ERROR, "failed to remove finished task from task_list", K(ret));
     } else {
       dec_running_task_cnt();
     }
@@ -3318,12 +3318,18 @@ int ObDagPrioScheduler::deal_with_finish_task(
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
       }
     }
-
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && OB_UNLIKELY(EN_FINISH_DAG_FAILURE)) {
+      ret = EN_FINISH_DAG_FAILURE;
+      FLOG_INFO("ERRSIM EN_FINISH_DAG_FAILURE", KR(ret));
+    }
+#endif
     bool finish_task_flag = true;
     if (OB_FAIL(ret)) {
-      dag->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
-      dag->set_dag_ret(ret);
-      finish_task_flag = false;
+      if (ObIDag::DAG_STATUS_NODE_FAILED != dag->get_dag_status()) {
+        dag->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
+        dag->set_dag_ret(ret);
+      }
       COMMON_LOG(WARN, "failed to deal with finish task in retry process", K(ret), KPC(dag));
       ret = OB_SUCCESS;
     } else if (retry_flag) {
