@@ -2269,6 +2269,15 @@ public:
                                                   nls_timestamp_tz_format};
     return set_nls_formats(tmp_str);
   }
+  inline bool is_only_alter_index() const
+  {
+    return is_alter_indexs_
+       && !is_alter_columns_
+       && !is_alter_options_
+       && !is_alter_partitions_
+       && !is_convert_to_character_
+       && alter_constraint_type_ ==  CONSTRAINT_NO_OPERATION;
+  }
   INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
                        K_(session_id),
                        K_(index_arg_list),

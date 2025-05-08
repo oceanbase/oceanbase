@@ -27,6 +27,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "rootserver/ob_ddl_service.h"
 
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
@@ -46,7 +47,8 @@ ObBatchUnbindTabletArg::ObBatchUnbindTabletArg()
     schema_version_(OB_INVALID_VERSION),
     orig_tablet_ids_(),
     hidden_tablet_ids_(),
-    is_old_mds_(false)
+    is_old_mds_(false),
+    is_write_defensive_(false)
 {
 }
 
@@ -62,6 +64,7 @@ int ObBatchUnbindTabletArg::assign(const ObBatchUnbindTabletArg &other)
     ls_id_ = other.ls_id_;
     schema_version_ = other.schema_version_;
     is_old_mds_ = other.is_old_mds_;
+    is_write_defensive_ = other.is_write_defensive_;
   }
   return ret;
 }
@@ -127,14 +130,14 @@ int ObBatchUnbindTabletArg::is_old_mds(const char *buf,
 OB_DEF_SERIALIZE(ObBatchUnbindTabletArg)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_);
+  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_, is_write_defensive_);
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObBatchUnbindTabletArg)
 {
   int len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, ls_id_, schema_version_, orig_tablet_ids_, hidden_tablet_ids_, is_old_mds_, is_write_defensive_);
   return len;
 }
 
@@ -149,6 +152,7 @@ OB_DEF_DESERIALIZE(ObBatchUnbindTabletArg)
       LST_DO_CODE(OB_UNIS_DECODE, is_old_mds_);
     }
   }
+  LST_DO_CODE(OB_UNIS_DECODE, is_write_defensive_);
   return ret;
 }
 
@@ -310,6 +314,47 @@ int ObTabletBindingHelper::bind_lob_tablet_to_data_tablet(
   });
 }
 
+int ObTabletBindingHelper::build_single_table_write_defensive(
+    rootserver::ObDDLService &ddl_service,
+    const ObTableSchema &table_schema,
+    const int64_t schema_version,
+    rootserver::ObDDLSQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_schema.is_valid() || schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is invalid", K(ret), K(table_schema), K(schema_version));
+  }
+  ObArray<ObTabletID> tablet_ids;
+  ObArray<ObBatchUnbindTabletArg> args;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+      LOG_WARN("invalid args", KR(ret), K(table_schema), K(tablet_ids));
+    } else if (OB_FAIL(ddl_service.build_modify_tablet_binding_args(
+        tenant_id, tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
+      LOG_WARN("failed to modify tablet binding args", KR(ret), K(tenant_id), K(tablet_ids), K(schema_version), K(args));
+    }
+    ObArenaAllocator allocator("DDLWriteDefens");
+    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
+      args[i].is_write_defensive_ = true;
+      int64_t pos = 0;
+      int64_t size = args[i].get_serialize_size();
+      char *buf = nullptr;
+      allocator.reuse();
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate", KR(ret), K(size), K(allocator.total()), K(allocator.used()));
+      } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
+        LOG_WARN("failed to serialize arg", KR(ret), K(args[i]), K(size));
+      } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
+        LOG_WARN("failed to register tx data", KR(ret), K(args[i].tenant_id_), K(args[i].ls_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 // TODO (lihongqin.lhq) Separate the code of replay
 template<typename F>
 int ObTabletBindingHelper::modify_tablet_binding_new_mds(
@@ -448,8 +493,10 @@ int ObTabletUnbindMdsHelper::unbind_hidden_tablets_from_orig_tablets(
           data.hidden_tablet_id_.reset();
           if (arg.is_redefined()) {
             data.redefined_ = true;
-            data.snapshot_version_ = OB_INVALID_VERSION; // will be fill back on commit
             data.schema_version_ = arg.schema_version_;
+            if (!arg.is_write_defensive_) {
+              data.snapshot_version_ = OB_INVALID_VERSION; // will be fill back on commit
+            }
           }
           return OB_SUCCESS;
         }))) {
@@ -470,8 +517,10 @@ int ObTabletUnbindMdsHelper::set_redefined_versions_for_hidden_tablets(
     const ObTabletID &hidden_tablet = arg.hidden_tablet_ids_.at(i);
     if (OB_FAIL(ObTabletBindingHelper::modify_tablet_binding_new_mds(ls, hidden_tablet, replay_scn, ctx, arg.is_old_mds_, [&arg](ObTabletBindingMdsUserData &data) -> int {
           data.redefined_ = false;
-          data.snapshot_version_ = OB_INVALID_VERSION; // will be fill back on commit
           data.schema_version_ = arg.schema_version_;
+          if (!arg.is_write_defensive_) {
+            data.snapshot_version_ = OB_INVALID_VERSION; // will be fill back on commit
+          }
           return OB_SUCCESS;
         }))) {
       LOG_WARN("failed to modify tablet binding", K(ret));

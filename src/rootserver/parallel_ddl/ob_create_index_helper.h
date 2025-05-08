@@ -74,6 +74,7 @@ private:
   ObSEArray<ObColumnSchemaV2*, 1> gen_columns_;
   ObIndexBuilder index_builder_;
   ObDDLTaskRecord task_record_;
+  bool create_index_on_empty_table_opt_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateIndexHelper);

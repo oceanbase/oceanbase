@@ -799,6 +799,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
+  uint64_t tenant_id = alter_table_arg.exec_tenant_id_;
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -844,6 +845,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     }
     if (OB_FAIL(populate_based_schema_obj_info_(alter_table_arg))) {
       LOG_WARN("fail to populate based schema obj info", KR(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, alter_table_arg.data_version_))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
     }
     DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
     if (FAILEDx(common_rpc_proxy->alter_table(alter_table_arg, res))) {
@@ -883,6 +886,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
           }
         }
       }
+    } else if (DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(alter_table_arg.data_version_)
+            && res.ddl_res_array_.empty()) {
     } else if (is_create_index(res.ddl_type_) || DDL_NORMAL_TYPE == res.ddl_type_) {
       // TODO(shuangcan): alter table create index returns DDL_NORMAL_TYPE now, check if we can fix this later
       // 同步等索引建成功

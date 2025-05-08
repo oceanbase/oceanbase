@@ -34,6 +34,12 @@ namespace share
 class SCN;
 }
 
+namespace rootserver
+{
+class ObDDLService;
+class ObDDLSQLTransaction;
+}
+
 namespace transaction
 {
 struct ObMulSourceDataNotifyArg;
@@ -61,7 +67,7 @@ public:
   ~ObBatchUnbindTabletArg() {}
   int assign(const ObBatchUnbindTabletArg &other);
   inline bool is_redefined() const { return schema_version_ != OB_INVALID_VERSION; }
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(schema_version), K_(orig_tablet_ids), K_(hidden_tablet_ids));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(schema_version), K_(orig_tablet_ids), K_(hidden_tablet_ids), K_(is_write_defensive));
   bool is_valid() { return true; }
   static int is_old_mds(const char *buf, const int64_t len, bool &is_old_mds);
   static int skip_array_len(const char *buf, int64_t data_len, int64_t &pos);
@@ -74,6 +80,7 @@ public:
   ObSArray<ObTabletID> orig_tablet_ids_;
   ObSArray<ObTabletID> hidden_tablet_ids_;
   bool is_old_mds_;
+  bool is_write_defensive_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchUnbindTabletArg);
 };
@@ -115,6 +122,11 @@ public:
   static int modify_tablet_binding_new_mds(ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, mds::BufferCtx &ctx, const bool for_old_mds, F op);
   static int has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info, bool &has_lob);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
+
+  static int build_single_table_write_defensive(rootserver::ObDDLService &ddl_service,
+                                                const ObTableSchema &table_schema,
+                                                const int64_t schema_version,
+                                                rootserver::ObDDLSQLTransaction &trans);
 private:
   const ObLS &ls_;
   const transaction::ObMulSourceDataNotifyArg &trans_flags_;

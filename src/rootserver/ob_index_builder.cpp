@@ -46,6 +46,7 @@
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "share/scn.h"
+#include "rootserver/ob_create_index_on_empty_table_helper.h"
 
 namespace oceanbase
 {
@@ -290,7 +291,12 @@ int ObIndexBuilder::do_create_global_index(
     ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    bool create_index_on_empty_table_opt = false;
+    const ObString &database_name = arg.database_name_;
+    if (database_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("database name is empty", K(ret), K(database_name));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -304,6 +310,16 @@ int ObIndexBuilder::do_create_global_index(
     } else if (!new_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
+                                                                                              trans,
+                                                                                              database_name,
+                                                                                              table_schema,
+                                                                                              new_arg.index_type_,
+                                                                                              new_arg.data_version_,
+                                                                                              new_arg.sql_mode_,
+                                                                                              create_index_on_empty_table_opt))) {
+      LOG_WARN("fail to check table empty with lock", K(ret));
+    } else if (create_index_on_empty_table_opt && FALSE_IT(new_arg.index_option_.index_status_ = INDEX_STATUS_AVAILABLE)) {
     } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
             new_arg, new_table_schema, allocator, gen_columns))) {
       LOG_WARN("fail to adjust expr index args", K(ret));
@@ -314,16 +330,27 @@ int ObIndexBuilder::do_create_global_index(
     } else {
       if (gen_columns.empty()) {
         if (OB_FAIL(ddl_service_.create_global_index(
-                trans, new_arg, new_table_schema, index_schema))) {
+                trans, new_arg, new_table_schema, index_schema, create_index_on_empty_table_opt))) {
           LOG_WARN("fail to create global index", K(ret));
         }
       } else {
         if (OB_FAIL(ddl_service_.create_global_inner_expr_index(
-              trans, table_schema, new_table_schema, gen_columns, index_schema))) {
+              trans, new_arg, table_schema, new_table_schema, gen_columns, index_schema, create_index_on_empty_table_opt))) {
           LOG_WARN("fail to create global inner expr index", K(ret));
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (create_index_on_empty_table_opt) {
+        if OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(ddl_service_,
+                                                                             new_table_schema,
+                                                                             index_schema.get_schema_version(),
+                                                                             trans)) {
+          LOG_WARN("fail to build single table write defensive", K(ret), K(index_schema));
+        } else {
+          res.index_table_id_ = index_schema.get_table_id();
+          res.schema_version_ = index_schema.get_schema_version();
+          res.task_id_ = 0;
+        }
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  new_arg,
                                                  &new_table_schema,
@@ -476,10 +503,15 @@ int ObIndexBuilder::do_create_local_index(
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
     uint64_t tenant_data_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    bool create_index_on_empty_table_opt = false;
+    const ObString &database_name = create_index_arg.database_name_;
+    if (database_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("database name is empty", K(ret), K(database_name));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("get tenant data version failed", K(ret));
+      LOG_WARN("get tenant data version failed", K(ret));
     } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(new_table_schema.assign(table_schema))) {
@@ -492,6 +524,16 @@ int ObIndexBuilder::do_create_local_index(
     } else if (!my_arg.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy create index arg", K(ret));
+    } else if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(ddl_service_,
+                                                                                              trans,
+                                                                                              database_name,
+                                                                                              table_schema,
+                                                                                              my_arg.index_type_,
+                                                                                              my_arg.data_version_,
+                                                                                              my_arg.sql_mode_,
+                                                                                              create_index_on_empty_table_opt))) {
+      LOG_WARN("fail to check table empty with lock", K(ret));
+    } else if (create_index_on_empty_table_opt && FALSE_IT(my_arg.index_option_.index_status_ = INDEX_STATUS_AVAILABLE)) {
     } else {
       const bool global_index_without_column_info = true;
       // build a global index with local storage if both the data table and index table are non-partitioned
@@ -521,7 +563,7 @@ int ObIndexBuilder::do_create_local_index(
       } else if (OB_FAIL(new_table_schema.check_create_index_on_hidden_primary_key(index_schema))) {
         LOG_WARN("failed to check create index on table", K(ret), K(index_schema));
       } else if (gen_columns.empty()) {
-        if (OB_FAIL(ddl_service_.create_index_table(my_arg, index_schema, trans))) {
+        if (OB_FAIL(ddl_service_.create_index_table(my_arg, index_schema, trans, create_index_on_empty_table_opt))) {
           LOG_WARN("fail to create index", K(ret), K(index_schema));
         }
       } else {
@@ -529,11 +571,21 @@ int ObIndexBuilder::do_create_local_index(
                                                          table_schema,
                                                          new_table_schema,
                                                          gen_columns,
-                                                         index_schema))) {
+                                                         index_schema,
+                                                         my_arg,
+                                                         create_index_on_empty_table_opt))) {
           LOG_WARN("fail to create inner expr index", K(ret));
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (create_index_on_empty_table_opt && OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(ddl_service_,
+                                                                                                                      new_table_schema,
+                                                                                                                      index_schema.get_schema_version(),
+                                                                                                                      trans))) {
+        LOG_WARN("fail to build single table write defensive", K(ret), K(index_schema));
+      } else if (create_index_on_empty_table_opt) {
+        res.index_table_id_ = index_schema.get_table_id();
+        res.schema_version_ = index_schema.get_schema_version();
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  create_index_arg,
                                                  &new_table_schema,
@@ -551,6 +603,7 @@ int ObIndexBuilder::do_create_local_index(
         res.task_id_ = task_record.task_id_;
       }
     }
+    DEBUG_SYNC(CREATE_INDEX_ON_EMPTY_TABLE);
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -561,7 +614,7 @@ int ObIndexBuilder::do_create_local_index(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+      } else if (!create_index_on_empty_table_opt && OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
         LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
       }
     }

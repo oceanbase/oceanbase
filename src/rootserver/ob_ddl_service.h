@@ -135,7 +135,8 @@ public:
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
                                  share::schema::ObTableSchema &table_schema,
-                                 ObMySQLTransaction &sql_trans);
+                                 ObMySQLTransaction &sql_trans,
+                                 const bool is_table_empty);
 
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
                     obrpc::ObAlterTableRes &res);
@@ -150,7 +151,9 @@ public:
                               const share::schema::ObTableSchema &orig_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-                              share::schema::ObTableSchema &index_schema);
+                              share::schema::ObTableSchema &index_schema,
+                              const obrpc::ObCreateIndexArg &arg,
+                              const bool is_table_empty);
   // check whether the foreign key related table is executing offline ddl, creating index, and constrtaint task.
   // And ddl should be refused if the foreign key related table is executing above ddl.
   int check_fk_related_table_ddl(
@@ -160,13 +163,16 @@ public:
       ObMySQLTransaction &trans,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &table_schema,
-      share::schema::ObTableSchema &index_schema);
+      share::schema::ObTableSchema &index_schema,
+      const bool is_table_empty);
   int create_global_inner_expr_index(
       ObMySQLTransaction &trans,
+      const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-      share::schema::ObTableSchema &index_schema);
+      share::schema::ObTableSchema &index_schema,
+      const bool is_table_empty);
   template <typename SCHEMA>
   int check_primary_zone_locality_condition(
       const SCHEMA &schema,
@@ -273,8 +279,9 @@ public:
                                 share::schema::ObTableSchema &new_table_schema,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                 ObDDLOperator &ddl_operator,
-                                ObMySQLTransaction &trans,
+                                ObDDLSQLTransaction &trans,
                                 common::ObArenaAllocator &allocator,
+                                const bool is_add_index_on_empty_table,
                                 obrpc::ObAlterTableRes &res,
                                 ObIArray<ObDDLTaskRecord> &ddl_tasks);
   int generate_object_id_for_partition_schemas(
@@ -1452,6 +1459,11 @@ private:
                               common::ObMySQLTransaction &trans,
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
+  int check_is_only_add_index_on_empty_table(ObMySQLTransaction &trans,
+                                             const ObString &database_name,
+                                             const share::schema::ObTableSchema &table_schema,
+                                             const obrpc::ObAlterTableArg &alter_table_arg,
+                                             bool &is_only_creata_index_on_empty_table);
   int alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                            obrpc::ObAlterTableRes &res,
                            const uint64_t tenant_data_version);

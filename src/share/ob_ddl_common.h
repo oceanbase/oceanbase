@@ -21,6 +21,8 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
+#define DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version) (data_version >= DATA_VERSION_4_2_5_4)
+
 namespace oceanbase
 {
 namespace obrpc
@@ -599,11 +601,10 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
-
-  static int check_table_empty_in_oracle_mode(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+  static int check_table_empty(
+      const ObString &database_name,
+      const share::schema::ObTableSchema &table_schema,
+      const ObSQLMode sql_mode,
       bool &is_table_empty);
 
   static int check_tenant_status_normal(

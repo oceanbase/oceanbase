@@ -120,6 +120,7 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
 #include "share/ob_license_utils.h"
+#include "rootserver/ob_create_index_on_empty_table_helper.h"
 
 namespace oceanbase
 {
@@ -387,7 +388,9 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                           const ObTableSchema &orig_table_schema,
                                           ObTableSchema &new_table_schema,
                                           ObIArray<ObColumnSchemaV2*> &new_columns,
-                                          ObTableSchema &index_schema)
+                                          ObTableSchema &index_schema,
+                                          const obrpc::ObCreateIndexArg &arg,
+                                          const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -429,6 +432,9 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
       }
     }
     if (OB_SUCC(ret)) {
+      // For create index on table with data, generate ddl_stmt_str when index enables
+      // For create index on empty table, generate ddl_stmt_str now
+      const ObString *ddl_stmt_str = is_table_empty ? & arg.ddl_stmt_str_ : nullptr;
       if (OB_FAIL(ddl_operator.alter_table_options(schema_guard,
                                                    new_table_schema,
                                                    orig_table_schema,
@@ -436,7 +442,7 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                                    trans))) {
         LOG_WARN("alter table options failed", K(ret), K(new_table_schema));
       } else if (OB_FAIL(ddl_operator.create_table(
-              index_schema, trans, nullptr/*ddl_stmt_str*/, true, false))) {
+              index_schema, trans, ddl_stmt_str, true, false))) {
         // record the create index operation when index enables rather than schema generates.
         LOG_WARN("failed to create index schema", K(ret));
       }
@@ -464,14 +470,15 @@ int ObDDLService::create_global_index(
     ObMySQLTransaction &trans,
     const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &table_schema,
-    share::schema::ObTableSchema &index_schema)
+    share::schema::ObTableSchema &index_schema,
+    const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(table_schema.check_create_index_on_hidden_primary_key(index_schema))) {
     LOG_WARN("fail to check create global index on table", K(ret), K(index_schema));
-  } else if (OB_FAIL(create_index_table(arg, index_schema, trans))) {
+  } else if (OB_FAIL(create_index_table(arg, index_schema, trans, is_table_empty))) {
     LOG_WARN("fail to create global index", K(ret));
   }
   return ret;
@@ -479,16 +486,18 @@ int ObDDLService::create_global_index(
 
 int ObDDLService::create_global_inner_expr_index(
     ObMySQLTransaction &trans,
+    const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &orig_table_schema,
     share::schema::ObTableSchema &new_table_schema,
     common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-    share::schema::ObTableSchema &index_schema)
+    share::schema::ObTableSchema &index_schema,
+    const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(create_inner_expr_index(trans, orig_table_schema,
-          new_table_schema, new_columns, index_schema))) {
+          new_table_schema, new_columns, index_schema, arg, is_table_empty))) {
     LOG_WARN("fail to create inner expr index", K(ret));
   }
   return ret;
@@ -498,7 +507,8 @@ int ObDDLService::create_global_inner_expr_index(
 int ObDDLService::create_index_table(
   const obrpc::ObCreateIndexArg &arg,
   ObTableSchema &table_schema,
-  ObMySQLTransaction &sql_trans)
+  ObMySQLTransaction &sql_trans,
+  const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   uint64_t new_table_id = table_schema.get_table_id(); // You can specify the data table id to build an index
@@ -539,9 +549,10 @@ int ObDDLService::create_index_table(
     }
     if (OB_SUCC(ret)) {
       // For create index operation, generate ddl_stmt_str when index enables, but
-      // for alter table add index operation, keep generating ddl_stmt_str same as 3.x while generating index schema.
+      // for alter table add index operation or create index on empty table, keep generating ddl_stmt_str same as 3.x while generating index schema.
+      const ObString *ddl_stmt_str = is_table_empty ? &arg.ddl_stmt_str_ : nullptr;
       if (OB_FAIL(create_table_in_trans(table_schema,
-              nullptr/* ddl_stmt_str */, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
+              ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
         LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
       }
     }
@@ -5698,8 +5709,9 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                     ObTableSchema &new_table_schema,
                                     ObSchemaGetterGuard &schema_guard,
                                     ObDDLOperator &ddl_operator,
-                                    ObMySQLTransaction &trans,
+                                    ObDDLSQLTransaction &trans,
                                     ObArenaAllocator &allocator,
+                                    const bool is_only_add_index_on_empty_table,
                                     obrpc::ObAlterTableRes &res,
                                     ObIArray<ObDDLTaskRecord> &ddl_tasks)
 {
@@ -5823,6 +5835,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               }
               bool global_index_without_column_info = create_index_arg->index_schema_.is_partitioned_table() ? false : true;
               if (OB_FAIL(ret)) {
+              } else if (is_only_add_index_on_empty_table && FALSE_IT(create_index_arg->index_option_.index_status_ = INDEX_STATUS_AVAILABLE)) {
               } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
                       *create_index_arg, new_table_schema, allocator, gen_columns))) {
                 LOG_WARN("adjust fulltext args failed", K(ret));
@@ -5837,6 +5850,12 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                                                       index_schema,
                                                                       trans))) {
                 LOG_WARN("failed to alter table add index!", K(index_schema), K(ret));
+              } else if (is_only_add_index_on_empty_table
+                         && OB_FAIL(ObTabletBindingHelper::build_single_table_write_defensive(*this,
+                                                                                              new_table_schema,
+                                                                                              index_schema.get_schema_version(),
+                                                                                              trans))) {
+                LOG_WARN("fail to build single table write defensive", KR(ret), K(index_schema));
               } else {
                 // The index data is stored separately from the main table,
                 // the partition needs to be built, and insert ori_schema_version in the outer insert
@@ -11479,6 +11498,43 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
   return ret;
 }
 
+int ObDDLService::check_is_only_add_index_on_empty_table(ObMySQLTransaction &trans,
+                                                         const ObString &database_name,
+                                                         const share::schema::ObTableSchema &table_schema,
+                                                         const obrpc::ObAlterTableArg &alter_table_arg,
+                                                         bool &is_only_creata_index_on_empty_table)
+{
+  int ret = OB_SUCCESS;
+  is_only_creata_index_on_empty_table = false;
+  const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
+  if (alter_table_arg.is_only_alter_index() && 0 < index_arg_list.count()) {
+    is_only_creata_index_on_empty_table = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size() && is_only_creata_index_on_empty_table; ++i) {
+    ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
+    ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+    if (OB_ISNULL(index_arg) || OB_ISNULL(create_index_arg)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("index arg should not be null", KR(ret), KP(index_arg), KP(create_index_arg));
+    } else if (index_arg->index_action_type_ != ObIndexArg::ADD_INDEX || !share::schema::is_index_support_empty_table_opt(create_index_arg->index_type_)) {
+      is_only_creata_index_on_empty_table = false;
+    }
+  }
+  if (OB_SUCC(ret) && is_only_creata_index_on_empty_table) {
+    if (OB_FAIL(ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(*this,
+                                                                                       trans,
+                                                                                       database_name,
+                                                                                       table_schema,
+                                                                                       ObIndexType::INDEX_TYPE_IS_NOT,
+                                                                                       alter_table_arg.data_version_,
+                                                                                       alter_table_arg.sql_mode_,
+                                                                                       is_only_creata_index_on_empty_table))) {
+      LOG_WARN("failed to check table is empty", KR(ret), K(database_name), K(table_schema), K(alter_table_arg.data_version_));
+    }
+  }
+  return ret;
+}
+
 //fix me :Check whether the newly added index column covers the partition column --by rongxuan.lc
 // It can be repaired after the featrue that add index in alter_table statement
 int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
@@ -11644,6 +11700,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
       }
 
+      bool is_only_add_index_on_empty_table = false;
       ObDDLSQLTransaction trans(schema_service_);
       ObTableLockOwnerID owner_id;
       int64_t timeout_us = 0;
@@ -11663,7 +11720,13 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                     orig_table_schema->get_table_id(),
                                                                     ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
-      } else if (is_rename_and_need_table_lock
+      } else if (OB_FAIL(check_is_only_add_index_on_empty_table(trans,
+                                                                alter_table_schema.get_origin_database_name(),
+                                                                new_table_schema,
+                                                                alter_table_arg,
+                                                                is_only_add_index_on_empty_table))) {
+        LOG_WARN("failed to checkc is only add index on empty table", KR(ret), K(alter_table_schema.get_origin_database_name()), K(new_table_schema), K(alter_table_arg));
+      }  else if (is_rename_and_need_table_lock
                  && OB_FAIL(get_lock_argument_for_rename_(alter_table_arg.client_session_id_,
                                                           alter_table_arg.client_session_create_ts_,
                                                           alter_table_arg.lock_priority_,
@@ -11770,6 +11833,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                ddl_operator,
                                                trans,
                                                alter_table_arg.allocator_,
+                                               is_only_add_index_on_empty_table,
                                                res,
                                                ddl_tasks))) {
             LOG_WARN("failed to alter table index!", K(ret));
@@ -12109,6 +12173,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         if (OB_FAIL(ret)) {
+        } else if (is_only_add_index_on_empty_table) {
         } else if (DDL_CREATE_INDEX == ddl_type || DDL_CREATE_PARTITIONED_LOCAL_INDEX == ddl_type || DDL_NORMAL_TYPE == ddl_type) {
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
@@ -13141,10 +13206,10 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
     LOG_WARN("add column not null in mysql mode is online ddl, not offline ddl", K(ret), K(is_oracle_mode));
   } else if (OB_FAIL(lock_table(trans, origin_table_schema))) {
     LOG_WARN("failed to lock ddl lock", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::check_table_empty_in_oracle_mode(tenant_id,
-                                                                 origin_table_schema.get_table_id(),
-                                                                 schema_guard,
-                                                                 is_table_empty))) {
+  } else if (OB_FAIL(ObDDLUtil::check_table_empty(alter_table_arg.alter_table_schema_.get_origin_database_name(),
+                                                  origin_table_schema,
+                                                  alter_table_arg.sql_mode_,
+                                                  is_table_empty))) {
     LOG_WARN("failed to check table empty in oracle mode", K(ret));
   } else if (!is_table_empty) {
     ret = OB_ERR_TABLE_ADD_NOT_NULL_COLUMN_NOT_EMPTY;
