@@ -145,8 +145,9 @@ OceanBase Database is licensed under the Mulan Public License, Version 2. See th
 
 Join the OceanBase community via:
 
-* [Discord](https://discord.gg/74cF8vbNEs)
-* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
-* [Chinese User Forum](https://ask.oceanbase.com/)
-* DingTalk Group: [33254054](images/dingtalk.png)
-* WeChat Group (Add the assistant with WeChat ID: OBCE666)
+* [Discord](https://discord.gg/74cF8vbNEs): Best for: asking questions, sharing feedback, get latest news, and meet other OceanBase users.
+* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase): Best for: ask complicated questions.
+* [GitHub Issues](https://github.com/oceanbase/oceanbase/issues): Best for: bugs you encounter using OceanBase, and feature proposals.
+* [Chinese User Forum](https://ask.oceanbase.com/): Only for Chinese users, best for: asking questions, sharing feedback, get latest news, and meet other OceanBase users.
+* DingTalk Group: [33254054](images/dingtalk.png): Only for Chinese users, best for: asking questions, get latest news.
+* WeChat Group (Add the assistant with WeChat ID: OBCE666): Only for Chinese users, best for: get latest news and meet other OceanBase users.
