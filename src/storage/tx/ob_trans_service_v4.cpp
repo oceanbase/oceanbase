@@ -2255,7 +2255,7 @@ int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
   return ret;
 }
 
-// need_check_leader : just for unittest case
+// need_check_leader : for unittest, set to false
 int ObTransService::handle_tx_batch_req(int msg_type,
                                         const char *buf,
                                         int32_t size,
@@ -2280,7 +2280,6 @@ int ObTransService::handle_tx_batch_req(int msg_type,
       if (OB_TRANS_CTX_NOT_EXIST == ret ||                              \
           OB_PARTITION_NOT_EXIST == ret ||                              \
           OB_LS_NOT_EXIST == ret) {                                     \
-        /* need_check_leader : just for unittest case*/                 \
         (void)handle_orphan_2pc_msg_(msg, need_check_leader, false);    \
       }                                                                 \
     } else if (OB_FAIL(ctx->get_ls_tx_ctx_mgr()                         \
@@ -2552,7 +2551,7 @@ int ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_c
   bool leader = false;
 
   if (need_check_leader && OB_FAIL(check_ls_status_(msg.get_receiver(), leader))) {
-    if (OB_LS_NOT_EXIST == ret) {
+    if (OB_PARTITION_NOT_EXIST == ret || OB_LS_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       TRANS_LOG(INFO, "check ls status with ls not exist", K(ret), K(msg), K(need_check_leader));
     } else {
