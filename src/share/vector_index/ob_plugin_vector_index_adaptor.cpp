@@ -2920,6 +2920,8 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   } else if (ctx->flag_ == PVQP_SECOND) {
+    close_snap_data_rb_flag();
+
     ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
     if (OB_ISNULL(query_cond->row_iter_) || OB_ISNULL(query_cond->scan_param_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2957,7 +2959,6 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
             LOG_WARN("serialize index failed.", K(ret));
           } else {
             set_snapshot_key_prefix(key_prefix);
-            close_snap_data_rb_flag();
           }
         }
       }
