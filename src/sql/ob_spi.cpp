@@ -20,6 +20,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_package.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "pl/ob_pl_exception_handling.h"
@@ -2595,7 +2596,14 @@ int ObSPIService::calc_dynamic_sqlstr(
     ObString user_sql;
     ObCharsetType client_cs_type = CHARSET_INVALID;
 
-    OZ (result.get_string(tmp_sql));
+    if (OB_SUCC(ret) && result.is_lob_storage()) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator, result, tmp_sql))) {
+        LOG_WARN("fail to read lob data", K(ret), K(result));
+      }
+    } else {
+      OZ (result.get_string(tmp_sql));
+    }
+
     if (OB_SUCC(ret) && tmp_sql.length() > 1 && ';' == tmp_sql[tmp_sql.length() - 1]) {
       tmp_sql.assign_ptr(tmp_sql.ptr(), tmp_sql.length() - 1);
     }
