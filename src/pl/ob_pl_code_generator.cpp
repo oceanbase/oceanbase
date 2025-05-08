@@ -2548,6 +2548,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     if (OB_FAIL(ret)) {
     } else if (s.is_signal_null()) {
       ObLLVMValue status;
+#ifdef OB_BUILD_ORACLE_PL
+      ObLLVMValue loc;
+#endif
       CK (OB_NOT_NULL(generator_.get_saved_exception().get_v()));
       CK (OB_NOT_NULL(generator_.get_saved_ob_error().get_v()));
       OZ (generator_.extract_status_from_context(generator_.get_vars().at(generator_.CTX_IDX), status));
@@ -2568,6 +2571,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       OZ (generator_.get_helper().create_block(ObString("normal"), generator_.get_func(), normal));
       OZ (generator_.generate_close_loop_cursor(true, generator_.get_current_exception() != NULL ? generator_.get_current_exception()->level_ : 0));
       OZ (generator_.generate_destruct_out_params());
+#ifdef OB_BUILD_ORACLE_PL
+      OZ (generator_.get_helper().get_int64(s.get_stmt_id(), loc));
+      OZ (generator_.generate_eh_adjust_call_stack(loc, error_code));
+#endif
       OZ (generator_.raise_exception(unwindException,
                                      error_code, sql_state, normal,
                                      s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
@@ -4698,6 +4705,22 @@ int ObPLCodeGenerator::init_eh_service()
       LOG_WARN("failed to create function", K(ret));
     } else { /*do nothing*/ }
   }
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    if (OB_FAIL(arg_types.push_back(int64_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
+      LOG_WARN("failed to get function type", K(ret));
+    } else if (OB_FAIL(helper_.create_function(ObString("eh_adjust_call_stack"), ft, eh_service_.eh_adjust_call_stack_))) {
+      LOG_WARN("failed to create function", K(ret));
+    } else { /*do nothing*/ }
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     arg_types.reset();
@@ -7471,7 +7494,21 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
   }
   return ret;
 }
-
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLCodeGenerator::generate_eh_adjust_call_stack(ObLLVMValue &loc, ObLLVMValue &error_code)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObLLVMValue, 3> args;
+  ObLLVMValue arg;
+  ObLLVMValue result;
+  OZ (extract_pl_ctx_from_context(get_vars().at(CTX_IDX), arg));
+  OZ (args.push_back(arg));
+  OZ (args.push_back(loc));
+  OZ (args.push_back(error_code));
+  OZ (helper_.create_call(ObString("eh_adjust_call_stack"), get_eh_service().eh_adjust_call_stack_, args, result));
+  return ret;
+}
+#endif
 int ObPLCodeGenerator::generate_close_loop_cursor(bool is_from_exception, int64_t dest_level)
 {
   int ret = OB_SUCCESS;

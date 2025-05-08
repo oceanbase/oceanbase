@@ -268,6 +268,9 @@ public:
                          bool in_warning,
                          bool signal);
   int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
+#ifdef OB_BUILD_ORACLE_PL
+  int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &error_code);
+#endif
   int generate_destruct_out_params();
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
