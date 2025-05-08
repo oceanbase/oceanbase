@@ -1101,7 +1101,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         exec_start_timestamp_ = ObTimeUtility::current_time();
         plan = result.get_physical_plan();
         if (OB_NOT_NULL(plan)) {
-          plan->stat_.executing_stat_.set_executing_record(exec_start_timestamp_);
+          plan->stat_.set_executing_record(exec_start_timestamp_);
         }
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
@@ -1149,7 +1149,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
       if (OB_NOT_NULL(plan)) {
-        plan->stat_.executing_stat_.erase_executing_record(exec_start_timestamp_);
+        plan->stat_.erase_executing_record(exec_start_timestamp_);
       }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled

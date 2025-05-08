@@ -603,7 +603,7 @@ struct ObPlanStat
   bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
-  uint64_t enable_plan_expiration_;
+  bool enable_plan_expiration_;
   int64_t first_exec_row_count_;
   int64_t first_exec_usec_;
   int64_t sample_times_;
@@ -695,7 +695,7 @@ struct ObPlanStat
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
       is_expired_(false),
-      enable_plan_expiration_(0),
+      enable_plan_expiration_(false),
       first_exec_row_count_(-1),
       first_exec_usec_(0),
       sample_times_(0),
@@ -800,7 +800,8 @@ struct ObPlanStat
       pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
       plan_hash_value_(rhs.plan_hash_value_),
       hints_all_worked_(rhs.hints_all_worked_),
-      executing_stat_(rhs.executing_stat_)
+      executing_stat_(rhs.executing_stat_),
+      gen_plan_usec_(rhs.gen_plan_usec_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -899,6 +900,19 @@ struct ObPlanStat
   inline bool is_updated() const
   {
     return last_active_time_ != 0;
+  }
+
+  inline void set_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.set_executing_record(exec_start_timestamp);
+    }
+  }
+  inline void erase_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.erase_executing_record(exec_start_timestamp);
+    }
   }
 
   /* XXX: support printing maxium 30 class members.

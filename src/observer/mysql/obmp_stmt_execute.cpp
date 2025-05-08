@@ -1197,7 +1197,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     if (OB_SUCCESS != ret || enable_perf_event) {
       exec_start_timestamp_ = ObTimeUtility::current_time();
       if (OB_NOT_NULL(result.get_physical_plan())) {
-        result.get_physical_plan()->stat_.executing_stat_.set_executing_record(exec_start_timestamp_);
+        result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
       }
       session.reset_plsql_exec_time();
     }
@@ -1251,7 +1251,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                                       false /* is_inner_sql */))) {
     exec_start_timestamp_ = ObTimeUtility::current_time();
     if (OB_NOT_NULL(result.get_physical_plan())) {
-      result.get_physical_plan()->stat_.executing_stat_.set_executing_record(exec_start_timestamp_);
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
     }
     if (!THIS_WORKER.need_retry()) {
       int cli_ret = OB_SUCCESS;
@@ -1273,7 +1273,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
     if (OB_NOT_NULL(result.get_physical_plan())) {
-      result.get_physical_plan()->stat_.executing_stat_.set_executing_record(exec_start_timestamp_);
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
     }
     result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
     session.reset_plsql_exec_time();
@@ -1411,7 +1411,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
       if (OB_NOT_NULL(result.get_physical_plan())) {
-        result.get_physical_plan()->stat_.executing_stat_.erase_executing_record(exec_start_timestamp_);
+        result.get_physical_plan()->stat_.erase_executing_record(exec_start_timestamp_);
       }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled

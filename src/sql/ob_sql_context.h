@@ -482,13 +482,6 @@ struct ObSpmCacheCtx
 };
 #endif
 
-// enum ObPlanGenReason {
-//   NotSubset = 0,              // no inclusion relationship
-//   LeftIsSuperior,             // left contains all the elements in right set
-//   PLAN_EXPIRE,
-//   RightIsSuperior             // right contains all the elements in left set
-// };
-
 struct ObSqlCtx
 {
   OB_UNIS_VERSION(1);
