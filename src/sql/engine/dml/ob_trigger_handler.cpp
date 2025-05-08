@@ -685,7 +685,7 @@ int TriggerHandle::do_handle_before_row(
           need_fire = true;
         }
         LOG_DEBUG("TRIGGER handle before row", K(need_fire), K(i), K(lbt()));
-        if (need_fire) {
+        if (OB_SUCC(ret) && need_fire) {
           if (OB_ISNULL(trig_rtdef.tg_row_point_params_)) {
             ret = OB_NOT_INIT;
             LOG_WARN("trigger row point params is not init", K(ret));
