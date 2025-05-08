@@ -1700,9 +1700,7 @@ int ObDMLResolver::try_resolve_external_symbol(ObQualifiedName &q_name,
     is_external = false;
     LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
   } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()
-             || T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()
-             || T_FUN_SYS_PL_SEQ_NEXT_VALUE == real_ref_expr->get_expr_type()
-             || T_FUN_SYS_SEQ_NEXTVAL == real_ref_expr->get_expr_type()) {
+             || T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
     is_external = false;
   }
   return ret;
