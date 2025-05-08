@@ -2935,7 +2935,7 @@ int ObRawExprResolverImpl::process_prior_node(const ParseNode &node, ObRawExpr *
 int ObRawExprResolverImpl::mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < idx - 1; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && idx > 0 && i < idx - 1; ++i) {
     if(OB_FAIL(type_info.push_back(ObString(0, NULL)))) {
       LOG_WARN("fail to push back info", K(i), K(ret), K(idx));
     }
