@@ -2371,7 +2371,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
             sleep_time = timeout_remain > 0 ? timeout_remain : 0;
           }
           retry_cnt++;
-          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, RETRY_IDLE_TIME, schema_version, 0);
+          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, schema_version, local_schema_version, 0);
         }
       }
     }

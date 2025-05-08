@@ -178,7 +178,7 @@ WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sq
 WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called", "inner session id", "parent session id", "", IDLE, true, true)
 
 // CONFIGURATION 30100-30999
-WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "target_schema_version", "refreshed_schema_version", "consensus_schema_version", ADMINISTRATIVE, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
 WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", USER_IO, true, true)
 WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry: insufficient px worker wait", "degree of parallel", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, true)

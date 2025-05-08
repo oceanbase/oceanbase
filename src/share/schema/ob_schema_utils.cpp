@@ -716,7 +716,7 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
         LOG_WARN("schema version not sync", K(tenant_id), K(consensus_timeout),
                  K(refreshed_schema_version), K(consensus_schema_version), K(schema_version));
       }
-      ob_usleep(10 * 1000L); // 10ms
+      ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(10 * 1000L, schema_version, refreshed_schema_version, consensus_schema_version);
     }
   }
   return ret;
