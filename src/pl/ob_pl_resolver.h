@@ -483,7 +483,12 @@ public:
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
   static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
-  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type, bool need_check = false);
+  static int set_question_mark_type(ObSchemaGetterGuard &schema_guard,
+                                    ObRawExpr *into_expr,
+                                    ObPLBlockNS *ns,
+                                    const ObPLDataType *type,
+                                    ObPLDependencyTable &deps,
+                                    bool need_check = false);
 
   static
   int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,

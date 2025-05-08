@@ -2068,7 +2068,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             type = ObPLExternalNS::PKG_VAR;
             if (OB_NOT_NULL(get_dependency_table())) {
               OZ (ObPLDependencyUtil::add_dependency_objects(*get_dependency_table(),
-                                                              resolve_ctx_,
+                                                              resolve_ctx_.schema_guard_,
                                                               data_type));
               if (OB_SUCC(ret) && data_type.is_cursor_type()) {
                 const ObPLCursor *cursor = nullptr;
@@ -3882,7 +3882,7 @@ int ObPLBlockNS::expand_data_type(const ObUserDefinedType *user_type,
       const ObUserDefinedType *l_user_type = NULL;
       if (OB_NOT_NULL(external_ns_) && OB_NOT_NULL(external_ns_->get_dependency_table())) {
         OZ (ObPLDependencyUtil::add_dependency_objects(*external_ns_->get_dependency_table(),
-                                                          external_ns_->get_resolve_ctx(),
+                                                          external_ns_->get_resolve_ctx().schema_guard_,
                                                           *member));
       }
       OZ (SMART_CALL(get_pl_data_type_by_id(member->get_user_type_id(), l_user_type)));

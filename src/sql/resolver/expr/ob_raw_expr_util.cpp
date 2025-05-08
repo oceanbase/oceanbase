@@ -927,7 +927,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
                                             common::ObMySQLProxy &sql_proxy,
                                             ExternalParams *extern_param_info,
                                             ObUDFInfo &udf_info,
-                                            pl::ObPLEnumSetCtx &enum_set_ctx)
+                                            pl::ObPLEnumSetCtx &enum_set_ctx,
+                                            pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   ObResolverParams params;
@@ -941,7 +942,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
   if (OB_NOT_NULL(extern_param_info)) {
     params.external_param_info_.assign(*extern_param_info);
   }
-  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx))) {
+  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx, deps))) {
     SQL_LOG(WARN, "failed to exec resovle udf exprs", K(ret), K(udf_info));
   }
   return ret;
@@ -959,7 +960,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
 int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                                             const ObIRoutineInfo *func_info,
                                             ObUDFInfo &udf_info,
-                                            pl::ObPLEnumSetCtx &enum_set_ctx)
+                                            pl::ObPLEnumSetCtx &enum_set_ctx,
+                                            pl::ObPLDependencyTable &deps)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> param_exprs;
@@ -1219,7 +1221,7 @@ do {                                                                            
               } else {
                 param_type = iparam->get_pl_data_type();
               }
-              OZ (pl::ObPLResolver::set_question_mark_type(iexpr, params.secondary_namespace_, &param_type));
+              OZ (pl::ObPLResolver::set_question_mark_type(*(params.schema_checker_->get_schema_guard()), iexpr, params.secondary_namespace_, &param_type, deps));
             }
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);

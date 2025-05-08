@@ -86,7 +86,7 @@ int ObPLResolver::init(ObPLFunctionAST &func_ast)
           const ObUserDefinedType *user_type = NULL;
           if (STANDALONE_ANONYMOUS == func_ast.get_proc_type()) {
             OZ (ObPLDependencyUtil::add_dependency_objects(func_ast.get_dependency_table(),
-                                                            resolve_ctx_,
+                                                            resolve_ctx_.schema_guard_,
                                                             type));
           }
           OZ (current_block_->get_namespace().get_pl_data_type_by_id(type.get_user_type_id(), user_type), type, i);
@@ -4136,7 +4136,12 @@ bool ObPLResolver::is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns)
   return ret;
 }
 
-int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type, bool need_check)
+int ObPLResolver::set_question_mark_type(ObSchemaGetterGuard &schema_guard,
+                                          ObRawExpr *into_expr,
+                                          ObPLBlockNS *ns,
+                                          const ObPLDataType *type,
+                                          ObPLDependencyTable &deps,
+                                          bool need_check)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_expr = NULL;
@@ -4192,6 +4197,9 @@ int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, 
       OX (dest_type = var->get_type());
     } else {
       OX ((const_cast<ObPLVar*>(var))->set_type(dest_type));
+      OZ (ObPLDependencyUtil::add_dependency_objects(deps,
+                                                     schema_guard,
+                                                     dest_type));
     }
     if (OB_FAIL(ret)) {
     } else if (dest_type.is_obj_type()) {
@@ -4369,13 +4377,13 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                     const ObUserDefinedType *user_type = NULL;
                     OZ (current_block_->get_namespace().get_pl_data_type_by_id(
                       value_expr->get_result_type().get_udt_id(), user_type));
-                    OZ (set_question_mark_type(into_expr, &(current_block_->get_namespace()), user_type));
+                    OZ (set_question_mark_type(resolve_ctx_.schema_guard_, into_expr, &(current_block_->get_namespace()), user_type, func.get_dependency_table()));
                   } else {
                     ObDataType data_type;
                     ObPLDataType pl_type;
                     OZ (ObRawExprUtils::extract_real_result_type(*value_expr, resolve_ctx_.session_info_, data_type));
                     OX (pl_type.set_data_type(data_type));
-                    OX (set_question_mark_type(into_expr, &(current_block_->get_namespace()), &pl_type));
+                    OX (set_question_mark_type(resolve_ctx_.schema_guard_, into_expr, &(current_block_->get_namespace()), &pl_type, func.get_dependency_table()));
                   }
                 }
               } else {
@@ -7732,7 +7740,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
               const ObPLRoutineParam* iparam = static_cast<const ObPLRoutineParam*>(param_info);
               OX (data_type = iparam->get_type());
             }
-            OZ (set_question_mark_type(params.at(i), &(current_block_->get_namespace()), &data_type, true));
+            OZ (set_question_mark_type(resolve_ctx_.schema_guard_, params.at(i), &(current_block_->get_namespace()), &data_type, func.get_dependency_table(), true));
           }
         }
         if (OB_SUCC(ret)
@@ -8920,8 +8928,8 @@ int ObPLResolver::resolve_fetch(
                   if (right->get_data_type()->get_meta_type().is_null() &&
                       stmt->get_into().count() > i &&
                       is_question_mark_value(func.get_expr(stmt->get_into(i)), &(current_block_->get_namespace()))) {
-                    OZ (set_question_mark_type(
-                      func.get_expr(stmt->get_into(i)), &(current_block_->get_namespace()), left));
+                    OZ (set_question_mark_type(resolve_ctx_.schema_guard_,
+                      func.get_expr(stmt->get_into(i)), &(current_block_->get_namespace()), left, func.get_dependency_table()));
                   } else {
                     CK (OB_NOT_NULL(left->get_data_type()));
                     OX (is_compatible = cast_supported(left->get_data_type()->get_obj_type(),
@@ -12033,7 +12041,8 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
                                                 resolve_ctx_.sql_proxy_,
                                                 resolve_ctx_.extern_param_info_,
                                                 udf_info,
-                                                *resolve_ctx_.enum_set_ctx_), udf_info);
+                                                *resolve_ctx_.enum_set_ctx_,
+                                                unit_ast.get_dependency_table()), udf_info);
     if (OB_SUCC(ret) && resolve_ctx_.is_sql_scope_ && OB_NOT_NULL(udf_info.ref_expr_) && udf_info.ref_expr_->has_param_out()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
@@ -13024,7 +13033,8 @@ int ObPLResolver::resolve_udf_info(
                                                   resolve_ctx_.sql_proxy_,
                                                   resolve_ctx_.extern_param_info_,
                                                   udf_info,
-                                                  *resolve_ctx_.enum_set_ctx_), udf_info);
+                                                  *resolve_ctx_.enum_set_ctx_,
+                                                  func.get_dependency_table()), udf_info);
     } else if (STANDALONE_PROCEDURE == routine_type
                || STANDALONE_FUNCTION == routine_type) {
 
@@ -13108,7 +13118,8 @@ int ObPLResolver::resolve_udf_info(
                                                   resolve_ctx_.sql_proxy_,
                                                   resolve_ctx_.extern_param_info_,
                                                   udf_info,
-                                                  *resolve_ctx_.enum_set_ctx_), udf_info);
+                                                  *resolve_ctx_.enum_set_ctx_,
+                                                  func.get_dependency_table()), udf_info);
     } else if (NESTED_PROCEDURE == routine_type || NESTED_FUNCTION == routine_type) {
       const ObPLRoutineInfo *sub_routine_info = static_cast<const ObPLRoutineInfo *>(routine_info);
 
@@ -13148,7 +13159,8 @@ int ObPLResolver::resolve_udf_info(
                                                   resolve_ctx_.sql_proxy_,
                                                   resolve_ctx_.extern_param_info_,
                                                   udf_info,
-                                                  *resolve_ctx_.enum_set_ctx_), udf_info);
+                                                  *resolve_ctx_.enum_set_ctx_,
+                                                  func.get_dependency_table()), udf_info);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected routine type",

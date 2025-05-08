@@ -43,7 +43,7 @@ public:
   static int add_dependency_objects(const ObPLDependencyTable *dep_tbl,
                                     const ObIArray<ObSchemaObjVersion> &dependency_objects);
   static int add_dependency_objects(ObPLDependencyTable &dep_tbl,
-                                    const ObPLResolveCtx &resolve_ctx,
+                                    ObSchemaGetterGuard &schema_guard,
                                     const ObPLDataType &type);
   static int add_dependency_object_impl(const ObPLDependencyTable *dep_tbl,
                                         const share::schema::ObSchemaObjVersion &obj_version);

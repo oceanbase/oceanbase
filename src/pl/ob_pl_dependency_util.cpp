@@ -123,7 +123,7 @@ int ObPLDependencyUtil::add_dependency_objects(const ObPLDependencyTable *dep_tb
 }
 
 int ObPLDependencyUtil::add_dependency_objects(ObPLDependencyTable &dep_tbl,
-                                              const ObPLResolveCtx &resolve_ctx,
+                                              ObSchemaGetterGuard &schema_guard,
                                               const ObPLDataType &type)
 {
   int ret = OB_SUCCESS;
@@ -138,7 +138,7 @@ int ObPLDependencyUtil::add_dependency_objects(ObPLDependencyTable &dep_tbl,
 
       if (OB_INVALID_ID == package_id || ObTriggerInfo::is_trigger_package_id(package_id)) {
         // do nothing, may inside package of ddl stage
-      } else if (OB_FAIL(resolve_ctx.schema_guard_.get_simple_package_info(tenant_id, package_id, package_info))) {
+      } else if (OB_FAIL(schema_guard.get_simple_package_info(tenant_id, package_id, package_info))) {
         LOG_WARN("failed to get_simple_package_info",
                  K(ret), K(type), K(tenant_id), K(package_id), KPC(package_info));
       } else if (OB_ISNULL(package_info)) {
@@ -158,7 +158,7 @@ int ObPLDependencyUtil::add_dependency_objects(ObPLDependencyTable &dep_tbl,
       const uint64_t udt_id = type.get_user_type_id();
       const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
 
-      if (OB_FAIL(resolve_ctx.schema_guard_.get_udt_info(tenant_id, udt_id, udt_info))) {
+      if (OB_FAIL(schema_guard.get_udt_info(tenant_id, udt_id, udt_info))) {
         LOG_WARN("failed to get_udt_info", K(ret), K(type), K(tenant_id), K(udt_id), KPC(udt_info));
       } else if (OB_ISNULL(udt_info)) {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -177,7 +177,7 @@ int ObPLDependencyUtil::add_dependency_objects(ObPLDependencyTable &dep_tbl,
       const uint64_t table_id = type.get_user_type_id();
       const uint64_t tenant_id = get_tenant_id_by_object_id(table_id);
 
-      if (OB_FAIL(resolve_ctx.schema_guard_.get_simple_table_schema(tenant_id, table_id, table_schema))) {
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("failed to get_simple_table_schema", K(ret), K(type), K(tenant_id), K(table_id), KPC(table_schema));
       } else if (OB_NOT_NULL(table_schema)) {
         obj_version.object_id_ = table_id;

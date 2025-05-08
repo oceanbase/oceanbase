@@ -977,7 +977,8 @@ public:
   static int resolve_udf_param_exprs(ObResolverParams &params,
                                      const share::schema::ObIRoutineInfo *func_info,
                                      ObUDFInfo &udf_info,
-                                     pl::ObPLEnumSetCtx &enum_set_ctx);
+                                     pl::ObPLEnumSetCtx &enum_set_ctx,
+                                     pl::ObPLDependencyTable &deps);
   static int resolve_udf_param_exprs(const share::schema::ObIRoutineInfo* func_info,
                                      pl::ObPLBlockNS &secondary_namespace_,
                                      ObSchemaChecker &schema_checker,
@@ -988,7 +989,8 @@ public:
                                      common::ObMySQLProxy &sql_proxy,
                                      ExternalParams *extern_param_info,
                                      ObUDFInfo &udf_info,
-                                     pl::ObPLEnumSetCtx &enum_set_ctx);
+                                     pl::ObPLEnumSetCtx &enum_set_ctx,
+                                     pl::ObPLDependencyTable &deps);
 
   static int rebuild_expr_params(ObUDFInfo &udf_info,
                                  sql::ObRawExprFactory *expr_factory,
