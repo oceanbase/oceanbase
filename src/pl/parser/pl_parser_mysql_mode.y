@@ -1922,6 +1922,9 @@ into_clause:
     {
       ParseNode *vars_list = NULL;
       merge_nodes(vars_list, parse_ctx->mem_pool_, T_SP_INTO_LIST, $2);
+      if (vars_list == NULL) {
+        obpl_mysql_parse_fatal_error(OB_PARSER_ERR_PARSE_SQL, YYLEX_PARAM, "Syntax Error");
+      }
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_INTO_VARIABLES, 1, vars_list);
     }
 ;
