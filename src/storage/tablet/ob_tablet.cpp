@@ -1309,10 +1309,9 @@ void ObTablet::check_truncate_info_state(
   const int64_t last_major_snapshot = get_last_major_snapshot_version();
   SpinRLockGuard guard(mds_cache_lock_);
   if (truncate_info_cache_.is_valid()) {
-    if (truncate_info_cache_.is_empty() ||
-        (read_version_range.base_version_ >= last_major_snapshot &&
-         last_major_snapshot >= truncate_info_cache_.newest_commit_version())) {
-          contain_truncate_info = false;
+    if (read_version_range.base_version_ >= last_major_snapshot &&
+        (truncate_info_cache_.is_empty() || last_major_snapshot >= truncate_info_cache_.newest_commit_version())) {
+      contain_truncate_info = false;
     }
   }
 }
@@ -1344,9 +1343,8 @@ int ObTablet::read_truncate_info_array(
   } else {
     SpinRLockGuard guard(mds_cache_lock_);
     if (truncate_info_cache_.is_valid()) {
-      if (truncate_info_cache_.is_empty()
-          || (read_version_range.base_version_ >= last_major_snapshot
-              && last_major_snapshot >= truncate_info_cache_.newest_commit_version())) {
+      if (read_version_range.base_version_ >= last_major_snapshot &&
+          (truncate_info_cache_.is_empty() || last_major_snapshot >= truncate_info_cache_.newest_commit_version())) {
         need_read_truncate_info = false;
         LOG_INFO("[TRUNCATE INFO] no truncate info in exsit version_range", KR(ret), K(tablet_id), K(read_version_range), K_(truncate_info_cache));
       } else {
