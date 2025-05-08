@@ -113,6 +113,7 @@ int ObTempTableInsertVecOp::inner_close()
 
 void ObTempTableInsertVecOp::destroy()
 {
+  interm_result_ids_.reset();
   sql_mem_processor_.unregister_profile_if_necessary();
   destroy_mem_context();
   ObOperator::destroy();
