@@ -3019,6 +3019,92 @@ int append_row_to_encoder(ObMicroBlockCSEncoder &encoder, ObDatumRow &row, ObCol
   return ret;
 }
 
+TEST_F(TestSemiStructEncoding, test_sub_schema_null_reuse)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  ObColDatums datums(allocator);
+  ObMicroBlockCSEncoder encoder;
+  const int64_t rowkey_cnt = 1;
+  const int64_t col_cnt = 2;
+  ObObjType col_types[col_cnt] = {ObIntType, ObJsonType};
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+  ctx_.semistruct_encoding_type_.mode_ = 1;
+
+  const int64_t row_cnt = 10;
+  const char* json_texts[row_cnt] = {
+    "{\"id\":215968269, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":36473389, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":252649085, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":553937707, \"int_k\":null}",
+    "{\"id\":460137687, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":461137687, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":462137687, \"str_k\":null}",
+    "{\"id\":463237687, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":464337687, \"int_k\":null, \"str_k\":null}",
+    "{\"id\":460437687, \"int_k\":null, \"str_k\":null}"
+  };
+
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator, col_cnt));
+
+  for (int i = 0; i < row_cnt; ++i) {
+    row.storage_datums_[0].set_int(i + 1);
+    ObString j_text(STRLEN(json_texts[i]), json_texts[i]);
+    ObDatum json_datum;
+    ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+    ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+    row.storage_datums_[1].set_string(json_datum.get_string());
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(row_cnt, datums.count());
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+
+  ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
+  ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
+
+  // <2> reuse
+  encoder.reuse();
+  datums.reuse();
+  ObSemiStructColumnEncodeCtx *semistruct_col_ctx = nullptr;
+  ASSERT_EQ(OB_SUCCESS, encoder.semistruct_encode_ctx_->get_col_ctx(1, semistruct_col_ctx));
+  ASSERT_EQ(true, semistruct_col_ctx->sub_schema_.is_inited());
+  {
+    const char* json_texts2[row_cnt] = {
+      "{\"id\":215968269, \"int_k\":1, \"str_k\":null}",
+      "{\"id\":36473389, \"int_k\":null, \"str_k\":\"4\"}",
+      "{\"id\":252649085, \"int_k\":null, \"str_k\":null}",
+      "{\"id\":553937707, \"int_k\":null, \"str_k\":\"3\"}",
+      "{\"id\":460137687, \"int_k\":2, \"str_k\":null}",
+      "{\"id\":460137687, \"int_k\":null, \"str_k\":null}",
+      "{\"id\":460137687, \"int_k\":20, \"str_k\":null}",
+      "{\"id\":460137687, \"int_k\":21, \"str_k\":null}",
+      "{\"id\":460137687, \"int_k\":22, \"str_k\":null}",
+      "{\"id\":460137687, \"int_k\":23}"
+    };
+
+    for (int i = 0; i < row_cnt; ++i) {
+      row.storage_datums_[0].set_int(i + 1);
+      ObString j_text(STRLEN(json_texts2[i]), json_texts2[i]);
+      ObDatum json_datum;
+      ASSERT_EQ(OB_SUCCESS, build_json_datum(allocator, j_text, json_datum));
+      ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
+      row.storage_datums_[1].set_string(json_datum.get_string());
+      ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    }
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
+    ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
+    ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
+    ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
+  }
+  reuse();
+}
+
 TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
