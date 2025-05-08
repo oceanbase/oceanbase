@@ -16830,6 +16830,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keyword
 # 15514: idx_objauth_mysql_user_id_real_agent
 # 15515: idx_objauth_mysql_obj_name_real_agent
 # 15516: __tenant_virtual_list_file
+# 15517: __all_virtual_ss_tablet_meta
+# 15518: __all_virtual_ss_ls_meta
+# 15519: __all_virtual_ss_sstable_mgr
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -42100,6 +42103,7 @@ def_table_schema(
 
 # 21658: DBA_OB_EXTERNAL_RESOURCES
 # 21659: CDB_OB_EXTERNAL_RESOURCES
+# 21660: V$OB_SS_SSTABLES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -75435,6 +75439,7 @@ def_table_schema(
 # 28275: GV$OB_RESULT_CACHE_OBJECTS
 # 28276: V$OB_RESULT_CACHE_OBJECTS
 # 28277: ALL_LOCATIONS
+# 28278: V$OB_SS_SSTABLES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
