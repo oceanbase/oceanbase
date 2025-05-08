@@ -887,7 +887,7 @@ public:
   static int resolve_op_exprs_for_oracle_implicit_cast(ObRawExprFactory &expr_factory,
                                                        const ObSQLSessionInfo *session_info,
                                                        common::ObIArray<ObOpRawExpr*> &op_exprs);
-  static int check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker);
+  static int check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker, bool is_prepare, bool &skip_check);
   static int add_cast_to_multiset(ObRawExpr *&expr);
 
 
