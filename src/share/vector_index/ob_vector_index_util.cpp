@@ -109,7 +109,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
           } else if (ObVectorIndexType::VIT_HNSW_INDEX == index_type) {
-            if (int_value >= 5 && int_value <= 64) {
+            if (int_value >= 5 && int_value <= 128) {
               param.m_ = int_value;
             } else {
               ret = OB_NOT_SUPPORTED;
@@ -1961,7 +1961,7 @@ int ObVectorIndexUtil::check_index_param(
       } else if (hnsw_is_set) {
         ef_construction_value = ef_construction_is_set ? ef_construction_value : default_ef_construction_value;
         m_value = m_is_set ? m_value : default_m_value;
-        if (m_value >= 5 && m_value <= 64) {
+        if (m_value >= 5 && m_value <= 128) {
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("invalid vector index m value", K(ret), K(parser_value));
