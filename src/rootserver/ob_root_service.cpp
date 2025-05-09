@@ -2011,6 +2011,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("failed to update _enable_dbms_job_package", K(ret));
     } else if (OB_FAIL(enable_mysql_compatible_dates_config_())) {
       LOG_WARN("fail to update _enable_mysql_compatible_dates config", K(ret));
+    } else if (OB_FAIL(disable_system_trigger())) {
+      LOG_WARN("fail to update _system_trig_enabled config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -10601,6 +10603,18 @@ int ObRootService::disable_dbms_job()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_dbms_job_package = false;", affected_rows))) {
     LOG_WARN("update _enable_dbms_job_package to false failed", K(ret));
   } else if (OB_FAIL(check_config_result("_enable_dbms_job_package", "false"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::disable_system_trigger()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _system_trig_enabled = false;", affected_rows))) {
+    LOG_WARN("update _system_trig_enabled to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_system_trig_enabled", "false"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;
