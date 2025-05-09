@@ -21807,6 +21807,8 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
+      } else if (is_recover_restore_table && index_table_schema->is_vec_index() && !index_table_schema->is_vec_spiv_index()) {
+        // skip vector index in restore task for now.
       } else if (OB_FAIL(check_index_table_need_rebuild(*index_table_schema,
                                                         drop_cols_id_arr,
                                                         is_oracle_mode,
