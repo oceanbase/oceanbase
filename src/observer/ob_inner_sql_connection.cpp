@@ -2280,7 +2280,6 @@ int ObInnerSQLConnection::create_session_by_mgr()
     inner_session_ = NULL;
     LOG_WARN("create session failed", K(ret), K(sid));
   } else {
-    THIS_WORKER.set_session(inner_session_);
     free_session_ctx_.sessid_ = sid;
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
@@ -2343,7 +2342,6 @@ int ObInnerSQLConnection::destroy_inner_session()
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("session mgr is null", K(ret));
         } else {
-          THIS_WORKER.set_session(NULL);
           GCTX.session_mgr_->revert_session(inner_session_);
           GCTX.session_mgr_->free_session(free_session_ctx_);
           GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
@@ -2432,5 +2430,18 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
     WAIT_END(ObWaitEventIds::INNER_SQL_EXEC_WAIT);
   }
 }
+
+ObInnerSQLSessionGuard::ObInnerSQLSessionGuard(sql::ObSQLSessionInfo *session)
+  : last_session_(NULL)
+{
+  last_session_ = THIS_WORKER.get_session();
+  THIS_WORKER.set_session(session);
+}
+
+ObInnerSQLSessionGuard::~ObInnerSQLSessionGuard()
+{
+  THIS_WORKER.set_session(last_session_);
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

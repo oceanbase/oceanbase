@@ -456,6 +456,16 @@ private:
   int64_t prev_block_sessid_;
   ObQueryRetryAshInfo *prev_info_;
 };
+
+class ObInnerSQLSessionGuard
+{
+public:
+  ObInnerSQLSessionGuard(sql::ObSQLSessionInfo *session);
+  ~ObInnerSQLSessionGuard();
+private:
+  sql::ObSQLSessionInfo *last_session_;
+};
+
 } // end of namespace observer
 } // end of namespace oceanbase
 
