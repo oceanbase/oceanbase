@@ -415,6 +415,10 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     } else if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
       type.set_type(dst_type.get_type());
       type.set_subschema_id(dst_type.get_subschema_id());
+    } else if (dst_type.is_enum_set_with_subschema()) {
+      type.set_type(dst_type.get_type());
+      type.set_subschema_id(dst_type.get_subschema_id());
+      type.set_accuracy(dst_type.get_accuracy());
     } else {
       type.set_type(dst_type.get_type());
       type.set_collation_type(dst_type.get_collation_type());
