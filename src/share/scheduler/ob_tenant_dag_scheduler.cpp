@@ -1775,6 +1775,13 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   } else if (dag->is_dag_net_canceled()) {
     flag = true;
     (void) dag->simply_set_stop();
+  } else {
+    bool is_cancel = false;
+    if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_->get_dag()->get_dag_id(), is_cancel))) {
+      LOG_WARN("fail to use SYS_TASK_STATUS_MGR to decide if cancel task", K(ret), K(task_->get_dag()->get_dag_id()));
+    } else if (is_cancel) {
+      flag = true;
+    }
   }
   return flag;
 }
@@ -1897,6 +1904,11 @@ int ObTenantDagWorker::yield()
         }
       }
     }
+#ifdef ERRSIM
+    if (ret == OB_CANCELED) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "cancel_merge", "dag_id", task_->get_dag()->get_dag_id(), "add_time", curr_time);
+    }
+#endif
   }
 
   return ret;
