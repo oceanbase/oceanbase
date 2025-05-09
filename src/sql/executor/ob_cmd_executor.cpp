@@ -819,10 +819,6 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAlterTriggerStmt, ObAlterTriggerExecutor);
         break;
       }
-      case stmt::T_REFRESH_TIME_ZONE_INFO: {
-        DEFINE_EXECUTE_CMD(ObRefreshTimeZoneInfoStmt, ObRefreshTimeZoneInfoExecutor);
-        break;
-      }
       case stmt::T_SET_DISK_VALID: {
         DEFINE_EXECUTE_CMD(ObSetDiskValidStmt, ObSetDiskValidExecutor);
         break;

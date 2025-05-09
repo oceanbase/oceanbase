@@ -65,6 +65,11 @@ install(FILES
   src/share/parameter/default_parameter.json
   src/share/system_variable/default_system_variable.json
   tools/timezone_V1.log
+  tools/timezone.data
+  tools/timezone_name.data
+  tools/timezone_trans.data
+  tools/timezone_trans_type.data
+  tools/spatial_reference_systems.data
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py

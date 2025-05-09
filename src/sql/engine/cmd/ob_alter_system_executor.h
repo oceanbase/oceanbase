@@ -111,8 +111,6 @@ DEF_SIMPLE_EXECUTOR(ObStopUpgradeJob);
 
 DEF_SIMPLE_EXECUTOR(ObSetTP);
 
-DEF_SIMPLE_EXECUTOR(ObRefreshTimeZoneInfo);
-
 DEF_SIMPLE_EXECUTOR(ObEnableSqlThrottle);
 
 DEF_SIMPLE_EXECUTOR(ObDisableSqlThrottle);

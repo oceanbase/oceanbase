@@ -35,8 +35,10 @@ private:
   static const int32_t FILE_IDX = 3;
   int resolve_exec_type(const ParseNode *node, table::ObModuleDataArg::ObInfoOpType &type);
   int resolve_module(const ParseNode *node, table::ObModuleDataArg::ObExecModule &mod);
-  int resolve_target_tenant_id(const ParseNode *node, uint64_t &target_tenant_id);
-  int resolve_file_path(const ParseNode *node, ObString &abs_path);
+  int resolve_target_tenant_id(const ParseNode *node,
+                               const table::ObModuleDataArg::ObExecModule mod,
+                               uint64_t &target_tenant_id);
+  int resolve_file_path(const ParseNode *node, table::ObModuleDataArg &arg);
 };
 }//namespace sql
 }//namespace oceanbase

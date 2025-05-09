@@ -167,8 +167,6 @@ DEF_SIMPLE_CMD_RESOLVER(ObSwitchRSRoleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAdminUpgradeCmdResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAdminRollingUpgradeCmdResolver);
 
-DEF_SIMPLE_CMD_RESOLVER(ObRefreshTimeZoneInfoResolver);
-
 DEF_SIMPLE_CMD_RESOLVER(ObCancelTaskResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObSetDiskValidResolver);
