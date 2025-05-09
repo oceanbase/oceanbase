@@ -256,7 +256,7 @@ int ObDASBaseAccessP<pcode>::process()
       }
     }
 
-    if (has_set_interrupt) {
+    if (OB_LIKELY(has_set_interrupt)) {
       // unregister interrupt checker
       UNSET_INTERRUPTABLE(interrupt_id);
     }

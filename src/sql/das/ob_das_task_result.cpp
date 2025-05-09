@@ -451,7 +451,7 @@ int ObDASTaskResultMgr::save_task_result_by_normal(int64_t &read_rows,
       // hard code to check interrupt
       if ((loop_times ++ & (DAS_TCB_CHECK_INTERRUPT_INTERVAL - 1)) == 0 && OB_FAIL(check_interrupt())) {
         LOG_WARN("saving result is interrupted",  K(tcb->task_id_), KR(ret));
-      } else if (OB_UNLIKELY(simulate_scan_hang_on > 0 && tcb->table_id_ > 500000)) {
+      } else if (OB_UNLIKELY(simulate_scan_hang_on > 0 && tcb->table_id_ > OB_MIN_USER_OBJECT_ID)) {
         ob_usleep(simulate_scan_hang_on);
         LOG_WARN("simulate scan hang on", K(simulate_scan_hang_on), K(loop_times));
       } else {
@@ -572,7 +572,7 @@ int ObDASTaskResultMgr::erase_task_result(int64_t task_id, bool need_unreg_dm)
       LOG_WARN("register exiting failed", KR(ret), K(task_id));
     } else {
       if (!is_already_exiting) {
-        if (need_unreg_dm) {
+        if (need_unreg_dm && !tcb->interrupt_info_.detectable_id_.is_invalid()) {
           ObDetectManagerUtils::das_task_unregister_check_item_from_dm(tcb->interrupt_info_.detectable_id_, tcb->interrupt_info_.check_node_sequence_id_);
         }
         ObDASTCBMemProfileKey &mem_profile_key = tcb->mem_profile_key_;
@@ -601,7 +601,8 @@ int ObDASTaskResultMgr::erase_task_result(int64_t task_id, bool need_unreg_dm)
     }
   }
   if (NULL != tcb) {
-    if (OB_UNLIKELY(ret == OB_EAGAIN)) {
+    if (OB_UNLIKELY(ret == OB_EAGAIN &&
+                    (tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0))) {
       ObInterruptCode int_code(OB_RPC_CONNECT_ERROR,
                                GETTID(),
                                tcb->interrupt_info_.self_addr_,
@@ -646,7 +647,7 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
     ObDASTCBMemProfileKey &mem_profile_key = tcb->mem_profile_key_;
     ObDASMemProfileInfo *mem_profile_info = NULL;
 
-    if (tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0) {
+    if (OB_LIKELY(tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0)) {
       if (OB_FAIL(SET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_))) {
         LOG_WARN("register interrupt failed", KR(ret));
       } else {
@@ -691,7 +692,7 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
       ret = save_ret;
     }
 
-    if (need_unset_interrupt) {
+    if (OB_LIKELY(need_unset_interrupt)) {
       UNSET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_);
     }
   }
@@ -727,7 +728,7 @@ int ObDASTaskResultMgr::fetch_result_by_normal(ObDASTCB *tcb,
     while (OB_SUCC(ret) && !has_more) {
       if ((loop_times ++ & (DAS_TCB_CHECK_INTERRUPT_INTERVAL - 1)) == 0 && OB_FAIL(check_interrupt())) {
         LOG_WARN("fetching result is interrupted",  K(tcb->task_id_), KR(ret));
-      } else if (OB_UNLIKELY(simulate_iter_hang_on > 0 && tcb->table_id_ > 500000)) {
+      } else if (OB_UNLIKELY(simulate_iter_hang_on > 0 && tcb->table_id_ > OB_MIN_USER_OBJECT_ID)) {
         ob_usleep(simulate_iter_hang_on);
         LOG_WARN("simulate iter hang on", K(simulate_iter_hang_on), K(loop_times));
       } else {
