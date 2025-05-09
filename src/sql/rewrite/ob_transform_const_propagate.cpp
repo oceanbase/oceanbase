@@ -2708,6 +2708,8 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
   if (OB_ISNULL(cur_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (T_OP_ROW != cur_expr->get_expr_type()) {
+    // do nothing
   } else if (cur_expr->is_const_expr() || !const_ctx.allow_trans_) {
     can_replace_child = false;
   } else {
@@ -2724,6 +2726,15 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
       LOG_WARN("failed to check const expr recursively", K(ret));
     } else {
       can_replace_child &= is_const_recursively;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_replace_child && i < cur_expr->get_param_count(); ++i) {
+      ObRawExpr *&child_expr = cur_expr->get_param_expr(i);
+      if (OB_ISNULL(child_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == child_expr->get_expr_type()) {
+        can_replace_child = false;
+      }
     }
   }
   return ret;
