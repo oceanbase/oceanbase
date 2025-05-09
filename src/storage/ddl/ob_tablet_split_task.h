@@ -138,7 +138,7 @@ public:
   ObTableStoreIterator table_store_iterator_;
   // for rewrite macro block task.
   INDEX_BUILDER_MAP index_builder_map_; // map between source sstable and dest sstables.
-  common::hash::ObHashMap<int64_t/*schema_stored_column_count*/, ObStorageSchema*> clipped_schemas_map_;
+  common::hash::ObHashMap<ObITable::TableKey/*source major sstable*/, ObStorageSchema*> clipped_schemas_map_;
   common::ObArenaAllocator allocator_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
