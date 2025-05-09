@@ -705,6 +705,10 @@ public:
   int is_query_deterministic(bool &is_deterministic) const;
   inline bool is_oracle_compat_groupby() const {return is_oracle_compat_groupby_; }
   inline void set_is_oracle_compat_groupby(bool v) { is_oracle_compat_groupby_ = v; }
+  inline void set_for_update_cursor_table_id(uint64_t table_id) {
+    for_update_cursor_table_id_ = table_id;
+  }
+  uint64_t get_for_update_table_id() const { return for_update_cursor_table_id_; }
 
 private:
   SetOperator set_op_;
@@ -773,6 +777,7 @@ private:
   // optimizer can assign or remove DISTINCT for this stmt
   bool is_implicit_distinct_;
   bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
+  uint64_t for_update_cursor_table_id_;
 };
 }
 }

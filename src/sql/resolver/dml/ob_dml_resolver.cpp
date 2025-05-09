@@ -8763,7 +8763,14 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
         LOG_WARN("current of dblink table not support", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "current of for dblink table");
       }
-      OZ (resolve_rowid_expr(&stmt, *item, rowid_expr));
+      if (OB_SUCC(ret)) {
+        if (item->is_generated_table()) {
+          OZ (ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_, *item, rowid_expr));
+          OZ (rowid_expr->formalize(params_.session_info_));
+        } else {
+          OZ (resolve_rowid_expr(&stmt, *item, rowid_expr));
+        }
+      }
       OZ (resolve_sql_expr(node, cursor_expr));
       OZ (ObRawExprUtils::create_equal_expr(*params_.expr_factory_,
                                             params_.session_info_,

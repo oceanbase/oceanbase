@@ -256,6 +256,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
+    for_update_cursor_table_id_ = other.for_update_cursor_table_id_;
   }
   return ret;
 }
@@ -571,6 +572,7 @@ ObSelectStmt::ObSelectStmt()
   is_select_straight_join_ = false;
   is_implicit_distinct_ = false;
   is_oracle_compat_groupby_ = false;
+  for_update_cursor_table_id_ = OB_INVALID_ID;
 }
 
 ObSelectStmt::~ObSelectStmt()

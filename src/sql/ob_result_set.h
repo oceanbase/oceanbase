@@ -74,6 +74,7 @@ public:
         route_sql_(),
         is_select_for_update_(false),
         has_hidden_rowid_(false),
+        rowid_table_id_(common::OB_INVALID_ID),
         stmt_sql_(),
         is_bulk_(false),
         has_link_table_(false),
@@ -97,6 +98,7 @@ public:
     ObString route_sql_;
     bool is_select_for_update_;
     bool has_hidden_rowid_;
+    uint64_t rowid_table_id_;
     ObString stmt_sql_;
     bool is_bulk_;
     bool has_link_table_;
@@ -174,6 +176,7 @@ public:
   ObString &get_stmt_sql();
   bool get_is_select_for_update();
   inline bool has_hidden_rowid();
+  inline uint64_t get_rowid_table_id() const;
   inline bool is_bulk();
   inline bool is_link_table();
   inline bool is_skip_locked();
@@ -672,6 +675,11 @@ inline bool ObResultSet::get_is_select_for_update()
 inline bool ObResultSet::has_hidden_rowid()
 {
   return external_retrieve_info_.has_hidden_rowid_;
+}
+
+inline uint64_t ObResultSet::get_rowid_table_id() const
+{
+  return external_retrieve_info_.rowid_table_id_;
 }
 
 inline bool ObResultSet::is_bulk()

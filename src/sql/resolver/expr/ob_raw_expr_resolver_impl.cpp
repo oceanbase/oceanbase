@@ -2051,6 +2051,34 @@ int ObRawExprResolverImpl::process_xml_attributes_node(const ParseNode *node, Ob
   return ret;
 }
 
+int ObRawExprResolverImpl::get_current_of_base_table_id(ObDMLStmt *stmt, uint64_t &base_table_id)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(stmt));
+  if (OB_SUCC(ret)) {
+    if (1 == stmt->get_table_items().count()) {
+      TableItem *item = stmt->get_table_item(0);
+      CK (OB_NOT_NULL(item));
+      if (OB_FAIL(ret)) {
+      } else if (item->is_link_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("current of dblink table not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "current of for dblink table");
+      } else if (item->is_generated_table()) {
+        CK (OB_NOT_NULL(item->ref_query_));
+        OZ (get_current_of_base_table_id(item->ref_query_, base_table_id));
+      } else {
+        base_table_id = item->ref_id_;
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("current of for multi-table not supported", K(stmt->get_table_size()), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "current of for multi-table");
+    }
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -2096,11 +2124,11 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
           if (OB_ISNULL(del_upd_stmt)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("del_upd_stmt is NULL", K(ret));
-          } else if (1 == del_upd_stmt->get_table_items().count()) {
-            if (OB_ISNULL(del_upd_stmt->get_table_items().at(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("table item is NULL", K(ret));
-            } else if (del_upd_stmt->get_table_items().at(0)->ref_id_ != cursor->get_rowid_table_id()) {
+          } else {
+            uint64_t stmt_table_id = OB_INVALID_ID;
+            if (OB_FAIL(get_current_of_base_table_id(del_upd_stmt, stmt_table_id))) {
+              LOG_WARN("fail to get stmt base table id");
+            } else if (stmt_table_id != cursor->get_rowid_table_id()) {
               ret = OB_INVALID_ROWID;
               LOG_WARN("invalid ROWID", K(del_upd_stmt->get_table_items().at(0)->ref_id_),
                        K(cursor->get_rowid_table_id()), K(ret));

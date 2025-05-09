@@ -170,6 +170,7 @@ private:
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);
   int process_multiset_node(const ParseNode *node, ObRawExpr *&expr);
   int process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr);
+  int get_current_of_base_table_id(ObDMLStmt *stmt, uint64_t &base_table_id);
   int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr);
   int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int check_pl_variable(ObQualifiedName &q_name, bool &is_pl_var);

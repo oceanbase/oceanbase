@@ -1644,6 +1644,32 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
   return ret;
 }
 
+int ObSelectResolver::get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  CK (OB_NOT_NULL(select_stmt));
+  for (int64_t i = 0; OB_SUCC(ret) && for_update_cnt <= 1 && i < select_stmt->get_table_size(); i++) {
+    CK (OB_NOT_NULL(table_item = select_stmt->get_table_item(i)));
+    if (OB_SUCC(ret) && table_item->for_update_) {
+      if (table_item->is_generated_table()) { //generated_table need to find the base table id
+        OX (add_rowid_table_item = (for_update_cnt > 1) ? NULL : table_item);
+        CK (OB_NOT_NULL(table_item->ref_query_));
+        OZ (get_cursor_for_update_table(table_item->ref_query_, for_update_cnt, add_rowid_table_item, base_table_id));
+      } else {
+        for_update_cnt++;
+        if (for_update_cnt > 1) {
+          add_rowid_table_item = NULL;
+        } else {
+          add_rowid_table_item = (add_rowid_table_item == NULL) ? table_item : add_rowid_table_item;
+          base_table_id = table_item->ref_id_;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -1733,6 +1759,12 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
       }
     }
   }
+  if (OB_SUCC(ret) && NULL == of_node) {
+    // lock all tables
+    if (OB_FAIL(set_for_update_oracle(*stmt, wait_us, skip_locked))) {
+      LOG_WARN("failed to set for update", K(ret));
+    }
+  }
 
   //如果是PL里的可更新游标，增加rowid属性
   if (OB_SUCC(ret) && ((NULL != params_.secondary_namespace_ && params_.is_cursor_)
@@ -1741,46 +1773,31 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
                            && NULL == session_info_->get_pl_context()))) {
     SelectItem rowid_item;
     ObSelectStmt *select_stmt = stmt;
-    TableItem *table_item = NULL;
     TableItem *add_rowid_table_item = NULL;
+    uint64_t base_table_id = OB_INVALID_ID;
     const ObTableSchema *table_schema = NULL;
     int64_t for_update_cnt = 0;
     CK (OB_NOT_NULL(params_.schema_checker_));
-    for (int64_t i = 0; OB_SUCC(ret) && for_update_cnt <= 1 && i < select_stmt->get_table_size(); i++) {
-      // 1. 单表的for update, 需要把表的rowid加入到 select_item中
-      // 2. 多表join for update, 不能加入rowid,因为不确定要加哪个表的rowid
-      // 3. 多表join for update of t1.c1, of 后面指定更新的表时,需要把指定的表的rowid加入到select_item中
-      CK (OB_NOT_NULL(table_item = select_stmt->get_table_item(i)));
-      if (OB_SUCC(ret) && (table_item->for_update_ || 1 == select_stmt->get_table_size())) {
-        for_update_cnt++;
-        if (for_update_cnt > 1) {
-          add_rowid_table_item = NULL;
-        } else if (table_item->is_basic_table()) {
-          OX (add_rowid_table_item = table_item);
-        }
-      }
-    }
+    OZ (get_cursor_for_update_table(select_stmt, for_update_cnt, add_rowid_table_item, base_table_id));
     if (OB_SUCC(ret) && add_rowid_table_item != NULL) {
       ObRawExpr *rowid_expr = NULL;
       OZ (params_.schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), 
                                                     add_rowid_table_item->ref_id_,
                                                     table_schema,
                                                     add_rowid_table_item->is_link_table()));
-      if (OB_FAIL(resolve_rowid_expr(select_stmt, *add_rowid_table_item, rowid_expr))) {
-        LOG_WARN("resolve rowid expr failed", K(ret));
-      } else {
+      if (OB_SUCC(ret)) {
+        if (add_rowid_table_item->is_generated_table()) {
+          OZ (ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_, *add_rowid_table_item, rowid_expr));
+        } else {
+          OZ (resolve_rowid_expr(select_stmt, *add_rowid_table_item, rowid_expr));
+        }
         OX (rowid_item.expr_name_ = ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
         OX (rowid_item.alias_name_ = ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
         OX (rowid_item.expr_ = rowid_expr);
         OX (rowid_item.is_hidden_rowid_ = true);
         OZ (set_select_item(rowid_item, false/* is_auto_gen*/));
+        OX (select_stmt->set_for_update_cursor_table_id(base_table_id));
       }
-    }
-  }
-  if (OB_SUCC(ret) && NULL == of_node) {
-    // lock all tables
-    if (OB_FAIL(set_for_update_oracle(*stmt, wait_us, skip_locked))) {
-      LOG_WARN("failed to set for update", K(ret));
     }
   }
 

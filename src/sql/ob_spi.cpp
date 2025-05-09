@@ -2388,11 +2388,7 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
       }
     }
     if (OB_SUCC(ret) && 1 == hidden_column_count) {
-        const common::ObField &field = columns->at(columns->count() - 1);
-        uint64_t table_id = OB_INVALID_ID;
-        OZ (schema_guard.get_table_id(session.get_effective_tenant_id(), field.dname_, field.org_tname_,
-                                      false, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
-        OX (rowid_table_id = table_id);
+      rowid_table_id = result_set.get_rowid_table_id();
     } else {
       rowid_table_id = OB_INVALID_ID;
     }
