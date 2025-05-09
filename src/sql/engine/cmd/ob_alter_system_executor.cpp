@@ -36,6 +36,7 @@
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
 #include "share/table/ob_redis_importer.h"
 #include "share/ob_timezone_importer.h"
+#include "share/ob_srs_importer.h"
 
 namespace oceanbase
 {
@@ -3082,6 +3083,13 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
       case table::ObModuleDataArg::REDIS: {
         table::ObRedisImporter importer(arg.target_tenant_id_, ctx);
         if (OB_FAIL(importer.exec_op(arg.op_))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+         break;
+      }
+      case table::ObModuleDataArg::GIS: {
+        table::ObSRSImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg))) {
           LOG_WARN("fail to exec op", K(ret), K(arg.op_));
         }
         break;

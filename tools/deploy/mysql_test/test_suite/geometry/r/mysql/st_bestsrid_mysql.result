@@ -1,6 +1,8 @@
 # ----------------------------------------------------------------------
 # Test of GEOMETRY ST_BESTSRID
 # ----------------------------------------------------------------------
+alter system load module data module=gis tenant=mysql infile = 'etc/';
+use test;
 # st_transform is the same as mysql, use _st_transform instead
 select st_astext(_st_transform(ST_GeomFromText('point(-70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-70 0)', 4326))));
 st_astext(_st_transform(ST_GeomFromText('point(-70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-70 0)', 4326))))

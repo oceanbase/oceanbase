@@ -277,6 +277,7 @@ ob_set_subtarget(ob_share common
   ob_dynamic_partition_manager.cpp
   ob_scheduled_manage_dynamic_partition.cpp
   ob_timezone_importer.cpp
+  ob_srs_importer.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed

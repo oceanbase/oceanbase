@@ -3,7 +3,24 @@
 --echo # ----------------------------------------------------------------------
 --echo # Base test of ST_ASWKB.
 --echo # ----------------------------------------------------------------------
---source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+--disable_query_log
+--disable_result_log
+--disable_warnings
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+let $c1 = query_get_value(select count(*) as cnt from oceanbase.__all_spatial_reference_systems, cnt, 1);
+
+if ($c1 != 5160)
+{
+  --source mysql_test/test_suite/geometry/t/default_srs_data_mysql.sql
+  sleep 30;
+}
+
+--enable_query_log
+--enable_result_log
+--enable_warnings
 
 
 SET @pt = ST_GeomFromText('POINT(0 1)');
