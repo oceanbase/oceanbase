@@ -129,7 +129,10 @@ int ObColumnCkmStruct::assign(
 int ObColumnCkmStruct::get_column_checksums(ObIArray<int64_t> &column_checksums) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid())) {
+  if (OB_UNLIKELY(column_checksums.count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect empty output parameter", K(ret), K(column_checksums));
+  } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("current checksum struct is invalid", K(ret), KPC(this));
   } else {

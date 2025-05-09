@@ -471,8 +471,8 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   } else if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (table_key_.is_major_sstable()) {
-    if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
-      LOG_WARN("fail to fill column checksum", K(ret), K(res.data_column_checksums_));
+    if (OB_FAIL(sstable_meta.get_column_checksums(column_checksums_))) {
+      LOG_WARN("fail to fill column checksum", K(ret), K(sstable_meta));
     }
   }
   if (OB_SUCC(ret)) {
