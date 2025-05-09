@@ -633,7 +633,6 @@ public:
       dupd_ctdef_(alloc),
       need_check_filter_null_(false),
       need_check_table_cycle_(false),
-      self_ref_update_(false),
       distinct_algo_(T_DISTINCT_NONE),
       assign_columns_(alloc),
       ddel_ctdef_(nullptr),
@@ -650,7 +649,6 @@ public:
                        K_(dupd_ctdef),
                        K_(need_check_filter_null),
                        K_(need_check_table_cycle),
-                       K_(self_ref_update),
                        K_(distinct_algo),
                        K_(assign_columns),
                        K_(distinct_key),
@@ -666,8 +664,6 @@ public:
   bool need_check_filter_null_;
   // need_check_table_cycle_ is true if the fk cascade update may cause a cycle reference.
   bool need_check_table_cycle_;
-  // whether self-referenced foreign key columns and referenced columns are updated at the same time
-  bool self_ref_update_;
   DistinctType distinct_algo_;
   ColContentFixedArray assign_columns_;
   //if update target column involve the partition key,

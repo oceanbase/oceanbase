@@ -928,7 +928,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!is_skipped && (upd_rtdef.has_table_cycle_ || upd_ctdef.self_ref_update_)) {
+  } else if (!is_skipped && upd_rtdef.has_table_cycle_) {
     ret = OB_ERR_ROW_IS_REFERENCED;
     LOG_WARN("A cycle reference is detected in foreign key cascade update.", K(ret));
   }
