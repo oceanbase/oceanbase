@@ -304,6 +304,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
               OX (syn_version.object_id_ = obj_id);
               OX (syn_version.version_ = schema_version);
               OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
+              OX (syn_version.invoker_db_id_ = session_info->get_database_id());
               OZ (dependency_objects.push_back(syn_version));
               if (OB_NOT_NULL(dep_db_array)) {
                 OZ (dep_db_array->push_back(dep_db_id));
@@ -377,7 +378,7 @@ int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetter
       LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
                                             K(obj_id), K(ret));
     } else {
-      if (OB_FAIL(dep_table.push_back(ObSchemaObjVersion(obj_id, schema_version, DEPENDENCY_SYNONYM)))) {
+      if (OB_FAIL(dep_table.push_back(ObSchemaObjVersion(obj_id, schema_version, DEPENDENCY_SYNONYM, session_info->get_database_id())))) {
         LOG_WARN("add dependency object failed", K(obj_id), K(ret));
       }
     }
@@ -405,7 +406,7 @@ int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetter
       LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
                                             K(obj_id), K(ret));
     } else {
-      ObSchemaObjVersion ver(obj_id, schema_version, DEPENDENCY_SYNONYM);
+      ObSchemaObjVersion ver(obj_id, schema_version, DEPENDENCY_SYNONYM, session_info->get_database_id());
       if (0 == i) {
         ver.is_db_explicit_ = true;
       }

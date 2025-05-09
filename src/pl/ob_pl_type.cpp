@@ -210,6 +210,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
 #endif
 
 int ObPLDataType::collect_synonym_deps(uint64_t tenant_id,
+                                       int64_t database_id,
                                        ObSynonymChecker &synonym_checker,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObIArray<ObSchemaObjVersion> *deps)
@@ -229,6 +230,7 @@ int ObPLDataType::collect_synonym_deps(uint64_t tenant_id,
         obj_version.object_id_ = synonym_ids.at(i);
         obj_version.object_type_ = DEPENDENCY_SYNONYM;
         obj_version.version_ = schema_version;
+        obj_version.invoker_db_id_ = database_id;
         if (OB_FAIL(deps->push_back(obj_version))) {
           LOG_WARN("failed to push back obj version to array", K(ret), KPC(deps), K(obj_version));
         }
@@ -253,7 +255,7 @@ int ObPLDataType::get_synonym_object(uint64_t tenant_id,
   OZ (ObResolverUtils::resolve_synonym_object_recursively(
     schema_checker, synonym_checker,
     tenant_id, owner_id, object_name, owner_id, object_name, exist));
-  OZ (collect_synonym_deps(tenant_id, synonym_checker, schema_guard, deps));
+  OZ (collect_synonym_deps(tenant_id, session_info.get_database_id(), synonym_checker, schema_guard, deps));
   return ret;
 }
 

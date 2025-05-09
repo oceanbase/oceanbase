@@ -576,6 +576,7 @@ public:
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
   static int collect_synonym_deps(uint64_t tenant_id,
+                                  int64_t database_id,
                                   sql::ObSynonymChecker &synonym_checker,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObIArray<share::schema::ObSchemaObjVersion> *deps);

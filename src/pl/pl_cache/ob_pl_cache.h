@@ -115,6 +115,7 @@ struct PCVPlSchemaObj
   uint64_t database_id_;
   int64_t schema_id_;
   int64_t schema_version_;
+  int64_t invoker_db_id_;
   share::schema::ObSchemaType schema_type_;
   share::schema::ObTableType table_type_;
   common::ObString table_name_;
@@ -129,6 +130,7 @@ struct PCVPlSchemaObj
   database_id_(common::OB_INVALID_ID),
   schema_id_(common::OB_INVALID_ID),
   schema_version_(0),
+  invoker_db_id_(common::OB_INVALID_ID),
   schema_type_(share::schema::OB_MAX_SCHEMA),
   table_type_(share::schema::MAX_TABLE_TYPE),
   table_name_(),
@@ -143,6 +145,7 @@ struct PCVPlSchemaObj
     database_id_(common::OB_INVALID_ID),
     schema_id_(common::OB_INVALID_ID),
     schema_version_(0),
+    invoker_db_id_(common::OB_INVALID_ID),
     schema_type_(share::schema::OB_MAX_SCHEMA),
     table_type_(share::schema::MAX_TABLE_TYPE),
     table_name_(),
@@ -197,6 +200,7 @@ struct PCVPlSchemaObj
                K_(database_id),
                K_(schema_id),
                K_(schema_version),
+               K_(invoker_db_id),
                K_(schema_type),
                K_(table_type),
                K_(table_name),
