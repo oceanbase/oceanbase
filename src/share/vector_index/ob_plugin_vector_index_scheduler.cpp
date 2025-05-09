@@ -77,36 +77,39 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(index_ls_mgr)) {
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
-      ObPluginVectorIndexAdaptor *adapter = iter->second;
-      ObSchemaGetterGuard schema_guard;
-      const ObTableSchema *table_schema;
-      ObTabletID tablet_id = iter->first;
-      ObTabletHandle tablet_handle;
-      if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
-        LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
-        LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adapter->get_vbitmap_table_id()));
-      } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
-        // remove adapter if tablet not exist or is in recyclebin
-        if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_inc_tablet_id()))) {
-          LOG_WARN("push back table id failed",
-            K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
-        } else if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_vbitmap_tablet_id()))) {
-          LOG_WARN("push back table id failed",
-            K(delete_tablet_id_array.count()), K(adapter->get_vbitmap_tablet_id()), KR(ret));
-        } else if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_snap_tablet_id()))) {
-          LOG_WARN("push back table id failed",
-            K(delete_tablet_id_array.count()), K(adapter->get_snap_tablet_id()), KR(ret));
-        }
-      } else if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
-        if (OB_TABLET_NOT_EXIST != ret) {
-          LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
-        } else {
-          ret = OB_SUCCESS; // not found, moved from this ls
-          if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+    {
+      RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
+      FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
+        ObPluginVectorIndexAdaptor *adapter = iter->second;
+        ObSchemaGetterGuard schema_guard;
+        const ObTableSchema *table_schema;
+        ObTabletID tablet_id = iter->first;
+        ObTabletHandle tablet_handle;
+        if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+          LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
+          LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adapter->get_vbitmap_table_id()));
+        } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
+          // remove adapter if tablet not exist or is in recyclebin
+          if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_inc_tablet_id()))) {
             LOG_WARN("push back table id failed",
               K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+          } else if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_vbitmap_tablet_id()))) {
+            LOG_WARN("push back table id failed",
+              K(delete_tablet_id_array.count()), K(adapter->get_vbitmap_tablet_id()), KR(ret));
+          } else if (OB_FAIL(delete_tablet_id_array.push_back(adapter->get_snap_tablet_id()))) {
+            LOG_WARN("push back table id failed",
+              K(delete_tablet_id_array.count()), K(adapter->get_snap_tablet_id()), KR(ret));
+          }
+        } else if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+          if (OB_TABLET_NOT_EXIST != ret) {
+            LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
+          } else {
+            ret = OB_SUCCESS; // not found, moved from this ls
+            if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+              LOG_WARN("push back table id failed",
+                K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+            }
           }
         }
       }
@@ -892,7 +895,7 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
       tablet_id_array_.reuse();
 
       // follower just refresh adapter statistics, leader submit log need memdata sync
-
+      RWLock::RLockGuard lock_guard(mgr->get_adapter_map_lock());
       FOREACH_X(iter, mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
         ObPluginVectorIndexAdaptor *adapter = iter->second;
         bool need_sync = false;
