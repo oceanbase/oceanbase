@@ -1502,5 +1502,11 @@ bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
   return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
 }
 
+bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_REQUEST)
+         || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
