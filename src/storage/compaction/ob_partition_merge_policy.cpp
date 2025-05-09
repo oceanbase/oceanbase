@@ -457,6 +457,7 @@ int ObPartitionMergePolicy::deal_with_minor_result(
     ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
+  bool is_delete_insert_table = false;
   if (result.handle_.empty()) {
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("no need to minor merge", K(ret), "merge_type", merge_type_to_str(merge_type), K(result));
@@ -467,10 +468,14 @@ int ObPartitionMergePolicy::deal_with_minor_result(
     LOG_WARN("failed to check continues", K(ret), K(result));
   } else if (OB_FAIL(get_multi_version_start(merge_type, ls, tablet, result.version_range_, result.snapshot_info_))) {
     LOG_WARN("failed to get kept multi_version_start", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet));
+  } else if (OB_FAIL(tablet.check_is_delete_insert_table(is_delete_insert_table))) {
+    LOG_WARN("failed to get delete_insert flag", K(ret), K(tablet));
   } else {
     result.version_range_.base_version_ = 0;
-    if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
-      LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
+    if (is_delete_insert_table || !is_mini_merge(merge_type)) {
+      if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
+        LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
+      }
     }
   }
   return ret;

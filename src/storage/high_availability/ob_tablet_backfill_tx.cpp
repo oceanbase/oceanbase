@@ -2291,6 +2291,7 @@ int ObTabletBackfillMergeCtx::get_ls_and_tablet()
 int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
+  bool is_delete_insert_table = false;
   get_merge_table_result.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2304,6 +2305,10 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("memtable should be frozen memtable", K(ret), KPC(memtable));
       }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(get_tablet()->check_is_delete_insert_table(is_delete_insert_table))) {
+      LOG_WARN("failed to get delete_insert flag", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -2326,9 +2331,11 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
       get_merge_table_result.snapshot_info_.snapshot_ = get_tablet()->get_multi_version_start();
       //src_tablet_transfer_seq, should not be used to write block;
       get_merge_table_result.transfer_seq_ = get_tablet()->get_transfer_seq();
-      if (OB_FAIL(get_tablet()->get_recycle_version(get_merge_table_result.version_range_.multi_version_start_,
-                                                    get_merge_table_result.version_range_.base_version_))) {
-        LOG_WARN("Fail to get table store recycle version", K(ret), K_(get_merge_table_result.version_range), KPC(get_tablet()));
+      if (is_delete_insert_table || !is_mini_merge(get_merge_type())) {
+        if (OB_FAIL(get_tablet()->get_recycle_version(get_merge_table_result.version_range_.multi_version_start_,
+                                                      get_merge_table_result.version_range_.base_version_))) {
+          LOG_WARN("Fail to get table store recycle version", K(ret), K_(get_merge_table_result.version_range), KPC(get_tablet()));
+        }
       }
     }
   }
