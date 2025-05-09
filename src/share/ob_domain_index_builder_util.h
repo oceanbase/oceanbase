@@ -49,6 +49,20 @@ public:
                                 const oceanbase::common::ObAddr &addr,
                                 int map_num,
                                 const int64_t snapshot_version);
+  static int retrieve_complete_domain_index(const ObIArray<ObTableSchema> &shared_schema_array,
+                                            const ObIArray<ObTableSchema> &domain_schema_array,
+                                            const ObIArray<ObTableSchema> &aux_schema_array,
+                                            ObArenaAllocator &allocator,
+                                            const uint64_t new_data_table_id,
+                                            ObIArray<ObTableSchema> &rebuid_index_schemas);
+
+private:
+  static int locate_aux_index_schema_by_name(const ObString &inner_index_name,
+                                             const uint64_t new_data_table_id,
+                                             const ObIArray<ObTableSchema> &domain_index_schemas,
+                                             const share::schema::ObIndexType type,
+                                             ObArenaAllocator &allocator,
+                                             int64_t &index_aux_schema_idx);
 };
 
 

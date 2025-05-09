@@ -62,6 +62,11 @@ public:
   static int generate_fts_aux_index_name(
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
+  static int generate_fts_aux_index_name(
+        ObIAllocator *allocator,
+        const share::schema::ObIndexType type,
+        const ObString &index_name,
+        ObString &new_index_name);
   static int adjust_fts_args(
       obrpc::ObCreateIndexArg &index_arg,
       ObTableSchema &data_schema, // not const since will add column to data schema

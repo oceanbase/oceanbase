@@ -82,6 +82,7 @@
 #include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "rootserver/ob_alter_table_constraint_checker.h"
+#include "share/ob_domain_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -16296,9 +16297,7 @@ int ObDDLService::check_has_domain_index(
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         if (share::schema::is_vec_dim_docid_value_type(index_infos.at(i).index_type_)) {
           sparse_vector_index_exist = true;
-          break;
-        } else if (share::schema::is_fts_index_aux(index_infos.at(i).index_type_) || share::schema::is_fts_doc_word_aux(index_infos.at(i).index_type_) ||
-                   share::schema::is_multivalue_index_aux(index_infos.at(i).index_type_)) {
+        } else if (share::schema::is_fts_or_multivalue_index(index_infos.at(i).index_type_)) {
           domain_index_exist = true;
         }
       }
@@ -26214,6 +26213,7 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
                                                    const uint64_t define_user_id)
 {
   int ret = OB_SUCCESS;
+  uint64_t orig_tid = orig_table_schema.get_table_id();
   uint64_t new_table_id = OB_INVALID_ID;
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
@@ -26295,6 +26295,10 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
   if (OB_SUCC(ret)) {
     //reconstruct index schema
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    ObSArray<ObTableSchema> shared_schema_array;
+    ObSArray<ObTableSchema> domain_schema_array;
+    ObSArray<ObTableSchema> aux_schema_array;
+
     if (OB_FAIL(new_table_schema.get_simple_index_infos(
                 simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", K(ret));
@@ -26306,7 +26310,8 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
       } else if (OB_ISNULL(index_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
-      } else if (index_table_schema->is_in_recyclebin()) {
+      } else if (index_table_schema->is_in_recyclebin() ||
+                 INDEX_STATUS_AVAILABLE != index_table_schema->get_index_status()) {
         continue;
       } else {
         ObString index_name;
@@ -26318,7 +26323,6 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
               orig_table_schema.get_table_id(), index_table_schema->get_table_name_str(),
               index_name))) {
             const ObString &index_table_name = index_table_schema->get_table_name_str();
-            uint64_t orig_tid = orig_table_schema.get_table_id();
             LOG_WARN("error get index table name failed",
                    K(orig_tid), K(index_table_name), K(ret));
           } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
@@ -26339,14 +26343,48 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
               new_index_schema.set_database_id(new_database_schema.get_database_id());
               //create table like, index always is valid
               new_index_schema.set_index_status(INDEX_STATUS_AVAILABLE);
-              if (OB_FAIL(new_schemas.push_back(new_index_schema))) {
-                LOG_WARN("failed to add table schema!", K(ret));
+
+              const ObIndexType index_type = new_index_schema.get_index_type();
+              if (new_index_schema.is_rowkey_doc_id() ||
+                  new_index_schema.is_doc_id_rowkey() ||
+                  new_index_schema.is_vec_rowkey_vid_type() ||
+                  new_index_schema.is_vec_vid_rowkey_type()) {
+                if (OB_FAIL(shared_schema_array.push_back(new_index_schema))) {
+                  LOG_WARN("fail to add shared schema array", K(ret));
+                }
+              } else if (new_index_schema.is_fts_index_aux() ||
+                         new_index_schema.is_multivalue_index_aux() ||
+                         new_index_schema.is_vec_domain_index()) {
+                if (OB_FAIL(domain_schema_array.push_back(new_index_schema))) {
+                  LOG_WARN("fail to add domain schema", K(ret));
+                }
+              } else if (share::schema::is_fts_doc_word_aux(index_type) ||
+                         share::schema::is_vec_index_id_type(index_type) ||
+                         share::schema::is_vec_index_snapshot_data_type(index_type) ||
+                         share::schema::is_built_in_vec_ivf_index(index_type)) {
+                if (OB_FAIL(aux_schema_array.push_back(new_index_schema))) {
+                  LOG_WARN("fail to add aux schema", K(ret));
+                }
+              } else if (OB_FAIL(new_schemas.push_back(new_index_schema))) {
+                LOG_WARN("fail to add index schema", K(ret));
               }
             }
           }
         }
       }
     } //end for
+
+    if (OB_SUCC(ret) &&
+        !domain_schema_array.empty() &&
+        OB_FAIL(ObDomainIndexBuilderUtil::retrieve_complete_domain_index(shared_schema_array,
+                                                                         domain_schema_array,
+                                                                         aux_schema_array,
+                                                                         allocator,
+                                                                         new_table_id,
+                                                                         new_schemas))) {
+      LOG_WARN("fail to retrieve complete index", K(ret));
+    }
+
     if (OB_FAIL(ret)) {
     } else if (new_table_schema.has_lob_column(true/*ignore_unused_column*/)) {
       ObLobMetaBuilder lob_meta_builder(*this);

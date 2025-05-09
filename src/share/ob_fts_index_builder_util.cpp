@@ -294,6 +294,75 @@ int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
+    ObIAllocator *allocator,
+    const share::schema::ObIndexType type,
+    const ObString &index_name,
+    ObString &new_index_name)
+{
+  // TODO: @yunshan.tys remove index name postfix, and only take one name in index namespace for fulltext index
+  int ret = OB_SUCCESS;
+  char *name_buf = nullptr;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is nullptr", K(ret));
+  } else if (!share::schema::is_fts_index(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(type));
+  } else if (OB_ISNULL(name_buf = static_cast<char *>(allocator->alloc(OB_MAX_TABLE_NAME_LENGTH)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", K(ret));
+  } else {
+    int64_t pos = 0;
+    if (share::schema::is_rowkey_doc_aux(type)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(name_buf,
+                                         OB_MAX_TABLE_NAME_LENGTH,
+                                         pos,
+                                         "fts_rowkey_doc"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else if (share::schema::is_doc_rowkey_aux(type)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(name_buf,
+                                         OB_MAX_TABLE_NAME_LENGTH,
+                                         pos,
+                                         "fts_doc_rowkey"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else if (share::schema::is_fts_index_aux(type)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(name_buf,
+                                         OB_MAX_TABLE_NAME_LENGTH,
+                                         pos,
+                                         "%.*s",
+                                         index_name.length(),
+                                         index_name.ptr()))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else if (share::schema::is_fts_doc_word_aux(type)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(name_buf,
+                                         OB_MAX_TABLE_NAME_LENGTH,
+                                         pos,
+                                         "%.*s_fts_doc_word",
+                                         index_name.length(),
+                                         index_name.ptr()))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, unknown fts index type", K(ret), K(type));
+    }
+    if (OB_SUCC(ret)) {
+      new_index_name.assign_ptr(name_buf, static_cast<int32_t>(pos));
+    } else {
+      LOG_WARN("failed to generate fts aux index name", K(ret));
+    }
+  }
+  return ret;
+}
+
 /*
  * this func will also:
  * 1. add cascade flag to corresponding column of data_schema

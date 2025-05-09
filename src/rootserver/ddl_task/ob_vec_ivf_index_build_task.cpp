@@ -868,7 +868,7 @@ int ObVecIVFIndexBuildTask::prepare_sq_meta_table()
   if (OB_SUCC(ret) && sq_meta_table_task_submitted_) {
     state_finished = true;
   }
-  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_VID_ROWKEY);
+  DEBUG_SYNC(AFTER_SQ_META_TABLE);
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -909,7 +909,7 @@ int ObVecIVFIndexBuildTask::prepare_pq_centroid_table()
   if (OB_SUCC(ret) && pq_centroid_table_task_submitted_) {
     state_finished = true;
   }
-  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_VID_ROWKEY);
+  DEBUG_SYNC(AFTER_PQ_CENTROID_TABLE);
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
@@ -966,7 +966,7 @@ int ObVecIVFIndexBuildTask::prepare_centroid_table()
   if (OB_SUCC(ret) && centroid_table_task_submitted_) {
     state_finished = true;
   }
-  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_VID_ROWKEY);
+  DEBUG_SYNC(AFTER_IVF_CENTROID_TABLE);
   if (state_finished && OB_SUCC(ret)) {
     ObDDLTaskStatus next_status;
     if (OB_FAIL(get_next_status(next_status))) {
