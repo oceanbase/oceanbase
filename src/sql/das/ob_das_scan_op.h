@@ -174,6 +174,8 @@ public:
       sample_info_(nullptr),
       is_for_foreign_check_(false),
       tsc_monitor_info_(nullptr),
+      key_ranges_(),
+      ss_key_ranges_(),
       task_count_(1),
       scan_op_id_(common::OB_INVALID_ID),
       scan_rows_size_(common::OB_INVALID_ID),
@@ -196,6 +198,8 @@ public:
                        K_(sql_mode),
                        K_(scan_flag),
                        K_(tsc_monitor_info),
+                       K_(key_ranges),
+                       K_(ss_key_ranges),
                        K_(scan_op_id),
                        K_(scan_rows_size),
                        K_(das_tasks_key));
@@ -221,6 +225,8 @@ public:
   const common::SampleInfo *sample_info_; //Block(Row)SampleScan, only support local das scan
   bool is_for_foreign_check_;
   ObTSCMonitorInfo *tsc_monitor_info_;
+  common::ObSEArray<common::ObNewRange, 1> key_ranges_;
+  common::ObSEArray<common::ObNewRange, 1> ss_key_ranges_;
   int64_t task_count_;  // not use
   uint64_t scan_op_id_;
   int64_t scan_rows_size_;
