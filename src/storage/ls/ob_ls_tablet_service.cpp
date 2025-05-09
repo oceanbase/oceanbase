@@ -3364,7 +3364,7 @@ int ObLSTabletService::update_rows(
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_UPDATE,
-                            true /* is_need_row_datum_utils */);
+                            true /* is_need_check_old_row_ */);
     ObIAllocator &work_allocator = run_ctx.allocator_;
     bool rowkey_change = false;
     UpdateIndexArray update_idx;
@@ -3747,7 +3747,8 @@ int ObLSTabletService::delete_rows(
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            ObDmlFlag::DF_DELETE);
+                            ObDmlFlag::DF_DELETE,
+                            true /* is_need_check_old_row_ */);
     int64_t row_count = 0;
     ObDatumRow *rows = nullptr;
     ObDatumRow *tmp_rows = nullptr;
@@ -6115,7 +6116,7 @@ int ObLSTabletService::delete_rows_in_tablet(
   int64_t error_row_idx = 0;
 
   if (OB_FAIL(check_old_row_legitimacy_wrap(
-      datum_utils.get_cmp_funcs(), tablet_handle, run_ctx, row_count, rows, error_row_idx))) {
+      run_ctx.cmp_funcs_, tablet_handle, run_ctx, row_count, rows, error_row_idx))) {
     LOG_WARN("check old row legitimacy failed", K(rows_info));
   } else if (OB_FAIL(process_old_rows_lob_col(tablet_handle, run_ctx, row_count, rows))){
     LOG_WARN("failed to process old rows lob col", K(ret));
