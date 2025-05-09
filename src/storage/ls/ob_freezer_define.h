@@ -44,7 +44,8 @@ enum class ObFreezeSourceFlag : int64_t
   GC_RETAIN_CTX       = 12, // deprecated
   TEST_MODE           = 13, // used for test only
   TABLET_SPLIT        = 14,
-  MAX_SOURCE          = 15,
+  GC_TABLET           = 15,
+  MAX_SOURCE          = 16,
 };
 
 static const int64_t MAX_FREEZE_SOURCE_TYPE_COUNT = static_cast<int64_t>(ObFreezeSourceFlag::MAX_SOURCE);

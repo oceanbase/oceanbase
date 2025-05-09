@@ -55,6 +55,8 @@ enum class ObRedoLogSubType
 
   OB_REDO_LOG_UPDATE_DUP_TABLE_LS = 18,
 
+  OB_REDO_LOG_GC_TABLET = 19,
+
   OB_REDO_LOG_MAX
 };
 
