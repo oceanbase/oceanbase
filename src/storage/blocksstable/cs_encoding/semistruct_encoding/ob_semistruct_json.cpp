@@ -338,13 +338,14 @@ int ObJsonDataFlatter::add(const ObFlatJson &flat_json)
     } else {
       LOG_WARN("get column fail", K(ret), K(col_cnt_), KPC(sub_schema_));
     }
+  } else if (flat_json.json_type() != ObJsonNodeType::J_NULL && sub_column->get_obj_type() != ObJsonType &&
+      sub_column->get_json_type() != flat_json.json_type()) {
+    ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
+    LOG_WARN("sub column type is not match", K(ret), KPC(sub_column), K(flat_json), K(datum_));
   } else if (sub_column->is_spare_storage()) {
     if (OB_FAIL(add_spare_col(flat_json, *sub_column))) {
       LOG_WARN("add_spare_col fail", K(ret), K(flat_json), K(col_cnt_));
     }
-  } else if (flat_json.json_type() != ObJsonNodeType::J_NULL && sub_column->get_json_type() != flat_json.json_type()) {
-    ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
-    LOG_WARN("sub column type is not match", K(ret), KPC(sub_column), K(flat_json));
   } else if (sub_column->get_col_id() >= sub_col_datums_->count() - sub_schema_->has_spare_column()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sub col id", K(ret), K(sub_column->get_col_id()), K(sub_col_datums_->count()), K(sub_schema_->has_spare_column()));
@@ -1210,6 +1211,7 @@ int ObSimpleSubSchema::merge(ObSimpleSubSchema &other)
             || (left_sub_column.get_obj_type() == ObNumberType && is_different_number_type(*left_sub_column.col_, *right_sub_column.col_)))) {
       LOG_DEBUG("same sub column path, but type is not same", K(left_sub_column), K(right_sub_column));
       left_sub_column.col_->set_obj_type(ObJsonType);
+      left_sub_column.col_->set_json_type(ObJsonNodeType::J_ERROR);
       left_sub_column.col_->set_is_spare_storage();
       left_sub_column.cnt_++;
       left_sub_column.min_len_ = 0;
