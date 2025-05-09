@@ -46,7 +46,7 @@ int ObSimpleThreadPoolBase<T>::init(const int64_t thread_num, const int64_t task
   } else {
     is_inited_ = true;
     name_ = name;
-    if (OB_FAIL(ObSimpleDynamicThreadPool::init(thread_num, name))) {
+    if (OB_FAIL(ObSimpleDynamicThreadPool::init(thread_num, name, tenant_id))) {
       COMMON_LOG(WARN, "dyna,ic thread pool init fail", K(ret));
     } else if (OB_FAIL(ObSimpleDynamicThreadPool::start())) {
       COMMON_LOG(WARN, "start thread pool fail", K(ret));

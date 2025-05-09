@@ -352,10 +352,11 @@ void *ObDynamicThreadPool::task_thread_func(void *data)
   return NULL;
 }
 
-int ObSimpleDynamicThreadPool::init(const int64_t thread_num, const char* name)
+int ObSimpleDynamicThreadPool::init(const int64_t thread_num, const char* name, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   name_ = name;
+  tenant_id_ = tenant_id;
   if (OB_FAIL(set_adaptive_thread(1, thread_num))) {
     COMMON_LOG(WARN, "set_adaptive_thread failed", K(ret));
   } else if (OB_FAIL(lib::ThreadPool::set_thread_count(thread_num))) {
@@ -395,7 +396,7 @@ void ObSimpleDynamicThreadPool::destroy()
 
 ObSimpleDynamicThreadPool::ObSimpleDynamicThreadPool()
   : min_thread_cnt_(OB_INVALID_COUNT), max_thread_cnt_(OB_INVALID_COUNT),
-    running_thread_cnt_(0), threads_idle_time_(0), update_threads_lock_(), ref_cnt_(0), name_("unknown"),
+    running_thread_cnt_(0), threads_idle_time_(0), update_threads_lock_(), ref_cnt_(0), name_("unknown"), tenant_id_(OB_INVALID_TENANT_ID),
     stat_(), has_bind_(false)
 {}
 
@@ -423,8 +424,7 @@ int ObSimpleDynamicThreadPool::set_adaptive_thread(int64_t min_thread_num, int64
 int ObSimpleDynamicThreadPool::set_max_thread_count(int64_t max_thread_cnt)
 {
   int ret = OB_SUCCESS;
-  if (max_thread_cnt > MAX_THREAD_NUM || max_thread_cnt < 0
-      || max_thread_cnt < min_thread_cnt_) {
+  if (max_thread_cnt < 0 || max_thread_cnt < min_thread_cnt_) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "set_adaptive_thread failed", KP(this), K(max_thread_cnt));
   } else {

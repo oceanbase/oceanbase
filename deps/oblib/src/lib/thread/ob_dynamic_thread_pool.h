@@ -116,7 +116,7 @@ public:
   static const int64_t MAX_THREAD_NUM = 1024;
   ObSimpleDynamicThreadPool();
   virtual ~ObSimpleDynamicThreadPool();
-  int init(const int64_t thread_num, const char* name);
+  int init(const int64_t thread_num, const char* name, const uint64_t tenant_id);
   int start();
   void destroy();
   int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num);
@@ -131,7 +131,7 @@ public:
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   void dec_ref() { ATOMIC_SAF(&ref_cnt_, 1); }
   int64_t get_ref_cnt() { return ATOMIC_LOAD(&ref_cnt_); }
-  TO_STRING_KV(KCSTRING_(name), KP(this), K_(min_thread_cnt), K_(max_thread_cnt), K_(running_thread_cnt), K_(threads_idle_time));
+  TO_STRING_KV(KCSTRING_(name), K_(tenant_id), KP(this), K_(min_thread_cnt), K_(max_thread_cnt), K_(running_thread_cnt), K_(threads_idle_time));
 protected:
   int64_t inc_thread_idle_time(int64_t time_us)
   {
@@ -149,6 +149,7 @@ private:
   lib::ObMutex update_threads_lock_;
   int64_t ref_cnt_;
   const char* name_;
+  uint64_t tenant_id_;
   ObSimpleThreadPoolStat stat_;
   bool has_bind_;
 };
