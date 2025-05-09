@@ -1562,15 +1562,6 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       // mysql ps模式时，会提前将cursor id设置为 stmt_id
       id = pl_cursor_cache_.gen_cursor_id();
       // ps cursor: proxy will record server ip, other ops of ps cursor will route by record ip.
-
-      // server cursor(not ps cursor) has same logic with temporary table,
-      // because we can not sync server cursor status to other server,
-      // so after open server cursor, other modify of this cursor need to do on same server.
-      bool is_already_set = false;
-      OZ (get_session_temp_table_used(is_already_set));
-      if (OB_SUCC(ret) && !is_already_set) {
-        OZ (set_session_temp_table_used(true));
-      }
     }
     if (OB_FAIL(ret)) {
     } else {
