@@ -675,6 +675,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     // 执行ObTask, 处理结果通过Result返回
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
@@ -699,7 +700,6 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       exec_ctx_.set_plan_start_time(exec_start_timestamp_);
-      ObAuditRecordData &audit_record = session->get_raw_audit_record();
 
       if (OB_SUCC(ret)) {
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
@@ -750,24 +750,23 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
       record_exec_timestamp(true, exec_timestamp);
       audit_record.exec_timestamp_ = exec_timestamp;
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        exec_record.record_end();
-        exec_record.max_wait_event_ = max_wait_desc;
-        exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-        exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.exec_record_ = exec_record;
-        audit_record.update_event_stage_state();
-      }
-
-      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
-      }
-      //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
-      record_sql_audit_and_plan_stat(plan, session);
     }
+    if (enable_perf_event) {
+      exec_record.record_end();
+      exec_record.max_wait_event_ = max_wait_desc;
+      exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+      exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.exec_record_ = exec_record;
+      audit_record.update_event_stage_state();
+    }
+
+    if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
+    }
+    //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
+    record_sql_audit_and_plan_stat(plan, session);
   }
   if (OB_NOT_NULL(plan)) {
     if (plan->is_limited_concurrent_num()) {
@@ -991,6 +990,7 @@ int ObRpcRemoteExecuteP::process()
     ObPhysicalPlanCtx *plan_ctx = NULL;
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
@@ -1012,7 +1012,6 @@ int ObRpcRemoteExecuteP::process()
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       exec_ctx->set_plan_start_time(exec_start_timestamp_);
-      ObAuditRecordData &audit_record = session->get_raw_audit_record();
 
       if (OB_SUCC(ret)) {
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), task.get_des_phy_plan().get_stmt_type());
@@ -1057,24 +1056,23 @@ int ObRpcRemoteExecuteP::process()
       record_exec_timestamp(true, exec_timestamp);
       audit_record.exec_timestamp_ = exec_timestamp;
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        exec_record.record_end();
-        exec_record.max_wait_event_ = max_wait_desc;
-        exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-        exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.exec_record_ = exec_record;
-        audit_record.update_event_stage_state();
-      }
-      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
-      }
-
-      //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
-      record_sql_audit_and_plan_stat(&phy_plan_, session);
     }
+    if (enable_perf_event) {
+      exec_record.record_end();
+      exec_record.max_wait_event_ = max_wait_desc;
+      exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+      exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.exec_record_ = exec_record;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
+    }
+
+    //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
+    record_sql_audit_and_plan_stat(&phy_plan_, session);
   }
 
   //vt_iter_factory_.reuse();

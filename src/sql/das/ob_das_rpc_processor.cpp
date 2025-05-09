@@ -53,6 +53,7 @@ int ObDASBaseAccessP<pcode>::before_process()
   // ash stat should be setted already in rpc thread.
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_sql_execution_ = true;
     di->get_ash_stat().in_das_remote_exec_ = true;
     di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
     di->get_ash_stat().user_id_ = das_remote_info_.user_id_;
@@ -287,6 +288,7 @@ template<obrpc::ObRpcPacketCode pcode>
 void ObDASBaseAccessP<pcode>::cleanup()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
   if (das_remote_info_.trans_desc_ != nullptr) {

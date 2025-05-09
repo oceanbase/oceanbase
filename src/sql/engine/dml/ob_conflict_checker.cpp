@@ -148,7 +148,8 @@ int ObConflictRowMapCtx::init_conflict_map(int64_t replace_row_cnt, int64_t rowk
   if (OB_SUCC(ret) && !conflict_map_.created()) {
     ObObj *objs = NULL;
     int64_t bucket_num = 0;
-    bucket_num = replace_row_cnt < MAX_ROW_BATCH_SIZE ? replace_row_cnt : MAX_ROW_BATCH_SIZE;
+    int64_t real_row_buckets = replace_row_cnt * 10;
+    bucket_num = real_row_buckets < MAX_ROW_BATCH_SIZE ? real_row_buckets : MAX_ROW_BATCH_SIZE;
     // map 没创建的场景下才需要创建, 这里可能被重复调用
     if (NULL == (rowkey_ = static_cast<ObRowkey*>(allocator_->alloc(sizeof(ObRowkey))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -192,8 +193,9 @@ int ObConflictChecker::create_rowkey_check_hashset(int64_t replace_row_cnt)
       LOG_WARN("allocate memory failed", K(ret), "size", sizeof(SeRowkeyDistCtx));
     } else {
       conflict_range_dist_ctx = new (buf) ConflictRangeDistCtx();
-      const int64_t max_bucket_num = replace_row_cnt > MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM ?
-          MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM : replace_row_cnt;
+      int64_t real_row_buckets = replace_row_cnt * 10;
+      const int64_t max_bucket_num = real_row_buckets > MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM ?
+          MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM : real_row_buckets;
       if (OB_FAIL(conflict_range_dist_ctx->create(max_bucket_num,
                                           "DmlConflictDisBu",
                                           "DmlConflictDisNo",

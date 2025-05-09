@@ -274,22 +274,21 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
       bool first_record = (1 == audit_record.try_cnt_);
       ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_end();
-        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.update_event_stage_state();
-        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-        EVENT_INC(SQL_PS_PREPARE_COUNT);
-        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-      }
-      if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_end_value();
-
-      }
     }
   } // diagnose end
+
+  if (enable_perf_event) {
+    audit_record.exec_record_.record_end();
+    audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+    audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+    audit_record.update_event_stage_state();
+    const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+    EVENT_INC(SQL_PS_PREPARE_COUNT);
+    EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
+  }
+  if (enable_sqlstat) {
+    sqlstat_record.record_sqlstat_end_value();
+  }
 
   // store the warning message from the most recent statement in the current session
   if (OB_SUCC(ret) && is_diagnostics_stmt) {

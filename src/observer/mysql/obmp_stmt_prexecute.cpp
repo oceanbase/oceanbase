@@ -424,6 +424,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
                                         bool &async_resp_used,
                                         ObPsStmtId &inner_stmt_id)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   int ret = OB_SUCCESS;
   if (OB_OCI_EXACT_FETCH != exec_mode_ && stmt::T_SELECT == stmt_type_) {
     LOG_DEBUG("begin server cursor.");

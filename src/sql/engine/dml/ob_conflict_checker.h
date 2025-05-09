@@ -106,7 +106,7 @@ public:
   int destroy();
 
 public:
-  static const int64_t MAX_ROW_BATCH_SIZE = 500;
+  static const int64_t MAX_ROW_BATCH_SIZE = 1024 * 1024;
   ObConflictRowMap conflict_map_;
   ObRowkey *rowkey_; // 临时的ObRowkey,用于map的compare，循环使用
   common::ObIAllocator *allocator_; // allocator用来创建hash map
@@ -176,8 +176,8 @@ struct ObConflictRange {
   inline uint64_t hash() const
   {
     uint64_t hash_val = 0;
-    hash_val = rowkey_.hash();
-    hash_val = tablet_id_.hash(hash_val);
+    hash_val += rowkey_.hash();
+    hash_val += tablet_id_.hash();
     return hash_val;
   }
   bool is_valid() const
@@ -297,8 +297,7 @@ private:
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 
 public:
-  static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 128 * 1024;
-
+  static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 1024 * 1024;
   common::ObArrayWrap<ObConflictRowMapCtx> conflict_map_array_;
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
   const ObConflictCheckerCtdef &checker_ctdef_;

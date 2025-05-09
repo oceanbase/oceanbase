@@ -1252,6 +1252,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
 
 int ObOperator::filter_row(ObEvalCtx &eval_ctx, const ObIArray<ObExpr *> &exprs, bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   ObDatum *datum = NULL;
   int ret = OB_SUCCESS;
   filtered = false;
@@ -1281,6 +1282,7 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
                                   const int64_t bsize,
                                   bool &all_filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   all_filtered = false;
   FOREACH_CNT_X(e, exprs, OB_SUCC(ret) && !all_filtered) {

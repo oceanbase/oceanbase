@@ -149,52 +149,54 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     //disconnect();
   } else {
     ObWaitEventStat total_wait_desc;
-    int64_t execution_id = 0;
-    ObMaxWaitGuard max_wait_guard(enable_perf_event
-        ? &audit_record.exec_record_.max_wait_event_ : nullptr);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
     int64_t fetch_limit = OB_INVALID_COUNT == fetch_rows_ ? INT64_MAX : fetch_rows_;
     int64_t true_row_num = 0;
-    if (enable_perf_event) {
-      audit_record.exec_record_.record_start();
-    }
-    if (enable_sqlstat) {
-      sqlstat_record.record_sqlstat_start_value();
-      sqlstat_record.set_is_in_retry(session.get_is_in_retry());
-      session.sql_sess_record_sql_stat_start_value(sqlstat_record);
-    }
-    if (OB_ISNULL(gctx_.sql_engine_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid sql engine", K(ret), K(gctx_));
-    } else if (FALSE_IT(execution_id = gctx_.sql_engine_->get_execution_id())) {
-      //nothing to do
-    } else if (OB_FAIL(set_session_active(session))) {
-      LOG_WARN("fail to set session active", K(ret));
-    } else {
-      exec_start_timestamp_ = ObTimeUtility::current_time();
-    }
-    if (OB_SUCC(ret)) {
-      //监控项统计开始
-      exec_start_timestamp_ = ObTimeUtility::current_time();
-      // 本分支内如果出错，全部会在response_result内部处理妥当
-      // 无需再额外处理回复错误包
-      session.set_current_execution_id(execution_id);
-      OX (need_response_error = false);
-      if (0 == fetch_limit && !cursor->is_streaming()
-                           && cursor->is_ps_cursor()
-                           && lib::is_oracle_mode()
-                           && OB_NOT_NULL(cursor->get_spi_cursor())
-                           && cursor->get_spi_cursor()->row_store_.get_row_cnt() > 0) {
-        set_close_cursor();
+    {
+      //记录sql_audit的执行等待时间，需要依赖max_wait_guard和total_wait_guard生命周期结束，
+      //因此要让total_wait_guard的析构早于audit record的统计逻辑
+      int64_t execution_id = 0;
+      ObMaxWaitGuard max_wait_guard(
+          enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      if (enable_perf_event) {
+        audit_record.exec_record_.record_start();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
+      if (OB_ISNULL(gctx_.sql_engine_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid sql engine", K(ret), K(gctx_));
+      } else if (FALSE_IT(execution_id = gctx_.sql_engine_->get_execution_id())) {
+        //nothing to do
+      } else if (OB_FAIL(set_session_active(session))) {
+        LOG_WARN("fail to set session active", K(ret));
       } else {
-        OZ (response_result(*cursor, session, fetch_limit, true_row_num));
+        exec_start_timestamp_ = ObTimeUtility::current_time();
       }
-      if (OB_READ_NOTHING == ret) {
-        LOG_WARN("nothing to read", K(ret));
-        // oracle return success when read nothing
-        ret = OB_SUCCESS;
+      if (OB_SUCC(ret)) {
+        //监控项统计开始
+        exec_start_timestamp_ = ObTimeUtility::current_time();
+        // 本分支内如果出错，全部会在response_result内部处理妥当
+        // 无需再额外处理回复错误包
+        session.set_current_execution_id(execution_id);
+        OX(need_response_error = false);
+        if (0 == fetch_limit && !cursor->is_streaming() && cursor->is_ps_cursor()
+            && lib::is_oracle_mode() && OB_NOT_NULL(cursor->get_spi_cursor())
+            && cursor->get_spi_cursor()->row_store_.get_row_cnt() > 0) {
+          set_close_cursor();
+        } else {
+          OZ(response_result(*cursor, session, fetch_limit, true_row_num));
+        }
+        if (OB_READ_NOTHING == ret) {
+          LOG_WARN("nothing to read", K(ret));
+          // oracle return success when read nothing
+          ret = OB_SUCCESS;
+        }
+        OX(need_response_error = true);
       }
-      OX (need_response_error = true);
     }
     //监控项统计结束
     exec_end_timestamp_ = ObTimeUtility::current_time();

@@ -167,30 +167,33 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_sqc_handler(arg_.sqc_handler_);
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());
     arg_.exec_ctx_->set_px_sqc_id(arg_.task_.get_sqc_id());
-    ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      session->set_ash_stat_value(di->get_ash_stat());
-    }
-    if (enable_perf_event) {
-      exec_record.record_start();
-    }
-    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
-      sqlstat_record.record_sqlstat_start_value();
-      sqlstat_record.set_is_in_retry(session->get_is_in_retry());
-      session->sql_sess_record_sql_stat_start_value(sqlstat_record);
-    }
+    {
+      //统计等待事件的guard生命周期必须小于收集统计信息的逻辑，才能保证后续获取到的时间准确
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
+      ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+      if (OB_NOT_NULL(di)) {
+        session->set_ash_stat_value(di->get_ash_stat());
+      }
+      if (enable_perf_event) {
+        exec_record.record_start();
+      }
+      if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session->get_is_in_retry());
+        session->sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
 
-    //监控项统计开始
-    exec_start_timestamp_ = enqueue_timestamp_;
+      //监控项统计开始
+      exec_start_timestamp_ = enqueue_timestamp_;
 
-    if (OB_FAIL(do_process())) {
-      LOG_WARN("failed to process", K(get_tenant_id()), K(ret));
+      if (OB_FAIL(do_process())) {
+        LOG_WARN("failed to process", K(get_tenant_id()), K(ret));
+      }
+
+      //监控项统计结束
+      exec_end_timestamp_ = ObTimeUtility::current_time();
     }
-
-    //监控项统计结束
-    exec_end_timestamp_ = ObTimeUtility::current_time();
 
     // some statistics must be recorded for plan stat, even though sql audit disabled
     record_exec_timestamp(true, exec_timestamp);
