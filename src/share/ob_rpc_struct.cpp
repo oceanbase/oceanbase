@@ -9132,6 +9132,7 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   row_inserted_ = other.row_inserted_;
   row_scanned_ = other.row_scanned_;
   physical_row_count_ = other.physical_row_count_;
+  is_data_split_finished_ = other.is_data_split_finished_;
   return ret;
 }
 

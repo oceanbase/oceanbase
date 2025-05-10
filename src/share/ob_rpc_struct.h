@@ -10816,16 +10816,17 @@ struct ObDDLBuildSingleReplicaRequestResult final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaRequestResult()
-    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0), physical_row_count_(0)
+    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0), physical_row_count_(0), is_data_split_finished_(false)
   {}
   ~ObDDLBuildSingleReplicaRequestResult() = default;
   int assign(const ObDDLBuildSingleReplicaRequestResult &other);
-  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned), K_(physical_row_count))
+  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned), K_(physical_row_count), K_(is_data_split_finished))
 public:
   int64_t ret_code_;
   int64_t row_inserted_;
   int64_t row_scanned_;
   int64_t physical_row_count_;
+  bool is_data_split_finished_;
 };
 
 struct ObDDLBuildSingleReplicaResponseArg final
