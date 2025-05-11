@@ -614,7 +614,7 @@ int ObVectorIndexUtil::check_ivf_lob_inrow_threshold(
     const int64_t lob_inrow_threshold)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   int64_t max_vec_len_with_ivf = 0;
   const ObTableSchema *data_table_schema = NULL;
   if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
@@ -640,6 +640,8 @@ int ObVectorIndexUtil::check_ivf_lob_inrow_threshold(
     } else if (!index_table_schema->is_vec_ivf_centroid_index()) {
       // skip none ivf centroid vector index
     } else {
+      // get dim
+      int64_t vector_dim = 0;
       for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
         const ObColumnSchemaV2 *col_schema = nullptr;
         if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
@@ -648,13 +650,32 @@ int ObVectorIndexUtil::check_ivf_lob_inrow_threshold(
         } else if (!col_schema->is_vec_ivf_center_vector_column()) {
           // skip none ivf centroid vector column
         } else {
-          int64_t vector_dim = 0;
           if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(col_schema->get_extended_type_info(), vector_dim))) {
             LOG_WARN("fail to get vector dim", K(ret), K(col_schema));
           } else {
             int cur_len = sizeof(float) * vector_dim;
             max_vec_len_with_ivf = max_vec_len_with_ivf > cur_len ? max_vec_len_with_ivf : cur_len;
           }
+        }
+      }
+
+      // get sub_dim if ivf_pq
+      if (OB_SUCC(ret)) {
+        ObString index_param_str = index_table_schema->get_index_params();
+        ObVectorIndexParam index_param;
+        if (index_param_str.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get invalid index param", K(ret), K(index_param_str));
+        } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_param_str,
+                                                                ObVectorIndexType::VIT_IVF_INDEX, index_param))) {
+          LOG_WARN("failed to parser params from string", K(ret), K(index_param_str));
+        } else if (index_param.type_ == VIAT_IVF_PQ) {
+          // 4(offset) * m + 16(pq centroid id) * m + 1(bitmap) * m = 21 * m
+          int64_t pq_cent_ids_len = (OB_DOC_ID_COLUMN_BYTE_LENGTH/*pq center id length*/ +
+                                       sizeof(uint8_t)/*array bitmap length*/ +
+                                       sizeof(uint32_t)/*array offset length*/) *
+                                       index_param.m_;
+          max_vec_len_with_ivf = max_vec_len_with_ivf > pq_cent_ids_len ? pq_cent_ids_len : pq_cent_ids_len;
         }
       }
     }
@@ -704,7 +725,7 @@ int ObVectorIndexUtil::check_has_extra_info(const ObTableSchema &data_table_sche
   int ret = OB_SUCCESS;
 
   has_extra_info = false;
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
   if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("fail to get simple index infos failed", K(ret));
@@ -736,7 +757,7 @@ int ObVectorIndexUtil::check_column_has_vector_index(
 {
   int ret = OB_SUCCESS;
 
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
   is_column_has_vector_index = false;
 
@@ -1098,7 +1119,7 @@ int ObVectorIndexUtil::get_vector_index_tid(
 {
   int ret = OB_SUCCESS;
 
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
   tid = OB_INVALID_ID;
 
@@ -1308,7 +1329,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
     uint64_t &snapshot_tid)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
 
   inc_tid = OB_INVALID_ID;
@@ -1431,7 +1452,7 @@ int ObVectorIndexUtil::get_vector_index_tid_with_index_prefix(
 {
   int ret = OB_SUCCESS;
 
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
   tid = OB_INVALID_ID;
 
@@ -1539,7 +1560,21 @@ int ObVectorIndexUtil::check_vec_index_param(
         }
       } else if (share::schema::is_vec_ivf_index(vec_index_type)) {
         int64_t lob_inrow_threshold = tbl_schema.get_lob_inrow_threshold();
-        if (lob_inrow_threshold < 4 * vector_dim) {
+        int64_t max_vec_len = 4 * vector_dim;
+        if (share::schema::is_vec_ivfpq_index(vec_index_type)) {
+          ObVectorIndexParam tmp_index_param;
+          if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_params, ObVectorIndexType::VIT_IVF_INDEX, tmp_index_param))) {
+            LOG_WARN("fail to parse ivf params", K(ret), K(index_params));
+          } else {
+            // 4(offset) * m + 16(pq centroid id) * m + 1(bitmap) * m = 21 * m
+            int64_t pq_cent_ids_len = (OB_DOC_ID_COLUMN_BYTE_LENGTH/*pq center id length*/ +
+                                       sizeof(uint8_t)/*array bitmap length*/ +
+                                       sizeof(uint32_t)/*array offset length*/) *
+                                       tmp_index_param.m_;
+            max_vec_len = pq_cent_ids_len > max_vec_len ? pq_cent_ids_len : max_vec_len;
+          }
+        }
+        if (OB_SUCC(ret) && lob_inrow_threshold < max_vec_len) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("create ivf index on column with outrow lob data not supported", K(ret), K(vector_dim), K(lob_inrow_threshold));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column with outrow lob data is");
@@ -3669,7 +3704,7 @@ int ObVectorIndexUtil::get_vector_index_type(
 {
   int ret = OB_SUCCESS;
 
-  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
   index_type = ObIndexType::INDEX_TYPE_MAX;
 
