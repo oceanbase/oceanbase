@@ -2984,7 +2984,7 @@ int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType ac
 {
   INIT_SUCC(ret);
   if (type_ == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ) {
-    if (actual_type == VIAT_HNSW_SQ || type_ == VIAT_HNSW_BQ) {
+    if (actual_type == VIAT_HNSW_SQ || actual_type == VIAT_HNSW_BQ) {
       // actual create hnswsq index
       if (OB_FAIL(init_snap_data_without_lock())) {
         LOG_WARN("failed to init snap mem data", K(ret), K(type_));
