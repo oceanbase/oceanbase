@@ -632,7 +632,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_partition_table_(false),
     is_normal_cgs_at_the_end_(false),
     is_mlog_table_(false),
-    is_enable_semistruct_encoding_(false)
+    is_enable_semistruct_encoding_(false),
+    has_lob_column_pushdown_(false)
 {
   reset();
 }
@@ -668,6 +669,7 @@ void ObTableParam::reset()
   is_normal_cgs_at_the_end_ = false;
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
+  has_lob_column_pushdown_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -722,9 +724,11 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(parser_properties_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(is_mlog_table_);
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                has_lob_column_pushdown_);
   }
-  OB_UNIS_ENCODE(is_enable_semistruct_encoding_);
   return ret;
 }
 
@@ -834,9 +838,11 @@ OB_DEF_DESERIALIZE(ObTableParam)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, is_mlog_table_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                has_lob_column_pushdown_);
   }
-  OB_UNIS_DECODE(is_enable_semistruct_encoding_);
   return ret;
 }
 
@@ -899,9 +905,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-                is_mlog_table_);
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                has_lob_column_pushdown_);
   }
-  OB_UNIS_ADD_LEN(is_enable_semistruct_encoding_);
   return len;
 }
 
@@ -1648,6 +1655,20 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   return ret;
 }
 
+int ObTableParam::check_lob_column_pushdown(sql::ObPushdownFilterNode &pushdown_filters)
+{
+  int ret = OB_SUCCESS;
+  has_lob_column_pushdown_ = false;
+  if (OB_UNLIKELY(!main_read_info_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected not valid read info", K(ret), K_(main_read_info));
+  } else {
+    has_lob_column_pushdown_ = pushdown_filters.check_filter_on_lob(main_read_info_);
+  }
+
+  return ret;
+}
+
 int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1670,7 +1691,9 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_vec_index),
        K_(is_column_replica_table),
        K_(is_normal_cgs_at_the_end),
-       K_(is_mlog_table));
+       K_(is_mlog_table),
+       K_(is_enable_semistruct_encoding),
+       K_(has_lob_column_pushdown));
   J_OBJ_END();
 
   return pos;

@@ -348,6 +348,7 @@ public:
   inline const ObString &get_parser_property() const { return parser_properties_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
+  inline bool is_filter_on_lob_column() const { return has_lob_column_pushdown_; }
 
   DECLARE_TO_STRING;
 
@@ -359,6 +360,7 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
+  int check_lob_column_pushdown(sql::ObPushdownFilterNode &pushdown_filters);
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
@@ -434,6 +436,8 @@ private:
   // for read time query check of mview
   bool is_mlog_table_;
   bool is_enable_semistruct_encoding_;
+  // for delete_insert, whether lob columns included in pushdown filters
+  bool has_lob_column_pushdown_;
 };
 } //namespace schema
 } //namespace share

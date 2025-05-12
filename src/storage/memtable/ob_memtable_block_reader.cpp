@@ -174,7 +174,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
           if (src_datum.is_nop_value()) {
             if (OB_UNLIKELY(default_datums.at(i).is_nop())) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("Unexpected nop value", K(ret), K(col_offsets.at(i)), K(row_idx));
+              LOG_WARN("Unexpected nop value", K(ret), K(col_offsets.at(i)), K(row_idx), K(rows_[row_idx]));
             } else if (OB_FAIL(datum.from_storage_datum(default_datums.at(i), map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(default_datums.at(i)), K(obj_type), K(map_type));
             }
@@ -210,7 +210,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
         if (filter.is_filter_black_node() || found_lob_out_row) {
           sql::ObPhysicalFilterExecutor &physical_filter = static_cast<sql::ObPhysicalFilterExecutor &>(filter);
           if (OB_FAIL(physical_filter.filter(datum_buf, col_count, *pd_filter_info.skip_bit_, filtered))) {
-            LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+            LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx), K(rows_[row_idx]));
           }
           if (found_lob_out_row) {
             context->lob_locator_helper_->reuse();
@@ -221,7 +221,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col_ids count: not 1", K(ret), K(filter));
           } else if (OB_FAIL(filter_white_filter(white_filter, datum_buf[0], filtered))) {
-            LOG_WARN("Failed to filter row with white filter", K(ret), K(row_idx));
+            LOG_WARN("Failed to filter row with white filter", K(ret), K(row_idx), K(rows_[row_idx]));
           }
         }
         if (OB_FAIL(ret)) {

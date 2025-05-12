@@ -1169,6 +1169,30 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownFilter)
   return len;
 }
 
+bool ObPushdownFilterNode::check_filter_on_lob(const storage::ObITableReadInfo &read_info)
+{
+  bool has_lob_column = false;
+  const int64_t col_count = col_ids_.count();
+  const common::ObIArray<ObColDesc> &cols_desc = read_info.get_columns_desc();
+  if (is_logic_op_node()) {
+    for (uint32_t i = 0; !has_lob_column && i < n_child_; i++) {
+      if (OB_NOT_NULL(childs_[i])) {
+        has_lob_column = childs_[i]->check_filter_on_lob(read_info);
+      }
+    }
+  } else {
+    for (int64_t i = 0; !has_lob_column && i < col_count; i++) {
+      for (int32_t col_pos = 0; col_pos < cols_desc.count(); col_pos++) {
+        if (col_ids_.at(i) == cols_desc.at(col_pos).col_id_) {
+          has_lob_column = is_lob_storage(cols_desc.at(col_pos).col_type_.get_type());
+          break;
+        }
+      }
+    }
+  }
+  return has_lob_column;
+}
+
 //--------------------- start filter executor ----------------------------
 int ObPushdownFilterExecutor::find_evaluated_datums(
     ObExpr *expr, const ObIArray<ObExpr*> &calc_exprs, ObIArray<ObExpr*> &eval_exprs)
