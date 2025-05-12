@@ -29,7 +29,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
     const blocksstable::ObDmlFlag dml_flag,
-    bool is_need_row_datum_utils)
+    const bool is_need_check_old_row)
   : store_ctx_(store_ctx),
     dml_param_(dml_param),
     allocator_(allocator),
@@ -40,13 +40,12 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     column_ids_(nullptr),
     datum_row_(),
     cmp_funcs_(),
-    is_need_check_old_row_(is_need_row_datum_utils),
+    is_need_check_old_row_(is_need_check_old_row),
     is_udf_(false),
     has_lob_rowkey_(false),
     lob_dml_ctx_(),
     main_table_rowkey_col_flag_(allocator),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
-    is_need_row_datum_utils_(is_need_row_datum_utils),
     is_inited_(false)
 {
   is_delete_insert_table_ = false;
@@ -208,25 +207,12 @@ int ObDMLRunningCtx::prepare_column_info(const common::ObIArray<uint64_t> &colum
 int ObDMLRunningCtx::check_need_old_row_legitimacy()
 {
   int ret = OB_SUCCESS;
-  // TODO(jingxing): setting this to true
+  is_need_check_old_row_ = false;
+
   if (OB_FAIL(relative_table_.has_udf_column(is_need_check_old_row_))) {
     LOG_WARN("check has udf column failed", K(ret));
   } else if (is_need_check_old_row_) {
     is_udf_ = true;
-    ObTableStoreIterator &table_iter = *relative_table_.tablet_iter_.table_iter();
-    while (OB_SUCC(ret) && !is_need_check_old_row_) {
-      ObITable *table_ptr = nullptr;
-      if (OB_FAIL(table_iter.get_next(table_ptr))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next table failed", K(ret));
-        }
-      } else if (OB_ISNULL(table_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, table ptr must not be nullptr", K(ret));
-      } else {
-        is_need_check_old_row_ = table_ptr->is_major_sstable();
-      }
-    }
   } else if (dml_param_.is_batch_stmt_ && !relative_table_.is_index_table()) {
     //batch stmt execution dependency defensive check to check
     //if the same row was modified multiple times
