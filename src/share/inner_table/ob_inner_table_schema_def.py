@@ -5977,7 +5977,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaotao.ht',
+  owner = 'shifangdan.sfd',
   table_name    = '__all_zone_storage',
   table_id      = '453',
   table_type = 'SYSTEM_TABLE',
@@ -6004,7 +6004,7 @@ def_table_schema(
 
 
 def_table_schema(
-  owner = 'xiaotao.ht',
+  owner = 'shifangdan.sfd',
   table_name    = '__all_zone_storage_operation',
   table_id      = '454',
   table_type = 'SYSTEM_TABLE',
@@ -14550,7 +14550,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaotao.ht',
+  owner = 'shifangdan.sfd',
   table_name = '__all_virtual_server_storage',
   table_id = '12386',
   table_type = 'VIRTUAL_TABLE',
@@ -33746,7 +33746,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xiaotao.ht',
+  owner           = 'shifangdan.sfd',
   table_name      = 'DBA_OB_ZONE_STORAGE',
   table_id        = '21384',
   table_type      = 'SYSTEM_VIEW',
@@ -33773,7 +33773,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xiaotao.ht',
+  owner           = 'shifangdan.sfd',
   table_name      = 'GV$OB_SERVER_STORAGE',
   table_id        = '21385',
   table_type      = 'SYSTEM_VIEW',
@@ -33803,7 +33803,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xiaotao.ht',
+  owner           = 'shifangdan.sfd',
   table_name      = 'V$OB_SERVER_STORAGE',
   table_id        = '21386',
   table_type      = 'SYSTEM_VIEW',
