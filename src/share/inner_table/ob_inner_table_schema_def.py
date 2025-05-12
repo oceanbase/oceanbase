@@ -10938,7 +10938,7 @@ def_table_schema(
 # 11124: __all_virtual_ss_tablet_meta
 # 11125: __all_virtual_ss_ls_meta
 # 11126: __all_virtual_ss_sstable_mgr
-
+# 11127:__all_virtual_ss_ls_tablet_reorganization_info
 
 ################################################################
 # INFORMATION SCHEMA
@@ -16833,6 +16833,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keyword
 # 15517: __all_virtual_ss_tablet_meta
 # 15518: __all_virtual_ss_ls_meta
 # 15519: __all_virtual_ss_sstable_mgr
+# 15520: __all_virtual_ss_ls_tablet_reorganization_table
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位

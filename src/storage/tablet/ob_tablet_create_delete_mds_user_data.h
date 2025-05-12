@@ -80,7 +80,8 @@ public:
       K_(transfer_ls_id), K_(data_type),
       K_(create_commit_scn), K_(create_commit_version),
       K_(delete_commit_scn), K_(delete_commit_version),
-      K_(start_transfer_commit_version), K_(start_split_commit_version));
+      K_(start_transfer_commit_version), K_(start_split_commit_version),
+      K_(start_transfer_commit_scn));
 private:
   void start_transfer_out_on_redo_(const share::SCN &redo_scn);
   void finish_transfer_in_on_redo_(const share::SCN &redo_scn);
@@ -106,6 +107,7 @@ public:
   int64_t delete_commit_version_; // delete tx commit trans version
   int64_t start_transfer_commit_version_; // start transfer commit trans version(transfer in/transfer out)
   int64_t start_split_commit_version_; // start split commit trans version
+  share::SCN start_transfer_commit_scn_; //ss start transfer commit log scn(transfer in/transfer out)
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const
