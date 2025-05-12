@@ -3531,22 +3531,12 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
       }
     }
 
-    // check self-referenced foreign key
-    bool self_ref_update = false;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(check_fk_self_ref_upd(table_list, spec, self_ref_update))) {
-      LOG_WARN("self-referenced foreign key columns and referenced columns failed", K(ret), K(table_list));
-    } else if (self_ref_update) {
-      LOG_TRACE("[FOREIGN KEY] find self-referenced foreign key columns and referenced columns are updated at the same time");
-    }
-
     // 3. If there exists a column which may be visited twice, set a flag for all tables
     // to check table cycle in update process.
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
       ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
       ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
       upd_ctdef.need_check_table_cycle_ = is_dup;
-      upd_ctdef.self_ref_update_ = self_ref_update;
     }
   }
 
@@ -10711,68 +10701,6 @@ int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_id
   }
   return ret;
 }
-
-
-/**
-  check that if a self-reference exists, it should fail if both the foreign key and
-  its referenced columnsin the same table are updated at the same time.
-  such as:
-    A (c1 int primary key, c2 int, foreign key (c2) references t1(c1) on update cascade
-    update A set c1 = 4, c2 = 4 where c1 = 1;
- */
-int ObStaticEngineCG::check_fk_self_ref_upd(const ObIArray<uint64_t> &table_list, const ObTableUpdateSpec &spec, bool &self_ref_update) {
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  for (int64_t i = 0 ; OB_SUCC(ret) && i < table_list.count() && !self_ref_update ; i++) {
-    const ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
-    const ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
-    const uint64_t table_id = upd_ctdef.das_base_ctdef_.index_tid_;
-    const ObForeignKeyArgArray& fk_args = upd_ctdef.fk_args_;
-    ObSchemaGetterGuard schema_guard;
-    const ObTableSchema *table_schema = NULL;
-    ObArray<uint64_t> update_columns;
-
-    for (int64_t j = 0 ; OB_SUCC(ret) && j < fk_args.count() ; j++) {
-      for (int64_t k = 0; OB_SUCC(ret) && k < fk_args.at(j).columns_.count(); k++) {
-        const ObForeignKeyColumn& fk_col = fk_args.at(j).columns_.at(k);
-        const uint64_t col_id = upd_ctdef.column_ids_.at(fk_col.idx_);
-        update_columns.push_back(col_id);
-      }
-    }
-
-    if (!update_columns.empty()) {
-      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-        LOG_WARN("get tenant schema guard failed", KR(ret));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-        LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(table_id));
-      } else if (OB_NOT_NULL(table_schema)) {
-        const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
-        for (int64_t j = 0 ; j < foreign_key_infos.count() && !self_ref_update ; j++) {
-          const ObForeignKeyInfo &fk_info = foreign_key_infos.at(j);
-          // maybe not CASCADE
-          if (fk_info.parent_table_id_ == fk_info.child_table_id_) {
-            for (int64_t k = 0 ; k < fk_info.child_column_ids_.count() && !self_ref_update ; k++) {
-              bool find_child = false;
-              bool find_parent = false;
-              const ObObjectID child_col_id = fk_info.child_column_ids_.at(k);
-              const ObObjectID parent_col_id = fk_info.parent_column_ids_.at(k);
-              for (int64_t p = 0 ; p < update_columns.count() && (!find_child || !find_parent) ; p++) {
-                if (update_columns.at(p) == child_col_id) {
-                  find_child = true;
-                } else if (update_columns.at(p) == parent_col_id){
-                  find_parent = true;
-                }
-              }
-              self_ref_update = find_parent && find_child;
-            }
-          } // end if
-        } // end for
-      }
-    }
-  } // end for
-  return ret;
-}
-
 
 int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters)
