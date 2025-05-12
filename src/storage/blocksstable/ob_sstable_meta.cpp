@@ -968,6 +968,11 @@ int ObSSTableMeta::deep_copy(
   return ret;
 }
 
+int ObSSTableMeta::get_column_checksums(common::ObIArray<int64_t> &column_checksums) const
+{
+  return column_ckm_struct_.get_column_checksums(column_checksums);
+}
+
 bool ObSSTableMeta::is_shared_table() const
 {
   return basic_meta_.table_shared_flag_.is_shared_sstable()
@@ -1347,7 +1352,8 @@ int ObSSTableMetaChecker::check_sstable_meta_strict_equality(
   } else if (OB_UNLIKELY(old_sstable_meta.get_col_checksum_cnt() != new_sstable_meta.get_col_checksum_cnt())) {
     ret = OB_INVALID_DATA;
     LOG_WARN("new sstable column checksum count is not equal to old one", K(ret));
-  } else if (OB_UNLIKELY(0 != MEMCMP(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum(), old_sstable_meta.get_col_checksum_cnt()))) {
+  } else if (OB_UNLIKELY(0 != MEMCMP(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum(),
+                                    old_sstable_meta.get_col_checksum_cnt()*sizeof(int64_t)))) {
     ret = OB_INVALID_DATA;
     LOG_WARN("new sstable column checksum is not equal to one", K(ret));
   }
