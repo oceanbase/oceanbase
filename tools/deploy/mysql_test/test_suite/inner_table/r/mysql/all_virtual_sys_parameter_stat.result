@@ -586,6 +586,7 @@ _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
 _system_trig_enabled
 _temporary_file_io_area_size
+_tenant_stack_size
 _trace_control_info
 _transfer_finish_trans_timeout
 _transfer_process_lock_tx_timeout

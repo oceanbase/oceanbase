@@ -19,6 +19,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "lib/signal/ob_signal_struct.h"
 
 extern int64_t global_thread_stack_size;
 namespace oceanbase {
@@ -168,6 +169,10 @@ private:
 };
 
 using ThreadPool = Threads;
+
+OB_INLINE int64_t calc_available_stack_size(int64_t size) {
+  return size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+}
 
 }  // lib
 }  // oceanbase

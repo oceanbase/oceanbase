@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "threads.h"
-#include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/resource/ob_affinity_ctrl.h"
@@ -20,7 +19,7 @@ using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-int64_t global_thread_stack_size = (1L << 19) - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+int64_t global_thread_stack_size = calc_available_stack_size(OB_DEFAULT_STACK_SIZE);
 thread_local uint64_t ThreadPool::thread_idx_ = 0;
 
 // 获取线程局部的租户上下文，为线程池启动时检查使用
@@ -207,6 +206,9 @@ int Threads::start()
     if (threads_ == nullptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     }
+  }
+  if (run_wrapper_ != nullptr) {
+    stack_size_ = calc_available_stack_size(get_tenant_stack_size(run_wrapper_->id()));
   }
   if (OB_SUCC(ret)) {
     stop_ = false;

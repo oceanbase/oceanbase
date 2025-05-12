@@ -9153,7 +9153,7 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
     uint64_t addr = 0;
     uint64_t stack_size = 0;
     const uint64_t stack_size_limit =
-        std::max(GCONF.stack_size - get_reserved_stack_size(), 4096L);
+        std::max(get_tenant_stack_size(MTL_ID()) - get_reserved_stack_size(), 4096L);
 
     if (OB_FAIL(final_expression(pl_func))) {
       LOG_WARN("generate obj access expr failed", K(ret));

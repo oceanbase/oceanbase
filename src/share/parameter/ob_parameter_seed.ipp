@@ -1360,6 +1360,10 @@ DEF_CAP(stack_size, OB_CLUSTER_PARAMETER, "512K", "[512K, 20M]",
         "the size of routine execution stack"
         "Range: [512K, 20M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_CAP(_tenant_stack_size, OB_TENANT_PARAMETER, "512K", "[512K, 20M]",
+        "the size of routine execution stack for a tenant "
+        "Range: [512K, 20M]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(__easy_memory_reserved_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
         "the percentage of easy memory reserved size. The default value is 0. Range: [0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -2441,9 +2441,9 @@ int ObServer::init_pre_setting()
     }
   }
   if (OB_SUCC(ret)) {
-    const int64_t stack_size = std::max(1L << 19, static_cast<int64_t>(GCONF.stack_size));
+    const int64_t stack_size = std::max(OB_DEFAULT_STACK_SIZE, static_cast<int64_t>(GCONF.stack_size));
     LOG_INFO("set stack_size", K(stack_size));
-    global_thread_stack_size = stack_size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+    global_thread_stack_size = calc_available_stack_size(stack_size);
   }
   if (OB_SUCC(ret) && GCONF.use_ipv6) {
     enable_use_ipv6();

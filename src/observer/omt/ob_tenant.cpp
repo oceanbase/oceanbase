@@ -1218,8 +1218,8 @@ int64_t ObTenant::min_worker_cnt() const
 
 int64_t ObTenant::max_worker_cnt() const
 {
-  int64_t cnt = std::max(tenant_meta_.unit_.config_.memory_size() / 20 / (GCONF.stack_size + (3 << 20) + (512 << 10)),
-                  150L);
+  int64_t cnt = std::max(tenant_meta_.unit_.config_.memory_size() / 20 / (get_tenant_stack_size(id_) + (3 << 20) + (512 << 10)),
+                         150L);
   if (GCONF._enable_numa_aware) {
     int numa_node_count = AFFINITY_CTRL.get_num_nodes();
     if (cnt < numa_node_count) {

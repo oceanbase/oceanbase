@@ -19,6 +19,11 @@ namespace oceanbase
 {
 namespace common
 {
+int64_t __attribute__((weak)) get_tenant_stack_size(const uint64_t tenant_id) {
+  UNUSED(tenant_id);
+  return OB_DEFAULT_STACK_SIZE;
+}
+
 _RLOCAL(char*, g_stackaddr);
 _RLOCAL(size_t, g_stacksize);
 

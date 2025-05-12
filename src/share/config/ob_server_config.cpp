@@ -29,6 +29,18 @@ int64_t get_cpu_count()
   return cpu_cnt > 0 ? cpu_cnt : get_cpu_num();
 }
 
+int64_t get_tenant_stack_size(const uint64_t tenant_id)
+{
+  int64_t stack_size = static_cast<int64_t>(GCONF.stack_size);
+  if (OB_LIKELY(OB_DEFAULT_STACK_SIZE == stack_size)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      stack_size = tenant_config->_tenant_stack_size;
+    }
+  }
+  return stack_size;
+}
+
 using namespace share;
 
 ObServerConfig::ObServerConfig()
