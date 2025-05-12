@@ -279,6 +279,7 @@ public:
     Decoder,
     CSDecoder,
     MemtableReader,
+    NewFlatReader,
     MaxReaderType
   };
   ObIMicroBlockReader()

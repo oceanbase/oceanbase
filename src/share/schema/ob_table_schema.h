@@ -34,6 +34,7 @@
 #include "share/schema/ob_trigger_info.h"
 #include "lib/compress/ob_compress_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 namespace oceanbase
 {
 
@@ -2357,6 +2358,7 @@ protected:
   ObNameGeneratedType name_generated_type_;
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
+  int64_t micro_block_format_version_;
   bool micro_index_clustered_;
   bool enable_macro_block_bloom_filter_;
 

@@ -28,6 +28,7 @@ enum ObRowStoreType : uint8_t
   ENCODING_ROW_STORE = 1,
   SELECTIVE_ENCODING_ROW_STORE = 2,
   CS_ENCODING_ROW_STORE = 3,
+  FLAT_OPT_ROW_STORE = 4,
   MAX_ROW_STORE,
   DUMMY_ROW_STORE = UINT8_MAX, // invalid dummy row store type for compatibility
 };

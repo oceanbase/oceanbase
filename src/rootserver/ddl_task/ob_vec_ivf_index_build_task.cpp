@@ -1252,7 +1252,7 @@ int ObVecIVFIndexBuildTask::deserialize_params_from_message(
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
   int64_t child_task_num = 0;
-  obrpc::ObCreateIndexArg tmp_arg;
+  SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf ||  data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
@@ -1360,6 +1360,7 @@ int ObVecIVFIndexBuildTask::deserialize_params_from_message(
       }
     }
   }
+  } // smart var
   return ret;
 }
 

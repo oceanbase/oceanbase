@@ -1647,6 +1647,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION),
     micro_index_clustered_(false),
     enable_macro_block_bloom_filter_(false),
     local_session_vars_(allocator),
@@ -3835,6 +3836,7 @@ void ObTableSchema::reset()
   virtual_column_cnt_ = 0;
   micro_index_clustered_ = false;
   enable_macro_block_bloom_filter_ = false;
+  micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -7418,6 +7420,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(dynamic_partition_policy_);
   OB_UNIS_ENCODE(external_location_id_);
   OB_UNIS_ENCODE(external_sub_path_);
+  OB_UNIS_ENCODE(micro_block_format_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7666,6 +7669,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(dynamic_partition_policy_, deep_copy_str);
   OB_UNIS_DECODE(external_location_id_);
   OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
+  OB_UNIS_DECODE(micro_block_format_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7814,6 +7818,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(dynamic_partition_policy_);
   OB_UNIS_ADD_LEN(external_location_id_);
   OB_UNIS_ADD_LEN(external_sub_path_);
+  OB_UNIS_ADD_LEN(micro_block_format_version_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

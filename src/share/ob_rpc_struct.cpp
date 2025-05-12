@@ -3248,7 +3248,8 @@ OB_SERIALIZE_MEMBER(ObTableOption,
                     row_store_type_,
                     store_format_,
                     enable_macro_block_bloom_filter_,
-                    storage_cache_policy_);
+                    storage_cache_policy_,
+                    micro_block_format_version_);
 
 DEF_TO_STRING(ObIndexOption)
 {

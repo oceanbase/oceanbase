@@ -329,6 +329,7 @@ all_table_def = dict(
       ('dynamic_partition_policy', 'varchar:OB_MAX_DYNAMIC_PARTITION_POLICY_LENGTH', 'false', ''),
       ('external_location_id', 'int', 'false', 'OB_INVALID_ID'),
       ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('micro_block_format_version', 'int', 'false', '1'),
     ],
 )
 

@@ -98,6 +98,7 @@
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -2249,6 +2250,7 @@ public:
        STORAGE_CACHE_POLICY,
        SEMISTRUCT_ENCODING_TYPE,
        DYNAMIC_PARTITION_POLICY,
+       MICRO_BLOCK_FORMAT_VERSION,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2717,7 +2719,8 @@ public:
     progressive_merge_round_(0),
     storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID),
     enable_macro_block_bloom_filter_(false),
-    storage_cache_policy_()
+    storage_cache_policy_(),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION)
   {}
   virtual void reset()
   {
@@ -2736,6 +2739,7 @@ public:
     storage_format_version_ = common::OB_STORAGE_FORMAT_VERSION_INVALID;
     enable_macro_block_bloom_filter_ = false;
     storage_cache_policy_.reset();
+    micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
   }
   bool is_valid() const;
   DECLARE_TO_STRING;
@@ -2755,6 +2759,7 @@ public:
   int64_t storage_format_version_;
   bool enable_macro_block_bloom_filter_;
   common::ObString storage_cache_policy_;
+  int64_t micro_block_format_version_;
 };
 
 struct ObIndexOption : public ObTableOption
