@@ -857,6 +857,7 @@ int ObIModel::work(ObTableExecCtx &ctx,
     res.query_session_id_ = session_id;
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
       if (ObQueryOperationType::QUERY_START == query_type) {
+        lease_timeout_period_ = query_iter->get_lease_timeout_period();
         query_session_->set_req_start_time(ObTimeUtility::current_monotonic_time());
         ret = query_iter->start(req, ctx, res);
       } else if (ObQueryOperationType::QUERY_NEXT == query_type) {

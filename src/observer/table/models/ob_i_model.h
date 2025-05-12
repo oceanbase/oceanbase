@@ -34,7 +34,8 @@ public:
 public:
   ObIModel()
     : allocator_("ObIModel", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      query_session_(nullptr)
+      query_session_(nullptr),
+      lease_timeout_period_(0)
   {
     new_reqs_.set_attr(ObMemAttr(MTL_ID(), "ModNewReqs"));
     new_results_.set_attr(ObMemAttr(MTL_ID(), "ModNewRes"));
@@ -269,6 +270,7 @@ public:
   OB_INLINE const common::ObIArray<ObTableLSOpRequest*> &get_new_requests() const { return new_reqs_; }
   OB_INLINE common::ObIArray<ObTableLSOpResult*> &get_new_results() { return new_results_; }
   OB_INLINE bool is_alloc_from_pool() { return is_alloc_from_pool_; }
+  OB_INLINE uint64_t get_lease_timeout_period() { return lease_timeout_period_; }
 protected:
   int alloc_and_init_request_result(ObTableExecCtx &ctx,
                                     const ObTableLSOpRequest &src_req,
@@ -330,6 +332,7 @@ protected:
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableNewQueryAsyncSession *query_session_;
+  uint64_t lease_timeout_period_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObIModel);
