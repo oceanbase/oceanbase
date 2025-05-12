@@ -802,6 +802,9 @@ int ObTmpFileBlockManager::get_block_usage_stat(int64_t &used_page_num, int64_t 
     SpinRLockGuard guard(stat_lock_);
     used_page_num = used_page_num_;
     macro_block_count = physical_block_num_;
+    if (used_page_num < 0 || macro_block_count < 0) {
+      LOG_ERROR("invalid used_page_num or macro_block_count", K(used_page_num), K(macro_block_count));
+    }
   }
 
   return ret;
