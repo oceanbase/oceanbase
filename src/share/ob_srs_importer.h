@@ -32,6 +32,7 @@ public:
   virtual ~ObSRSImporter() {}
   int exec_op(table::ObModuleDataArg op_arg);
   OB_INLINE int64_t get_affected_rows() { return affected_rows_; }
+  static int get_srs_cnt(ObCommonSqlProxy *sql_proxy, uint64_t tenant_id, int64_t &srs_cnt);
 
 private:
   int import_srs_info(const ObString &file_path);

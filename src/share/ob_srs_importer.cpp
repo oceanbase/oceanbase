@@ -45,25 +45,18 @@ int ObSRSImporter::exec_op(table::ObModuleDataArg op)
   return ret;
 }
 
-int ObSRSImporter::import_srs_info(const ObString &file_path)
+int ObSRSImporter::get_srs_cnt(ObCommonSqlProxy *sql_proxy, uint64_t tenant_id, int64_t &srs_cnt)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObMySQLTransaction trans;
-
-  // check old data row_cnt
-  if (OB_ISNULL(exec_ctx_.get_sql_proxy())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy must not null", K(ret), KP(exec_ctx_.get_sql_proxy()));
-  } else if (OB_FAIL(sql.assign_fmt("select count(*) as srs_cnt from oceanbase.%s", OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
+  if (OB_FAIL(sql.assign_fmt("select count(*) as srs_cnt from oceanbase.%s", OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
     LOG_WARN("failed to assign sql", KR(ret), K(sql));
   } else {
-    int64_t srs_cnt = 0;
-    ObCommonSqlProxy *sql_proxy = exec_ctx_.get_sql_proxy();
+    srs_cnt = 0;
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_proxy->read(res, tenant_id_, sql.ptr()))) {
-        LOG_WARN("failed to read", KR(ret), K(tenant_id_), K(sql));
+      if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to read", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get sql result", KR(ret));
@@ -78,6 +71,25 @@ int ObSRSImporter::import_srs_info(const ObString &file_path)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObSRSImporter::import_srs_info(const ObString &file_path)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObMySQLTransaction trans;
+  int64_t srs_cnt = 0;
+
+  // check old data row_cnt
+  if (OB_ISNULL(exec_ctx_.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not null", K(ret), KP(exec_ctx_.get_sql_proxy()));
+  } else if (OB_FAIL(get_srs_cnt(exec_ctx_.get_sql_proxy(), tenant_id_, srs_cnt))) {
+    LOG_WARN("get srs count failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(sql.assign_fmt("select count(*) as srs_cnt from oceanbase.%s", OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
   }
   // truncate table
   if (OB_SUCC(ret)) {
@@ -98,7 +110,7 @@ int ObSRSImporter::import_srs_info(const ObString &file_path)
     ObSqlString load_sql;
     ObSqlString update_time;
     const char *srs_file = "spatial_reference_systems.data";
-    if (OB_FAIL(load_sql.assign_fmt("LOAD DATA /*+ direct(true, 0, 'inc_replace') */ INFILE '%.*s/%s' INTO TABLE oceanbase.%s ", file_path.length(), file_path.ptr(), srs_file,
+    if (OB_FAIL(load_sql.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE oceanbase.%s ", file_path.length(), file_path.ptr(), srs_file,
       OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
       LOG_WARN("failed to assign sql", K(ret), K(load_sql));
     } else if (OB_FAIL(update_time.assign_fmt("update oceanbase.%s set gmt_create = NOW(), gmt_modified = NOW()",
