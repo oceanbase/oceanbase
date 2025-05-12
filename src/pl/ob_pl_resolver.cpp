@@ -4196,7 +4196,7 @@ int ObPLResolver::set_question_mark_type(ObSchemaGetterGuard &schema_guard,
   }
   if (OB_SUCC(ret) && need_set) {
     ObPLDataType dest_type(*type);
-    if (!need_check && !(OB_NOT_NULL(var->get_type().get_data_type())
+    if (!(OB_NOT_NULL(var->get_type().get_data_type())
               && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
       OX (dest_type = var->get_type());
     } else {

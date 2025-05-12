@@ -444,6 +444,7 @@ public:
                          ObObjParam &src, const ObExprResType &result_type, ObObjParam &result,
                          const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert_objparam(pl::ObPLExecCtx *ctx, ObObjParam *src, const int64_t result_idx, ObObjParam *result, bool need_set);
+  static int spi_convert_anonymous_array(pl::ObPLExecCtx *ctx, ObObjParam *param, uint64_t user_type_id);
   static int spi_set_package_variable(pl::ObPLExecCtx *ctx,
                              uint64_t package_id,
                              int64_t var_idx,
