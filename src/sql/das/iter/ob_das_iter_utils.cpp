@@ -2152,6 +2152,8 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
 {
   int ret = OB_SUCCESS;
 
+  const ObDASBaseCtDef *sort_base_ctdef = nullptr;
+  ObDASBaseRtDef *sort_base_rtdef = nullptr;
   const ObDASSortCtDef *sort_ctdef = nullptr;
   ObDASSortRtDef *sort_rtdef = nullptr;
   const ObDASTableLookupCtDef *lookup_ctdef = nullptr;
@@ -2167,14 +2169,19 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
   if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table lookup param is nullptr", KP(attach_ctdef), KP(attach_rtdef));
-  } else if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef, attach_rtdef, DAS_OP_SORT, sort_ctdef, sort_rtdef))) {
-    LOG_WARN("find sort def failed", K(ret));
+  } else if (OB_FAIL(ObDASUtils::find_child_das_def(attach_ctdef, attach_rtdef, DAS_OP_SORT, sort_base_ctdef, sort_base_rtdef))) {
+    SQL_DAS_LOG(WARN, "find sort def failed", K(ret));
+  } else if (OB_ISNULL(sort_base_ctdef) || OB_ISNULL(sort_base_rtdef)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("sort_ctdef or sort_rtdef is null", K(ret));
   } else if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef, attach_rtdef, DAS_OP_IR_AUX_LOOKUP, mvi_lookup_ctdef, mvi_lookup_rtdef))) {
     LOG_WARN("find ir aux lookup def failed", K(ret));
   } else if (mvi_lookup_ctdef->children_cnt_ != 2) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("find index def failed", K(ret), K(mvi_lookup_ctdef->children_cnt_));
   } else {
+    sort_ctdef = static_cast<const ObDASSortCtDef *>(sort_base_ctdef);
+    sort_rtdef = static_cast<ObDASSortRtDef *>(sort_base_rtdef);
     const ObDASScanCtDef* index_ctdef = static_cast<const ObDASScanCtDef*>(mvi_lookup_ctdef->children_[0]);
     ObDASScanRtDef * index_rtdef = static_cast<ObDASScanRtDef *>(mvi_lookup_rtdef->children_[0]);
     const ObDASScanCtDef* docid_table_ctdef = mvi_lookup_ctdef->get_lookup_scan_ctdef();
