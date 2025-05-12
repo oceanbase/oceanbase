@@ -679,6 +679,14 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
      LOG_WARN("failed to replace old adapter", K(ret));
     }
   }
+  // free adapter memory when failed
+  if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter)) {
+    LOG_INFO("release new adapter memory in failure", K(ret));
+    new_adapter->~ObPluginVectorIndexAdaptor();
+    vector_index_service->get_allocator().free(adpt_buff);
+    adpt_buff = nullptr;
+    new_adapter = nullptr;
+  }
   if (OB_NOT_NULL(snapshot_idx_iter) && OB_NOT_NULL(tsc_service)) {
     int tmp_ret = tsc_service->revert_scan_iter(snapshot_idx_iter);
     if (tmp_ret != OB_SUCCESS) {
