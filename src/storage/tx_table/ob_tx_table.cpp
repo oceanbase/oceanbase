@@ -1080,19 +1080,34 @@ void ObTxTable::recycle_tx_data_finish(const share::SCN current_recycle_scn)
             KTIME(current_ts));
 }
 
-int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
+#define SKIP_CALC_LOG(LOG_LEVEL) \
+  STORAGE_LOG(LOG_LEVEL, "get upper trans version", K(ls_id), K(calc_upper_trans_is_disabled_), K(sstable_end_scn))
+int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn,
+                                                        SCN &upper_trans_version,
+                                                        const bool force_print_log)
 {
   int ret = OB_SUCCESS;
+  const ObLSID ls_id = ls_->get_ls_id();
   if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
     // cannot calculate upper trans version right now
-    if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL)) {
-      STORAGE_LOG(INFO, "calc upper trans version is disabled", K(calc_upper_trans_is_disabled_), K(sstable_end_scn));
+    if (TC_REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL)) {
+      STORAGE_LOG(INFO, "calc upper trans version is disabled",
+                  K(ls_id), K(calc_upper_trans_is_disabled_),
+                  K(sstable_end_scn));
+    }
+    if (force_print_log) {
+      SKIP_CALC_LOG(INFO);
+    } else {
+      SKIP_CALC_LOG(TRACE);
     }
   } else {
-    ret = tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version);
+    ret = tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn,
+                                                                  upper_trans_version,
+                                                                  force_print_log);
   }
   return ret;
 }
+#undef SKIP_CALC_LOG
 
 void ObTxTable::disable_upper_trans_calculation()
 {
