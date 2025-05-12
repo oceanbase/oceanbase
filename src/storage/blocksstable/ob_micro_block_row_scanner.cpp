@@ -1791,6 +1791,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_directly(
         LOG_DEBUG("check base version filter fail", K(ret));
       } else if (row->row_flag_.is_not_exist()) {
         version_fit = false;
+      } else {
+        row->snapshot_version_ = 0;
+        ret_row = row;
       }
     } else {
       row->snapshot_version_ = 0;
