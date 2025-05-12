@@ -161,8 +161,12 @@ bool ObVecIndexAsyncTaskUtil::check_can_do_work()
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   bool is_oracle_mode = false;
+  const bool is_not_support = true;
   int64_t tenant_id = MTL_ID();
-  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+  if (is_not_support) {
+    bret = false;
+    LOG_DEBUG("can not do work, not support async task");
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", K(ret), K(tenant_id));
   } else if (is_oracle_mode) {
     bret = false;
@@ -1394,6 +1398,8 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
           } else { // set extra column id
             if (OB_FAIL(extra_column_idxs.push_back(i))) {
               LOG_WARN("failed to push back extra column idx", K(ret), K(i));
+            } else if (OB_FAIL(dml_column_ids.push_back(all_column_ids.at(i)))) {
+              LOG_WARN("fail to push back column id", K(ret), K(all_column_ids.at(i)));
             }
           }
         } // end for.
@@ -1428,7 +1434,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
       } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id_, timeout, snapshot))) {
         LOG_WARN("fail to get snapshot", K(ret));
       } else if (OB_FAIL(get_old_snapshot_data(adaptor, tx_desc, snapshot_column_count, cs_type, vector_key_col_idx,
-          vector_data_col_idx, vector_vid_col_idx, vector_col_idx, table_scan_iter, delete_row_iter))) {
+          vector_data_col_idx, vector_vid_col_idx, vector_col_idx, extra_column_idxs, table_scan_iter, delete_row_iter))) {
         LOG_WARN("failed to get old snapshot data", K(ret));
       } else if (OB_ISNULL(adaptor.get_snap_data_()) || !adaptor.get_snap_data_()->is_inited()) {  // adaptor created by vector index async task, there won't be access from other threads.
         LOG_INFO("data table is empty, won't create snapshot index");
@@ -1582,6 +1588,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
     int64_t vector_data_col_idx,
     int64_t vector_vid_col_idx,
     int64_t vector_col_idx,
+    ObSEArray<int64_t, 4> &extra_column_idxs,
     ObTableScanIterator *table_scan_iter,
     storage::ObValueRowIterator &delete_row_iter)
 {
@@ -1599,7 +1606,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
     LOG_WARN("failed to init row iter", K(ret));
   }
   HEAP_VAR(blocksstable::ObDatumRow, d_row, tenant_id_) {
-    if (OB_SUCC(ret) && OB_FAIL(d_row.init(snapshot_column_count))) {
+    if (OB_SUCC(ret) && OB_FAIL(d_row.init(snapshot_column_count + extra_column_idxs.count()))) {
       LOG_WARN("fail to init datum row", K(ret), K(d_row));
     }
     while (OB_SUCC(ret)) {
@@ -1639,6 +1646,21 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
           d_row.storage_datums_[vector_data_col_idx].set_has_lob_header();
           d_row.storage_datums_[vector_vid_col_idx].set_null();
           d_row.storage_datums_[vector_col_idx].set_null();
+          // set extra column default value
+          if (extra_column_idxs.count() > 0) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_idxs.count(); i++) {
+              if (extra_column_idxs.at(i) == vector_key_col_idx ||
+                  extra_column_idxs.at(i) == vector_data_col_idx ||
+                  extra_column_idxs.at(i) == vector_vid_col_idx ||
+                  extra_column_idxs.at(i) == vector_col_idx) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected extra column idx", K(i), K(extra_column_idxs.at(i)),
+                  K(vector_key_col_idx), K(vector_data_col_idx), K(vector_vid_col_idx), K(vector_col_idx));
+              } else {
+                d_row.storage_datums_[extra_column_idxs.at(i)].set_null();
+              }
+            }
+          }
         }
         if (OB_SUCC(ret) && OB_FAIL(delete_row_iter.add_row(d_row, util))) {
           LOG_WARN("failed to add row to iter", K(ret));

@@ -44,13 +44,23 @@ bool ObVecAsyncTaskExector::check_operation_allow()
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   bool bret = true;
-
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+  bool is_active_time = true;
+  const bool is_not_support = true;
+  if (is_not_support) {
+    bret = false;
+    LOG_DEBUG("skip this round, not support async task.");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     bret = false;
     LOG_WARN("get tenant data version failed", K(ret));
   } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
     bret = false;
     LOG_DEBUG("vector index async task can not work with data version less than 4_3_5_2", K(tenant_data_version));
+  } else if (ObVecIndexAsyncTaskUtil::in_active_time(tenant_id_, is_active_time)) {
+    bret = false;
+    LOG_WARN("fail to get active time");
+  } else if (!is_active_time) {
+    bret = false;
+    LOG_INFO("skip this round, not in active time.");
   }
   return bret;
 }
@@ -75,9 +85,12 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  const bool is_not_support = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
+  } else if (is_not_support) {
+    // skip
   } else if (OB_ISNULL(vector_index_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(tenant_id_));
@@ -87,11 +100,14 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
     ObIAllocator *allocator = index_ls_mgr->get_async_task_opt().get_allocator();
     ObVecIndexAsyncTaskHandler &thread_pool_handle = vector_index_service_->get_vec_async_task_handle();
     if (0 == index_ls_mgr->get_complete_adapter_map().size()) { // no vector index exist, skip
-    } else if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) { // no need to init twice, skip
-    } else if (OB_FAIL(thread_pool_handle.init(allocator))) {
-      LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(thread_pool_handle.start())) {
-      LOG_WARN("fail to start thread pool", K(ret), K(tenant_id_));
+    } else {
+      common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
+      if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) { // no need to init twice, skip
+      } else if (OB_FAIL(thread_pool_handle.init(allocator))) {
+        LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(thread_pool_handle.start())) {
+        LOG_WARN("fail to start thread pool", K(ret), K(tenant_id_));
+      }
     }
   }
   return ret;

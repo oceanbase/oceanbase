@@ -203,6 +203,7 @@ public:
 public:
   static const int64_t MIN_THREAD_COUNT = 1;
   static const int64_t MAX_THREAD_COUNT = 12;
+  common::ObSpinLock lock_; // lock for init
 
 private:
   static const int64_t INVALID_TG_ID = -1;
@@ -246,6 +247,7 @@ private:
       int64_t vector_data_col_idx,
       int64_t vector_vid_col_idx,
       int64_t vector_col_idx,
+      ObSEArray<int64_t, 4> &extra_column_idxs,
       storage::ObTableScanIterator *table_scan_iter,
       storage::ObValueRowIterator &delete_row_iter);
   int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
