@@ -1033,6 +1033,7 @@ int ObVecIndexAsyncTask::do_work()
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
+  void *adpt_buff = nullptr;
   DEBUG_SYNC(HANDLE_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1054,7 +1055,7 @@ int ObVecIndexAsyncTask::do_work()
   } else if (OB_FAIL(adpt_guard.get_adatper()->check_vsag_mem_used())) {
     LOG_WARN("fail to check vsag mem used", KR(ret), KPC(ctx_));
   } else {
-    void *adpt_buff = vector_index_service->get_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
+    adpt_buff = vector_index_service->get_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
     if (OB_ISNULL(adpt_buff)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for vector index adapter", KR(ret));
@@ -1075,11 +1076,12 @@ int ObVecIndexAsyncTask::do_work()
   if (task_started) {
     adpt_guard.get_adatper()->vector_index_task_finish();
   }
-
   if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter)) {
-    if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_adapter(new_adapter))) {
-      LOG_WARN("failed to release adapter", K(ret));
-    }
+    LOG_INFO("release new adapter memory in failure", K(ret));
+    new_adapter->~ObPluginVectorIndexAdaptor();
+    vector_index_service->get_allocator().free(adpt_buff);
+    adpt_buff = nullptr;
+    new_adapter = nullptr;
   }
 
   if (OB_NOT_NULL(ctx_)) {
