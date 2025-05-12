@@ -4411,6 +4411,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_LOCATION_ACCESS_DENIED__USER_ERROR_MSG "Location access denied"
 #define OB_LOCATION_OBJ_EXIST__USER_ERROR_MSG "Can't create location '%.*s'; location exists"
 #define OB_LOCATION_OBJ_NOT_EXIST__USER_ERROR_MSG "location '%.*s' doesn\'t exist"
+#define OB_LOGSERVICE_RPC_ERROR__USER_ERROR_MSG "OBLogService rpc execute failed"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9256,6 +9257,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOCATION_OBJ_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11091, Can't create location '%.*s'; location exists"
 #define OB_LOCATION_OBJ_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11092, location '%.*s' doesn\'t exist"
 #define OB_LOCATION_OBJ_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11092, location '%.*s' doesn\'t exist"
+#define OB_LOGSERVICE_RPC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11093, OBLogService rpc execute failed"
+#define OB_LOGSERVICE_RPC_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11093, OBLogService rpc execute failed"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9275,7 +9278,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2424];
+extern int g_all_ob_errnos[2425];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
