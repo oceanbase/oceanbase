@@ -559,12 +559,13 @@ public:
   template<typename ... Args>
   int create_context(MemoryContext &context,
                      __MemoryContext__ &ref_context,
+                     __MemoryContext__ *parent,
                      const DynamicInfo &di,
                      Args && ... args)
   {
     int ret = common::OB_SUCCESS;
 
-    new (&ref_context) __MemoryContext__(/*need_free*/false, di, this, args...);
+    new (&ref_context) __MemoryContext__(/*need_free*/false, di, parent, args...);
     if (OB_FAIL(ref_context.init())) {
       OB_LOG(WARN, "init failed", K(ret));
     }
@@ -590,7 +591,6 @@ public:
     }
     const bool need_free = context->need_free_;
     TreeNode *parent_node = context->tree_node_.parent_;
-    abort_unless(parent_node != nullptr);
     context->deinit();
     if (need_free) {
       __MemoryContext__ *parent = node2context(parent_node);
@@ -836,7 +836,7 @@ public:
     int ret = common::OB_SUCCESS;
     if (OB_LIKELY(condition)) {
       __MemoryContext__ *tmp_context = reinterpret_cast<__MemoryContext__*>(buf0_);
-      if (OB_FAIL(CURRENT_CONTEXT->create_context(context_, *tmp_context, args...))) {
+      if (OB_FAIL(CURRENT_CONTEXT->create_context(context_, *tmp_context, nullptr, args...))) {
         OB_LOG(WARN, "create context failed", K(ret));
       } else {
         Flow *tmp_flow = new (buf1_) Flow(context_);
