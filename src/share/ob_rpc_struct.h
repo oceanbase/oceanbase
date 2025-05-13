@@ -4409,6 +4409,7 @@ public:
     RECOVERY_LS_SERVICE,
     BALANCE_TASK_EXECUTE,
     DISASTER_RECOVERY_SERVICE,
+    ARBITRATION_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
