@@ -1724,7 +1724,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
     LOG_WARN("the size of part task channel map is zero", K(ret));
   } else if (OB_FAIL(ObRepartSliceIdxCalc::get_tablet_id<USE_VEC>(eval_ctx, tablet_id, skip))) {
     LOG_WARN("failed to get partition id", K(ret));
-  } else if (OB_FAIL(get_task_idx_by_tablet_id(eval_ctx, tablet_id, slice_idx_array.at(0)))) {
+  } else if (OB_FAIL(get_task_idx_by_tablet_id<USE_VEC>(eval_ctx, tablet_id, slice_idx_array.at(0), skip))) {
     if (OB_HASH_NOT_EXIST == ret) {
       if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
         slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
@@ -1738,7 +1738,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
       } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
         const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
         int64_t hash_idx = 0;
-        if (OB_FAIL(hash_calc_.calc_slice_idx<false>(eval_ctx, part_ch_array.count(), hash_idx))) {
+        if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, part_ch_array.count(), hash_idx))) {
           LOG_WARN("fail calc hash value", K(ret));
         } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
           slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
@@ -1756,9 +1756,11 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
   return ret;
 }
 //TODO:shanting2.0 实现pkey hash的向量化1.0和2.0接口
+template <bool USE_VEC>
 int ObSlaveMapPkeyHashIdxCalc::get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx,
                                                          int64_t tablet_id,
-                                                         int64_t &task_idx)
+                                                         int64_t &task_idx,
+                                                         ObBitVector *skip)
 {
   int ret = OB_SUCCESS;
   int64_t hash_idx = 0;
@@ -1773,7 +1775,10 @@ int ObSlaveMapPkeyHashIdxCalc::get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx,
     } else if (task_idx_array->count() <= 0){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the size of task idx array is zero", K(ret));
-    } else if (OB_FAIL(hash_calc_.calc_slice_idx<false>(eval_ctx, task_idx_array->count(), hash_idx))) {
+    } else if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx,
+                                                          task_idx_array->count(),
+                                                          hash_idx,
+                                                          skip))) {
       LOG_WARN("fail calc hash value", K(ret));
     } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
       task_idx = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;

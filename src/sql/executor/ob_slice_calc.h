@@ -1090,7 +1090,9 @@ public:
   }
 
 private:
-  int get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx, int64_t tablet_id , int64_t &task_idx);
+  template <bool USE_VEC>
+  int get_task_idx_by_tablet_id(ObEvalCtx &eval_ctx, int64_t tablet_id , int64_t &task_idx,
+                                ObBitVector *skip = NULL);
   int build_affi_hash_map(hash::ObHashMap<int64_t, ObPxPartChMapItem> &affi_hash_map);
 private:
   hash::ObHashMap<int64_t, ObPxPartChMapItem> affi_hash_map_;
