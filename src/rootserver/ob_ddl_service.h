@@ -273,7 +273,8 @@ public:
   int create_index_tablet(const ObTableSchema &index_schema,
                           ObMySQLTransaction &trans,
                           share::schema::ObSchemaGetterGuard &schema_guard,
-                          const bool need_check_tablet_cnt);
+                          const bool need_check_tablet_cnt,
+                          const bool is_table_empty);
   virtual int alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
                                 const share::schema::ObTableSchema &orgin_table_schema,
                                 share::schema::ObTableSchema &new_table_schema,
@@ -1360,7 +1361,8 @@ private:
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
                             share::schema::ObSchemaGetterGuard &schema_guard,
-                            const bool need_check_tablet_cnt);
+                            const bool need_check_tablet_cnt,
+                            const bool is_table_empty);
   /*
    * Check and set various options of modify tenant, among which the modifications of zone_list,
    *  locality and resource_pool are related to each other.

@@ -605,6 +605,10 @@ int ObCreateIndexHelper::create_tablets_()
     LOG_WARN("fail to get frozen status for create tablet", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (create_index_on_empty_table_opt_
+             && OB_FAIL(ObCreateIndexOnEmptyTableHelper::get_major_frozen_scn(tenant_id_, frozen_scn))) {
+    // we will create empty major when create index on empty table, so we need to get timestamp as major version to make sure data in the index table is consistent with the data table.
+    LOG_WARN("fail to get wait major frozen scn", K(ret));
   } else {
     ObTableSchema &index_schema = index_schemas_.at(0);
     ObTableCreator table_creator(tenant_id_, frozen_scn, trans_);

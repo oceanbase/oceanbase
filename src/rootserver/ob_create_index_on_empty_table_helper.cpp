@@ -13,6 +13,10 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "rootserver/ob_ddl_service.h"
+#include "storage/tx/ob_ts_mgr.h"
+#include "common/ob_timeout_ctx.h"
+#include "share/ob_share_util.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 using namespace share;
@@ -51,6 +55,25 @@ int ObCreateIndexOnEmptyTableHelper::check_create_index_on_empty_table_opt(
                                                     is_create_index_on_empty_table_opt))) {
       LOG_WARN("failed to check table empty", KR(ret), K(database_name), K(table_schema));
     }
+  }
+  return ret;
+}
+
+int ObCreateIndexOnEmptyTableHelper::get_major_frozen_scn(const uint64_t tenant_id, share::SCN &major_frozen_scn)
+{
+  int ret = OB_SUCCESS;
+  bool is_external_consistent = false;
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(common::OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                           ctx.get_timeout(),
+                                           major_frozen_scn,
+                                           is_external_consistent))) {
+    LOG_WARN("fail to get gts sync", K(ret), K(tenant_id), K(ctx.get_timeout()), K(major_frozen_scn), K(is_external_consistent));
   }
   return ret;
 }

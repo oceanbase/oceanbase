@@ -17,6 +17,10 @@
 #include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace rootserver
 {
 class ObDDLService;
@@ -31,6 +35,10 @@ public:
     uint64_t executor_data_version,
     const ObSQLMode sql_mode,
     bool &is_create_index_on_empty_table_opt);
+
+  static int get_major_frozen_scn(
+    const uint64_t tenant_id,
+    share::SCN &major_frozen_scn);
 };
 
 } //namespace rootserver

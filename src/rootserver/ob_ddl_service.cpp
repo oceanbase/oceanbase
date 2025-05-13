@@ -458,7 +458,8 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
       }
       if (OB_SUCC(ret) && index_schema.has_tablet()
           && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard,
-                                         true/*need_check_tablet_cnt*/))) {
+                                         true/*need_check_tablet_cnt*/,
+                                         is_table_empty))) {
         LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
       }
     }
@@ -552,7 +553,7 @@ int ObDDLService::create_index_table(
       // for alter table add index operation or create index on empty table, keep generating ddl_stmt_str same as 3.x while generating index schema.
       const ObString *ddl_stmt_str = is_table_empty ? &arg.ddl_stmt_str_ : nullptr;
       if (OB_FAIL(create_table_in_trans(table_schema,
-              ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
+              ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/, is_table_empty))) {
         LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
       }
     }
@@ -2007,7 +2008,8 @@ int ObDDLService::create_table_in_trans(
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    const bool need_check_tablet_cnt)
+    const bool need_check_tablet_cnt,
+    const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -2045,7 +2047,7 @@ int ObDDLService::create_table_in_trans(
       }
     }
     if (OB_SUCC(ret) && table_schema.has_tablet()
-        && OB_FAIL(create_index_tablet(table_schema, trans, schema_guard, need_check_tablet_cnt))) {
+        && OB_FAIL(create_index_tablet(table_schema, trans, schema_guard, need_check_tablet_cnt, is_table_empty))) {
       LOG_WARN("fail to create_index_tablet", KR(ret), K(table_schema));
     }
     if (OB_ISNULL(sql_trans) && trans.is_started()) {
@@ -5587,7 +5589,8 @@ int ObDDLService::lock_tables_in_recyclebin(const ObDatabaseSchema &database_sch
 int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                                       ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                      const bool need_check_tablet_cnt)
+                                      const bool need_check_tablet_cnt,
+                                      const bool is_table_empty)
 {
   int ret = OB_SUCCESS;
   int64_t tenant_id = index_schema.get_tenant_id();
@@ -5602,6 +5605,9 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
     LOG_WARN("root service is null", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
+  } else if (is_table_empty && OB_FAIL(ObCreateIndexOnEmptyTableHelper::get_major_frozen_scn(tenant_id, frozen_scn))) {
+    // we will create empty major when create index on empty table, so we need to get timestamp as major version to make sure data in the index table is consistent with the data table.
+    LOG_WARN("failed to get major frozen", KR(ret), K(tenant_id));
   } else {
     int64_t start_usec = ObTimeUtility::current_time();
     ObTableCreator table_creator(
@@ -5860,7 +5866,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                 // The index data is stored separately from the main table,
                 // the partition needs to be built, and insert ori_schema_version in the outer insert
                 if (index_schema.has_tablet()
-                    && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/))) {
+                    && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/, is_only_add_index_on_empty_table))) {
                   LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
                 }
                 if (OB_SUCC(ret)) {
@@ -17237,7 +17243,7 @@ int ObDDLService::rebuild_hidden_table_index(
           has_tablet = is_system_table(table_id);
         }
         if (!has_tablet) {
-        } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard, false/*need_check_tablet_cnt*/))) {
+        } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard, false/*need_check_tablet_cnt*/, false/*is_tabale_empty*/))) {
           LOG_WARN("create table tablets failed", K(ret), K(this_table));
         } else {}
         if (OB_SUCC(ret)) {
@@ -23398,7 +23404,8 @@ int ObDDLService::rebuild_index_in_trans(
     LOG_WARN("failed to generate tablet id", K(ret));
   } else if (OB_FAIL(create_table_in_trans(index_schema,
                               ddl_stmt_str, &trans, schema_guard,
-                              false/*need_check_tablet_cnt*/))) {
+                              false/*need_check_tablet_cnt*/,
+                              false/*is_table_empty*/))) {
     LOG_WARN("create_table_in_trans failed", K(index_schema), KR(ret), K(ddl_stmt_str));
   }
 
@@ -23782,7 +23789,7 @@ int ObDDLService::add_table_schema(
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, trans, schema_guard,
-                                           false/*need_check_tablet_cnt*/))) {
+                                           false/*need_check_tablet_cnt*/, false/*is_table_empty*/))) {
     LOG_WARN("create_table_in_trans failed", KR(ret), K(table_schema));
   }
   LOG_INFO("[UPGRADE] add inner table", KR(ret),
