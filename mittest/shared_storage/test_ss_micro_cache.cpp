@@ -610,8 +610,8 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache_for_prewarm)
   const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
   char data_buf[micro_size];
   MEMSET(data_buf, 'c', micro_size);
-  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(
-                micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, false /*transfer_seg*/));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(micro_key, data_buf, micro_size,
+                        ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, false /*transfer_seg*/));
 
   ObSSMicroBlockMetaHandle micro_meta_handle;
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_meta_handle, false));
@@ -621,8 +621,8 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache_for_prewarm)
 
   // Scenario 2
   const ObSSMicroBlockCacheKey micro_key2 = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset + micro_size, micro_size);
-  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(
-                micro_key2, data_buf, micro_size, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, true /*transfer_seg*/));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(micro_key2, data_buf, micro_size,
+                        ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, true /*transfer_seg*/));
 
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key2, micro_meta_handle, false));
   ASSERT_EQ(false, micro_meta_handle()->is_in_l1());

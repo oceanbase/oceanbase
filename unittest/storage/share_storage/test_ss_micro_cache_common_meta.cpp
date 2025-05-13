@@ -603,6 +603,21 @@ TEST_F(TestSSMicroCacheCommonMeta, micro_block_handle)
   ASSERT_EQ(1, micro_meta.ref_cnt_);
 }
 
+TEST_F(TestSSMicroCacheCommonMeta, expired_micro_meta)
+{
+  ObSSMicroBlockMeta micro_meta;
+  micro_meta.ref_cnt_ = 10;
+
+  micro_meta.update_access_time();
+  micro_meta.access_time_ -= 4 * 3600;
+  ASSERT_EQ(false, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME));
+  micro_meta.access_time_ -= 44 * 3600;
+  ASSERT_EQ(true, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME));
+  micro_meta.update_access_time();
+  micro_meta.update_access_time(120);
+  ASSERT_EQ(false, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME));
+}
+
 TEST_F(TestSSMicroCacheCommonMeta, micro_meta_handle_arr)
 {
   const int32_t micro_size = 100;
