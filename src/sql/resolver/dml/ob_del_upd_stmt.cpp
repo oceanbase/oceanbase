@@ -497,6 +497,7 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to get dml table infos", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < dml_table_infos.count(); ++i) {
+    bool hit_updatable_view = false;
     if (OB_ISNULL(dml_table_infos.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dml table info is null", K(ret));
@@ -505,17 +506,16 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else if (dml_table_infos.at(i)->table_id_ != OB_INVALID_ID &&
                dml_table_infos.at(i)->table_id_ != dml_table_infos.at(i)->loc_table_id_) {
       // handle updatable view in a speical way
-      for (int64_t j = 0; OB_SUCC(ret) && j < part_expr_items_.count(); ++j) {
-        if (part_expr_items_.at(j).table_id_ == dml_table_infos.at(i)->loc_table_id_) {
-          if (OB_FAIL(visitor.visit(part_expr_items_.at(j).part_expr_,
-                                    SCOPE_DMLINFOS))) {
-            LOG_WARN("failed to visit part expr items", K(ret));
-          } else if (OB_FAIL(visitor.visit(part_expr_items_.at(j).subpart_expr_,
-                                           SCOPE_DMLINFOS))) {
-            LOG_WARN("failed to visit subpart exprs", K(ret));
-          }
+      for (int64_t j = 0; OB_SUCC(ret) && !hit_updatable_view && j < part_expr_items_.count(); ++j) {
+        if (OB_FAIL(visitor.visit(part_expr_items_.at(j).part_expr_,
+                                  SCOPE_DMLINFOS))) {
+          LOG_WARN("failed to visit part expr items", K(ret));
+        } else if (OB_FAIL(visitor.visit(part_expr_items_.at(j).subpart_expr_,
+                                         SCOPE_DMLINFOS))) {
+          LOG_WARN("failed to visit subpart exprs", K(ret));
         }
       }
+      hit_updatable_view = true;
     }
   }
   return ret;
