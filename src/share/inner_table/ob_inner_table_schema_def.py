@@ -16275,6 +16275,7 @@ def_table_schema(
 # 12546: __tenant_virtual_list_file
 # 12547: __all_virtual_external_resource
 # 12548: __all_virtual_external_resource_history
+# 12549: __all_virtual_ccl_rule_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位

@@ -473,6 +473,7 @@ public:
     uint64_t column_priv_id_;
     uint64_t catalog_id_;
     uint64_t obj_type_;
+    uint64_t ccl_rule_id_;
   };
   union {
     common::ObString table_name_;
