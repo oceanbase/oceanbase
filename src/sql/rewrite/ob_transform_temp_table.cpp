@@ -2795,6 +2795,9 @@ int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
                                         trans.get_max_iteration_count(),
                                         trans_happended))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+      // jinmao TODO: defensive code, remove it later
+      LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(check_evaluate_after_transform(root_stmt, stmts, can_eval))) {
       LOG_WARN("failed to check after transform", K(ret));
     } else if (!can_eval) {
@@ -2895,6 +2898,9 @@ int ObTransformTempTable::evaluate_cte_cost_globally(ObDMLStmt *origin_root,
                                                 trans.get_max_iteration_count(),
                                                 trans_happended))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+      // jinmao TODO: defensive code, remove it later
+      LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
