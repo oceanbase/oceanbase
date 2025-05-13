@@ -2825,7 +2825,7 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
             "FROM ("))) {
         LOG_WARN("append ash sql failed", K(ret));
       } else if (OB_FAIL(append_time_model_view_sql(
-        tm_view,"sql_id, session_type", tm_cols_wrap, tm_flags_wrap, "session_data", true))) {
+        tm_view,"sql_id, session_type", tm_cols_wrap, tm_flags_wrap, "session_data_fixup", true))) {
         LOG_WARN("append time model view sql failed", K(ret));
       } else if (OB_FAIL(tm_view.append(" GROUP BY sql_id, session_type"))) {
         LOG_WARN("append sql string failed", K(ret));
@@ -3080,9 +3080,9 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
         lib::is_oracle_mode() ? &oracle_proxy : static_cast<ObCommonSqlProxy *>(GCTX.sql_proxy_);
     bool with_color = true;
     const uint64_t request_tenant_id = MTL_ID();
-    const int64_t column_size = 11;
-    const int64_t column_widths[column_size] = {20, 64, 11, 20, 64, 20, 11, 40, 20, 11, 20};
-    AshColumnItem column_headers[column_size] = {"Session ID", "Program", "% Activity", "Avg Active Sessions",
+    const int64_t column_size = 12;
+    const int64_t column_widths[column_size] = {32, 20, 64, 11, 20, 64, 20, 11, 40, 20, 11, 20};
+    AshColumnItem column_headers[column_size] = {"Node", "Session ID", "Program", "% Activity", "Avg Active Sessions",
         "Event Name", "Wait Class", "% Event", "SQL ID", "Plan Hash", "% SQL ID", "Sql Executions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
@@ -3109,53 +3109,53 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
         LOG_WARN("failed to append sql", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
               "top_session AS ("
-                "SELECT session_id, SUM(count_weight) AS total_sample_count, program "
+                "SELECT svr_ip, svr_port, session_id, SUM(count_weight) AS total_sample_count, program "
                 "FROM session_data "
-                "GROUP BY session_id, program "
+                "GROUP BY svr_ip, svr_port, session_id, program "
                 "ORDER BY total_sample_count DESC %s), ",
                   lib::is_oracle_mode() ? "FETCH FIRST 15 ROWS ONLY" : "LIMIT 15"))) {
         LOG_WARN("append top session topic text failed", K(ret));
       } else if (OB_FAIL(sql_string.append(
               "top_event AS ("
-              "SELECT session_id, event_no, event, wait_class, event_sample_count "
+              "SELECT svr_ip, svr_port, session_id, event_no, event, wait_class, event_sample_count "
                 "FROM ("
-                  "SELECT session_id, event_no, event, wait_class, SUM(count_weight) AS event_sample_count, "
-                          "ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY SUM(count_weight) DESC) AS event_rank "
+                  "SELECT svr_ip, svr_port, session_id, event_no, event, wait_class, SUM(count_weight) AS event_sample_count, "
+                          "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, session_id ORDER BY SUM(count_weight) DESC) AS event_rank "
                   "FROM session_data "
-                  "WHERE session_id IN (SELECT session_id FROM top_session) "
-                  "GROUP BY session_id, event_no, event, wait_class"
+                  "WHERE (svr_ip, svr_port, session_id) IN (SELECT svr_ip, svr_port, session_id FROM top_session) "
+                  "GROUP BY svr_ip, svr_port, session_id, event_no, event, wait_class"
                 ") event_data "
                 "WHERE event_rank = 1"
               "), "))) {
         LOG_WARN("append top event topic text failed", K(ret));
       } else if (OB_FAIL(sql_string.append(
               "sql_data AS ("
-                "SELECT session_id, event_no, sql_id, plan_hash, "
-                        "SUM(SUM(count_weight)) OVER (PARTITION BY session_id, event_no, sql_id ORDER BY SUM(count_weight)) AS sql_sample_count, "
+                "SELECT svr_ip, svr_port, session_id, event_no, sql_id, plan_hash, "
+                        "SUM(SUM(count_weight)) OVER (PARTITION BY svr_ip, svr_port, session_id, event_no, sql_id ORDER BY SUM(count_weight)) AS sql_sample_count, "
                         "COUNT(DISTINCT trace_id) AS sql_exec_count "
                 "FROM ( "
-                        " SELECT session_id, event_no, count_weight, trace_id, "
+                        " SELECT svr_ip, svr_port, session_id, event_no, count_weight, trace_id, "
                         " FIRST_VALUE ( sql_id ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS sql_id, "
                         " FIRST_VALUE ( plan_hash ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS plan_hash "
                         " from session_data "
                       " ) "
-                "WHERE (session_id, event_no) IN (SELECT session_id, event_no FROM top_event) "
-                "GROUP BY session_id, event_no, sql_id, plan_hash"
+                "WHERE (svr_ip, svr_port, session_id, event_no) IN (SELECT svr_ip, svr_port, session_id, event_no FROM top_event) "
+                "GROUP BY svr_ip, svr_port, session_id, event_no, sql_id, plan_hash"
               "), "))) {
         LOG_WARN("append sql_data text failed", K(ret));
       } else if (OB_FAIL(sql_string.append(
               "top_sql AS ("
-                "SELECT session_id, sql_id, plan_hash, sql_sample_count, sql_exec_count "
+                "SELECT svr_ip, svr_port, session_id, sql_id, plan_hash, sql_sample_count, sql_exec_count "
                 "FROM ("
-                  "SELECT session_id, sql_id, plan_hash, sql_sample_count, sql_exec_count, "
-                          "ROW_NUMBER() OVER (PARTITION BY session_id, event_no ORDER BY sql_sample_count DESC) AS sql_rank "
+                  "SELECT svr_ip, svr_port, session_id, sql_id, plan_hash, sql_sample_count, sql_exec_count, "
+                          "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, session_id, event_no ORDER BY sql_sample_count DESC) AS sql_rank "
                   "FROM sql_data"
                 ") tmp_sql "
                 "WHERE sql_rank = 1 AND sql_id IS NOT NULL AND LENGTH(sql_id) > 0"
               ") "))) {
         LOG_WARN("append top sql topic text failed", K(ret));
-      } else if (OB_FAIL(sql_string.append(
-              "SELECT ts.session_id AS SESSION_ID, "
+      } else if (OB_FAIL(sql_string.append_fmt(
+              "SELECT %s AS NODE, ts.session_id AS SESSION_ID, "
                       "ts.total_sample_count AS TOTAL_SAMPLE_COUNT, "
                       "ts.program AS PROGRAM, "
                       "te.event AS EVENT, "
@@ -3166,9 +3166,11 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
                       "tsq.sql_sample_count AS SQL_SAMPLE_COUNT, "
                       "tsq.sql_exec_count AS SQL_EXEC_COUNT "
               "FROM top_session ts "
-              "LEFT JOIN top_event te ON ts.session_id = te.session_id "
-              "LEFT JOIN top_sql tsq ON ts.session_id = tsq.session_id "
-              "ORDER BY ts.total_sample_count DESC"))) {
+              "LEFT JOIN top_event te ON ts.session_id = te.session_id and ts.svr_ip = te.svr_ip and ts.svr_port = te.svr_port "
+              "LEFT JOIN top_sql tsq ON ts.session_id = tsq.session_id and ts.svr_ip = tsq.svr_ip and ts.svr_port = tsq.svr_port "
+              "ORDER BY ts.total_sample_count DESC",
+              lib::is_oracle_mode() ? "ts.svr_ip||':'||ts.svr_port" : "CONCAT(ts.svr_ip, ':', ts.svr_port)"//%s AS node
+              ))) {
         LOG_WARN("append the main topic failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, request_tenant_id, sql_string.ptr()))) {
         LOG_WARN("falied to execute sql", KR(ret), K(request_tenant_id), K(sql_string));
@@ -3186,6 +3188,8 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
             }
           } else {
             int64_t tmp_real_str_len = 0;
+            char node_char[64] = "";
+            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(*result, "NODE", node_char, 64, tmp_real_str_len);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "SESSION_ID", session_id, int64_t);
             int64_t total_sample_cnt = 0;
             EXTRACT_INT_FIELD_FOR_ASH(*result, "TOTAL_SAMPLE_COUNT", total_sample_cnt, int64_t);
@@ -3219,7 +3223,7 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
 
             if (OB_SUCC(ret)) {
               AshColumnItem column_content[] = {
-                  ASH_FIELD_CHAR(session_id), program_char, active_radio_char, avg_active_sessions_char,
+                  node_char, ASH_FIELD_CHAR(session_id), program_char, active_radio_char, avg_active_sessions_char,
                   event_char, wait_class_char, event_percentage,
                   sql_id, ASH_FIELD_CHAR(plan_hash), sql_percentage, ASH_FIELD_CHAR(sql_exec_cnt)};
               if (column_content[7].column_content_[0] != '\0') {
@@ -4232,40 +4236,49 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_wait_events(
                   " sql_id, CASE WHEN (plan_hash IS NULL) THEN 0 ELSE plan_hash END AS plan_hash, "
                   " sql_plan_line_id, event_no, event, trace_id, time_model, count_weight  "
               " FROM ( "
-                  " SELECT "
-                      " FIRST_VALUE ( sql_id ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS sql_id, "
-                      " FIRST_VALUE ( plan_hash ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS plan_hash, "
-                      "sql_plan_line_id, "
-                      "event_no, "
-                      "event, "
-                      "trace_id, "
-                      "time_model, "
-                      "count_weight, "
-                      "action"
+                  " ( SELECT /*+use_hash(t2)*/ "
+                      " FIRST_VALUE ( t1.sql_id ) IGNORE NULLS OVER ( PARTITION BY t1.svr_ip, t1.svr_port, t1.session_id, t1.trace_id ) AS sql_id, "
+                      " FIRST_VALUE ( t1.plan_hash ) IGNORE NULLS OVER ( PARTITION BY t1.svr_ip, t1.svr_port, t1.session_id, t1.trace_id ) AS plan_hash, "
+                      "t1.sql_plan_line_id, "
+                      "t1.event_no, "
+                      "t1.event, "
+                      "t1.trace_id, "
+                      "t1.time_model, "
+                      "t1.count_weight, "
+                      "t1.action"
                   " FROM "
-                      " session_data "
-                  " WHERE %s > 0"
-                  " UNION ALL "
-                  " SELECT "
-                      " sql_id, "
-                      " plan_hash, "
-                      " sql_plan_line_id, "
-                      " event_no, "
-                      " event, "
-                      " trace_id, "
-                      " time_model, "
-                      " count_weight, "
-                      " action "
+                      " session_data t1"
+                      "  JOIN ( "
+                          " SELECT DISTINCT session_id, trace_id "
+                          " FROM session_data  user_ash "
+                          " WHERE %s > 0 AND session_id IS NOT NULL AND trace_id IS NOT NULL "
+                      " ) t2 ON t1.session_id = t2.session_id AND t1.trace_id = t2.trace_id "
+                  " ) UNION ALL ("
+                  " SELECT /*+use_hash(t2)*/ "
+                      " t1.sql_id, "
+                      " t1.plan_hash, "
+                      " t1.sql_plan_line_id, "
+                      " t1.event_no, "
+                      " t1.event, "
+                      " t1.trace_id, "
+                      " t1.time_model, "
+                      " t1.count_weight, "
+                      " t1.action "
                     " FROM "
-                      " session_data "
-                    " WHERE time_model > 0 and %s = 0"
-                  " ) "
+                      " session_data t1 "
+                      " LEFT JOIN ( "
+                        " SELECT DISTINCT session_id, trace_id "
+                        " FROM session_data  user_ash "
+                        " WHERE %s > 0 AND session_id IS NOT NULL AND trace_id IS NOT NULL "
+                        " ) t2 ON t1.session_id = t2.session_id AND t1.trace_id = t2.trace_id "
+                    " WHERE t2.session_id IS NULL AND t2.trace_id IS NULL "
+                  " ) ) "
               " WHERE sql_id is not null "
           " ), ",
-          lib::is_oracle_mode() ? "BITAND(time_model, 32783) " // IN_PARSE || IN_PL_PARSE || IN_PLAN_CACHE || IN_SQL_OPTIMIZE ||IN_RPC_DECODE
-                              : "(time_model & 32783) ",
-          lib::is_oracle_mode() ? "BITAND(time_model, 32783) " // IN_PARSE || IN_PL_PARSE || IN_PLAN_CACHE || IN_SQL_OPTIMIZE ||IN_RPC_DECODE
-                              : "(time_model & 32783) "))) {
+          lib::is_oracle_mode() ? "BITAND(time_model, 3178509) "
+                              : "(time_model & 3178509) ",
+          lib::is_oracle_mode() ? "BITAND(time_model, 3178509) "
+                              : "(time_model & 3178509) "))) {
         LOG_WARN("failed to append sql string", K(ret));
       } else if (OB_FAIL(append_time_model_view_sql(
         tm_view,"sql_id, plan_hash, event_no", tm_cols_wrap, tm_flags_wrap, "session_data_fixup", true))) {
@@ -4804,33 +4817,44 @@ int ObDbmsWorkloadRepository::print_top_sql_command_type(const AshReportParams &
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
           " session_data_fixup AS ( "
-            " SELECT "
-                " FIRST_VALUE ( sql_id ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS sql_id, "
-                " v1.stmt_type as stmt_type, "
-                " v1.event_no as event_no, "
-                " v1.count_weight as count_weight, "
-                " v1.svr_ip AS svr_ip, "
-                " v1.svr_port AS svr_port, "
-                " v1.trace_id as trace_id "
-            " FROM  session_data v1 "
-            " WHERE  stmt_type IS NOT NULL and trace_id is not null and  %s > 0"
-            " UNION ALL "
-            " SELECT "
-                " sql_id, "
-                " stmt_type, "
-                " event_no, "
-                " count_weight, "
-                " svr_ip, "
-                " svr_port, "
-                " trace_id "
+            " SELECT sql_id, stmt_type, event_no, count_weight, svr_ip, svr_port, trace_id FROM "
+              " ( SELECT /*+use_hash(t2)*/ "
+                " FIRST_VALUE ( t1.sql_id ) IGNORE NULLS OVER ( PARTITION BY t1.svr_ip, t1.svr_port, t1.session_id, t1.trace_id ) AS sql_id, "
+                " t1.stmt_type as stmt_type, "
+                " t1.event_no as event_no, "
+                " t1.count_weight as count_weight, "
+                " t1.svr_ip AS svr_ip, "
+                " t1.svr_port AS svr_port, "
+                " t1.trace_id as trace_id "
               " FROM "
-                " session_data "
-              " WHERE stmt_type IS NOT NULL and %s = 0"
-          " ), ",
-          lib::is_oracle_mode() ? "BITAND(time_model, 32783) " // IN_PARSE || IN_PL_PARSE || IN_PLAN_CACHE || IN_SQL_OPTIMIZE ||IN_RPC_DECODE
-                              : "(time_model & 32783) ",
-          lib::is_oracle_mode() ? "BITAND(time_model, 32783) " // IN_PARSE || IN_PL_PARSE || IN_PLAN_CACHE || IN_SQL_OPTIMIZE ||IN_RPC_DECODE
-                              : "(time_model & 32783) "))) {
+              " session_data t1"
+              "  JOIN ( "
+                  " SELECT DISTINCT session_id, trace_id "
+                  " FROM session_data  user_ash "
+                  " WHERE %s > 0 AND session_id IS NOT NULL AND trace_id IS NOT NULL "
+                " ) t2 ON t1.session_id = t2.session_id AND t1.trace_id = t2.trace_id )"
+              " UNION ALL "
+              " ( SELECT /*+use_hash(t2)*/ "
+                " t1.sql_id, "
+                " t1.stmt_type, "
+                " t1.event_no, "
+                " t1.count_weight, "
+                " t1.svr_ip, "
+                " t1.svr_port, "
+                " t1.trace_id "
+              " FROM "
+                " session_data t1 "
+                " LEFT JOIN ( "
+                  " SELECT DISTINCT session_id, trace_id "
+                  " FROM session_data  user_ash "
+                  " WHERE %s > 0 AND session_id IS NOT NULL AND trace_id IS NOT NULL "
+                  " ) t2 ON t1.session_id = t2.session_id AND t1.trace_id = t2.trace_id "
+              " WHERE t2.session_id IS NULL AND t2.trace_id IS NULL )"
+            " ), ",
+            lib::is_oracle_mode() ? "BITAND(time_model, 3178509) "
+                                : "(time_model & 3178509) ",
+            lib::is_oracle_mode() ? "BITAND(time_model, 3178509) "
+                      : "(time_model & 3178509) "))) {
         LOG_WARN("failed to append sql string", K(ret));
       } else if (OB_FAIL(sql_string.append(
         "sql2stmt AS ("
@@ -6229,14 +6253,14 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
       } else if (OB_FAIL(sql_string.append(
         "WITH session_data AS("
           "SELECT blocking_session_id, event, p1 AS holder_tx_id, p2 AS holder_data_seq, "
-                  "tx_id, sql_id, count_weight, trace_id, event_id, svr_ip, svr_port,session_id "
+                  "tx_id, sql_id, count_weight, trace_id, event_id,  session_id "
           "FROM ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_wr_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
       } else if (OB_FAIL(sql_string.append(
           ") tmp_ash"
-          " where  blocking_session_id != 0 and blocking_session_id is not null and event_id = 14003 "
+          " where blocking_session_id != 0 and blocking_session_id is not null and event_id = 14003 "
         "), "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
@@ -6272,11 +6296,11 @@ int ObDbmsWorkloadRepository::print_top_blocking_session(const AshReportParams &
                     "SUM(count_weight) AS sql_samples "
             "FROM ( "
               " SELECT blocking_session_id, event, event_id, holder_tx_id, holder_data_seq, "
-              " FIRST_VALUE ( sql_id ) IGNORE NULLS OVER ( PARTITION BY svr_ip, svr_port, session_id, trace_id ) AS sql_id, "
+              " FIRST_VALUE ( sql_id ) IGNORE NULLS OVER ( PARTITION BY  session_id, trace_id ) AS sql_id, "
               " count_weight , tx_id "
               " from session_data"
               ") sd "
-            " where  blocking_session_id != 0 and blocking_session_id is not null and event_id = 14003 "
+            " where blocking_session_id != 0 and blocking_session_id is not null and event_id = 14003 "
             "GROUP BY blocking_session_id, event, event_id, holder_tx_id, holder_data_seq, sql_id"
           " ) top_waitting_sql "
           "ORDER BY sql_samples DESC %s"
