@@ -4813,11 +4813,21 @@ int ObDelUpdResolver::resolve_json_partial_update_flag(ObIArray<ObTableAssignmen
     }
     for (int64_t i = 0; OB_SUCC(ret) && need_partial_update && i < table_assigns.count(); ++i) {
       ObTableAssignment &table_assign = table_assigns.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+      // if there ara rowkey columns update, disable json partial update.
+      bool has_rowkey_update = false;
+      for (int64_t j = 0; OB_SUCC(ret) && ! has_rowkey_update && j < table_assign.assignments_.count(); ++j) {
         ObAssignment &assign = table_assign.assignments_.at(j);
-        bool allow_json_partial_update = false;
-        if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
-          LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+        if (OB_NOT_NULL(assign.column_expr_) && assign.column_expr_->is_rowkey_column()) {
+          has_rowkey_update = true;
+        }
+      }
+      if (OB_SUCC(ret) && ! has_rowkey_update) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+          ObAssignment &assign = table_assign.assignments_.at(j);
+          bool allow_json_partial_update = false;
+          if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
+            LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+          }
         }
       }
     }
