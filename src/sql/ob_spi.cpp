@@ -3860,7 +3860,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
 
   DISABLE_SQL_MEMLEAK_GUARD;
-
+  cursor.set_unstreaming();
   HEAP_VAR(ObSPIResultSet, spi_result) {
     ObSPICursor* spi_cursor = NULL;
     OZ (spi_result.init(session_info));
@@ -4030,6 +4030,10 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
 
     bool is_server_cursor = false;
     bool use_stream = false;
+    bool force_unstreaming = false;
+    if (OB_SUCC(ret) && cursor_var.is_ref_cursor_type() && ctx->func_->should_init_as_session_cursor()) {
+      force_unstreaming = true;
+    }
     if (OB_SUCC(ret)) {
       is_server_cursor = OB_INVALID_ID != cursor->get_id()
         || (package_id != OB_INVALID_ID && OB_INVALID_ID == routine_id);
@@ -4043,7 +4047,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     if (OB_FAIL(ret)) {
     } else if (lib::is_oracle_mode() // streaming cursor
                && ((is_server_cursor && use_stream) || !is_server_cursor)
-               && (!for_update || (for_update && skip_locked))) {
+               && (!for_update || (for_update && skip_locked))
+               && !force_unstreaming) {
       FLT_SET_TAG(pl_spi_streaming_cursor, true);
       OZ (streaming_cursor_open(ctx,
                                 *cursor,

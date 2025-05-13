@@ -1041,6 +1041,7 @@ public:
   inline void set_for_update() { for_update_ = true; }
   inline void set_hidden_rowid() { has_hidden_rowid_ = true; }
   inline void set_streaming() { is_streaming_ = true; }
+  inline void set_unstreaming() { is_streaming_ = false; }
   inline void set_scrollable() { is_scrollable_ = true; }
   inline bool is_scrollable() { return is_scrollable_; }
   inline bool get_fetched() const { return fetched_; }
