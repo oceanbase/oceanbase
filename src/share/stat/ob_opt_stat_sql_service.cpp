@@ -1294,9 +1294,13 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
           if (OB_SUCC(ret)) {
             if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
               LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-            } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
-              LOG_WARN("failed to push back buckets", K(ret));
-            } else {/*do nothing*/}
+            } else if (dst_key_col_stat.stat_->get_histogram().is_valid() &&
+                       OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
+              LOG_WARN("failed to push back buckets, reset to default", K(ret));
+              dst_key_col_stat.stat_->get_histogram().reset();
+              ret = OB_SUCCESS;
+            } else { /*do nothing*/
+            }
           }
         } else {//column stat has been obtained, just skip
           int64_t llc_bitmap_size = 0;
@@ -1406,8 +1410,10 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
               if (OB_SUCC(ret)) {
                 if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
                   LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-                } else if (OB_FAIL(hist.add_bucket(bkt))) {
-                  LOG_WARN("failed to push back buckets", K(ret));
+                } else if (hist.is_valid() && OB_FAIL(hist.add_bucket(bkt))) {
+                  LOG_WARN("failed to push back buckets, reset to default", K(ret));
+                  hist.reset();
+                  ret = OB_SUCCESS;
                 } else {
                   dst_key_col_stat.only_histogram_stat_ = true;
                 }
