@@ -139,7 +139,7 @@ private:
       ObLSDesc &dest_ls,
       int64_t part_group_min_size,
       int64_t &swap_cnt);
-  bool check_ls_need_swap_(uint64_t ls_more_size, uint64_t ls_less_size);
+  bool check_ls_need_swap_(int64_t ls_more_size, int64_t ls_less_size);
   bool is_bg_with_balance_weight_(const ObArray<ObBalanceGroupInfo *> &ls_pg_desc_arr);
   int get_ls_balance_weight_avg_(
       const ObArray<ObBalanceGroupInfo *> &ls_pg_desc_arr,

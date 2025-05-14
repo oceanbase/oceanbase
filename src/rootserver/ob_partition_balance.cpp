@@ -384,7 +384,6 @@ int ObPartitionBalance::on_new_partition(
 {
   int ret = OB_SUCCESS;
   ObBalanceGroup bg = bg_in; // get a copy
-  ObLSDesc *src_ls_desc = nullptr;
   ObTransferPartInfo part_info;
   const ObObjectID &table_id = table_schema.get_table_id();
   const bool is_dup_ls_related_part = dup_ls_id_.is_valid() && (src_ls_id == dup_ls_id_ || dest_ls_id == dup_ls_id_);
@@ -920,7 +919,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
   int ret = OB_SUCCESS;
 
   int64_t ls_cnt = ls_desc_array_.count();
-  uint64_t part_group_sum = 0;
+  int64_t part_group_sum = 0;
   for (int64_t i = 0; i < ls_cnt; i++) {
     part_group_sum += ls_desc_array_.at(i)->get_unweighted_partgroup_cnt();
   }
@@ -1072,11 +1071,11 @@ int ObPartitionBalance::process_balance_partition_disk_()
   return ret;
 }
 
-bool ObPartitionBalance::check_ls_need_swap_(uint64_t ls_more_size, uint64_t ls_less_size)
+bool ObPartitionBalance::check_ls_need_swap_(int64_t ls_more_size, int64_t ls_less_size)
 {
   bool need_swap = false;
   if (ls_more_size > PART_BALANCE_THRESHOLD_SIZE) {
-    if ((ls_more_size - ls_more_size * GCONF.balancer_tolerance_percentage / 100) > ls_less_size) {
+    if ((ls_more_size - ls_more_size / 100 * GCONF.balancer_tolerance_percentage) > ls_less_size) {
       need_swap = true;
     }
   }
@@ -1090,20 +1089,20 @@ int ObPartitionBalance::try_swap_part_group_(
     int64_t &swap_cnt)
 {
   int ret = OB_SUCCESS;
-  if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
-    // do nothing
-  } else {
-    FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
-      if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
-        LOG_WARN("try swap part group in bg failed", KR(ret),
-            K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
-      }
+  FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
+    if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
+      break;
+    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
+      LOG_WARN("try swap part group in bg failed", KR(ret),
+          K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
     }
-    FOREACH_X(iter, weighted_bg_map_, OB_SUCC(ret)) {
-      if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
-        LOG_WARN("try swap part group in bg failed", KR(ret),
-            K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
-      }
+  }
+  FOREACH_X(iter, weighted_bg_map_, OB_SUCC(ret)) {
+    if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
+      break;
+    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
+      LOG_WARN("try swap part group in bg failed", KR(ret),
+          K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
     }
   }
   return ret;
@@ -1135,10 +1134,14 @@ int ObPartitionBalance::try_swap_part_group_in_bg_(
   if (OB_ISNULL(ls_more) || OB_ISNULL(ls_less)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not found ls", KR(ret), K(ls_more), K(ls_less));
+  } else if (OB_UNLIKELY(!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls do not need swap", KR(ret), K(src_ls), K(dest_ls));
   } else  if (ls_more->get_part_groups_count() == 0 || ls_less->get_part_groups_count() == 0) {
     // do nothing
   } else {
     int64_t swap_size = 0;
+    int64_t ls_diff_size = src_ls.get_data_size() - dest_ls.get_data_size();
     if (OB_FAIL(ls_more->get_largest_part_group(largest_pg))) {
       LOG_WARN("failed to get the largest pg", KR(ret), KPC(ls_more));
     } else if (OB_FAIL(ls_less->get_smallest_part_group(smallest_pg))) {
@@ -1148,10 +1151,10 @@ int ObPartitionBalance::try_swap_part_group_in_bg_(
       LOG_WARN("null ptr", KR(ret), KP(largest_pg), KP(smallest_pg));
     } else if (FALSE_IT(swap_size = largest_pg->get_data_size() - smallest_pg->get_data_size())) {
     } else if (swap_size >= part_group_min_size
-        && src_ls.get_data_size() - dest_ls.get_data_size() > swap_size
+        && ls_diff_size > swap_size
         && largest_pg->get_weight() == smallest_pg->get_weight()) {
       LOG_INFO("[PART_BALANCE] swap_partition", KPC(largest_pg), KPC(smallest_pg),
-          K(src_ls), K(dest_ls), K(swap_size), K(part_group_min_size));
+          K(src_ls), K(dest_ls), K(swap_size), K(ls_diff_size), K(part_group_min_size));
       if (OB_FAIL(add_transfer_task_(
           ls_more->get_ls_id(),
           ls_less->get_ls_id(),

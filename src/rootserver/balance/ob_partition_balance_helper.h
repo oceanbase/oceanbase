@@ -43,9 +43,9 @@ public:
         balance_weight_(0) {}
   ~ObLSDesc() {}
   share::ObLSID get_ls_id() const { return ls_id_; }
-  uint64_t get_partgroup_cnt() const { return unweighted_partgroup_cnt_ + weighted_partgroup_cnt_; }
-  uint64_t get_unweighted_partgroup_cnt() const { return unweighted_partgroup_cnt_; }
-  uint64_t get_data_size() const { return data_size_; }
+  int64_t get_partgroup_cnt() const { return unweighted_partgroup_cnt_ + weighted_partgroup_cnt_; }
+  int64_t get_unweighted_partgroup_cnt() const { return unweighted_partgroup_cnt_; }
+  int64_t get_data_size() const { return data_size_; }
   uint64_t get_ls_group_id() const { return ls_group_id_; }
   int64_t get_balance_weight() const { return balance_weight_; }
   void add_data_size(int64_t size) { data_size_ += size; }
@@ -63,9 +63,9 @@ public:
 private:
   share::ObLSID ls_id_;
   uint64_t ls_group_id_;
-  uint64_t unweighted_partgroup_cnt_;
-  uint64_t weighted_partgroup_cnt_;
-  uint64_t data_size_;
+  int64_t unweighted_partgroup_cnt_;
+  int64_t weighted_partgroup_cnt_;
+  int64_t data_size_;
   int64_t balance_weight_;
 };
 
