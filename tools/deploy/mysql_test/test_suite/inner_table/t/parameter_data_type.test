@@ -275,8 +275,6 @@ show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'r
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval' tenant = sys;         # TIME
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info 14 1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time' tenant = sys;        # MOMENT
---replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info 14 1
-show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible' tenant = sys;                    # VERSION
 
 disconnect my_sys;
 
@@ -401,8 +399,6 @@ show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'r
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info 14 1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
---replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info 14 1
-show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
 
 disconnect my_mysql;
 
