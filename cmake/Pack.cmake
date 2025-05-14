@@ -69,7 +69,6 @@ install(FILES
   tools/timezone_name.data
   tools/timezone_trans.data
   tools/timezone_trans_type.data
-  tools/spatial_reference_systems.data
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
