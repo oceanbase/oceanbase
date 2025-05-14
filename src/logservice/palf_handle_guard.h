@@ -156,6 +156,12 @@ public:
   // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
   CONST_DELEGATE_WITH_RET(palf_handle_, get_paxos_member_list, int);
 
+#ifdef OB_BUILD_ARBITRATION
+  // @brief: get arbitration member of log stram
+  // @params[out] ObMember arbitration_member
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_arbitration_member, int);
+#endif
+
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
   // @param[in] const int64_t curr_replica_num: current replica num, for pre-check

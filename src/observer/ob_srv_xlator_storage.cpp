@@ -108,4 +108,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
     RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObRpcPrepareTabletSplitTaskRangesP, gctx_);
+#ifdef OB_BUILD_ARBITRATION
+    RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
+#endif
 }

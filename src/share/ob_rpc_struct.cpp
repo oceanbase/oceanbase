@@ -11338,5 +11338,44 @@ int ObTriggerDumpDataDictArg::init(const share::SCN &base_scn, int64_t data_dict
   return OB_SUCCESS;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+bool ObFetchArbMemberArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && ls_id_.is_valid()
+         && ls_id_.is_valid_with_tenant(tenant_id_);
+}
+
+void ObFetchArbMemberArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+}
+
+int ObFetchArbMemberArg::assign(const ObFetchArbMemberArg &arg)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = arg.tenant_id_;
+  ls_id_ = arg.ls_id_;
+  return ret;
+}
+
+int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
+      || OB_UNLIKELY(!ls_id.is_valid())
+      || OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
+#endif
 }//end namespace obrpc
 }//end namepsace oceanbase

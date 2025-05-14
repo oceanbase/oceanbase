@@ -282,6 +282,9 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_QUERY_CLIENT_SESSION, ObKillQueryClientSessio
 OB_DEFINE_PROCESSOR_S(Srv, OB_DATA_DICT_TRIGGER_DUMP, ObRPcTriggerDumpDataDictP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_EXTERNAL_STORAGE_DEST, ObRpcChangeExternalStorageDestP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAR_FETCHED_LOG_CACHE, ObClearFetchedLogCacheP);
+#ifdef OB_BUILD_ARBITRATION
+OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ARB_MEMBER, ObFetchArbMemberP);
+#endif
 } // end of namespace observer
 } // end of namespace oceanbase
 

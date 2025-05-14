@@ -88,6 +88,10 @@
 #include "logservice/data_dictionary/ob_data_dict_service.h" // for ObDataDictService
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/standby/ob_flashback_standby_log_command.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
+#include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
+#endif
 
 namespace oceanbase
 {
@@ -2955,6 +2959,16 @@ int ObRpcNotifyTenantThreadP::process()
           balance_exe_ser->wakeup();
           tbalance_service->wakeup();
         }
+#ifdef OB_BUILD_ARBITRATION
+      } else if (obrpc::ObNotifyTenantThreadArg::ARBITRATION_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObArbitrationService * arbitration_service = MTL(rootserver::ObArbitrationService*);
+        if (OB_ISNULL(arbitration_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("arbitration service is null", KR(ret), K(arg_), KP(arbitration_service));
+        } else {
+          arbitration_service->wakeup();
+        }
+#endif
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));
@@ -3262,6 +3276,13 @@ int ObRPcTriggerDumpDataDictP::process()
   LOG_INFO("trigger dump data dict processor", KR(ret), K_(arg));
   return ret;
 }
+
+#ifdef OB_BUILD_ARBITRATION
+int ObFetchArbMemberP::process()
+{
+  return ObArbitrationServiceUtils::get_arb_member_from_leader(arg_, result_);
+}
+#endif
 
 int ObClearFetchedLogCacheP::process()
 {

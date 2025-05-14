@@ -3740,6 +3740,8 @@ public:
     INVALID_TYPE = -1,
     RECOVERY_LS_SERVICE,
     BALANCE_TASK_EXECUTE,
+    DISASTER_RECOVERY_SERVICE, // for compatible
+    ARBITRATION_SERVICE
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -11648,6 +11650,29 @@ public:
   share::SCN base_scn_; // expected snapshot_scn for data_dict_dump；
   int64_t data_dict_dump_history_retention_sec_; // data_dict retention time in seconds;
 };
+
+#ifdef OB_BUILD_ARBITRATION
+struct ObFetchArbMemberArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchArbMemberArg() : tenant_id_(OB_INVALID_TENANT_ID),
+                          ls_id_() {}
+  ~ObFetchArbMemberArg() {}
+  bool is_valid() const;
+  void reset();
+  int assign(const ObFetchArbMemberArg &arg);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline share::ObLSID get_ls_id() const { return ls_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchArbMemberArg);
+};
+#endif
 
 }//end namespace obrpc
 }//end namespace oceanbase

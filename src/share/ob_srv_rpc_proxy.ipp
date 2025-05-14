@@ -228,3 +228,6 @@
   RPC_S(PR5 trigger_dump_data_dict, OB_DATA_DICT_TRIGGER_DUMP, (ObTriggerDumpDataDictArg));
   RPC_S(PR5 change_external_storage_dest, obrpc::OB_CHANGE_EXTERNAL_STORAGE_DEST, (ObAdminSetConfigArg));
   RPC_AP(PR5 clear_fetched_log_cache, OB_CLEAR_FETCHED_LOG_CACHE, (share::ObClearFetchedLogCacheArg), share::ObClearFetchedLogCacheRes);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_S(PR5 fetch_arb_member, OB_FETCH_ARB_MEMBER, (ObFetchArbMemberArg), ObMember);
+#endif
