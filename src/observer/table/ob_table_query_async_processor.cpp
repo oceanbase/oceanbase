@@ -1162,6 +1162,10 @@ int ObTableQueryAsyncP::new_try_process()
         LOG_WARN("model fail to after work", K(ret), K_(arg));
       }
     }
+
+    if (OB_SUCC(ret) && ObQueryOperationType::QUERY_START == arg_.query_type_) {
+      set_timeout(model->get_lease_timeout_period());
+    }
   }
 
   #ifndef NDEBUG
