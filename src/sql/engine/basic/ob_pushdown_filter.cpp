@@ -2824,7 +2824,8 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     trans_info_expr_(nullptr),
     auto_split_filter_type_(OB_INVALID_ID),
     auto_split_expr_(nullptr),
-    auto_split_params_(alloc)
+    auto_split_params_(alloc),
+    ext_tbl_filter_pd_level_(0)
 {
 }
 
@@ -2848,7 +2849,8 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               trans_info_expr_,
               auto_split_filter_type_,
               auto_split_expr_,
-              auto_split_params_);
+              auto_split_params_,
+              ext_tbl_filter_pd_level_);
   return ret;
 }
 
@@ -2872,7 +2874,8 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               trans_info_expr_,
               auto_split_filter_type_,
               auto_split_expr_,
-              auto_split_params_);
+              auto_split_params_,
+              ext_tbl_filter_pd_level_);
   return ret;
 }
 
@@ -2896,7 +2899,8 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               trans_info_expr_,
               auto_split_filter_type_,
               auto_split_expr_,
-              auto_split_params_);
+              auto_split_params_,
+              ext_tbl_filter_pd_level_);
   return len;
 }
 
