@@ -4283,7 +4283,7 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
   bool ac = false;
   get_autocommit(ac),
   J_OBJ_START();
-  J_KV(KP(this), "id", sessid_, "deser", is_deserialized_,
+  J_KV(KP(this), "id", sessid_, "client_sid", client_sessid_, "deser", is_deserialized_,
        N_TENANT, get_tenant_name(), "tenant_id", tenant_id_,
        N_EFFECTIVE_TENANT, get_effective_tenant_name(), "effective_tenant_id", effective_tenant_id_,
        N_DATABASE, get_database_name(),
@@ -6526,7 +6526,7 @@ int ObBasicSessionInfo::set_session_state_(ObSQLSessionState state)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(SESSION_KILLED == thread_data_.state_)) {
     ret = OB_ERR_SESSION_INTERRUPTED;
-    LOG_WARN("session is killed", K(ret), K(sessid_), K(proxy_sessid_), K(state));
+    LOG_WARN("session is killed", K(ret), K(sessid_), K(client_sessid_), K(proxy_sessid_), K(state));
   } else if (OB_UNLIKELY(SESS_NOT_IN_RETRY != thread_data_.is_in_retry_
                          && is_query_killed()
                          && SESSION_KILLED != state)) {
