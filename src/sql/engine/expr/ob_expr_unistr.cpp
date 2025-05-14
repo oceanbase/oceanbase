@@ -62,33 +62,56 @@ int ObExprUnistr::calc_unistr(const common::ObString &src,
 {
   int ret = OB_SUCCESS;
   struct Functor {
-    Functor(char* buf, const int64_t buf_len, int32_t &pos, const common::ObCollationType dst_cs_type)
-      : buf(buf), buf_len(buf_len), pos(pos), dst_cs_type(dst_cs_type) {}
+    Functor(char* buf, const int64_t buf_len, int32_t &pos, int64_t total_str_len, const common::ObCollationType dst_cs_type)
+      : buf(buf), buf_len(buf_len), pos(pos), total_str_len(total_str_len), dst_cs_type(dst_cs_type) {}
     // for unicode inner scan loop
+    // 以下四元组构成改造中的循环不变量, incomming_char_len 外层循环参数, unicode_inner_len 内部循环参数
+    // (incomming_char_len, total_str_len, (unicode_inner_len, unicode_encoding_value), (buf, buf_len, pos))
+    int incoming_char_len = 0;
+
+    int found_backslash = false;
     int unicode_inner_len = 0;
     int64_t unicode_encoding_value = 0;
-    bool is_ucs2_format = false;
+
     char* buf;
     const int64_t buf_len;
     int32_t &pos;
+
+    const int64_t total_str_len;
     const common::ObCollationType dst_cs_type;
+    bool is_ucs2_format = false;
+
     int operator() (const ObString &str, ob_wc_t wchar) {
       int ret = OB_SUCCESS;
-      int32_t written_bytes = 0;
-
-      if(unicode_inner_len) {
-        if(unicode_inner_len == 4 && '\\' == wchar) {
-          //found "\\"
-            if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
-                                        buf + pos, buf_len - pos, written_bytes))) {
-              LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
-            } else {
-              pos += written_bytes;
-            }
-            is_ucs2_format = false;
-            unicode_encoding_value = 0;
-            return ret;
+      ++incoming_char_len;
+      if (!found_backslash) {
+        if ('\\' != wchar) {
+          int32_t written_bytes = 0;
+          if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
+                                      buf + pos, buf_len - pos, written_bytes))) {
+            LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
+          } else {
+            pos += written_bytes;
+          }
         } else {
+          found_backslash = true;
+          is_ucs2_format = true;
+          unicode_inner_len = 0;
+        }
+      } else {
+        if (unicode_inner_len == 0 && '\\' == wchar) {
+          //found "\\"
+          int32_t written_bytes = 0;
+          if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
+                                      buf + pos, buf_len - pos, written_bytes))) {
+            LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
+          } else {
+            pos += written_bytes;
+          }
+          is_ucs2_format = false;
+          found_backslash = false;
+          unicode_inner_len = 0;
+        } else if (unicode_inner_len < 4){
           int64_t value = 0;
           if ('0' <= wchar && wchar <= '9') {
             value = wchar - '0';
@@ -103,35 +126,40 @@ int ObExprUnistr::calc_unistr(const common::ObString &src,
           if (OB_SUCC(ret)) {
             unicode_encoding_value *= 16;
             unicode_encoding_value += value;
+            ++unicode_inner_len;
           }
         }
-        unicode_inner_len--;
-        if(unicode_inner_len == 0 && OB_SUCC(ret) && is_ucs2_format) {
-          if (OB_UNLIKELY(pos + 2 > buf_len)) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("size overflow", K(ret));
-          } else {
-            buf[pos++] = (unicode_encoding_value >> 8) & 0xFF;
-            buf[pos++] = unicode_encoding_value & 0xFF;
+        if (OB_SUCC(ret)) {
+          if (is_ucs2_format && unicode_inner_len == 4) {
+            if (OB_UNLIKELY(pos + 2 > buf_len)) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("size overflow", K(ret));
+            } else {
+              buf[pos++] = (unicode_encoding_value >> 8) & 0xFF;
+              buf[pos++] = unicode_encoding_value & 0xFF;
+              unicode_inner_len = 0;
+              unicode_encoding_value = 0;
+              found_backslash = false;
+              is_ucs2_format = false;
+            }
           }
         }
-      } else if ('\\' != wchar) {
-        if (OB_FAIL(ObCharset::wc_mb(dst_cs_type, wchar,
-                                    buf + pos, buf_len - pos, written_bytes))) {
-          LOG_WARN("fail to convert unicode to multi-byte", K(ret), K(wchar));
-        } else {
-          pos += written_bytes;
+      }
+
+      if (OB_SUCC(ret)) {
+        // there may be no chance for total_str_len + 1
+        if (incoming_char_len == total_str_len) {
+          if (unicode_inner_len != 0) {
+            ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXADECIMAL_CHARACTERS_OR_ANOTHER;
+            LOG_WARN("fail to get next character", K(ret));
+          }
         }
-      } else {
-        unicode_encoding_value = 0;
-        unicode_inner_len = 4;
-        is_ucs2_format = true;
       }
       return ret;
-    };
+    }
   };
 
-  Functor temp_handler(buf, buf_len, pos, dst_cs_type);
+  Functor temp_handler(buf, buf_len, pos, src.length(), dst_cs_type);
   ObCharsetType src_charset_type = ObCharset::charset_type_by_coll(src_cs_type);
   OZ(ObFastStringScanner::foreach_char(src, src_charset_type, temp_handler));
   return ret;
