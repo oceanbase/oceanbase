@@ -205,6 +205,11 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
     need_refresh = true;
   }
 #endif
+
+  // TODO: @liquanhong.lqh, remove this
+  if (di_base_iters_.count() > 0) {
+    need_refresh = false;
+  }
   return ret;
 }
 

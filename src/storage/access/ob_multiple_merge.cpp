@@ -757,7 +757,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     update_and_report_tablet_stat();
     scan_state_ = ScanState::NONE;
   }
-  LOG_TRACE("[Vectorized] get next rows", K(ret), K(count), K(capacity), KPC(block_row_store_));
+  LOG_TRACE("[Vectorized] get next rows", K(ret), K_(scan_state), K(count), K(capacity), KPC(block_row_store_));
 
   return ret;
 }
