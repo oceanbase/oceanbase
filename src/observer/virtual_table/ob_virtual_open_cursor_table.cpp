@@ -151,6 +151,7 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
         if (OB_ISNULL(cursor_info)) {
           // do not report error
           SERVER_LOG(WARN, "get a NULL cursor when record for v$open_cursor.");
+        } else if (!cursor_info->isopen()) {
         } else {
           OZ (fill_session_cursor_cell(*sess_info, cursor_info->get_id()));
         }

@@ -236,8 +236,7 @@ int ObUserDefinedType::deep_copy_obj(
 
   if (OB_SUCC(ret)) {
     switch (src.get_meta().get_extend_type()) {
-    case PL_CURSOR_TYPE:
-    case PL_REF_CURSOR_TYPE: {
+    case PL_CURSOR_TYPE: {
       OZ (ObRefCursorType::deep_copy_cursor(allocator, src, dst));
     }
       break;

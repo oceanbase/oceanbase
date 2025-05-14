@@ -854,9 +854,7 @@ public:
   static int spi_copy_ref_cursor(pl::ObPLExecCtx *ctx,
                                  ObIAllocator *allocator,
                                  ObObj *src,
-                                 ObObj *dest,
-                                 ObDataType *dest_type,
-                                 uint64_t package_id = OB_INVALID_ID);
+                                 ObObj *dest);
 
   static int spi_add_ref_cursor_refcount(pl::ObPLExecCtx *ctx, ObObj *cursor, int64_t addend);
   static int spi_handle_ref_cursor_refcount(pl::ObPLExecCtx *ctx,
@@ -1249,6 +1247,12 @@ private:
                                    uint64_t routine_id = OB_INVALID_ID,
                                    bool ignore = false);
 
+  static int cursor_release(pl::ObPLExecCtx *ctx,
+                            pl::ObPLCursorInfo *cursor,
+                            bool is_refcursor,
+                            uint64_t package_id,
+                            uint64_t routine_id,
+                            bool ignore);
   static int do_cursor_fetch(pl::ObPLExecCtx *ctx,
                                      pl::ObPLCursorInfo *cursor,
                                      bool is_server_cursor,
