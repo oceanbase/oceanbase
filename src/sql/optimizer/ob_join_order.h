@@ -162,7 +162,8 @@ namespace sql
         prune_mj_(true),
         force_inner_nl_(false),
         ignore_hint_(true),
-        is_reverse_path_(false) { }
+        is_reverse_path_(false),
+        force_normal_nlj_(false) { }
     virtual ~ValidPathInfo() {};
     void reset()
     {
@@ -176,6 +177,7 @@ namespace sql
       force_inner_nl_ = false;
       ignore_hint_ = true;
       is_reverse_path_ = false;
+      force_normal_nlj_ = false;
     }
     TO_STRING_KV(K_(join_type),
                  K_(local_methods),
@@ -186,7 +188,8 @@ namespace sql
                  K_(prune_mj),
                  K_(force_inner_nl),
                  K_(ignore_hint),
-                 K_(is_reverse_path));
+                 K_(is_reverse_path),
+                 K_(force_normal_nlj));
     ObJoinType join_type_;
     int64_t local_methods_;
     int64_t distributed_methods_;
@@ -197,6 +200,7 @@ namespace sql
     bool force_inner_nl_;
     bool ignore_hint_;
     bool is_reverse_path_;
+    bool force_normal_nlj_;
   };
 
   enum OptimizationMethod

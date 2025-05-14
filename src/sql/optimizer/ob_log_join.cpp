@@ -189,9 +189,16 @@ int ObLogJoin::get_connect_by_exprs(ObIArray<ObRawExpr*> &exprs)
 
 uint64_t ObLogJoin::hash(uint64_t seed) const
 {
+  ObQueryCtx *query_ctx = nullptr;
   seed = do_hash(join_type_, seed);
   seed = do_hash(join_algo_, seed);
   seed = do_hash(join_dist_algo_, seed);
+  if (is_nlj_without_param_down() &&
+      OB_NOT_NULL(get_plan()) && OB_NOT_NULL(get_plan()->get_stmt()) &&
+      OB_NOT_NULL(query_ctx = get_plan()->get_stmt()->get_query_ctx()) &&
+      query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4)) {
+    seed = do_hash(is_nlj_without_param_down(), seed);
+  }
   seed = ObLogicalOperator::hash(seed);
 
   return seed;
@@ -563,6 +570,7 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
   const ObLogicalOperator *left_child = NULL;
   const ObLogicalOperator *right_child = NULL;
   const JoinPath *join_path = NULL;
+  ObQueryCtx *query_ctx = nullptr;
   ObString qb_name;
   if (is_late_mat()) {
     // need not print outline for late material join
@@ -573,7 +581,8 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
        || OB_ISNULL(stmt = get_plan()->get_stmt())
        || OB_ISNULL(left_child = get_child(first_child))
        || OB_ISNULL(right_child = get_child(second_child))
-       || OB_ISNULL(join_path = get_join_path())) {
+       || OB_ISNULL(join_path = get_join_path())
+       || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt), K(left_child), K(right_child), K(join_path));
     } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
@@ -631,6 +640,15 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
                join_path->need_mat_ &&
                OB_FAIL(print_join_hint_outline(*stmt,
                                                T_USE_NL_MATERIALIZATION,
+                                               qb_name,
+                                               right_child->get_table_set(),
+                                               plan_text))) {
+      LOG_WARN("fail to print pq distribute hint", K(ret));
+    } else if (is_nlj_without_param_down() &&
+               !join_path->need_mat_ &&
+               query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4) &&
+               OB_FAIL(print_join_hint_outline(*stmt,
+                                               T_NO_USE_NL_MATERIALIZATION,
                                                qb_name,
                                                right_child->get_table_set(),
                                                plan_text))) {
@@ -962,11 +980,17 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
   const char* algo_str = T_PQ_DISTRIBUTE == hint_type
                          ? ObJoinHint::get_dist_algo_str(get_real_dist_method())
                          : NULL;
+  bool is_enable_hint = true;
+  ObItemType print_type = hint_type;
+  if (T_NO_USE_NL_MATERIALIZATION == hint_type) {
+    print_type = T_USE_NL_MATERIALIZATION;
+    is_enable_hint = false;
+  }
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
   if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ", ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                                            ObHint::get_hint_name(hint_type),
+                                            ObHint::get_hint_name(print_type, is_enable_hint),
                                             qb_name.length(), qb_name.ptr()))) {
     LOG_WARN("fail to print pq map hint head", K(ret));
   } else if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, table_set))) {

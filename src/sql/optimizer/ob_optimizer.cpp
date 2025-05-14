@@ -756,7 +756,11 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
-    ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
+    if (query_ctx->get_query_hint().has_outline_data()) {
+      ctx_.set_push_join_pred_into_view_enabled(true);
+    } else {
+      ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
+    }
     ctx_.set_enable_distributed_das_scan(enable_distributed_das_scan);
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled
