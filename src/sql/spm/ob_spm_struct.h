@@ -156,10 +156,11 @@ public:
       elapsed_time_ = other.elapsed_time_;
       error_cnt_ = other.error_cnt_;
       last_exec_ts_ = other.last_exec_ts_;
+      records_ = NULL;
     }
     return *this;
   }
-  TO_STRING_KV(K_(executions), K_(cpu_time), K_(elapsed_time), K_(error_cnt), K_(last_exec_ts), KPC_(records));
+  TO_STRING_KV(K_(executions), K_(cpu_time), K_(elapsed_time), K_(error_cnt), K_(last_exec_ts));
 public:
   int64_t  executions_;       // The total number of executions in the evolution process
   int64_t  cpu_time_;         // The total CPU time consumed during the evolution process
