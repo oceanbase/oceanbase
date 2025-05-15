@@ -205,6 +205,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           } else if (!decided_scn.is_valid()
                      || SCN::min_scn() == decided_scn
                      || decided_scn < ls->get_tablet_change_checkpoint_scn()) {
+            need_retry = true;
             STORAGE_LOG(INFO, "no any log callback and no need to update clog checkpoint",
               K(freezer->get_ls_id()), K(decided_scn), KPC(ls), K(ls->get_ls_meta()));
           }
