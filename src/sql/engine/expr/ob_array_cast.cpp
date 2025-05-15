@@ -429,8 +429,12 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
         case ObVarcharType: {
           ObArrayBinary *dst_arr = static_cast<ObArrayBinary *>(dst);
           ObStringBuffer str_buf(&alloc);
+          ObAccuracy dst_acc = basic_type->basic_meta_.get_accuracy();
           if (OB_FAIL(j_node.print(str_buf, false))) {
             LOG_WARN("failed to push back array value", K(ret));
+          } else if (str_buf.length() > dst_acc.get_length()) {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("char type length is too long", K(ret), K(str_buf.length()), K(dst_acc.get_length()));
           } else if (OB_FAIL(dst_arr->push_back(str_buf.string()))) {
             LOG_WARN("failed to push back array value", K(ret));
           }
