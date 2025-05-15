@@ -1505,8 +1505,6 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
     // Try Package Schema
     if (OB_TABLE_NOT_EXIST == ret) {
       const ObPackageInfo *package_info = nullptr;
-      const ObPackageInfo *spec_info = nullptr;
-      const ObPackageInfo *body_info = nullptr;
       if (OB_FAIL(schema_guard.get_package_info(tenant_id, object_db_id, object_name,
                                                 share::schema::PACKAGE_TYPE, compatible_mode, package_info))
           || OB_ISNULL(package_info)) {
@@ -1514,24 +1512,10 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
       } else {
         type = PKG_NS;
         object_id = package_info->get_package_id();
-        if (OB_FAIL(ObPLPackageManager::get_package_schema_info(
-              schema_guard, package_info->get_package_id(), spec_info, body_info))) {
-          LOG_WARN("fail to get package info", K(ret));
-        } else {
-          if (OB_NOT_NULL(spec_info)) {
-            obj_version.object_id_ = spec_info->get_package_id();
-            obj_version.version_ = spec_info->get_schema_version();
-            obj_version.object_type_ = DEPENDENCY_PACKAGE;
-            ADD_DEPENDENCY;
-          }
-          if (OB_NOT_NULL(body_info)) {
-            obj_version.reset();
-            OX (obj_version.object_id_ = body_info->get_package_id());
-            OX (obj_version.version_ = body_info->get_schema_version());
-            OX (obj_version.object_type_ = DEPENDENCY_PACKAGE_BODY);
-            ADD_DEPENDENCY;
-          }
-        }
+        obj_version.object_id_ = package_info->get_package_id();
+        obj_version.version_ = package_info->get_schema_version();
+        obj_version.object_type_ = DEPENDENCY_PACKAGE;
+        ADD_DEPENDENCY;
       }
     }
     // Try UDT Schema
@@ -1725,26 +1709,13 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(package_info)) {
             ObSchemaObjVersion obj_version;
-            const ObPackageInfo *spec_info = nullptr;
-            const ObPackageInfo *body_info = nullptr;
             type = PKG_NS;
             parent_id = OB_INVALID_ID == db_id ? OB_SYS_DATABASE_ID : db_id;
             var_idx = static_cast<int64_t>(package_info->get_package_id());
-            OZ (ObPLPackageManager::get_package_schema_info(schema_guard, package_info->get_package_id(), spec_info, body_info));
-            if (OB_NOT_NULL(spec_info)) {
-              OX (obj_version.object_id_ = spec_info->get_package_id());
-              OX (obj_version.version_ = spec_info->get_schema_version());
-              OX (obj_version.object_type_ = DEPENDENCY_PACKAGE);
-              OZ (ObPLDependencyUtil::add_dependency_object_impl(get_dependency_table(), obj_version));
-
-            }
-            if (OB_NOT_NULL(body_info)) {
-              obj_version.reset();
-              OX (obj_version.object_id_ = body_info->get_package_id());
-              OX (obj_version.version_ = body_info->get_schema_version());
-              OX (obj_version.object_type_ = DEPENDENCY_PACKAGE_BODY);
-              OZ (ObPLDependencyUtil::add_dependency_object_impl(get_dependency_table(), obj_version));
-            }
+            OX (obj_version.object_id_ = package_info->get_package_id());
+            OX (obj_version.version_ = package_info->get_schema_version());
+            OX (obj_version.object_type_ = DEPENDENCY_PACKAGE);
+            OZ (ObPLDependencyUtil::add_dependency_object_impl(get_dependency_table(), obj_version));
           }
         }
       }
