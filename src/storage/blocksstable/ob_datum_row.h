@@ -359,6 +359,7 @@ public:
   OB_INLINE void set_first_multi_version_row() { mvcc_row_flag_.set_first_multi_version_row(true); }
   OB_INLINE void set_last_multi_version_row() { mvcc_row_flag_.set_last_multi_version_row(true); }
   OB_INLINE void set_shadow_row() { mvcc_row_flag_.set_shadow_row(true); }
+  OB_INLINE void set_uncommitted_row() { mvcc_row_flag_.set_uncommitted_row(true); }
   OB_INLINE void set_multi_version_flag(const ObMultiVersionRowFlag &multi_version_flag) { mvcc_row_flag_ = multi_version_flag; }
   /*
    *row estimate section

@@ -4851,10 +4851,203 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   scanner->~ObStoreRowIterator();
+  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
   handle1.reset();
   handle2.reset();
   merger.reset();
 }
+
+TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[5];
+  micro_data[0] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag\n"
+      "0        var0   -9       MIN           7        12      INSERT    INSERT_DELETE   SCF\n"
+      "0        var0   -9       DI_VERSION    7        12      INSERT    NORMAL   C\n"
+      "0        var0   -9       0             -1       -1      DELETE    NORMAL   CL\n";
+
+  micro_data[1] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1   -44      MIN           7        59      INSERT    INSERT_DELETE   SCF   trans_id_0\n"
+      "1        var1   -44      DI_VERSION    7        59      INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -44      0             7        28      DELETE    NORMAL   C     trans_id_0\n";
+
+  micro_data[2] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1   -33      DI_VERSION    7        28      INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -33      0             7        71      DELETE    NORMAL   C     trans_id_0\n";
+
+  micro_data[3] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1   -22      DI_VERSION    7        71      INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -22      0             7        2       DELETE    NORMAL   C     trans_id_0\n";
+
+  micro_data[4] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1   -11      DI_VERSION    7        2       INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -11      0            -1        9       DELETE    NORMAL   C     trans_id_0\n"
+      "1        var1   -4       DI_VERSION   -1        9       INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -4       0            -1       -1       DELETE    NORMAL   CL    trans_id_0\n";
+
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "0        var0  -9        MIN           9        12      INSERT    INSERT_DELETE   SCF   trans_id_0\n"
+      "0        var0  -9        DI_VERSION    9        12      INSERT    NORMAL   C     trans_id_0\n"
+      "0        var0  -9        0             7        12      DELETE    NORMAL   CL    trans_id_0\n"
+      "1        var1  MIN       -89           7        9       INSERT    NORMAL   UCF   trans_id_5\n"
+      "1        var1  MIN       -88           7        100     DELETE    NORMAL   UC    trans_id_5\n"
+      "1        var1  -44       MIN           7        100     INSERT    INSERT_DELETE   SC    trans_id_0\n"
+      "1        var1  -44       DI_VERSION    7        100     INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1  -44       0             7        59      DELETE    NORMAL   CL    trans_id_0\n"
+      "2        var2  MIN       -15          12        7       INSERT    NORMAL   UCF   trans_id_1\n"
+      "2        var2  MIN       -14          -1        7       DELETE    NORMAL   UC    trans_id_1\n"
+      "2        var2   -4       MIN          -1        7       INSERT    INSERT_DELETE   SC    trans_id_0\n"
+      "2        var2   -4       DI_VERSION   -1        7       INSERT    NORMAL   C     trans_id_0\n"
+      "2        var2   -4       0            -1       -1       DELETE    NORMAL   CL    trans_id_0\n";
+
+  snapshot_version = 20;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(20);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTableHandleV2 handle3;
+  const char *micro_data3[1];
+  micro_data3[0] =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "1        var1  MIN       -89           7        9       INSERT    NORMAL   UCF   trans_id_5\n"
+      "1        var1  MIN       -88           7        100     DELETE    NORMAL   UCL    trans_id_5\n"
+      "2        var2  MIN       -25          18        7       INSERT    NORMAL   UCF    trans_id_1\n"
+      "2        var2  MIN       -24          12        7       DELETE    NORMAL   UCL    trans_id_1\n";
+
+  snapshot_version = 50;
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(100);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data3, 1);
+  prepare_data_end(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
+  STORAGE_LOG(INFO, "finish prepare sstable3");
+
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard tx_table_guard;
+  get_tx_table_guard(tx_table_guard);
+  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
+
+  for (int64_t i = 1; i <= 5; i++) {
+    ObTxData *tx_data = new ObTxData();
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
+    transaction::ObTransID tx_id = i;
+
+    // fill in data
+    tx_data->tx_id_ = tx_id;
+    if (i < 5) {
+      tx_data->commit_version_.convert_for_tx(i * 10 + i);
+      tx_data->start_scn_.convert_for_tx(i);
+      tx_data->end_scn_ = tx_data->commit_version_;
+      tx_data->state_ = ObTxData::COMMIT;
+    } else {
+      tx_data->commit_version_.convert_for_tx(INT64_MAX);
+      tx_data->start_scn_.convert_for_tx(i);
+      tx_data->end_scn_.convert_for_tx(50);
+      tx_data->state_ = ObTxData::RUNNING;
+      transaction::ObUndoAction undo_action(ObTxSEQ(2, 0),ObTxSEQ(1, 0));
+      tx_data->add_undo_action(tx_table, undo_action);
+    }
+
+    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+    delete tx_data;
+  }
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+
+  STORAGE_LOG(WARN, "full_read_info", K(full_read_info_));
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint     bigint bigint   flag    flag_type  multi_version_row_flag  trans_id\n"
+      "0        var0  -9        MIN           9        12      INSERT    INSERT_DELETE   SCF   trans_id_0\n"
+      "0        var0  -9        DI_VERSION    9        12      INSERT    NORMAL   C     trans_id_0\n"
+      "0        var0   -9       0             -1       -1      DELETE    NORMAL   CL    trans_id_0\n"
+      "1        var1  MIN       -89           7        9       INSERT    NORMAL   UCF   trans_id_5\n"
+      "1        var1  MIN       -88           7        100     DELETE    NORMAL   UC    trans_id_5\n"
+      "1        var1  -44       MIN           7        100     INSERT    INSERT_DELETE   SC    trans_id_0\n"
+      "1        var1  -44       DI_VERSION    7        100     INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1  -44       0             7        28      DELETE    NORMAL   C     trans_id_0\n"
+      "1        var1   -33      DI_VERSION    7        28      INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -33      0             7        71      DELETE    NORMAL   C     trans_id_0\n"
+      "1        var1   -22      DI_VERSION    7        71      INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -22      0             7        2       DELETE    NORMAL   C     trans_id_0\n"
+      "1        var1   -11      DI_VERSION    7        2       INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -11      0            -1        9       DELETE    NORMAL   C     trans_id_0\n"
+      "1        var1   -4       DI_VERSION   -1        9       INSERT    NORMAL   C     trans_id_0\n"
+      "1        var1   -4       0            -1       -1       DELETE    NORMAL   CL    trans_id_0\n"
+      "2        var2  -11       MIN          18        7       INSERT    INSERT_DELETE   SCF   trans_id_0\n"
+      "2        var2  -11       DI_VERSION   18        7       INSERT    NORMAL   C     trans_id_0\n"
+      "2        var2  -11       0            -1        7       DELETE    NORMAL   C     trans_id_0\n"
+      "2        var2   -4       DI_VERSION   -1        7       INSERT    NORMAL   C     trans_id_0\n"
+      "2        var2   -4       0            -1       -1       DELETE    NORMAL   CL    trans_id_0\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  handle3.reset();
+  merger.reset();
+}
+
 } // namespace storage
 } // namespace oceanbase
 
