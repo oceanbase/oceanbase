@@ -48,20 +48,41 @@ public:
 struct ObFTDictInfoKey
 {
 public:
-  ObFTDictInfoKey() : type_(0) {}
+  ObFTDictInfoKey()
+      : type_(static_cast<uint64_t>(ObFTDictType::DICT_TYPE_INVALID)),
+        tenant_id_(OB_INVALID_TENANT_ID)
+  {
+  } // default constructor
+  ObFTDictInfoKey(const uint64_t type, const uint64_t tenant_id)
+      : type_(type),
+        tenant_id_(tenant_id)
+  {
+  }
   uint64_t hash() const
   {
     uint64_t hash = 0;
     hash = common::murmurhash(&type_, sizeof(int64_t), hash);
+    hash = common::murmurhash(&tenant_id_, sizeof(uint64_t), hash);
     return hash;
   }
 
-  bool operator==(const ObFTDictInfoKey &other) const { return type_ == other.type_; }
+  bool operator==(const ObFTDictInfoKey &other) const
+  {
+    return type_ == other.type_ && tenant_id_ == other.tenant_id_;
+  }
 
-  int compare(const ObFTDictInfoKey &other) const { return type_ - other.type_; }
+  int compare(const ObFTDictInfoKey &other) const
+  {
+    int ret = tenant_id_ - other.tenant_id_;
+    if (0 == ret) {
+      ret = type_ - other.type_;
+    }
+    return ret;
+  }
 
-public:
+private:
   uint64_t type_;
+  uint64_t tenant_id_;
   // name
 };
 

@@ -47,8 +47,7 @@ int ObFTDictHub::destroy()
 int ObFTDictHub::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container)
 {
   int ret = OB_SUCCESS;
-  ObFTDictInfoKey key;
-  key.type_ = static_cast<uint64_t>(desc.type_);
+  ObFTDictInfoKey key(static_cast<uint64_t>(desc.type_), MTL_ID());
   ObFTDictInfo info;
   container.reset();
 
@@ -91,8 +90,7 @@ int ObFTDictHub::load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &c
   int ret = OB_SUCCESS;
   ObFTDictInfo info;
   container.reset();
-  ObFTDictInfoKey key;
-  key.type_ = static_cast<uint64_t>(desc.type_);
+  ObFTDictInfoKey key(static_cast<uint64_t>(desc.type_), MTL_ID());
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("dict hub not init", K(ret));
