@@ -4404,6 +4404,7 @@ public:
     RECOVERY_LS_SERVICE,
     BALANCE_TASK_EXECUTE,
     DISASTER_RECOVERY_SERVICE,
+    ARBITRATION_SERVICE
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -13928,6 +13929,29 @@ public:
   share::ObRebuildTabletLocation dest_;
   share::ObRebuildTabletLocation src_;
 };
+
+#ifdef OB_BUILD_ARBITRATION
+struct ObFetchArbMemberArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchArbMemberArg() : tenant_id_(OB_INVALID_TENANT_ID),
+                          ls_id_() {}
+  ~ObFetchArbMemberArg() {}
+  bool is_valid() const;
+  void reset();
+  int assign(const ObFetchArbMemberArg &arg);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline share::ObLSID get_ls_id() const { return ls_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchArbMemberArg);
+};
+#endif
 
 }//end namespace obrpc
 }//end namespace oceanbase
