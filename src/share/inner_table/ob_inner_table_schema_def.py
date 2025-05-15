@@ -16276,6 +16276,7 @@ def_table_schema(
 # 12547: __all_virtual_external_resource
 # 12548: __all_virtual_external_resource_history
 # 12549: __all_virtual_ccl_rule_history
+# 12550:__all_virtual_tenant_vector_mem_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16836,6 +16837,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keyword
 # 15518: __all_virtual_ss_ls_meta
 # 15519: __all_virtual_ss_sstable_mgr
 # 15520: __all_virtual_ss_ls_tablet_reorganization_info
+# 15521: __all_virtual_tenant_vector_mem_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -42107,6 +42109,8 @@ def_table_schema(
 # 21658: DBA_OB_EXTERNAL_RESOURCES
 # 21659: CDB_OB_EXTERNAL_RESOURCES
 # 21660: V$OB_SS_SSTABLES
+# 21661: GV$OB_VECTOR_MEMORY
+# 21662: V$OB_VECTOR_MEMORY
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
