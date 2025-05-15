@@ -12,9 +12,9 @@
 
 #ifndef OCEANBASE_OBSERVER_OB_SHOW_CREATE_CATALOG_
 #define OCEANBASE_OBSERVER_OB_SHOW_CREATE_CATALOG_
+#include "common/ob_range.h"
 #include "lib/container/ob_se_array.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
-#include "common/ob_range.h"
 #include "src/share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
@@ -32,6 +32,7 @@ public:
   virtual ~ObShowCreateCatalog();
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
+
 private:
   int calc_show_catalog_id(uint64_t &show_catalog_id);
   int fill_row_cells(uint64_t show_catalog_id, const common::ObString &catalog_name);
@@ -44,9 +45,10 @@ private:
                                     char *buf,
                                     const int64_t &buf_len,
                                     int64_t &pos) const;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateCatalog);
 };
-}
-}
+} // namespace observer
+} // namespace oceanbase
 #endif /* OCEANBASE_OBSERVER_OB_SHOW_CREATE_CATALOG_ */
