@@ -1236,6 +1236,14 @@ public:
   void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
     enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
   }
+  bool is_diagnosis_enabled() const { return is_diagnosis_enabled_; }
+  void set_diagnosis_enabled(const bool is_diagnosis_enabled) {
+    is_diagnosis_enabled_ = is_diagnosis_enabled;
+  }
+  void set_diagnosis_limit_num(const int64_t diagnosis_limit_num) {
+    diagnosis_limit_num_ = diagnosis_limit_num;
+  }
+  int64_t get_diagnosis_limit_num() const { return diagnosis_limit_num_; }
   int reset_tx_variable_if_remote_trans(const ObPhyPlanType& type);
   int check_tx_read_only_privilege(const ObSqlTraits &sql_traits);
   int get_group_concat_max_len(uint64_t &group_concat_max_len) const;
@@ -2324,6 +2332,8 @@ private:
   int64_t next_tx_read_only_;
   transaction::ObTxIsolationLevel next_tx_isolation_;
   bool enable_mysql_compatible_dates_;
+  bool is_diagnosis_enabled_;
+  int64_t diagnosis_limit_num_;
   //===============================================================
 
   //==============系统变量相关的变量，不需序列化到远端==============
