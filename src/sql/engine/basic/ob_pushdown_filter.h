@@ -38,6 +38,7 @@ class ColumnMap;
 }
 namespace storage
 {
+class ObITableReadInfo;
 struct ObTableIterParam;
 struct ObTableAccessContext;
 }
@@ -282,6 +283,12 @@ public:
   }
   virtual int postprocess() { return common::OB_SUCCESS; }
   virtual bool is_semistruct_filter_node() const { return false; }
+  OB_INLINE bool is_logic_op_node() const
+  {
+    return AND_FILTER == type_ || TRUNCATE_AND_FILTER == type_ ||
+        OR_FILTER == type_ || TRUNCATE_OR_FILTER == type_;
+  }
+  bool check_filter_on_lob(const storage::ObITableReadInfo &read_info);
   VIRTUAL_TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));
 public:
   common::ObIAllocator &alloc_;

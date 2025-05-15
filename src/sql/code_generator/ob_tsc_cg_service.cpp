@@ -818,6 +818,9 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
+      } else if (OB_FAIL(scan_ctdef.table_param_.check_lob_column_pushdown(
+                  *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
+        LOG_WARN("failed to check lob column pushdown", K(ret));
       }
     }
   }
@@ -833,6 +836,9 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
+      } else if (OB_FAIL(lookup_ctdef->table_param_.check_lob_column_pushdown(
+                  *lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
+        LOG_WARN("failed to check lob column pushdown", K(ret));
       }
     }
   }
@@ -1468,8 +1474,11 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
             scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store(),
             scan_ctdef.table_param_.is_enable_semistruct_encoding());
         if (OB_FAIL(filter_constructor.apply(
-            scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
+                    scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
           LOG_WARN("failed to apply filter constructor", K(ret));
+        } else if (OB_FAIL(scan_ctdef.table_param_.check_lob_column_pushdown(
+                    *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
+          LOG_WARN("failed to check lob column pushdown", K(ret));
         }
         LOG_TRACE("index merge pushdown filters", K(scan_ctdef.ref_table_id_), K(scan_pushdown_filters));
       }
