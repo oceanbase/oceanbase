@@ -79,6 +79,7 @@ public:
       const ObLobAccessParam &param,
       const bool is_get,
       ObTableScanParam &scan_param,
+      ObIAllocator *stmt_allocator,
       ObIAllocator *scan_allocator);
   int prepare_lob_tablet_id(ObLobAccessParam& param);
   int prepare_scan_param_schema_version(
@@ -136,6 +137,7 @@ private:
       const bool is_get,
       uint32_t col_num,
       ObTableScanParam& scan_param,
+      ObIAllocator *stmt_allocator,
       ObIAllocator *scan_allocator);
   int prepare_table_param(
       const ObLobAccessParam &param,
