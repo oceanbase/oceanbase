@@ -483,6 +483,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
+    } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
+      LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
+    } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
+      LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
     } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx, succ_block_tx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
@@ -931,10 +935,6 @@ int ObTransferHandler::do_trans_transfer_start_(
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (OB_FAIL(do_tx_start_transfer_in_(task_info, start_scn, tablet_meta_list, timeout_ctx, trans))) {
     LOG_WARN("failed to do tx start transfer in", K(ret), K(task_info), K(start_scn), K(tablet_meta_list));
-  } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
-    LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
-  } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
-    LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
   } else if (OB_FAIL(update_transfer_status_(task_info, next_status, start_scn, OB_SUCCESS, trans))) {
     LOG_WARN("failed to update transfer status", K(ret), K(task_info));
   }
