@@ -296,7 +296,7 @@ int ObSubSchemaCtx::assgin(const ObSubSchemaCtx &other)
   } else {
     if (is_inited() && get_subschema_count() > 0) {
       reset();
-      LOG_INFO("subschema context reset due to assgin other", K(*this), K(lbt()));
+      LOG_DEBUG("subschema context reset due to assign other", K(*this), K(lbt()));
     }
     if (!is_inited() && OB_FAIL(init())) {
       LOG_WARN("fail to init subschema ctx", K(ret));
@@ -428,7 +428,7 @@ int ObSubSchemaCtx::set_subschema(uint16_t subschema_id, ObSubSchemaValue &value
     if (OB_HASH_NOT_EXIST == ret) {
       // not exist
       ret = OB_SUCCESS;
-      LOG_INFO("add new subschema", K(ret), K(subschema_id), K(value), K(subschema_array_.count()));
+      LOG_DEBUG("add new subschema", K(ret), K(subschema_id), K(value), K(subschema_array_.count()));
       if (OB_FAIL(ensure_array_capacity(subschema_id + 1))) {
         LOG_WARN("fail to ensure array capacity", K(ret));
       } else if (FALSE_IT(subschema_array_.at(subschema_id) = value)) {
