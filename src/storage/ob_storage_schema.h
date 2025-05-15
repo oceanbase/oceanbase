@@ -221,7 +221,7 @@ private:
   int64_t get_column_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
-  void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum) const;
+  static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 
 public:
   static const uint32_t INVALID_ID = UINT32_MAX;
