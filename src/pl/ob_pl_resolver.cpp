@@ -822,7 +822,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
     }
     if (OB_FAIL(ret)) {
-      record_error_line(parse_tree, resolve_ctx_.session_info_);
+      record_error_line(parse_tree, resolve_ctx_.session_info_, func.get_db_name(), func.get_package_name(), func.get_name());
     }
   }
   return ret;
@@ -1153,7 +1153,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLPackageAST &pack
     }
     }
     if (OB_FAIL(ret)) {
-      record_error_line(parse_tree, resolve_ctx_.session_info_);
+      record_error_line(parse_tree, resolve_ctx_.session_info_, package_ast.get_db_name(), package_ast.get_name(), ObString());
     }
   }
   return ret;
@@ -2150,7 +2150,9 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
       LOG_USER_WARN(OB_ERR_SP_UNDECLARED_TYPE,
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
-      record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+      record_error_line(sp_data_type_node, resolve_ctx_.session_info_, func.get_db_name(),
+                        func.is_routine() ?  static_cast<ObPLFunctionAST&>(func).get_package_name() : func.get_name(),
+                        func.is_routine() ? func.get_name() : ObString());
       ObPL::insert_error_msg(ret);
       ret = OB_SUCCESS;
       OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_,
@@ -3126,7 +3128,9 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
         LOG_USER_WARN(OB_ERR_SP_UNDECLARED_TYPE,
                       obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                       obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
-        record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+        record_error_line(sp_data_type_node, resolve_ctx_.session_info_, func.get_db_name(),
+                          func.is_routine() ?  static_cast<ObPLFunctionAST&>(func).get_package_name() : func.get_name(),
+                          func.is_routine() ? func.get_name() : ObString());
         ObPL::insert_error_msg(ret);
         ret = OB_SUCCESS;
         CK (T_SP_ROWTYPE == sp_data_type_node->type_ || T_SP_TYPE == sp_data_type_node->type_);
@@ -10637,7 +10641,9 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   }
   OZ (ObRawExprUtils::set_call_in_pl(expr));
   if (OB_FAIL(ret)) {
-    record_error_line(node, resolve_ctx_.session_info_);
+    record_error_line(node, resolve_ctx_.session_info_, unit_ast.get_db_name(),
+                      unit_ast.is_routine() ? static_cast<ObPLFunctionAST&>(unit_ast).get_package_name() : unit_ast.get_name(),
+                      unit_ast.is_routine() ? unit_ast.get_name() : ObString());
   }
   return ret;
 }
@@ -11542,7 +11548,7 @@ int ObPLResolver::resolve_obj_access_node(const ParseNode &node,
     }
   }
   if (OB_FAIL(ret)) {
-    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info);
+    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info, ObString(), ObString(), ObString());
   }
   return ret;
 }
@@ -11627,7 +11633,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
     }
   }
   if (OB_FAIL(ret)) {
-    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info);
+    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info,  ObString(), ObString(), ObString());
   }
 #undef PROCESS_IDENT_NODE
 #undef PROCESS_CPARAM_LIST_NODE
@@ -17845,7 +17851,9 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
     }
   }
   if (OB_FAIL(ret)) {
-    record_error_line(parse_tree, resolve_ctx_.session_info_);
+    record_error_line(parse_tree, resolve_ctx_.session_info_, unit_ast.get_db_name(),
+                      unit_ast.is_routine() ? static_cast<ObPLFunctionAST&>(unit_ast).get_package_name() : unit_ast.get_name(),
+                      unit_ast.is_routine() ? unit_ast.get_name() : ObString());
   }
   return ret;
 }
@@ -18478,21 +18486,21 @@ int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitA
 }
 
 int ObPLResolver::record_error_line(const ObStmtNodeTree *parse_tree,
-                                    ObSQLSessionInfo &session_info)
+                                    ObSQLSessionInfo &session_info, const ObString &db_name, const ObString &package_name, const ObString &name)
 {
   int ret = OB_SUCCESS;
   if (NULL != parse_tree &&
       (0 < parse_tree->stmt_loc_.first_line_ || 0 < parse_tree->stmt_loc_.first_column_)) {
     ret = record_error_line(session_info,
                             parse_tree->stmt_loc_.first_line_,
-                            parse_tree->stmt_loc_.first_column_);
+                            parse_tree->stmt_loc_.first_column_, db_name, package_name, name);
   }
   return ret;
 }
 
 int ObPLResolver::record_error_line(ObSQLSessionInfo &session_info,
                                     int32_t line,
-                                    int32_t col)
+                                    int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name)
 {
   int ret = OB_SUCCESS;
   // comp oracle, oracle line is begin with 1 while ob is begin with 0
@@ -18504,11 +18512,22 @@ int ObPLResolver::record_error_line(ObSQLSessionInfo &session_info,
       err_msg.reset();
       if (OB_FAIL(err_msg.append_fmt("\nat "))) {
         LOG_WARN("fail to get call stack name.", K(ret));
-      } else if (OB_FAIL(err_msg.append_fmt(" line : %d, col : %d", line, col))) {
-        LOG_WARN("fail to append line info.", K(ret), K(line), K(col));
-      } else {
-        LOG_DEBUG("exact error msg: ", K(line), K(col));
+      } else if (name.case_compare("__anonymous_block__") != 0) {
+        if (!db_name.empty()) {
+         OZ (err_msg.append_fmt("%.*s.", db_name.length(), db_name.ptr()));
+        }
+        if (!package_name.empty()) {
+          if (!session_info.is_for_trigger_package() && !name.empty()) {
+            OZ (err_msg.append_fmt("%.*s.", package_name.length(), package_name.ptr()));
+          } else {
+            OZ (err_msg.append_fmt("%.*s", package_name.length(), package_name.ptr()));
+          }
+        }
+        if (!name.empty() && !session_info.is_for_trigger_package()) {
+          OZ (err_msg.append_fmt("%.*s", name.length(), name.ptr()));
+        }
       }
+      OZ (err_msg.append_fmt(" line : %d, col : %d", line, col));
       LOG_USER_ERROR_LINE_COLUMN(line, col);
   }
   return ret;

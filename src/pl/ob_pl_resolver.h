@@ -401,9 +401,9 @@ public:
                                 common::ObIArray<ObObjAccessIdent> &obj_access_idents,
                                 ObSQLSessionInfo &session_info);
   static
-  int record_error_line(const ObStmtNodeTree *parse_tree, ObSQLSessionInfo &session_info);
+  int record_error_line(const ObStmtNodeTree *parse_tree, ObSQLSessionInfo &session_info, const ObString &db_name, const ObString &package_name, const ObString &name);
   static
-  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col);
+  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name);
   static
   int resolve_access_ident(const ObObjAccessIdent &access_ident,
                            ObPLExternalNS &external_ns,

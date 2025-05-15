@@ -713,7 +713,7 @@ int ObPLCompiler::check_package_body_legal(const ObPLBlockNS *parent_ns,
       ObPL::insert_error_msg(ret);
       ObPLResolver::record_error_line(session_info_,
                                       spec_routine_info->get_line_number(),
-                                      spec_routine_info->get_col_number());
+                                      spec_routine_info->get_col_number(), package_ast.get_db_name(), package_ast.get_name(), ObString());
     }
   }
   CK (OB_NOT_NULL(parent_ns->get_cursor_table()));
