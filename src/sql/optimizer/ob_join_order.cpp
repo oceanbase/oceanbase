@@ -12053,7 +12053,7 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
                                                                path_info.join_type_,
                                                                best_paths))) {
     LOG_WARN("failed to generate best inner paths", K(ret));
-  } else if (!best_paths.empty()) {
+  } else if (!best_paths.empty() && !path_info.force_normal_nlj_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < best_paths.count(); j++) {
         if (OB_FAIL(generate_inner_nl_paths(equal_sets,
@@ -14818,7 +14818,9 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
                                                ValidPathInfo &path_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan())) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_stmt()->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else {
@@ -14842,6 +14844,10 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
     if (NULL != log_join_hint && NULL != log_join_hint->nl_material_) {
       path_info.force_mat_ = log_join_hint->nl_material_->is_enable_hint();
       path_info.force_no_mat_ = log_join_hint->nl_material_->is_disable_hint();
+      if (log_hint.is_outline_data_ && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4, COMPAT_VERSION_4_3_0,
+                                                                           COMPAT_VERSION_4_3_5_BP3)) {
+        path_info.force_normal_nlj_ = true;
+      }
     } else if (log_hint.is_outline_data_) {
       path_info.force_mat_ = false;
       path_info.force_no_mat_ = true;
