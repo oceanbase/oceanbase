@@ -3378,8 +3378,9 @@ int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   client_app_info_.client_info_.assign(&client_info_buf_[0], size);
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
-    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(),
-        min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size));
+    int64_t length = min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size);
+    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(), length);
+    di->get_ash_stat().client_id_[length > 0 ? length - 1 : 0] = '\0';
   }
   return ret;
 }
