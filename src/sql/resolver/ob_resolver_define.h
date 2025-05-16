@@ -377,7 +377,8 @@ struct ObResolverParams
        is_resolve_lateral_derived_table_(false),
        package_guard_(NULL),
        is_resolve_fake_cte_table_(false),
-       is_returning_(false)
+       is_returning_(false),
+       is_in_view_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -446,6 +447,7 @@ public:
   pl::ObPLPackageGuard *package_guard_;
   bool is_resolve_fake_cte_table_;
   bool is_returning_;
+  bool is_in_view_;
 };
 } // end namespace sql
 } // end namespace oceanbase
