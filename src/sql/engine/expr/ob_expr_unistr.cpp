@@ -83,7 +83,7 @@ int ObExprUnistr::calc_unistr(const common::ObString &src,
 
     int operator() (const ObString &str, ob_wc_t wchar) {
       int ret = OB_SUCCESS;
-      ++incoming_char_len;
+      incoming_char_len += str.length();
       if (!found_backslash) {
         if ('\\' != wchar) {
           int32_t written_bytes = 0;
@@ -149,7 +149,7 @@ int ObExprUnistr::calc_unistr(const common::ObString &src,
       if (OB_SUCC(ret)) {
         // there may be no chance for total_str_len + 1
         if (incoming_char_len == total_str_len) {
-          if (unicode_inner_len != 0) {
+          if (found_backslash) {
             ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXADECIMAL_CHARACTERS_OR_ANOTHER;
             LOG_WARN("fail to get next character", K(ret));
           }
