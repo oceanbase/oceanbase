@@ -2272,7 +2272,7 @@ int ObDDLRedoLogWriter::wait_finish_log(
     LOG_WARN("failed to get pre tablet handle", K(ret));
   } else if (FALSE_IT(pre_meta_version = pre_tablet_handle.get_obj()->get_tablet_meta().snapshot_version_)) {
   } else if (OB_FAIL(compaction::ObRefreshTabletUtil::update_tablet_meta(*ls_handle.get_ls(),
-             shared_tablet_, update_tablet_meta_param))) {
+             shared_tablet_, update_tablet_meta_param, table_key.get_snapshot_version()))) {
     LOG_WARN("failed to update tablet meta", K(ret), K(update_tablet_meta_param));
   }
 

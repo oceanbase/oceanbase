@@ -1348,7 +1348,9 @@ int ObDDLFinishReplayExecutor::replay_ddl_finish(ObTabletHandle &tablet_handle)
     } else if (OB_FAIL(new_tablet.deserialize_for_replay(allocator, buf, buf_len, pos))) {
       LOG_WARN("failed to deserialize tablet meat", K(ret));
     } else if (OB_FAIL(compaction::ObRefreshTabletUtil::update_tablet_meta(*ls_,
-                       new_tablet, update_tablet_meta_param))) {
+                                                                           new_tablet,
+                                                                           update_tablet_meta_param,
+                                                                           log_->get_table_key().get_snapshot_version()))) {
       LOG_WARN("failed to update tablet meta", K(ret));
     }
 
