@@ -442,7 +442,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
         OZ (deps.push_back(obj_version));
-        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker,
+        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, session_info_->get_database_id(), synonym_checker,
                                                          *schema_checker_->get_schema_mgr(), &deps));
       }
     }

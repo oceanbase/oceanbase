@@ -290,6 +290,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
               OX (syn_version.object_id_ = obj_id);
               OX (syn_version.version_ = schema_version);
               OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
+              OX (syn_version.invoker_db_id_ = session_info->get_database_id());
               OZ (dependency_objects.push_back(syn_version));
               if (OB_NOT_NULL(dep_db_array)) {
                 OZ (dep_db_array->push_back(dep_db_id));
@@ -2036,7 +2037,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
               if (OB_FAIL(ret)) {
               } else if (exist) {
                 if (OB_NOT_NULL(deps) &&
-                    OB_FAIL(ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker, *schema_checker.get_schema_guard(), deps))) {
+                    OB_FAIL(ObPLDependencyUtil::collect_synonym_deps(tenant_id, database_id, synonym_checker, *schema_checker.get_schema_guard(), deps))) {
                   LOG_WARN("fail to collect synonym deps", K(ret));
                 } else if (object_db_id != database_id) {
                   const ObDatabaseSchema *database_schema = NULL;

@@ -1954,7 +1954,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           if (exist) {
             OZ (resolve_synonym(
               object_db_id, object_name, type, parent_id, var_idx, name, db_id, get_dependency_table(), full_schema));
-            OZ (ObPLDependencyUtil::collect_synonym_deps(MTL_ID(), synonym_checker, resolve_ctx_.schema_guard_, get_dependency_table()));
+            OZ (ObPLDependencyUtil::collect_synonym_deps(MTL_ID(), db_id, synonym_checker, resolve_ctx_.schema_guard_, get_dependency_table()));
           }
         }
       }
@@ -2448,6 +2448,7 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
         LOG_WARN("add dependency object failed", "package_id", schema_routine_info->get_package_id(), K(ret));
       } else if (synonym_checker.has_synonym()) {
         if (OB_FAIL(ObPLDependencyUtil::collect_synonym_deps(resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                              resolve_ctx_.session_info_.get_database_id(),
                                                               synonym_checker,
                                                               resolve_ctx_.schema_guard_,
                                                               get_dependency_table()))) {
