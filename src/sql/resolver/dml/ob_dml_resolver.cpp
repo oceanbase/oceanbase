@@ -10908,6 +10908,7 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
       obj_version.object_type_ = table_type,
       obj_version.version_ = schema_version;
       obj_version.is_db_explicit_  = is_db_expilicit;
+      obj_version.invoker_db_id_ = params_.session_info_->get_database_id();
       uint64_t dep_db_id = database_id;
       if (OB_FAIL(get_stmt()->add_global_dependency_table(obj_version))) {
         LOG_WARN("add global dependency table failed",

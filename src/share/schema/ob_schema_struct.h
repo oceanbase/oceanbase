@@ -1499,16 +1499,18 @@ struct ObSchemaObjVersion
       // The default is table, which is compatible with the current logic
       object_type_(DEPENDENCY_TABLE),
       is_db_explicit_(false),
-      is_existed_(true)
+      is_existed_(true),
+      invoker_db_id_(common::OB_INVALID_ID)
   {
   }
 
-  ObSchemaObjVersion(int64_t object_id, int64_t version, ObDependencyTableType object_type)
+  ObSchemaObjVersion(int64_t object_id, int64_t version, ObDependencyTableType object_type, int64_t db_id = common::OB_INVALID_ID)
       : object_id_(object_id),
         version_(version),
         object_type_(object_type),
         is_db_explicit_(false),
-        is_existed_(true)
+        is_existed_(true),
+        invoker_db_id_(db_id)
     {
     }
 
@@ -1520,6 +1522,7 @@ struct ObSchemaObjVersion
     object_type_ = DEPENDENCY_TABLE;
     is_db_explicit_ = false;
     is_existed_ = true;
+    invoker_db_id_ = common::OB_INVALID_ID;
   }
   inline int64_t get_object_id() const { return object_id_; }
   inline int64_t get_version() const { return version_; }
@@ -1625,12 +1628,14 @@ struct ObSchemaObjVersion
   ObDependencyTableType object_type_;
   bool is_db_explicit_;
   bool is_existed_;
+  int64_t invoker_db_id_; // for public synonym
 
   TO_STRING_KV(N_TID, object_id_,
                N_SCHEMA_VERSION, version_,
                K_(object_type),
                K_(is_db_explicit),
-               K_(is_existed));
+               K_(is_existed),
+               K_(invoker_db_id));
   OB_UNIS_VERSION(1);
 };
 
