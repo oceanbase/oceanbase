@@ -12,6 +12,7 @@
 
 #ifndef OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_
+#include "share/ob_compute_property.h"
 #include "sql/das/ob_das_task.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -120,7 +121,8 @@ public:
       domain_id_idxs_(alloc),
       domain_types_(alloc),
       domain_tids_(alloc),
-      pre_range_graph_(alloc)
+      pre_range_graph_(alloc),
+      aggregate_param_props_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -214,6 +216,7 @@ public:
   ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
   ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
   ObPreRangeGraph pre_range_graph_;
+  ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef

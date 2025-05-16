@@ -14,6 +14,7 @@
 #define _OB_OPTIMIZER_UTIL_H
 #include "lib/container/ob_array.h"
 #include "lib/allocator/ob_allocator.h"
+#include "share/ob_compute_property.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -30,14 +31,6 @@ enum PartitionRelation
   COMPATIBLE_SMALL,
   COMPATIBLE_LARGE,
   COMPATIBLE_COMMON
-};
-
-enum Monotonicity
-{
-  NONE_MONO,
-  ASC,
-  DESC,
-  CONST
 };
 
 struct MergeKeyInfo
