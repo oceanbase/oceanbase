@@ -577,7 +577,7 @@ END_P SET_VAR DELIMITER
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node> module_name info_type opt_infile
 %type <node_opt_parens> select_clause_set select_clause_set_body
-%type <node> dynamic_partition_option dynamic_partition_option_list
+%type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 
 %start sql_stmt
 %%
@@ -2619,6 +2619,14 @@ opt_win_window:
 }
 ;
 
+sys_view_cast_opt:
+/* empty */     { $$= NULL; }
+| IGNORE        {
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+  $$->is_hidden_const_ = 1; }
+;
+
 case_arg:
 expr                  { $$ = $1; }
 | /*EMPTY*/             { $$ = NULL; }
@@ -2844,7 +2852,7 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
-| CAST '(' expr AS cast_data_type opt_array ')'
+| CAST '(' expr AS cast_data_type opt_array sys_view_cast_opt ')'
 {
   // opt_array add for multivalue index, CAST(... AS UNSIGNED ARRAY) syntax support
 
@@ -2855,6 +2863,11 @@ MOD '(' expr ',' expr ')'
     malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 2, $3, $5);
     make_name_node($$, result->malloc_pool_, "cast");
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+    if ($7 != NULL) {
+      $$->value_ = 1;
+    } else {
+      $$->value_ = 0;
+    }
   } else {
     // for multivalue index, CAST(... AS UNSIGNED ARRAY)
     ParseNode *truncate = NULL;

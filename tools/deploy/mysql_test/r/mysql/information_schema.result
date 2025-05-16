@@ -33,8 +33,8 @@ desc information_schema.tables;
 | Field                  | Type                | Null | Key | Default | Extra |
 +------------------------+---------------------+------+-----+---------+-------+
 | TABLE_CATALOG          | varchar(512)        | NO   |     |         |       |
-| TABLE_SCHEMA           | varchar(64)         | NO   |     |         |       |
-| TABLE_NAME             | varchar(64)         | NO   |     |         |       |
+| TABLE_SCHEMA           | char(64)            | NO   |     |         |       |
+| TABLE_NAME             | char(64)            | NO   |     |         |       |
 | TABLE_TYPE             | varchar(64)         | NO   |     |         |       |
 | ENGINE                 | varchar(64)         | NO   |     |         |       |
 | VERSION                | bigint(0) unsigned  | NO   |     |         |       |
