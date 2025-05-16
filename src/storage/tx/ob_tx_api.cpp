@@ -419,10 +419,18 @@ int ObTransService::commit_tx(ObTxDesc &tx, const int64_t expire_ts, const ObStr
     // plus 10s to wait callback, if callback leaky, wakeup self
     int64_t wait_us = MAX(expire_ts - ObTimeUtility::current_time(), 0) + 10 * 1000 * 1000L;
     if (OB_FAIL(cb.wait(wait_us, result))) {
-      TRANS_LOG(WARN, "wait commit fail", K(ret), K(expire_ts), K(wait_us), K(tx));
+      TRANS_LOG(WARN, "wait commit fail", K(ret), K(expire_ts), K(wait_us), K(tx.tx_id_));
       /* NOTE: must cancel callback before release it */
-      tx.cancel_commit_cb();
-      ret = ret == OB_TIMEOUT ? OB_TRANS_STMT_TIMEOUT : ret;
+      ObITxCallback *cb_ret = tx.cancel_commit_cb();
+      if (OB_ISNULL(cb_ret)) {
+        // cancel cb fail, the cb has been processing, need wait
+        while (OB_FAIL(cb.wait(1_s, result))) {
+          TRANS_LOG(WARN, "wait commit fail, retry", K(ret), K(tx.tx_id_));
+        }
+        ret = result;
+      } else {
+        ret = ret == OB_TIMEOUT ? OB_TRANS_STMT_TIMEOUT : ret;
+      }
     } else {
       ret = result;
     }
