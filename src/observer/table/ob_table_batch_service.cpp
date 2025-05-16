@@ -244,34 +244,6 @@ int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
   return ret;
 }
 
-int ObTableBatchService::get_result_index(
-    const ObNewRow &row,
-    const ObIArray<ObTableOperation> &ops,
-    const ObIArray<uint64_t> &rowkey_ids,
-    ObObj *rowkey_cells,
-    ObIArray<int64_t> &indexs)
-{
-  int ret = OB_SUCCESS;
-
-  for (int64_t pos = 0; pos < rowkey_ids.count(); ++pos) {
-    rowkey_cells[pos] = row.get_cell(rowkey_ids.at(pos));
-  }
-  ObRowkey row_rowkey(rowkey_cells, rowkey_ids.count());
-
-  for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); i++) {
-    const ObITableEntity &entity = ops.at(i).entity();
-    ObRowkey entity_rowkey = entity.get_rowkey();
-    bool equal = false;
-    if (OB_FAIL(row_rowkey.equal(entity_rowkey, equal))) {
-      LOG_WARN("fail to compare rowkey", K(row_rowkey), K(entity_rowkey));
-    } else if (equal && OB_FAIL(indexs.push_back(i))) {
-      LOG_WARN("fail to push_back index", K(row_rowkey), K(indexs), K(i));
-    }
-  }
-
-  return ret;
-}
-
 int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                                                   ObTableApiSpec &spec,
                                                   const ObIArray<ObITableEntity *> &entities,

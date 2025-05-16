@@ -66,6 +66,7 @@ public:
   static int generate_scan_ranges_by_entities(const uint64_t table_id,
                                               const ObIArray<ObITableEntity*> &entities,
                                               ObIArray<common::ObNewRange> &ranges);
+  static int compare_rowkey(ObRowkey &storage_rowkey, ObRowkey &request_rowkey, bool &is_equal);
 // query interface
 public:
   static int query(ObTableCtx &ctx, ObTableApiRowIterator &iter);
