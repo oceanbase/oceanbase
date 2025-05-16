@@ -51,6 +51,7 @@ void ObStorageHdfsBase::reset()
   }
   if (OB_NOT_NULL(hdfs_client_)) {
     hdfs_client_->release();
+    hdfs_client_ = nullptr;
   }
   // TODO(bitao): add writable file to deconstruct
   if (is_opened_writable_file_) {}
