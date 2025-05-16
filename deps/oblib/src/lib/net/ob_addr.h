@@ -79,7 +79,8 @@ public:
 
   void reset()
   {
-    reset_v4_extraneous();
+    reset_v4_extraneous();  // reset addr except v4_
+    ip_.v4_ = 0;            // reset v4_
     port_ = 0;
     //memset(&ip_, 0, sizeof (ip_));
   }
