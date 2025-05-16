@@ -91,7 +91,7 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
                                                                             stmt, false,
                                                                             partial_cost_check))) {
         LOG_WARN("failed to check partial cost eval validity", K(ret));
-      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, false, false,
+      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, rule_based_trans_happened, false,
                                           is_happened, partial_cost_check))) {
         LOG_WARN("failed to accept transform", K(ret), KPC(trans_stmt));
       } else if (!is_happened) {

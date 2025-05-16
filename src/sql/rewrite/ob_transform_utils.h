@@ -1503,7 +1503,9 @@ public:
                                            ObRawExpr *not_null_expr,
                                            bool is_true = true);
   static int add_param_null_constraint(ObTransformerCtx &ctx,
-                                      ObRawExpr *not_null_expr);
+                                      ObRawExpr *null_expr);
+  static int add_param_null_constraint(ObTransformerCtx &ctx,
+                                       ObIArray<ObRawExpr *> &null_exprs);
 
   static int add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
                                                 ObRawExpr *expr,
