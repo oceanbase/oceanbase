@@ -8082,7 +8082,7 @@ def_table_schema(**all_catalog_privilege_def)
 def_table_schema(**gen_history_table_def(540, all_catalog_privilege_def))
 
 # 541: __all_tenant_flashback_log_scn
-# 542: __sslog_table
+# 542: __all_sslog_table
 # 543: __all_license
 def_table_schema(
   owner = 'jiabokai.jbk',
