@@ -438,9 +438,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
-                                         || ob_is_json(dst_type.get_type())
-                                         || ob_is_geometry(dst_type.get_type())) {
+      if (ob_is_string_or_lob_type(dst_type.get_type())
+          || ob_is_raw(dst_type.get_type())
+          || ob_is_json(dst_type.get_type())
+          || ob_is_geometry(dst_type.get_type())
+          || ob_is_roaringbitmap(dst_type.get_type())) {
         type.set_collation_level(dst_type.get_collation_level());
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
@@ -669,7 +671,7 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    } else if (ob_is_geometry(obj_type)) {
+    } else if (ob_is_geometry(obj_type) || ob_is_roaringbitmap(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_BINARY);
       dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
     } else if (ob_is_interval_tc(obj_type)) {
