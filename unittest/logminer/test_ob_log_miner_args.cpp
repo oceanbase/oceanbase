@@ -59,7 +59,7 @@ struct CmdArgs {
       argv[i] = nullptr;
     }
     argc = 0;
-    optind = 1;
+    optind = 0;
   }
 
   ObIAllocator &allocator;
