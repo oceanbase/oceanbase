@@ -579,7 +579,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
                                                        bool &is_success)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena("CardEstimation");
+  ObArenaAllocator arena("CardEstimation", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObArray<ObBatchEstTasks *> tasks;
   ObArray<ObAddr> prefer_addrs;
   int64_t partition_limit = 0;
@@ -945,7 +945,11 @@ int ObAccessPathEstimation::get_storage_estimation_task(ObOptimizerContext &ctx,
     task = new (ptr) ObBatchEstTasks();
     task->addr_ = best_index_part.addr_;
     task->arg_.schema_version_ = table_meta.schema_version_;
-    OZ (tasks.push_back(task));
+    if (OB_FAIL(tasks.push_back(task))) {
+      LOG_WARN("failed to push back", K(ret));
+      task->~ObBatchEstTasks();
+      task = nullptr;
+    }
   }
   return ret;
 }
@@ -1394,11 +1398,13 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ptr), K(ret));
     } else {
-      valid_partition_info = new(ptr)ObTablePartitionInfo();
-      if (OB_FAIL(get_valid_partition_info(ctx, table_partition_info, *valid_partition_info))) {
-        LOG_WARN("failed to get valid partition info", K(ret));
-      } else if (OB_FAIL(valid_partition_infos.push_back(valid_partition_info))) {
+      valid_partition_info = new(ptr)ObTablePartitionInfo(allocator);
+      if (OB_FAIL(valid_partition_infos.push_back(valid_partition_info))) {
         LOG_WARN("failed to push back", K(ret));
+        valid_partition_info->~ObTablePartitionInfo();
+        valid_partition_info = nullptr;
+      } else if (OB_FAIL(get_valid_partition_info(ctx, table_partition_info, *valid_partition_info))) {
+        LOG_WARN("failed to get valid partition info", K(ret));
       }
     }
   }
