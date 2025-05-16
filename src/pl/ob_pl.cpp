@@ -172,7 +172,10 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(_Unwind_Resume));
   jit::ObLLVMHelper::add_symbol(ObString("eh_personality"),
                                 (void*)(ObPLEH::eh_personality));
-
+#ifdef OB_BUILD_ORACLE_PL
+  jit::ObLLVMHelper::add_symbol(ObString("eh_adjust_call_stack"),
+                                WRAP_SPI_CALL(ObPLEH::eh_adjust_call_stack));
+#endif
 #if defined(__aarch64__) && defined(CPP_STANDARD_20)
   jit::ObLLVMHelper::add_symbol(ObString("DW.ref.eh_personality"),
                                 (void*)(&DW_REF_ObPLEH_eh_personality));
@@ -4227,7 +4230,8 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
       && !is_called_from_sql_
       && !is_anonymous
       && !ObTriggerInfo::is_trigger_package_id(func_.get_package_id())
-      && top_context_->get_exec_stack().count() > 0) {
+      && top_context_->get_exec_stack().count() > 0
+      && 0 != this->get_loc()) {
     ObPLExecState *parent = top_context_->get_exec_stack().at(top_context_->get_exec_stack().count() - 1);
     CK (OB_NOT_NULL(parent));
     OX (parent->set_loc(this->get_loc()));
@@ -4572,7 +4576,7 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
 
  #ifdef OB_BUILD_ORACLE_PL
       if (OB_NOT_NULL(ctx->pl_ctx_)) {
-        ObPLEH::eh_adjust_call_stack(*ctx->pl_ctx_, sql_info.loc_, ret);
+        ObPLEH::eh_adjust_call_stack(ctx->pl_ctx_, sql_info.loc_, ret);
       }
  #endif
 

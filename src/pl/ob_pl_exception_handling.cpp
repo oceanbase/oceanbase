@@ -121,18 +121,19 @@ ObPLException::ObPLException(int64_t error_code)
 }
 
 #ifdef OB_BUILD_ORACLE_PL
-int ObPLEH::eh_adjust_call_stack(ObPLContext &pl_ctx, uint64_t location, int err_code)
+int ObPLEH::eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code)
 {
   int ret = OB_SUCCESS;
   int64_t stack_depth = 0;
-  if (lib::is_oracle_mode() && OB_NOT_NULL(pl_ctx.get_call_stack_trace())) {
-    CK ((stack_depth = pl_ctx.get_exec_stack().count()) > 0);
-    CK (OB_NOT_NULL(pl_ctx.get_exec_stack().at(stack_depth - 1)));
-    OX (pl_ctx.get_exec_stack().at(stack_depth - 1)->set_loc(location));
-    OZ (pl_ctx.get_call_stack_trace()->format_exception_stack(err_code, pl_ctx.get_exec_stack()));
+  if (lib::is_oracle_mode() && OB_NOT_NULL(pl_ctx) && OB_NOT_NULL(pl_ctx->get_call_stack_trace())) {
+    CK ((stack_depth = pl_ctx->get_exec_stack().count()) > 0);
+    CK (OB_NOT_NULL(pl_ctx->get_exec_stack().at(stack_depth - 1)));
+    OX (pl_ctx->get_exec_stack().at(stack_depth - 1)->set_loc(location));
+    OZ (pl_ctx->get_call_stack_trace()->format_exception_stack(err_code, pl_ctx->get_exec_stack()));
   }
   return ret;
 }
+
 #endif
 
 ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
@@ -189,7 +190,7 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
 
 #ifdef OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(pl_ctx));
-    OZ (eh_adjust_call_stack(*pl_ctx, loc,
+    OZ (eh_adjust_call_stack(pl_ctx, loc,
       value->error_code_ < 0
         ? value->error_code_
         :(value->error_code_ & ~(UINT64_MAX << OB_PACKAGE_ID_SHIFT))));
