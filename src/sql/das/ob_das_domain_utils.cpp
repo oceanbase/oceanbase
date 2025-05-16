@@ -307,7 +307,8 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
 {
   int ret = OB_SUCCESS;
   static int64_t FT_WORD_DOC_COL_CNT = 4;
-  const int64_t ft_word_bkt_cnt = MAX(fulltext.length() / 10, 2);
+  static constexpr int64_t FT_MAX_WORD_BUCKET = 997;
+  const int64_t ft_word_bkt_cnt = MIN(MAX(fulltext.length() / 10, 2), FT_MAX_WORD_BUCKET);
   int64_t doc_length = 0;
   ObFTWordMap ft_word_map;
   void *rows_buf = nullptr;
