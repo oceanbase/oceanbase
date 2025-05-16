@@ -738,11 +738,6 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
         ctx_allocator->do_cleanup();
         bool has_unfree = ctx_allocator->check_has_unfree(first_label, first_bt);
         if (has_unfree) {
-#ifdef FATAL_ERROR_HANG
-          if (is_malloc_v2_enabled()) {
-            abort_unless(first_label[0] != '\0' && first_label[0] != ' ');
-          }
-#endif
           if (ObCtxIds::GLIBC == ctx_id
               && 0 == strncmp("Pl", first_label, 2)
               && pl_leaked_times_++ < 10) {

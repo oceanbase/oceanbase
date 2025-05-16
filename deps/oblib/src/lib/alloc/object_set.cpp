@@ -699,7 +699,7 @@ AObject *ObjectSet::merge_obj(AObject *obj)
 
 void ObjectSetV2::do_cleanup()
 {
-  for (int i = 0; i < ARRAYSIZEOF(scs); ++i) {
+  for (int i = 0; i < NORMAL_SC_CNT; ++i) {
     // clean local_free
     AObject *obj = NULL;
     {
@@ -779,10 +779,14 @@ AObject *ObjectSetV2::alloc_object(const uint64_t size, const ObMemAttr &attr)
     if (NULL != block) {
       obj = new (block->data()) AObject();
       obj->is_large_ = true;
+      SizeClass &sc = scs[LARGE_SC_IDX];
+      sc.lock_.lock();
+      DEFER(sc.lock_.unlock());
+      sc.push_full(block);
     }
   } else {
     const int sc_idx = calc_sc_idx(all_size);
-    DEBUG_ASSERT(sc_idx < ARRAYSIZEOF(scs));
+    DEBUG_ASSERT(sc_idx < NORMAL_SC_CNT);
     const int bin_size = BIN_SIZE_MAP(sc_idx);
     SizeClass &sc = scs[sc_idx];
     sc.lock_.lock();
@@ -851,6 +855,10 @@ void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
   obj->in_use_ = false;
   obj->on_malloc_sample_ = false;
   if (OB_UNLIKELY(obj->is_large_)) {
+    SizeClass &sc = scs[LARGE_SC_IDX];
+    sc.lock_.lock();
+    DEFER(sc.lock_.unlock());
+    sc.remove_full(block);
     free_block(block);
   } else {
     int64_t max_cnt = block->max_cnt_;
@@ -859,7 +867,7 @@ void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
       return;
     }
     const int sc_idx = block->sc_idx_;
-    DEBUG_ASSERT(sc_idx < ARRAYSIZEOF(scs));
+    DEBUG_ASSERT(sc_idx < NORMAL_SC_CNT);
     bool need_free = false;
     {
       SizeClass &sc = scs[sc_idx];
