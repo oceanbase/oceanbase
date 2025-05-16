@@ -14,7 +14,6 @@
 #define OB_LIB_INTRUSIVE_LIST_H_
 
 #include <stdint.h>
-#include "lib/list/ob_atomic_list.h"
 
 namespace oceanbase
 {
@@ -433,42 +432,6 @@ inline void CountQueue<T,L>::append_clear(CountQueue<T,L> &q)
   append(q);
   q.head_ = q.tail_ = 0;
   q.size_ = 0;
-}
-
-// Atomic intrusive lists
-template<class T, class L = typename T::Link_link_>
-struct ObAtomicSLL
-{
-  ObAtomicSLL();
-  explicit ObAtomicSLL(const char *name);
-
-  void push(T *c) { al_.push(c); }
-  T *pop() { return reinterpret_cast<T *>(al_.pop()); }
-  T *popall() { return reinterpret_cast<T *>(al_.popall()); }
-  bool empty() { return al_.empty(); }
-
-  // only if only one thread is doing pops it is possible to have a "remove"
-  // which only that thread can use as well.
-  T *remove(T *c) { return reinterpret_cast<T *>(al_.remove(c)); }
-  T *head() { return reinterpret_cast<T *>(al_.head()); }
-  T *next(T *c) { return reinterpret_cast<T *>(al_.next(c)); }
-
-  ObAtomicList al_;
-};
-
-#define ASLL(c, l) oceanbase::common::ObAtomicSLL<c, c::Link##_##l>
-#define ASLLM(c, m, ml, l) oceanbase::common::ObAtomicSLL<c, c::Link##_##ml##l>
-
-template<class T, class L>
-inline ObAtomicSLL<T, L>::ObAtomicSLL()
-{
-  (void)al_.init("ObAtomicSLL", reinterpret_cast<int64_t>(&L::next_link(reinterpret_cast<T *>(0))));
-}
-
-template<class T, class L>
-inline ObAtomicSLL<T,L>::ObAtomicSLL(const char *name)
-{
-  (void)al_.init(name, reinterpret_cast<int64_t>(&L::next_link(reinterpret_cast<T *>(0))));
 }
 
 } // end of namespace common
