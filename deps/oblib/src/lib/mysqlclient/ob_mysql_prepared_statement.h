@@ -475,6 +475,7 @@ private:
                           ObIAllocator &allocator,
                           const ObTimeZoneInfo *tz_info);
 #endif
+  static int64_t get_alloca_size_by_mysql_type(enum_field_types buffer_type);
   void increase_out_param_cur_pos(int64_t v) {
     out_param_cur_pos_ += v;
   }
