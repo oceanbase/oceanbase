@@ -14941,20 +14941,42 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(source_expr_column_item), K(target_table_item));
         } else if (source_expr_column_item->base_tid_ != OB_INVALID_ID) {
-          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-                                                        source_expr_column_item->base_tid_,
-                                                        source_base_table_schema))) {
+          if (OB_FAIL(schema_checker_->get_table_schema(
+                  session_info_->get_effective_tenant_id(),
+                  source_expr_column_item->base_tid_,
+                  source_base_table_schema))) {
             // get base table from source_expr_column_item->base_tid_
-            LOG_WARN("fail to get source base table schema", K(ret));
+            if (ret == OB_TABLE_NOT_EXIST) {
+              // base table maybe a dblink table, get from sql_schema_guard
+              // can't use
+              // const TableItem *source_table_item =
+              // stmt->get_table_item_by_id(source_real_col_ref_expr->get_table_id());
+              // source_table_item->is_link_table()
+              // because source_table_item is a GENERATED_TABLE(Subplan Scan)
+              if (OB_FAIL(schema_checker_->get_table_schema(
+                      session_info_->get_effective_tenant_id(),
+                      source_expr_column_item->base_tid_,
+                      source_base_table_schema, true))) {
+                LOG_WARN("fail to get source base table schema from sql_schema_guard", K(ret));
+              }
+            } else {
+              LOG_WARN("fail to get source base table schema", K(ret));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_ISNULL(source_base_table_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(source_base_table_schema));
-          } else if ((source_base_table_schema->is_user_table()
-                     || source_base_table_schema->is_external_table())
-                     && ObRawExprUtils::check_exprs_type_collation_accuracy_equal(target_real_ref,
-                                                                                  source_real_ref)
-                     && (!target_real_col_ref_expr->is_not_null_for_write()
-                         || source_real_col_ref_expr->is_not_null_for_read())) {
+            LOG_WARN("fail to get source base table schema", K(ret));
+          } else if (source_base_table_schema->is_link_table()) {
+            //dblink table can not use fast column convert
+            fast_calc = false;
+          } else if ((source_base_table_schema->is_user_table() ||
+                      source_base_table_schema->is_external_table()) &&
+                     ObRawExprUtils::check_exprs_type_collation_accuracy_equal(
+                         target_real_ref, source_real_ref) &&
+                     (!target_real_col_ref_expr->is_not_null_for_write() ||
+                      source_real_col_ref_expr->is_not_null_for_read())) {
             // 3.then satisfy:
             // 2-1.source col ref expr is from base table
             // 2-2.they have same type and collation and accuracy
