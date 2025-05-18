@@ -19767,11 +19767,30 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
       bool table_on_null_side = false;
       bool is_simple_filter = false;
       ObSEArray<ObPCConstParamInfo, 4> param_constraints;
+
       if (OB_ISNULL(cur_match_expr = match_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (OB_FAIL(cur_match_expr->get_table_id(table_id))) {
-        LOG_WARN("failed to get table id", K(ret));
+      } else if (cur_match_expr->get_match_columns().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < cur_match_expr->get_match_columns().count(); j++) {
+          ObColumnRefRawExpr *match_col = NULL;
+          if (OB_ISNULL(cur_match_expr->get_match_columns().at(j)) || !cur_match_expr->get_match_columns().at(j)->is_column_ref_expr()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", K(ret));
+          } else if (OB_FALSE_IT(match_col = static_cast<ObColumnRefRawExpr*>(cur_match_expr->get_match_columns().at(j)))) {
+          } else if (table_id != OB_INVALID_ID && table_id != match_col->get_table_id()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against columns on different tables");
+          } else {
+            table_id = match_col->get_table_id();
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_exprs_on_table))) {
         LOG_WARN("failed to get fulltext search expr on table", K(ret), K(table_id));
       } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
