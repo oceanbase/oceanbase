@@ -106,7 +106,26 @@ int ObMySQLUtil::get_length(const char *&pos, uint64_t &length)
       get_uint3(pos, s4);
       length = s4;
     } else if (sentinel == 254) {
-      get_uint8(pos, length);
+      /*
+        In our client-server protocol all numbers bigger than 2^24
+        stored as 8 bytes with uint8korr. Here we always know that
+        parameter length is less than 2^4 so we don't look at the second
+        4 bytes. But still we need to obey the protocol hence 9 in the
+        assignment below.
+        if (packet_left_len < 9) {
+          *header_len = 0;
+          return 0;
+        }
+        *header_len = 9;
+        return static_cast<ulong>(uint4korr(packet + 1));
+
+        OceanBase length parsing compatible with mysql, so we don't look at the second
+        4 bytes. But still we need to obey the protocol hence 9 in the
+        assignment below.
+      */
+      get_uint4(pos, s4);
+      length = s4;
+      pos += 4;
     } else {
       // 255??? won't get here.
       pos--;                  // roll back
