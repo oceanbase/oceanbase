@@ -102,11 +102,6 @@ private:
   static int adjust_entities(ObTableBatchCtx &ctx,
                              const common::ObIArray<ObTableOperation> &ops,
                              ObIArray<ObITableEntity*> &entities);
-  static int get_result_index(const ObNewRow &row,
-                              const ObIArray<ObTableOperation> &ops,
-                              const ObIArray<uint64_t> &rowkey_ids,
-                              ObObj *rowkey_cells,
-                              ObIArray<int64_t> &indexs);
   static int check_legality(ObTableBatchCtx &ctx,
                             const common::ObIArray<ObTableOperation> &ops,
                             common::ObIArray<ObTableOperationResult> &results);
