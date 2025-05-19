@@ -658,7 +658,8 @@ int ObSelectStmtPrinter::print_order_by()
       for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
         const OrderItem &order_item = select_stmt->get_order_item(i);
         ObRawExpr *order_expr = order_item.expr_;
-        int64_t sel_item_pos = -1;
+        int64_t sel_item_pos = 1;
+        bool found = false;
         if (OB_ISNULL(order_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
@@ -666,25 +667,33 @@ int ObSelectStmtPrinter::print_order_by()
                    CM_IS_IMPLICIT_CAST(order_expr->get_cast_mode())) {
           order_expr = order_expr->get_param_expr(0);
         }
-        for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_select_item_size(); ++j) {
-          ObRawExpr *select_expr = select_stmt->get_select_item(j).expr_;
+        for (int64_t j = 0; OB_SUCC(ret) && !found && j < select_stmt->get_select_item_size(); ++j) {
+          const SelectItem &select_item = select_stmt->get_select_item(j);
+          ObRawExpr *select_expr = select_item.expr_;
+          bool skip = false;
           if (OB_ISNULL(select_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret));
+          } else if (select_item.is_implicit_added_ || select_item.implicit_filled_) {
+            skip = true;
           } else if (T_FUN_SYS_CAST == select_expr->get_expr_type() &&
                      CM_IS_IMPLICIT_CAST(select_expr->get_cast_mode())) {
             select_expr = select_expr->get_param_expr(0);
           }
-          if (order_expr == select_expr) {
-            sel_item_pos = j + 1;
-            break;
+          if (OB_SUCC(ret)) {
+            if (skip) {
+            } else if (order_expr == select_expr) {
+              found = true;
+            } else {
+              sel_item_pos ++;
+            }
           }
         }
-        if (sel_item_pos != -1) {
+        if (found) {
           DATA_PRINTF(" %ld", sel_item_pos);
         } else {
           DATA_PRINTF(" ");
-          if (OB_FAIL(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
+          if (FAILEDx(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
             LOG_WARN("fail to print order by expr", K(ret));
           }
         }
