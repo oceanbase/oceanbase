@@ -378,8 +378,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     inherit_sharding_index_(-1),
     need_osg_merge_(false),
     max_px_thread_branch_(OB_INVALID_INDEX),
-    max_px_group_branch_(OB_INVALID_INDEX)
-
+    max_px_group_branch_(OB_INVALID_INDEX),
+    is_order_by_plan_top_(false)
 {
 }
 
@@ -5623,7 +5623,6 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
 {
   int ret = OB_SUCCESS;
   used = true;
-  bool is_first_child = true;
   bool inherit_child_ordering = true;
   int64_t inherit_child_ordering_index = -1;
   ObLogicalOperator *parent = get_parent();
@@ -5634,25 +5633,29 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3) {
-    while (OB_SUCC(ret) && NULL != parent) {
-      if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
-        LOG_WARN("failed to check use child ordering", K(ret));
-      } else {
-        inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index);
-        if (!used && inherit_child_ordering && child->is_plan_root()) {
-          ObLogPlan *plan = child->get_plan();
-          const ObDMLStmt *stmt = NULL;
-          if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect null param", K(ret));
-          } else if (0 == stmt->get_order_item_size()) {
-            //do nothing
-          } else {
-            used = true;
-          }
+    if (NULL == parent) {
+      used = false;
+    }
+    while (OB_SUCC(ret) && NULL != child) {
+      if (child->is_order_by_plan_top()) {
+        ObLogPlan *plan = child->get_plan();
+        const ObDMLStmt *stmt = NULL;
+        if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null param", K(ret));
+        } else if (0 == stmt->get_order_item_size()) {
+          //do nothing
+        } else {
+          used = true;
+          break;
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (NULL == parent) {
+        break;
+      } else if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
+        LOG_WARN("failed to check use child ordering", K(ret));
+      } else if (OB_FALSE_IT(inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index))) {
       } else if (used || !inherit_child_ordering) {
         break;
       } else {

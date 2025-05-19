@@ -1712,6 +1712,9 @@ public:
                                     bool nested) const;
   int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
                              bool &contain_dist_das) const;
+
+  inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
+  inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1930,6 +1933,7 @@ protected:
   bool need_osg_merge_;
   int64_t max_px_thread_branch_;
   int64_t max_px_group_branch_;
+  bool is_order_by_plan_top_;
 };
 
 template <typename Allocator>
