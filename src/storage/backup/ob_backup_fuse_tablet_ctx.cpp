@@ -249,6 +249,16 @@ int ObBackupTabletGroupFuseCtx::close_extern_writer()
   return ret;
 }
 
+int ObBackupTabletGroupFuseCtx::abort_extern_writer()
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mutex_);
+  if (OB_FAIL(extern_tablet_meta_writer_.abort())) {
+    LOG_WARN("failed to abort extern tablet meta writer", K(ret));
+  }
+  return ret;
+}
+
 int ObBackupTabletGroupFuseCtx::set_result(
     const int32_t result,
     const bool need_retry,
