@@ -363,7 +363,11 @@ public:
         err_msg_(),
         sqc_order_gi_tasks_(false) {}
   virtual ~ObPxInitSqcResultMsg() = default;
-  void reset() {}
+  void reset()
+  {
+    err_msg_.reset();
+    tablets_info_.reset();
+  }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
 public:
   int64_t dfo_id_;
@@ -407,6 +411,7 @@ public:
     trans_result_.reset();
     task_monitor_info_array_.reset();
     dml_row_info_.reset();
+    interm_result_ids_.reset();
     fb_info_.reset();
     err_msg_.reset();
   }
