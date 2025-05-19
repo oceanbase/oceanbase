@@ -122,6 +122,8 @@
                                                                       "endpoint_repeat_cnt) VALUES "
 
 #define DELETE_HISTOGRAM_STAT_SQL "DELETE /*+%.*s*/  FROM __all_histogram_stat WHERE %.*s"
+
+#define CHECK_HISTOGRAM_STAT_SQL "SELECT /*+%.*s*/ COUNT(1) as total_count FROM __all_histogram_stat WHERE %.*s"
 #define DELETE_COL_STAT_SQL "DELETE /*+%.*s*/ FROM __all_column_stat WHERE %.*s"
 #define DELETE_TAB_STAT_SQL "DELETE /*+%.*s*/ FROM __all_table_stat WHERE %.*s"
 #define UPDATE_HISTOGRAM_TYPE_SQL "UPDATE /*+%.*s*/ __all_column_stat SET histogram_type = 0, bucket_cnt = 0 WHERE %.*s"
@@ -553,8 +555,12 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
   } else if (!only_update_col_stat &&
              OB_FAIL(conn->execute_write(exec_tenant_id, delete_histogram.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(delete_histogram));
-  } else if (OB_FAIL(need_histogram &&
-              conn->execute_write(exec_tenant_id, insert_histogram.ptr(), affected_rows))) {
+  } else if (only_update_col_stat && need_histogram) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get something wrong", K(ret));
+  } else if (!only_update_col_stat && OB_FAIL(check_column_histogram_valid(exec_tenant_id, column_stats, conn))) {
+    LOG_WARN("failed to check histogram stats", K(ret));
+  } else if (need_histogram && OB_FAIL(conn->execute_write(exec_tenant_id, insert_histogram.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(insert_histogram));
   } else if (OB_FAIL(conn->execute_write(exec_tenant_id, column_stats_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(column_stats_sql));
@@ -644,6 +650,77 @@ int ObOptStatSqlService::construct_delete_column_histogram_sql(const uint64_t te
   return ret;
 }
 
+// todo 后续删除，短期抓一下统计信息histogram问题
+int ObOptStatSqlService::check_column_histogram_valid(const uint64_t tenant_id,
+                                                      const ObIArray<ObOptColumnStat *> &column_stats,
+                                                      sqlclient::ObISQLConnection *conn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString check_histogram_sql;
+  ObSqlString where_str;
+  ObSqlString hint_str;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_stats.count(); ++i) {
+    if (OB_ISNULL(column_stats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(column_stats.at(i)));
+    } else if (where_str.append_fmt(
+                   " %s (%lu, %ld, %ld, %lu) %s",
+                   i != 0 ? "," : "(TENANT_ID, TABLE_ID, PARTITION_ID, COLUMN_ID) IN (",
+                   ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                   ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_stats.at(i)->get_table_id()),
+                   column_stats.at(i)->get_partition_id(),
+                   column_stats.at(i)->get_column_id(),
+                   i == column_stats.count() - 1 ? ")" : "")) {
+      LOG_WARN("failed to append fmt", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !where_str.empty()) {
+    if (OB_FAIL(hint_str.append("opt_param('enable_in_range_optimization','true')"))) {
+      LOG_WARN("fail to append hint", K(ret));
+    } else if (OB_FAIL(check_histogram_sql.append_fmt(CHECK_HISTOGRAM_STAT_SQL,
+                                                      hint_str.string().length(),
+                                                      hint_str.string().ptr(),
+                                                      where_str.string().length(),
+                                                      where_str.string().ptr()))) {
+      LOG_WARN("fail to append SQL where string.", K(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res)
+      {
+        sqlclient::ObMySQLResult *result = NULL;
+        uint count = 0;
+        if (conn == NULL) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexepected null", K(ret));
+        } else if (OB_FAIL(conn->execute_read(exec_tenant_id, check_histogram_sql.ptr(), res))) {
+          LOG_WARN("execute sql failed", "sql", check_histogram_sql.ptr(), K(ret));
+        } else if (NULL == (result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to execute sql", K(ret));
+        } else {
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END != ret) {
+                LOG_WARN("result next failed, ", K(ret));
+              } else {
+                ret = OB_SUCCESS;
+                break;
+              }
+            } else {
+              EXTRACT_INT_FIELD_MYSQL(*result, "total_count", count, uint64_t);
+              if (count > 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexepected error that stats error", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaGetterGuard *schema_guard,
                                                         const uint64_t tenant_id,
                                                         ObIAllocator &allocator,
@@ -666,6 +743,9 @@ int ObOptStatSqlService::construct_histogram_insert_sql(share::schema::ObSchemaG
     if (OB_ISNULL(column_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(column_stats.at(i)));
+    } else if (column_stats.at(i)->get_histogram().get_bucket_cnt() != column_stats.at(i)->get_histogram().get_bucket_size()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error histogram", K(ret), K(column_stats.at(i)));
     } else {
       ObHistogram &hist = column_stats.at(i)->get_histogram();
       for (int64_t j = 0; OB_SUCC(ret) && hist.is_valid() && j < hist.get_bucket_size(); ++j) {
@@ -2401,3 +2481,4 @@ int ObOptStatSqlService::delete_system_stats(const uint64_t tenant_id)
 #undef INSERT_ONLINE_COL_STAT_DUPLICATE
 #undef INERT_SYSTEM_STAT_SQL
 #undef DELETE_SYSTEM_STAT_SQL
+#undef CHECK_HISTOGRAM_STAT_SQL
