@@ -318,6 +318,7 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
   transaction::ObTxDesc *save_tx_desc = NULL;
   int64_t save_nested_count = 0;
   int64_t affected_rows = 0;
+  bool need_restore_session = false;
   ObSqlString sql;
   if (OB_ISNULL(ctx) ||
       OB_ISNULL(ctx->get_sql_proxy()) ||
@@ -334,7 +335,8 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
   } else if (OB_FAIL(prepare_and_store_session(session,
                                                saved_session,
                                                save_tx_desc,
-                                               save_nested_count))) {
+                                               save_nested_count,
+                                               need_restore_session))) {
     LOG_WARN("failed to begin nested session", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sql_plan_infos.count(); ++i) {
@@ -471,7 +473,7 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
       OB_NOT_NULL(ctx->get_sql_proxy())) {
     ctx->get_sql_proxy()->close(conn, ret);
   }
-  if (OB_NOT_NULL(session)) {
+  if (OB_NOT_NULL(session) && need_restore_session) {
     int end_ret = restore_session(session,
                                   saved_session,
                                   save_tx_desc,
@@ -2500,13 +2502,15 @@ int ObSqlPlan::plan_text_to_strings(PlanText &plan_text,
 int ObSqlPlan::prepare_and_store_session(ObSQLSessionInfo *session,
                                         ObSQLSessionInfo::StmtSavedValue *&session_value,
                                         transaction::ObTxDesc *&tx_desc,
-                                        int64_t &nested_count)
+                                        int64_t &nested_count,
+                                        bool &need_restore)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   session_value = NULL;
   tx_desc = NULL;
   nested_count = 0;
+  need_restore = false;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session value", K(ret));
@@ -2526,6 +2530,7 @@ int ObSqlPlan::prepare_and_store_session(ObSQLSessionInfo *session,
       session->set_autocommit(true);
       tx_desc = session->get_tx_desc();
       session->get_tx_desc() = NULL;
+      need_restore = true;
     }
   }
   return ret;
