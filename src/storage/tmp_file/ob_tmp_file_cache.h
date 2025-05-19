@@ -146,7 +146,7 @@ private:
   static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS = 48;
   static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_BITS = 16;
   static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_MAX = (1 << 13);
-  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX = (1 << PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS);
+  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX = (1LL << PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS);
   union {
     int64_t block_id_;      // for sn mode
     int64_t tmp_file_id_;   // for ss mode
