@@ -2317,6 +2317,10 @@ DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
          "A switch that determines whether to enable strict OS parameter check mode, defaulting to true and can be set to false to bypass strict checks."
          "Value: True: allowed; False: allowed but not suggested",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(io_scheduler_thread_count, OB_CLUSTER_PARAMETER, "4", "[1, 16]",
+        "Range: [1, 16] in integer. This parameter is used to adjust the number of threads in the I/O scheduler. "
+        "The default value is 4. You can set it within the range of 1 to 16 to control the concurrency level of the I/O scheduler.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_BOOL(_enable_tree_based_io_scheduler, OB_CLUSTER_PARAMETER, "True",
          "A switch that allows enabling the tree-based IO scheduler."
          "Value: True: allowed; False: disabled",

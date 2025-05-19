@@ -144,6 +144,7 @@ ignore_replay_checksum_error
 inc_sstable_upload_thread_score
 index_block_cache_priority
 internal_sql_execute_timeout
+io_scheduler_thread_count
 job_queue_processes
 json_document_max_depth
 kv_group_commit_batch_size

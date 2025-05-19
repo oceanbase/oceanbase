@@ -436,7 +436,7 @@ int ObDeviceManager::alloc_device_and_init_(
   int ret = OB_SUCCESS;
   ObDeviceInsInfo *dev_info = nullptr;
   device_handle = nullptr;
-  const int64_t fake_max_io_depth = 256;
+  const int64_t fake_max_io_depth = 512;
   ObQSyncLockWriteGuard guard(lock_);
 
   // Re-check to see if the device was created while acquiring the lock

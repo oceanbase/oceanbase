@@ -110,7 +110,7 @@ int ObIOManagerV2::init()
 int ObIOManagerV2::start()
 {
   int ret = OB_SUCCESS;
-  if (0 != qsched_start(root_qid_, 2)) {
+  if (0 != qsched_start(root_qid_, GCONF.io_scheduler_thread_count)) {
     ret = OB_ERR_SYS;
   } else if (OB_FAIL(io_submitter_.start())) {
   }
