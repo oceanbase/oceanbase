@@ -315,9 +315,11 @@ public:
 {4096, ABLOCK_SIZE * 8},
 {8192, ABLOCK_SIZE * 16}
 };
+  static constexpr int NORMAL_SC_CNT = sizeof(SIZE_CLASS_MAP)/sizeof(SIZE_CLASS_MAP[0]);
+  static constexpr int LARGE_SC_IDX = NORMAL_SC_CNT;
 #define BIN_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][0]
 #define BLOCK_SIZE_MAP(sc_idx) SIZE_CLASS_MAP[sc_idx][1]
-  SizeClass scs[sizeof(SIZE_CLASS_MAP)/sizeof(SIZE_CLASS_MAP[0])];
+  SizeClass scs[NORMAL_SC_CNT + 1];
 
   IBlockMgr *blk_mgr_;
 } __attribute__((aligned(16)));
