@@ -366,6 +366,7 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
+  uint64_t get_all_vsag_use_mem() { return all_vsag_use_mem_; }
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
                K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));

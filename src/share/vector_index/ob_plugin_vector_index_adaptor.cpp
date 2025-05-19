@@ -856,7 +856,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
         LOG_WARN("failed to init incr data mem ctx.", K(ret));
       } else {
         ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
-        int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
+        int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
         if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                                build_type,
@@ -902,7 +902,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
     } else {
       ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
-      int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
+      int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              build_type,
@@ -1586,7 +1586,7 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       LOG_WARN("check vsag mem used failed.", K(ret));
     } else {
       ObVectorIndexAlgorithmType build_type = param->extra_info_actual_size_ > 0 ?  VIAT_HGRAPH : VIAT_HNSW;
-      int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
+      int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,

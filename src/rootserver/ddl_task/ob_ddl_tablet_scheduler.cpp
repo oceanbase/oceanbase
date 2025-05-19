@@ -17,6 +17,7 @@
 #include "share/ob_ddl_checksum.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "src/observer/ob_inner_sql_connection.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -540,7 +541,11 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
             }
           }
           if (OB_SUCC(ret)) {
-            if (pre_data_size == 0 || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size)) {
+            bool satisfied_built_vec_index_if_need = true;
+            if (index_schema->is_vec_hnsw_index() && !ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, tenant_id_, tablet_data_row_cnt + pre_data_row_cnt)) {
+              satisfied_built_vec_index_if_need = false;
+            }
+            if (pre_data_size == 0 || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
               if (OB_FAIL(out_tablets.push_back(in_tablets.at(i)))) {
                 LOG_WARN("fail to push back", K(ret), K(in_tablets.at(i)));
               } else {
