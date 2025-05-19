@@ -371,10 +371,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         ObString sp_info_str;
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    plan->stat_.sp_info_str_,
-                                    sp_info_str))) {
-          SERVER_LOG(ERROR, "copy sp_info_str failed", K(ret));
+        char *buf = nullptr;
+        int64_t buf_len =
+            plan->stat_.sp_info_str_.length() + 1 > OB_MAX_COMMAND_LENGTH
+                ? OB_MAX_COMMAND_LENGTH
+                : plan->stat_.sp_info_str_.length() + 1;
+        if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
+        } else if (OB_FALSE_IT(plan->stat_.sp_info_str_.to_string(buf, buf_len))) {
+        } else if (OB_FALSE_IT(sp_info_str.assign(buf, buf_len))) {
         } else {
           cells[i].set_varchar(sp_info_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -416,10 +422,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         } else {
           origin_str = pl_object->get_stat().sys_vars_str_;
         }
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    origin_str,
-                                    sys_vars_str))) {
-          SERVER_LOG(ERROR, "copy sys_vars_str failed", K(ret));
+        char *buf = nullptr;
+        int64_t buf_len =
+            origin_str.length() + 1 > OB_MAX_COMMAND_LENGTH
+                ? OB_MAX_COMMAND_LENGTH
+                : origin_str.length() + 1;
+        if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
+        } else if (OB_FALSE_IT(origin_str.to_string(buf, buf_len))) {
+        } else if (OB_FALSE_IT(sys_vars_str.assign(buf, buf_len))) {
         } else {
           cells[i].set_varchar(sys_vars_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -435,10 +447,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         ObString config_str;
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    plan->stat_.config_str_,
-                                    config_str))) {
-          SERVER_LOG(ERROR, "copy sys_vars_str failed", K(ret));
+        char *buf = nullptr;
+        int64_t buf_len =
+            plan->stat_.config_str_.length() + 1 > OB_MAX_COMMAND_LENGTH
+                ? OB_MAX_COMMAND_LENGTH
+                : plan->stat_.config_str_.length() + 1;
+        if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
+        } else if (OB_FALSE_IT(plan->stat_.config_str_.to_string(buf, buf_len))) {
+        } else if (OB_FALSE_IT(config_str.assign(buf, buf_len))) {
         } else {
           cells[i].set_varchar(config_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
