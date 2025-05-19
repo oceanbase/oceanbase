@@ -68,6 +68,10 @@
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
+#include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
+#endif
 
 namespace oceanbase
 {
@@ -3414,6 +3418,11 @@ int ObRpcNotifyTenantThreadP::process()
       } else if (obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE == arg_.get_thread_type()) {
         rootserver::ObDRService *service = MTL(rootserver::ObDRService *);
         WAKE_UP_TENANT_SERVICE
+#ifdef OB_BUILD_ARBITRATION
+      } else if (obrpc::ObNotifyTenantThreadArg::ARBITRATION_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObArbitrationService *service = MTL(rootserver::ObArbitrationService*);
+        WAKE_UP_TENANT_SERVICE
+#endif
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));
@@ -4237,6 +4246,13 @@ int ObRpcBroadcastConfigVersionP::process()
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ARBITRATION
+int ObFetchArbMemberP::process()
+{
+  return ObArbitrationServiceUtils::get_arb_member_from_leader(arg_, result_);
+}
+#endif
 
 int ObRpcNotifyLSRestoreFinishP::process()
 {

@@ -466,7 +466,7 @@ public:
   // @return
   // - OB_SUCCESS
   // - OB_NOT_INIT
-  int get_arbitration_member(common::ObMember &arb_member) const;
+  virtual int get_arbitration_member(common::ObMember &arb_member) const override final;
   int set_election_silent_flag(const bool election_silent_flag);
   bool is_election_silent() const;
 #endif

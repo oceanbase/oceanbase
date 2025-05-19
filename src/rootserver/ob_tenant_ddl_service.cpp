@@ -3685,6 +3685,17 @@ int ObTenantDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, 
           LOG_WARN("failed to wakeup dr service", KR(ret), K(arg), K(tenant_id));
         }
       }
+
+#ifdef OB_BUILD_ARBITRATION
+      // When modify tenant arbitration service status, we have to wakeup tenant arbitration
+      // service to add/remove replica as soon as possible
+      if (OB_FAIL(ret)) {
+      } else if (arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::ENABLE_ARBITRATION_SERVICE)) {
+        if (OB_FAIL(ObArbitrationServiceUtils::wakeup_single_tenant_arbitration_service(gen_meta_tenant_id(tenant_id)))) {
+          LOG_WARN("fail to wakeup tenant arbitration service", KR(ret), K(tenant_id));
+        }
+      }
+#endif
     }
   } else if (!arg.new_tenant_name_.empty()) {
     // rename tenant

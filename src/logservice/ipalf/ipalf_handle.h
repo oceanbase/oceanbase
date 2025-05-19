@@ -274,6 +274,10 @@ public:
 
   // @param [out] diagnose info, current diagnose info of palf
   virtual int diagnose(palf::PalfDiagnoseInfo &diagnose_info) const = 0;
+#ifdef OB_BUILD_ARBITRATION
+  // @param [out] arbitration_member, the address of arb member
+  virtual int get_arbitration_member(common::ObMember &arb_member) const = 0;
+#endif
 
   VIRTUAL_TO_STRING_KV("IPalfHandle", "Dummy");
 };

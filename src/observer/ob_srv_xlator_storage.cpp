@@ -154,6 +154,9 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObNotifyLogServiceAccessPointP, gctx_);
     RPC_PROCESSOR(ObRpcBroadcastConfigVersionP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyLSRestoreFinishP, gctx_);
+#ifdef OB_BUILD_ARBITRATION
+    RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
+#endif
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
     RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
 }
