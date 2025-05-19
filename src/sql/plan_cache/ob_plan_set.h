@@ -102,6 +102,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet>
 {
   friend struct ObPhyLocationGetter;
 public:
+  static const common::ObObjMeta UNKNOWN_VAR_DEFAULT_META;
   explicit ObPlanSet(ObPlanSetType type)
       : alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
         plan_cache_value_(NULL),
@@ -224,6 +225,9 @@ private:
   static int check_vector_param_same_bool(const ObObjParam &param_obj,
                                          bool &first_val,
                                          bool &is_same);
+
+  static common::ObObjMeta default_unknown_var_meta();
+  int get_variable_meta(const ObSQLSessionInfo *session_info, const ObString &var_name, ObObjMeta &meta);
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;

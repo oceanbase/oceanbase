@@ -46,6 +46,7 @@ namespace oceanbase
 {
 namespace sql
 {
+const common::ObObjMeta ObPlanSet::UNKNOWN_VAR_DEFAULT_META = default_unknown_var_meta();
 ObPlanSet::~ObPlanSet()
 {
   // Make sure destory planset before destory pre calculable expression.
@@ -60,6 +61,34 @@ ObPlanSet::~ObPlanSet()
       pre_cal_expr_handler_ = NULL;
     }
   }
+}
+
+common::ObObjMeta ObPlanSet::default_unknown_var_meta()
+{
+  common::ObObjMeta var_meta;
+  var_meta.set_type(ObVarcharType);
+  var_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+  var_meta.set_collation_type(CS_TYPE_BINARY);
+  return var_meta;
+}
+
+int ObPlanSet::get_variable_meta(const ObSQLSessionInfo *session_info, const ObString &var_name,
+                                 common::ObObjMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  ObSessionVariable sess_var;
+  if (OB_FAIL(session_info->get_user_variable(var_name, sess_var))) {
+    if (ret == OB_ERR_USER_VARIABLE_UNKNOWN) {
+      meta = UNKNOWN_VAR_DEFAULT_META;
+      ret = OB_SUCCESS;
+      LOG_TRACE("ignore unknow variable error", K(ret), K(var_name));
+    } else {
+      LOG_WARN("failed to get user variable", K(ret), K(var_name));
+    }
+  } else {
+    meta = sess_var.meta_;
+  }
+  return ret;
 }
 
 //used for get plan
@@ -121,11 +150,14 @@ int ObPlanSet::match_params_info(const ParamStore *params,
                  K(ret), K(pc_ctx.sql_ctx_.session_info_));
       } else {
         ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
+        common::ObObjMeta tmp_meta;
         for (int64_t i = 0 ; OB_SUCC(ret) && is_same && i < related_user_var_names_.count(); i++) {
-          if (OB_FAIL(session_info->get_user_variable(related_user_var_names_.at(i), sess_var))) {
-            LOG_WARN("failed to get user variable", K(ret), K(related_user_var_names_.at(i)), K(i));
+          if (OB_FAIL(get_variable_meta(pc_ctx.sql_ctx_.session_info_,
+                related_user_var_names_.at(i), tmp_meta))) {
+            LOG_WARN("failed to get user variable meta", K(ret),
+              K(related_user_var_names_.at(i)), K(i));
           } else {
-            is_same = (related_user_sess_var_metas_.at(i) == sess_var.meta_);
+            is_same = (related_user_sess_var_metas_.at(i) == tmp_meta);
           }
         }
       }
@@ -508,7 +540,6 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
   int ret = OB_SUCCESS;
   is_same = true;
   ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
-  ObSessionVariable sess_var;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null session_info", K(ret));
@@ -543,14 +574,16 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
         is_same = false;
       } else {
         int64_t CNT = related_user_var_names_.count();
+        common::ObObjMeta tmp_meta;
         for (int64_t i = 0; OB_SUCC(ret) && is_same && i < CNT; i++) {
           if (related_user_var_names_.at(i) != pc_ctx.sql_ctx_.related_user_var_names_.at(i)) {
             is_same = false;
-          } else if (OB_FAIL(session_info->get_user_variable(related_user_var_names_.at(i),
-                                                             sess_var))) {
-            LOG_WARN("failed to get user variable", K(ret), K(sess_var));
+          } else if (OB_FAIL(get_variable_meta(pc_ctx.sql_ctx_.session_info_,
+                      related_user_var_names_.at(i), tmp_meta))) {
+            LOG_WARN("failed to get user variable meta", K(ret),
+              K(related_user_var_names_.at(i)), K(i));
           } else {
-            is_same = (sess_var.meta_ == related_user_sess_var_metas_.at(i));
+            is_same = (related_user_sess_var_metas_.at(i) == tmp_meta);
           }
         }
       }
@@ -737,13 +770,14 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
         }
       }
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < related_user_var_names_.count(); i++) {
-        OZ( sql_ctx.session_info_->get_user_variable(related_user_var_names_.at(i),
-                                                     sess_var),
-            ret,
-            related_user_var_names_.at(i),
-            i );
-        OC( (related_user_sess_var_metas_.push_back)(sess_var.meta_) );
+      common::ObObjMeta tmp_meta;
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < related_user_var_names_.count(); i++) {
+        if (OB_FAIL(get_variable_meta(pc_ctx.sql_ctx_.session_info_,
+              related_user_var_names_.at(i), tmp_meta))) {
+          LOG_WARN("failed to get user variable meta", K(ret),
+            K(related_user_var_names_.at(i)), K(i));
+        }
+        OC( (related_user_sess_var_metas_.push_back)(tmp_meta) );
       }
 
       if (OB_FAIL(ret)) {
