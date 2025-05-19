@@ -475,7 +475,7 @@ int ObSrvDeliver::init_queue_threads()
 
   // TODO: fufeng, make it configurable
   if (OB_FAIL(create_queue_thread(lib::TGDefIDs::LeaseQueueTh, "LeaseQueueTh", lease_queue_))) {
-  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, "DDLQueueTh", ddl_queue_))) {
+  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, DDL_THREAD_NAME, ddl_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLPQueueTh, PARALLEL_DDL_THREAD_NAME, ddl_parallel_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::MysqlQueueTh,
                                          "MysqlQueueTh", mysql_queue_))) {

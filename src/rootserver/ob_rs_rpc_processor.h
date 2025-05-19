@@ -186,6 +186,11 @@ private:
 
 class ObRootServerRPCProcessorBase
 {
+bool is_ddl_thread()
+{
+  return (0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name()))
+         || (0 == STRCASECMP(DDL_THREAD_NAME, ob_get_origin_thread_name()));
+}
 public:
   ObRootServerRPCProcessorBase(ObRootService &rs, const ObRPCProcessorCheckType::RPCProcessorCheckType &check_type, const bool is_ddl_like, obrpc::ObDDLArg *arg)
       : root_service_(rs), check_type_(check_type), is_ddl_like_(is_ddl_like), ddl_arg_(arg) {}
@@ -200,6 +205,10 @@ protected:
     if (OB_FAIL(check_rs_status_(pcode))) {
       RS_LOG(WARN, "fail to check RS status", KR(ret), K(pcode));
     } else {
+      // check whether the thread name and rpc type match
+      if ((is_ddl_like_ && !is_ddl_thread()) || (!is_ddl_like_ && is_ddl_thread())) {
+        LOG_ERROR("thread name and rpc type not match, need fix", K(is_ddl_thread()), K_(is_ddl_like), K(pcode));
+      }
       // check other conditions
       if (is_ddl_like_
             && (!GCONF.enable_ddl && !is_allow_when_disable_ddl(pcode, ddl_arg_))) {
