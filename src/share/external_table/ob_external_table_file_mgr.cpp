@@ -1239,9 +1239,10 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
       OZ(insert_file_ids.push_back(is_odps_external_table ? 0 : ++max_file_id)); // odps table's file_id is 0
     } else if (ret == OB_SUCCESS) {
       if (old_file_infos.at(file_idx).file_size_ != file_infos.at(i).file_size_
-          || old_file_infos.at(file_idx).delete_version_ != MAX_VERSION)
-      OZ(update_file_infos.push_back(file_infos.at(i)));
-      OZ(update_file_ids.push_back(old_file_ids.at(file_idx)));
+          || old_file_infos.at(file_idx).delete_version_ != MAX_VERSION) {
+        OZ(update_file_infos.push_back(file_infos.at(i)));
+        OZ(update_file_ids.push_back(old_file_ids.at(file_idx)));
+      }
     } else {
       LOG_WARN("unexpected error", K(ret), K(i));
     }
