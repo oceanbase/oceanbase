@@ -39,7 +39,7 @@ int ObLogExchange::get_explain_name_internal(char *buf,
       (is_repart_exchange() || is_pq_dist())) {
     ret = BUF_PRINTF(" (");
     if (OB_FAIL(ret)){
-    } else if (is_repart_exchange()) {
+    } else if (is_repart_exchange() && ObPQDistributeMethod::SM_BROADCAST != dist_method_) {
       if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
         ret = BUF_PRINTF("PKEY RANDOM");
       } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {

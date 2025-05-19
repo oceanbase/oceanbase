@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/executor/ob_slice_calc.h"
+#include "sql/engine/px/ob_slice_calc.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::sql;
@@ -102,6 +102,7 @@ int ObSliceIdxCalc::get_slice_idx_batch(const ObIArray<ObExpr*> &exprs, ObEvalCt
     CALL_GET_SLICE_INNER(RANGE, ObRangeSliceIdCalc, get_slice_idx_batch_inner, exprs, eval_ctx, skip, batch_size, indexes)
     CALL_GET_SLICE_INNER(HASH, ObHashSliceIdCalc, get_slice_idx_batch_inner, exprs, eval_ctx, skip, batch_size, indexes)
     CALL_GET_SLICE_INNER(HYBRID_HASH_RANDOM, ObHybridHashRandomSliceIdCalc, get_slice_idx_batch_inner, exprs, eval_ctx, skip, batch_size, indexes)
+    CALL_GET_SLICE_INNER(SM_REPART_RANDOM, ObSlaveMapPkeyRandomIdxCalc, get_slice_idx_batch_inner, exprs, eval_ctx, skip, batch_size, indexes)
     default : {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected slice calc type", K(CALC_TYPE));
@@ -463,9 +464,6 @@ int ObSlaveMapRepartIdxCalcBase::init(uint64_t tenant_id)
                                                ObModIds::OB_HASH_NODE,
                                                tenant_id))) {
       LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
-    } else {
-      // In ObRepartSliceIdxCalc::init(), the support_vectorized_calc_ has been set to true.
-      support_vectorized_calc_ = false;
     }
   }
 
@@ -751,8 +749,6 @@ int ObRepartSliceIdxCalc::init(uint64_t tenant_id)
     LOG_WARN("failed to build affi hash map", K(ret));
   } else if (OB_FAIL(setup_one_side_one_level_info())) {
     LOG_WARN("fail to build one side on level map", K(ret));
-  } else {
-    support_vectorized_calc_ = true;
   }
   return ret;
 }
@@ -830,7 +826,7 @@ int ObRepartSliceIdxCalc::build_part2tablet_id_map()
     int64_t part_id = OB_INVALID_ID;
     int64_t subpart_id = OB_INVALID_ID;
     ObTabletID tablet_id;
-    for (auto iter = px_repart_ch_map_.begin(); OB_SUCC(ret) && iter != px_repart_ch_map_.end(); ++iter) {
+    for (ObPxPartChMap::iterator iter = px_repart_ch_map_.begin(); OB_SUCC(ret) && iter != px_repart_ch_map_.end(); ++iter) {
       tablet_id = ObTabletID(iter->first);
       if (OB_FAIL(table_schema_.get_part_id_by_tablet(tablet_id, part_id, subpart_id))) {
         LOG_WARN("get part id by tablet id", K(tablet_id), K(part_id));
@@ -929,7 +925,7 @@ int ObBc2HostSliceIdCalc::get_slice_indexes_inner(
   }
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < host_idx_.count(); i++) {
-      auto &hi = host_idx_.at(i);
+      const HostIndex &hi = host_idx_.at(i);
       int64_t idx = hi.begin_ + hi.idx_ % (hi.end_ - hi.begin_);
       slice_idx_array.at(i) = channel_idx_.at(idx);
       hi.idx_++;
