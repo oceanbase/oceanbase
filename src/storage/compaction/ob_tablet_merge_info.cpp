@@ -125,13 +125,15 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
     ObTxDataMinorFilter *compaction_filter = (ObTxDataMinorFilter*)ctx.filter_ctx_.compaction_filter_;
     ObSSTableMetaHandle sstable_meta_hdl;
     ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(tables_handle.get_table(0));
+    SCN default_tx_data_recycle_scn(SCN::min_scn());
     if (OB_ISNULL(oldest_tx_data_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
     } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
     } else {
-      param.set_filled_tx_scn(sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn());
+      default_tx_data_recycle_scn = sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn();
+      param.set_filled_tx_scn(default_tx_data_recycle_scn);
 
       if (OB_NOT_NULL(compaction_filter)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
@@ -146,6 +148,11 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
         }
       }
     }
+    FLOG_INFO("finish record tx_data_recycle_scn",
+              K(param.filled_tx_scn()),
+              K(default_tx_data_recycle_scn),
+              KPC(compaction_filter),
+              KPC(oldest_tx_data_sstable));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected merge type when merge tx data table", KR(ret), K(ctx));

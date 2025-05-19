@@ -220,7 +220,8 @@ int64_t LogIOWorkerWrapper::palf_id_to_index_(const int64_t palf_id)
 {
   int64_t index = -1;
   // For sys log stream, index set to 0.
-  if (is_sys_palf_id(palf_id)) {
+  if (is_sys_palf_id(palf_id) || (!is_user_tenant_ && (share::ObLSID::SSLOG_LS_ID == palf_id))) {
+    // TODO: jinqian.zzy
     index = SYS_LOG_IO_WORKER_INDEX;
   } else {
     const int64_t hash_factor = log_writer_parallelism_ - 1;

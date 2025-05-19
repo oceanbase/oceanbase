@@ -82,7 +82,7 @@ private:
 
 TEST_F(TestMdsTableForcellyRemove, reset) {
   MdsTableHandle handle;
-  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
   ctx1.on_redo(mock_scn(10));
@@ -113,7 +113,7 @@ TEST_F(TestMdsTableForcellyRemove, reset) {
 
 TEST_F(TestMdsTableForcellyRemove, remove) {
   MdsTableHandle handle;
-  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
   ctx1.on_redo(mock_scn(10));

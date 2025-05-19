@@ -36,6 +36,11 @@
 
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_sswriter_rpc.h"
+#include "storage/incremental/ob_shared_meta_rpc_common.h"
+#endif
+
 using namespace oceanbase;
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -156,6 +161,15 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
   // RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
   // RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_PROCESSOR(ObSSWriterGrantP);
+  RPC_PROCESSOR(ObSSWriterLeaseReqP);
+  RPC_PROCESSOR(ObSSWriterLeaseAsyncReqP);
+  RPC_PROCESSOR(ObSSWriterLeaseAsyncRespP);
+  RPC_PROCESSOR(ObSSWriterLocationReqP);
+  RPC_PROCESSOR(ObSSWriterLocationRespP);
+  RPC_PROCESSOR(ObSharedRpcP, gctx_);
+#endif
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {
@@ -190,10 +204,6 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(logservice::LogProbeRsP);
 #endif
   RPC_PROCESSOR(logservice::LogGetCkptReqP);
-#ifdef OB_BUILD_SHARED_STORAGE
-  RPC_PROCESSOR(logservice::LogSyncBaseLSNReqP);
-  RPC_PROCESSOR(logservice::LogAcquireRebuildInfoP);
-#endif
 }
 
 void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)

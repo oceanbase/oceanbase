@@ -14711,6 +14711,30 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DYNAMIC_PARTITION_TABLES limit 1);
 cnt
 1
+desc oceanbase.V$OB_SS_SSTABLES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+LS_ID	bigint(20)	NO		NULL	
+TABLET_ID	bigint(20)	NO		NULL	
+TRANSFER_SCN	bigint(20)	NO		NULL	
+TABLE_TYPE	varchar(20)	NO		NULL	
+CG_IDX	bigint(20)	NO		NULL	
+START_LOG_SCN	bigint(20)	NO		NULL	
+END_LOG_SCN	bigint(20)	NO		NULL	
+DATA_CHECKSUM	bigint(20)	NO		NULL	
+SIZE	bigint(20)	NO		NULL	
+REC_SCN	bigint(20)	NO		NULL	
+UPPER_TRANS_VERSION	bigint(20)	NO		NULL	
+CONTAIN_UNCOMMITTED_ROW	varchar(3)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_SS_SSTABLES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_SS_SSTABLES|%') then 3
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_SSTABLES limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

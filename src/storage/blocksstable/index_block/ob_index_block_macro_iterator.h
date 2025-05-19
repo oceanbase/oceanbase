@@ -154,6 +154,7 @@ public:
                K_(index_tree_type), K_(is_inited));
 
 private:
+  int move_to_next_macro();
   int locate_macro_block(
       const bool need_move_to_bound,
       const bool cursor_at_begin_bound,

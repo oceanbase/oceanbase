@@ -36,6 +36,8 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObLSMeta;
+
 class ObLSCreateType
 {
 public:
@@ -48,12 +50,14 @@ public:
 class ObLSMeta
 {
   friend class ObLSMetaPackage;
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  friend class ObSSLSMeta;
+#endif
   OB_UNIS_VERSION_V(1);
 public:
   ObLSMeta();
   ObLSMeta(const ObLSMeta &ls_meta);
-  ~ObLSMeta() {}
+  virtual ~ObLSMeta() {}
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const ObMigrationStatus &migration_status,
@@ -70,55 +74,50 @@ public:
   ObLSMeta &operator=(const ObLSMeta &other);
   share::SCN get_clog_checkpoint_scn() const;
   palf::LSN get_clog_base_lsn() const;
-  int set_clog_checkpoint(const int64_t ls_epoch,
-                          const palf::LSN &clog_checkpoint_lsn,
+  int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const share::SCN &clog_checkpoint_scn,
                           const bool write_slog);
   int64_t get_rebuild_seq() const;
-  int set_migration_status(const int64_t ls_epoch,
-                           const ObMigrationStatus &migration_status,
+  int set_migration_status(const ObMigrationStatus &migration_status,
                            const bool write_slog = true);
   int get_migration_status (ObMigrationStatus &migration_status) const;
-  int set_gc_state(const int64_t ls_epoch, const logservice::LSGCState &gc_state, const share::SCN &offline_scn);
+  int set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn);
   int get_gc_state(logservice::LSGCState &gc_state);
   int get_offline_scn(share::SCN &offline_scn);
 
-  int set_restore_status(const int64_t ls_epoch, const share::ObLSRestoreStatus &restore_status);
+  int set_restore_status(const share::ObLSRestoreStatus &restore_status);
   int get_restore_status(share::ObLSRestoreStatus &restore_status) const;
-  int update_ls_replayable_point(const int64_t ls_epoch, const share::SCN &replayable_point);
+  int update_ls_replayable_point(const share::SCN &replayable_point);
   int get_ls_replayable_point(share::SCN &replayable_point);
 
   //for ha batch update ls meta element
   int update_ls_meta(
-      const int64_t ls_epoch,
       const bool update_restore_status,
       const ObLSMeta &src_ls_meta);
   //for ha rebuild update ls meta
-  int set_ls_rebuild(const int64_t ls_epoch);
+  int set_ls_rebuild();
   int check_valid_for_backup() const;
   share::SCN get_tablet_change_checkpoint_scn() const;
-  int set_tablet_change_checkpoint_scn(const int64_t ls_epoch, const share::SCN &tablet_change_checkpoint_scn);
+  int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn);
   share::SCN get_transfer_scn() const;
-  int inc_update_transfer_scn(const int64_t ls_epoch, const share::SCN &transfer_scn);
-  int update_id_meta(const int64_t ls_epoch,
-                     const int64_t service_type,
+  int inc_update_transfer_scn(const share::SCN &transfer_scn);
+  int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
                      const share::SCN &latest_scn,
                      const bool write_slog);
   int get_all_id_meta(transaction::ObAllIDMeta &all_id_meta) const;
   int get_saved_info(ObLSSavedInfo &saved_info);
-  int build_saved_info(const int64_t ls_epoch);
-  int set_saved_info(const int64_t ls_epoch, const ObLSSavedInfo &saved_info);
-  int clear_saved_info(const int64_t ls_epoch);
+  int build_saved_info();
+  int set_saved_info(const ObLSSavedInfo &saved_info);
+  int clear_saved_info();
   int get_migration_and_restore_status(
       ObMigrationStatus &migration_status,
       share::ObLSRestoreStatus &ls_restore_status);
-  int set_rebuild_info(const int64_t ls_epoch, const ObLSRebuildInfo &rebuild_info);
+  int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
   int check_ls_need_online(bool &need_online) const;
   int set_transfer_meta_info(
-      const int64_t ls_epoch,
       const share::SCN &replay_scn,
       const share::ObLSID &src_ls,
       const share::SCN &src_scn,
@@ -126,13 +125,12 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
       const uint64_t data_version);
   int get_transfer_meta_info(ObLSTransferMetaInfo &trasfer_meta_info) const;
-  int cleanup_transfer_meta_info(const int64_t ls_epoch, const share::SCN &replay_scn);
+  int cleanup_transfer_meta_info(const share::SCN &replay_scn);
   ObMajorMVMergeInfo get_major_mv_merge_info() const;
-  int set_major_mv_merge_scn(const int64_t ls_epoch, const SCN &major_mv_merge_scn);
-  int set_major_mv_merge_scn_safe_calc(const int64_t ls_epoch, const SCN &major_mv_merge_scn_safe_calc);
-  int set_major_mv_merge_scn_publish(const int64_t ls_epoch, const SCN &major_mv_merge_scn_publish);
+  int set_major_mv_merge_scn(const SCN &major_mv_merge_scn);
+  int set_major_mv_merge_scn_safe_calc(const SCN &major_mv_merge_scn_safe_calc);
+  int set_major_mv_merge_scn_publish(const SCN &major_mv_merge_scn_publish);
   ObLSStoreFormat get_store_format() const;
-
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -141,6 +139,8 @@ public:
       const share::SCN &create_scn,
       const ObMajorMVMergeInfo &major_mv_merge_info,
       const ObLSStoreFormat &store_format);
+  int64_t get_ls_epoch() const { return ls_epoch_; }
+  void set_ls_epoch(const int64_t ls_epoch) { ls_epoch_ = ls_epoch; }
 
   ObReplicaType get_replica_type() const
   { return unused_replica_type_; }
@@ -197,22 +197,28 @@ public:
 private:
   void update_clog_checkpoint_in_ls_meta_package_(const share::SCN& clog_checkpoint_scn,
                                                   const palf::LSN& clog_base_lsn);
-private:
+protected:
   ObReplicaType unused_replica_type_;
   ObLSPersistentState ls_persistent_state_;
-  typedef common::ObFunction<int(const int64_t, const ObLSMeta &)> WriteSlog;
+  typedef common::ObFunction<int(const ObLSMeta &)> WriteSlog;
   // for test
   static WriteSlog write_slog_;
 
   // clog_checkpoint_scn_, meaning:
   // 1. dump points of all modules have exceeded clog_checkpoint_scn_
   // 2. all clog entries which log_scn are smaller than clog_checkpoint_scn_ can be recycled
-  share::SCN clog_checkpoint_scn_;
+  union {
+    share::SCN clog_checkpoint_scn_;
+    share::SCN ss_checkpoint_scn_; // for share storage
+  };
   // clog_base_lsn_, meaning:
   // 1. all clog entries which lsn are smaller than clog_base_lsn_ have been recycled
   // 2. log_scn of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_scn_
   // 3. clog starts to replay log entries from clog_base_lsn_ on crash recovery
-  palf::LSN clog_base_lsn_;
+  union {
+    palf::LSN clog_base_lsn_;
+    palf::LSN ss_checkpoint_lsn_;
+  };
   int64_t rebuild_seq_;
   ObMigrationStatus migration_status_;
   logservice::LSGCState gc_state_;

@@ -24,6 +24,7 @@
 #include "storage/compaction/ob_tablet_refresh_dag.h"
 #include "storage/compaction/ob_verify_ckm_dag.h"
 #include "storage/compaction/ob_update_skip_major_tablet_dag.h"
+#include "storage/incremental/ob_inc_sstable_upload_task.h"
 #endif
 
 
@@ -1793,7 +1794,11 @@ void ObTenantDagWorker::set_task(ObITask *task)
 
   ObIDag *dag = nullptr;
   if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
-    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type());
+    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type())
+#ifdef OB_BUILD_SHARED_STORAGE
+      || (dag->get_type() == ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD)
+#endif
+      ;
   }
 }
 
@@ -1856,12 +1861,12 @@ void ObTenantDagWorker::run1()
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
+      reset_compaction_thread_locals();
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*cur_task, *this, ret/*task error_code*/))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
-      reset_compaction_thread_locals();
     } else {
       ObThreadCondGuard guard(cond_);
       while (NULL == task_ && DWS_FREE == status_ && !has_set_stop()) {
@@ -3057,6 +3062,9 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
       } else if (GCTX.is_shared_storage_mode()
               && ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == cur->get_type()) {
         cancel_flag = ls_id == static_cast<compaction::ObUpdateSkipMajorTabletDag *>(cur)->get_param().ls_id_;
+      } else if (GCTX.is_shared_storage_mode()
+                 && ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD == cur->get_type()) {
+        cancel_flag = ls_id == static_cast<storage::ObIncSSTableUploadDag *>(cur)->get_param().ls_id_;
 #endif
       } else {
         cancel_flag = (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());
@@ -4122,6 +4130,14 @@ void ObTenantDagScheduler::reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_HA_LOW, tenant_config->ha_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_DDL, tenant_config->ddl_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_TTL, tenant_config->ttl_thread_score);
+#ifdef OB_BUILD_SHARED_STORAGE
+    // use compaction_high_thread_score as default upload thread count
+    if (0 == tenant_config->inc_sstable_upload_thread_score) {
+      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->compaction_high_thread_score);
+    } else {
+      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->inc_sstable_upload_thread_score);
+    }
+#endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
   }
 }

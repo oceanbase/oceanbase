@@ -422,6 +422,13 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
       if (strncmp(token, "enable_production_mode:", 23) != 0) {
         func();
       }
+// TODO by qingxia: open this feature before release
+// #ifdef OB_BUILD_SHARED_LOG_SERVICE
+//       if (strncmp(token, "logservice_access_point", 23) == 0) {
+//         ret = OB_INVALID_CONFIG;
+//         LOG_ERROR("logservice_access_point cannot be setted by -o", K(ret));
+//       }
+// #endif
       token = STRTOK_R(NULL, delimiter, &saveptr);
     }
   }

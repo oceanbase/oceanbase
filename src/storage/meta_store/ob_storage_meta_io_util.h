@@ -57,7 +57,7 @@ public:
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       write_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
       write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-      write_info.ls_epoch_id_ = ls_epoch;
+      write_info.set_ls_epoch_id(ls_epoch);
       write_info.mtl_tenant_id_ = mtl_tenant_id;
       if (OB_FAIL(OB_STORAGE_OBJECT_MGR.write_object(opt, write_info, object_handle))) {
         STORAGE_LOG(WARN, "fail to write tenant super block", K(ret), K(opt), K(meta_object));
@@ -100,7 +100,7 @@ public:
       read_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
       read_info.offset_ = 0;
       read_info.size_ = object_size;
-      read_info.ls_epoch_id_ = ls_epoch;
+      read_info.set_ls_epoch_id(ls_epoch);
       read_info.mtl_tenant_id_ = mtl_tenant_id;
       int64_t pos = 0;
 

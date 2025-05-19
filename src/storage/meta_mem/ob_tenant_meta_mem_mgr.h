@@ -30,6 +30,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/meta_mem/ob_external_tablet_cnt_map.h"
+#include "storage/meta_mem/ob_ss_tablet_local_cache_map.h"
 #include "storage/meta_mem/ob_flying_tablet_pointer_map.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer_map.h"
@@ -190,7 +191,7 @@ public:
   void destroy();
   int print_old_chain(
       const ObTabletMapKey &key,
-      const ObTabletPointer &tablet_ptr,
+      const ObTabletBasePointer &tablet_ptr,
       const int64_t buf_len,
       char *buf);
   // TIPS:
@@ -242,6 +243,11 @@ public:
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       ObTabletHandle &tablet_handle);
+  int acquire_tablet_from_pool_for_ss(
+      const ObTabletPoolType &type,
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      ObTabletHandle &tablet_handle);
   int get_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
@@ -271,6 +277,7 @@ public:
       bool &allow_tablet_version_gc);
   int check_allow_tablet_gc(const ObTabletID &tablet_id, const int64_t transfer_seq, bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
+  int check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);
@@ -280,6 +287,7 @@ public:
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,
       const ObMetaDiskAddr &new_addr,
+      const ObUpdateTabletPointerParam &update_tablet_pointer_param,
       const ObTabletPoolType &pool_type = ObTabletPoolType::TP_MAX,
       const bool set_pool = false /* whether to set tablet pool */);
   int compare_and_swap_tablet(
@@ -311,10 +319,15 @@ public:
   int dec_ref_in_leak_checker(const int32_t index);
   int inc_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
   int dec_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
+  int insert_or_update_ss_tablet(const ObSSTabletMapKey &key, const ObTabletHandle &tablet_hdl);
+  int fetch_ss_tablet(const ObSSTabletMapKey &key, ObTabletHandle &tablet_hdl);
   int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,
                                 const share::ObLSID &ls_id,
                                 const MacroBlockId &macro_id,
                                 const ObDatumRowkey &common_rowkey);
+  int init_memtablet_mgr_for_inner_tablet(
+      const ObTabletMapKey &key,
+      const lib::Worker::CompatMode compat_mode);
 
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
@@ -477,6 +490,7 @@ private:
   friend class ObT3mTabletMapIterator;
   friend class TableGCTask;
   friend class ObTabletPointer;
+  // friend class ObTabletBasePointer;
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
@@ -543,6 +557,7 @@ private:
   ObTabletPointerMap tablet_map_;
   ObFlyingTabletPointerMap flying_tablet_map_;
   ObExternalTabletCntMap external_tablet_cnt_map_;
+  ObSSTabletLocalCacheMap ss_tablet_local_cache_map_;
   int tg_id_;
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;

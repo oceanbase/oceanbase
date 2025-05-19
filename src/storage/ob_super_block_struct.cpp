@@ -147,7 +147,7 @@ int64_t ServerSuperBlockBody::get_serialize_size_(void) const
   return len;
 }
 
-ObServerSuperBlock::ObServerSuperBlock() : header_(), body_() {}
+ObServerSuperBlock::ObServerSuperBlock() : header_(), body_(), min_file_id_(0), max_file_id_(0) {}
 
 bool ObServerSuperBlock::is_valid() const
 {
@@ -215,6 +215,8 @@ void ObServerSuperBlock::reset()
 {
   header_.reset();
   body_.reset();
+  min_file_id_ = 0;
+  max_file_id_ = 0;
 }
 
 int ObServerSuperBlock::construct_header()
@@ -307,21 +309,23 @@ void ObTenantSnapshotMeta::reset()
   snapshot_id_.reset();
 }
 
-// ========================== ObTenantSuperBlock ==============================
 OB_SERIALIZE_MEMBER(ObLSItem, ls_id_, epoch_, status_, min_macro_seq_, max_macro_seq_);
 
+// ========================== ObTenantSuperBlock ==============================
 ObTenantSuperBlock::ObTenantSuperBlock()
 {
   reset();
+  wait_gc_tablet_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
 }
 
 ObTenantSuperBlock::ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden)
   : tenant_id_(tenant_id), is_hidden_(is_hidden), version_(TENANT_SUPER_BLOCK_VERSION),
-    snapshot_cnt_(0), auto_inc_ls_epoch_(0), ls_cnt_(0)
+    snapshot_cnt_(0), auto_inc_ls_epoch_(0), ls_cnt_(0), min_file_id_(0), max_file_id_(0)
 {
   SET_FIRST_VALID_SLOG_CURSOR(replay_start_point_);
   tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+  wait_gc_tablet_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   preallocated_seqs_.set(
       ObTenantSeqGenerator::BATCH_PREALLOCATE_NUM,
       ObTenantSeqGenerator::BATCH_PREALLOCATE_NUM,
@@ -339,12 +343,15 @@ void ObTenantSuperBlock::reset()
   replay_start_point_.reset();
   ls_meta_entry_.reset();
   tablet_meta_entry_.reset();
+  wait_gc_tablet_entry_.reset();
   is_hidden_= false;
   version_ = TENANT_SUPER_BLOCK_VERSION;
   snapshot_cnt_ = 0;
   preallocated_seqs_.reset();
   auto_inc_ls_epoch_ = 0;
   ls_cnt_ = 0;
+  min_file_id_ = 0;
+  max_file_id_ = 0;
 }
 
 void ObTenantSuperBlock::copy_snapshots_from(const ObTenantSuperBlock &other)
@@ -361,6 +368,7 @@ bool ObTenantSuperBlock::is_valid() const
                   && replay_start_point_.is_valid()
                   && ls_meta_entry_.is_valid()
                   && tablet_meta_entry_.is_valid()
+                  && wait_gc_tablet_entry_.is_valid()
                   && version_ > MIN_SUPER_BLOCK_VERSION
                   && (is_old_version() || IS_EMPTY_BLOCK_LIST(tablet_meta_entry_))
                   && snapshot_cnt_ >= 0
@@ -479,7 +487,8 @@ int ObTenantSuperBlock::serialize_(char *buf, const int64_t buf_len, int64_t &po
       preallocated_seqs_,
       auto_inc_ls_epoch_,
       ls_item_arr_,
-      ls_cnt_);
+      ls_cnt_,
+      wait_gc_tablet_entry_);
   return ret;
 }
 
@@ -525,7 +534,8 @@ int ObTenantSuperBlock::deserialize_(const char *buf, const int64_t data_len, in
       preallocated_seqs_,
       auto_inc_ls_epoch_,
       ls_item_arr_,
-      ls_cnt_);
+      ls_cnt_,
+      wait_gc_tablet_entry_);
   return ret;
 }
 
@@ -550,7 +560,8 @@ int64_t ObTenantSuperBlock::get_serialize_size_(void) const
       preallocated_seqs_,
       auto_inc_ls_epoch_,
       ls_item_arr_,
-      ls_cnt_);
+      ls_cnt_,
+      wait_gc_tablet_entry_);
   return len;
 }
 
@@ -591,8 +602,12 @@ OB_SERIALIZE_MEMBER(ObLSPendingFreeTabletArray,
 int ObLSPendingFreeTabletArray::assign(const ObLSPendingFreeTabletArray &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(items_.assign(other.items_))) {
+  if (this == &other) { // nothing to do
+  } else if (OB_FAIL(items_.assign(other.items_))) {
     LOG_WARN("fail to assign items", K(ret));
+  } else {
+    ls_id_    = other.ls_id_;
+    ls_epoch_ = other.ls_epoch_;
   }
   return ret;
 }

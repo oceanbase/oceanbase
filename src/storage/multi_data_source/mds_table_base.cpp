@@ -46,7 +46,7 @@ int MdsTableBase::advance_state_to(State new_state) const
 int MdsTableBase::init(const ObTabletID tablet_id,
                        const share::ObLSID ls_id,
                        const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
-                       ObTabletPointer *pointer,
+                       ObTabletBasePointer *pointer,
                        ObMdsTableMgr *p_mgr)
 {
   int ret = OB_SUCCESS;
@@ -88,7 +88,7 @@ int MdsTableBase::register_to_mds_table_mgr()
   return ret;
 }
 
-void MdsTableBase::mark_removed_from_t3m(ObTabletPointer *pointer)
+void MdsTableBase::mark_removed_from_t3m(ObTabletBasePointer *pointer)
 {
   MDS_TG(1_ms);
   int ret = OB_SUCCESS;

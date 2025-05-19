@@ -165,12 +165,8 @@ ob_set_subtarget(ob_storage blocksstable_index_block
 
 ob_set_subtarget(ob_storage meta_store
   meta_store/ob_server_storage_meta_service.cpp
-  meta_store/ob_server_storage_meta_persister.cpp
-  meta_store/ob_server_storage_meta_replayer.cpp
   meta_store/ob_storage_meta_io_util.cpp
   meta_store/ob_tenant_storage_meta_service.cpp
-  meta_store/ob_tenant_storage_meta_persister.cpp
-  meta_store/ob_tenant_storage_meta_replayer.cpp
   meta_store/ob_tenant_seq_generator.cpp
   meta_store/ob_startup_accelerate_info.cpp
 )
@@ -694,7 +690,7 @@ ob_set_subtarget(ob_storage ddl
 )
 
 ob_set_subtarget(ob_storage common
-  ob_all_micro_block_range_iterator.cpp
+  ob_micro_block_index_iterator.cpp
   ob_bloom_filter_task.cpp
   ob_col_map.cpp
   ob_disk_usage_reporter.cpp
@@ -732,6 +728,7 @@ ob_set_subtarget(ob_storage common
   ob_gc_upper_trans_helper.cpp
   ob_storage_async_rpc.cpp
   ob_partition_pre_split.cpp
+  ob_inner_tablet_access_service.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -742,6 +739,7 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_external_tablet_cnt_map.cpp
   meta_mem/ob_flying_tablet_pointer_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
+  meta_mem/ob_ss_tablet_local_cache_map.cpp
   meta_mem/ob_storage_meta_cache.cpp
   meta_mem/ob_tablet_attr.cpp
   meta_mem/ob_tablet_handle.cpp
@@ -814,6 +812,7 @@ ob_set_subtarget(ob_storage compaction
 ob_set_subtarget(ob_storage compaction_filter
   compaction/filter/ob_tx_data_minor_filter.cpp
   compaction/filter/ob_mds_info_compaction_filter.cpp
+  compaction/filter/ob_member_table_minor_filter.cpp
 )
 
 ob_set_subtarget(ob_storage memtable
@@ -1052,6 +1051,14 @@ ob_set_subtarget(ob_storage truncate_info
   truncate_info/ob_truncate_partition_filter.cpp
   truncate_info/ob_mds_info_distinct_mgr.cpp
   truncate_info/ob_truncate_info_kv_cache.cpp
+)
+
+ob_set_subtarget(ob_storage member_table
+  member_table/ob_member_table_schema_helper.cpp
+  member_table/ob_member_table.cpp
+  member_table/ob_member_table_operation.cpp
+  member_table/ob_member_table_iterator.cpp
+  member_table/ob_member_table_service.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

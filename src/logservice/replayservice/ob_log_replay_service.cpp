@@ -197,7 +197,7 @@ ObLogReplayService::~ObLogReplayService()
   destroy();
 }
 
-int ObLogReplayService::init(PalfEnv *palf_env,
+int ObLogReplayService::init(ipalf::IPalfEnv *palf_env,
                              ObLSAdapter *ls_adapter,
                              ObILogAllocator *allocator)
 {
@@ -209,7 +209,7 @@ int ObLogReplayService::init(PalfEnv *palf_env,
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObLogReplayService init twice", K(ret));
-  } else if (OB_ISNULL(palf_env_= palf_env)
+  } else if (OB_ISNULL(palf_env_ = palf_env)
              || OB_ISNULL(ls_adapter_ = ls_adapter)
              || OB_ISNULL(allocator_ = allocator)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1129,10 +1129,11 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   int64_t decompressed_log_size = -1;
   ObLogReplayTask *replay_task = NULL;
   const SCN &replayable_point = inner_get_replayable_point_();
+  palf::LSN end_lsn;
   if (OB_UNLIKELY(OB_ISNULL(submit_task))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "submit task is NULL when fetch log", K(replay_status), KPC(submit_task));
-  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn))) {
+  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn, end_lsn))) {
     CLOG_LOG(WARN, "submit task get log value failed",  K(replay_status), K(submit_task));
   } else if (OB_FAIL(replay_status.get_ls_id(id))) {
     CLOG_LOG(ERROR, "replay status get log stream id failed", KPC(submit_task), K(replay_status));
@@ -1210,7 +1211,7 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   } else if (OB_SUCC(ret) && need_iterate_next_log) {
     bool unused_iterate_end_by_replayable_point = false;
     // TODO by runlin: compatibility with LogEntryHeader
-    if (OB_FAIL(submit_task->update_submit_log_meta_info(cur_lsn + log_size + sizeof(LogEntryHeader),
+    if (OB_FAIL(submit_task->update_submit_log_meta_info(end_lsn,
                                                          cur_log_submit_scn))) {
       // log info fallback
       CLOG_LOG(ERROR, "failed to update_submit_log_meta_info", KR(ret), K(cur_lsn),

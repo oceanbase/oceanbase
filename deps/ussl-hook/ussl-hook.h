@@ -79,4 +79,7 @@ typedef struct ssl_config_item_t
 
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		                     int __maxevents, int __timeout);
+
+extern int http_conn_pipe[2];
+int ussl_loop_add_http_listen();
 #endif // USSL_HOOK_USSL_HOOK_

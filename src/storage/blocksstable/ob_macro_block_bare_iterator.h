@@ -60,6 +60,7 @@ public:
       ObMicroIndexInfo &micro_index_info,
       ObIAllocator &rowkey_allocator);
   int get_macro_block_header(ObSSTableMacroBlockHeader &macro_header);
+  int get_macro_meta(ObDataMacroBlockMeta *&macro_meta, ObIAllocator &allocator);
   int get_micro_block_count(int64_t &micro_block_count);
   int get_index_block(ObMicroBlockData &micro_block, const bool force_deserialize, const bool is_macro_meta_block = false);
   int get_macro_meta_block(ObMicroBlockData &micro_block);

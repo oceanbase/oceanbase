@@ -118,6 +118,7 @@ public:
   OB_INLINE share::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
   OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
+  OB_INLINE share::SCN get_rec_scn() const { return rec_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
   OB_INLINE int64_t get_recycle_version() const { return recycle_version_; }
   OB_INLINE int16_t get_sstable_seq() const { return sstable_logic_seq_; }
@@ -150,7 +151,8 @@ public:
       K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq), K_(co_base_snapshot_version));
+      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq), K_(co_base_snapshot_version),
+      K_(rec_scn));
 
 public:
   int32_t version_;
@@ -195,6 +197,7 @@ public:
   int64_t root_macro_seq_;
   share::SCN tx_data_recycle_scn_;
   int64_t co_base_snapshot_version_;
+  share::SCN rec_scn_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 
@@ -283,6 +286,7 @@ public:
   }
   OB_INLINE share::SCN get_ddl_scn() const { return basic_meta_.get_ddl_scn(); }
   OB_INLINE share::SCN get_filled_tx_scn() const { return basic_meta_.get_filled_tx_scn(); }
+  OB_INLINE share::SCN get_rec_scn() const { return basic_meta_.rec_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return basic_meta_.get_data_index_tree_height(); }
   OB_INLINE int64_t get_recycle_version() const { return basic_meta_.get_recycle_version(); }
   OB_INLINE int16_t get_sstable_seq() const { return basic_meta_.get_sstable_seq(); }
@@ -293,6 +297,7 @@ public:
   OB_INLINE const ObRootBlockInfo &get_root_info() const { return data_root_info_; }
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
   OB_INLINE const ObTableBackupFlag &get_table_backup_flag() const { return basic_meta_.table_backup_flag_; }
+  OB_INLINE const ObTableSharedFlag &get_table_shared_flag() const { return basic_meta_.table_shared_flag_; }
   int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
   inline int transform_root_block_extra_buf(common::ObArenaAllocator &allocator)
   {
@@ -443,6 +448,9 @@ public:
   static int fix_filled_tx_scn_value_for_compact(
       const ObITable::TableKey &table_key,
       share::SCN &filled_tx_scn);
+  static int fix_rec_scn_value_for_compact(
+      const ObITable::TableKey &table_key,
+      share::SCN &rec_scn);
 };
 
 } // namespace blocksstable

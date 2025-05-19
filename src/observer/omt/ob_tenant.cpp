@@ -802,6 +802,7 @@ int ObTenant::init(const ObTenantMeta &meta)
   } else {
     ObTenantBase::mtl_init_ctx_ = mtl_init_ctx_;
     tenant_meta_ = meta;
+    tenant_meta_.epoch_ = epoch_;
     set_unit_min_cpu(meta.unit_.config_.min_cpu());
     set_unit_max_cpu(meta.unit_.config_.max_cpu());
     const int64_t memory_size = static_cast<double>(tenant_meta_.unit_.config_.memory_size());

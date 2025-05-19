@@ -97,6 +97,7 @@ void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
   param.tx_data_recycle_scn_.set_min();
+  param.rec_scn_.set_min();
   param.original_size_ = 0;
   param.ddl_scn_.set_min();
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;

@@ -17,6 +17,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "storage/shared_storage/ob_ss_object_access_util.h"
 #undef private
 #undef protected
 
@@ -164,7 +165,7 @@ void TestCalibrateDisk::prepare(const int64_t segment_id_pos)
   write_info.buffer_ = write_buf;
   write_info.offset_ = 0;
   write_info.size_ = file_size_;
-  write_info.tmp_file_valid_length_ = file_size_;
+  write_info.set_tmp_file_valid_length(file_size_);
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
 
@@ -177,9 +178,7 @@ void TestCalibrateDisk::prepare(const int64_t segment_id_pos)
     ASSERT_TRUE(macro_id.is_valid());
     ObStorageObjectHandle write_object_handle;
     ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
-    ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
-    ASSERT_NE(nullptr, tenant_file_mgr);
-    ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+    ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   }
 }
 
@@ -193,7 +192,7 @@ void TestCalibrateDisk::write_dir()
   write_info.buffer_ = write_buf;
   write_info.offset_ = 0;
   write_info.size_ = file_size_;
-  write_info.tmp_file_valid_length_ = file_size_;
+  write_info.set_tmp_file_valid_length(file_size_);
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
 
@@ -206,9 +205,7 @@ void TestCalibrateDisk::write_dir()
     ASSERT_TRUE(macro_id.is_valid());
     ObStorageObjectHandle write_object_handle;
     ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
-    ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
-    ASSERT_NE(nullptr, tenant_file_mgr);
-    ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+    ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   }
 }
 

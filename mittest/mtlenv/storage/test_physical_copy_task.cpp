@@ -264,6 +264,7 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
   param_.tx_data_recycle_scn_.set_min();
+  param_.rec_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;

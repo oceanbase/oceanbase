@@ -27,8 +27,10 @@
 #include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_task_queue.h"
+#endif
 #include "storage/tx/ob_tx_log_cb_define.h"
-
 
 namespace oceanbase
 {
@@ -1017,6 +1019,9 @@ public:
   bool is_parallel_logging() const;
   int assign_commit_parts(const share::ObLSArray &log_participants,
                           const ObTxCommitParts &log_commit_parts);
+#ifdef OB_BUILD_SHARED_STORAGE
+  sslog::ObSSLogNotifyTaskQueue &get_sslog_notify_queue() { return sslog_notify_queue_; }
+#endif
 protected:
   // for xa
   virtual bool is_sub2pc() const override
@@ -1179,6 +1184,10 @@ private:
 
   // for transfer move tx ctx to clean for abort
   bool transfer_deleted_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for sslog notify service
+  sslog::ObSSLogNotifyTaskQueue sslog_notify_queue_;
+#endif
   // ========================================================
 };
 

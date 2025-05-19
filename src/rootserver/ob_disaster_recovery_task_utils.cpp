@@ -24,7 +24,12 @@
 #include "share/ob_srv_rpc_proxy.h"                                    // for ObSrvRpcProxy
 #include "share/ob_debug_sync.h"                                       // for DEBUG_SYNC
 #include "share/ob_service_epoch_proxy.h"                              // for ObServiceEpochProxy
+#include "share/ob_zone_table_operation.h"                             // for ObZoneTableOperation
 #include "share/location_cache/ob_location_service.h"                  // for ObLocationService
+#include "rootserver/ob_root_utils.h"                                  // ObTenantUtils
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_proposer_config_mgr.h"
+#endif
 
 namespace oceanbase
 {
@@ -514,8 +519,8 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
   ObMySQLTransaction trans;
   ObSqlString execute_result;
   ObLSReplicaTaskTableOperator task_table_operator;
-  const uint64_t task_tenant_id = task.get_tenant_id();
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(task_tenant_id);
+  uint64_t service_epoch_tenant = OB_INVALID_TENANT_ID;
+  uint64_t persistent_tenant = OB_INVALID_TENANT_ID;
   if (OB_UNLIKELY(ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR)) {
     // errsim here, do nothing
     ret = ERRSIM_CLEAN_TASK_FROM_DRTASK_TABLE_ERROR;
@@ -526,11 +531,17 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rpc_proxy is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, sql_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(lock_service_epoch(trans, task_tenant_id, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
-    LOG_WARN("failed to lock server epoch", KR(ret), K(task));
-  } else if (OB_FAIL(task_table_operator.delete_task(trans, task))) {
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+                                              task.get_tenant_id(),
+                                              task.get_disaster_recovery_task_type(),
+                                              service_epoch_tenant,
+                                              persistent_tenant))) {
+    LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(task));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, persistent_tenant))) {
+    LOG_WARN("failed to start trans", KR(ret), K(task), K(persistent_tenant));
+  } else if (OB_FAIL(lock_service_epoch(trans, service_epoch_tenant, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
+    LOG_WARN("failed to lock server epoch", KR(ret), K(task), K(service_epoch_tenant));
+  } else if (OB_FAIL(task_table_operator.delete_task(trans, persistent_tenant, task))) {
     // only when the task is successfully cleared, will the history table be written
     LOG_WARN("delete task failed", KR(ret), K(task));
   } else if (OB_FAIL(DisasterRecoveryUtils::build_execute_result(
@@ -540,7 +551,7 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
     LOG_WARN("task set execute result failed", KR(ret), K(task), K(execute_result));
   } else if (OB_FAIL(task.log_execute_result())) {
     // record rs event, never fail
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(task_tenant_id), tenant_data_version))) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(persistent_tenant, tenant_data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(task));
   } else if (is_history_table_data_version_match(tenant_data_version)) {
     // record task history table
@@ -551,7 +562,7 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
       task_status = ObDRLSReplicaTaskStatus::FAILED;
     }
     task.set_task_status(task_status);
-    if (OB_FAIL(task_table_operator.insert_task(trans, task, true/*record_history*/))) {
+    if (OB_FAIL(task_table_operator.insert_task(trans, persistent_tenant, task, true/*record_history*/))) {
       LOG_WARN("insert task failed", KR(ret), K(task));
     }
   }
@@ -589,7 +600,8 @@ int DisasterRecoveryUtils::clean_task_while_task_finish(
     const share::ObTaskId &task_id,
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const int ret_code)
+    const int ret_code,
+    const obrpc::ObDRTaskType &task_type)
 {
   // while task execute finish in observer
   // clean task in inner table, record rs event and task history table.
@@ -599,7 +611,8 @@ int DisasterRecoveryUtils::clean_task_while_task_finish(
   ObMySQLTransaction trans;
   ObArray<ObDRTask*> dr_tasks;
   ObLSReplicaTaskTableOperator table_operator;
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+  uint64_t service_epoch_tenant = OB_INVALID_TENANT_ID;
+  uint64_t persistent_tenant = OB_INVALID_TENANT_ID;
   char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
   common::ObArenaAllocator task_alloc("DRUtils", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_UNLIKELY(task_id.is_invalid()
@@ -610,18 +623,24 @@ int DisasterRecoveryUtils::clean_task_while_task_finish(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is nullptr", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+                                              tenant_id,
+                                              task_type,
+                                              service_epoch_tenant,
+                                              persistent_tenant))) {
+    LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(tenant_id), K(task_type));
   } else if (false == task_id.to_string(task_id_to_set, sizeof(task_id_to_set))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("convert task id to string failed", KR(ret), K(task_id));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, sql_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(lock_service_epoch(trans, tenant_id, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
-    LOG_WARN("failed to lock server epoch", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, persistent_tenant))) {
+    LOG_WARN("failed to start trans", KR(ret), K(persistent_tenant));
+  } else if (OB_FAIL(lock_service_epoch(trans, service_epoch_tenant, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
+    LOG_WARN("failed to lock server epoch", KR(ret), K(service_epoch_tenant));
   } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %ld AND ls_id = %lu AND task_id = '%s'",
                                     share::OB_ALL_LS_REPLICA_TASK_TNAME, tenant_id, ls_id.id(), task_id_to_set))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(ls_id), K(task_id_to_set));
-  } else if (OB_FAIL(table_operator.load_task_from_inner_table(*GCTX.sql_proxy_, tenant_id, sql, task_alloc, dr_tasks))) {
-    LOG_WARN("failed to load task from inner table", KR(ret), K(tenant_id), K(sql));
+  } else if (OB_FAIL(table_operator.load_task_from_inner_table(*GCTX.sql_proxy_, persistent_tenant, sql, task_alloc, dr_tasks))) {
+    LOG_WARN("failed to load task from inner table", KR(ret), K(persistent_tenant), K(sql));
   }
   COMMIT_DISASTER_RECOVERY_UTILS_TRANS
   if (OB_FAIL(ret)) {
@@ -698,6 +717,227 @@ int DisasterRecoveryUtils::check_tenant_enable_parallel_migration(
     LOG_INFO("[DRTASK_NOTICE] check tenant enable_parallel_migration over", KR(ret),
               K(tenant_id), K(enable_parallel_migration), K(tenant_role), K(mode));
   }
+  return ret;
+}
+
+int DisasterRecoveryUtils::get_tenant_zone_list(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObZone> &zone_list)
+{
+  int ret = OB_SUCCESS;
+  share::ObUnitTableOperator unit_op;
+  common::ObArray<share::ObResourcePool> pools;
+  zone_list.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret));
+  } else if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init proxy", KR(ret));
+  } else if (OB_FAIL(unit_op.get_resource_pools(tenant_id, pools))) {
+    LOG_WARN("failed to get resource pool", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      if (OB_FAIL(append(zone_list, pools.at(i).zone_list_))) {
+        LOG_WARN("append failed", KR(ret), "zone_list", pools.at(i).zone_list_);
+      }
+    }
+  }
+  return ret;
+}
+
+int DisasterRecoveryUtils::check_member_list_for_single_replica(
+    const common::ObMemberList &member_list,
+    bool &pass_check)
+{
+  int ret = OB_SUCCESS;
+  pass_check = true;
+  common::ObZone first_server_zone;
+  if (0 == member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(member_list));
+  } else {
+    for (int64_t index = 0; pass_check && OB_SUCC(ret) && index < member_list.get_member_number(); ++index) {
+      common::ObAddr server;
+      ObServerInfoInTable server_info;
+      if (OB_FAIL(member_list.get_server_by_index(index, server))) {
+        LOG_WARN("fail to get member", KR(ret), K(index));
+      } else if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
+        LOG_WARN("failed to get server info", KR(ret), K(server));
+      } else if (server_info.is_alive()) {
+        pass_check = false;
+        LOG_INFO("has member alived, skip", K(server));
+      } else if (first_server_zone.is_empty()) {
+        if (OB_FAIL(first_server_zone.assign(server_info.get_zone()))) {
+          LOG_WARN("failed to get server zone", KR(ret), K(server_info));
+        }
+      } else if (server_info.get_zone() != first_server_zone) {
+        // in single replica deployment scenario
+        // if member_list count is not one(migration mid-state), then they must belong to the same zone.
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("multi server is not same zone", KR(ret), K(server_info), K(first_server_zone));
+      }
+    }
+  }
+  return ret;
+}
+
+int DisasterRecoveryUtils::get_all_meta_tenant_ids(
+    ObIArray<uint64_t> &meta_tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  meta_tenant_ids.reset();
+  ObArray<uint64_t> tmp_tenant_ids;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(GCTX.schema_service_, tmp_tenant_ids))) {
+    LOG_WARN("fail to get tenant id array", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_ids.count(); ++i) {
+      const uint64_t tenant_id = tmp_tenant_ids.at(i);
+      if (is_meta_tenant(tenant_id) && OB_FAIL(meta_tenant_ids.push_back(tenant_id))) {
+        LOG_WARN("fail to push back tenant", KR(ret), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int DisasterRecoveryUtils::get_service_epoch_value_to_check(
+    const ObDRTask &task,
+    const uint64_t thread_tenant_id,
+    const int64_t thread_service_epoch,
+    int64_t &service_epoch)
+{
+  // 1. when the sys tenant or meta tenant's dr threads processes its own dr tasks,
+  //    verify the service_epoch recorded in the memory.
+  //    (if sys thread_tenant_id deal meta replace replica task, also use sys tenant service epoch value)
+  // 2. when the sys tenant's dr threads processes dr tasks of other tenants,
+  //    verify whether the service_epoch value is zero (not included meta replace task).
+  //    (when ordinary tenant's dr threads start to work, it will push this value to non-zero.)
+  // 3. manual task thread_tenant_id and thread_service_epoch is invalid, service_epoch = INVALID_DR_SERVICE_EPOCH_VALUE
+
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else {
+    service_epoch = thread_service_epoch;
+    if (is_sys_tenant(thread_tenant_id) && !is_sys_tenant(task.get_tenant_id())
+        && ObDRTaskType::LS_REPLACE_REPLICA != task.get_disaster_recovery_task_type()) {
+      service_epoch = 0;
+    }
+  }
+  return ret;
+}
+
+/*
+1. service_epoch_tenant: get __all_service_epoch row to lock.
+  (1). for common tasks, lock the row of the tenant to which the task belongs, example:
+    a. common task of tenant 1, lock row key 1 in 1 tenant service epoch table.
+    b. common task of tenant 1001, lock row key 1001 in 1001 tenant service epoch table.
+    c. common task of tenant 1002, lock row key 1002 in 1001 tenant service epoch table.
+  (2). for meta tenant replace replica task, lock sys tenant row, example:
+    a. replace task of tenant 1001, lock row key 1 in 1 tenant service epoch table.
+    b. replace task of tenant 1002, lock row key 1002 in 1001 tenant service epoch table.
+2. persistent_tenant: get persistent tenant id which tenant's __all_ls_replica_task table should be written.
+  persistent_tenant = gen_meta_tenant_id(service_epoch_tenant)
+*/
+int DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+    const uint64_t task_tenant_id,
+    const obrpc::ObDRTaskType &task_type,
+    uint64_t &service_epoch_tenant,
+    uint64_t &persistent_tenant)
+{
+  int ret = OB_SUCCESS;
+  service_epoch_tenant = OB_INVALID_TENANT_ID;
+  persistent_tenant = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(!is_valid_tenant_id(task_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_tenant_id), K(task_type));
+  } else {
+    service_epoch_tenant = task_tenant_id;
+    if (is_meta_tenant(task_tenant_id) && ObDRTaskType::LS_REPLACE_REPLICA == task_type) {
+      service_epoch_tenant = OB_SYS_TENANT_ID;
+    }
+    persistent_tenant = gen_meta_tenant_id(service_epoch_tenant);
+  }
+  return ret;
+}
+
+int DisasterRecoveryUtils::check_dest_has_sslog(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr& dest_server,
+    bool has_sslog)
+{
+  // check destination has sslog replica and sslog has leader.
+  int ret = OB_SUCCESS;
+  share::ObLSInfo ls_info;
+  const share::ObLSReplica *ls_replica_ptr = nullptr;
+  const share::ObLSReplica *leader_replica = nullptr;
+  has_sslog = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || !dest_server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
+  } else if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst_operator_ is null", KR(ret), KP(GCTX.lst_operator_));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
+                                             tenant_id,
+                                             ls_id,
+                                             share::ObLSTable::DEFAULT_MODE,
+                                             ls_info))) {
+    LOG_WARN("get ls info failed", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_info.find(dest_server, ls_replica_ptr))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+    LOG_WARN("fail to find replica by server", KR(ret), K(dest_server), K(ls_info));
+  } else if (OB_ISNULL(ls_replica_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_replica_ptr is null", KR(ret), K(dest_server), K(ls_info));
+  } else if (!ls_replica_ptr->is_in_service()) {
+    // upper layer process this scene
+    LOG_INFO("ls_replica not in service", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
+  } else if (OB_FAIL(ls_info.find_leader(leader_replica))) {
+    LOG_WARN("fail to find leader", KR(ret), K(ls_info));
+  } else if (OB_ISNULL(leader_replica)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader replica ptr is null", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    has_sslog = true;
+    LOG_INFO("destination has sslog ls", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
+  }
+  return ret;
+}
+
+int DisasterRecoveryUtils::get_member_info(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    palf::LogConfigVersion &config_version,
+    common::ObMemberList &member_list)
+{
+  int ret = OB_SUCCESS;
+  #ifdef OB_BUILD_SHARED_LOG_SERVICE
+  common::GlobalLearnerList learner_list; // not used
+  config_version.reset();
+  member_list.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    libpalf::LibPalfMemberInfoReaderWrapper palf_wrapper(tenant_id, ls_id.id());
+    if (OB_FAIL(palf_wrapper.get_member_info(config_version, member_list, learner_list))) {
+      LOG_WARN("failed to get member info", KR(ret));
+    }
+  }
+  #endif
   return ret;
 }
 

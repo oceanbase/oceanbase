@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 #define private public
+#include "logservice/ipalf/ipalf_handle.h"
+#include "logservice/palf/log_config_mgr.h"
 #include "logservice/ob_arbitration_service.h"
 #include "logservice/ob_net_keepalive_adapter.h"
 #undef private

@@ -230,6 +230,9 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
       ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();
       finish_recover_one_tx_ctx_();
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    ctx_info_.notify_task_queue_view_.release();
+#endif
   }
 
   if (OB_SUCC(ret)) {

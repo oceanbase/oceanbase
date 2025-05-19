@@ -41,7 +41,7 @@ public:
 
     ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-    merge_context.tablet_handle_ = tablet_handle;
+    merge_context.tablet_handle_.assign(tablet_handle);
 
     table_merge_schema_.reset();
     OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
@@ -58,6 +58,7 @@ public:
     static_param.scn_range_.start_scn_ = static_param.tables_handle_.get_table(0)->get_start_scn();
     static_param.scn_range_.end_scn_ = static_param.tables_handle_.get_table(tables_count - 1)->get_end_scn();
     static_param.merge_scn_ = static_param.scn_range_.end_scn_;
+    static_param.rec_scn_.set_min();
   }
   ObStorageSchema table_merge_schema_;
 };

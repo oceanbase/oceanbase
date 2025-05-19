@@ -361,7 +361,7 @@ int ObLSTabletService::remove_tablet(const ObTabletHandle& tablet_handle)
       LOG_INFO("tablet object has been changed, need retry", K(ret), K(key), K(target_tablet), KPC(cur_tablet_handle.get_obj()));
     } else {
       const ObMetaDiskAddr &tablet_addr = tablet_handle.get_obj()->get_tablet_addr();
-      if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.remove_tablet(ls_id, ls_epoch, tablet_handle))) {
+      if (OB_FAIL(TENANT_STORAGE_META_SERVICE.remove_tablet(ls_id, ls_epoch, tablet_handle))) {
         LOG_WARN("failed to write remove tablet slog", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(tablet_handle.get_obj()->wait_release_memtables())) {
         LOG_ERROR("failed to release memtables", K(ret), K(tablet_id));
@@ -451,7 +451,7 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
       if (OB_FAIL(ret)) {
       } else if (tablet_ids.empty()) {
         LOG_INFO("all tablets already deleted, do nothing", K(ret), K(ls_id), K(tablet_id_array));
-      } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.remove_tablets(ls_id, ls_->get_ls_epoch(), tablet_ids, tablet_addrs))) {
+      } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.batch_remove_tablet(ls_id, ls_->get_ls_epoch(), tablet_ids, tablet_addrs))) {
         LOG_WARN("failed to remove tablets", K(ret), K(ls_id), K(tablet_ids));
       } else {
         time_guard.click("WrSlog");
@@ -616,6 +616,7 @@ int ObLSTabletService::table_scan(ObTabletHandle &tablet_handle, ObTableScanIter
 {
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_scan_begin);
+  const bool is_ls_inner_tablet = tablet_handle.get_obj()->get_tablet_id().is_ls_inner_tablet();
   bool allow_to_read = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -625,7 +626,8 @@ int ObLSTabletService::table_scan(ObTabletHandle &tablet_handle, ObTableScanIter
   } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
-  } else if (OB_FAIL(prepare_scan_table_param(param, *(MTL(ObTenantSchemaService*)->get_schema_service())))) {
+  } else if (!is_ls_inner_tablet
+      && OB_FAIL(prepare_scan_table_param(param, *(MTL(ObTenantSchemaService*)->get_schema_service())))) {
     LOG_WARN("failed to prepare scan table param", K(ret), K(param));
   } else if (OB_FAIL(inner_table_scan(tablet_handle, iter, param))) {
     LOG_WARN("failed to do table scan", K(ret), KP(&iter), K(param));
@@ -749,27 +751,12 @@ int ObLSTabletService::rollback_rebuild_tablet(const ObTabletID &tablet_id)
     LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", tablet_handle_head.get_obj());
   } else {
     time_guard.click("GetTablet");
-
     ObTablet *tablet_head = tablet_handle_head.get_obj();
-    ObTabletHandle next_tablet_handle;
     ObMetaObj<ObTablet> meta_obj;
     tablet_head->get_next_tablet_guard().get_obj(meta_obj);
-    next_tablet_handle.set_obj(meta_obj);
-    next_tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-    const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
-    ObMetaDiskAddr disk_addr;
-    ObTabletHandle new_tablet_handle;
-    const ObTabletPersisterParam param(ls_->get_ls_id(), ls_->get_ls_epoch(), tablet_id, next_tablet_handle.get_obj()->get_transfer_seq());
 
-    if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *next_tablet_handle.get_obj(), new_tablet_handle))) {
-      LOG_WARN("fail to persist and transform tablet", K(ret), K(next_tablet_handle), K(new_tablet_handle));
-    } else if (FALSE_IT(time_guard.click("Persist"))) {
-    } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->get_tablet_addr())) {
-    } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, tablet_handle_head, new_tablet_handle, time_guard))) {
-      LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
-    } else {
-      FLOG_INFO("succeeded to rollback rebuild", K(key), K(disk_addr));
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("This logical is designed for next_tablet_guard in tablet, shoudle be deleted", K(ret), KPC(tablet_head), K(lbt()));
   }
 
   return ret;
@@ -876,35 +863,34 @@ int ObLSTabletService::migrate_create_tablet(
   const ObTabletMapKey key(ls_id, tablet_id);
   ObFreezer *freezer = ls_->get_freezer();
   ObTabletHandle tmp_tablet_hdl;
-  ObTabletHandle tablet_handle;
   ObMetaDiskAddr disk_addr;
   const ObTabletPersisterParam param(ls_id, ls_->get_ls_epoch(), tablet_id, mig_tablet_param.transfer_info_.transfer_seq_);
   ObTransService *tx_svr = MTL(ObTransService*);
   const bool is_transfer = false;
+  handle.reset();
 
   if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
     LOG_WARN("fail to create temporary tablet", K(ret), K(key));
   } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->init_with_migrate_param(allocator, mig_tablet_param, false/*is_update*/, freezer, is_transfer))) {
     LOG_WARN("fail to init tablet", K(ret), K(mig_tablet_param));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
-  } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet_hdl.get_obj(), tablet_handle))) {
-    LOG_WARN("fail to persist and transform tablet", K(ret), K(tmp_tablet_hdl), K(tablet_handle));
+  } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet_hdl.get_obj(), handle))) {
+    LOG_WARN("fail to persist and transform tablet", K(ret), K(tmp_tablet_hdl), K(handle));
   } else if (FALSE_IT(time_guard.click("Persist"))) {
-  } else if (FALSE_IT(disk_addr = tablet_handle.get_obj()->tablet_addr_)) {
-  } else if (OB_FAIL(safe_create_cas_tablet(ls_id, tablet_id, disk_addr, tablet_handle, time_guard))) {
+  } else if (FALSE_IT(disk_addr = handle.get_obj()->tablet_addr_)) {
+  } else if (OB_FAIL(safe_create_cas_tablet(ls_id, tablet_id, disk_addr, handle, time_guard))) {
     LOG_WARN("fail to create tablet and cas", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
-  } else if (OB_FAIL(tablet_handle.get_obj()->start_direct_load_task_if_need())) {
+  } else if (OB_FAIL(handle.get_obj()->start_direct_load_task_if_need())) {
     LOG_WARN("start ddl if need failed", K(ret));
   } else if (OB_FAIL(tx_svr->create_tablet(key.tablet_id_, key.ls_id_))) {
-    LOG_WARN("fail to create tablet cache", K(ret), K(key), K(tablet_handle));
+    LOG_WARN("fail to create tablet cache", K(ret), K(key), K(handle));
   } else {
     LOG_INFO("migrate create tablet succeed", K(ret), K(key), K(disk_addr));
   }
 
-  if (OB_SUCC(ret)) {
-    handle = tablet_handle;
-  } else {
+  if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
+    handle.reset();
     if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
       LOG_ERROR("fail to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
     }
@@ -1094,7 +1080,9 @@ int ObLSTabletService::update_tablet_table_store(
     if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_hdl))) {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     } else if (old_tablet_hdl.get_obj()->is_empty_shell()) {
-      handle = old_tablet_hdl;
+      if (OB_FAIL(handle.assign(old_tablet_hdl))) {
+        LOG_WARN("failed to assign tablet_handle", K(ret), K(old_tablet_hdl));
+      }
       LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet_hdl.get_obj());
     } else {
       time_guard.click("GetTablet");
@@ -1112,8 +1100,9 @@ int ObLSTabletService::update_tablet_table_store(
       } else if (FALSE_IT(disk_addr = new_tablet_hdl.get_obj()->tablet_addr_)) {
       } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_hdl, new_tablet_hdl, time_guard))) {
         LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+      } else if (OB_FAIL(handle.assign(new_tablet_hdl))) {
+        LOG_WARN("failed to assign tablet_handle", K(ret), K(old_tablet_hdl));
       } else {
-        handle = new_tablet_hdl;
         LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(param), K(handle));
       }
     }
@@ -1124,8 +1113,8 @@ int ObLSTabletService::update_tablet_table_store(
     if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
       LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
-
   }
+
   return ret;
 }
 
@@ -1209,7 +1198,9 @@ int ObLSTabletService::update_medium_compaction_info(
   } else if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
     LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
   } else if (old_tablet_handle.get_obj()->is_empty_shell()) {
-    handle = old_tablet_handle;
+    if (OB_FAIL(handle.assign(old_tablet_handle))) {
+      LOG_WARN("failed to assign tablet_handle", K(ret), K(old_tablet_handle));
+    }
     LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet_handle.get_obj());
   } else {
     time_guard.click("GetTablet");
@@ -1237,8 +1228,8 @@ int ObLSTabletService::update_medium_compaction_info(
     } else if (FALSE_IT(disk_addr = new_tablet_hdl.get_obj()->tablet_addr_)) {
     } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_handle, new_tablet_hdl, time_guard))) {
       LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
-    } else {
-      handle = new_tablet_hdl;
+    } else if (OB_FAIL(handle.assign(new_tablet_hdl))) {
+      LOG_WARN("failed to assign tablet_handle", K(ret), K(new_tablet_hdl));
     }
   }
   return ret;
@@ -1282,7 +1273,9 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     } else if (tablet_for_mds_dump_handle.get_obj()->is_empty_shell()) {
-      handle = tablet_for_mds_dump_handle;
+      if (OB_FAIL(handle.assign(tablet_for_mds_dump_handle))) {
+        LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_for_mds_dump_handle));
+      }
       LOG_INFO("mds tablet is empty shell tablet, should skip mds table dump operation", K(ret),
           "mds tablet", *tablet_for_mds_dump_handle.get_obj());
     } else if (OB_FAIL(mds_mini_sstable_handle.get_sstable(mds_sstable))) {
@@ -1296,7 +1289,9 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
       } else if (old_tablet_hdl.get_obj()->is_empty_shell()) {
-        handle = old_tablet_hdl;
+        if (OB_FAIL(handle.assign(old_tablet_hdl))) {
+          LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_for_mds_dump_handle));
+        }
         LOG_INFO("old tablet is empty shell tablet, should skip mds table dump operation", K(ret),
             "old tablet", *old_tablet_hdl.get_obj());
       } else {
@@ -1323,9 +1318,10 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
         } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
         } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_hdl, new_tablet_handle, time_guard))) {
           LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+        } else if (OB_FAIL(handle.assign(new_tablet_handle))) {
+          LOG_WARN("failed to assign tablet_handle", K(ret), K(new_tablet_handle));
         } else {
           time_guard.click("SafeCAS");
-          handle = new_tablet_handle;
           LOG_INFO("succeeded to build new tablet with mds mini sstable",
               K(ret), K(key), K(disk_addr), K(new_tablet_handle), K(flush_scn), KP(mds_sstable));
         }
@@ -1801,29 +1797,6 @@ int ObLSTabletService::update_tablet_ha_expected_status(
   return ret;
 }
 
-int ObLSTabletService::replay_create_inner_tablet(
-    common::ObArenaAllocator &allocator,
-    const ObMetaDiskAddr &disk_addr,
-    const ObTabletMapKey &key,
-    const int64_t ls_epoch,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  int64_t buf_len = 0;
-  int64_t pos = 0;
-  ObTablet *tablet = tablet_handle.get_obj();
-  tablet->tablet_addr_ = disk_addr;
-  if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(disk_addr, ls_epoch, allocator, buf, buf_len))) {
-    LOG_WARN("fail to read tablet buf from disk", K(ret), K(disk_addr));
-  } else if (OB_FAIL(tablet->deserialize_for_replay(allocator, buf, buf_len, pos))) {
-    LOG_WARN("fail to deserialize tablet", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(tablet->init_shared_params(key.ls_id_, key.tablet_id_, tablet->get_tablet_meta().compat_mode_))) {
-    LOG_WARN("fail to init shared params", K(ret), K(key));
-  }
-  return ret;
-}
-
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObLSTabletService::upload_major_compaction_tablet_meta(
   const common::ObTabletID &tablet_id,
@@ -1894,148 +1867,66 @@ int ObLSTabletService::upload_major_compaction_tablet_meta(
   return ret;
 }
 
-// TODO 这里的实现不完善，需要进一步完善
-// 2. 对比sn的replay_create_tablet 其中check_and_set_initial_state和start_direct_load_task_if_need是否可以直接去掉，如果去掉，再真正加载的时候还是要补上相应的动作。
-int ObLSTabletService::ss_replay_create_tablet(const ObMetaDiskAddr &disk_addr, const ObTabletID &tablet_id)
+int ObLSTabletService::get_pending_upload_tablet_id_arr(
+    const SCN &ls_ss_checkpoint_scn,
+    ObIArray<ObTabletID> &tablet_id_arr)
 {
   int ret = OB_SUCCESS;
-  bool b_exist = false;
-  const ObLSID &ls_id = ls_->get_ls_id();
-  ObMetaDiskAddr old_addr;
+  tablet_id_arr.reuse();
+
+  bool locked = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(has_tablet(ls_id, tablet_id, b_exist))) {
-    LOG_WARN("fail to check tablet existence", K(ret), K(ls_id), K(tablet_id));
-  } else if (b_exist) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("restart replay tablet should not exist", K(ret), K(ls_id), K(tablet_id));
+    LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    ObTimeGuard time_guard("ObLSTabletService::replay_create_tablet", 1_s);
-    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ReplayCreate"));
-    const ObTabletMapKey key(ls_id, tablet_id);
-    ObTabletHandle tablet_hdl;
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-    if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_hdl))) {
-      LOG_WARN("fail to create temporary tablet", K(ret), K(key));
-    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_addr(key, old_addr))) {
-      LOG_WARN("fail to get tablet addr", K(ret), K(key));
-    } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
-      LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
-    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(
-        key,
-        old_addr,
-        disk_addr,
-        ObTabletPoolType::TP_LARGE,
-        true /* whether to set tablet pool */))) {
-      LOG_WARN("fail to compare and swap tablet addr", K(ret));
-    } else if (ObStorageObjectOpt::is_inaccurate_tablet_addr(disk_addr) && tablet_id.is_ls_inner_tablet()) {
-      ObMetaDiskAddr cur_addr;
-      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_addr(key, cur_addr))) {
-        LOG_WARN("fail to get current tablet addr for ls_inner_tablet", K(ret), K(key));
-      } else if (OB_FAIL(replay_create_inner_tablet(allocator, cur_addr, key, ls_->get_ls_epoch(), tablet_hdl))) {
-        LOG_WARN("fail to replay create inner tablet", K(ret), K(cur_addr), K(key));
-      } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(
-          key,
-          disk_addr,
-          cur_addr,
-          ObTabletPoolType::TP_LARGE,
-          false /* whether to set tablet pool, has been set before */))) {
-        LOG_WARN("fail to compare and swap tablet addr", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(tablet_id_set_.erase(tablet_id))) {
-        if (OB_HASH_NOT_EXIST != tmp_ret) {
-          LOG_ERROR("fail to erase tablet id from set", K(tmp_ret), K(tablet_id));
+    int64_t retry_time = 0;
+    const ObLSID &ls_id = ls_->get_ls_id();
+    while (OB_SUCC(ret) && !locked) {
+      common::ObBucketTryRLockAllGuard lock_guard(bucket_lock_);
+      if (OB_FAIL(lock_guard.get_ret()) && OB_EAGAIN != ret) {
+        STORAGE_LOG(WARN, "fail to lock all tablet id set", K(ret));
+      } else if (OB_EAGAIN == ret) {
+        // try again after 1ms sleep.
+        ob_usleep(1000);
+        retry_time++;
+        if (retry_time <= 1000) {
+          if (retry_time % 10 == 0) {
+            LOG_INFO("try get read lock again", K(ret), K(retry_time), K(ls_ss_checkpoint_scn), K(ls_id));
+          }
+          ret = OB_SUCCESS;
+        } else {
+          LOG_INFO("try get read lock failed", K(ret), K(retry_time), K(ls_ss_checkpoint_scn), K(ls_id));
+          break;
+        }
+      } else {
+        // get lock successfully
+        locked = true;
+
+        ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+        ObTabletMapKey key;
+        ObSArray<ObTabletID> tablet_ids;
+        GetAllTabletIDOperator op(tablet_ids);
+        if (OB_FAIL(tablet_id_set_.foreach(op))) {
+          STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
+        } else {
+          key.ls_id_ = ls_id;
+          bool need_upload;
+          for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+            key.tablet_id_ = tablet_ids.at(i);
+            need_upload = false;
+            if (OB_FAIL(t3m->check_tablet_has_sstable_need_upload(ls_ss_checkpoint_scn, key, need_upload))) {
+              LOG_WARN("fail to check tablet need upload or not", K(ret), K(ls_ss_checkpoint_scn), K(key));
+            } else if (!need_upload) {
+              // do nothing
+            } else if (OB_FAIL(tablet_id_arr.push_back(key.tablet_id_))) {
+              LOG_WARN("fail to push back", K(ret), K(tablet_id_arr), K(key));
+            }
+          } // end for
         }
       }
-      if (OB_TMP_FAIL(inner_remove_tablet(key.ls_id_, key.tablet_id_))) {
-        LOG_WARN("fail to erase tablet from meta memory manager", K(tmp_ret), K(key));
-      }
-    } else {
-      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(key), K(old_addr), K(disk_addr), KPC(tablet_hdl.get_obj()));
-    }
+    } // end while
   }
-  return ret;
-}
 
-int ObLSTabletService::ss_replay_create_tablet_for_trans_info_tmp(
-    const ObMetaDiskAddr &current_disk_addr,
-    const ObLSHandle &ls_handle,
-    const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  bool is_exist = false;
-  const ObLSID &ls_id = ls_->get_ls_id();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(has_tablet(ls_id, tablet_id, is_exist))) {
-    LOG_WARN("fail to check tablet existence", K(ret), K(ls_id), K(tablet_id));
-  } else if (is_exist) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("restart replay tablet should not exist", K(ret), K(ls_id), K(tablet_id));
-  } else {
-    ObTimeGuard time_guard("ss_replay_create_tablet_for_trans_info_tmp", 1_s);
-    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ReplayCreateTmp"));
-    const ObTabletMapKey key(ls_id, tablet_id);
-    ObTabletHandle tmp_tablet_hdl;
-    ObTablet *tmp_tablet = nullptr;
-    ObMetaDiskAddr tmp_addr;
-    char *buf = nullptr;
-    int64_t buf_len = 0;
-    int64_t pos = 0;
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-
-    if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
-      LOG_WARN("fail to create temporary tablet", K(ret), K(key));
-    } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-    } else if (FALSE_IT(tmp_tablet->tablet_addr_ = current_disk_addr)) {
-    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_addr(key, tmp_addr))) {
-      LOG_WARN("fail to get tablet addr", K(ret), K(key));
-    } else if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(current_disk_addr, ls_->get_ls_epoch(), allocator, buf, buf_len))) {
-      LOG_WARN("fail to read tablet buf from disk", K(ret), K(current_disk_addr), K(ls_->get_ls_epoch()));
-    } else if (OB_FAIL(tmp_tablet->deserialize_for_replay(allocator, buf, buf_len, pos))) {
-      LOG_WARN("fail to deserialize tablet", K(ret), KP(buf), K(buf_len));
-    } else if (OB_FAIL(tmp_tablet->init_shared_params(ls_handle.get_ls()->get_ls_id(),
-                                                      tmp_tablet->get_tablet_id(),
-                                                      tmp_tablet->get_tablet_meta().compat_mode_))) {
-      LOG_WARN("failed to init shared params", K(ret), K(ls_handle.get_ls()->get_ls_id()), K(tmp_tablet->get_tablet_id()));
-    } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
-      LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
-    } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(
-        key,
-        tmp_addr,
-        current_disk_addr,
-        ObTabletPoolType::TP_LARGE,
-        true /* whether to set tablet pool */))) {
-      LOG_WARN("fail to compare and swap tablet addr", K(ret));
-    } else if (OB_FAIL(tmp_tablet->check_and_set_initial_state())) {
-      LOG_WARN("fail to check and set initial state", K(ret), KPC(tmp_tablet));
-    } else if (OB_FAIL(tmp_tablet->start_direct_load_task_if_need())) {
-      LOG_WARN("start ddl if need failed", K(ret));
-    } else if (tmp_tablet->get_tablet_meta().transfer_info_.has_transfer_table() &&
-        OB_FAIL(ObTabletReplayCreateHandler::record_ls_transfer_info_tmp(ls_handle, tmp_tablet->get_tablet_id(), tmp_tablet->get_tablet_meta().transfer_info_))) {
-      LOG_WARN("fail to record_ls_transfer_info", K(ret), K(tmp_tablet->get_tablet_id()), K(tmp_tablet->get_tablet_meta().transfer_info_));
-    }
-
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(tablet_id_set_.erase(tablet_id))) {
-        if (OB_HASH_NOT_EXIST != tmp_ret) {
-          LOG_ERROR("fail to erase tablet id from set", K(tmp_ret), K(tablet_id));
-        }
-      }
-      if (OB_TMP_FAIL(inner_remove_tablet(key.ls_id_, key.tablet_id_))) {
-        LOG_WARN("fail to erase tablet from meta memory manager", K(tmp_ret), K(key));
-      }
-      FLOG_INFO("failed to replay create one tablet for tmp (transfer_info_tmp)", K(ret), K(key), K(tmp_addr), K(current_disk_addr), KPC(tmp_tablet_hdl.get_obj()));
-    } else {
-      FLOG_INFO("succeeded to replay create one tablet for tmp (transfer_info_tmp)", K(ret), K(key), K(tmp_addr), K(current_disk_addr), KPC(tmp_tablet_hdl.get_obj()));
-    }
-  }
   return ret;
 }
 
@@ -2080,11 +1971,10 @@ int ObLSTabletService::write_tablet_id_set_to_pending_free()
           }
         } // end for
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_batch_remove_ls_tablets(ls_id,
-                                                                                    ls_->get_ls_epoch(),
-                                                                                    tablet_ids,
-                                                                                    tablet_addrs,
-                                                                                    false/*delete_current_version*/))) {
+        } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.batch_remove_tablet(ls_id,
+                                                                      ls_->get_ls_epoch(),
+                                                                      tablet_ids,
+                                                                      tablet_addrs))) {
           LOG_WARN("fail to write batch tablets to pending arr", K(ret), K(ls_id), K(ls_->get_ls_epoch()), K(tablet_ids), K(tablet_addrs));
         } else {
           LOG_INFO("succeed to write_tablet_id_set_to_pending_free", K(ret), K(ls_id), K(tablet_ids.count()), K(tablet_ids));
@@ -2096,21 +1986,65 @@ int ObLSTabletService::write_tablet_id_set_to_pending_free()
 }
 #endif
 
+int ObLSTabletService::replay_deserialize_tablet(
+    const ObTabletMapKey &key,
+    const char *buf,
+    const int64_t buf_len,
+    const ObTabletHandle &tablet_handle,
+    common::ObArenaAllocator &allocator,
+    ObTabletPoolType &pool_type,
+    ObUpdateTabletPointerParam &param)
+{
+  int ret = OB_SUCCESS;
+  const ObMetaDiskAddr &disk_addr = param.resident_info_.addr_;
+  ObTablet *tablet = tablet_handle.get_obj();
+  int64_t pos = 0;
+  if (OB_ISNULL(tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("upexpected error, tablet is nullptr", K(ret), K(key), K(tablet_handle));
+  } else if (FALSE_IT(tablet->tablet_addr_ = disk_addr)) {
+  } else if (OB_FAIL(tablet->deserialize_for_replay(allocator, buf, buf_len, pos))) {
+    LOG_WARN("fail to deserialize tablet", K(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(tablet->init_shared_params(key.ls_id_,
+                                                key.tablet_id_,
+                                                tablet->get_tablet_meta().compat_mode_))) {
+    LOG_WARN("failed to init shared params", K(ret), K(key));
+  // The tablet attr isn't valid, which is empty shell or upgrade from old version observer in shared nothing mode.
+  } else if (!param.resident_info_.attr_.is_valid() && OB_FAIL(tablet->calc_tablet_attr(param.resident_info_.attr_))) {
+    LOG_WARN("fail to calc tablet attr by tablet", K(ret));
+  } else {
+    if (tablet->is_empty_shell()) {
+      pool_type = ObTabletPoolType::TP_NORMAL;
+    } else {
+      const int64_t try_cache_size = tablet->get_try_cache_size();
+      if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
+        pool_type = ObTabletPoolType::TP_LARGE;
+      } else {
+        pool_type = ObTabletPoolType::TP_NORMAL;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::replay_create_tablet(
-    const ObMetaDiskAddr &disk_addr,
+    const ObUpdateTabletPointerParam &param,
     const char *buf,
     const int64_t buf_len,
     const ObTabletID &tablet_id,
     ObTabletTransferInfo &tablet_transfer_info)
 {
   int ret = OB_SUCCESS;
+  const ObMetaDiskAddr &disk_addr = param.tablet_addr();
   bool b_exist = false;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObTransService *tx_svr = MTL(ObTransService*);
-  ObFreezer *freezer = ls_->get_freezer();
   const ObLSID &ls_id = ls_->get_ls_id();
+  // In shared storage mode, don't need to load tablet to accelerate restart.
+  const bool load_tablet = !GCTX.is_shared_storage_mode();
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ReplayCreate"));
   ObTabletHandle tablet_hdl;
+  ObUpdateTabletPointerParam tablet_ptr_param = param;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -2120,65 +2054,56 @@ int ObLSTabletService::replay_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("restart replay tablet should not exist", K(ret), K(ls_id), K(tablet_id));
   } else {
+    tablet_ptr_param.refresh_tablet_cache();
     ObTimeGuard time_guard("ObLSTabletService::replay_create_tablet", 1_s);
     const ObTabletMapKey key(ls_id, tablet_id);
-    ObTablet *tablet = nullptr;
-    int64_t pos = 0;
     ObMetaDiskAddr old_addr;
     ObTabletPoolType pool_type(ObTabletPoolType::TP_MAX);
-    int64_t try_cache_size = 0;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_hdl))) {
       LOG_WARN("fail to create temporary tablet", K(ret), K(key));
-    } else if (FALSE_IT(tablet = tablet_hdl.get_obj())) {
-    } else if (FALSE_IT(tablet->tablet_addr_ = disk_addr)) {
     } else if (OB_FAIL(t3m->get_tablet_addr(key, old_addr))) {
       LOG_WARN("fail to get tablet addr", K(ret), K(key));
-    } else if (OB_FAIL(tablet->deserialize_for_replay(allocator, buf, buf_len, pos))) {
-      LOG_WARN("fail to deserialize tablet", K(ret), KP(buf), K(buf_len), K(pos));
-    } else if (FALSE_IT(time_guard.click("Deserialize"))) {
-    } else if (OB_FAIL(tablet->init_shared_params(ls_id,
-                                                  tablet_id,
-                                                  tablet->get_tablet_meta().compat_mode_))) {
-      LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
       LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
-    } else {
-      if (tablet->is_empty_shell()) {
-        pool_type = ObTabletPoolType::TP_NORMAL;
-      } else {
-        try_cache_size = tablet->get_try_cache_size();
-        if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
-          pool_type = ObTabletPoolType::TP_LARGE;
-        } else {
-          pool_type = ObTabletPoolType::TP_NORMAL;
-        }
+    } else if (!load_tablet) {
+      pool_type = tablet_ptr_param.is_empty_shell() ? ObTabletPoolType::TP_NORMAL : ObTabletPoolType::TP_LARGE;
+      tablet_hdl.reset();
+      if (tablet_id.is_ls_inner_tablet() && tablet_id.is_special_memtable_tablet()
+          && OB_FAIL(t3m->init_memtablet_mgr_for_inner_tablet(key, tablet_ptr_param.compat_mode()))) {
+        LOG_WARN("fail to init memtable mgr for inner tablet", K(ret), K(tablet_ptr_param));
       }
+    } else if (OB_FAIL(replay_deserialize_tablet(key, buf, buf_len, tablet_hdl ,allocator, pool_type, tablet_ptr_param))) {
+      LOG_WARN("fail to replay deserialize tablet", K(ret));
+    } else {
+      time_guard.click("Deserialize");
     }
-
-    if (OB_FAIL(ret)) {
-      // do nothing
+    if (OB_FAIL(ret)) { // do nothing
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(
-        key, old_addr,
+        key,
+        old_addr,
         disk_addr,
+        tablet_ptr_param,
         pool_type,
         true /* whether to set tablet pool */))) {
       LOG_WARN("fail to compare and swap tablat in t3m", K(ret), K(key), K(old_addr), K(disk_addr));
     } else if (FALSE_IT(time_guard.click("CASwap"))) {
-    } else if (OB_FAIL(tablet->check_and_set_initial_state())) {
-      LOG_WARN("fail to check and set initial state", K(ret), K(key));
-    } else if (OB_FAIL(tablet->start_direct_load_task_if_need())) {
+    } else if (load_tablet && OB_FAIL(tablet_hdl.get_obj()->start_direct_load_task_if_need())) {
       LOG_WARN("start ddl if need failed", K(ret));
-    } else if (OB_FAIL(tablet->inc_macro_ref_cnt())) {
+    } else if (load_tablet && OB_FAIL(tablet_hdl.get_obj()->inc_macro_ref_cnt())) {
       LOG_WARN("fail to increase macro blocks' ref cnt for meta and data", K(ret));
     } else if (OB_FAIL(tx_svr->create_tablet(key.tablet_id_, key.ls_id_))) {
       LOG_WARN("fail to create tablet cache", K(ret), K(key), K(tablet_hdl));
+    } else if (load_tablet) {
+      tablet_transfer_info = tablet_hdl.get_obj()->get_tablet_meta().transfer_info_;
+    } else {
+      tablet_transfer_info = param.transfer_info();
     }
 
     if (OB_SUCC(ret)) {
-      tablet_transfer_info = tablet->get_tablet_meta().transfer_info_;
-      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(ls_id), K(tablet_id), K(try_cache_size), K(pool_type), KPC(tablet));
+      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(ls_id), K(tablet_id), K(pool_type), K(param),
+          KPC(tablet_hdl.get_obj()));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
@@ -2186,7 +2111,7 @@ int ObLSTabletService::replay_create_tablet(
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && load_tablet) {
     int tmp_ret = OB_SUCCESS;
     ObServerAutoSplitScheduler &auto_split_scheduler= ObServerAutoSplitScheduler::get_instance();
     if (OB_TMP_FAIL(auto_split_scheduler.push_task(tablet_hdl, *ls_))) {
@@ -3091,9 +3016,10 @@ int ObLSTabletService::insert_rows(
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
           if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
-            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
             rows_info.reset();
-            if (OB_FAIL(rows_info.init(
+            if (OB_FAIL(tmp_handle.assign(relative_table.tablet_iter_.get_tablet_handle()))) {
+              LOG_WARN("failed to assign tablet_handle", K(ret), K(relative_table.tablet_iter_.get_tablet_handle()));
+            } else if (OB_FAIL(rows_info.init(
                 col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
               LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
             }
@@ -3237,7 +3163,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
           if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
-            tmp_handle = relative_table.tablet_iter_.get_tablet_handle();
+            tmp_handle.assign(relative_table.tablet_iter_.get_tablet_handle());
             rows_info.reset();
             if (OB_FAIL(rows_info.init(col_descs,
                                        relative_table,
@@ -3424,8 +3350,9 @@ int ObLSTabletService::update_rows(
         // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
         // outside the while loop.
         if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-          tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
-          if (nullptr != rows_infos) {
+          if (OB_FAIL(tmp_handle.assign(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()))) {
+            LOG_WARN("failed to assign tablet_handle", K(ret), K(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()));
+          } else if (nullptr != rows_infos) {
             rows_infos[0].reset();
             rows_infos[1].reset();
             if (OB_FAIL(rows_infos[0].init(col_descs, relative_table, ctx,
@@ -3593,7 +3520,7 @@ int ObLSTabletService::delay_process_new_rows(
     // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
     // outside the while loop.
     if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-      tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      tmp_handle.assign(run_ctx.relative_table_.tablet_iter_.get_tablet_handle());
     }
     if (OB_FAIL(row_iter.get_next_row(old_row))) {
       LOG_WARN("fail to get row from row stores", K(ret));
@@ -3673,9 +3600,10 @@ int ObLSTabletService::put_rows(
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
           if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
             rows_info.reset();
-            if (OB_FAIL(rows_info.init(
+            if (OB_FAIL(tmp_handle.assign(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()))) {
+              LOG_WARN("failed to assign tablet_handle", K(ret), K(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()));
+            } else if (OB_FAIL(rows_info.init(
                 col_descs, data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
               LOG_WARN("Failed to init rows info", K(ret), K(data_table));
             }
@@ -3784,9 +3712,10 @@ int ObLSTabletService::delete_rows(
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
           if (tmp_handle.get_obj() != relative_table.tablet_iter_.get_tablet_handle().get_obj()) {
-            tmp_handle = relative_table.tablet_iter_.get_tablet_handle();
             rows_info.reset();
-            if (OB_FAIL(rows_info.init(
+            if (OB_FAIL(tmp_handle.assign(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()))) {
+              LOG_WARN("failed to assign tablet_handle", K(ret), K(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()));
+            } else if (OB_FAIL(rows_info.init(
                 col_descs, relative_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
               LOG_WARN("Failed to init rows info", K(ret), K(relative_table));
             }
@@ -3900,7 +3829,9 @@ int ObLSTabletService::lock_rows(
         // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
         // outside the while loop.
         if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
-          tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+          if (OB_FAIL(tmp_handle.assign(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()))) {
+            LOG_WARN("failed to assign tablet_handle", K(ret), K(run_ctx.relative_table_.tablet_iter_.get_tablet_handle()));
+          }
         }
         ObRelativeTable &relative_table = run_ctx.relative_table_;
         const ObStorageDatumUtils &datum_utils = dml_param.table_param_->get_data_table().get_read_info().get_datum_utils();
@@ -4116,7 +4047,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "BuildHaTab"));
   ObMetaDiskAddr disk_addr;
-  ObTabletPointer *pointer = nullptr;
+  ObTabletBasePointer *pointer = nullptr;
   ObTimeGuard time_guard("ObLSTabletService::build_ha_tablet_new_table_store", 1_s);
 
   if (IS_NOT_INIT) {
@@ -4209,8 +4140,8 @@ int ObLSTabletService::safe_update_cas_tablet(
     LOG_WARN("fail to get ls epoch", K(ret), K(key), K(new_handle));
   } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(new_handle));
-  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.update_tablet(key.ls_id_, ls_epoch, key.tablet_id_, addr))) {
-    LOG_WARN("fail to write update tablet slog", K(ret), K(key), K(addr));
+  } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.update_tablet(key.ls_id_, ls_epoch, key.tablet_id_, param))) {
+    LOG_WARN("fail to write update tablet slog", K(ret), K(key), K(param));
   } else if (FALSE_IT(time_guard.click("WrSlog"))) {
   } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(key, old_handle, new_handle, param))) {
     LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(addr), K(param));
@@ -4237,10 +4168,10 @@ int ObLSTabletService::safe_update_cas_empty_shell(
     LOG_WARN("fail to get ckpt_slog_lock", K(ret));
   } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(new_handle));
-  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.write_empty_shell_tablet(tablet, addr))) {
+  } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.write_empty_shell_tablet(ls_->get_ls_epoch(), tablet, addr))) {
     LOG_WARN("fail to write emtpy shell tablet slog", K(ret), K(key), K(new_handle));
   } else if (FALSE_IT(tablet->tablet_addr_ = addr)) {
-  } else if (FALSE_IT(param.tablet_addr_ = addr)) {
+  } else if (FALSE_IT(param.resident_info_.addr_ = addr)) {
   } else if (FALSE_IT(time_guard.click("WrSlog"))) {
   } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(key, old_handle, new_handle, param))) {
     LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(old_handle), K(new_handle), K(param));
@@ -4269,7 +4200,7 @@ int ObLSTabletService::safe_create_cas_tablet(
     LOG_WARN("fail to get ls epoch", K(ret), K(ls_id), K(tablet_id), K(addr));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.update_tablet(ls_id, ls_epoch, tablet_id, addr))) {
+  } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.update_tablet(ls_id, ls_epoch, tablet_id, param))) {
     LOG_WARN("fail to write update tablet slog", K(ret), K(ls_id), K(tablet_id), K(addr));
   } else if (FALSE_IT(time_guard.click("WrSlog"))) {
   } else if (OB_FAIL(refresh_tablet_addr(ls_id, tablet_id, param, tablet_handle))) {
@@ -4297,10 +4228,10 @@ int ObLSTabletService::safe_create_cas_empty_shell(
     LOG_WARN("fail to get ckpt_slog_lock", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.write_empty_shell_tablet(tablet, addr))) {
+  } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.write_empty_shell_tablet(ls_->get_ls_epoch(), tablet, addr))) {
     LOG_WARN("fail to write emtpy shell tablet", K(ret), K(tablet_id), K(addr));
   } else if (FALSE_IT(tablet->tablet_addr_ = addr)) {
-  } else if (FALSE_IT(param.tablet_addr_ = addr)) {
+  } else if (FALSE_IT(param.resident_info_.addr_ = addr)) {
   } else if (FALSE_IT(time_guard.click("WrSlog"))) {
   } else if (OB_FAIL(refresh_tablet_addr(ls_id, tablet_id, param, tablet_handle))) {
     LOG_WARN("failed to refresh tablet addr", K(ret), K(ls_id), K(tablet_id), K(param), K(lbt()));

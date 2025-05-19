@@ -5843,7 +5843,7 @@ int ObSchemaRetrieveUtils::fill_sys_table_lob_tid(ObTableSchema &table)
   uint64_t lob_meta_table_id = OB_INVALID_ID;
   uint64_t lob_piece_table_id = OB_INVALID_ID;
   if (is_system_table(table_id)) {
-    if (OB_ALL_CORE_TABLE_TID == table_id) {
+    if (is_hardcode_schema_table(table_id)) {
       // do nothing
     } else if (!get_sys_table_lob_aux_table_id(table_id, lob_meta_table_id, lob_piece_table_id)) {
       ret = OB_ENTRY_NOT_EXIST;

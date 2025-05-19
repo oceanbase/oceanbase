@@ -287,7 +287,7 @@ int ObRootBlockInfo::read_block_data(
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.buf_ = buf;
     read_info.mtl_tenant_id_ = MTL_ID();
-    read_info.bypass_micro_cache_ = true;
+    read_info.set_bypass_micro_cache(true);
     read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
@@ -1162,7 +1162,7 @@ int ObSSTableMacroInfo::write_block_ids(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data_block_count_ and other_block_count_ shouldn't be both 0", K(ret), K(data_block_count_),
         K(other_block_count_));
-  } else if (OB_FAIL(writer.init_for_object(tablet_id.id(), tablet_transfer_seq, snapshot_version, link_write_info->start_macro_seq_, link_write_info->get_ddl_redo_callback()))) {
+  } else if (OB_FAIL(writer.init_for_macro_info(tablet_id.id(), tablet_transfer_seq, snapshot_version, link_write_info->start_macro_seq_, link_write_info->get_ddl_redo_callback()))) {
     LOG_WARN("fail to initialize item writer", K(ret), KPC(link_write_info));
   } else if (OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_block_count_));

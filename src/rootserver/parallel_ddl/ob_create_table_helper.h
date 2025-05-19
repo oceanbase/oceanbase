@@ -87,6 +87,10 @@ private:
 
   int prefetch_schemas_();
   int check_and_set_database_id_();
+  int check_sslog_table_exist_(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const ObString &table_name);
   int check_table_name_();
   int set_tablegroup_id_();
   int check_and_set_parent_table_id_();

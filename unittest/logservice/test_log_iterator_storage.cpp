@@ -12,9 +12,6 @@
 
 #include "unittest/logservice/test_shared_log_common.h"
 #define private public
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_log_iterator_storage.h"
-#endif
 #undef private
 
 namespace oceanbase
@@ -476,7 +473,7 @@ TEST_F(TestLogIteratorStorage, test_hybrid_storage)
   {
     CLOG_LOG(INFO, "begin case1");
     EXPECT_EQ(OB_SUCCESS, hybrid_storage.init(tenant_id, palf_id_shared, shared_start_lsn, suggessted_read_buf_size, &ext_handler));
-    hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = &local_storage;
+    static_cast<palf::PalfHandle*>(hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_)->palf_handle_impl_ = &local_storage;
   }
 
   // case2: 测试pread接口
@@ -600,7 +597,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
   auto get_file_end_lsn = [&local_end_lsn] {
     return local_end_lsn;
   };
-  hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = &local_storage;
+  static_cast<palf::PalfHandle*>(hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_)->palf_handle_impl_ = &local_storage;
 
   // shared | local
   // 5-14   | 10-15
@@ -634,7 +631,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
 
   // 验证正常读取操作，local为空, 此时读到shared_end_lsn并返回OB_ERR_OUT_OF_LOWER_BOUND
   {
-    hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = NULL;
+    static_cast<palf::PalfHandle*>(hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_)->palf_handle_impl_ = NULL;
     CLOG_LOG(INFO, "begin case2");
     std::vector<LSN> shared_start_lsns =
       {shared_start_lsn, shared_start_lsn + default_block_size, shared_start_lsn + 2 * default_block_size};
@@ -654,7 +651,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
         EXPECT_EQ(lsn + entry.get_serialize_size(), shared_end_lsn);
       }
     }
-    hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = &local_storage;
+    static_cast<palf::PalfHandle*>(hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_)->palf_handle_impl_ = &local_storage;
   }
 
   // shared | local
@@ -764,7 +761,7 @@ TEST_F(TestLogIteratorStorage, test_log_iterator)
       unittest_tenant_base_->unit_max_cpu_ = 1000;
     }
   }
-  hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_.palf_handle_impl_ = NULL;
+  static_cast<palf::PalfHandle*>(hybrid_storage.local_storage_.palf_handle_guard_.palf_handle_)->palf_handle_impl_ = NULL;
 }
 
 }

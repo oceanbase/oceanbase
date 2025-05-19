@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX PALF
 #include "palf_env_impl.h"
+#include "logservice/ipalf/ipalf_handle.h"
 #include "palf_handle.h"
 #include "share/ob_local_device.h"                            // ObLocalDevice
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
@@ -181,7 +182,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              rebuild_replica_log_lag_threshold_(0),
                              enable_log_cache_(false),
                              diskspace_enough_(true),
-                             tenant_id_(0),
+                             tenant_id_(-1),
                              io_adapter_(),
                              is_inited_(false),
                              is_running_(false)
@@ -1206,9 +1207,10 @@ bool PalfEnvImpl::check_can_create_palf_handle_impl_() const
 {
   bool bool_ret = true;
   int64_t count = palf_handle_impl_map_.count();
+  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
   // NB: avoid concurrent with expand and shrink, need guard by palf_meta_lock_.
   const PalfDiskOptions disk_opts = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
-  bool_ret = (count + 1) * MIN_DISK_SIZE_PER_PALF_INSTANCE <= disk_opts.log_disk_usage_limit_size_;
+  bool_ret = (count + 1) * per_palf_size <= disk_opts.log_disk_usage_limit_size_;
   return bool_ret;
 }
 
@@ -1414,7 +1416,8 @@ int PalfEnvImpl::check_can_update_log_disk_options_(const PalfDiskOptions &disk_
 {
   int ret = OB_SUCCESS;
   const int64_t curr_palf_instance_num = palf_handle_impl_map_.count();
-  const int64_t curr_min_log_disk_size = curr_palf_instance_num * MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  const int64_t curr_min_log_disk_size = curr_palf_instance_num * per_palf_size;
   if (disk_opts.log_disk_usage_limit_size_ < curr_min_log_disk_size) {
     ret = OB_NOT_SUPPORTED;
     PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),

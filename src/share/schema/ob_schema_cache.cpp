@@ -16,6 +16,7 @@
 #include "ob_schema_cache.h"
 #include "share/cache/ob_cache_name_define.h"
 #include "observer/ob_server_struct.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
 namespace oceanbase
 {
 using namespace common;
@@ -451,6 +452,23 @@ const ObTableSchema *ObSchemaCache::get_all_core_table() const
   return &all_core_table_;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObSchemaCache::init_sslog_table()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(sslog_table_))) {
+    LOG_WARN("sslog_table_schema failed", K(ret));
+  }
+  return ret;
+}
+
+const ObTableSchema *ObSchemaCache::get_sslog_table() const
+{
+  return &sslog_table_;
+}
+#endif
+
 int ObSchemaCache::init()
 {
   int ret = OB_SUCCESS;
@@ -467,6 +485,11 @@ int ObSchemaCache::init()
     LOG_WARN("init sys cache failed", K(ret));
   } else if (OB_FAIL(init_all_core_table())) {
     LOG_WARN("init all_core_table cache failed", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_sslog_exist()
+             && OB_FAIL(init_sslog_table())) {
+    LOG_WARN("init sslog_table cache failed", K(ret));
+#endif
   } else {
     lib::ContextParam param;
     param.set_mem_attr(OB_SERVER_TENANT_ID, "SchemaSysCache", ObCtxIds::SCHEMA_SERVICE)

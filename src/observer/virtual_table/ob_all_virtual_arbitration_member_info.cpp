@@ -57,12 +57,16 @@ int ObAllVirtualArbMemberInfo::init(
 int ObAllVirtualArbMemberInfo::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (false == start_to_read_) {
+  if (GCONF.enable_logservice) {
+    ret = OB_ITER_END;
+  }
+  if (OB_SUCC(ret) && false == start_to_read_) {
 #ifdef OB_BUILD_ARBITRATION
-    auto func_iterate_palf = [&](const palf::PalfHandle &palf_handle) -> int {
+    auto func_iterate_palf = [&](const ipalf::IPalfHandle &ipalf_handle) -> int {
       int ret = OB_SUCCESS;
       palf::ArbMemberInfo arb_member_info;
       int64_t palf_id = -1;
+      const palf::PalfHandle &palf_handle = static_cast<const palf::PalfHandle&>(ipalf_handle);
       palf_handle.get_palf_id(palf_id);
       if (OB_FAIL(palf_handle.get_remote_arb_member_info(arb_member_info))) {
         if (OB_NOT_MASTER != ret

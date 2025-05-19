@@ -15,6 +15,9 @@
 #include "storage/backup/ob_backup_index_block_builder_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/compaction/ob_shared_storage_compaction_util.h"
+#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -178,6 +181,14 @@ int ObBackupTaskIndexRebuilderMgr::prepare_index_block_rebuilder_(
   ObSSTableIndexBuilder *sstable_index_builder = NULL;
   const common::ObTabletID &tablet_id = item.get_tablet_id();
   const storage::ObITable::TableKey &table_key = item.get_table_key();
+  blocksstable::ObMacroSeqParam macro_seq_param;
+  macro_seq_param.start_ = 0;
+  macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode() && OB_NOT_NULL(task_idx) && *task_idx > 0) {
+    macro_seq_param.start_ += (*task_idx) * oceanbase::compaction::MACRO_STEP_SIZE;
+  }
+#endif
   void *buf = NULL;
   if (!item.is_valid() || 2 != device_handle_array.count()) {
     ret = OB_INVALID_ARGUMENT;
@@ -194,6 +205,7 @@ int ObBackupTaskIndexRebuilderMgr::prepare_index_block_rebuilder_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable index builder should not be null", K(ret));
   } else if (OB_FAIL(rebuilder->init(*sstable_index_builder,
+                                     macro_seq_param,
                                      task_idx,
                                      table_key,
                                      &device_handle_array))) {
@@ -915,6 +927,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                               0/*cluster_version*/,
                                               false/*micro_index_clustered*/,
                                               tablet->get_transfer_seq(),
+                                              tablet->get_reorganization_scn(),
                                               table_key.get_end_scn()))) {
         LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema));
       }
@@ -946,6 +959,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                         0/*cluster_version*/,
                                         false/*micro_index_clustered*/,
                                         tablet->get_transfer_seq(),
+                                        tablet->get_reorganization_scn(),
                                         table_key.get_end_scn(),
                                         cg_schema,
                                         cg_idx))) {

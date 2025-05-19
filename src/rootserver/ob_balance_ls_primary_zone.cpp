@@ -325,8 +325,9 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
     LOG_WARN("failed to update ls primary zone", KR(ret), K(primary_zone_info),
         K(new_primary_zone), K(new_zone_priority));
   } else if (is_meta_tenant(tenant_id)) {
-    //user sys ls has same primary zone with meta sys ls
+    //user sys ls and meta sslog ls has same primary zone with meta sys ls
     share::ObLSPrimaryZoneInfo user_primary_zone_info;
+    share::ObLSPrimaryZoneInfo sslog_primary_zone_info;
     share::ObLSStatusOperator status_op;
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
     if (OB_FAIL(status_op.get_ls_primary_zone_info(user_tenant_id, SYS_LS,
@@ -337,6 +338,16 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
         new_zone_priority))) {
       LOG_WARN("failed to update ls primary zone", KR(ret), K(user_primary_zone_info),
           K(new_primary_zone), K(new_zone_priority));
+    } else if (GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(status_op.get_ls_primary_zone_info(tenant_id, SSLOG_LS,
+          sslog_primary_zone_info, *GCTX.sql_proxy_))) {
+        LOG_WARN("failed to get ls primary_zone info", KR(ret), K(tenant_id), K(user_tenant_id));
+      } else if (OB_FAIL(try_update_ls_primary_zone(
+          sslog_primary_zone_info, new_primary_zone,
+          new_zone_priority))) {
+        LOG_WARN("failed to update ls primary zone", KR(ret), K(sslog_primary_zone_info),
+            K(new_primary_zone), K(new_zone_priority));
+      }
     }
   }
   return ret;

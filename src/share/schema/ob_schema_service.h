@@ -844,6 +844,10 @@ public:
 
   virtual void set_cluster_schema_status(const ObClusterSchemaStatus &schema_status) = 0;
   virtual ObClusterSchemaStatus get_cluster_schema_status() const = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  //get sslog table schema
+  virtual int get_sslog_table_schema(ObTableSchema &table_schema) = 0;
+#endif
   //get all core table schema
   virtual int get_all_core_table_schema(ObTableSchema &table_schema) = 0;
   //get core table schemas

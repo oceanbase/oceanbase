@@ -113,7 +113,6 @@ private:
       ObIAllocator &allocator);
 
 private:
-  ObTabletHandle tablet_handle_;
   ObTabletSplitTscInfo split_info_;
 };
 

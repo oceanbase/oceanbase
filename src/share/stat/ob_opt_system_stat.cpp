@@ -116,14 +116,14 @@ int OptSystemIoBenchmark::run_benchmark(ObIAllocator &allocator, const uint64_t 
       LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
     } else {
       ObTenantFileManager *tnt_file_manager = MTL(ObTenantFileManager*);
-      ObTenantDiskSpaceManager *tnt_disk_space_manager = MTL(ObTenantDiskSpaceManager*);
+      ObTenantDiskSpaceManager *tnt_disk_space_manager = MTL(ObTenantDiskSpaceManager *);
       ss_second_id = tnt_file_manager->get_micro_cache_file_fd();
       if (OB_UNLIKELY(OB_INVALID_FD == ss_second_id)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("micro cache file is not exist, cannot do benchmark",
             KR(ret), K(tenant_id), K(ss_second_id));
       } else {
-        const int64_t free_disk_size = tnt_disk_space_manager->get_micro_cache_reserved_size();
+        const int64_t free_disk_size = tnt_disk_space_manager->get_micro_cache_file_size();
         free_block_count = free_disk_size / OB_DEFAULT_MACRO_BLOCK_SIZE;
         total_block_count = free_block_count;
         max_rnd_read_offset = free_disk_size - load_size;

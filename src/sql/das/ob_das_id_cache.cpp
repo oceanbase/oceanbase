@@ -99,16 +99,6 @@ void ObDASIDCache::reset()
   alloc_.reset();
 }
 
-int ObDASIDCache::refresh_id_service_location()
-{
-  int ret = OB_SUCCESS;
-  id_service_leader_.reset();
-  if (OB_FAIL(GCTX.location_service_->nonblock_renew(GCONF.cluster_id, MTL_ID(), DAS_ID_LS))) {
-    LOG_WARN("das id cache nonblock renew failed", KR(ret));
-  }
-  return ret;
-}
-
 int ObDASIDCache::update_das_id(const int64_t start_id, const int64_t end_id)
 {
   int ret = OB_SUCCESS;

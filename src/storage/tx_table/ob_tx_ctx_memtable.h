@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObFreezer;
 //
 // We need to maintain the filter location and the playback site
 // separately to modularly manage different table structures, remove
@@ -43,7 +44,9 @@ public:
   ObTxCtxMemtable();
   ~ObTxCtxMemtable();
 
-  int init(const ObITable::TableKey &table_key, const share::ObLSID &ls_id);
+  int init(const ObITable::TableKey &table_key,
+           const share::ObLSID &ls_id,
+           storage::ObFreezer *freezer);
 
   void reset();
   int on_memtable_flushed() override;
@@ -65,7 +68,7 @@ public:
   virtual int64_t get_occupied_size() const override { return 0; }
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
-  virtual share::SCN get_rec_scn();
+  virtual share::SCN get_rec_scn() override;
   virtual int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const override;
@@ -104,6 +107,7 @@ private:
   bool is_inited_;
   bool is_frozen_;
   ObTxCtxTable ls_ctx_mgr_guard_;
+  storage::ObFreezer *freezer_;
   common::ObSpinLock flush_lock_;
   share::SCN max_end_scn_;
 };

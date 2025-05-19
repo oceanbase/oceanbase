@@ -143,7 +143,7 @@ OB_INLINE static int cosine_calculate_simd4_avx128(const float *a, const float *
   float sum[4] CACHE_ALIGNED;
   _mm_store_ps(sum, vsum);
 
-  tmp_ip = sum[0] + sum[1] + sum[2] + sum[3];;
+  tmp_ip = sum[0] + sum[1] + sum[2] + sum[3];
   ip += tmp_ip;
 
   float sum_a[4] CACHE_ALIGNED;

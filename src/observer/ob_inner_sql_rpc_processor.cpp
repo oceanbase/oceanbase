@@ -16,6 +16,7 @@
 #include "ob_inner_sql_result.h"
 #include "ob_resource_inner_sql_connection_pool.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/ob_inner_tablet_access_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -420,6 +421,12 @@ int ObInnerSqlRpcP::process()
             }
             break;
           }
+          case ObInnerSQLTransmitArg::OPERATION_TYPE_INNER_TABLET_WRITE: {
+            if (OB_FAIL(process_inner_tablet_write(conn, transmit_arg, transmit_result))) {
+              LOG_WARN("failed to process inner tablet write", K(ret), K(transmit_arg));
+            }
+            break;
+          }
           default: {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("Unknown operation type", K(ret), K(transmit_arg.get_operation_type()));
@@ -476,6 +483,32 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
     } else if (transmit_arg.get_tz_info_wrap().is_valid() && OB_FAIL(conn->set_tz_info_wrap(transmit_arg.get_tz_info_wrap()))) {
       LOG_WARN("fail to set tz info wrap", K(ret), K(transmit_arg));
     }
+  }
+  return ret;
+}
+
+int ObInnerSqlRpcP::process_inner_tablet_write(
+    sqlclient::ObISQLConnection *conn,
+    const ObInnerSQLTransmitArg &arg,
+    ObInnerSQLTransmitResult &transmit_result)
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnection *inner_conn = static_cast<observer::ObInnerSQLConnection *>(conn);
+  ObInnerTabletSQLStr inner_tablet_str;
+  int64_t pos = 0;
+  int64_t affected_rows = -1;
+  if (OB_FAIL(inner_tablet_str.deserialize(arg.get_inner_sql().ptr(), arg.get_inner_sql().length(), pos))) {
+    LOG_WARN("deserialize multi data source str failed", K(ret), K(arg), K(pos));
+  } else if (OB_FAIL(inner_conn->execute_inner_tablet_write(
+      arg.get_tenant_id(),
+      inner_tablet_str.get_ls_id(),
+      inner_tablet_str.get_tablet_id(),
+      inner_tablet_str.get_buf(), inner_tablet_str.get_buf_len(), affected_rows))) {
+    LOG_WARN("failed to execute inner tablet write", K(ret), K(arg), K(inner_tablet_str));
+  } else {
+    transmit_result.set_affected_rows(affected_rows);
+    transmit_result.set_stmt_type(
+    static_cast<observer::ObInnerSQLConnection *>(conn)->get_session().get_stmt_type());
   }
   return ret;
 }

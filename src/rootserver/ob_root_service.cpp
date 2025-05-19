@@ -5574,7 +5574,6 @@ int ObRootService::optimize_table(const ObOptimizeTableArg &arg)
   } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, mode))) {
     LOG_WARN("fail to get tenant mode", K(ret));
   } else {
-    const int64_t all_core_table_id = OB_ALL_CORE_TABLE_TID;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.tables_.count(); ++i) {
       SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
         ObSqlString sql;
@@ -5593,7 +5592,7 @@ int ObRootService::optimize_table(const ObOptimizeTableArg &arg)
           LOG_WARN("fail to get table schema", K(ret));
         } else if (nullptr == table_schema) {
           // skip deleted table
-        } else if (all_core_table_id == table_schema->get_table_id()) {
+        } else if (is_hardcode_schema_table(table_schema->get_table_id())) {
           // do nothing
         } else {
           if (lib::Worker::CompatMode::MYSQL == mode) {
@@ -11441,7 +11440,7 @@ void ObRootService::update_cpu_quota_concurrency_in_memory_()
   }
 }
 
-int ObRootService::set_config_after_bootstrap_()
+int ObRootService::set_static_config_after_bootstrap_()
 {
   // configs will be sent to other servers when set in rs, so there is no need to wait config set
   int ret = OB_SUCCESS;
@@ -11475,6 +11474,47 @@ int ObRootService::set_config_after_bootstrap_()
       }
     }
   }
+  return ret;
+}
+
+int ObRootService::set_dynamic_config_after_bootstrap_()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObSqlString sql;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (!GCONF.enable_logservice) { // do nothing
+  } else if (0 == GCONF.logservice_access_point.size() ||
+    0 == strlen(GCONF.logservice_access_point.str())) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("enable_logservice is true, but logservice_access_point is empty," \
+      "please check bootstrap stmt", K(ret));
+  } else if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
+    LOG_WARN("failed to assign sql string", KR(ret));
+  } else if (OB_FAIL(sql.append_fmt(" logservice_access_point = '%s'",
+    GCONF.logservice_access_point.str()))) {
+    LOG_WARN("failed to append_fmt for logservice_access_point", KR(ret), K(sql),
+      K(GCONF.logservice_access_point));
+  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to set config for logservice_access_point", KR(ret), K(sql),
+      K(GCONF.logservice_access_point));
+  } else if (OB_FAIL(check_config_result("logservice_access_point",
+    GCONF.logservice_access_point.str()))) {
+    LOG_WARN("failed to check_config_result for logservice_access_point", KR(ret),
+      K(GCONF.logservice_access_point));
+  } else { } // do nothing
+#endif
+  return ret;
+}
+
+int ObRootService::set_config_after_bootstrap_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_static_config_after_bootstrap_())) {
+    LOG_WARN("failed to set static config after bootstrap", KR(ret));
+  } else if (OB_FAIL(set_dynamic_config_after_bootstrap_())) {
+    LOG_WARN("failed to set dynamic config after bootstrap", KR(ret));
+  } else { } // do nothing
   return ret;
 }
 int ObRootService::wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list)

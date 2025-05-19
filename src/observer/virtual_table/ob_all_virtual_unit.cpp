@@ -269,7 +269,7 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
             // shared_storage mode
             MTL_SWITCH(tenant_meta.unit_.tenant_id_) {
               ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
-              if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager*))) {
+              if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
                 ret = OB_ERR_UNEXPECTED;
                 SERVER_LOG(WARN, "tenant disk space manager is null", KR(ret), KP(disk_space_mgr));
               } else if (OB_FAIL(disk_space_mgr->get_used_disk_size(data_disk_in_use))) {

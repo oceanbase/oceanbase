@@ -67,6 +67,7 @@ namespace sql {
   class ObPsCache;
   class ObAuditLogger;
   class ObAuditLogUpdater;
+  class ObExternalDataAccessMgr;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -108,14 +109,21 @@ class ObTenantMdsService;
 #ifdef OB_BUILD_SHARED_STORAGE
   class ObTenantDiskSpaceManager;
   class ObTenantFileManager;
+  class ObSSMacroCacheMgr;
   class ObSSMicroCachePrewarmService;
   class ObSSMicroCache;
+  class ObSSLocalCacheService;
   class ObPublicBlockGCService;
+  class ObSSWriterService;
+  class ObAtomicFileMgr;
+  class ObSSMetaService;
+  class ObSSGarbageCollectorService;
   class ObStorageCachePolicyService;
 #else
 #endif
-
   class ObGlobalIteratorPool;
+  class ObInnerTabletAccessService;
+  class ObMemberTableService;
 } // namespace storage
 
 namespace transaction {
@@ -235,6 +243,12 @@ namespace storage {
   class MockTenantModuleEnv;
   class ObStorageHADiagMgr;
 }
+#ifdef OB_BUILD_SHARED_STORAGE
+namespace sslog
+{
+  class ObSSLogNotifyService;
+}
+#endif
 
 namespace share
 {
@@ -279,22 +293,37 @@ namespace detector
 #ifdef OB_BUILD_SHARED_STORAGE
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
+#define SSMacroCacheMgr storage::ObSSMacroCacheMgr*,
 #define SSMicroCachePrewarmService storage::ObSSMicroCachePrewarmService*,
 #define SSMicroCache storage::ObSSMicroCache*,
+#define SSLocalCacheService storage::ObSSLocalCacheService*,
 #define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
 #define PublicBlockGCService storage::ObPublicBlockGCService*,
+#define SSWriterService storage::ObSSWriterService*,
+#define AtomicFileMgr storage::ObAtomicFileMgr*,
+#define SSMetaService storage::ObSSMetaService*,
+#define SSGarbageCollectorService storage::ObSSGarbageCollectorService*,
+#define OBSSLOGNOTIFYSERVICE sslog::ObSSLogNotifyService*,
 #define StorageCachePolicyService storage::ObStorageCachePolicyService*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
+#define SSMacroCacheMgr
 #define SSMicroCachePrewarmService
 #define SSMicroCache
+#define SSLocalCacheService
 #define TenantCompactionObjMgr
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
 #define PublicBlockGCService
+#define SSWriterService
+#define AtomicFileMgr
+#define SharedSSTableService
+#define SSMetaService
+#define SSGarbageCollectorService
+#define OBSSLOGNOTIFYSERVICE
 #define StorageCachePolicyService
 #endif
 
@@ -322,10 +351,12 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       logservice::coordinator::ObFailureDetector*,   \
       logservice::ObLogService*,                     \
       logservice::ObGarbageCollector*,               \
-      TenantDiskSpaceManager                         \
+      TenantDiskSpaceManager                        \
       TenantFileManager                              \
+      SSMacroCacheMgr                                \
       SSMicroCache                                   \
       SSMicroCachePrewarmService                     \
+      SSLocalCacheService                            \
       StorageCachePolicyService                      \
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
@@ -431,6 +462,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTabletMemtableMgrPool*,            \
       rootserver::ObMViewMaintenanceService*,       \
       PublicBlockGCService                          \
+      SSWriterService                               \
+      AtomicFileMgr                                 \
+      SSMetaService                                 \
+      SSGarbageCollectorService                     \
+      OBSSLOGNOTIFYSERVICE                          \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
@@ -443,6 +479,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
+      sql::ObExternalDataAccessMgr*,             \
       share::ObWorkloadRepositoryContext*,           \
       observer::ObTenantQueryRespTimeCollector*,     \
       table::ObTableGroupCommitMgr*,                 \
@@ -450,7 +487,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableClientInfoMgr*,                  \
       table::ObHTableRowkeyMgr*,                     \
       rootserver::ObDDLServiceLauncher*,             \
-      rootserver::ObDDLScheduler*                   \
+      rootserver::ObDDLScheduler*,                   \
+      storage::ObInnerTabletAccessService*,          \
+      storage::ObMemberTableService*                 \
   )
 
 
@@ -794,6 +833,8 @@ protected:
   double unit_max_cpu_;
   double unit_min_cpu_;
   int64_t unit_memory_size_;
+  // tenant data disk size
+  int64_t unit_data_disk_size_;
   int64_t switchover_epoch_;
 
 private:

@@ -265,6 +265,10 @@ private:
       ObAddr &leader,
       common::ObIArray<ObAddr> &addrs);
 
+  int wakeup_tenant_dr_service_(
+      const share::schema::ObTenantSchema &new_tenant_schema,
+      const share::schema::ObTenantSchema &orig_tenant_schema);
+
 private:
   int check_inner_stat();
   int create_sys_table_schemas(
@@ -506,8 +510,9 @@ private:
   int drop_resource_pool_final(const uint64_t tenant_id,
                                common::ObIArray<uint64_t> &drop_ug_id_array,
                                ObIArray<share::ObResourcePoolName> &pool_names);
-  int try_drop_sys_ls_(const uint64_t meta_tenant_id,
-                       common::ObMySQLTransaction &trans);
+  int try_drop_meta_ls_(const uint64_t meta_tenant_id,
+                        const share::ObLSID &ls_id,
+                        common::ObMySQLTransaction &trans);
   //get gts value, return OB_STATE_NOT_MATCH when is not external consistent
   int get_tenant_external_consistent_ts(const int64_t tenant_id, share::SCN &scn);
 

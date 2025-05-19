@@ -1469,41 +1469,41 @@ int ObStorageStreamRpcP<RPC_CODE>::is_follower_ls(logservice::ObLogService *log_
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-ObGetMicroBlockCacheInfoArg::ObGetMicroBlockCacheInfoArg()
+ObGetHAMicroCacheLSInfoArg::ObGetHAMicroCacheLSInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_()
 {
 }
 
-bool ObGetMicroBlockCacheInfoArg::is_valid() const
+bool ObGetHAMicroCacheLSInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
 }
 
-void ObGetMicroBlockCacheInfoArg::reset()
+void ObGetHAMicroCacheLSInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroCacheLSInfoArg, tenant_id_, ls_id_);
 
-ObGetMicroBlockCacheInfoRes::ObGetMicroBlockCacheInfoRes()
+ObGetHAMicroCacheLSInfoRes::ObGetHAMicroCacheLSInfoRes()
   : ls_cache_info_()
 {
 }
 
-bool ObGetMicroBlockCacheInfoRes::is_valid() const
+bool ObGetHAMicroCacheLSInfoRes::is_valid() const
 {
   return ls_cache_info_.is_valid();
 }
 
-void ObGetMicroBlockCacheInfoRes::reset()
+void ObGetHAMicroCacheLSInfoRes::reset()
 {
   ls_cache_info_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoRes, ls_cache_info_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroCacheLSInfoRes, ls_cache_info_);
 
 ObGetMigrationCacheJobInfoArg::ObGetMigrationCacheJobInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -1566,28 +1566,28 @@ void ObGetMicroBlockKeyArg::reset()
 
 OB_SERIALIZE_MEMBER(ObGetMicroBlockKeyArg, tenant_id_, ls_id_, job_info_);
 
-ObCopyMicroBlockKeySetRes::ObCopyMicroBlockKeySetRes()
+ObGetHAMicroMetaSetRes::ObGetHAMicroMetaSetRes()
   : header_(),
     key_set_array_()
 {
 }
 
-ObCopyMicroBlockKeySetRes::~ObCopyMicroBlockKeySetRes()
+ObGetHAMicroMetaSetRes::~ObGetHAMicroMetaSetRes()
 {
 }
 
-bool ObCopyMicroBlockKeySetRes::is_valid() const
+bool ObGetHAMicroMetaSetRes::is_valid() const
 {
   return header_.is_valid();
 }
 
-void ObCopyMicroBlockKeySetRes::reset()
+void ObGetHAMicroMetaSetRes::reset()
 {
   header_.reset();
   key_set_array_.reset();
 }
 
-int ObCopyMicroBlockKeySetRes::assign(const ObCopyMicroBlockKeySetRes &other)
+int ObGetHAMicroMetaSetRes::assign(const ObGetHAMicroMetaSetRes &other)
 {
   int ret = OB_SUCCESS;
   if (!other.is_valid()) {
@@ -1604,26 +1604,26 @@ int ObCopyMicroBlockKeySetRes::assign(const ObCopyMicroBlockKeySetRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCopyMicroBlockKeySetRes, header_, key_set_array_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroMetaSetRes, header_, key_set_array_);
 
-ObMigrateWarmupKeySet::ObMigrateWarmupKeySet()
+ObHAMicroPrewarmMetaSet::ObHAMicroPrewarmMetaSet()
   : tenant_id_(OB_INVALID_ID),
     key_sets_()
 {
 }
 
-bool ObMigrateWarmupKeySet::is_valid() const
+bool ObHAMicroPrewarmMetaSet::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !key_sets_.empty();
 }
 
-void ObMigrateWarmupKeySet::reset()
+void ObHAMicroPrewarmMetaSet::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   key_sets_.reset();
 }
 
-int ObMigrateWarmupKeySet::assign(const ObMigrateWarmupKeySet &arg)
+int ObHAMicroPrewarmMetaSet::assign(const ObHAMicroPrewarmMetaSet &arg)
 {
   int ret = OB_SUCCESS;
   if (!arg.is_valid()) {
@@ -1637,25 +1637,25 @@ int ObMigrateWarmupKeySet::assign(const ObMigrateWarmupKeySet &arg)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObMigrateWarmupKeySet, tenant_id_, key_sets_);
+OB_SERIALIZE_MEMBER(ObHAMicroPrewarmMetaSet, tenant_id_, key_sets_);
 
-ObSSLSFetchMicroBlockArg::ObSSLSFetchMicroBlockArg()
+ObGetLSReplicaMicroBlockArg::ObGetLSReplicaMicroBlockArg()
   : tenant_id_(OB_INVALID_TENANT_ID), micro_metas_()
 {
 }
 
-bool ObSSLSFetchMicroBlockArg::is_valid() const
+bool ObGetLSReplicaMicroBlockArg::is_valid() const
 {
   return (is_valid_tenant_id(tenant_id_) && !micro_metas_.empty());
 }
 
-void ObSSLSFetchMicroBlockArg::reset()
+void ObGetLSReplicaMicroBlockArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   micro_metas_.reset();
 }
 
-int ObSSLSFetchMicroBlockArg::assign(const ObSSLSFetchMicroBlockArg &other)
+int ObGetLSReplicaMicroBlockArg::assign(const ObGetLSReplicaMicroBlockArg &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
@@ -1667,7 +1667,7 @@ int ObSSLSFetchMicroBlockArg::assign(const ObSSLSFetchMicroBlockArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObSSLSFetchMicroBlockArg, tenant_id_, micro_metas_);
+OB_SERIALIZE_MEMBER(ObGetLSReplicaMicroBlockArg, tenant_id_, micro_metas_);
 
 #endif
 
@@ -4003,7 +4003,7 @@ int ObFetchMicroBlockKeysP::process()
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
       ObCopyMicroBlockKeySetProducer producer;
-      ObCopyMicroBlockKeySet key_set;
+      ObCopyMicroPrewarmMetaSet key_set;
       ObCopyMicroBlockKeySetRpcHeader rpc_header;
       int64_t max_key_set_size = WARMUP_MAX_KEY_SET_SIZE_IN_RPC; // 4M;
       const int64_t start_ts = ObTimeUtil::current_time();
@@ -4033,7 +4033,7 @@ int ObFetchMicroBlockKeysP::process()
           } else if (!key_set.is_valid()) {
             LOG_INFO("skip this key set", K(arg_), K(key_set));
           } else {
-            // dest will judge ObMigrateWarmupKeySet serialize size,
+            // dest will judge ObHAMicroPrewarmMetaSet serialize size,
             if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
               STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
             }
@@ -4050,7 +4050,7 @@ int ObFetchMicroBlockKeysP::process()
               break;
             } else {
               key_set_count++;
-              key_count += key_set.micro_block_key_metas_.count();
+              key_count += key_set.micro_prewarm_metas_.count();
               end_blk_idx = key_set.blk_idx_;
             }
           }
@@ -4089,7 +4089,7 @@ int ObFetchMicroBlockP::process()
       char *buf = NULL;
       last_send_time_ = this->get_receive_timestamp();
       int64_t key_count = 0;
-      ObSArray<ObSSMicroBlockCacheKeyMeta> key_meta_array;
+      ObSArray<ObSSMicroPrewarmMeta> key_meta_array;
       const int64_t start_ts = ObTimeUtil::current_time();
       const int64_t first_receive_ts = this->get_receive_timestamp();
       LOG_INFO("start to fetch micro block", K(arg_));
@@ -4264,14 +4264,14 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
         STORAGE_LOG(ERROR, "bandwidth_throttle must not null", KR(ret), KP_(bandwidth_throttle));
       } else {
         SMART_VARS_2((storage::ObReplicaPrewarmMicroBlockProducer, producer),
-                     (ObSSLSFetchMicroBlockArg, arg)) {
+                     (ObGetLSReplicaMicroBlockArg, arg)) {
           if (OB_FAIL(arg.assign(arg_))) {
             LOG_WARN("fail to assign copy fetch micro block arg", KR(ret), K(arg_));
           } else if (OB_FAIL(producer.init(arg.micro_metas_))) {
             LOG_WARN("fail to init replica prewarm micro block producer", KR(ret), K(arg));
           } else {
             while (OB_SUCC(ret)) {
-              ObSSMicroBlockCacheKeyMeta micro_meta;
+              ObSSMicroPrewarmMeta micro_meta;
               if (OB_FAIL(producer.get_next_micro_block(micro_meta, data))) {
                 if (OB_ITER_END != ret) {
                   STORAGE_LOG(WARN, "fail to get next micro block", KR(ret));
@@ -4935,11 +4935,11 @@ int ObStorageRpc::get_ls_micro_block_cache_info(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const ObStorageHASrcInfo &src_info,
-    ObSSLSCacheInfo &ls_cache_info)
+    ObSSMicroCacheLSInfo &ls_cache_info)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObGetMicroBlockCacheInfoArg arg;
-  obrpc::ObGetMicroBlockCacheInfoRes res;
+  obrpc::ObGetHAMicroCacheLSInfoArg arg;
+  obrpc::ObGetHAMicroCacheLSInfoRes res;
   ls_cache_info.reset();
 
   if (!is_inited_) {
@@ -5005,7 +5005,7 @@ int ObStorageRpc::get_micro_block_key_set(
     const share::ObLSID &ls_id,
     const ObStorageHASrcInfo &src_info,
     const ObMigrationCacheJobInfo &job_info,
-    obrpc::ObCopyMicroBlockKeySetRes &res)
+    obrpc::ObGetHAMicroMetaSetRes &res)
 {
   int ret = OB_SUCCESS;
   res.reset();

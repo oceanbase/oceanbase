@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "share/transfer/ob_transfer_info.h" // OB_INVALID_TRANSFER_SEQ
 
@@ -99,6 +101,59 @@ uint64_t ObDieingTabletMapKey::hash() const
   hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
   hash_val = common::murmurhash(&transfer_seq_, sizeof(transfer_seq_), hash_val);
   return hash_val;
+}
+
+ObSSTabletMapKey::~ObSSTabletMapKey()
+{
+  reset();
+}
+
+void ObSSTabletMapKey::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  transfer_scn_ = UINT64_MAX;
+}
+
+int ObSSTabletMapKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
+uint64_t ObSSTabletMapKey::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
+  if (ObTabletID(tablet_id_).is_inner_tablet()) {
+    hash_val = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_val);
+  } else {
+    hash_val = common::murmurhash(&transfer_scn_, sizeof(transfer_scn_), hash_val);
+  }
+  return hash_val;
+}
+
+int ObSSTabletMapKey::set_common_tablet_key(const ObTabletID &tablet_id, const uint64_t transfer_scn) {
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid() || share::OB_INVALID_SCN_VAL == transfer_scn || tablet_id.is_inner_tablet()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(transfer_scn));
+  } else {
+    tablet_id_ = tablet_id.id();
+    transfer_scn_ = transfer_scn;
+  }
+  return ret;
+}
+
+int ObSSTabletMapKey::set_inner_tablet_key(const ObTabletID &tablet_id, const share::ObLSID ls_id) {
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid() || !tablet_id.is_valid() || !tablet_id.is_inner_tablet()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(ls_id));
+  } else {
+    tablet_id_ = tablet_id.id();
+    ls_id_ = ls_id.id();
+  }
+  return ret;
 }
 
 } // namespace storage

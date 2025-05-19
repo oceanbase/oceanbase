@@ -12,7 +12,9 @@
 
 #pragma once
 
+#ifndef USING_LOG_PREFIX
 #define USING_LOG_PREFIX STORAGE
+#endif // USING_LOG_PREFIX
 
 #include <stdint.h>
 #include "lib/ob_define.h"

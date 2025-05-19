@@ -59,6 +59,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
+#include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_file_manager.h"
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #endif
@@ -66,6 +67,7 @@
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "storage/ob_inner_tablet_access_service.h"
 
 namespace oceanbase
 {
@@ -142,6 +144,11 @@ int ObRpcLSCancelReplicaP::process()
                      "result", ret);
   }
   return ret;
+}
+
+int ObRpcLSReplaceReplicaP::process()
+{
+  return observer::ObService::do_replace_ls_replica(arg_);
 }
 
 int ObRpcLSMigrateReplicaP::process()
@@ -304,7 +311,8 @@ int ObRpcDRTaskReplyToMetaP::process()
                                       arg_.task_id_,
                                       arg_.tenant_id_,
                                       arg_.ls_id_,
-                                      arg_.result_))) {
+                                      arg_.result_,
+                                      arg_.task_type_))) {
     LOG_WARN("fail to clean task while task finish", KR(ret), K(arg_));
   }
   return ret;
@@ -1587,6 +1595,19 @@ int ObRpcCreateLSP::process()
       COMMON_LOG(WARN, "failed create log stream", KR(ret), K(arg_));
     }
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_SUCC(ret)) {
+    ObSSMetaService *meta_svr = nullptr;
+    if (!GCTX.is_shared_storage_mode()) {
+      // do nothing
+    } else if (OB_ISNULL(meta_svr = MTL(ObSSMetaService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObSSMetaService should not be null", K(ret));
+    } else if (OB_FAIL(meta_svr->create_ls(arg_))) {
+      COMMON_LOG(WARN, "failed create log stream", KR(ret), K(arg_));
+    }
+  }
+#endif
   (void)result_.init(ret, GCTX.self_addr(), arg_.get_replica_type());
   return ret;
 }
@@ -3755,7 +3776,7 @@ int ObGetSSMacroBlockP::process()
       read_info.offset_ = arg_.offset_;
       read_info.size_ = arg_.size_;
       read_info.io_desc_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
-      read_info.bypass_micro_cache_ = true;
+      read_info.set_bypass_micro_cache(true);
       read_info.mtl_tenant_id_ = MTL_ID();
       if (OB_ISNULL(buf = static_cast<char *>(result_.allocator_.alloc(read_info.size_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3815,29 +3836,11 @@ int ObGetSSMicroBlockMetaP::process()
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
       ObSSMicroCache *micro_cache = nullptr;
-      ObSSMicroBlockMetaHandle micro_meta_handle;
-      result_.micro_meta_info_.micro_key_ = arg_.micro_key_;
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObSSMicroCache is null", KR(ret), K_(arg_.tenant_id));
-      } else if (OB_FAIL(micro_cache->get_micro_meta_handle(arg_.micro_key_, micro_meta_handle))) {
-        LOG_WARN("fail to get micro block meta", KR(ret), K_(arg));
-      } else if (OB_UNLIKELY(!micro_meta_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("micro_meta handle should be valid", KR(ret), K_(arg));
-      } else {
-        ObSSMicroMetaInfo &micro_meta_info = result_.micro_meta_info_;
-        micro_meta_info.reuse_version_ = micro_meta_handle()->reuse_version();
-        micro_meta_info.data_dest_ = micro_meta_handle()->data_dest();
-        micro_meta_info.access_time_ = micro_meta_handle()->access_time();
-        micro_meta_info.length_ = micro_meta_handle()->length();
-        micro_meta_info.is_in_l1_ = micro_meta_handle()->is_in_l1();
-        micro_meta_info.is_in_ghost_ = micro_meta_handle()->is_in_ghost();
-        micro_meta_info.is_persisted_ = micro_meta_handle()->is_persisted();
-        micro_meta_info.is_reorganizing_ = micro_meta_handle()->is_reorganizing();
-        micro_meta_info.ref_cnt_ = micro_meta_handle()->ref_cnt();
-        micro_meta_info.crc_ = micro_meta_handle()->crc();
-        micro_meta_info.micro_key_ = micro_meta_handle()->get_micro_key();
+      } else if (OB_FAIL(micro_cache->get_micro_meta_info(arg_.micro_key_, result_.micro_meta_info_))) {
+        LOG_WARN("fail to get micro block meta info", KR(ret), K_(arg));
       }
     }
   }
@@ -4033,8 +4036,8 @@ int ObGetSSMicroCacheInfoP::process()
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObSSMicroCache is null", KR(ret), K_(arg_.tenant_id));
-      } else if (OB_FAIL(micro_cache->get_micro_cache_info(
-                     result_.micro_cache_stat_, result_.super_block_, result_.arc_info_))) {
+      } else if (OB_FAIL(micro_cache->get_micro_cache_info(result_.micro_cache_stat_,
+                 result_.super_blk_, result_.arc_info_))) {
         LOG_WARN("fail to get micro_cache_info", KR(ret), K_(arg_.tenant_id));
       }
     }
@@ -4107,10 +4110,10 @@ int ObSetSSCkptCompressorP::process()
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("micro_cache is nullptr", KR(ret));
-      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK) {
-        micro_cache->set_micro_ckpt_compressor_type(arg_.compressor_type_);
-      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK) {
-        micro_cache->set_blk_ckpt_compressor_type(arg_.compressor_type_);
+      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_MICRO_META_BLK) {
+        micro_cache->set_micro_meta_compressor_type(arg_.compressor_type_);
+      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK) {
+        // TODO @donglou.zl delete this arg handle
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("block_type is unexpected", K(ret), K_(arg_.block_type));
@@ -4126,41 +4129,7 @@ int ObSetSSCkptCompressorP::process()
 
 int ObSetSSCacheSizeRatioP::process()
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!arg_.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(arg));
-  } else {
-    MTL_SWITCH(arg_.tenant_id_)
-    {
-      bool succ_adjust = false;
-      ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
-      int64_t micro_cache_reserved_size = 0;
-      if (OB_ISNULL(tnt_file_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(tnt_file_mgr->adjust_cache_disk_ratio(arg_.micro_cache_size_ratio_,
-                 arg_.macro_cache_size_ratio_, succ_adjust, micro_cache_reserved_size))) {
-        LOG_WARN("fail to adjust cache disk ratio", K_(arg));
-      } else if (succ_adjust) {
-        LOG_INFO("succ to adjust cache disk ratio", K_(arg));
-      } else {
-        ret = OB_EAGAIN;
-        LOG_WARN("can't adjust cache disk ratio now", K(ret), K_(arg));
-      }
-
-      if (OB_SUCC(ret)) {
-        ObSSMicroCache *micro_cache_mgr = MTL(ObSSMicroCache *);
-        if (OB_ISNULL(micro_cache_mgr)) {
-          ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(micro_cache_mgr->resize_micro_cache_file_size(micro_cache_reserved_size))) {
-          LOG_WARN("fail to resize micro cache file size", K(arg_.tenant_id_), K(micro_cache_reserved_size));
-        } else {
-          LOG_INFO("succ to resize micro_cache file size", K(arg_.tenant_id_), K(micro_cache_reserved_size));
-        }
-      }
-    }
-  }
-  return ret;
+  return OB_NOT_SUPPORTED;
 }
 #endif
 
@@ -4205,6 +4174,20 @@ int ObRebuildTabletP::process()
       SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet failed", "ls_id", arg_.ls_id_.id(), "result", ret);
     }
   }
+  return ret;
+}
+
+int ObNotifyLogServiceAccessPointP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (!GCONF.logservice_access_point.set_value(arg_.get_logservice_access_point())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to set logservice access point", KR(ret), K(arg_));
+  }
+  result_.set_ret(ret);
   return ret;
 }
 
@@ -4294,5 +4277,35 @@ int ObRpcStartArchiveP::process()
   }
   return ret;
 }
+
+int ObWriteInnerTabletP::process()
+{
+  int ret = OB_SUCCESS;
+  ObTransService *tx_svc = MTL_WITH_CHECK_TENANT(ObTransService *, arg_.tenant_id_);
+  ObInnerTabletAccessService *inner_tablet_as = MTL_WITH_CHECK_TENANT(ObInnerTabletAccessService *, arg_.tenant_id_);
+  ObInnerTabletWriteCtx ctx;
+  int64_t affected_rows = 0;
+  ctx.tx_desc_ = arg_.tx_desc_;
+  ctx.buf_ = arg_.buf_.ptr();
+  ctx.buf_len_ = arg_.buf_.length();
+  ctx.ls_id_ = arg_.ls_id_;
+  ctx.tablet_id_ = arg_.tablet_id_;
+
+  if (OB_ISNULL(tx_svc) || OB_ISNULL(inner_tablet_as) || !arg_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tx service or inner tablet access service should not be NULL", KR(ret), K(arg_));
+  } else {
+    if (OB_FAIL(inner_tablet_as->insert_rows(ctx, affected_rows))) {
+      LOG_WARN("register into tx failed", KR(ret), K(arg_));
+    } else if (OB_FAIL(tx_svc->collect_tx_exec_result(*(arg_.tx_desc_), result_.tx_result_))) {
+      LOG_WARN("collect tx result failed", KR(ret), K(result_));
+    }
+    tx_svc->release_tx(*arg_.tx_desc_);
+  }
+  result_.result_ = ret;
+  result_.affected_rows_ = affected_rows;
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

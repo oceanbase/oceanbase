@@ -146,6 +146,11 @@ public:
   //enable refresh schema info
   virtual int set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info);
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  // get schema of __all_sslog_table
+  virtual int get_sslog_table_schema(ObTableSchema &table_schema);
+#endif
+
   // get schema of __all_core_table
   virtual int get_all_core_table_schema(ObTableSchema &table_schema);
   virtual void set_cluster_schema_status(const ObClusterSchemaStatus &status) override

@@ -230,7 +230,7 @@ namespace sql
                              const ObColumnRefRawExpr &column_expr,
                              int64_t flag);
     int check_whether_contain_nested_sql(const ObDMLStmt &stmt);
-    int check_force_default_stat();
+    int check_force_default_stat(const ObDMLStmt &stmt);
     int init_system_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
     int init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session);

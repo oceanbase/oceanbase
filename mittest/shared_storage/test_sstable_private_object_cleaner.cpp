@@ -187,13 +187,15 @@ void TestSSTablePrivateObjectCleaner::create_ls(
 int TestSSTablePrivateObjectCleaner::prepare_data_store_desc(ObWholeDataStoreDesc &data_desc)
 {
   int ret = OB_SUCCESS;
+  const share::SCN reorganization_scn(share::SCN::min_scn());
   ret = data_desc.init(
       false /*is_ddl*/, TestSSTablePrivateObjectCleaner::table_schema_,
       ObLSID(ls_id_), ObTabletID(tablet_id_), compaction::MAJOR_MERGE,
       ObTimeUtility::fast_current_time() /*snapshot_version*/,
       DATA_CURRENT_VERSION,
       TestSSTablePrivateObjectCleaner::table_schema_.get_micro_index_clustered(),
-      0 /*transfer_seq*/);
+      0 /*transfer_seq*/,
+      reorganization_scn);
   data_desc.get_desc().sstable_index_builder_ = nullptr;
   return ret;
 }

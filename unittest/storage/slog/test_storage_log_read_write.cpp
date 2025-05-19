@@ -82,7 +82,7 @@ void TestStorageLogRW::SetUp()
   TestDataFilePrepare::SetUp();
   slogger_ = OB_NEW(ObStorageLogger, ObModIds::TEST);
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
-  ASSERT_EQ(OB_SUCCESS, slogger_->init(slogger_mgr, OB_SERVER_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger_->init(slogger_mgr, OB_SERVER_TENANT_ID, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger_->start());
 
   slogger_->start_log(start_cursor_);

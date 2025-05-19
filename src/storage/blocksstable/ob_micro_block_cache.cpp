@@ -974,11 +974,11 @@ int ObIMicroBlockCache::prefetch(
     read_info.size_ = idx_row.get_block_size();
     read_info.io_timeout_ms_ = max(THIS_WORKER.get_timeout_remain() / 1000, 0);
     read_info.mtl_tenant_id_ = MTL_ID();
-    read_info.logic_micro_id_ = idx_row.get_logic_micro_id();
-    read_info.micro_crc_ = idx_row.get_data_checksum();
+    read_info.set_logic_micro_id(idx_row.get_logic_micro_id());
+    read_info.set_micro_crc(idx_row.get_data_checksum());
     if (is_major_macro_preread) {
-      read_info.bypass_micro_cache_ = true;
-      read_info.is_major_macro_preread_ = true;
+      read_info.set_bypass_micro_cache(true);
+      read_info.set_is_major_macro_preread(true);
     }
 
     if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
@@ -1027,9 +1027,9 @@ int ObIMicroBlockCache::prefetch(
   read_info.size_ = size;
   read_info.io_timeout_ms_ = max(THIS_WORKER.get_timeout_remain() / 1000, 0);
   read_info.mtl_tenant_id_ = MTL_ID();
-  read_info.bypass_micro_cache_ = true;
+  read_info.set_bypass_micro_cache(true);
   // only prefetch_multi_block need preread major macro
-  read_info.is_major_macro_preread_ = true;
+  read_info.set_is_major_macro_preread(true);
 
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
@@ -1268,8 +1268,8 @@ int ObDataMicroBlockCache::load_block(
       macro_read_info.size_ = micro_block_id.size_;
       macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       macro_read_info.mtl_tenant_id_ = MTL_ID();
-      macro_read_info.logic_micro_id_ = logic_micro_id;
-      macro_read_info.micro_crc_ = data_checksum;
+      macro_read_info.set_logic_micro_id(logic_micro_id);
+      macro_read_info.set_micro_crc(data_checksum);
 
       if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
@@ -1572,8 +1572,8 @@ int ObIndexMicroBlockCache::load_block(
       macro_read_info.size_ = micro_block_id.size_;
       macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       macro_read_info.mtl_tenant_id_ = MTL_ID();
-      macro_read_info.logic_micro_id_ = logic_micro_id;
-      macro_read_info.micro_crc_ = data_checksum;
+      macro_read_info.set_logic_micro_id(logic_micro_id);
+      macro_read_info.set_micro_crc(data_checksum);
 
       ObIndexBlockDataTransformer idx_transformer;
       char *transform_buf = nullptr;

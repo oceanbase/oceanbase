@@ -96,6 +96,10 @@ public:
   int init(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int init_for_share_storage(const ObTabletMeta &old_tablet_meta);
+  share::SCN get_acquire_scn() const;
+#endif
 
   int assign(const ObTabletMeta &other);
   void reset();

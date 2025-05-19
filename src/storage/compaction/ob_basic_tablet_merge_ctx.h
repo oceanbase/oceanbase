@@ -103,6 +103,7 @@ public:
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
   int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
   int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
+  share::SCN rec_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -264,6 +265,7 @@ public:
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
   STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
+  STATIC_PARAM_FUNC(const SCN &, rec_scn);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);
   PROGRESSIVE_FUNC(progressive_merge_step);
@@ -297,6 +299,7 @@ public:
     const ObMergeBlockInfo &block_info,
     const int64_t cost_time)
   { return OB_NOT_SUPPORTED; }
+  virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const;
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:

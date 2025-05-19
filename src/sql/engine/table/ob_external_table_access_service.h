@@ -22,6 +22,7 @@
 #include "common/storage/ob_io_device.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/ob_sql_context.h"
+#include "storage/blocksstable/index_block/ob_skip_index_filter_executor.h"
 
 namespace oceanbase
 {
@@ -161,7 +162,8 @@ public:
 class ObExternalTableRowIterator : public common::ObNewRowIterator {
 public:
   ObExternalTableRowIterator() :
-    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL)
+    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL),
+    skip_filter_executor_()
   {}
   virtual int init(const storage::ObTableScanParam *scan_param);
 protected:
@@ -185,6 +187,7 @@ protected:
   ObExpr *file_id_expr_;
   ObExpr *file_name_expr_;
   common::ObString ip_port_;
+  blocksstable::ObSkipIndexFilterExecutor skip_filter_executor_;
 };
 
 class ObExternalTableAccessService : public common::ObITabletScan

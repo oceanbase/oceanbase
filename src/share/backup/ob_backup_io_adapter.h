@@ -61,6 +61,8 @@ public:
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int adaptively_del_file(
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
+  static int get_file_modify_time(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info, int64_t &modify_time)
+    { modify_time = 0; return 0; }
   /**
    * Deletes a list of specified objects (files_to_delete).
    * If some objects are deleted successfully and others fail, the function

@@ -684,17 +684,26 @@ int ObLSRecoveryStatHandler::get_palf_stat_(
 {
   int ret = OB_SUCCESS;
   palf_stat.reset();
-  logservice::ObLogService *log_service = NULL;
+  ObLSService *ls_service = nullptr;
+  storage::ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  logservice::ObLogHandler *log_handler = nullptr;
   palf::PalfHandleGuard palf_handle_guard;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get MTL log_service", KR(ret), K_(tenant_id), KPC_(ls));
-  } else if (OB_FAIL(log_service->open_palf(ls_->get_ls_id(), palf_handle_guard))) {
-    LOG_WARN("failed to open palf", KR(ret), K_(tenant_id), KPC_(ls));
-  } else if (OB_FAIL(palf_handle_guard.stat(palf_stat))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_->get_ls_id(), ls_handle, ObLSGetMod::RS_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), K_(tenant_id), KPC_(ls));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ls", KR(ret), K_(tenant_id), KPC_(ls));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handle is null", KR(ret), KPC_(ls));
+  } else if (OB_FAIL(log_handler->stat(palf_stat))) {
     LOG_WARN("get palf_stat failed", KR(ret), KPC_(ls));
   }
 

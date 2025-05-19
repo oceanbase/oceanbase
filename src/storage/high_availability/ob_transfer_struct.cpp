@@ -1616,3 +1616,56 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTransferBuildTabletInfoCtx::build_src_reorganization_scn(
+    const share::ObTransferTaskInfo &task_info)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build src reorganization scn get invalid argument", K(ret), K(task_info));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(task_info.src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(task_info));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(task_info));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
+      tablet_handle.reset();
+      tablet = nullptr;
+      const ObTransferTabletInfo &tablet_info = task_info.tablet_list_.at(i);
+      if (OB_FAIL(ls->ha_get_tablet(tablet_info.tablet_id_, tablet_handle))) {
+        LOG_WARN("failed to get ha tablet", K(ret), K(tablet_info));
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle), K(tablet_info));
+      } else if (OB_FAIL(src_reorganization_scn_array_.push_back(tablet->get_reorganization_scn()))) {
+        LOG_WARN("failed to push reorganization scn into array", K(ret), KPC(tablet));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferBuildTabletInfoCtx::get_src_reorganization_scn(
+    common::ObIArray<share::SCN> &reorganization_scn)
+{
+  int ret = OB_SUCCESS;
+  reorganization_scn.reset();
+
+  if (OB_FAIL(reorganization_scn.assign(src_reorganization_scn_array_))) {
+    LOG_WARN("failed to assign reorganization scn", K(ret), K(src_reorganization_scn_array_));
+  }
+  return ret;
+}
+
+#endif

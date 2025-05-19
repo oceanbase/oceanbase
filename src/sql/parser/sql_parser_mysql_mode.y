@@ -333,6 +333,7 @@ END_P SET_VAR DELIMITER
         OBSOLETE OBJECT OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
         OBJECT_ID
+        LOGSERVICE_ACCESS_POINT
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PERCENTAGE
         PERCENT_RANK PERCENTILE_CONT PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
@@ -473,7 +474,7 @@ END_P SET_VAR DELIMITER
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
 %type <node> opt_tg_partition_option tg_hash_partition_option tg_key_partition_option tg_range_partition_option tg_subpartition_option tg_list_partition_option
 %type <node> alter_column_behavior opt_set opt_position_column
-%type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info opt_shared_storage_info shared_storage_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
+%type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info opt_bootstrap_info bootstrap_info opt_logservice_access_point logservice_access_point opt_shared_storage_info shared_storage_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
 %type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name merge_engine_types
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
@@ -20001,7 +20002,7 @@ DUMP MEMORY LEAK
  *
  *****************************************************************************/
 alter_system_stmt:
-alter_with_opt_hint SYSTEM BOOTSTRAP server_info_list opt_shared_storage_info
+alter_with_opt_hint SYSTEM BOOTSTRAP server_info_list opt_bootstrap_info
 {
   (void)($1);
   ParseNode *server_list = NULL;
@@ -21571,17 +21572,52 @@ REGION opt_equal_mark relation_name_or_string ZONE opt_equal_mark relation_name_
 }
 ;
 
-shared_storage_info:
-',' SHARED_STORAGE_INFO opt_equal_mark STRING_VALUE
+opt_shared_storage_info:
+shared_storage_info
 {
-  (void)($3);
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+
+shared_storage_info:
+SHARED_STORAGE_INFO opt_equal_mark STRING_VALUE
+{
+  (void)($2);
   result->contain_sensitive_data_ = true;
-  $$ = $4;
+  $$ = $3;
   $$->type_ = T_SHARED_STORAGE_INFO;
 }
 
-opt_shared_storage_info:
-shared_storage_info
+opt_logservice_access_point:
+logservice_access_point
+{
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+
+logservice_access_point:
+LOGSERVICE_ACCESS_POINT opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  result->contain_sensitive_data_ = true;
+  $$ = $3;
+  $$->type_ = T_LOGSERVICE_ACCESS_POINT;
+}
+
+bootstrap_info:
+',' opt_logservice_access_point opt_shared_storage_info
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BOOTSTRAP_INFO, 2, $2, $3);
+}
+
+opt_bootstrap_info:
+bootstrap_info
 {
   $$ = $1;
 }
@@ -22557,7 +22593,21 @@ opt_server_or_zone opt_tenant_name
                            $7     /* tenant */
                            );
   $$->value_ = $5[0];                /* scope */
-};
+}
+|
+LOGSERVICE_ACCESS_POINT COMP_EQ STRING_VALUE opt_comment
+{
+  ParseNode *logservice_access_point= NULL;
+  make_name_node(logservice_access_point, result->malloc_pool_, "logservice_access_point");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_ACTION, 5,
+                           logservice_access_point,    /* param_name */
+                           $3,    /* param_value */
+                           $4,    /* comment */
+                           NULL,    /* zone or server */
+                           NULL     /* tenant */
+                           );
+}
+;
 
 alter_system_reset_parameter_actions:
 alter_system_reset_parameter_action
@@ -25639,6 +25689,7 @@ ACCESS_INFO
 |       LOGFILE
 |       LOGONLY_REPLICA_NUM
 |       LOGS
+|       LOGSERVICE_ACCESS_POINT
 |       LOG_RESTORE_SOURCE
 |       MAJOR
 |       MANHATTAN

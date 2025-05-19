@@ -82,7 +82,6 @@
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
-
 global fields
 fields = [
     'tenant_id',
@@ -10933,13 +10932,114 @@ def_table_schema(
 )
 
 # 11121: abandoned # __all_virtual_ddl_diagnose_info, which is moved to 12514
-
 # 11122: __all_virtual_ss_tablet_upload_stat
 # 11123: __all_virtual_ss_tablet_compact_stat
-# 11124: __all_virtual_ss_tablet_meta
-# 11125: __all_virtual_ss_ls_meta
-# 11126: __all_virtual_ss_sstable_mgr
-# 11127:__all_virtual_ss_ls_tablet_reorganization_info
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name = '__all_virtual_ss_tablet_meta',
+  table_id = '11124',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('transfer_scn', 'int'),
+  ],
+  normal_columns = [
+    ('meta_version', 'int'),
+    ('data_tablet_id', 'int'),
+    ('create_scn', 'int'),
+    ('start_scn', 'int'),
+    ('create_schema_version', 'int'),
+    ('data_checkpoint_scn', 'int'),
+    ('mds_checkpoint_scn', 'int'),
+    ('ddl_checkpoint_scn', 'int'),
+    ('multi_version_start', 'int'),
+    ('tablet_snapshot_version', 'int'),
+  ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name = '__all_virtual_ss_ls_meta',
+  table_id = '11125',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+  ],
+  normal_columns = [
+    ('meta_version', 'int'),
+    ('ss_checkpoint_scn', 'int'),
+    ('ss_checkpoint_lsn', 'int'),
+    ('sslog_checkpoint_scn', 'int'),
+    ('ss_clog_accum_checksum', 'int'),
+  ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+    owner = 'yanyuan.cxf',
+    table_name    = '__all_virtual_ss_sstable_mgr',
+    table_id      = '11126',
+    table_type = 'VIRTUAL_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('ls_id', 'int'),
+      ('tablet_id', 'int'),
+      ('transfer_scn', 'int'),
+      ('table_type', 'int'),
+      ('start_log_scn', 'int'),
+      ('end_log_scn', 'int'),
+    ],
+    in_tenant_space=True,
+    normal_columns = [
+      ('upper_trans_version', 'int'),
+      ('size', 'int'),
+      ('data_block_count', 'int'),
+      ('index_block_count', 'int'),
+      ('linked_block_count', 'int'),
+      ('contain_uncommitted_row', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
+      ('nested_offset', 'int'),
+      ('nested_size', 'int'),
+      ('cg_idx', 'int'),
+      ('data_checksum', 'int'),
+      ('table_flag', 'int'),
+      ('rec_scn', 'int'),
+    ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+    owner = 'muwei.ym',
+    table_name = '__all_virtual_ss_ls_tablet_reorganization_info',
+    table_id   = '11127',
+    table_type = 'VIRTUAL_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+        ('svr_port', 'int'),
+        ('tenant_id', 'int'),
+        ('ls_id', 'int'),
+        ('tablet_id', 'int'),
+        ('reorganization_scn', 'int'),
+        ('data_type', 'varchar:32'),
+        ('commit_scn', 'int'),
+    ],
+    normal_columns = [
+      ('value', 'varchar:OB_MAX_VARCHAR_LENGTH'),
+    ],
+  in_tenant_space = True,
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 ################################################################
 # INFORMATION SCHEMA
@@ -11253,6 +11353,7 @@ def_table_schema(
       ('cg_idx', 'int'),
       ('data_checksum', 'int'),
       ('table_flag', 'int'),
+      ('rec_scn', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -16106,8 +16207,65 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_catalog_privilege_history',
   keywords = all_def_keywords['__all_catalog_privilege_history']))
 
-# 12520: __all_virtual_sswriter_group_stat
-# 12521: __all_virtual_sswriter_lease_mgr
+def_table_schema(
+  owner = 'gjw228474',
+  table_name     = '__all_virtual_sswriter_group_stat',
+  table_id       = '12520',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('type', 'varchar:32'),
+    ('group_id', 'int'),
+    ('grant_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('grant_svr_port', 'int'),
+    ('current_ts', 'int'),
+    ('remaining_lease_us', 'int'),
+    ('lease_expire_ts', 'int'),
+    ('create_ts', 'int'),
+    ('epoch', 'int'),
+    ('last_request_lease_ts', 'int'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'gjw228474',
+  table_name     = '__all_virtual_sswriter_lease_mgr',
+  table_id       = '12521',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('type', 'varchar:32'),
+    ('group_id', 'int'),
+    ('region', 'varchar:MAX_REGION_LENGTH'),
+    ('state', 'varchar:32'),
+    ('target_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('target_svr_port', 'int'),
+    ('current_ts', 'int'),
+    ('last_update_state_ts', 'int'),
+    ('lease_expire_ts', 'int'),
+    ('epoch', 'int'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 12522: __all_virtual_tenant_flashback_log_scn
 
@@ -16812,8 +16970,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15494', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15495', all_def_keywords['__all_catalog_privilege']))
 # 15496: __all_virtual_ss_tablet_upload_stat
 # 15497: __all_virtual_ss_tablet_compact_stat
-# 15498: __all_virtual_sswriter_group_stat
-# 15499: __all_virtual_sswriter_lease_mgr
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15498', all_def_keywords['__all_virtual_sswriter_group_stat']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15499', all_def_keywords['__all_virtual_sswriter_lease_mgr']))
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 # 15502: __all_virtual_tenant_flashback_log_scn
@@ -16833,10 +16991,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keyword
 # 15514: idx_objauth_mysql_user_id_real_agent
 # 15515: idx_objauth_mysql_obj_name_real_agent
 # 15516: __tenant_virtual_list_file
-# 15517: __all_virtual_ss_tablet_meta
-# 15518: __all_virtual_ss_ls_meta
-# 15519: __all_virtual_ss_sstable_mgr
-# 15520: __all_virtual_ss_ls_tablet_reorganization_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15517', all_def_keywords['__all_virtual_ss_tablet_meta'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15518', all_def_keywords['__all_virtual_ss_ls_meta'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15519', all_def_keywords['__all_virtual_ss_sstable_mgr'])))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15520', all_def_keywords['__all_virtual_ss_ls_tablet_reorganization_info']))
 # 15521: __all_virtual_tenant_vector_mem_info
 
 # 余留位置（此行之前占位）
@@ -42108,7 +42266,43 @@ def_table_schema(
 
 # 21658: DBA_OB_EXTERNAL_RESOURCES
 # 21659: CDB_OB_EXTERNAL_RESOURCES
-# 21660: V$OB_SS_SSTABLES
+def_table_schema(
+owner = 'yunxing.cyx',
+table_name      = 'V$OB_SS_SSTABLES',
+table_id        = '21660',
+table_type      = 'SYSTEM_VIEW',
+rowkey_columns  = [],
+normal_columns  = [],
+gm_columns      = [],
+in_tenant_space = True,
+view_definition = """
+SELECT
+ M.TENANT_ID,
+ M.LS_ID,
+ M.TABLET_ID,
+ M.TRANSFER_SCN,
+ (case M.TABLE_TYPE
+    when 10 then 'MAJOR' when 11 then 'MINOR'
+    when 12 then 'MINI' when 13 then 'META'
+    when 14 then 'DDL_DUMP'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'
+    when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
+    when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
+    when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    else 'INVALID'
+  end) as TABLE_TYPE,
+ M.CG_IDX,
+ M.START_LOG_SCN,
+ M.END_LOG_SCN,
+ M.DATA_CHECKSUM,
+ M.SIZE,
+ M.REC_SCN,
+ M.UPPER_TRANS_VERSION,
+ M.CONTAIN_UNCOMMITTED_ROW
+FROM
+ oceanbase.__all_virtual_ss_sstable_mgr M
+""".replace("\n", " ")
+)
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
 
@@ -75446,7 +75640,45 @@ def_table_schema(
 # 28275: GV$OB_RESULT_CACHE_OBJECTS
 # 28276: V$OB_RESULT_CACHE_OBJECTS
 # 28277: ALL_LOCATIONS
-# 28278: V$OB_SS_SSTABLES
+def_table_schema(
+owner = 'yunxing.cyx',
+table_name      = 'V$OB_SS_SSTABLES',
+name_postfix    = '_ORA',
+database_id     = 'OB_ORA_SYS_DATABASE_ID',
+table_id        = '28278',
+table_type      = 'SYSTEM_VIEW',
+rowkey_columns  = [],
+normal_columns  = [],
+gm_columns      = [],
+in_tenant_space = True,
+view_definition = """
+SELECT
+ M.TENANT_ID,
+ M.LS_ID,
+ M.TABLET_ID,
+ M.TRANSFER_SCN,
+ (case M.TABLE_TYPE
+    when 10 then 'MAJOR' when 11 then 'MINOR'
+    when 12 then 'MINI' when 13 then 'META'
+    when 14 then 'DDL_DUMP'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'
+    when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
+    when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
+    when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    else 'INVALID'
+  end) as TABLE_TYPE,
+ M.CG_IDX,
+ M.START_LOG_SCN,
+ M.END_LOG_SCN,
+ M.DATA_CHECKSUM,
+ M."SIZE",
+ M.REC_SCN,
+ M.UPPER_TRANS_VERSION,
+ M.CONTAIN_UNCOMMITTED_ROW
+FROM
+ SYS.ALL_VIRTUAL_SS_SSTABLE_MGR M
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

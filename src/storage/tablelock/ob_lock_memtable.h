@@ -221,7 +221,7 @@ public:
   bool is_active_memtable() override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
-  virtual share::SCN get_rec_scn();
+  virtual share::SCN get_rec_scn() override;
   virtual int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;

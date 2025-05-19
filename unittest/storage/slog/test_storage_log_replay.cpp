@@ -128,7 +128,7 @@ TEST_F(TestStorageLogReplay, test_basic)
 
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
   ObStorageLogger *slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->is_start_ = false;
@@ -165,7 +165,7 @@ TEST_F(TestStorageLogReplay, test_basic)
   OB_DELETE(ObStorageLogger, ObModIds::TEST, slogger);
 
   slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0 /*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->is_start_ = false;
@@ -242,7 +242,7 @@ TEST_F(TestStorageLogReplay, test_switch_file_replay)
 
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
   ObStorageLogger *slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0 /*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->is_start_ = false;
@@ -270,7 +270,7 @@ TEST_F(TestStorageLogReplay, test_switch_file_replay)
   OB_DELETE(ObStorageLogger, ObModIds::TEST, slogger);
 
   slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->is_start_ = false;
@@ -301,7 +301,7 @@ TEST_F(TestStorageLogReplay, test_mock_restart)
 
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
   ObStorageLogger *slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->is_start_ = false;
@@ -326,7 +326,7 @@ TEST_F(TestStorageLogReplay, test_mock_restart)
 
   // reset slogger and set its start cursor as replay_finish_cursor
   slogger->destroy();
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, TEST_TENANT_ID, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
   slogger->is_start_ = false;
   ASSERT_EQ(OB_SUCCESS, slogger->start_log(replay_finish_cursor_));

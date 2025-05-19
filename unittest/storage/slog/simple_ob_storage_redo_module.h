@@ -245,13 +245,15 @@ int SimpleObStorageModule::inner_replay_empty_shell_tablet(const ObRedoModuleRep
   int64_t buf_len = 0;
   ObEmptyShellTabletLog slog;
   ObTabletTransferInfo tablet_transfer_info;
+  ObUpdateTabletPointerParam upd_tablet_ptr_param;
+  upd_tablet_ptr_param.resident_info_.addr_ = param.disk_addr_;
   if (OB_FAIL(slog.deserialize_id(param.buf_, param.disk_addr_.size(), pos))) {
     STORAGE_LOG(WARN, "failed to serialize tablet_id_", K(ret), K(param.disk_addr_.size()), K(pos));
   } else if (OB_FAIL(read_from_disk(param.disk_addr_, allocator, buf, buf_len))) {
     STORAGE_LOG(WARN, "read from disk failed", K(ret), K(param.disk_addr_), K(buf_len));
   } else if (OB_FAIL(get_tablet_svr(slog.ls_id_, ls_tablet_svr, ls_handle))) {
     STORAGE_LOG(WARN, "get tablet svr failed", K(ret), K(slog.ls_id_));
-  } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(param.disk_addr_, buf, buf_len, slog.tablet_id_, tablet_transfer_info))) {
+  } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(upd_tablet_ptr_param, buf, buf_len, slog.tablet_id_, tablet_transfer_info))) {
     STORAGE_LOG(WARN, "replay empty shell tablet failed", K(ret), K(param.disk_addr_), K(slog.tablet_id_));
   }
 

@@ -15,6 +15,7 @@ set ob_enable_plan_cache = 0;
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
+alter system set default_table_store_format = "row";
 create table t1(col_int int, 
                 col_zero int,
                 col_null int, 

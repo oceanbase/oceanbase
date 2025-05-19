@@ -443,6 +443,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tablet_info.cpp
   virtual_table/ob_all_virtual_server.cpp
   virtual_table/ob_all_virtual_server_storage.cpp
+  virtual_table/ob_all_virtual_sswriter_group_stat.cpp
+  virtual_table/ob_all_virtual_sswriter_lease_mgr.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
   virtual_table/ob_all_virtual_tablet_compaction_progress.cpp
   virtual_table/ob_all_virtual_io_status.cpp
@@ -563,10 +565,14 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
   virtual_table/ob_all_virtual_plugin_info.cpp
   virtual_table/ob_all_virtual_cs_replica_tablet_stats.cpp
+  virtual_table/ob_all_virtual_ss_tablet_meta.cpp
+  virtual_table/ob_all_virtual_ss_ls_meta.cpp
+  virtual_table/ob_all_virtual_ss_sstable_mgr.cpp
   virtual_table/ob_all_virtual_dynamic_partition_table.cpp
   virtual_table/ob_all_virtual_storage_cache_task.cpp
   virtual_table/ob_all_virtual_tablet_local_cache.cpp
   virtual_table/ob_tenant_show_catalog_databases.cpp
+  virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.cpp
 )
 
 ob_server_add_target(ob_server)

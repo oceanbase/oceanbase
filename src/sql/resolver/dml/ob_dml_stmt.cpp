@@ -4023,6 +4023,24 @@ int ObDMLStmt::check_if_contain_inner_table(bool &is_contain_inner_table) const
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+bool ObDMLStmt::check_if_contain_sslog_table() const
+{
+  int ret = OB_SUCCESS;
+  bool is_contain_sslog_table = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain_sslog_table && i < table_items_.count(); ++i) {
+    TableItem *table_item = table_items_.at(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table item is NULL", K(ret), K(i), K(table_items_.count()));
+    } else if (is_sslog_table(table_item->ref_id_)) {
+      is_contain_sslog_table = true;
+    }
+  }
+  return is_contain_sslog_table;
+}
+#endif
+
 bool ObDMLStmt::has_for_update() const
 {
   bool bret = false;

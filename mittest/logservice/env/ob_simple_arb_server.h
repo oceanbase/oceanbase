@@ -96,7 +96,7 @@ public:
   }
   void revert_palf_env(IPalfEnvImpl *palf_env) override final
   {
-    palflite::PalfEnvLite *palf_env_lite = dynamic_cast<palflite::PalfEnvLite*>(palf_env);
+    palflite::PalfEnvLite *palf_env_lite = static_cast<palflite::PalfEnvLite*>(palf_env);
     palf_env_mgr_.revert_palf_env_lite(palf_env_lite);
   }
   const std::string& get_clog_dir() const override final

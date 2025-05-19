@@ -242,6 +242,12 @@ public:
       common::ObIArray<double> &sortedness,
       common::ObIArray<uint64_t> &res_sample_counts) const;
 
+  int inner_tablet_scan(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObTableScanParam &param,
+      ObNewRowIterator *&result);
+
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
   int check_data_disk_full_(
@@ -291,6 +297,12 @@ protected:
   {
     return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
   }
+
+  int do_table_scan_(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &data_tablet_id,
+      ObTableScanParam &param,
+      ObNewRowIterator *&result);
 
 private:
   bool is_inited_;

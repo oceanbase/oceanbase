@@ -259,6 +259,8 @@ public:
 
   virtual OB_INLINE share::SCN get_start_scn() const;
   virtual OB_INLINE share::SCN get_end_scn() const;
+  // TODO: yanyuan.cxf make it const
+  virtual OB_INLINE share::SCN get_rec_scn() { return share::SCN::invalid_scn(); }
   virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
   virtual OB_INLINE bool is_trans_state_deterministic() { return get_upper_trans_version() < INT64_MAX; }
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }

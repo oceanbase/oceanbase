@@ -260,12 +260,10 @@ public:
     const common::ObTabletID &tablet_id,
     const ObUpdateTableStoreParam &param,
     const int64_t start_macro_seq);
-  int ss_replay_create_tablet(const ObMetaDiskAddr &disk_addr, const ObTabletID &tablet_id);
+  int get_pending_upload_tablet_id_arr(
+    const SCN &ls_ss_checkpoint_scn,
+    ObIArray<ObTabletID> &tablet_id_arr);
   int write_tablet_id_set_to_pending_free();
-  int ss_replay_create_tablet_for_trans_info_tmp(
-    const ObMetaDiskAddr &current_disk_addr,
-    const ObLSHandle &ls_handle,
-    const ObTabletID &tablet_id);
 #endif
   // Get tablet handle but ignore empty shell. Return OB_TABLET_NOT_EXIST if it is empty shell.
   int ha_get_tablet(
@@ -283,7 +281,7 @@ public:
       ObTabletHandle &handle);
   int update_tablet_to_empty_shell(const common::ObTabletID &tablet_id);
   int replay_create_tablet(
-      const ObMetaDiskAddr &disk_addr,
+      const ObUpdateTabletPointerParam &param,
       const char *buf,
       const int64_t buf_len,
       const ObTabletID &tablet_id,
@@ -561,7 +559,7 @@ private:
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
       ObTimeGuard &time_guard);
-  static int safe_update_cas_empty_shell(
+  int safe_update_cas_empty_shell(
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
@@ -665,12 +663,14 @@ private:
 
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
 private:
-  static int replay_create_inner_tablet(
-      common::ObArenaAllocator &allocator,
-      const ObMetaDiskAddr &disk_addr,
+  static int replay_deserialize_tablet(
       const ObTabletMapKey &key,
-      const int64_t ls_epoch,
-      ObTabletHandle &tablet_handle);
+      const char *buf,
+      const int64_t buf_len,
+      const ObTabletHandle &tablet_handle,
+      common::ObArenaAllocator &allocator,
+      ObTabletPoolType &pool_type,
+      ObUpdateTabletPointerParam &param);
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,
                                                        ObTabletHandle &tablet_handle);

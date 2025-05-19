@@ -1001,6 +1001,10 @@ public:
   //call this(if you really need this , use friend class, such as chunkserver)
   //construct core schema from hard code
   int fill_all_core_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
+#ifdef OB_BUILD_SHARED_STORAGE
+  //construct sslog schema from hard code
+  int fill_sslog_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
+#endif
   virtual int get_tenant_schema_version(const uint64_t tenant_id, int64_t &schema_version);
   int64_t get_table_count() const;
   //the schema service should be thread safe

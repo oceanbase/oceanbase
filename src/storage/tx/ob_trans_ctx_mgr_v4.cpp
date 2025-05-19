@@ -1489,7 +1489,7 @@ int ObLSTxCtxMgr::get_min_start_scn(SCN &min_start_scn)
   return ret;
 }
 
-SCN ObLSTxCtxMgr::get_aggre_rec_scn_()
+SCN ObLSTxCtxMgr::get_aggre_rec_scn_() const
 {
   SCN ret;
   SCN prev_aggre_rec_scn = prev_aggre_rec_scn_.atomic_get();

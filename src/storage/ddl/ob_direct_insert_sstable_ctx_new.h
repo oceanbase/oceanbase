@@ -389,6 +389,7 @@ public:
   bool is_schema_item_ready() { return is_schema_item_ready_; }
   bool get_micro_index_clustered() { return micro_index_clustered_; }
   int64_t get_tablet_transfer_seq() { return tablet_transfer_seq_; }
+  share::SCN get_reorganization_scn() const { return reorganization_scn_; }
   int prepare_storage_schema(ObTabletHandle &tablet_handle);
   int64_t get_task_cnt() { return task_cnt_; }
   int64_t get_cg_cnt() {return cg_cnt_; }
@@ -472,6 +473,7 @@ protected:
   bool micro_index_clustered_;
   int64_t tablet_transfer_seq_;
   bool is_no_logging_;
+  share::SCN reorganization_scn_;
 };
 
 class ObTabletFullDirectLoadMgr final : public ObTabletDirectLoadMgr

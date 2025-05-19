@@ -36935,7 +36935,7 @@ int ObDDLService::add_sys_table_lob_aux(
   int ret = OB_SUCCESS;
   meta_schema.reset();
   data_schema.reset();
-  if (OB_ALL_CORE_TABLE_TID == table_id) {
+  if (is_hardcode_schema_table(table_id)) {
     // do nothing
   } else if (OB_FAIL(get_sys_table_lob_aux_schema(table_id, meta_schema, data_schema))) {
     LOG_WARN("fail to get sys table's index schema", KR(ret), K(table_id));

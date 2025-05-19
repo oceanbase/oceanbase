@@ -16,9 +16,6 @@
 #include "logservice/palf/palf_env.h"
 #include "share/scn.h"
 #include "logservice/ob_log_base_type.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_log_iterator_storage.h"
-#endif
 
 #ifndef MOCK_OB_LOG_HANDLER_H_
 #define MOCK_OB_LOG_HANDLER_H_
@@ -310,6 +307,10 @@ public:
     return OB_SUCCESS;
   }
   int force_set_as_single_replica()
+  {
+    return OB_SUCCESS;
+  }
+  int force_set_as_single_replica(const palf::LogConfigVersion &config_version, const int64_t timeout_us)
   {
     return OB_SUCCESS;
   }

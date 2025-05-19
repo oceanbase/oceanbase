@@ -476,6 +476,10 @@ private:
   int inner_generate_check_co_convert_dag(ObLS *ls);
   int try_remove_unneeded_tablets_();
   int try_offline_ls_();
+  int deal_compat_with_ls_inner_tablet_();
+  int create_ls_inner_tablet_for_compat_(
+      const common::ObIArray<ObTabletID> &tablet_id_array,
+      ObLS *ls);
   int check_tx_data_continue_();
   int record_server_event_();
 

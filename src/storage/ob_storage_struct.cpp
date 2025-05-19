@@ -251,7 +251,8 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     snapshot_info_(),
     is_backfill_(false),
     backfill_scn_(),
-    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ)
+    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ),
+    rec_scn_()
 {
 }
 
@@ -293,6 +294,7 @@ void ObGetMergeTablesResult::reset()
   is_backfill_ = false;
   backfill_scn_.reset();
   transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
+  rec_scn_.reset();
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -312,6 +314,7 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     backfill_scn_ = src.backfill_scn_;
     snapshot_info_ = src.snapshot_info_;
     transfer_seq_ = src.transfer_seq_;
+    rec_scn_ = src.rec_scn_;
   }
   return ret;
 }
@@ -363,8 +366,9 @@ bool ObDDLTableStoreParam::is_valid() const
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()
-  : new_upper_trans_(nullptr),
-    last_minor_end_scn_()
+: new_upper_trans_(nullptr),
+  last_minor_end_scn_(),
+  ss_new_upper_trans_(nullptr)
 {
   last_minor_end_scn_.set_min();
 }
@@ -378,6 +382,7 @@ void UpdateUpperTransParam::reset()
 {
   new_upper_trans_ = nullptr;
   last_minor_end_scn_.set_min();
+  ss_new_upper_trans_ = nullptr;
 }
 
 

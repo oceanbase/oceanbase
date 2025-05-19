@@ -11,13 +11,14 @@
  */
 
 #include "palf_handle.h"
+#include "logservice/ipalf/ipalf_config_change_handle.h"
 
 namespace oceanbase
 {
 using namespace share;
 namespace palf
 {
-#define CHECK_VALID if (NULL == palf_handle_impl_) { return OB_NOT_INIT; }
+#define CHECK_VALID if (OB_ISNULL(palf_handle_impl_)) { return OB_NOT_INIT; }
 
 PalfHandle::PalfHandle() : palf_handle_impl_(NULL),
                            rc_cb_(NULL),
@@ -44,21 +45,9 @@ bool PalfHandle::is_valid() const
   return NULL != palf_handle_impl_;
 }
 
-PalfHandle& PalfHandle::operator=(const PalfHandle &rhs)
+bool PalfHandle::operator==(const ipalf::IPalfHandle &rhs) const
 {
-  if (this == &rhs) {
-    return *this;
-  }
-  palf_handle_impl_ = rhs.palf_handle_impl_;
-  rc_cb_ = rhs.rc_cb_;
-  fs_cb_ = rhs.fs_cb_;
-  rebuild_cb_ = rhs.rebuild_cb_;
-  return *this;
-}
-
-bool  PalfHandle::operator==(const PalfHandle &rhs) const
-{
-  return palf_handle_impl_ == rhs.palf_handle_impl_;
+  return this->palf_handle_impl_ == static_cast<const PalfHandle*>(&rhs)->palf_handle_impl_;
 }
 
 int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list,
@@ -158,6 +147,23 @@ int PalfHandle::seek(const SCN &scn, PalfGroupBufferIterator &iter)
   return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter);
 }
 
+int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter)
+{
+  CHECK_VALID;
+  int ret = OB_SUCCESS;
+  if (!lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid lsn to seek iterator", KR(ret), K(lsn));
+  } else if (true == iter.is_inited()) {
+    ret = iter.reuse(lsn);
+  } else if (OB_FAIL(iter.init(lsn, palf_handle_impl_))) {
+    PALF_LOG(WARN, "failed to init ipalf::IPalfLogIterator", KR(ret), K(lsn));
+  } else {
+    PALF_LOG(INFO, "succeed to init ipalf::IPalfLogIterator", K(lsn));
+  }
+  return ret;
+}
+
 int PalfHandle::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
   CHECK_VALID;
@@ -225,7 +231,7 @@ int PalfHandle::get_base_lsn(LSN &lsn) const
 }
 
 int PalfHandle::get_base_info(const LSN &lsn,
-                              PalfBaseInfo &palf_base_info)
+                              palf::PalfBaseInfo &palf_base_info)
 {
   CHECK_VALID;
   return palf_handle_impl_->get_base_info(lsn, palf_base_info);
@@ -486,7 +492,7 @@ int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 
 int PalfHandle::change_access_mode(const int64_t proposal_id,
                                    const int64_t mode_version,
-                                   const AccessMode &access_mode,
+                                   const ipalf::AccessMode &access_mode,
                                    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
@@ -495,7 +501,7 @@ int PalfHandle::change_access_mode(const int64_t proposal_id,
   return ret;
 }
 
-int PalfHandle::get_access_mode(int64_t &mode_version, AccessMode &access_mode) const
+int PalfHandle::get_access_mode(int64_t &mode_version, ipalf::AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
@@ -503,7 +509,7 @@ int PalfHandle::get_access_mode(int64_t &mode_version, AccessMode &access_mode) 
   return ret;
 }
 
-int PalfHandle::get_access_mode(AccessMode &access_mode) const
+int PalfHandle::get_access_mode(ipalf::AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
@@ -519,7 +525,7 @@ int PalfHandle::get_access_mode_version(int64_t &mode_version) const
 }
 
 int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
-                                        AccessMode &access_mode,
+                                        ipalf::AccessMode &access_mode,
                                         SCN &ref_scn) const
 {
   int ret = OB_SUCCESS;
@@ -677,6 +683,17 @@ int PalfHandle::unregister_rebuild_cb()
   }
 	return ret;
 }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int PalfHandle::register_refresh_priority_cb()
+{
+  return OB_NOT_SUPPORTED;
+}
+
+int PalfHandle::unregister_refresh_priority_cb()
+{
+  return OB_NOT_SUPPORTED;
+}
+#endif
 
 int PalfHandle::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
 {

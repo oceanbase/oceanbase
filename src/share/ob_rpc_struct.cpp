@@ -4692,6 +4692,54 @@ int ObLSModifyPaxosReplicaNumberArg::init(
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObLSReplaceReplicaArg,
+                    task_id_,
+                    tenant_id_,
+                    ls_id_,
+                    dst_member_,
+                    config_version_);
+
+int ObLSReplaceReplicaArg::assign(
+    const ObLSReplaceReplicaArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (this == &that) {
+  } else {
+    task_id_ = that.task_id_;
+    tenant_id_ = that.tenant_id_;
+    ls_id_ = that.ls_id_;
+    dst_member_ = that.dst_member_;
+    config_version_ = that.config_version_;
+  }
+  return ret;
+}
+
+int ObLSReplaceReplicaArg::init(
+    const share::ObTaskId &task_id,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObReplicaMember &dst_member,
+    const palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(task_id.is_invalid()
+               || !is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || !dst_member.is_valid()
+               || !config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_id), K(tenant_id), K(ls_id),
+              K(dst_member), K(config_version));
+  } else {
+    task_id_ = task_id;
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    dst_member_ = dst_member;
+    config_version_ = config_version;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObDRTaskReplyResult,
                     task_id_,
                     tenant_id_,
@@ -4715,13 +4763,23 @@ int ObDRTaskReplyResult::init(
     const share::ObTaskId &task_id,
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const int result)
+    const int result,
+    const ObDRTaskType &task_type)
 {
   int ret = OB_SUCCESS;
-  task_id_ = task_id;
-  tenant_id_ = tenant_id;
-  ls_id_ = ls_id;
-  result_ = result;
+  if (OB_UNLIKELY(task_id.is_invalid()
+               || !is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || ObDRTaskType::MAX_TYPE == task_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_id), K(tenant_id), K(ls_id), K(task_type));
+  } else {
+    task_id_ = task_id;
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    result_ = result;
+    task_type_ = task_type;
+  }
   return ret;
 }
 
@@ -11438,11 +11496,9 @@ int ObGetSSPhyBlockInfoResult::assign(const ObGetSSPhyBlockInfoResult &rhs)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObSSMicroMetaInfo, reuse_version_, data_dest_, access_time_, length_, is_in_l1_, is_in_ghost_,
-    is_persisted_, is_reorganizing_, ref_cnt_, crc_, micro_key_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroBlockMetaArg, tenant_id_, micro_key_);
-OB_SERIALIZE_MEMBER(ObGetSSMicroBlockMetaResult, micro_meta_info_, ret_);
-int ObGetSSMicroBlockMetaResult::assign(const ObGetSSMicroBlockMetaResult &rhs)
+OB_SERIALIZE_MEMBER(ObGetSSMicroBlockMetaRes, micro_meta_info_, ret_);
+int ObGetSSMicroBlockMetaRes::assign(const ObGetSSMicroBlockMetaRes &rhs)
 {
   int ret = OB_SUCCESS;
   micro_meta_info_ = rhs.micro_meta_info_;
@@ -11490,8 +11546,8 @@ int ObGetSSMacroBlockByURIResult::assign(const ObGetSSMacroBlockByURIResult &oth
 
 OB_SERIALIZE_MEMBER(ObDelSSTabletMetaArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
-OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoArg, tenant_id_);
-OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoResult, micro_cache_stat_, super_block_, arc_info_);
+OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoResult, micro_cache_stat_, super_blk_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
@@ -11749,6 +11805,7 @@ OB_DEF_DESERIALIZE(ObRegisterTxDataArg)
   }
   return ret;
 }
+
 OB_DEF_SERIALIZE_SIZE(ObRegisterTxDataArg)
 {
   int64_t len = 0;
@@ -13165,8 +13222,8 @@ int ObDumpServerUsageResult::assign(const ObDumpServerUsageResult &rhs)
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-OB_SERIALIZE_MEMBER(ObLSSyncHotMicroKeyArg, tenant_id_, ls_id_, leader_addr_, micro_keys_);
-int ObLSSyncHotMicroKeyArg::assign(const ObLSSyncHotMicroKeyArg &other)
+OB_SERIALIZE_MEMBER(ObLSSyncHotMicroMetaArg, tenant_id_, ls_id_, leader_addr_, micro_keys_);
+int ObLSSyncHotMicroMetaArg::assign(const ObLSSyncHotMicroMetaArg &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(micro_keys_.assign(other.micro_keys_))) {
@@ -13179,7 +13236,7 @@ int ObLSSyncHotMicroKeyArg::assign(const ObLSSyncHotMicroKeyArg &other)
   return ret;
 }
 
-bool ObLSSyncHotMicroKeyArg::is_valid() const
+bool ObLSSyncHotMicroMetaArg::is_valid() const
 {
   return is_valid_tenant_id(tenant_id_) && (micro_keys_.count() > 0) && (ls_id_ != ObLSID::INVALID_LS_ID) && leader_addr_.is_valid();
 }
@@ -13410,6 +13467,22 @@ int ObRefreshServiceNameRes::assign(const ObRefreshServiceNameRes &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObNotifyLogServiceAccessPointArg, logservice_access_point_);
+void ObNotifyLogServiceAccessPointArg::reset()
+{
+  logservice_access_point_.reset();
+}
+
+int ObNotifyLogServiceAccessPointArg::init(const common::ObString &logservice_access_point)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(ob_write_string(allocator_, logservice_access_point, logservice_access_point_))) {
+    LOG_WARN("fail to copy str", KR(ret), K(logservice_access_point));
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObNotifySharedStorageInfoArg, shared_storage_infos_);
 void ObNotifySharedStorageInfoArg::reset()
 {
@@ -13462,6 +13535,39 @@ int ObFetchStableMemberListInfo::assign(const ObFetchStableMemberListInfo &other
   } else if (OB_FALSE_IT(config_version_ = other.config_version_)) {
   }
   return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyLogServiceAccessPointResult, ret_);
+
+ObNotifyLogServiceAccessPointResult::ObNotifyLogServiceAccessPointResult()
+  : ret_(common::OB_ERROR)
+{}
+
+ObNotifyLogServiceAccessPointResult::~ObNotifyLogServiceAccessPointResult()
+{}
+
+int ObNotifyLogServiceAccessPointResult::assign(const ObNotifyLogServiceAccessPointResult&other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+void ObNotifyLogServiceAccessPointResult::reset()
+{
+  ret_ = common::OB_ERROR;
+}
+
+void ObNotifyLogServiceAccessPointResult::set_ret(int ret)
+{
+  ret_ = ret;
+}
+
+int ObNotifyLogServiceAccessPointResult::get_ret() const
+{
+  return ret_;
 }
 
 int ObNotifySharedStorageInfoArg::assign(const ObNotifySharedStorageInfoArg &other)
@@ -13612,6 +13718,121 @@ int ObRebuildTabletArg::assign(const ObRebuildTabletArg &arg)
   }
   return ret;
 }
+
+ObWriteInnerTabletArg::ObWriteInnerTabletArg()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    tx_desc_(nullptr),
+    ls_id_(),
+    tablet_id_(),
+    buf_()
+{
+}
+
+bool ObWriteInnerTabletArg::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID
+      && OB_NOT_NULL(tx_desc_)
+      && tx_desc_->is_valid()
+      && ls_id_.is_valid()
+      && tablet_id_.is_valid();
+}
+
+int ObWriteInnerTabletArg::init(const uint64_t tenant_id,
+                              const ObTxDesc &tx_desc,
+                              const ObLSID &ls_id,
+                              const common::ObTabletID &tablet_id,
+                              const ObString &buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID || !tx_desc.is_valid() || !ls_id.is_valid()
+      || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tx_desc), K(ls_id), K(tablet_id));
+  } else {
+    tenant_id_ = tenant_id;
+    tx_desc_ = const_cast<ObTxDesc *>(&tx_desc);
+    ls_id_ = ls_id;
+    tablet_id_ = tablet_id;
+    buf_ = buf;
+  }
+  return ret;
+}
+
+void ObWriteInnerTabletArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  tx_desc_ = nullptr;
+  ls_id_.reset();
+  tablet_id_.reset();
+  buf_.reset();
+}
+
+OB_DEF_SERIALIZE(ObWriteInnerTabletArg)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(tenant_id_);
+  OB_UNIS_ENCODE(*tx_desc_);
+  LST_DO_CODE(OB_UNIS_ENCODE, ls_id_, tablet_id_, buf_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObWriteInnerTabletArg)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(tenant_id_);
+  if (OB_SUCC(ret)) {
+    ObTransService *tx_svc = MTL_WITH_CHECK_TENANT(ObTransService *, tenant_id_);
+    if (OB_ISNULL(tx_svc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null tx service ptr", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(tx_svc->acquire_tx(buf, data_len, pos, tx_desc_))) {
+      LOG_WARN("acquire tx by deserialize fail", K(data_len), K(pos), KR(ret));
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE, ls_id_, tablet_id_, buf_);
+      LOG_INFO("deserialize txDesc from session", KPC_(tx_desc), KPC(this));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObWriteInnerTabletArg)
+{
+  int64_t len = 0;
+  if (!is_valid()) {
+    len = 0;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "write inner tablet argument is invalid, cannot get serialize size", K(ret), KPC(this));
+  } else {
+    OB_UNIS_ADD_LEN(tenant_id_);
+    OB_UNIS_ADD_LEN(*tx_desc_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, ls_id_, tablet_id_, buf_);
+  }
+  return len;
+}
+
+bool ObWriteInnerTabletResult::is_valid() const
+{
+  return true;
+}
+
+int ObWriteInnerTabletResult::init(const ObTxExecResult &tx_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tx_result_.assign(tx_result))) {
+    LOG_WARN("assign tx result fail", K(ret));
+  }
+  return ret;
+}
+
+void ObWriteInnerTabletResult::reset()
+{
+  result_ = OB_SUCCESS;
+  tx_result_.reset();
+  affected_rows_ = 0;
+  return;
+}
+
+OB_SERIALIZE_MEMBER(ObWriteInnerTabletResult, result_, tx_result_, affected_rows_);
+
 
 }//end namespace obrpc
 }//end namespace oceanbase

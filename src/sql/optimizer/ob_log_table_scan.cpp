@@ -903,8 +903,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
   if (get_contains_fake_cte() ||
-      is_virtual_table(get_ref_table_id()) ||
-      EXTERNAL_TABLE == get_table_type()) {
+      is_virtual_table(get_ref_table_id())) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
@@ -974,6 +973,13 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         }
       } else if (OB_FAIL(lookup_pushdown_filters.push_back(filters.at(i)))) {
         LOG_WARN("store lookup pushdown filter failed", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret) && EXTERNAL_TABLE == get_table_type()) {
+      // for external table, all filters are duplicate in no pushdown
+      nonpushdown_filters.reset();
+      if (OB_FAIL(nonpushdown_filters.assign(filters))) {
+        LOG_WARN("store non-pushdown filters failed", K(ret));
       }
     }
   }

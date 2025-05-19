@@ -80,6 +80,7 @@
 #include "common/ob_target_specific.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
+#include "storage/member_table/ob_member_table_schema_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -983,6 +984,12 @@ int ObServer::start()
       LOG_ERROR("fail to init mds schema helper", K(ret));
     } else {
       FLOG_INFO("success to init mds schema helper");
+    }
+
+    if (FAILEDx(ObMemberTableSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init member table schema helper", K(ret));
+    } else {
+      FLOG_INFO("success to init member table schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {

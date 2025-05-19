@@ -876,6 +876,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"skewonly", SKEWONLY},
   {"skip_index", SKIP_INDEX},
   {"shared_storage_info", SHARED_STORAGE_INFO},
+  {"logservice_access_point", LOGSERVICE_ACCESS_POINT},
   {"shutdown", SHUTDOWN},
   {"signed", SIGNED},
   {"signal", SIGNAL},

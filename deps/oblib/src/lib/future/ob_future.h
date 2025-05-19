@@ -329,6 +329,11 @@ public:
   int wait_for(int64_t time_span_ms) const { return future::ObFutureBase<T>::wait_for(time_span_ms); }
   bool is_valid() const { return future::ObFutureBase<T>::is_valid(); }
   bool is_ready() const { return future::ObFutureBase<T>::is_ready(); }
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    return pos;
+  }
 };
 
 template <typename T>

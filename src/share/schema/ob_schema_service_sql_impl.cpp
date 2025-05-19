@@ -18,6 +18,7 @@
 #include "src/rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
 
 #define COMMON_SQL              "SELECT * FROM %s"
 #define COMMON_SQL_WITH_TENANT  "SELECT * FROM %s WHERE tenant_id = %lu"
@@ -317,6 +318,17 @@ int ObSchemaServiceSQLImpl::get_all_core_table_schema(ObTableSchema &table_schem
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObSchemaServiceSQLImpl::get_sslog_table_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
+    LOG_WARN("sslog_table_schema failed", K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObSchemaServiceSQLImpl::get_core_table_schemas(
     ObISQLClient &sql_client,
@@ -625,8 +637,8 @@ int ObSchemaServiceSQLImpl::get_core_table_priorities(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("core table don't read history table, "
                      "impossible to have is_deleted set", KR(ret), K(schema_status));
-          } else if (OB_ALL_CORE_TABLE_TID == core_schema.get_table_id()) {
-            // __all_core_table's schema in inner_table only used for sys views, won't be used by schema.
+          } else if (is_hardcode_schema_table(core_schema.get_table_id())) {
+            // hardcode schema table's schema in inner_table only used for sys views, won't be used by schema.
           } else if (OB_FAIL(temp_table_schemas.push_back(core_schema))) {
             LOG_WARN("push_back failed", KR(ret), K(schema_status));
           }
@@ -5273,6 +5285,12 @@ int ObSchemaServiceSQLImpl::fetch_tables(
                                  schema_version,
                                  fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
         LOG_WARN("append sql failed", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (is_shared_storage_sslog_exist()
+                 && OB_FAIL(sql.append_fmt(" and a.table_id != %lu",
+                                 fill_extract_schema_id(schema_status, OB_ALL_SSLOG_TABLE_TID)))) {
+        LOG_WARN("append sql failed", K(ret));
+#endif
       } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
         LOG_WARN("append sql failed", KR(ret));
       }
@@ -6221,15 +6239,21 @@ int ObSchemaServiceSQLImpl::get_table_schema(
   int ret = OB_SUCCESS;
 
   // __all_core_table
-  if (OB_ALL_CORE_TABLE_TID == table_id) {
-    ObTableSchema all_core_table_schema;
-    if (OB_FAIL(get_all_core_table_schema(all_core_table_schema))) {
+  if (is_hardcode_schema_table(table_id)) {
+    ObTableSchema hardcode_table_schema;
+    if (OB_ALL_CORE_TABLE_TID == table_id &&
+        OB_FAIL(get_all_core_table_schema(hardcode_table_schema))) {
       LOG_WARN("get all core table schema failed", K(ret));
-    } else if (OB_FAIL(alloc_table_schema(all_core_table_schema, allocator,
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (is_shared_storage_sslog_table(table_id) &&
+               OB_FAIL(get_sslog_table_schema(hardcode_table_schema))) {
+      LOG_WARN("get sslog table schema failed", K(ret));
+#endif
+    } else if (OB_FAIL(alloc_table_schema(hardcode_table_schema, allocator,
                                           table_schema))) {
       LOG_WARN("alloc table schema failed", K(ret));
     } else {
-      LOG_INFO("get all core table schema succeed", K(table_schema->get_table_name_str()));
+      LOG_INFO("get hard code table schema succeed", K(table_schema->get_table_name_str()));
     }
   } else {
     // normal_table(contain core table)

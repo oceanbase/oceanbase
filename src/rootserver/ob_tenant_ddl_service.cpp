@@ -1896,7 +1896,7 @@ int ObTenantDDLService::create_tenant_sys_tablets(
         if (OB_SUCC(ret) && is_system_table(data_table_id)) {
           uint64_t lob_meta_table_id = OB_INVALID_ID;
           uint64_t lob_piece_table_id = OB_INVALID_ID;
-          if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+          if (is_hardcode_schema_table(data_table_id)) {
             // do nothing
           } else if (!get_sys_table_lob_aux_table_id(data_table_id, lob_meta_table_id, lob_piece_table_id)) {
             ret = OB_ENTRY_NOT_EXIST;
@@ -2249,7 +2249,7 @@ int ObTenantDDLService::modify_tenant(const ObModifyTenantArg &arg)
     LOG_USER_ERROR(OB_TENANT_NOT_EXIST, tenant_name.length(), tenant_name.ptr());
     LOG_WARN("tenant not exists", K(arg), K(ret));
   } else if (FALSE_IT(is_restore = orig_tenant_schema->is_restore())) {
-  } else if (!is_restore) {
+  } else if (!is_restore && (0 != arg.sys_var_list_.count())) {
     // The physical recovery may be in the system table recovery stage, and it is necessary to avoid
     // the situation where SQL cannot be executed and hang
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(
@@ -2270,8 +2270,6 @@ int ObTenantDDLService::modify_tenant(const ObModifyTenantArg &arg)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(modify_tenant_inner_phase(arg, orig_tenant_schema, schema_guard, is_restore))) {
     LOG_WARN("modify_tenant_inner_phase fail", K(ret));
-  } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_dr_service(orig_tenant_schema->get_tenant_id()))) {
-    LOG_WARN("failed to wakeup dr service", KR(ret), K(arg), K(orig_tenant_schema->get_tenant_id()));
   }
   return ret;
 }
@@ -3682,6 +3680,11 @@ int ObTenantDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, 
           LOG_WARN("unit_manager reload failed", K(ret));
         }
       }
+      if (OB_SUCC(ret) && arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::LOCALITY)) {
+        if (OB_FAIL(wakeup_tenant_dr_service_(new_tenant_schema, *orig_tenant_schema))) {
+          LOG_WARN("failed to wakeup dr service", KR(ret), K(arg), K(tenant_id));
+        }
+      }
     }
   } else if (!arg.new_tenant_name_.empty()) {
     // rename tenant
@@ -3740,6 +3743,40 @@ int ObTenantDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, 
   }
   return ret;
 }
+
+int ObTenantDDLService::wakeup_tenant_dr_service_(
+    const share::schema::ObTenantSchema &new_tenant_schema,
+    const share::schema::ObTenantSchema &orig_tenant_schema)
+{
+  int ret = OB_SUCCESS;
+  bool replace_locality = false;
+  common::ObArray<common::ObZone> pre_zone_list;
+  common::ObArray<common::ObZone> cur_zone_list;
+  if (OB_FAIL(new_tenant_schema.get_zone_list(cur_zone_list))) {
+    LOG_WARN("failed to get zone list", KR(ret), K(new_tenant_schema));
+  } else if (OB_FAIL(orig_tenant_schema.get_zone_list(pre_zone_list))) {
+    LOG_WARN("failed to get zone list", KR(ret), K(orig_tenant_schema));
+  } else if (1 != pre_zone_list.count() || 1 != cur_zone_list.count()) {
+    // skip, replace_locality = false
+  } else if (pre_zone_list.at(0) == cur_zone_list.at(0)) {
+    // skip, same zone
+  } else {
+    replace_locality = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    // only F@z1->F@z2 is single replace locality, when single replace locality happens,
+    // sys tenant need to first process the meta tenant's single replace task.
+    const uint64_t tenant_id = replace_locality ? OB_SYS_TENANT_ID : orig_tenant_schema.get_tenant_id();
+    if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_dr_service(tenant_id))) {
+      LOG_WARN("failed to wakeup dr service", KR(ret), K(tenant_id));
+    }
+    LOG_INFO("wake up tenant dr service for alter tenant locality",
+              KR(ret), K(tenant_id), K(replace_locality), K(pre_zone_list), K(cur_zone_list));
+  }
+  return ret;
+}
+
 template <typename SCHEMA>
 int ObTenantDDLService::get_schema_primary_regions(
     const SCHEMA &schema,
@@ -5000,15 +5037,17 @@ int ObTenantDDLService::check_empty_primary_zone_locality_condition(
   return ret;
 }
 
-int ObTenantDDLService::try_drop_sys_ls_(const uint64_t meta_tenant_id,
-                       common::ObMySQLTransaction &trans)
+int ObTenantDDLService::try_drop_meta_ls_(
+    const uint64_t meta_tenant_id,
+    const share::ObLSID &ls_id,
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
-  } else if (OB_UNLIKELY(!is_meta_tenant(meta_tenant_id))) {
+  } else if (OB_UNLIKELY(!is_meta_tenant(meta_tenant_id) || !ls_id.is_valid_with_tenant(meta_tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not meta tenant", KR(ret), K(meta_tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(meta_tenant_id), K(ls_id));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
@@ -5017,20 +5056,19 @@ int ObTenantDDLService::try_drop_sys_ls_(const uint64_t meta_tenant_id,
     ObLSLifeAgentManager life_agent(*sql_proxy_);
     ObLSStatusOperator ls_status;
     ObLSStatusInfo sys_ls_info;
-    if (OB_FAIL(ls_status.get_ls_status_info(meta_tenant_id, SYS_LS, sys_ls_info, trans))) {
+    if (OB_FAIL(ls_status.get_ls_status_info(meta_tenant_id, ls_id, sys_ls_info, trans))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("sys ls not exist, no need to drop", KR(ret), K(meta_tenant_id));
+        LOG_INFO("sys ls not exist, no need to drop", KR(ret), K(meta_tenant_id), K(ls_id));
       } else {
-        LOG_WARN("failed to get ls status info", KR(ret), K(meta_tenant_id));
+        LOG_WARN("failed to get ls status info", KR(ret), K(meta_tenant_id), K(ls_id));
       }
-    } else if (OB_FAIL(life_agent.drop_ls_in_trans(meta_tenant_id, SYS_LS, share::NORMAL_SWITCHOVER_STATUS, trans))) {
-      LOG_WARN("failed to drop ls in trans", KR(ret), K(meta_tenant_id));
+    } else if (OB_FAIL(life_agent.drop_ls_in_trans(meta_tenant_id, ls_id, share::NORMAL_SWITCHOVER_STATUS, trans))) {
+      LOG_WARN("failed to drop ls in trans", KR(ret), K(meta_tenant_id), K(ls_id));
     }
   }
   return ret;
 }
-
 
 int ObTenantDDLService::drop_resource_pool_pre(const uint64_t tenant_id,
                                          common::ObIArray<uint64_t> &drop_ug_id_array,
@@ -5208,8 +5246,10 @@ int ObTenantDDLService::drop_tenant(const ObDropTenantArg &arg)
         LOG_WARN("ddl_operator drop_tenant failed", K(user_tenant_id), KR(ret));
       } else if (OB_FAIL(ddl_operator.drop_tenant(meta_tenant_id, trans))) {
         LOG_WARN("ddl_operator drop_tenant failed", K(meta_tenant_id), KR(ret));
-      } else if (OB_FAIL(try_drop_sys_ls_(meta_tenant_id, trans))) {
+      } else if (OB_FAIL(try_drop_meta_ls_(meta_tenant_id, SYS_LS, trans))) {
         LOG_WARN("failed to drop sys ls", KR(ret), K(meta_tenant_id));
+      } else if (OB_FAIL(try_drop_meta_ls_(meta_tenant_id, SSLOG_LS, trans))) {
+        LOG_WARN("failed to drop sslog ls", KR(ret), K(meta_tenant_id));
       } else if (tenant_schema->is_in_recyclebin()) {
         // try recycle record from __all_recyclebin
         ObArray<ObRecycleObject> recycle_objs;

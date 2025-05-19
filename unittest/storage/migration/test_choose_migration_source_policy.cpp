@@ -59,7 +59,10 @@ class MockMemberList
 {
 public:
   MockMemberList() {}
-  virtual ~MockMemberList() {}
+  virtual ~MockMemberList()
+  {
+    mock_ls_.log_handler_.is_inited_ = false;
+  }
 
   int get_ls_member_list_for_checkpoint(const uint64_t, const share::ObLSID &,
       const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &addr_list)
@@ -382,7 +385,12 @@ public:
     if (OB_FAIL(mock_addr("192.168.1.1:1234", parent))) {
       LOG_WARN("failed to mock addr", K(ret));
     } else {
-      mock_ls_.log_handler_.palf_handle_.palf_handle_impl_ = &mock_palf_handle_impl_;
+      mock_ls_.log_handler_.is_inited_ = true;
+      mock_ls_.log_handler_.is_in_stop_state_ = false;
+      if (OB_ISNULL(mock_ls_.log_handler_.palf_handle_)) {
+        mock_ls_.log_handler_.palf_handle_ = new palf::PalfHandle();
+      }
+      static_cast<palf::PalfHandle*>(mock_ls_.log_handler_.palf_handle_)->palf_handle_impl_ = &mock_palf_handle_impl_;
       mock_palf_handle_impl_.is_inited_ = true;
       mock_palf_handle_impl_.config_mgr_.parent_ = parent;
       ls_handle.ls_ = &mock_ls_;

@@ -37,7 +37,7 @@ int ObServerCheckpointWriter::init(ObStorageLogger *server_slogger)
   } else if (OB_FAIL(allocator_.init(
                common::OB_MALLOC_NORMAL_BLOCK_SIZE, MEM_LABEL, OB_SERVER_TENANT_ID, MEM_LIMIT))) {
     LOG_WARN("fail to init fifo allocator", K(ret));
-  } else if (OB_FAIL(tenant_meta_item_writer_.init(false /*whether need addr*/, mem_attr))) {
+  } else if (OB_FAIL(tenant_meta_item_writer_.init_for_slog_ckpt(OB_SERVER_TENANT_ID, 0/*tenant epoch id*/, mem_attr, &fd_dispenser_))) {
     LOG_WARN("fail to init tenant meta item writer", K(ret));
   } else {
     server_slogger_ = server_slogger;
@@ -52,6 +52,7 @@ int ObServerCheckpointWriter::write_checkpoint(const ObLogCursor &log_cursor)
   LOG_INFO("start to write server checkpoint", K(log_cursor));
 
   MacroBlockId tenant_meta_entry;
+  fd_dispenser_.set_cur_max_file_id(OB_STORAGE_OBJECT_MGR.get_server_super_block().max_file_id_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObServerCheckpointWriter not init", K(ret));
@@ -60,12 +61,12 @@ int ObServerCheckpointWriter::write_checkpoint(const ObLogCursor &log_cursor)
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(write_tenant_meta_checkpoint(tenant_meta_entry))) {
     LOG_WARN("fail to write tenant config checkpoint", K(ret));
-  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block(log_cursor, tenant_meta_entry))) {
+  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block(log_cursor, tenant_meta_entry, fd_dispenser_))) {
     LOG_WARN("fail to update server super block", K(ret), K(log_cursor), K(tenant_meta_entry));
   } else if (OB_FAIL(server_slogger_->remove_useless_log_file(log_cursor.file_id_, OB_SERVER_TENANT_ID))) {
     LOG_WARN("fail to remove_useless_log_file", K(ret));
   } else {
-    LOG_INFO("succeed to write server checkpoint", K(log_cursor), K(tenant_meta_entry));
+    LOG_INFO("succeed to write server checkpoint", K(log_cursor), K(tenant_meta_entry), K(fd_dispenser_));
   }
 
   return ret;

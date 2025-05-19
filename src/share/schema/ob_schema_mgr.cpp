@@ -2577,8 +2577,8 @@ int ObSchemaMgr::add_table(
   const uint64_t table_id = table_schema.get_table_id();
   bool is_system_table = false;
   int64_t idx = 0;
-  if (OB_ALL_CORE_TABLE_TID == table_schema.get_table_id()) {
-    FLOG_INFO("add __all_core_table schema", KR(ret), K(table_schema), K(lbt()));
+  if (is_hardcode_schema_table(table_schema.get_table_id())) {
+    FLOG_INFO("add hardcode table schema", KR(ret), K(table_schema), K(lbt()));
   }
 
   if (!check_inner_stat()) {

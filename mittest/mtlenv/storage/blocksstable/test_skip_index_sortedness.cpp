@@ -100,6 +100,7 @@ public:
                       DATA_CURRENT_VERSION,
                       table_schema_.get_micro_index_clustered(),
                       0 /*transfer_seq*/,
+                      share::SCN::min_scn()/*reorgnize scn*/,
                       scn,
                       &cg_schema,
                       0));

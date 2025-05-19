@@ -114,6 +114,13 @@ if(OB_USE_BABASSL)
     )
 endif()
 
+if(OB_BUILD_SHARED_LOG_SERVICE)
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/shared_log_service
+  )
+endif()
+
 if (OB_USE_CLANG)
   # The following clang warnings should be fixed later: -Wno-unused-variable -Wno-invalid-offsetof
   set(OBLIB_COMPILE_DEFINITIONS -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
@@ -129,16 +136,17 @@ if (OB_USE_CLANG)
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-overloaded-virtual -Wno-reserved-user-defined-literal
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
-    $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>)
+    $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>
+    -Wno-register -Wno-invalid-partial-specialization)
   if (CPP_STANDARD_20)
     set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
         -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
         -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
         -Wno-enum-constexpr-conversion -Wno-covered-switch-default
         -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
-        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class -Wno-register
+        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class
         -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
-        -Wno-ambiguous-reversed-operator -Wno-invalid-partial-specialization
+        -Wno-ambiguous-reversed-operator
         -Wno-string-concatenation)
   endif()
   target_compile_options(oblib_base_without_pass INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
@@ -305,6 +313,7 @@ target_link_libraries(oblib_base_without_pass
   -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
   ${DEP_DIR}/lib/libisal.a
+  ${DEP_DIR}/lib/libpalf.a
  )
 endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_without_pass oblib_pass)

@@ -121,8 +121,8 @@ if(CPP_STANDARD_20)
   ob_define(CPP_STANDARD_20 ON)
   add_definitions(-DCPP_STANDARD_20)
 else()
-  message(STATUS "Using C++11 standard")
-  set(CMAKE_CXX_FLAGS "-std=gnu++11")
+  message(STATUS "Using C++17 standard")
+  set(CMAKE_CXX_FLAGS "-std=gnu++17")
 endif()
 
 if(OB_DISABLE_PIE)
@@ -167,6 +167,9 @@ if(OB_BUILD_CLOSE_MODULES)
 
   # 日志存储压缩
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
+
+  # 独立日志服务
+  ob_define(OB_BUILD_SHARED_LOG_SERVICE ON)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
@@ -227,6 +230,10 @@ endif()
 
 if (OB_BUILD_JNI_ODPS)
  add_definitions(-DOB_BUILD_JNI_ODPS)
+endif()
+
+if(OB_BUILD_SHARED_LOG_SERVICE)
+  add_definitions(-DOB_BUILD_SHARED_LOG_SERVICE)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.

@@ -3777,7 +3777,7 @@ int ObDDLUtil::upload_block_for_ss(const char *buf, const int64_t len, const blo
     object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     object_info.io_desc_.set_unsealed();
     object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
-    object_info.ls_epoch_id_ = 0;
+    object_info.set_ls_epoch_id(0);
 
     if (OB_FAIL(OB_STORAGE_OBJECT_MGR.async_write_object(macro_block_id, object_info, object_handle))) {
       LOG_WARN("failed to write info", K(ret), K(macro_block_id), K(object_info), K(object_handle));

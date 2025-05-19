@@ -38,6 +38,7 @@
   // ls disaster recovery rpc
   RPC_S(PR5 disaster_recovery_task_reply, OB_DISASTER_RECOVERY_TASK_REPLY, (ObDRTaskReplyResult));
   RPC_S(PR5 ls_cancel_replica_task, OB_LS_CANCEL_REPLICA_TASK, (ObLSCancelReplicaTaskArg));
+  RPC_S(PR5 ls_replace_replica, OB_LS_REPLACE_REPLICA, (ObLSReplaceReplicaArg));
   RPC_S(PR5 ls_migrate_replica, OB_LS_MIGRATE_REPLICA, (ObLSMigrateReplicaArg));
   RPC_S(PR5 ls_add_replica, OB_LS_ADD_REPLICA, (ObLSAddReplicaArg));
   RPC_S(PR5 ls_type_transform, OB_LS_TYPE_TRANSFORM, (ObLSChangeReplicaArg));
@@ -190,19 +191,20 @@
   #ifdef OB_BUILD_SHARED_STORAGE
   RPC_S(PR5 remote_write_ddl_finsih_log, OB_REMOTE_WRITE_DDL_FINISH_LOG, (obrpc::ObRpcRemoteWriteDDLFinishLogArg));
   RPC_S(PR5 get_ss_macro_block, OB_GET_SS_MACRO_BLOCK, (obrpc::ObGetSSMacroBlockArg), obrpc::ObGetSSMacroBlockResult);
-  RPC_S(PR5 sync_hot_micro_key, OB_SYNC_HOT_MICRO_KEY, (obrpc::ObLSSyncHotMicroKeyArg));
+  RPC_S(PR5 sync_hot_micro_key, OB_SYNC_HOT_MICRO_KEY, (obrpc::ObLSSyncHotMicroMetaArg));
   RPC_S(PR5 get_ss_phy_block_info, OB_GET_SS_PHY_BLOCK_INFO, (obrpc::ObGetSSPhyBlockInfoArg), obrpc::ObGetSSPhyBlockInfoResult);
-  RPC_S(PR5 get_ss_micro_block_meta, OB_GET_SS_MICRO_BLOCK_META, (obrpc::ObGetSSMicroBlockMetaArg), obrpc::ObGetSSMicroBlockMetaResult);
+  RPC_S(PR5 get_ss_micro_block_meta, OB_GET_SS_MICRO_BLOCK_META, (obrpc::ObGetSSMicroBlockMetaArg), obrpc::ObGetSSMicroBlockMetaRes);
   RPC_S(PR5 get_ss_macro_block_by_uri, OB_GET_SS_MACRO_BLOCK_BY_URI, (obrpc::ObGetSSMacroBlockByURIArg), obrpc::ObGetSSMacroBlockByURIResult);
   RPC_S(PR5 del_ss_tablet_meta, OB_DEL_SS_TABLET_META, (obrpc::ObDelSSTabletMetaArg));
   RPC_S(PR5 enable_ss_micro_cache, OB_ENABLE_SS_MICRO_CACHE, (obrpc::ObEnableSSMicroCacheArg));
-  RPC_S(PR5 get_ss_micro_cache_info, OB_GET_SS_MICRO_CACHE_INFO, (obrpc::ObGetSSMicroCacheInfoArg), obrpc::ObGetSSMicroCacheInfoResult);
+  RPC_S(PR5 get_ss_micro_cache_info, OB_GET_SS_MICRO_CACHE_INFO, (obrpc::ObGetSSMicroCacheAllInfoArg), obrpc::ObGetSSMicroCacheAllInfoResult);
   RPC_S(PR5 clear_ss_micro_cache, OB_CLEAR_SS_MICRO_CACHE, (obrpc::ObClearSSMicroCacheArg));
   RPC_S(PR5 del_ss_local_tmpfile, OB_DEL_SS_LOCAL_TMPFILE, (obrpc::ObDelSSLocalTmpFileArg));
   RPC_S(PR5 del_ss_local_major, OB_DEL_SS_LOCAL_MAJOR, (obrpc::ObDelSSLocalMajorArg));
   RPC_S(PR5 calibrate_ss_disk_space, OB_CALIBRATE_SS_DISK_SPACE, (obrpc::ObCalibrateSSDiskSpaceArg));
   RPC_S(PR5 del_ss_tablet_micro, OB_DEL_SS_TABLET_MICRO, (obrpc::ObDelSSTabletMicroArg));
   RPC_S(PR5 set_ss_ckpt_compressor, OB_SET_SS_CKPT_COMPRESSOR, (obrpc::ObSetSSCkptCompressorArg));
+  RPC_AP(PR1 lease_request, OB_SSWRITER_LEASE_REQ, (storage::ObSSWriterLeaseRequest), Int64);
   RPC_S(PR5 set_ss_cache_size_ratio, OB_SET_SS_CACHE_SIZE_RATIO, (obrpc::ObSetSSCacheSizeRatioArg));
   RPC_S(PR5 trigger_storage_cache, OB_TRIGGER_STORAGE_CACHE, (obrpc::ObTriggerStorageCacheArg));
   #endif
@@ -270,8 +272,10 @@
   RPC_AP(PR5 collect_mv_merge_info, OB_COLLECT_MV_MERGE_INFO, (obrpc::ObCollectMvMergeInfoArg), obrpc::ObCollectMvMergeInfoResult);
   RPC_S(PR5 fetch_stable_member_list, OB_FETCH_STABLE_MEMBER_LIST, (obrpc::ObFetchStableMemberListArg), obrpc::ObFetchStableMemberListInfo);
   RPC_S(PR5 notify_shared_storage_info, OB_NOTIFY_SHARED_STORAGE_INFO, (obrpc::ObNotifySharedStorageInfoArg), obrpc::ObNotifySharedStorageInfoResult);
+  RPC_S(PR5 notify_logservice_access_point, OB_NOTIFY_LOGSERVICE_ACCESS_POINT, (obrpc::ObNotifyLogServiceAccessPointArg), obrpc::ObNotifyLogServiceAccessPointResult);
   RPC_S(PR5 broadcast_config_version, OB_BROADCAST_CONFIG_VERSION, (ObBroadcastConfigVersionArg));
   RPC_S(PR5 notify_ls_restore_finish, OB_NOTIFY_LS_RESTORE_FINISH, (obrpc::ObNotifyLSRestoreFinishArg));
   RPC_S(PR5 notify_start_archive, OB_NOTIFY_START_ARCHIVE, (obrpc::ObNotifyStartArchiveArg));
   RPC_S(PR5 ha_rebuild_tablet, OB_HA_REBUILD_TABLET, (obrpc::ObRebuildTabletArg));
   RPC_S(PR5 estimate_skip_rate, OB_ESTIMATE_SKIP_RATE, (obrpc::ObEstSkipRateArg), ObEstSkipRateRes);
+  RPC_S(PR5 write_inner_tablet, OB_WRITE_INNER_TABLET, (ObWriteInnerTabletArg), ObWriteInnerTabletResult);

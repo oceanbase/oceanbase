@@ -1079,6 +1079,10 @@ int ObIndexBlockTreeCursor::get_parent_node_macro_id(MacroBlockId &macro_id)
     LOG_WARN("Not init", K(ret));
   } else {
     macro_id = curr_path_item_->macro_block_id_;
+    if (OB_UNLIKELY(!macro_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("macro_id is invalid.", KR(ret), K(macro_id));
+    }
   }
   return ret;
 }

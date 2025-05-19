@@ -14,9 +14,7 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_PALF_STAT_
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
-#include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
-#include "logservice/palf/palf_handle.h"
 #include "logservice/palf/log_meta_info.h"//CONFIG_VERSION_LEN
 
 namespace oceanbase

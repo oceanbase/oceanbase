@@ -612,7 +612,7 @@ private:
   int get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
   int submit_start_working_log_();
   int try_wait_gts_and_inc_max_commit_ts_();
-  share::SCN get_aggre_rec_scn_();
+  share::SCN get_aggre_rec_scn_() const;
 public:
   static const int64_t MAX_HASH_ITEM_PRINT = 16;
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms

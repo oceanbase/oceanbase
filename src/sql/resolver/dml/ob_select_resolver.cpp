@@ -1443,11 +1443,13 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       bool has_flashback_query = false;
       if (OB_FAIL(check_stmt_has_flashback_query(select_stmt, false, has_flashback_query))) {
         LOG_WARN("failed to check stmt has flashback query", K(ret));
-      } else if (has_flashback_query) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn used with flashback query");
-        LOG_WARN("rowscn can't use with flashback query", K(ret));
       }
+      // TODO(handora.qc): understand and resolve the unsupported cases
+      // else if (has_flashback_query) {
+      //   ret = OB_NOT_SUPPORTED;
+      //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn used with flashback query");
+      //   LOG_WARN("rowscn can't use with flashback query", K(ret));
+      // }
     }
   }
 

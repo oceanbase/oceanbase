@@ -37,7 +37,7 @@ public:
 public:
   int init(const uint64_t tenant_id);
   void reset();
-  int create_tablet(ObTabletHandle &tablet_handle);
+  int create_tablet(ObTablet *&tablet);
   /* ATTENTION: below functions should be called without any ls_tablet or t3m locks */
   int throttle_tablet_creation();
   void free_tablet(ObTablet *tablet);

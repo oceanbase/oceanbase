@@ -206,6 +206,7 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
                                                   const ObVersionRange &trans_version_range,
                                                   ObTabletMergeCtx &merge_context)
 {
+  merge_context.merge_dag_ = &merge_dag_;
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
   merge_context.static_param_.is_delete_insert_merge_ = false;
   merge_context.static_param_.data_version_ = DATA_VERSION_4_2_0_0;

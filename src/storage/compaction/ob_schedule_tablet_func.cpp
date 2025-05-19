@@ -106,10 +106,12 @@ int ObScheduleTabletFunc::schedule_tablet_new_round(
       || user_request
       || ObBasicMergeScheduler::get_merge_scheduler()->get_tenant_status().enable_adaptive_compaction_with_cpu_load()) {
     ObMediumCompactionScheduleFunc func(
-        ls_status_.get_ls(), tablet_handle, ls_status_.weak_read_ts_,
+        ls_status_.get_ls(), ls_status_.weak_read_ts_,
         *tablet_status_.medium_list(), &tablet_cnt_,
         merge_reason_);
-    if (OB_FAIL(func.schedule_next_medium_for_leader(
+    if (OB_FAIL(func.init_tablet_handle(tablet_handle))) {
+      LOG_WARN("failed to init func with tablet_handle", K(ret), K(tablet_handle), K(func));
+    } else if (OB_FAIL(func.schedule_next_medium_for_leader(
         tablet_status_.tablet_merge_finish() ? 0 : merge_version_,
         medium_clog_submitted))) {
       if (OB_NOT_MASTER == ret) {

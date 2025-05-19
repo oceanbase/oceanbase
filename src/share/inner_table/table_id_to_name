@@ -485,6 +485,10 @@
 # 11118: __all_virtual_ddl_sim_point
 # 11119: __all_virtual_ddl_sim_point_stat
 # 11120: __all_virtual_res_mgr_sysstat
+# 11124: __all_virtual_ss_tablet_meta
+# 11125: __all_virtual_ss_ls_meta
+# 11126: __all_virtual_ss_sstable_mgr
+# 11127: __all_virtual_ss_ls_tablet_reorganization_info
 # 12001: SESSION_VARIABLES
 # 12006: GLOBAL_STATUS
 # 12008: SESSION_STATUS
@@ -1229,6 +1233,8 @@
 # 12519: __all_virtual_catalog_privilege_history
 # 12519: __all_catalog_privilege  # BASE_TABLE_NAME
 # 12519: __all_catalog_privilege_history  # BASE_TABLE_NAME1
+# 12520: __all_virtual_sswriter_group_stat
+# 12521: __all_virtual_sswriter_lease_mgr
 # 12523: __all_virtual_pl_recompile_objinfo
 # 12523: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 12524: __all_virtual_vector_index_task
@@ -1925,6 +1931,10 @@
 # 15494: __all_catalog  # BASE_TABLE_NAME
 # 15495: ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT
 # 15495: __all_catalog_privilege  # BASE_TABLE_NAME
+# 15498: ALL_VIRTUAL_SSWRITER_GROUP_STAT
+# 15498: __all_virtual_sswriter_group_stat  # BASE_TABLE_NAME
+# 15499: ALL_VIRTUAL_SSWRITER_LEASE_MGR
+# 15499: __all_virtual_sswriter_lease_mgr  # BASE_TABLE_NAME
 # 15503: ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT
 # 15503: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 15504: TENANT_VIRTUAL_SHOW_CREATE_CATALOG
@@ -1935,6 +1945,14 @@
 # 15508: __all_mview_dep  # BASE_TABLE_NAME
 # 15509: ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE
 # 15509: __all_virtual_dynamic_partition_table  # BASE_TABLE_NAME
+# 15517: ALL_VIRTUAL_SS_TABLET_META
+# 15517: __all_virtual_ss_tablet_meta  # BASE_TABLE_NAME
+# 15518: ALL_VIRTUAL_SS_LS_META
+# 15518: __all_virtual_ss_ls_meta  # BASE_TABLE_NAME
+# 15519: ALL_VIRTUAL_SS_SSTABLE_MGR
+# 15519: __all_virtual_ss_sstable_mgr  # BASE_TABLE_NAME
+# 15520: ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO
+# 15520: __all_virtual_ss_ls_tablet_reorganization_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2476,6 +2494,7 @@
 # 21655: DBA_OB_DYNAMIC_PARTITION_TABLES
 # 21656: CDB_OB_DYNAMIC_PARTITION_TABLES
 # 21657: V$OB_DYNAMIC_PARTITION_TABLES
+# 21660: V$OB_SS_SSTABLES
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2994,6 +3013,7 @@
 # 28264: DBA_OB_TEMP_FILES
 # 28271: DBA_OB_CS_REPLICA_STATS
 # 28274: V$OB_DYNAMIC_PARTITION_TABLES
+# 28278: V$OB_SS_SSTABLES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

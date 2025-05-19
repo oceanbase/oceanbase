@@ -468,7 +468,7 @@ int modify_progressive_merge_num_for_tenant(ObExecContext &ctx,
               if (table->is_tmp_table()) {
                 do_alter = false;
               }
-              if (table->get_table_id() == OB_ALL_CORE_TABLE_TID) {
+              if (is_hardcode_schema_table(table->get_table_id())) {
                 do_alter = false;
               }
               if (table->get_progressive_merge_num() == progressive_merge_num) {
@@ -597,7 +597,7 @@ int enable_extended_rowid_for_tenant_tables(ObExecContext &ctx, const int64_t te
               const ObTableSchema *table = tables.at(j);
               if (table->is_in_recyclebin()) {
                 // do nothing
-              } else if (OB_ALL_CORE_TABLE_TID == table->get_table_id()) {
+              } else if (is_hardcode_schema_table(table->get_table_id())) {
                 // do nothing
               } else if (!table->has_rowid()) {
                 // do nothing

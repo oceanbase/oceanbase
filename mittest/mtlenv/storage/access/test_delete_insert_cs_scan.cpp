@@ -283,7 +283,7 @@ void TestDeleteInsertCSScan::prepare_scan_param(
   get_table_param_.frozen_version_ = INT64_MAX;
   get_table_param_.refreshed_merge_ = nullptr;
   get_table_param_.need_split_dst_table_ = false;
-  get_table_param_.tablet_iter_.tablet_handle_ = tablet_handle;
+  get_table_param_.tablet_iter_.tablet_handle_.assign(tablet_handle);
   get_table_param_.tablet_iter_.table_store_iter_.assign(table_store_iter);
   get_table_param_.tablet_iter_.transfer_src_handle_ = nullptr;
   get_table_param_.tablet_iter_.split_extra_tablet_handles_.reset();

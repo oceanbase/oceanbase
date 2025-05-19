@@ -51,7 +51,7 @@ DEFINE_LOG_SUB_MOD(LIB)                  // lib
 DEFINE_LOG_SUB_MOD(OFS)                  // OFS
 DEFINE_LOG_SUB_MOD(RPC)                  // rpc
 DEFINE_LOG_SUB_MOD(RS)                   // rootserver
-DEFINE_LOG_SUB_MOD(BOOTSTRAP)                   // rootserver
+DEFINE_LOG_SUB_MOD(BOOTSTRAP)            // rootserver
 DEFINE_LOG_SUB_MOD(SERVER)               // rpc, common/server_framework
 DEFINE_LOG_SUB_MOD(SHARE)                // share
 DEFINE_LOG_SUB_MOD(SQL)                  // sql
@@ -69,14 +69,15 @@ DEFINE_LOG_SUB_MOD(DETECT)               // dead lock
 DEFINE_LOG_SUB_MOD(PALF)                 // palf
 DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
-DEFINE_LOG_SUB_MOD(FLT)                // trace
-DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
+DEFINE_LOG_SUB_MOD(FLT)                  // trace
+DEFINE_LOG_SUB_MOD(OBTRACE)              // trace
 DEFINE_LOG_SUB_MOD(BALANCE)              // balance module
 DEFINE_LOG_SUB_MOD(MDS)                  // multi data source
 DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
 DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
-DEFINE_LOG_SUB_MOD(WR)                 // workload repository
+DEFINE_LOG_SUB_MOD(WR)                   // workload repository
 DEFINE_LOG_SUB_MOD(LOGMINER)             // logminer
+DEFINE_LOG_SUB_MOD(SSLOG)                // sslog
 LOG_MOD_END(ROOT)
 
 //statement of WRS's sub_modules
@@ -473,6 +474,8 @@ LOG_MOD_END(PL)
 #define _WR_LOG(level, _fmt_, args...) _OB_MOD_LOG(WR, level, _fmt_, ##args)
 #define LOGMNR_LOG(level, info_string, args...) OB_MOD_LOG(LOGMINER, level, info_string, ##args)
 #define _LOGMNR_LOG(level, _fmt_, args...) _OB_MOD_LOG(LOGMINER, level, _fmt_, ##args)
+#define SSLOG_LOG(level, info_string, args...) OB_MOD_LOG(SSLOG, level, info_string, ##args)
+#define _SSLOG_LOG(level, _fmt_, args...) _OB_MOD_LOG(SSLOG, level, _fmt_, ##args)
 
 //dfine ParMod_SubMod_LOG
 #define WRS_CLUSTER_LOG(level, info_string, args...) OB_SUB_MOD_LOG(WRS, CLUSTER, level,        \

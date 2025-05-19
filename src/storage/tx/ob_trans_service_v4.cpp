@@ -1503,7 +1503,7 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
   } else if (!check_ls_readable_(ls, snapshot.core_.version_, src)) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
-    } else if (leader || is_sync_replica_(ls_id)) {
+    } else if (leader || is_sync_replica_(ls_id) || tablet_id.is_ls_inner_tablet()) {
       ret = OB_SUCCESS;
     } else if (ObTxReadSnapshot::SRC::SPECIAL == src ||
                ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src) {

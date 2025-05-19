@@ -15,8 +15,10 @@
 #define private public
 #define protected public
 
-#include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
+#include "lib/ob_errno.h"
+#include "lib/allocator/ob_concurrent_fifo_allocator.h"
+#include "lib/container/ob_array.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
 namespace oceanbase
 {
 namespace storage
@@ -118,41 +120,41 @@ TEST_F(TestSSMicroCacheArcInfo, arc_iter_info)
   ASSERT_EQ(true, arc_iter_info.is_inited_);
 
   {
-    arc_iter_info.iter_seg_arr_[ARC_T1].init_iter_seg_info(1000, false, 0);
-    ASSERT_EQ(false, arc_iter_info.is_delete_op_type(ARC_T1));
-    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(ARC_T1));
-    arc_iter_info.iter_seg_arr_[ARC_T1].init_iter_seg_info(1000, false, 400);
-    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-    arc_iter_info.adjust_arc_iter_seg_info(ARC_T1);
-    ASSERT_EQ(1000, arc_iter_info.iter_seg_arr_[ARC_T1].seg_cnt_);
-    ASSERT_EQ(1000, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
-    ASSERT_EQ(400, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-    arc_iter_info.reuse(ARC_T1);
-    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].seg_cnt_);
-    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
-    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(ARC_T1));
+    arc_iter_info.iter_seg_arr_[SS_ARC_T1].init_iter_seg_info(1000, false, 0);
+    ASSERT_EQ(false, arc_iter_info.is_delete_op_type(SS_ARC_T1));
+    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+    arc_iter_info.iter_seg_arr_[SS_ARC_T1].init_iter_seg_info(1000, false, 400);
+    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+    arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_T1);
+    ASSERT_EQ(1000, arc_iter_info.iter_seg_arr_[SS_ARC_T1].seg_cnt_);
+    ASSERT_EQ(1000, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.exp_iter_cnt_);
+    ASSERT_EQ(400, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+    arc_iter_info.reuse(SS_ARC_T1);
+    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T1].seg_cnt_);
+    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.exp_iter_cnt_);
+    ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
   }
 
   {
-    arc_iter_info.iter_seg_arr_[ARC_B2].init_iter_seg_info(2000, true, 510);
-    ASSERT_EQ(true, arc_iter_info.is_delete_op_type(ARC_B2));
-    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B2));
-    arc_iter_info.adjust_arc_iter_seg_info(ARC_B2);
-    ASSERT_EQ(2000, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.exp_iter_cnt_);
-    ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
-    arc_iter_info.reuse(ARC_B2);
+    arc_iter_info.iter_seg_arr_[SS_ARC_B2].init_iter_seg_info(2000, true, 510);
+    ASSERT_EQ(true, arc_iter_info.is_delete_op_type(SS_ARC_B2));
+    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_B2));
+    arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_B2);
+    ASSERT_EQ(2000, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.exp_iter_cnt_);
+    ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
+    arc_iter_info.reuse(SS_ARC_B2);
 
-    arc_iter_info.iter_seg_arr_[ARC_B2].init_iter_seg_info(5000, true, 510);
-    ASSERT_EQ(true, arc_iter_info.is_delete_op_type(ARC_B2));
-    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B2));
-    arc_iter_info.adjust_arc_iter_seg_info(ARC_B2);
-    ASSERT_EQ(SS_MAX_ARC_FETCH_CNT, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.exp_iter_cnt_);
-    ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
-    ASSERT_EQ(OB_SUCCESS, arc_iter_info.finish_handle_cold_micro(ARC_B2));
-    ASSERT_EQ(499, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
+    arc_iter_info.iter_seg_arr_[SS_ARC_B2].init_iter_seg_info(5000, true, 510);
+    ASSERT_EQ(true, arc_iter_info.is_delete_op_type(SS_ARC_B2));
+    ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_B2));
+    arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_B2);
+    ASSERT_EQ(SS_ARC_FETCH_COUNT, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.exp_iter_cnt_);
+    ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
+    ASSERT_EQ(OB_SUCCESS, arc_iter_info.finish_handle_cold_micro(SS_ARC_B2));
+    ASSERT_EQ(499, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
     arc_iter_info.reuse();
-    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(ARC_B2));
+    ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(SS_ARC_B2));
   }
 }
 
@@ -208,197 +210,195 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
   ASSERT_EQ(5500, arc_info.max_p_);
   ASSERT_EQ(2000, arc_info.min_p_);
 
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  ASSERT_EQ(false, arc_info.close_to_evict());
-
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 100;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 100;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 1000;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 1000;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 0;
-  arc_info.seg_info_arr_[ARC_T2].size_ = 0;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_B1].cnt_ = 100;
-  arc_info.seg_info_arr_[ARC_B1].size_ = micro_size * 100;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 0;
-  arc_info.seg_info_arr_[ARC_T1].size_ = 0;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 600;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 600;
-  arc_info.seg_info_arr_[ARC_B2].cnt_ = 500;
-  arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 500;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
+  ASSERT_EQ(false, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 800;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 800;
+  ASSERT_EQ(false, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 100;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 100;
+  ASSERT_EQ(false, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 1000;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 1000;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 0;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = 0;
+  ASSERT_EQ(false, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_B1].cnt_ = 100;
+  arc_info.seg_info_arr_[SS_ARC_B1].size_ = micro_size * 100;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 0;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = 0;
+  ASSERT_EQ(false, arc_info.need_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 600;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 600;
+  arc_info.seg_info_arr_[SS_ARC_B2].cnt_ = 500;
+  arc_info.seg_info_arr_[SS_ARC_B2].size_ = micro_size * 500;
+  ASSERT_EQ(true, arc_info.need_eviction());
 
   ObSSARCIterInfo arc_iter_info;
   ASSERT_EQ(OB_SUCCESS, arc_iter_info.init(1));
 
   // 1. need to evict T2
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 500;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 500;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 1000;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 1000;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.to_delete_);
-  arc_iter_info.reuse(ARC_T2);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 500;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 500;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 1000;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 1000;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.to_delete_);
+  arc_iter_info.reuse(SS_ARC_T2);
 
   // 2. need to evict T1/T2
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 750;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 750;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 750;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 750;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 500;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 500;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 750;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 750;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 750;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 750;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 500;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 500;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
   arc_iter_info.reuse();
 
   // 3. need to evict T1/T2
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 1250;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 1250;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 750;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 750;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 750;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 750;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T2));
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 1250;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 1250;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 750;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 750;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 750;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 750;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(250, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T2));
   arc_iter_info.reuse();
 
   // 4. need to evict T1/T2
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 1300;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 1300;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 1200;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 1200;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(800, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(700, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 1300;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 1300;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 1200;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 1200;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(800, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 800;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 800;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(700, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
   arc_iter_info.reuse();
 
   // 5. need to delete B1
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
-  arc_info.seg_info_arr_[ARC_B1].cnt_ = 500;
-  arc_info.seg_info_arr_[ARC_B1].size_ = micro_size * 500;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
-  ASSERT_EQ(300, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.to_delete_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B1));
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 800;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 800;
+  arc_info.seg_info_arr_[SS_ARC_B1].cnt_ = 500;
+  arc_info.seg_info_arr_[SS_ARC_B1].size_ = micro_size * 500;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B1);
+  ASSERT_EQ(300, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.to_delete_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_B1));
   arc_iter_info.reuse();
 
   // 6. need to delete B2
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 0;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 0;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 1000;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 1000;
-  arc_info.seg_info_arr_[ARC_B2].cnt_ = 600;
-  arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 600;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(ARC_T2));
-  arc_iter_info.reuse(ARC_T2);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B2);
-  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.to_delete_);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 0;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 0;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 1000;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 1000;
+  arc_info.seg_info_arr_[SS_ARC_B2].cnt_ = 600;
+  arc_info.seg_info_arr_[SS_ARC_B2].size_ = micro_size * 600;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  ASSERT_EQ(false, arc_iter_info.need_handle_arc_seg(SS_ARC_T2));
+  arc_iter_info.reuse(SS_ARC_T2);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B2);
+  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.to_delete_);
   arc_iter_info.reuse();
 
   // 7. adjust p_
   arc_info.p_ = 5500;
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 1300;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 1300;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 1200;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 1200;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T2));
-  arc_iter_info.reuse(ARC_T2);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 1300;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 1300;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 1200;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 1200;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 800;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 800;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(750, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T2));
+  arc_iter_info.reuse(SS_ARC_T2);
 
   arc_info.p_ = 4000;
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 1300;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 1300;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 1200;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 1200;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(900, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 800;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 800;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T2));
-  arc_iter_info.reuse(ARC_T2);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 1300;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 1300;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 1200;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 1200;
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(900, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 800;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 800;
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T2));
+  arc_iter_info.reuse(SS_ARC_T2);
 
   // 8. test trigger eviction by memory size
   arc_info.p_ = 5000;
-  arc_info.seg_info_arr_[ARC_T1].cnt_ = 200;
-  arc_info.seg_info_arr_[ARC_T1].size_ = micro_size * 200;
-  arc_info.seg_info_arr_[ARC_T2].cnt_ = 200;
-  arc_info.seg_info_arr_[ARC_T2].size_ = micro_size * 200;
-  arc_info.seg_info_arr_[ARC_B1].cnt_ = 100;
-  arc_info.seg_info_arr_[ARC_B1].size_ = micro_size * 100;
-  arc_info.seg_info_arr_[ARC_B2].cnt_ = 100;
-  arc_info.seg_info_arr_[ARC_B2].size_ = micro_size * 100;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
+  arc_info.seg_info_arr_[SS_ARC_T1].cnt_ = 200;
+  arc_info.seg_info_arr_[SS_ARC_T1].size_ = micro_size * 200;
+  arc_info.seg_info_arr_[SS_ARC_T2].cnt_ = 200;
+  arc_info.seg_info_arr_[SS_ARC_T2].size_ = micro_size * 200;
+  arc_info.seg_info_arr_[SS_ARC_B1].cnt_ = 100;
+  arc_info.seg_info_arr_[SS_ARC_B1].size_ = micro_size * 100;
+  arc_info.seg_info_arr_[SS_ARC_B2].cnt_ = 100;
+  arc_info.seg_info_arr_[SS_ARC_B2].size_ = micro_size * 100;
+  ASSERT_EQ(false, arc_info.need_eviction());
   arc_info.micro_cnt_limit_ = 667;
-  ASSERT_EQ(false, arc_info.trigger_eviction());
+  ASSERT_EQ(false, arc_info.need_eviction());
   arc_info.micro_cnt_limit_ = 500;
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_B1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B2);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_B2);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_B1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B2);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_B2);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
   arc_info.micro_cnt_limit_ = 300;
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T2);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(130, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_B1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B2);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_B2);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T2);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(130, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_B1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B2);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_B2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_B2);
 
   // test copy assignment
   ObSSARCInfo arc_info2;
@@ -411,21 +411,6 @@ TEST_F(TestSSMicroCacheArcInfo, arc_info)
     ASSERT_EQ(arc_info.seg_info_arr_[i].size_, arc_info2.seg_info_arr_[i].size_);
     ASSERT_EQ(arc_info.seg_info_arr_[i].cnt_, arc_info2.seg_info_arr_[i].cnt_);
   }
-
-  // check close_to_eviction
-  ObSSARCInfo arc_info3;
-  const int64_t large_micro_size = 1024 * 1024;
-  arc_info3.micro_cnt_limit_ = 1024;
-  arc_info3.limit_ = 1024 * large_micro_size;
-  arc_info3.work_limit_ = arc_info3.limit_;
-  arc_info3.p_ = arc_info.work_limit_ / 2;
-
-  arc_info3.seg_info_arr_[ARC_T1].cnt_ = 923;
-  arc_info3.seg_info_arr_[ARC_T1].size_ = large_micro_size * 923;
-  ASSERT_EQ(false, arc_info3.close_to_evict());
-  arc_info3.seg_info_arr_[ARC_T1].cnt_ = 924;
-  arc_info3.seg_info_arr_[ARC_T1].size_ = large_micro_size * 924;
-  ASSERT_EQ(true, arc_info3.close_to_evict());
 }
 
 TEST_F(TestSSMicroCacheArcInfo, arc_state_machine)
@@ -442,161 +427,161 @@ TEST_F(TestSSMicroCacheArcInfo, arc_state_machine)
   // 1. Add new micro, util T1 is full
   // T1 : 1000
   for (int64_t i = 0; i < max_micro_cnt; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_NEW_ADD, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_NEW_INSERT, micro_size, 1));
   }
-  ASSERT_EQ(false, arc_info.trigger_eviction());
-  ASSERT_EQ(micro_size * max_micro_cnt, arc_info.seg_info_arr_[ARC_T1].size());
-  ASSERT_EQ(max_micro_cnt, arc_info.seg_info_arr_[ARC_T1].count());
+  ASSERT_EQ(false, arc_info.need_eviction());
+  ASSERT_EQ(micro_size * max_micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].size());
+  ASSERT_EQ(max_micro_cnt, arc_info.seg_info_arr_[SS_ARC_T1].count());
 
   // 2. Continue to add some new micro into T1
   // T1 : 1600
-  for (int64_t i = 0; i < SS_MAX_ARC_HANDLE_OP_CNT + 100; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_NEW_ADD, micro_size, 1));
+  for (int64_t i = 0; i < SS_ARC_HANDLE_OP_MAX_COUNT + 100; ++i) {
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_NEW_INSERT, micro_size, 1));
   }
-  ASSERT_EQ(max_micro_cnt + SS_MAX_ARC_HANDLE_OP_CNT + 100, arc_info.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ(true, arc_info.trigger_eviction());
+  ASSERT_EQ(max_micro_cnt + SS_ARC_HANDLE_OP_MAX_COUNT + 100, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ(true, arc_info.need_eviction());
 
   ObSSARCIterInfo arc_iter_info;
   ASSERT_EQ(OB_SUCCESS, arc_iter_info.init(1));
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.adjust_arc_iter_seg_info(ARC_T1);
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(arc_info.seg_info_arr_[ARC_T1].count(), arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
-  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.to_delete_);
-  arc_iter_info.reuse(ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(600, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_T1);
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(arc_info.seg_info_arr_[SS_ARC_T1].count(), arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.exp_iter_cnt_);
+  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.to_delete_);
+  arc_iter_info.reuse(SS_ARC_T1);
 
   // 3. Evict from T1 to B1
   // T1: 1100; B1: 500
-  for (int64_t i = 0; i < SS_MAX_ARC_HANDLE_OP_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_TASK_EVICT_OP, micro_size, 1));
+  for (int64_t i = 0; i < SS_ARC_HANDLE_OP_MAX_COUNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_ARC_EVICT, micro_size, 1));
   }
-  ASSERT_EQ(max_micro_cnt + 100, arc_info.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ((max_micro_cnt + 100) * micro_size, arc_info.seg_info_arr_[ARC_T1].size());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_info.seg_info_arr_[ARC_B1].count());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT * micro_size, arc_info.seg_info_arr_[ARC_B1].size());
+  ASSERT_EQ(max_micro_cnt + 100, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ((max_micro_cnt + 100) * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT * micro_size, arc_info.seg_info_arr_[SS_ARC_B1].size());
 
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
-  ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.to_delete_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B1));
-  arc_iter_info.reuse(ARC_B1);
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B1);
+  ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.to_delete_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_B1));
+  arc_iter_info.reuse(SS_ARC_B1);
 
   // 4. Hit T1 again, T1 -> T2
   // T1: 600; B1: 500; T2: 500
-  for (int64_t i = 1; i <= SS_MAX_ARC_HANDLE_OP_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_HIT_T1, micro_size, 1));
+  for (int64_t i = 1; i <= SS_ARC_HANDLE_OP_MAX_COUNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_ARC_HIT_T1, micro_size, 1));
   }
-  ASSERT_EQ(max_micro_cnt - 400, arc_info.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ((max_micro_cnt - 400) * micro_size, arc_info.seg_info_arr_[ARC_T1].size());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_info.seg_info_arr_[ARC_T2].count());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
+  ASSERT_EQ(max_micro_cnt - 400, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ((max_micro_cnt - 400) * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size());
 
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.to_delete_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_T1));
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_B1);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.op_cnt_);
-  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[ARC_B1].op_info_.to_delete_);
-  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B1));
-  arc_iter_info.reuse(ARC_B1);
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.to_delete_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_T1));
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_B1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.op_cnt_);
+  ASSERT_EQ(true, arc_iter_info.iter_seg_arr_[SS_ARC_B1].op_info_.to_delete_);
+  ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(SS_ARC_B1));
+  arc_iter_info.reuse(SS_ARC_B1);
 
   // 5. Add some new micro into T1
   // T1: 700; B1: 500; T2: 500
   for (int64_t i = 1; i <= 100; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_NEW_ADD, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_NEW_INSERT, micro_size, 1));
   }
-  ASSERT_EQ(max_micro_cnt - 300, arc_info.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ((max_micro_cnt - 300) * micro_size, arc_info.seg_info_arr_[ARC_T1].size());
+  ASSERT_EQ(max_micro_cnt - 300, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ((max_micro_cnt - 300) * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size());
 
   // 6. Hit B1, B1 -> T2
   // T1: 700; B1: 300; T2: 700
   ASSERT_EQ(5000, arc_info.p_);
   for (int64_t i = 1; i <= 200; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, true, ObSSARCOpType::SS_ARC_HIT_GHOST, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, true, ObSSMicroArcOpType::SS_ARC_HIT_GHOST, micro_size, 1));
   }
   ASSERT_EQ(5500, arc_info.p_);
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT + 200, arc_info.seg_info_arr_[ARC_T2].count());
-  ASSERT_EQ((SS_MAX_ARC_HANDLE_OP_CNT + 200) * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT - 200, arc_info.seg_info_arr_[ARC_B1].count());
-  ASSERT_EQ((SS_MAX_ARC_HANDLE_OP_CNT - 200) * micro_size, arc_info.seg_info_arr_[ARC_B1].size());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT + 200, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ((SS_ARC_HANDLE_OP_MAX_COUNT + 200) * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT - 200, arc_info.seg_info_arr_[SS_ARC_B1].count());
+  ASSERT_EQ((SS_ARC_HANDLE_OP_MAX_COUNT - 200) * micro_size, arc_info.seg_info_arr_[SS_ARC_B1].size());
 
   // 7. Continue to hit B1, B1 -> T2
   // T1: 700; B1: 100; T2: 900
   for (int64_t i = 1; i <= 200; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, true, ObSSARCOpType::SS_ARC_HIT_GHOST, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, true, ObSSMicroArcOpType::SS_ARC_HIT_GHOST, micro_size, 1));
   }
   ASSERT_EQ(5500, arc_info.p_);
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(150, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(450, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  arc_iter_info.adjust_arc_iter_seg_info(ARC_T2);
-  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.to_delete_);
-  ASSERT_EQ(900, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.exp_iter_cnt_);
-  arc_iter_info.reuse(ARC_T2);
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(150, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(450, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_T2);
+  ASSERT_EQ(false, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.to_delete_);
+  ASSERT_EQ(900, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.exp_iter_cnt_);
+  arc_iter_info.reuse(SS_ARC_T2);
 
   // 8. Evict from T2 to B2
   // T1: 700; B1: 100; T2: 400; B2: 500
-  for (int64_t i = 1; i <= SS_MAX_ARC_HANDLE_OP_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(false, false, ObSSARCOpType::SS_ARC_TASK_EVICT_OP, micro_size, 1));
+  for (int64_t i = 1; i <= SS_ARC_HANDLE_OP_MAX_COUNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(false, false, ObSSMicroArcOpType::SS_ARC_EVICT, micro_size, 1));
   }
-  ASSERT_EQ(400, arc_info.seg_info_arr_[ARC_T2].count());
-  ASSERT_EQ(400 * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT, arc_info.seg_info_arr_[ARC_B2].count());
-  ASSERT_EQ(SS_MAX_ARC_HANDLE_OP_CNT * micro_size, arc_info.seg_info_arr_[ARC_B2].size());
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T2);
+  ASSERT_EQ(400, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(400 * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(SS_ARC_HANDLE_OP_MAX_COUNT * micro_size, arc_info.seg_info_arr_[SS_ARC_B2].size());
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(100, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T2);
 
   // 9. Hit B2, B2 -> T2
   // T1 : 700; B1: 100; T2: 600; B2: 300
   for (int64_t i = 1; i <= 200; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(false, true, ObSSARCOpType::SS_ARC_HIT_GHOST, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(false, true, ObSSMicroArcOpType::SS_ARC_HIT_GHOST, micro_size, 1));
   }
   ASSERT_EQ(3500, arc_info.p_);
-  ASSERT_EQ(600, arc_info.seg_info_arr_[ARC_T2].count());
-  ASSERT_EQ(600 * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
-  ASSERT_EQ(300, arc_info.seg_info_arr_[ARC_B2].count());
-  ASSERT_EQ(300 * micro_size, arc_info.seg_info_arr_[ARC_B2].size());
-  ASSERT_EQ(true, arc_info.trigger_eviction());
+  ASSERT_EQ(600, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(600 * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size());
+  ASSERT_EQ(300, arc_info.seg_info_arr_[SS_ARC_B2].count());
+  ASSERT_EQ(300 * micro_size, arc_info.seg_info_arr_[SS_ARC_B2].size());
+  ASSERT_EQ(true, arc_info.need_eviction());
 
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(300, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T2);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(300, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T2);
 
   // 10. Add some new micro into T1
   // T1: 1100; B1: 100; T2: 600; B2: 300
   for (int64_t i = 1; i <= 400; ++i) {
-    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSARCOpType::SS_ARC_NEW_ADD, micro_size, 1));
+    ASSERT_EQ(OB_SUCCESS, arc_info.adjust_seg_info(true, false, ObSSMicroArcOpType::SS_NEW_INSERT, micro_size, 1));
   }
-  ASSERT_EQ(1100, arc_info.seg_info_arr_[ARC_T1].count());
-  ASSERT_EQ(1100 * micro_size, arc_info.seg_info_arr_[ARC_T1].size());
-  ASSERT_EQ(600, arc_info.seg_info_arr_[ARC_T2].count());
-  ASSERT_EQ(600 * micro_size, arc_info.seg_info_arr_[ARC_T2].size());
-  ASSERT_EQ(true, arc_info.trigger_eviction());
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T1);
-  ASSERT_EQ(700, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.op_cnt_);
-  arc_iter_info.adjust_arc_iter_seg_info(ARC_T1);
-  ASSERT_EQ(1100, arc_iter_info.iter_seg_arr_[ARC_T1].op_info_.exp_iter_cnt_);
-  arc_iter_info.reuse(ARC_T1);
-  arc_info.calc_arc_iter_info(arc_iter_info, ARC_T2);
-  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[ARC_T2].op_info_.op_cnt_);
-  arc_iter_info.reuse(ARC_T2);
+  ASSERT_EQ(1100, arc_info.seg_info_arr_[SS_ARC_T1].count());
+  ASSERT_EQ(1100 * micro_size, arc_info.seg_info_arr_[SS_ARC_T1].size());
+  ASSERT_EQ(600, arc_info.seg_info_arr_[SS_ARC_T2].count());
+  ASSERT_EQ(600 * micro_size, arc_info.seg_info_arr_[SS_ARC_T2].size());
+  ASSERT_EQ(true, arc_info.need_eviction());
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T1);
+  ASSERT_EQ(700, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.op_cnt_);
+  arc_iter_info.adjust_arc_iter_seg_info(SS_ARC_T1);
+  ASSERT_EQ(1100, arc_iter_info.iter_seg_arr_[SS_ARC_T1].op_info_.exp_iter_cnt_);
+  arc_iter_info.reuse(SS_ARC_T1);
+  arc_info.calc_arc_iter_info(arc_iter_info, SS_ARC_T2);
+  ASSERT_EQ(0, arc_iter_info.iter_seg_arr_[SS_ARC_T2].op_info_.op_cnt_);
+  arc_iter_info.reuse(SS_ARC_T2);
 }
 
 }  // namespace storage

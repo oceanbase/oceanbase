@@ -370,7 +370,7 @@ public:
   ObMtStat &get_mt_stat() { return mt_stat_; }
   const ObMtStat &get_mt_stat() const { return mt_stat_; }
   share::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
-  share::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
+  virtual share::SCN get_rec_scn() override { return rec_scn_.atomic_get(); }
   ObTabletMemtableMgr *get_memtable_mgr();
   // *************** getter *****************
 

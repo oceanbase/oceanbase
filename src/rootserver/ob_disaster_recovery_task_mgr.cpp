@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_disaster_recovery_task_mgr.h"
-#include "ob_disaster_recovery_task_utils.h"
 #include "ob_disaster_recovery_task.h"
 #include "ob_rs_event_history_table_operator.h"
 #include "observer/ob_inner_sql_connection.h"
@@ -99,8 +98,9 @@ int ObParallelMigrationMode::parse_from_string(const ObString &mode)
   return ret;
 }
 
-ObDRTaskMgr::ObDRTaskMgr()
-  : service_epoch_(0),
+ObDRTaskMgr::ObDRTaskMgr(const int64_t service_epoch, const uint64_t tenant_id)
+  : service_epoch_(service_epoch),
+    tenant_id_(tenant_id),
     dr_tasks_(),
     task_alloc_("ObDRTaskMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     table_operator_()
@@ -112,36 +112,45 @@ ObDRTaskMgr::~ObDRTaskMgr()
   FREE_DISASTER_RECOVERY_MANAGER_TASK_MEMORY
 }
 
+int ObDRTaskMgr::check_inner_stat_() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id_) || is_user_tenant(tenant_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_id is invalid", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK);
 int ObDRTaskMgr::try_pop_and_execute_task(
-    const uint64_t tenant_id)
+    const uint64_t table_tenant_id)
 {
+  // process all tasks in the table (table_tenant_id)
   FREE_DISASTER_RECOVERY_MANAGER_TASK_MEMORY
   int ret = OB_SUCCESS;
   ObSqlString sql;
   if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK)) {
     // for test, return success, skip pop task
     LOG_INFO("errsim disaster recovery pop and execute task", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %ld AND task_status = '%s' "
+  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE task_status = '%s' "
                                     " ORDER BY priority ASC, gmt_create ASC",
                                     share::OB_ALL_LS_REPLICA_TASK_TNAME,
-                                    tenant_id,
                                     ObDRLSReplicaTaskStatus(ObDRLSReplicaTaskStatus::WAITING).get_status_str()))) {
-    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(table_operator_.load_task_from_inner_table(*GCTX.sql_proxy_, tenant_id, sql, task_alloc_, dr_tasks_))) {
-    LOG_WARN("failed to load task from inner table", KR(ret), K(tenant_id), K(sql));
+    LOG_WARN("failed to assign sql", KR(ret), K(table_tenant_id));
+  } else if (OB_FAIL(table_operator_.load_task_from_inner_table(*GCTX.sql_proxy_, table_tenant_id, sql, task_alloc_, dr_tasks_))) {
+    LOG_WARN("failed to load task from inner table", KR(ret), K(table_tenant_id), K(sql));
   }
   if (OB_FAIL(ret) || is_zero_row(dr_tasks_.count())) {
     // skip
     LOG_TRACE("skip execute task", KR(ret), "count", dr_tasks_.count());
-  } else if (OB_FAIL(check_and_set_parallel_migrate_task_(tenant_id))) {
-    LOG_WARN("failed to check tenant enable_parallel_migration", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_and_set_parallel_migrate_task_())) {
+    LOG_WARN("failed to check tenant enable_parallel_migration", KR(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
     // ignore ret code for isolation different task
@@ -161,30 +170,28 @@ int ObDRTaskMgr::try_pop_and_execute_task(
 
 ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_CLEAN_TASK);
 int ObDRTaskMgr::try_clean_and_cancel_task(
-    const uint64_t tenant_id)
+    const uint64_t table_tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_CLEAN_TASK)) {
     // for test, return success, skip clean task
     LOG_INFO("errsim disaster recovery clean task", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     FREE_DISASTER_RECOVERY_MANAGER_TASK_MEMORY
     ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %ld and task_status = '%s'",
+    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE task_status = '%s'",
                                 share::OB_ALL_LS_REPLICA_TASK_TNAME,
-                                tenant_id,
                                 ObDRLSReplicaTaskStatus(ObDRLSReplicaTaskStatus::INPROGRESS).get_status_str()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(table_operator_.load_task_from_inner_table(*GCTX.sql_proxy_, tenant_id, sql, task_alloc_, dr_tasks_))) {
-      LOG_WARN("failed to load task from inner table", KR(ret), K(tenant_id),K(sql));
+      LOG_WARN("failed to assign sql", KR(ret), K(table_tenant_id));
+    } else if (OB_FAIL(table_operator_.load_task_from_inner_table(*GCTX.sql_proxy_, table_tenant_id, sql, task_alloc_, dr_tasks_))) {
+      LOG_WARN("failed to load task from inner table", KR(ret), K(table_tenant_id),K(sql));
     } else if (OB_FAIL(check_clean_and_cancel_task_())) {
-      LOG_WARN("failed to do clean task", KR(ret), K(tenant_id));
+      LOG_WARN("failed to do clean task", KR(ret), K(table_tenant_id));
     }
     FREE_DISASTER_RECOVERY_MANAGER_TASK_MEMORY
   }
@@ -197,7 +204,9 @@ int ObDRTaskMgr::execute_task_(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
-  if (OB_UNLIKELY(!task.is_valid())) {
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
@@ -236,7 +245,9 @@ int ObDRTaskMgr::check_befor_execute_dr_task_(
   int ret = OB_SUCCESS;
   ObServerInfoInTable server_info;
   const ObAddr &dst_server = task.get_dst_server();
-  if (OB_UNLIKELY(!task.is_valid())) {
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
   } else if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_EXECUTE_TASK_ERROR)) {
@@ -265,34 +276,45 @@ int ObDRTaskMgr::update_task_schedule_status_(
   ObSqlString sql;
   ObMySQLTransaction trans;
   int64_t affected_rows = 0;
-  const uint64_t task_tenant_id = task.get_tenant_id();
-  uint64_t sql_tenant_id = gen_meta_tenant_id(task_tenant_id);
   char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  if (OB_UNLIKELY(!task.is_valid())) {
+  int64_t service_epoch = OB_INVALID_ID;
+  uint64_t service_epoch_tenant = OB_INVALID_TENANT_ID;
+  uint64_t persistent_tenant = OB_INVALID_TENANT_ID;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_value_to_check(task, tenant_id_, service_epoch_, service_epoch))) {
+    LOG_WARN("failed to get service epoch value to check", KR(ret), K(task), K_(tenant_id), K_(service_epoch));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+                                              task.get_tenant_id(),
+                                              task.get_disaster_recovery_task_type(),
+                                              service_epoch_tenant,
+                                              persistent_tenant))) {
+    LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(task));
   } else if (false == task.get_task_id().to_string(task_id_to_set, sizeof(task_id_to_set))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("convert task id to string failed", KR(ret), K(task));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, sql_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, task_tenant_id, service_epoch_))) {
-    LOG_WARN("failed to lock server epoch", KR(ret), K(task));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, persistent_tenant))) {
+    LOG_WARN("failed to start trans", KR(ret), K(task), K(persistent_tenant));
+  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, service_epoch_tenant, service_epoch))) {
+    LOG_WARN("failed to lock server epoch", KR(ret), K(task), K(service_epoch_tenant), K(service_epoch));
   } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET task_status = '%s', schedule_time = now() WHERE tenant_id = %lu AND ls_id = %lu "
                           "AND task_type = '%s' AND task_id = '%s' AND task_status = '%s'",
                           share::OB_ALL_LS_REPLICA_TASK_TNAME,
                           ObDRLSReplicaTaskStatus(ObDRLSReplicaTaskStatus::INPROGRESS).get_status_str(),
-                          task_tenant_id,
+                          task.get_tenant_id(),
                           task.get_ls_id().id(),
                           ob_disaster_recovery_task_type_strs(task.get_disaster_recovery_task_type()),
                           task_id_to_set,
                           ObDRLSReplicaTaskStatus(ObDRLSReplicaTaskStatus::WAITING).get_status_str()))) {
     LOG_WARN("assign sql string failed", KR(ret), K(task));
-  } else if (OB_FAIL(trans.write(sql_tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("execute sql failed", KR(ret), K(sql), K(sql_tenant_id));
+  } else if (OB_FAIL(trans.write(persistent_tenant, sql.ptr(), affected_rows))) {
+    LOG_WARN("execute sql failed", KR(ret), K(sql), K(task), K(persistent_tenant));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expected single row", KR(ret), K(sql));
@@ -301,27 +323,25 @@ int ObDRTaskMgr::update_task_schedule_status_(
   return ret;
 }
 
-int ObDRTaskMgr::check_and_set_parallel_migrate_task_(
-    const uint64_t tenant_id)
+int ObDRTaskMgr::check_and_set_parallel_migrate_task_()
 {
   int ret = OB_SUCCESS;
-  bool enable_parallel_migration = false;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(DisasterRecoveryUtils::check_tenant_enable_parallel_migration(tenant_id, enable_parallel_migration))) {
-    LOG_WARN("failed to check tenant enable_parallel_migration", KR(ret), K(tenant_id));
-  } else if (!enable_parallel_migration) {
-    // skip
-    LOG_TRACE("enable_parallel_migration is false", K(tenant_id), K(enable_parallel_migration));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < dr_tasks_.count(); ++i) {
+      bool enable_parallel_migration = false;
       ObDRTask *task = dr_tasks_.at(i);
       if (OB_ISNULL(task)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("task is null ptr", KR(ret), KP(task));
       } else if (ObDRTaskType::LS_MIGRATE_REPLICA != task->get_disaster_recovery_task_type()) {
         // skip
+      } else if (OB_FAIL(DisasterRecoveryUtils::check_tenant_enable_parallel_migration(task->get_tenant_id(), enable_parallel_migration))) {
+        LOG_WARN("failed to check tenant enable_parallel_migration", KR(ret), KPC(task));
+      } else if (!enable_parallel_migration) {
+        // skip
+        LOG_TRACE("enable_parallel_migration is false", K_(tenant_id), KPC(task), K(enable_parallel_migration));
       } else {
         ObMigrateLSReplicaTask *migrate_task = static_cast<ObMigrateLSReplicaTask*>(task);
         if (OB_ISNULL(migrate_task)) {

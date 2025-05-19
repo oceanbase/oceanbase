@@ -1109,7 +1109,7 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
   int ret = OB_SUCCESS;
   string arg_str;
   ObGetSSMicroBlockMetaArg arg;
-  ObGetSSMicroBlockMetaResult result;
+  ObGetSSMicroBlockMetaRes result;
   ObSSMicroBlockCacheKey &micro_key = arg.micro_key_;
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
@@ -1126,7 +1126,7 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
   } else {
     micro_key.mode_ = static_cast<ObSSMicroBlockCacheKeyMode>(mode);
-    if (micro_key.is_logic_key()) {
+    if (micro_key.is_logical_key()) {
       int64_t version = 0;
       int64_t offset = 0;
       int64_t macro_data_seq = 0;
@@ -1658,8 +1658,8 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
 {
   int ret = OB_SUCCESS;
   string arg_str;
-  ObGetSSMicroCacheInfoArg arg;
-  ObGetSSMicroCacheInfoResult result;
+  ObGetSSMicroCacheAllInfoArg arg;
+  ObGetSSMicroCacheAllInfoResult result;
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
     ADMIN_WARN("should provide tenant_id");
@@ -1679,7 +1679,7 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
   } else {
     ObCStringHelper helper;
     fprintf(stdout, "micro_cache_stat=%s\n", helper.convert(result.micro_cache_stat_));
-    fprintf(stdout, "super_block=%s\n", helper.convert(result.super_block_));
+    fprintf(stdout, "super_block=%s\n", helper.convert(result.super_blk_));
     fprintf(stdout, "arc_info=%s\n", helper.convert(result.arc_info_));
   }
 
@@ -1711,9 +1711,9 @@ DEF_COMMAND(SERVER, set_ss_ckpt_compressor, 1, "tenant_id:ckpt_type:compressor_n
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
   } else {
     if (0 == strncmp(ckpt_type_name, "micro", 5)) {
-      arg.block_type_ = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
+      arg.block_type_ = ObSSPhyBlockType::SS_MICRO_META_BLK;
     } else if (0 == strncmp(ckpt_type_name, "blk", 3)) {
-      arg.block_type_ = ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK;
+      arg.block_type_ = ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK;
     } else {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "ckpt_type is invalid", K(ret), K(ckpt_type_name));

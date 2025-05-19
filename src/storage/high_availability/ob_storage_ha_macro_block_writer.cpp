@@ -385,7 +385,7 @@ int ObStorageHASharedMacroBlockWriter::set_macro_write_info_(
     write_info.io_desc_.set_unsealed();
     write_info.mtl_tenant_id_ = MTL_ID();
     write_info.offset_ = 0;
-    write_info.ls_epoch_id_ = 0;
+    write_info.set_ls_epoch_id(0);
     opt.set_ss_share_data_macro_object_opt(macro_block_id.second_id(), macro_block_id.third_id(), macro_block_id.column_group_id());
   }
   return ret;

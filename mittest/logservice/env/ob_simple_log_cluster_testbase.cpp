@@ -20,9 +20,6 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "src/share/ob_device_manager.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_shared_log_utils.h"
-#endif
 #undef protected
 #undef private
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
@@ -80,50 +77,50 @@ void ObSimpleLogClusterTestBase::TearDownTestCase()
 int ObSimpleLogClusterTestBase::init_log_shared_storage_()
 {
   int ret = OB_SUCCESS;
-  if (!need_shared_storage_) {
-    return ret;
-  }
-  char base_dir_c[1024];
-  getcwd(base_dir_c, 1024);
-  std::string base_dir = std::string(base_dir_c) + "/" + test_name_ + "/bucket";
-  ObDeviceConfig device_config;
-  std::string mkdir = "mkdir " + base_dir;
-  std::string rmdir = "rm -rf " + base_dir;
-  system(rmdir.c_str());
-  system(mkdir.c_str());
-  std::string root_path = "file://" + base_dir;
-  const char *used_for = ObStorageUsedType::get_str(ObStorageUsedType::TYPE::USED_TYPE_LOG);
-  const char *state = "ADDED";
-  MEMCPY(device_config.path_, root_path.c_str(), root_path.size());
-  MEMCPY(device_config.used_for_, used_for, strlen(used_for));
-  device_config.sub_op_id_ = 1;
-  STRCPY(device_config.state_, state);
-  device_config.op_id_ = 1;
-  device_config.last_check_timestamp_ = 0;
-  device_config.storage_id_ = 1;
-  device_config.max_iops_ = 0;
-  device_config.max_bandwidth_ = 0;
-  const uint64_t test_memory = 6L * 1024L * 1024L * 1024L;
-  char tenant_uri[OB_MAX_URI_LENGTH] = {'\0'};
-  ObBackupDest dest;
-  uint64_t storage_id = OB_INVALID_ID;
-  common::ObBackupIoAdapter io_adapter;
-  if (OB_FAIL(ObDeviceConfigMgr::get_instance().init(base_dir.c_str()))) {
-    SERVER_LOG(ERROR, "init ObDeviceConfigMgr failed");
-  } else if (OB_FAIL(ObDeviceConfigMgr::get_instance().add_device_config(device_config))) {
-    SERVER_LOG(ERROR, "add_device_config failed");
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
-    SERVER_LOG(ERROR, "get_storage_dest_ failed");
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_tenant_str_(
-      dest, tenant_id_, tenant_uri, OB_MAX_URI_LENGTH))) {
-    SERVER_LOG(ERROR, "construct_tenant_str_ failed");
-  } else if (OB_FAIL(io_adapter.mkdir(tenant_uri, dest.get_storage_info()))) {
-    SERVER_LOG(ERROR, "mkdir failed", K(tenant_uri));
-  } else {
-    GCTX.startup_mode_ = ObServerMode::SHARED_STORAGE_MODE;
-    SERVER_LOG(INFO, "init_log_shared_storage_ success", K(tenant_uri));
-  }
-
+//  if (!need_shared_storage_) {
+//    return ret;
+//  }
+//  char base_dir_c[1024];
+//  getcwd(base_dir_c, 1024);
+//  std::string base_dir = std::string(base_dir_c) + "/" + test_name_ + "/bucket";
+//  ObDeviceConfig device_config;
+//  std::string mkdir = "mkdir " + base_dir;
+//  std::string rmdir = "rm -rf " + base_dir;
+//  system(rmdir.c_str());
+//  system(mkdir.c_str());
+//  std::string root_path = "file://" + base_dir;
+//  const char *used_for = ObStorageUsedType::get_str(ObStorageUsedType::TYPE::USED_TYPE_LOG);
+//  const char *state = "ADDED";
+//  MEMCPY(device_config.path_, root_path.c_str(), root_path.size());
+//  MEMCPY(device_config.used_for_, used_for, strlen(used_for));
+//  device_config.sub_op_id_ = 1;
+//  STRCPY(device_config.state_, state);
+//  device_config.op_id_ = 1;
+//  device_config.last_check_timestamp_ = 0;
+//  device_config.storage_id_ = 1;
+//  device_config.max_iops_ = 0;
+//  device_config.max_bandwidth_ = 0;
+//  const uint64_t test_memory = 6L * 1024L * 1024L * 1024L;
+//  char tenant_uri[OB_MAX_URI_LENGTH] = {'\0'};
+//  ObBackupDest dest;
+//  uint64_t storage_id = OB_INVALID_ID;
+//  common::ObBackupIoAdapter io_adapter;
+//  if (OB_FAIL(ObDeviceConfigMgr::get_instance().init(base_dir.c_str()))) {
+//    SERVER_LOG(ERROR, "init ObDeviceConfigMgr failed");
+//  } else if (OB_FAIL(ObDeviceConfigMgr::get_instance().add_device_config(device_config))) {
+//    SERVER_LOG(ERROR, "add_device_config failed");
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
+//    SERVER_LOG(ERROR, "get_storage_dest_ failed");
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_tenant_str_(
+//      dest, tenant_id_, tenant_uri, OB_MAX_URI_LENGTH))) {
+//    SERVER_LOG(ERROR, "construct_tenant_str_ failed");
+//  } else if (OB_FAIL(io_adapter.mkdir(tenant_uri, dest.get_storage_info()))) {
+//    SERVER_LOG(ERROR, "mkdir failed", K(tenant_uri));
+//  } else {
+//    GCTX.startup_mode_ = ObServerMode::SHARED_STORAGE_MODE;
+//    SERVER_LOG(INFO, "init_log_shared_storage_ success", K(tenant_uri));
+//  }
+//
   return ret;
 }
 

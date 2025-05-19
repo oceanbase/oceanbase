@@ -316,6 +316,10 @@ struct ObGetMergeTablesResult
   bool is_backfill_;
   share::SCN backfill_scn_;
   int64_t transfer_seq_; // is_used for write_macro_block in ss, used for all compaction.
+
+  // for sstorage
+  share::SCN rec_scn_;
+
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -413,13 +417,22 @@ public:
 struct UpdateUpperTransParam final
 {
 public:
+  struct SCNAndVersion {
+    SCNAndVersion(): scn_(), upper_trans_version_(0) {}
+    SCNAndVersion(const share::SCN &scn, const int64_t upper_trans_version)
+    : scn_(scn), upper_trans_version_(upper_trans_version) {}
+    TO_STRING_KV(K_(scn), K_(upper_trans_version));
+    share::SCN scn_;
+    int64_t upper_trans_version_;
+  };
   UpdateUpperTransParam();
   ~UpdateUpperTransParam();
   void reset();
-  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn));
+  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn), KPC_(ss_new_upper_trans));
 public:
   ObIArray<int64_t> *new_upper_trans_;
   share::SCN last_minor_end_scn_;
+  ObIArray<SCNAndVersion> *ss_new_upper_trans_;
 };
 
 struct ObUpdateTableStoreParam
@@ -641,6 +654,17 @@ public:
   bool is_split_dst_with_partkey() const;
   bool is_split_dst_without_partkey() const;
   void reset();
+
+  int assign (const ObTabletSplitTscInfo &other) {
+    int ret = OB_SUCCESS;
+    start_partkey_ = other.start_partkey_;
+    end_partkey_ = other.end_partkey_;
+    is_split_dst_ = other.is_split_dst_;
+    split_cnt_ = other.split_cnt_;
+    split_type_ = other.split_type_;
+    partkey_is_rowkey_prefix_ = other.partkey_is_rowkey_prefix_;
+    return ret;
+  }
 
   TO_STRING_KV(K_(start_partkey),
     K_(end_partkey), K_(is_split_dst), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));

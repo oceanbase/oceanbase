@@ -13,6 +13,8 @@
 #include "ob_tx_data_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
+#define USING_LOG_PREFIX STORAGE
+
 namespace oceanbase
 {
 using namespace share;

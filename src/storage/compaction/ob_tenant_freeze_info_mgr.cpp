@@ -20,7 +20,9 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#endif
 namespace oceanbase
 {
 
@@ -457,6 +459,32 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  /* FIXME: should change to function and consider about other modules */
+  } else if (GCTX.is_shared_storage_mode() && OB_ALL_SSLOG_TABLE_TID == tablet_id.id()) {
+    ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+    SCN last_succ_scn = SCN::min_scn();
+    // get last_succ_scn from meta_tenant
+    if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
+    } else {
+      last_succ_scn = ss_gc_srv->get_last_succ_gc_scn();
+    }
+    // get last_succ_scn from user_tenant
+    uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+    ss_gc_srv = nullptr;
+    MTL_SWITCH(user_tenant_id) {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
+      } else {
+        last_succ_scn = SCN::min(last_succ_scn, ss_gc_srv->get_last_succ_gc_scn());
+      }
+    }
+    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
+    LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(user_tenant_id), K(snapshot_info));
+#endif
   } else if (OB_FAIL(get_multi_version_duration(duration))) {
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {

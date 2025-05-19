@@ -17,7 +17,6 @@
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/scn.h"
-#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -7156,7 +7155,7 @@ int ObInnerTableSchema::all_table_history_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     ObObj micro_block_format_version_default;
-    micro_block_format_version_default.set_int(storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+    micro_block_format_version_default.set_int(1);
     ADD_COLUMN_SCHEMA_T("micro_block_format_version", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -7172,7 +7171,6 @@ int ObInnerTableSchema::all_table_history_schema(ObTableSchema &table_schema)
       micro_block_format_version_default,
       micro_block_format_version_default); //default_value
   }
-
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

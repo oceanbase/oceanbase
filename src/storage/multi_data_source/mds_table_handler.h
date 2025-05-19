@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObTabletPointer;
+class ObTabletBasePointer;
 namespace mds
 {
 
@@ -38,13 +38,13 @@ public:
                            const share::ObLSID &ls_id,
                            const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
                            const bool not_exist_create,
-                           ObTabletPointer *pointer);
+                           ObTabletBasePointer *pointer);
   int try_gc_mds_table();
   int try_release_nodes_below(const share::SCN &scn);
   void reset() { this->~ObMdsTableHandler(); }
   void set_tablet_status_written() { ATOMIC_CAS(&(is_written_), false, true); }
   void reset_tablet_status_written() { ATOMIC_STORE(&(is_written_), false); }
-  void mark_removed_from_t3m(ObTabletPointer *pointer);
+  void mark_removed_from_t3m(ObTabletBasePointer *pointer);
   bool is_tablet_status_written() const { return ATOMIC_LOAD(&(is_written_)); }
   TO_STRING_KV(K_(mds_table_handle));
 private:

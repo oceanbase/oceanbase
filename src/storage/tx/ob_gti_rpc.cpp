@@ -129,6 +129,10 @@ int ObGtiRequestRpc::post(const ObGtiRequest &msg)
 {
   int ret = OB_SUCCESS;
   ObAddr server;
+  ObLSID ls_id = GTI_LS;
+  if (GCTX.is_shared_storage_mode() && is_meta_tenant(msg.get_tenant_id())) {
+    ls_id = SSLOG_LS;
+  }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "gti request rpc not inited", KR(ret));
@@ -138,7 +142,7 @@ int ObGtiRequestRpc::post(const ObGtiRequest &msg)
   } else if (!msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(msg));
-  } else if (OB_FAIL(MTL(transaction::ObTransService*)->get_location_adapter()->nonblock_get_leader(GCONF.cluster_id, msg.get_tenant_id(), GTI_LS, server))) {
+  } else if (OB_FAIL(MTL(transaction::ObTransService*)->get_location_adapter()->nonblock_get_leader(GCONF.cluster_id, msg.get_tenant_id(), ls_id, server))) {
     TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(GTI_LS));
   } else if (server == self_) {
    ObGtiRpcResult gti_rpc_result;

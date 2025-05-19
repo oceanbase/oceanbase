@@ -297,6 +297,7 @@ int TestCompactionPolicy::mock_sstable(
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
     param.filled_tx_scn_ = table_key.get_end_scn();
+    param.rec_scn_ = table_key.get_start_scn();
   }
 
   void *buf = nullptr;
@@ -356,6 +357,7 @@ int TestCompactionPolicy::mock_column_sstable(
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
     param.filled_tx_scn_ = table_key.get_end_scn();
+    param.rec_scn_ = table_key.get_start_scn();
   }
 
   if (OB_FAIL(ret)) {

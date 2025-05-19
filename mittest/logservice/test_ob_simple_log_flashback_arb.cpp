@@ -64,8 +64,8 @@ int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
                                         share::ObLSStatusInfoArray &ls_array)
 {
   int ret = OB_SUCCESS;
-  common::ObFunction<int(const palf::PalfHandle&)> get_palf_info =
-  [&](const palf::PalfHandle &palf_handle)
+  common::ObFunction<int(const ipalf::IPalfHandle&)> get_palf_info =
+  [&](const ipalf::IPalfHandle &palf_handle)
   {
     int ret = OB_SUCCESS;
     share::ObLSStatusInfo ls_status;
@@ -95,11 +95,15 @@ int ObLogFlashbackService::BaseLSOperator::update_leader_()
   leader_.reset();
   logservice::ObLogService *log_service = NULL;
   log_service = MTL(logservice::ObLogService*);
-  palf::PalfHandleGuard palf_handle;
-  if (OB_FAIL(log_service->open_palf(ls_id_, palf_handle))) {
+  palf::PalfHandleGuard palf_handle_guard;
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "logservice is not supported", K(ret));
+  } else if (OB_FAIL(log_service->open_palf(ls_id_, palf_handle_guard))) {
     CLOG_LOG(ERROR, "open_palf failed", K(ret), K_(ls_id));
   } else {
-    palf::PalfHandleImpl *palf_handle_impl = dynamic_cast<palf::PalfHandleImpl*>(palf_handle.palf_handle_.palf_handle_impl_);
+    palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_guard.get_palf_handle());
+    palf::PalfHandleImpl *palf_handle_impl = dynamic_cast<palf::PalfHandleImpl*>(palf_handle->palf_handle_impl_);
     leader_ = palf_handle_impl->state_mgr_.get_leader();
   }
   return ret;

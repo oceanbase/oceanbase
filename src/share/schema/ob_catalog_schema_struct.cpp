@@ -160,7 +160,7 @@ bool ObCatalogPriv::is_valid() const
 
 void ObCatalogPriv::reset()
 {
-  catalog_.reset();;
+  catalog_.reset();
   ObSchema::reset();
   ObPriv::reset();
 }

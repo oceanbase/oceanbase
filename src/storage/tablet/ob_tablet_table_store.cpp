@@ -266,6 +266,43 @@ int ObTabletTableStore::init_for_shared_storage(
     }
     return ret;
   }
+
+int ObTabletTableStore::process_minor_sstables_for_ss_(
+    ObArenaAllocator &allocator,
+    const UpdateUpperTransParam &upper_trans_param,
+    ObArray<ObITable *> &sstables,
+    const int64_t inc_base_snapshot_version,
+    int64_t &inc_pos)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<UpdateUpperTransParam::SCNAndVersion> *new_upper_trans = upper_trans_param.ss_new_upper_trans_;
+  if (OB_ISNULL(new_upper_trans) || new_upper_trans->empty() || sstables.empty()) {
+  } else {
+    int j = 0;
+    for(int i = inc_pos; i < sstables.count(); i++) {
+      if (sstables.at(i)->is_sstable()) {
+        ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
+        if (sstable->get_upper_trans_version() == INT64_MAX) {
+          for (; j < new_upper_trans->count(); j++) {
+            if (new_upper_trans->at(j).scn_ == sstable->get_end_scn()) {
+              sstable->set_upper_trans_version(allocator, new_upper_trans->at(j).upper_trans_version_);
+            } else if (new_upper_trans->at(j).scn_ > sstable->get_end_scn()) {
+              break;
+            }
+          }
+        }
+        if (sstable->get_upper_trans_version() <= inc_base_snapshot_version) {
+          inc_pos = i + 1; // remove this minor
+        }
+      }
+    }
+    if (inc_pos == sstables.count()) {
+      inc_pos = -1; // all minor removed
+    }
+  }
+  return ret;
+}
+
 #endif
 
 int ObTabletTableStore::init(
@@ -1793,6 +1830,13 @@ int ObTabletTableStore::inner_process_minor_tables(
         }
       }
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_SUCC(ret) &&GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(process_minor_sstables_for_ss_(allocator, upper_trans_param, sstables, inc_base_snapshot_version, inc_pos))) {
+        LOG_WARN("fail process for ss", K(ret));
+      }
+    }
+#endif
     if (OB_FAIL(ret) || inc_pos < 0) {
     } else if (OB_FAIL(init_minor_sstable_array_with_check(new_sstables, allocator, sstables, inc_pos))) {
       LOG_WARN("failed to init minor_tables", K(ret));

@@ -62,7 +62,7 @@ int ObStorageLoggerManager::init(
     log_dir_ = log_dir;
     max_log_file_size_ = max_log_file_size;
     log_file_spec_ = log_file_spec;
-    if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID))) {
+    if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID, 0/*tenant epoch*/))) {
       STORAGE_REDO_LOG(WARN, "fail to init server slogger", K(ret));
     } else {
       is_inited_ = true;

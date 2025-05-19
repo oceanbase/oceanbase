@@ -466,6 +466,7 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
   ObITable *last_table_ptr = NULL;
   SCN compact_start_scn = SCN::min_scn();
   SCN compact_end_scn = SCN::min_scn();
+  SCN rec_scn = SCN::min_scn();
   ObTableStoreIterator ddl_table_iter;
   bool is_data_complete = false;
   if (ddl_sstable_array.empty()) {
@@ -481,7 +482,11 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstables(ddl_table_iter))) {
     LOG_WARN("failed to get ddl sstables", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter, is_data_complete, compact_start_scn, compact_end_scn))) {
+  } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter,
+                                                          is_data_complete,
+                                                          compact_start_scn,
+                                                          compact_end_scn,
+                                                          rec_scn))) {
     LOG_WARN("failed to check data integrity", K(ret), K(ddl_table_iter));
   } else if (!is_data_complete) {
     ret = OB_INVALID_TABLE_STORE;

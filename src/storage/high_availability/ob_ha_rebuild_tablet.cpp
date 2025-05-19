@@ -1162,9 +1162,10 @@ int ObTabletRebuildMajorDag::init(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     }
+  } else if (OB_FAIL(copy_tablet_ctx_.tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else {
     status = ObCopyTabletStatus::TABLET_EXIST;
-    copy_tablet_ctx_.tablet_handle_ = tablet_handle;
     compat_mode_ = tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 

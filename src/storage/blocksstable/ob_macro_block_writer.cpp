@@ -1983,16 +1983,36 @@ int ObMacroBlockWriter::alloc_block()
   ObStorageObjectOpt storage_opt;
   if (!is_local_exec_mode(data_store_desc_->get_exec_mode())) {
     // for ss mode, need set shared block type
-    if (data_store_desc_->is_for_index_or_meta()) {
-      storage_opt.set_ss_share_meta_macro_object_opt(
-        data_store_desc_->get_tablet_id().id(),
-        macro_seq_generator_->get_current(),
-        data_store_desc_->get_table_cg_idx());
+    const bool index_or_meta = data_store_desc_->is_for_index_or_meta();
+    ObStorageObjectType obj_type = ObStorageObjectType::MAX;
+#define COVERT_TO_OBJ_TYPE(T1) \
+    (index_or_meta ? \
+      ObStorageObjectType::SHARED_##T1##_META_MACRO :\
+      ObStorageObjectType::SHARED_##T1##_DATA_MACRO)
+    if (data_store_desc_->is_major_merge_type()) {
+      obj_type = COVERT_TO_OBJ_TYPE(MAJOR);
+    } else if (is_mini_merge(data_store_desc_->get_merge_type())) {
+      obj_type = COVERT_TO_OBJ_TYPE(MINI);
+    } else if (is_minor_merge(data_store_desc_->get_merge_type())) {
+      obj_type = COVERT_TO_OBJ_TYPE(MINOR);
+    } else if (is_mds_mini_merge(data_store_desc_->get_merge_type())) {
+      obj_type = COVERT_TO_OBJ_TYPE(MDS_MINI);
+    } else if (is_mds_minor_merge(data_store_desc_->get_merge_type())) {
+      obj_type = COVERT_TO_OBJ_TYPE(MDS_MINOR);
     } else {
-      storage_opt.set_ss_share_data_macro_object_opt(
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("merge-type not supported yet", K(ret), K(data_store_desc_->get_merge_type()));
+    }
+#undef COVERT_TO_OBJ_TYPE
+    if (OB_SUCC(ret)) {
+      storage_opt.set_ss_share_object_opt(
+        obj_type,
+        data_store_desc_->get_tablet_id().is_ls_inner_tablet(),
+        data_store_desc_->get_ls_id().id(),
         data_store_desc_->get_tablet_id().id(),
         macro_seq_generator_->get_current(),
-        data_store_desc_->get_table_cg_idx());
+        data_store_desc_->get_table_cg_idx(),
+        data_store_desc_->get_reorganization_scn().get_val_for_tx());
     }
   } else {
     if (data_store_desc_->is_for_index_or_meta()) {
@@ -2003,7 +2023,8 @@ int ObMacroBlockWriter::alloc_block()
                                          data_store_desc_->get_tablet_transfer_seq());
     }
   }
-  if (macro_blocks_[current_index_].is_dirty()) { // has been allocated
+  if (OB_FAIL(ret)) {
+  } else if (macro_blocks_[current_index_].is_dirty()) { // has been allocated
   } else if (OB_UNLIKELY(!is_need_macro_buffer_ && current_index_ != 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected current index", K(ret));

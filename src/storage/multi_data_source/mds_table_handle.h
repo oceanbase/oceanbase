@@ -24,7 +24,7 @@ namespace oceanbase
 namespace storage
 {
 class ObLS;
-class ObTabletPointer;
+class ObTabletBasePointer;
 namespace mds
 {
 class MdsTableHandle
@@ -42,12 +42,12 @@ public:
            const ObTabletID tablet_id,
            const share::ObLSID ls_id,
            const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
-           ObTabletPointer *pointer,
+           ObTabletBasePointer *pointer,
            ObMdsTableMgr *mgr_handle = nullptr);
   template <typename UnitKey, typename UnitValue>
   int get_mds_unit(MdsUnit<UnitKey, UnitValue> *&p_mds_unit);
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
-  int mark_removed_from_t3m(ObTabletPointer *pointer) const;
+  int mark_removed_from_t3m(ObTabletBasePointer *pointer) const;
   int mark_switched_to_empty_shell() const;
   template <int N>
   int forcely_remove_nodes(const char (&reason)[N], share::SCN redo_scn_limit);

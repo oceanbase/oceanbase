@@ -130,6 +130,46 @@ public:
   // --------------------------------------------------------
 };
 
+class ObTabletResidentInfo final
+{
+public:
+  ObTabletResidentInfo()
+    : attr_(),
+      addr_(),
+      key_()
+  {}
+  ObTabletResidentInfo(
+    const ObTabletMapKey &tablet_key,
+    const ObTabletAttr &tablet_attr,
+    const ObMetaDiskAddr &tablet_addr)
+    : attr_(tablet_attr),
+      addr_(tablet_addr),
+      key_(tablet_key)
+  {}
+  ~ObTabletResidentInfo() { reset(); }
+  bool is_valid() const { return attr_.is_valid() && key_.is_valid() && addr_.is_valid(); }
+  bool has_transfer_table() const { return attr_.has_transfer_table(); }
+  bool is_empty_shell() const { return attr_.is_empty_shell(); }
+  bool has_next_tablet() const { return attr_.has_next_tablet(); }
+  bool has_nested_table() const { return attr_.has_nested_table(); }
+  int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
+  int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }
+  uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }
+  int64_t get_ss_public_sstable_occupy_size() const { return attr_.ss_public_sstable_occupy_size_; }
+  int64_t get_backup_size() const { return attr_.backup_bytes_; }
+  void reset()
+  {
+    attr_.reset();
+    addr_.set_none_addr();
+    key_.reset();
+  }
+  TO_STRING_KV(K_(key), K_(addr), K_(attr));
+public:
+  ObTabletAttr attr_;
+  ObMetaDiskAddr addr_;
+  ObTabletMapKey key_;
+};
+
 } // namespace storage
 } // namespace oceanbase
 

@@ -35,7 +35,7 @@ class ObIAllocator;
 namespace storage
 {
 class ObTabletHandle;
-class ObTabletPointer;
+class ObTabletBasePointer;
 class ObTablet;
 
 namespace mds

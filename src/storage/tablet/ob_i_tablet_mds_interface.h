@@ -167,7 +167,7 @@ protected:// implemented by ObTablet
   virtual const ObTabletMeta &get_tablet_meta_() const = 0;
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const = 0;
-  virtual ObTabletPointer *get_tablet_pointer_() const = 0;
+  virtual ObTabletBasePointer *get_tablet_pointer_() const = 0;
   template <typename K, typename V>
   int read_data_from_tablet_cache(const K &key,
                                   const common::ObFunction<int(const V&)> &read_op,

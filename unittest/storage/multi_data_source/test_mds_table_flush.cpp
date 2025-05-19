@@ -112,7 +112,7 @@ int construct_tested_mds_table(MdsTableHandle &handle) {
   for (int i = 0; i < 7; ++i) {
     v_ctx.push_back(new MdsCtx(MdsWriter(transaction::ObTransID(i))));
   }
-  if (OB_FAIL(handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111))) {
+  if (OB_FAIL(handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111))) {
   } else if (OB_FAIL(handle.set<ExampleUserData1>(1, *v_ctx[0]))) {
   } else if (FALSE_IT(v_ctx[0]->on_redo(mock_scn(50)))) {
   } else if (FALSE_IT(v_ctx[0]->on_commit(mock_scn(100), mock_scn(100)))) {
@@ -262,7 +262,7 @@ TEST_F(TestMdsTableFlush, advance_rec_scn_consider_about_max_aborted_scn_on_mds_
 
 TEST_F(TestMdsTableFlush, flush_scn_decline1) {
   MdsTableHandle handle;
-  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
   ctx1.on_redo(mock_scn(10));
@@ -283,7 +283,7 @@ TEST_F(TestMdsTableFlush, flush_scn_decline1) {
 
 TEST_F(TestMdsTableFlush, flush_scn_decline2) {
   MdsTableHandle handle;
-  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, handle.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MdsCtx ctx1(MdsWriter(transaction::ObTransID(1)));
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx1);
   ctx1.on_redo(mock_scn(10));

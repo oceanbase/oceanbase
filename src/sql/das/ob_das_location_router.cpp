@@ -864,7 +864,10 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
   tablet_loc.tablet_id_ = tablet_id;
   if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
     LOG_WARN("store access tablet id failed", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
+  } else if (is_shared_storage_sslog_table(tablet_id.id())
+          && FALSE_IT(tablet_loc.ls_id_ = SSLOG_LS)) {
+  } else if (!is_shared_storage_sslog_table(tablet_id.id())
+          && OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
                                                           tablet_id,
                                                           tablet_loc.ls_id_))) {
     LOG_WARN("nonblock get ls id failed", K(ret), K(tenant_id), K(tablet_id));
@@ -960,7 +963,10 @@ int ObDASLocationRouter::nonblock_get(const ObDASTableLocMeta &loc_meta,
     ObLSID ls_id;
     if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
       LOG_WARN("store all tablet list failed", K(ret), K(tablet_id));
-    } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id, tablet_id, ls_id))) {
+    } else if (is_shared_storage_sslog_table(tablet_id.id())
+            && FALSE_IT(ls_id = SSLOG_LS)) {
+    } else if (!is_shared_storage_sslog_table(tablet_id.id())
+            && OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id, tablet_id, ls_id))) {
       LOG_WARN("nonblock get ls id failed", K(ret));
     } else if (OB_FAIL(GCTX.location_service_->nonblock_get(GCONF.cluster_id,
                                                             tenant_id,
@@ -1070,7 +1076,10 @@ int ObDASLocationRouter::nonblock_get_leader(const uint64_t tenant_id,
              && is_local_leader) {
     // when not in retry, try local leader optimization
     tablet_loc.server_ = GCTX.self_addr();
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
+  } else if (is_shared_storage_sslog_table(tablet_id.id())
+          && FALSE_IT(tablet_loc.ls_id_ = SSLOG_LS)) {
+  } else if (!is_shared_storage_sslog_table(tablet_id.id())
+          && OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
                                                           tablet_id,
                                                           tablet_loc.ls_id_))) {
     LOG_WARN("nonblock get ls id failed", K(ret), K(tablet_id));
@@ -1117,11 +1126,13 @@ int ObDASLocationRouter::get_leader(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   ObLSID ls_id;
-  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
-                                          tablet_id,
-                                          expire_renew_time,
-                                          is_cache_hit,
-                                          ls_id))) {
+  if (is_shared_storage_sslog_table(tablet_id.id()) && FALSE_IT(ls_id = SSLOG_LS)) {
+  } else if (!is_shared_storage_sslog_table(tablet_id.id())
+          && OB_FAIL(GCTX.location_service_->get(tenant_id,
+                                                 tablet_id,
+                                                 expire_renew_time,
+                                                 is_cache_hit,
+                                                 ls_id))) {
     LOG_WARN("nonblock get ls id failed", K(ret));
   } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
                                                         tenant_id,
@@ -1339,11 +1350,13 @@ int ObDASLocationRouter::block_renew_tablet_location(const ObTabletID &tablet_id
   }
   //the timeout limit for "refresh location" is within 1s
   THIS_WORKER.set_timeout_ts(timeout_ctx.get_abs_timeout());
-  if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
-                                          tablet_id,
-                                          expire_renew_time,
-                                          is_cache_hit,
-                                          ls_id))) {
+  if (is_shared_storage_sslog_table(tablet_id.id()) && FALSE_IT(ls_id = SSLOG_LS)) {
+  } else if (!is_shared_storage_sslog_table(tablet_id.id())
+          && OB_FAIL(GCTX.location_service_->get(MTL_ID(),
+                                                 tablet_id,
+                                                 expire_renew_time,
+                                                 is_cache_hit,
+                                                 ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
   } else if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
                                                  MTL_ID(),

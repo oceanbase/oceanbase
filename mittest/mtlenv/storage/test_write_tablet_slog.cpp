@@ -98,7 +98,7 @@ TEST_F(TestWriteTabletSlog, basic)
   ASSERT_NE(nullptr, ls);
 
   // advance the replay start cursor
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantStorageMetaService*)->get_active_cursor(replay_start_cursor));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantStorageMetaService*)->slogger_.get_active_cursor(replay_start_cursor));
 
   // create tablet and write slog
   ObTabletID tablet_id(1001);
@@ -123,8 +123,10 @@ TEST_F(TestWriteTabletSlog, basic)
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_hdl));
 
   // write create tablet slog
-  ObMetaDiskAddr disk_addr = new_tablet_hdl.get_obj()->tablet_addr_;
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.update_tablet(ls_id, ls->get_ls_epoch(), tablet_id, disk_addr));
+  ObUpdateTabletPointerParam tablet_ptr_param;
+  tablet_ptr_param.resident_info_.addr_ = new_tablet_hdl.get_obj()->tablet_addr_;
+  tablet_ptr_param.resident_info_.attr_.iter_attr_.valid_ = true;
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.update_tablet(ls_id, ls->get_ls_epoch(), tablet_id, tablet_ptr_param));
 
   // remove tablet without writing slog
   ASSERT_EQ(OB_SUCCESS, ls->ls_tablet_svr_.inner_remove_tablet(ls_id, tablet_id));
@@ -135,11 +137,11 @@ TEST_F(TestWriteTabletSlog, basic)
   ObTenantSuperBlock super_block = tenant->get_super_block();
   super_block.replay_start_point_ = replay_start_cursor;
 
-  ObTenantStorageMetaReplayer &replayer = MTL(ObTenantStorageMetaService*)->get_replayer();
+  ObTenantCheckpointSlogHandler &replayer = MTL(ObTenantStorageMetaService*)->ckpt_slog_handler_;
   if (!GCTX.is_shared_storage_mode()) {
     // the slogger has started when mtl start, start_replay will call start_log() again,
     // this error does not affect the accuracy of the replay result
-    ASSERT_EQ(OB_INIT_TWICE, replayer.start_replay(super_block));
+    ASSERT_EQ(OB_INIT_TWICE, replayer.replay_checkpoint_and_slog(super_block));
   } else {
     // TODO(fenggu.yh) add test for shared-storage
   }

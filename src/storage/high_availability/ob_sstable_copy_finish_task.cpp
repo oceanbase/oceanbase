@@ -845,6 +845,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         0/*cluster_version*/,
         tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
         tablet->get_transfer_seq(),
+        tablet->get_reorganization_scn(),
         sstable_param->table_key_.get_end_scn(),
         cg_schema,
         cg_idx,

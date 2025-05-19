@@ -99,7 +99,7 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
 
     common::ObTabletID tablet_id;
     PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
-    ObSSTabletCacheInfo tablet_micro_cache_info;
+    ObSSMicroCacheTabletInfo tablet_micro_cache_info;
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(cur_idx_ < 0)) {
       ret = OB_ERR_UNEXPECTED;

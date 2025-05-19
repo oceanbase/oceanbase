@@ -36,7 +36,10 @@ ObStorageLogger::~ObStorageLogger()
   destroy();
 }
 
-int ObStorageLogger::init(ObStorageLoggerManager &slogger_manager, const uint64_t tenant_id)
+int ObStorageLogger::init(
+    ObStorageLoggerManager &slogger_manager,
+    const uint64_t tenant_id,
+    const int64_t tenant_epoch)
 {
   int ret = OB_SUCCESS;
   const int64_t max_log_file_size = slogger_manager.max_log_file_size_;
@@ -47,17 +50,29 @@ int ObStorageLogger::init(ObStorageLoggerManager &slogger_manager, const uint64_
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_REDO_LOG(WARN, "The ObStorageLogger has been inited.", K(ret));
+  } else if (OB_UNLIKELY(tenant_epoch < 0 || OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_epoch), K(tenant_id));
   } else {
     if (OB_SERVER_TENANT_ID == tenant_id) {
       log_writer_ = &server_log_writer_;
-      pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/server", slogger_manager.get_root_dir());
+      if (!GCTX.is_shared_storage_mode()) {
+        pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/server", slogger_manager.get_root_dir());
+      } else {
+        pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/server_slog", slogger_manager.get_root_dir());
+      }
     } else if (is_virtual_tenant_id(tenant_id)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_REDO_LOG(WARN, "Virtual tenant shouldn't create slogger.", K(ret), K(tenant_id));
     } else {
       log_writer_ = &tenant_log_writer_;
-      pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
+      if (!GCTX.is_shared_storage_mode()) {
+        pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
                     slogger_manager.get_root_dir(), tenant_id);
+      } else {
+        pret = snprintf(tnt_slog_dir_, MAX_PATH_SIZE, "%s/%lu_%ld/slog",
+                    slogger_manager.get_root_dir(), tenant_id, tenant_epoch);
+      }
     }
   }
 

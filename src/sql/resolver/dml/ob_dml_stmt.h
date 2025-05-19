@@ -1080,6 +1080,9 @@ public:
                K_(has_vec_approx));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool check_if_contain_sslog_table() const;
+#endif
   int check_if_contain_select_for_update(bool &is_contain_select_for_update) const;
   int check_if_table_exists(uint64_t table_id, bool &is_existed) const;
   bool has_for_update() const;

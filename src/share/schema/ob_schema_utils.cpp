@@ -546,7 +546,7 @@ int ObSchemaUtils::construct_tenant_space_full_table(
     if (OB_SUCC(ret) && is_system_table(table_id)) {
       uint64_t lob_meta_table_id = 0;
       uint64_t lob_piece_table_id = 0;
-      if (OB_ALL_CORE_TABLE_TID == table_id) {
+      if (is_hardcode_schema_table(table_id)) {
         // do nothing
       } else if (!get_sys_table_lob_aux_table_id(table_id, lob_meta_table_id, lob_piece_table_id)) {
         ret = OB_ENTRY_NOT_EXIST;
@@ -583,7 +583,7 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
   int ret = OB_SUCCESS;
   if (is_system_table(data_table_id)) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-      if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+      if (is_hardcode_schema_table(data_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_sys_table_lob_aux_schema(data_table_id, lob_meta_schema, lob_piece_schema))) {
         LOG_WARN("fail to get sys table lob aux schema", KR(ret), K(data_table_id));

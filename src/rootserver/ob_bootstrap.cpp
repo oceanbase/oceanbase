@@ -241,6 +241,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("cannot do bootstrap on not empty server", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_root_key())) {
     LOG_WARN("fail to notify sys tenant root key", KR(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (OB_FAIL(check_and_notify_logservice_access_point())) {
+    LOG_WARN("fail to notify logservice access point", KR(ret));
+#endif
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (OB_FAIL(check_and_notify_shared_storage_info())) {
     LOG_WARN("fail to notify shared-storage info", KR(ret));
@@ -263,6 +267,40 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObPreBootstrap::check_and_notify_logservice_access_point()
+{
+  int ret = OB_SUCCESS;
+  const ObString &logservice_access_point = arg_.logservice_access_point_;
+  if (!GCONF.enable_logservice) {
+    // do nothing
+  } else if (logservice_access_point.empty()) {
+    // TODO by qingxia: close this fast way before release
+    // ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logservice_access_point is empty with enable_logservice", KR(ret), K(arg_));
+  } else if (!GCONF.logservice_access_point.set_value(logservice_access_point)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("logservice storage info too long!", KR(ret), K(logservice_access_point));
+  } else {
+    // Notify rs_list nodes with logservice access point
+    ObNotifyLogServiceAccessPointArg rpc_arg;
+    ObNotifyLogServiceAccessPointResult rpc_result;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+      if (OB_FAIL(rpc_arg.init(logservice_access_point))) {
+        LOG_WARN("fail to init rpc_arg", KR(ret), K(logservice_access_point));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+                                    .notify_logservice_access_point(rpc_arg, rpc_result))) {
+        LOG_WARN("fail to send rpc notify_logservice_access_point", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+      } else if (OB_FAIL(rpc_result.get_ret())) {
+        LOG_WARN("notify_logservice_access_point via rpc failed", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+#endif
 
 #ifdef OB_BUILD_SHARED_STORAGE
 /*
@@ -923,7 +961,7 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   int ret = OB_SUCCESS;
   if (is_system_table(data_table_id)) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-      if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+      if (is_hardcode_schema_table(data_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_sys_table_lob_aux_schema(data_table_id, lob_meta_schema, lob_piece_schema))) {
         LOG_WARN("fail to get sys table lob aux schema", KR(ret), K(data_table_id));

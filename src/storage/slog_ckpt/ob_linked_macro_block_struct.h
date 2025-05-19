@@ -161,6 +161,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableLinkBlockWriteInfo);
 };
 
+class ObSlogCheckpointFdDispenser final
+{
+public:
+  ObSlogCheckpointFdDispenser() : min_file_id_(0), max_file_id_(0) {}
+  explicit ObSlogCheckpointFdDispenser(const int64_t cur_file_id)
+  {
+    min_file_id_ = max_file_id_ = cur_file_id + 1;
+  }
+  ~ObSlogCheckpointFdDispenser() = default;
+  void set_cur_max_file_id(const int64_t cur_file_id) {  min_file_id_ = max_file_id_ = cur_file_id + 1; }
+  int64_t get_min_file_id() const { return min_file_id_; }
+  int64_t get_max_file_id() const { return max_file_id_; }
+  int64_t acquire_new_file_id() { return ATOMIC_AAF(&max_file_id_, 1); }
+
+  TO_STRING_KV(K_(min_file_id), K_(max_file_id));
+private :
+  int64_t min_file_id_;
+  int64_t max_file_id_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObSlogCheckpointFdDispenser);
+};
+
 }  // end namespace storage
 }  // end namespace oceanbase
 

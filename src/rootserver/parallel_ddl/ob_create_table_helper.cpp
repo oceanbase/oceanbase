@@ -18,6 +18,7 @@
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
 #include "share/ob_index_builder_util.h"
 #include "share/sequence/ob_sequence_option_builder.h" // ObSequenceOptionBuilder
 #include "share/schema/ob_table_sql_service.h"
@@ -530,6 +531,41 @@ int ObCreateTableHelper::check_and_set_database_id_()
   return ret;
 }
 
+int ObCreateTableHelper::check_sslog_table_exist_(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || table_name.empty()
+               || OB_INVALID_ID == database_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_name), K(database_id));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    LOG_TRACE("not in shared storage mode, skip", K(tenant_id), K(database_id), K(table_name));
+  } else {
+    // use the same name_case_mode
+    const ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
+    const share::schema::ObSysTableChecker::TableNameWrapper input_table(database_id, mode, table_name);
+    const share::schema::ObSysTableChecker::TableNameWrapper sslog_table(OB_SYS_DATABASE_ID, mode, share::OB_ALL_SSLOG_TABLE_TNAME);
+    if (!is_user_tenant(tenant_id) && sslog_table == input_table) {
+      /*
+      The current table creation defaults to parallel mode, which directly query table_schema in the inner table
+      to determine whether there is a table with the same name.
+      For __all_sslog_table, we do not record its schema in the inner table, so special treatment is needed.
+      (in serial table creation mode, directly use schema_mgr in memory for judgment, which has the table_schema of __all_sslog_table).
+      1.For sys and meta tenant, because they have pre-built __all_sslog_table internally in the oceanbase(201001) database,
+        so it is forbidden to create a table named __all_sslog_table in oceanbase(201001) database.
+      2.For user tenant, no __all_sslog_table is pre-built internally, so there is no such limitation.
+      */
+      ret = OB_ERR_TABLE_EXIST;
+      LOG_WARN("sslog table exist", KR(ret), K(sslog_table), K(input_table));
+    }
+  }
+  return ret;
+}
+
 int ObCreateTableHelper::check_table_name_()
 {
   int ret = OB_SUCCESS;
@@ -562,6 +598,8 @@ int ObCreateTableHelper::check_table_name_()
       ret = OB_ERR_EXIST_OBJECT;
       LOG_WARN("Name is already used by an existing object",
                KR(ret), K_(tenant_id), K(database_id), K(table_name), K(synonym_id));
+    } else if (OB_FAIL(check_sslog_table_exist_(tenant_id_, database_id, table_name))) {
+      LOG_WARN("fail to check sslog table", KR(ret), K_(tenant_id), K(table_name));
     } else if (OB_FAIL(latest_schema_guard_.get_table_id(
                database_id, session_id, table_name, table_id, table_type, schema_version))) {
       LOG_WARN("fail to get table_id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));

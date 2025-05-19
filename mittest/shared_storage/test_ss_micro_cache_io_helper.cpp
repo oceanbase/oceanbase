@@ -67,7 +67,7 @@ TEST_F(TestSSMicroCacheIOHelper, basic_read_write)
 {
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager);
-  const int64_t micro_cache_file_size = disk_space_manager->get_micro_cache_reserved_size();
+  const int64_t micro_cache_file_size = disk_space_manager->get_micro_cache_file_size();
   const int64_t SIZE_2_MB = 2 * 1024 * 1024;
   ASSERT_GT(micro_cache_file_size, SIZE_2_MB * 10);
 
@@ -79,7 +79,7 @@ TEST_F(TestSSMicroCacheIOHelper, basic_read_write)
     write_buf[i] = static_cast<char>(ObRandom::rand(0, 128));
   }
   ObSSPhysicalBlock phy_block;
-  ObSSPhysicalBlockHandle phy_block_handle;
+  ObSSPhyBlockHandle phy_block_handle;
   phy_block_handle.set_ptr(&phy_block);
   ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheIOHelper::write_block(offset, size, write_buf, phy_block_handle));
 

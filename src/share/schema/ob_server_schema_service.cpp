@@ -121,6 +121,11 @@ int ObServerSchemaService::init_tenant_basic_schema(const uint64_t tenant_id)
       LOG_WARN("add sys variable failed", KR(ret), K(tenant_id));
     } else if (OB_FAIL(fill_all_core_table_schema(tenant_id, *schema_mgr_for_cache))) {
       LOG_WARN("init add core table schema failed", KR(ret), K(tenant_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (is_shared_storage_sslog_exist()
+               && OB_FAIL(fill_sslog_table_schema(tenant_id, *schema_mgr_for_cache))) {
+      LOG_WARN("init add sslog table schema failed", KR(ret), K(tenant_id));
+#endif
     } else if (is_sys_tenant(tenant_id)) {
       // only sys tenant rely on root user schema
       ObSimpleUserSchema user;
@@ -1318,8 +1323,8 @@ int ObServerSchemaService::get_increment_table_keys(
         && schema_operation.op_type_ < OB_DDL_TABLE_OPERATION_END)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
-  } else if (OB_ALL_CORE_TABLE_TID == schema_operation.table_id_) {
-    // won't load __all_core_table schema from inner_table
+  } else if (is_hardcode_schema_table(schema_operation.table_id_)) {
+    // won't load hardcode _table schema from inner_table
   } else {
     const uint64_t tenant_id = schema_operation.tenant_id_;
     const uint64_t table_id = schema_operation.table_id_;
@@ -1372,8 +1377,8 @@ int ObServerSchemaService::get_increment_table_keys_reversely(
         && schema_operation.op_type_ < OB_DDL_TABLE_OPERATION_END)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
-  } else if (OB_ALL_CORE_TABLE_TID == schema_operation.table_id_) {
-    // won't load __all_core_table schema from inner_table
+  } else if (is_hardcode_schema_table(schema_operation.table_id_)) {
+    // won't load hardcode table schema from inner_table
   } else {
     const uint64_t tenant_id = schema_operation.tenant_id_;
     const uint64_t table_id = schema_operation.table_id_;
@@ -5686,6 +5691,35 @@ int ObServerSchemaService::fill_all_core_table_schema(
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObServerSchemaService::fill_sslog_table_schema(
+    const uint64_t tenant_id,
+    ObSchemaMgr &schema_mgr_for_cache)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema sslog_table_schema;
+  ObSimpleTableSchemaV2 sslog_table_schema_simple;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", K(ret));
+  } else if (common::is_user_tenant(tenant_id)) {
+    // do nothing
+  } else if (OB_FAIL(schema_service_->get_sslog_table_schema(sslog_table_schema))) {
+    LOG_WARN("failed to init schema service, ret=[%d]", K(ret));
+  } else if (!is_sys_tenant(tenant_id)
+             && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, sslog_table_schema))) {
+    LOG_WARN("fail to construct __all_core_table schema", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(convert_to_simple_schema(sslog_table_schema, sslog_table_schema_simple))) {
+    LOG_WARN("failed to add table schema into the schema manager, ret=[%d]", K(ret));
+  } else if (OB_FAIL(schema_mgr_for_cache.add_table(sslog_table_schema_simple))) {
+    LOG_WARN("failed to add table schema into the schema manager, ret=[%d]", K(ret));
+  }
+
+  return ret;
+}
+#endif
+
 // new schema refresh
 int ObServerSchemaService::refresh_schema(
     const ObRefreshSchemaStatus &schema_status)
@@ -6982,6 +7016,10 @@ int ObServerSchemaService::get_table_ids(
     schema.reset();
     if (OB_FAIL(schema_creators[i](schema))) {
       LOG_WARN("create table schema failed", KR(ret), K(tenant_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (is_shared_storage_sslog_table(schema.get_table_id())) {
+      // do_nothing
+#endif
     } else if (OB_FAIL(table_ids.push_back(schema.get_table_id()))) {
       LOG_WARN("push_back failed", KR(ret), K(tenant_id));
     }
@@ -7005,7 +7043,7 @@ int ObServerSchemaService::add_sys_table_lob_aux_ids(
       uint64_t lob_meta_table_id = 0;
       uint64_t lob_piece_table_id = 0;
       if (is_system_table(data_table_id)) {
-        if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+        if (is_hardcode_schema_table(data_table_id)) {
             // do nothing
         } else if (!(get_sys_table_lob_aux_table_id(data_table_id, lob_meta_table_id, lob_piece_table_id))) {
           ret = OB_ENTRY_NOT_EXIST;

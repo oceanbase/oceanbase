@@ -23,6 +23,7 @@
 #include "observer/mysql/obmp_stmt_execute.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "storage/ob_inner_tablet_access_service.h"
 
 namespace oceanbase
 {
@@ -1033,12 +1034,18 @@ common::sqlclient::ObCommonServerConnectionPool *ObInnerSQLConnection::get_commo
   return NULL;
 }
 
+#define GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER                           \
+  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);                              \
+  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id)) {           \
+    ls_id = SSLOG_LS;                                                         \
+  }                                                                           \
+
 template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
+  GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
   bool need_retry = is_in_trans() ? false : true;
@@ -1142,7 +1149,7 @@ int ObInnerSQLConnection::start_transaction_inner(
       } else {
         TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
         common::ObAddr resource_server_addr; // MYADDR
-        share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
+        GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER
         int64_t query_timeout = OB_INVALID_TIMESTAMP;
         int64_t trx_timeout = OB_INVALID_TIMESTAMP;
         ObSQLMode sql_mode = 0;
@@ -1332,7 +1339,6 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
   ObInnerSqlWaitGuard guard(is_inner_session(), diagnostic_info_, inner_session_);
   TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
   common::ObAddr resource_server_addr; // MYADDR
-  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   int64_t query_timeout = OB_INVALID_TIMESTAMP;
   int64_t trx_timeout = OB_INVALID_TIMESTAMP;
   ObSQLMode sql_mode = 0;
@@ -1625,7 +1631,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
           set_resource_conn_id(OB_INVALID_ID);
       } else { // not in trans
         common::ObAddr resource_server_addr;
-        share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
+        GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER
         if (OB_FAIL(nonblock_get_leader(
                     GCONF.cluster_id, tenant_id, ls_id, resource_server_addr))) {
           LOG_WARN("nonblock get leader failed", K(ret), K(tenant_id), K(ls_id));
@@ -1833,7 +1839,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
        LOG_INFO("set sql exec addr", KR(ret), K(*sql_exec_addr));
     } else {
       common::ObAddr resource_server_addr;
-      share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
+      GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER
       if (OB_FAIL(nonblock_get_leader(
                   cluster_id, tenant_id, ls_id, resource_server_addr))) {
         LOG_WARN("nonblock get leader failed", K(ret), K(tenant_id), K(ls_id), K(cluster_id));
@@ -2360,6 +2366,124 @@ int ObInnerSQLConnection::destroy_inner_session()
   LOG_DEBUG("end destroying inner session", K(ret), K(inner_session_), K(free_session_ctx_));
   return ret;
 }
+
+int ObInnerSQLConnection::execute_inner_tablet_write(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const char *buf,
+    const int64_t buf_len,
+    int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
+  transaction::ObTxDesc *tx_desc = nullptr;
+  affected_rows = -1;
+
+  SMART_VAR(ObInnerSQLResult, res, get_session(), is_inner_session(), diagnostic_info_)
+  {
+    if (!inited_) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("connection not inited", K(ret));
+    } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_ls_inner_tablet() || OB_ISNULL(buf) || buf_len <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(tablet_id), KP(buf), K(buf_len));
+    } else if (local_execute) {
+      if (OB_FAIL(switch_tenant(tenant_id))) {
+        LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!is_in_trans()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("execute inner tablet write should be in trans", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(res.init(local_execute))) {
+        LOG_WARN("init result set", K(ret), K(local_execute));
+      } else if (local_execute) {
+        if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
+          const sql::ObSQLSessionInfo &session_info = get_session();
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Invalid tx_desc", K(ret), K(ls_id), K(session_info));
+        } else {
+          MTL_SWITCH(tenant_id)
+          {
+            ObInnerTabletWriteCtx ctx;
+            ctx.ls_id_ = ls_id;
+            ctx.tablet_id_ = tablet_id;
+            ctx.tx_desc_ = tx_desc;
+            ctx.buf_ = buf;
+            ctx.buf_len_ = buf_len;
+            storage::ObInnerTabletAccessService *inner_tablet_access_service = nullptr;
+            if (OB_ISNULL(inner_tablet_access_service = MTL(storage::ObInnerTabletAccessService *))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("inner tablet access service should not be NULL", K(ret), KP(inner_tablet_access_service));
+            } else if (OB_FAIL(inner_tablet_access_service->insert_rows(ctx, affected_rows))) {
+              LOG_WARN("failed to insert rows", K(ret), K(ctx));
+            } else if (OB_FAIL(res.close())) {
+              LOG_WARN("close result set failed", K(ret), K(tenant_id));
+            }
+          }
+        }
+      } else {
+        common::ObAddr resource_server_addr; // MYADDR
+        int64_t query_timeout = OB_INVALID_TIMESTAMP;
+        int64_t trx_timeout = OB_INVALID_TIMESTAMP;
+        ObSQLMode sql_mode = 0;
+        const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
+        bool is_load_data_exec = get_session().is_load_data_exec_session();
+        if (is_resource_conn()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource", K(ret),
+                   K(MYADDR), K(tenant_id), K(get_resource_conn_id()));
+        } else if (OB_INVALID_ID == get_resource_conn_id() || !get_resource_svr().is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("resource_conn_id or resource_svr is invalid", K(ret), K(tenant_id),
+                   K(get_resource_conn_id()), K(get_resource_svr()));
+        } else if (OB_FAIL(get_session().get_query_timeout(query_timeout))
+                   || OB_FAIL(get_session().get_tx_timeout(trx_timeout))) {
+          LOG_WARN("get conn timeout failed", KR(ret), K(get_session()));
+        } else {
+          ObInnerTabletSQLStr inner_tablet_str;
+          char *tmp_str = nullptr;
+          int64_t pos = 0;
+          ObString sql;
+          if (OB_FAIL(inner_tablet_str.set(ls_id, tablet_id, buf, buf_len))) {
+            LOG_WARN("failed to set inner tablet sql str", K(ret), K(ls_id), K(tablet_id));
+          } else if (OB_ISNULL(tmp_str = static_cast<char *>(
+                                   ob_malloc(inner_tablet_str.get_serialize_size(), "InnerTabletStr")))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc inner tablet str", K(ret), K(inner_tablet_str.get_serialize_size()));
+          } else if (OB_FAIL(inner_tablet_str.serialize(tmp_str, inner_tablet_str.get_serialize_size(), pos))) {
+            LOG_WARN("failed to serialize inner tablet sql str", K(ret), K(inner_tablet_str));
+          } else {
+            sql.assign_ptr(tmp_str, inner_tablet_str.get_serialize_size());
+            ret = forward_request_(tenant_id, ObInnerSQLTransmitArg::OPERATION_TYPE_INNER_TABLET_WRITE, sql, res);
+            if (OB_SUCC(ret)) {
+              affected_rows = res.remote_result_set().get_stream_handler()->get_result()->get_affected_rows();
+            }
+          }
+
+          if (OB_NOT_NULL(tmp_str)) {
+            ob_free(tmp_str);
+          }
+        }
+      }
+    }
+  }
+
+  LOG_INFO("inner tablet write in inner_sql_connection",
+           KR(ret),
+           KP(this),
+           K(local_execute),
+           "resource connection id", get_resource_conn_id(),
+           "session id", get_session().get_server_sid(),
+           KPC(tx_desc),
+           K(ls_id),
+           K(tablet_id));
+  return ret;
+}
+
 
 ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::ObDiagnosticInfo *di, sql::ObSQLSessionInfo *inner_session)
     : is_inner_session_(is_inner_session),

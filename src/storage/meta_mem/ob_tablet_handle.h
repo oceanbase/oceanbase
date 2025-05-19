@@ -30,29 +30,46 @@ enum class WashTabletPriority : int8_t
 };
 class ObTablet;
 
-class ObTabletHandle : public ObMetaObjGuard<ObTablet>
+class ObTabletHandle : protected ObMetaObjGuard<ObTablet>
 {
+  friend class ObTenantMetaMemMgr;
+  friend class ObSSMetaService;
+  friend class ObSSTabletCreateHelper;
+  friend class ObTabletPointer;
+  friend class ObTabletPointerMap;
 private:
   typedef ObMetaObjGuard<ObTablet> Base;
+  enum class ObTabletHdlType : int8_t
+  {
+    FROM_T3M       = 0, // get_tablet from t3m, memory may from full_allocator or pool of t3m;
+    COPY_FROM_T3M  = 1, // get_tablet by external allocator of t3m;
+    STANDALONE     = 2, // for acuqired/create_tmp_tablet and ss_tablet in local
+    MAX            = 3
+  };
+
 public:
   ObTabletHandle(const char *file = __builtin_FILE(),
                  const int line = __builtin_LINE(),
                  const char *func = __builtin_FUNCTION());
-  ObTabletHandle(const ObTabletHandle &other);
+  ObTabletHandle(const ObTabletHandle& other) = delete;
+  ObTabletHandle &operator= (const ObTabletHandle& other) = delete;
   virtual ~ObTabletHandle();
-  ObTabletHandle &operator = (const ObTabletHandle &other);
-  virtual void set_obj(ObMetaObj<ObTablet> &obj) override;
-  virtual void set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m) override;
+  int assign(const ObTabletHandle &other);
+  OB_INLINE ObTablet *get_obj() const { return Base::get_obj(); }
+  OB_INLINE void get_obj(ObMetaObj<ObTablet> &obj) const { Base::get_obj(obj); }
   virtual void reset() override;
   virtual bool need_hold_time_check() const override { return true; }
+  virtual bool is_valid() const override;
   void set_wash_priority(const WashTabletPriority priority) { wash_priority_ = priority; }
   common::ObArenaAllocator *get_allocator() { return static_cast<common::ObArenaAllocator *>(allocator_); }
-  void disallow_copy_and_assign() { allow_copy_and_assign_ = false; }
-  bool is_tmp_tablet() const { return !allow_copy_and_assign_; }
   char *get_buf() { return reinterpret_cast<char *>(obj_); }
   int64_t get_buf_len() const { return get_buf_header().buf_len_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
+  void set_obj(const ObTabletHdlType type, ObMetaObj<ObTablet> &obj);
+  void set_obj(const ObTabletHdlType type, ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
+  virtual void set_obj(ObMetaObj<ObTablet> &obj) override;
+  virtual void set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m) override;
   int register_into_leak_checker(const char *file, const int line, const char *func);
   int inc_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
   int dec_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
@@ -62,9 +79,9 @@ private:
     return ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(obj_));
   }
 private:
+  ObTabletHdlType type_;
   int32_t index_;  // initialize as -1
   WashTabletPriority wash_priority_;
-  bool allow_copy_and_assign_;
   DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
 };
 

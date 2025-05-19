@@ -637,6 +637,33 @@ public:
   // or @c NULL if @a c is not found.
   const char *reverse_find(char c) const { return static_cast<const char *>(memrchr(ptr_, c, data_length_)); }
 
+  // reverse find @n @c from @str backwards.
+  // return a pointer to the found position.
+  // return nullptr if not found.
+  // e.g., reverse_find("/a/b/c/d", '/', 3), return the pointer to "/b/c/d".
+  //       reverse_find("/a/b/c/d", '/', 10), return nulltpr.
+  const char *reverse_find(const char c, const int64_t n)
+  {
+    const char *p_ret = nullptr;
+    int64_t find_cnt = 0;
+    if (OB_UNLIKELY(OB_ISNULL(ptr_) || (0 == STRLEN(ptr_)) || (n <= 0))) {
+      LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", KP_(ptr), K(n));
+    } else {
+      const char *cur = ptr_ + STRLEN(ptr_) - 1;
+      while (cur >= ptr_) {
+        if (*cur == c) {
+          find_cnt++;
+          if (find_cnt == n) {
+            p_ret = cur;
+            break;
+          }
+        }
+        cur--;
+      }
+    }
+    return p_ret;
+  }
+
   // Split the buffer on the character at @a p.
   //
   // The buffer is split in to two parts and the character at @a p

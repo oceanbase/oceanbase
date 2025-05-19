@@ -477,7 +477,8 @@ public:
                K_(data_format_version),
                K_(table_key),
                K_(snapshot_version),
-               K_(trans_id));
+               K_(trans_id),
+               K_(rec_scn));
 public:
   ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
@@ -487,6 +488,7 @@ public:
   ObITable::TableKey table_key_;
   int64_t snapshot_version_; // used for full direct load only.
   transaction::ObTransID trans_id_; // used for incremental direct load only
+  share::SCN rec_scn_;
 };
 
 struct ObDDLTableMergeDagParam : public share::ObIDagInitParam

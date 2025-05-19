@@ -57,7 +57,8 @@ private:
 
   int call_create_normal_tenant_(ObParallelCreateNormalTenantProxy &proxy);
 
-  int wait_ls_leader_(const uint64_t tenant_id, const bool force_renew = false);
+  int wait_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool force_renew = false);
+  int do_check_can_create_user_ls_(bool &can_create);
 
   int check_can_create_user_ls_(ObParallelCreateNormalTenantProxy &proxy);
 
@@ -67,13 +68,16 @@ private:
   int get_tenant_schema_from_inner_table_();
 
   int create_tenant_sys_ls_();
+  int create_tenant_sslog_();
+  int create_sslog_tablet_();
 
   int create_tenant_sys_ls_(const ObTenantSchema &tenant_schema,
       const ObIArray<share::ObResourcePoolName> &pool_list,
       const bool create_ls_with_palf,
       const palf::PalfBaseInfo &palf_base_info,
       const uint64_t source_tenant_id,
-      const share::ObAllTenantInfo &tenant_info);
+      const share::ObAllTenantInfo &tenant_info,
+      const bool is_sslog = false);
 
   int create_tenant_user_ls_(ObParallelCreateNormalTenantProxy &proxy);
   int construct_tenant_info_(const uint64_t tenant_id, share::ObAllTenantInfo &tenant_info);

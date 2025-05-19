@@ -22,7 +22,7 @@ endfunction()
 
 function(ob_ha_unittest_observer case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
+  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock observer_test oceanbase)
 endfunction()
 
 function(errsim_ha_unittest_observer case)
@@ -134,6 +134,8 @@ ob_ha_unittest_observer(test_transfer_doing_stage_restart_with_mds_flush storage
 ob_ha_unittest_observer(test_transfer_complete_restart_with_mds_flush storage_ha/test_transfer_complete_restart_with_mds_flush.cpp)
 ob_ha_unittest_observer(test_transfer_with_empty_shell storage_ha/test_transfer_with_empty_shell.cpp)
 ob_ha_unittest_observer(test_mds_transaction test_mds_transaction.cpp)
+ob_ha_unittest_observer(test_member_table_basic storage_ha/test_member_table_basic.cpp)
+ob_ha_unittest_observer(test_member_table_mini_and_minor storage_ha/test_member_table_mini_and_minor.cpp)
 errsim_ha_unittest_observer(errsim_test_transfer_handler errsim/storage_ha/errsim_test_transfer_handler.cpp)
 
 ob_farm_observer(test_collect_mv_farm mv/test_collect_mv.cpp)

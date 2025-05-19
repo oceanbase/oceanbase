@@ -157,8 +157,12 @@ int ObGtiSource::refresh_gti_location()
 {
   int ret = OB_SUCCESS;
   gti_cache_leader_.reset();
+  ObLSID ls_id = GTI_LS;
+  if (GCTX.is_shared_storage_mode() && is_meta_tenant(MTL_ID())) {
+    ls_id = SSLOG_LS;
+  }
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-  if (OB_FAIL(txs->get_location_adapter()->nonblock_renew(GCONF.cluster_id, MTL_ID(), GTI_LS))) {
+  if (OB_FAIL(txs->get_location_adapter()->nonblock_renew(GCONF.cluster_id, MTL_ID(), ls_id))) {
     TRANS_LOG(WARN, "gti nonblock renew error", KR(ret), K(MTL_ID()), K(GTI_LS));
   } else {
     TRANS_LOG(INFO, "refresh gti location success", K(MTL_ID()));

@@ -27,7 +27,7 @@
 #include "share/resource_manager/ob_resource_plan_info.h"
 #include "storage/ob_storage_checked_object_base.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
+#include "storage/shared_storage/micro_cache/ob_ss_physical_block_info.h"
 #include "storage/shared_storage/ob_ss_fd_cache_struct.h"
 #endif
 
@@ -98,6 +98,8 @@ enum ObIOModule {
   SSTABLE_MACRO_BLOCK_WRITE_IO,
   CLOG_WRITE_IO,
   CLOG_READ_IO,
+  INC_ATOMIC_PROTOCOL_IO,
+  INC_SSTABLE_UPLOAD_IO,
   // end
   SYS_MODULE_END_ID
 };
@@ -228,7 +230,10 @@ enum class ObIOCallbackType : uint8_t {
   TEST_CALLBACK = 11, // just for unittest
   SS_TMP_FILE_CALLBACK = 12,
   TMP_CACHED_READ_CALLBACK = 13,
-  MAX_CALLBACK_TYPE = 14
+  INC_UPLOAD_ASYNC_MACRO_READ_CALLBACK = 14,
+  EXTERNAL_DATA_LOAD_FROM_REMOTE_CALLBACK = 15,
+  EX_CACHED_READ_CALLBACK = 16,
+  MAX_CALLBACK_TYPE = 17
 };
 
 bool is_atomic_write_callback(const ObIOCallbackType type);
@@ -314,11 +319,14 @@ public:
   ObSSIOInfo &operator=(const ObSSIOInfo &other);
 
 public:
-  storage::ObSSPhysicalBlockHandle phy_block_handle_;  // hold ref_cnt
+  storage::ObSSPhyBlockHandle phy_block_handle_;  // hold ref_cnt
   storage::ObSSFdCacheHandle fd_cache_handle_;
   int64_t tmp_file_valid_length_;
+  uint64_t effective_tablet_id_; // indicate effective tablet id about partition split
+  bool is_write_cache_; // indicate write or read macro cache
 
-  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),  K_(tmp_file_valid_length));
+  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),
+                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache));
 };
 #endif
 

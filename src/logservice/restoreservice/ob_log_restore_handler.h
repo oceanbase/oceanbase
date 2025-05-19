@@ -24,6 +24,7 @@
 #include "logservice/palf/log_group_entry.h"
 #include "logservice/palf/lsn.h"           // LSN
 #include "ob_log_restore_define.h"         // Parent ObRemoteFetchContext
+#include "logservice/ipalf/ipalf_handle.h"
 #include "logservice/palf/palf_handle.h"   // PalfHandle
 #include "share/ob_define.h"
 #include "share/restore/ob_log_restore_source_mgr.h"
@@ -141,7 +142,7 @@ public:
   ~ObLogRestoreHandler();
 
 public:
-  int init(const int64_t id, PalfEnv *palf_env);
+  int init(const int64_t id, ipalf::IPalfEnv *palf_env);
   int stop();
   void destroy();
   // @brief switch log_restore_handle role, to LEADER or FOLLOWER

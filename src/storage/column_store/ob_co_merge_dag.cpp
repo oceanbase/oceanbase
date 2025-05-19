@@ -1530,8 +1530,9 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
     LOG_WARN("failed to get result by snapshot", K(ret));
   } else if (OB_FAIL(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
     LOG_WARN("failed to assign tables handle", K(ret), K(tmp_result));
+  } else if (OB_FAIL(co_merge_ctx_->tablet_handle_.assign(tmp_tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tmp_tablet_handle));
   } else {
-    co_merge_ctx_->tablet_handle_ = tmp_tablet_handle;
     co_merge_ctx_->static_param_.tablet_transfer_seq_ = tmp_tablet_handle.get_obj()->get_transfer_seq();
     co_merge_ctx_->static_param_.rowkey_read_info_ =
       static_cast<const ObRowkeyReadInfo *>(&(co_merge_ctx_->get_tablet()->get_rowkey_read_info()));

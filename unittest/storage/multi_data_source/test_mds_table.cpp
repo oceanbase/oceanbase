@@ -151,7 +151,7 @@ void TestMdsTable::compare_binary_key() {
 }
 
 void TestMdsTable::set() {
-  ASSERT_EQ(OB_SUCCESS, mds_table_.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MDS_LOG(INFO, "test sizeof", K(sizeof(MdsTableImpl<UnitTestMdsTable>)), K(sizeof(B)), K(mds_table_.p_mds_table_base_.ctrl_ptr_->ref_));
   ExampleUserData1 data1(1);
   ExampleUserData2 data2;
@@ -623,7 +623,7 @@ TEST_F(TestMdsTable, test_recycle) {
 
 TEST_F(TestMdsTable, test_recalculate_flush_scn_op) {
   MdsTableHandle mds_table;
-  ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletPointer*)0x111));
+  ASSERT_EQ(OB_SUCCESS, mds_table.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), share::SCN::min_scn(), (ObTabletBasePointer*)0x111));
   MdsCtx ctx1(mds::MdsWriter(ObTransID(1)));
   MdsCtx ctx2(mds::MdsWriter(ObTransID(2)));
   MdsCtx ctx3(mds::MdsWriter(ObTransID(3)));

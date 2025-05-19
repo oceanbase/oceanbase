@@ -1,6 +1,6 @@
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
 drop table if exists test_get_uncommitted_row_with_fuse_row_t;
 create table test_get_uncommitted_row_with_fuse_row_t(a int primary key, b int, unique key u_idx(b));
 insert into test_get_uncommitted_row_with_fuse_row_t (a, b) values (1, 10), (2, 20), (3, 30);

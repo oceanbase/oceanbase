@@ -1203,12 +1203,16 @@ int ObLSMigrationHandler::report_to_disaster_recovery_()
   } else if (OB_FAIL(get_ls_migration_task_(task))) {
     LOG_WARN("failed to get ls migration task", KR(ret));
   } else {
-    res.task_id_ = task.task_id_;
-    res.tenant_id_ = MTL_ID();
-    res.ls_id_ = task.arg_.ls_id_;
+    int result = OB_SUCCESS;
+    obrpc::ObDRTaskType dr_type = obrpc::ObDRTaskType::MAX_TYPE;
     uint64_t sys_data_version = 0;
-    if (OB_FAIL(get_result_(res.result_))) {
+    if (OB_FAIL(ObMigrationOpType::convert_to_dr_type(task.arg_.type_, dr_type))) {
+      LOG_WARN("fail to convert dr task type", KR(ret), K(task));
+    } else if (OB_FAIL(get_result_(result))) {
       LOG_WARN("failed to get ls migration result", KR(ret), K(task));
+    } else if (OB_FAIL(res.init(task.task_id_, MTL_ID(), task.arg_.ls_id_, result, dr_type))) {
+      // for dr_type, no compatibility processing required
+      LOG_WARN("failed to init res", KR(ret), K(task), K(result), K(dr_type));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
     } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
@@ -1297,13 +1301,13 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
             KR(ret), K(required_size));
       }
     } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
-        // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
-        FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
-            KR(ret), K(required_size));
-      }
-#endif
+// #ifdef OB_BUILD_SHARED_STORAGE
+//       if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
+//         // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
+//         FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
+//             KR(ret), K(required_size));
+//       }
+// #endif
     }
   }
   return ret;

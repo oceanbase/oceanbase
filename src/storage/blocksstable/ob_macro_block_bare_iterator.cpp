@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_data_store_desc.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
@@ -406,6 +407,44 @@ int ObMicroBlockBareIterator::get_macro_block_header(ObSSTableMacroBlockHeader &
     LOG_WARN("Not inited", K(ret));
   } else {
     macro_header = macro_block_header_;
+  }
+  return ret;
+}
+
+int ObMicroBlockBareIterator::get_macro_meta(ObDataMacroBlockMeta *&macro_meta, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObMicroBlockData meta_block;
+  const char *meta_block_buf = macro_block_buf_ + macro_block_header_.fixed_header_.meta_block_offset_;
+  const int64_t meta_block_buf_size = macro_block_header_.fixed_header_.meta_block_size_;
+  ObMacroBlockReader macro_block_reader;
+  ObMicroBlockReaderHelper micro_reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  bool is_compressed = false;
+  ObDatumRow datum_row;
+  ObDataMacroBlockMeta tmp_macro_meta;
+  if (OB_FAIL(macro_block_reader.decrypt_and_decompress_data(macro_block_header_,
+                                                             meta_block_buf,
+                                                             meta_block_buf_size,
+                                                             meta_block.get_buf(),
+                                                             meta_block.get_buf_size(),
+                                                             is_compressed))) {
+    LOG_WARN("decrypt and decompress meta block fail", K(ret));
+  } else if (OB_FAIL(micro_reader_helper.init(allocator))) {
+    LOG_WARN("init micro block reader helper fail", K(ret));
+  } else if (OB_FAIL(micro_reader_helper.get_reader(meta_block.get_store_type(), micro_reader))) {
+    LOG_WARN("get micro block reader fail", K(ret));
+  } else if (OB_FAIL(micro_reader->init(meta_block, NULL))) {
+    LOG_WARN("micro block reader init fail", K(ret));
+  } else if (OB_FAIL(datum_row.init(allocator, macro_block_header_.fixed_header_.rowkey_column_count_ + 1))) {
+    LOG_WARN("datum row init fail", K(ret));
+  } else if (OB_FAIL(micro_reader->get_row(0, datum_row))) {
+    LOG_WARN("read meta row fail", K(ret));
+  } else if (OB_FAIL(tmp_macro_meta.parse_row(datum_row))) {
+    LOG_WARN("parse meta row to macro meta fail", K(ret));
+  } else if (OB_FAIL(tmp_macro_meta.deep_copy(macro_meta, allocator))) {
+    macro_meta = NULL;
+    LOG_WARN("deep copy macro meta fail", K(ret));
   }
   return ret;
 }
@@ -810,6 +849,7 @@ int ObMacroBlockRowBareIterator::get_macro_block_header(
   }
   return ret;
 }
+
 
 int ObMacroBlockRowBareIterator::init_micro_reader(const ObRowStoreType store_type)
 {

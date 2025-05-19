@@ -127,6 +127,7 @@ public:
   bool is_only_shared_macro_blocks() const {
     return SHARED_SSTABLE != shared_flag_
         && SHARED_MACRO_BLOCKS == shared_flag_; }
+  int32_t get_flag() const { return flag_; }
   TO_STRING_KV(K_(shared_flag), K_(reserved));
 
 private:

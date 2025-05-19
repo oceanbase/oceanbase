@@ -200,6 +200,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPrivateBlockGCThread::THREAD_NUM,
        storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),
        storage::ObPrivateBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
 #endif
 
 

@@ -75,6 +75,90 @@ ObTabletMeta::~ObTabletMeta()
   reset();
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTabletMeta::init_for_share_storage(const ObTabletMeta &old_tablet_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!old_tablet_meta.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(old_tablet_meta));
+  } else {
+    const SCN start_checkpoint_scn = old_tablet_meta.transfer_info_.transfer_start_scn_.is_valid_and_not_min() ?
+        old_tablet_meta.transfer_info_.transfer_start_scn_ : INIT_CLOG_CHECKPOINT_SCN;
+    // todo feidu inc_shared_storage , recover, ls_id_ = SYS_LS; useless at shared storage, just use sys ls id
+    ls_id_ = old_tablet_meta.ls_id_; // useless at shared storage, but useful when init_tablet, such as check_tablet_schema_mismatch.
+
+    // 1. set while create, all the tablet replica is same.
+    version_ = TABLET_META_VERSION;
+    tablet_id_ = old_tablet_meta.tablet_id_;
+    data_tablet_id_ = old_tablet_meta.data_tablet_id_;
+    ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
+    create_scn_ = old_tablet_meta.create_scn_;
+    create_schema_version_ = old_tablet_meta.create_schema_version_;
+    compat_mode_ = old_tablet_meta.compat_mode_;
+    micro_index_clustered_ = old_tablet_meta.micro_index_clustered_;
+    start_scn_ = INIT_CLOG_CHECKPOINT_SCN;
+    max_serialized_medium_scn_ = 0; // abandoned
+    space_usage_.reset();               // TODO: calculated by tablet persist
+    max_sync_storage_schema_version_ = 0;
+
+    // 2. ddl modify, only modify once.
+    ddl_commit_scn_.set_min();
+    ddl_snapshot_version_ = 0;
+    ddl_data_format_version_ = 0;
+    ddl_replay_status_ = CS_REPLICA_INVISILE; // cs replica is not visable when doing offline ddl
+    ddl_start_scn_.convert_for_tx(SS_DDL_START_SCN_VAL);
+    ddl_checkpoint_scn_.convert_for_tx(SS_DDL_START_SCN_VAL);
+    ddl_execution_id_ = 1;
+
+    // 3. mini/minor/major
+    clog_checkpoint_scn_ = start_checkpoint_scn;
+
+    report_status_.merge_snapshot_version_ = 0;
+    report_status_.cur_report_version_ = 0;
+    report_status_.data_checksum_ = 0;
+    report_status_.row_count_ = 0;
+
+    snapshot_version_ = old_tablet_meta.snapshot_version_;
+    multi_version_start_ = 0;
+    table_store_flag_.set_without_major_sstable();
+    mds_checkpoint_scn_ = start_checkpoint_scn;
+    // use the init value
+    // extra_medium_info_ = old_tablet_meta.extra_medium_info_;
+
+    // 4. ignored
+    if (OB_FAIL(ha_status_.init_status())) {
+      LOG_WARN("failed to init ha status", K(ret));
+    } else {
+      transfer_info_ = old_tablet_meta.transfer_info_;
+    }
+    last_persisted_committed_tablet_status_.reset();
+  }
+
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  }
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+share::SCN ObTabletMeta::get_acquire_scn() const
+{
+  share::SCN max_scn;
+  max_scn = clog_checkpoint_scn_;
+  max_scn = MAX(max_scn, ddl_checkpoint_scn_);
+  max_scn = MAX(max_scn, mds_checkpoint_scn_);
+  return max_scn;
+}
+#endif
+
 int ObTabletMeta::init(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,

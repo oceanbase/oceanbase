@@ -85,16 +85,16 @@ public:
 private:
   int dump_in_shared_storage_mode(
     const ObLSHandle &ls_handle,
-    ObTablet &tablet,
+    ObTabletHandle &tablet_handle,
     ObTableStoreIterator &ddl_table_iter,
     const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &compacted_sstable_handle);
 #endif
 private:
-  int merge_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
-  int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
-  int merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
+  int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
+  int merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
 private:
   bool is_inited_;
   ObDDLTableMergeDagParam merge_param_;
@@ -157,11 +157,12 @@ public:
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       blocksstable::ObSSTable *sstable,
+      ObTabletHandle &new_tablet_handle,
       const ObTablesHandleArray &slice_sstables);
 
   static int compact_ddl_kv(
       ObLS &ls,
-      ObTablet &tablet,
+      ObTabletHandle &tablet_handle,
       ObTableStoreIterator &ddl_sstable_iter,
       const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
       const ObTabletDDLParam &ddl_param,
@@ -195,7 +196,8 @@ public:
       ObTableStoreIterator &ddl_sstable_iter,
       const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
       share::SCN &compact_start_scn,
-      share::SCN &compact_end_scn);
+      share::SCN &compact_end_scn,
+      share::SCN &rec_scn);
 
   static int freeze_ddl_kv(const ObDDLTableMergeDagParam &param);
 
@@ -203,7 +205,8 @@ public:
       ObTableStoreIterator &ddl_sstable_iter,
       bool &is_data_continue,
       share::SCN &compact_start_scn,
-      share::SCN &compact_end_scn);
+      share::SCN &compact_end_scn,
+      share::SCN &rec_scn);
 
   static int schedule_ddl_minor_merge_on_demand(
       const bool need_freeze,
@@ -227,7 +230,8 @@ private:
       const ObIArray<ObDDLKVHandle> &ddl_kvs,
       bool &is_data_continue,
       share::SCN &compact_start_scn,
-      share::SCN &compact_end_scn);
+      share::SCN &compact_end_scn,
+      share::SCN &rec_scn);
 
 };
 

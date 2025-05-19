@@ -333,39 +333,6 @@ public:
   palf::LSN base_lsn_;
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-enum LogRebuildType
-{
-  FULL_REBUILD = 0,
-  FAST_REBUILD = 1,
-};
-
-struct LogAcquireRebuildInfoMsg {
-  OB_UNIS_VERSION(1);
-public:
-  LogAcquireRebuildInfoMsg();
-  LogAcquireRebuildInfoMsg(const common::ObAddr &src,
-                           const int64_t palf_id,
-                           const palf::LSN &rebuild_replica_end_lsn);
-  LogAcquireRebuildInfoMsg(const common::ObAddr &src,
-                           const int64_t palf_id,
-                           const palf::LSN &rebuild_replica_end_lsn,
-                           const palf::PalfBaseInfo &base_info,
-                           const LogRebuildType &type);
-  ~LogAcquireRebuildInfoMsg();
-  bool is_valid() const;
-  void reset();
-  bool is_req() const { return is_req_; }
-  TO_STRING_KV(K_(palf_id), K_(src), K_(is_req), K_(rebuild_replica_end_lsn),
-      K_(base_info), K_(type));
-  common::ObAddr src_;
-  int64_t palf_id_;
-  bool is_req_;
-  palf::LSN rebuild_replica_end_lsn_;
-  palf::PalfBaseInfo base_info_;
-  LogRebuildType type_;
-};
-#endif
 } // end namespace logservice
 }// end namespace oceanbase
 

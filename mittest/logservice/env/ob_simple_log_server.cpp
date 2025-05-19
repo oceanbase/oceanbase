@@ -13,6 +13,10 @@
 #define protected public
 #include "ob_simple_log_server.h"
 
+#include "lib/file/file_directory_utils.h"
+#include "logservice/palf/log_define.h"
+#include "share/config/ob_server_config.h"
+#include <iostream>
 #define USING_LOG_PREFIX RPC_TEST
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -458,7 +462,10 @@ int ObSimpleLogServer::init_log_service_(const bool is_bootstrap)
   ObMemAttr ele_attr(1, ObNewModIds::OB_ELECTION);
   net_keepalive_ = MTL_NEW(MockNetKeepAliveAdapter, "SimpleLog");
   omt::ObSharedTimer *shared_timer_ptr = &shared_timer_;
-  if (OB_FAIL(net_keepalive_->init(&deliver_))) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    SERVER_LOG(ERROR, "logservice is not supported", K(ret));
+  } else if (OB_FAIL(net_keepalive_->init(&deliver_))) {
   } else if (OB_FAIL(omt::ObSharedTimer::mtl_init(shared_timer_ptr))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
   } else if (OB_FAIL(init_log_kv_cache_())) {
@@ -471,10 +478,10 @@ int ObSimpleLogServer::init_log_service_(const bool is_bootstrap)
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else if (is_bootstrap && OB_FAIL(ckpt_map_.init("CKPTMap", OB_SERVER_TENANT_ID))) {
     SERVER_LOG(ERROR, "ckpt_map_ init fail", K(ret));
-  } else if (OB_FAIL(log_service_.get_palf_env()->start())) {
+  } else if (OB_FAIL(static_cast<palf::PalfEnv*>(log_service_.get_palf_env())->start())) {
     SERVER_LOG(ERROR, "palf_env start fail", K(ret));
   } else {
-    palf_env_ = log_service_.get_palf_env();
+    palf_env_ = static_cast<palf::PalfEnv*>(log_service_.get_palf_env());
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = tenant_id_;
     SERVER_LOG(INFO, "init_log_service_ success", K(ret), K(opts), K(disk_opts_));
   }
@@ -497,10 +504,10 @@ int ObSimpleLogServer::init_ls_service_(const bool is_bootstrap)
       ls_service_->is_inited_ = true;
     }
   }
-  auto func_iterate_palf = [this](const palf::PalfHandle &palf_handle) -> int {
+  auto func_iterate_palf = [this](const ipalf::IPalfHandle &palf_handle) -> int {
     int ret = OB_SUCCESS;
     int64_t palf_id = INVALID_PALF_ID;
-    palf_handle.palf_handle_impl_->get_palf_id(palf_id);
+    palf_handle.get_palf_id(palf_id);
     if (OB_FAIL(add_ls_to_ls_map_(palf_id))) {
       LOG_WARN("failed to add_ls_to_map_", K(ret));
     } else {
@@ -527,35 +534,9 @@ int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
     SERVER_LOG(ERROR, "deliver_ start failed", K(ret));
   } else if (OB_FAIL(log_service_.arb_service_.start())) {
     SERVER_LOG(ERROR, "arb_service start failed", K(ret));
-  #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(omt::ObSharedTimer::mtl_start(shared_timer))) {
-    SERVER_LOG(ERROR, "shared_log_service start failed", K(ret));
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(log_service_.shared_log_service_.start())) {
-    SERVER_LOG(ERROR, "shared_log_service start failed", K(ret));
-  #endif
   } else if (OB_FAIL(looper_.start())) {
     SERVER_LOG(ERROR, "ObLooper start failed", K(ret));
   }
-  #ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_SUCC(ret) && GCTX.is_shared_storage_mode())
-  {
-    //add ls to shared_log_service
-    common::ObFunction<int(const palf::PalfHandle&)> add_ls = [&](const palf::PalfHandle &palf_handle) {
-    int ret = OB_SUCCESS;
-    int64_t palf_id = -1;
-    palf_handle.get_palf_id(palf_id);
-    if (OB_FAIL(log_service_.shared_log_service_.add_ls(ObLSID(palf_id)))) {
-      SERVER_LOG(WARN, "ls_array push_back failed", K(palf_id));
-    } else {
-      SERVER_LOG(INFO, "add ls to shared_log_service success", K(palf_id));
-    }
-    return ret;
-    };
-    if (OB_FAIL(log_service_.iterate_palf(add_ls))) {
-      SERVER_LOG(ERROR, "iterate_palf failed");
-    }
-  }
-  #endif
   // do not start entire log_service_ for now, it will
   // slow down cases running
   return ret;
@@ -1045,13 +1026,13 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogProbeRsP);
     }
-    case obrpc::OB_LOG_SYNC_BASE_LSN_REQ: {
-      PROCESS(logservice::LogSyncBaseLSNReqP)
-    }
-    case obrpc::OB_LOG_ACQUIRE_REBUILD_INFO: {
-      //modify_pkt.set_tenant_id(node_id_);
-      PROCESS(LogAcquireRebuildInfoP)
-    }
+//    case obrpc::OB_LOG_SYNC_BASE_LSN_REQ: {
+//      PROCESS(logservice::LogSyncBaseLSNReqP)
+//    }
+//    case obrpc::OB_LOG_ACQUIRE_REBUILD_INFO: {
+//      //modify_pkt.set_tenant_id(node_id_);
+//      PROCESS(LogAcquireRebuildInfoP)
+//    }
     default:
       SERVER_LOG(ERROR, "invalid req type", K(pkt.get_pcode()));
       break;

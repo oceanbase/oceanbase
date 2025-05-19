@@ -69,7 +69,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     pre_warm_param_(),
     tablet_schema_guard_(),
     tablet_transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ),
-    co_base_snapshot_version_(0)
+    co_base_snapshot_version_(0),
+    rec_scn_()
 {
   merge_scn_.set_max();
 }
@@ -92,6 +93,7 @@ void ObStaticMergeParam::reset()
   encoding_granularity_ = 0;
   tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   co_base_snapshot_version_ = 0;
+  rec_scn_.reset();
   for_unittest_ = false;
   is_cs_replica_force_full_merge_ = false;
 }
@@ -202,6 +204,7 @@ int ObStaticMergeParam::get_basic_info_from_result(
     snapshot_info_ = get_merge_table_result.snapshot_info_;
     is_backfill_ = get_merge_table_result.is_backfill_;
     merge_scn_ = get_merge_table_result.get_merge_scn();
+    rec_scn_ = get_merge_table_result.rec_scn_;
 
     if (is_major_or_meta_merge_type(get_merge_type())) {
       // for major or meta, need set create_snapshot as last major/meta sstable
@@ -919,6 +922,7 @@ int ObBasicTabletMergeCtx::init_static_desc()
                                 static_param_.data_version_,
                                 static_param_.get_exec_mode(),
                                 get_tablet()->get_tablet_meta().micro_index_clustered_,
+                                get_tablet()->get_reorganization_scn(),
                                 true,
                                 static_param_.encoding_granularity_))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
@@ -1562,6 +1566,11 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
     ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), schema_for_merge);
   }
   return ret;
+}
+
+ObDagPrio::ObDagPrioEnum ObBasicTabletMergeCtx::get_dag_priority() const
+{
+  return merge_dag_ ? merge_dag_->get_priority() : ObDagPrio::ObDagPrioEnum::DAG_PRIO_MAX;
 }
 
 } // namespace compaction

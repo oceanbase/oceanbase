@@ -129,9 +129,10 @@ int ObBackupSSTableSecMetaIterator::inner_init_(
              KPC(sstable_meta_ptr));
   } else if (OB_FAIL(create_tmp_sstable_(create_sstable_param))) {
     LOG_WARN("failed to create tmp sstable", K(ret), K(create_sstable_param));
+  } else if (OB_FAIL(tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else {
     output_idx_ = 0;
-    tablet_handle_ = tablet_handle;
     tablet_id_ = tablet_id;
     table_key_ = table_key;
     if (OB_FAIL(init_sstable_sec_meta_iter_())) {

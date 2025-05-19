@@ -16,6 +16,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "ob_disaster_recovery_task.h"
+#include "ob_disaster_recovery_task_utils.h"
 #include "ob_disaster_recovery_task_table_operator.h"
 
 namespace oceanbase
@@ -58,33 +59,29 @@ private:
 class ObDRTaskMgr
 {
 public:
-  ObDRTaskMgr();
+  ObDRTaskMgr(const int64_t service_epoch, const uint64_t tenant_id);
   virtual ~ObDRTaskMgr();
-  void set_service_epoch(const int64_t service_epoch) { service_epoch_ = service_epoch; }
 
   // check the __all_ls_replica_task table for invalid tasks and clean them up
   // @params[in]  last_check_ts, timestamp of last check
-  int try_clean_and_cancel_task(
-      const uint64_t tenant_id);
+  int try_clean_and_cancel_task(const uint64_t table_tenant_id);
 
   // check task in __all_ls_replica_task and schedule it
   // @params[in]  tenant_id, task of which tenent
-  int try_pop_and_execute_task(
-      const uint64_t tenant_id);
+  int try_pop_and_execute_task(const uint64_t table_tenant_id);
 
 private:
   // check and execute task
   // @params[in]  task, task to execute
   int execute_task_(
       ObDRTask &task);
-
+  int check_inner_stat_() const;
   // update task status from waiting to inprogress and set schedule_time
   // @params[in]  task, which task to update
   int update_task_schedule_status_(
       const ObDRTask &task);
 
-  int check_and_set_parallel_migrate_task_(
-      const uint64_t tenant_id);
+  int check_and_set_parallel_migrate_task_();
 
   // do some check before execute dr task
   // @params[in]  task, target task to check
@@ -124,6 +121,7 @@ private:
 
 private:
   int64_t service_epoch_;
+  uint64_t tenant_id_;
   ObArray<ObDRTask*> dr_tasks_;
   common::ObArenaAllocator task_alloc_;
   ObLSReplicaTaskTableOperator table_operator_;

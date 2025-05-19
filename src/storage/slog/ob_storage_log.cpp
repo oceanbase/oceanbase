@@ -181,18 +181,93 @@ DEF_TO_STRING(ObCreateTabletLog)
 }
 
 ObDeleteTabletLog::ObDeleteTabletLog()
-  : ls_id_(), tablet_id_()
+  : ls_id_(),
+    tablet_id_(),
+    ls_epoch_(0),
+    tablet_meta_version_(0),
+    status_(ObPendingFreeTabletStatus::MAX),
+    free_time_(0),
+    gc_type_(GCTabletType::DropTablet),
+    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
 {
 }
 
 ObDeleteTabletLog::ObDeleteTabletLog(const ObLSID &ls_id, const ObTabletID &tablet_id)
-  : ls_id_(ls_id), tablet_id_(tablet_id)
+  : ls_id_(ls_id),
+    tablet_id_(tablet_id),
+    ls_epoch_(0),
+    tablet_meta_version_(0),
+    status_(ObPendingFreeTabletStatus::MAX),
+    free_time_(0),
+    gc_type_(GCTabletType::DropTablet),
+    tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
+{
+}
+
+ObDeleteTabletLog::ObDeleteTabletLog(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t ls_epoch,
+    const int64_t tablet_meta_version,
+    const ObPendingFreeTabletStatus &status,
+    const int64_t free_time,
+    const GCTabletType &gc_type,
+    const int64_t tablet_transfer_seq)
+  : ls_id_(ls_id),
+    tablet_id_(tablet_id),
+    ls_epoch_(ls_epoch),
+    tablet_meta_version_(tablet_meta_version),
+    status_(status),
+    free_time_(free_time),
+    gc_type_(gc_type),
+    tablet_transfer_seq_(tablet_transfer_seq)
 {
 }
 
 bool ObDeleteTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid();
+  bool is_valid = ls_id_.is_valid() && tablet_id_.is_valid();
+  if (GCTX.is_shared_storage_mode()) {
+    is_valid = is_valid
+            && ls_epoch_ >= 0
+            && tablet_meta_version_ > 0
+            && ObPendingFreeTabletStatus::MAX != status_
+            && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
+  }
+  return is_valid;
+}
+
+bool ObDeleteTabletLog::operator ==(const ObDeleteTabletLog &other) const
+{
+  return ls_id_               == other.ls_id_
+      && tablet_id_           == other.tablet_id_
+      && ls_epoch_            == other.ls_epoch_
+      && tablet_meta_version_ == other.tablet_meta_version_
+      && status_              == other.status_
+      && free_time_           == other.free_time_
+      && gc_type_             == other.gc_type_
+      && tablet_transfer_seq_ == other.tablet_transfer_seq_;
+}
+
+bool ObDeleteTabletLog::operator !=(const ObDeleteTabletLog &other) const
+{
+  return !(*this == other);
+}
+
+uint64_t ObDeleteTabletLog::hash() const
+{
+  uint64_t hash_val = ls_id_.hash() + tablet_id_.hash();
+  hash_val = common::murmurhash(&ls_epoch_, sizeof(ls_epoch_), hash_val);
+  hash_val = common::murmurhash(&tablet_meta_version_, sizeof(tablet_meta_version_), hash_val);
+  hash_val = common::murmurhash(&tablet_transfer_seq_, sizeof(tablet_transfer_seq_), hash_val);
+  return hash_val;
+}
+
+int ObDeleteTabletLog::hash(uint64_t &hash_val) const
+{
+  int ret = OB_SUCCESS;
+  hash_val = hash();
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObDeleteTabletLog, ls_id_, tablet_id_, ls_epoch_, tablet_meta_version_, status_, free_time_, gc_type_, tablet_transfer_seq_);
@@ -201,7 +276,76 @@ DEF_TO_STRING(ObDeleteTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id));
+  J_KV(K_(ls_id), K_(tablet_id), K_(ls_epoch), K_(tablet_meta_version), K_(status), K_(free_time), K_(gc_type),
+       K_(tablet_transfer_seq));
+  J_OBJ_END();
+  return pos;
+}
+
+ObGCTabletLog::ObGCTabletLog(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObTabletID &tablet_id,
+    const int64_t tablet_meta_version,
+    const ObPendingFreeTabletStatus &status,
+    const int64_t tablet_transfer_seq)
+  : ls_id_(ls_id),
+    tablet_id_(tablet_id),
+    ls_epoch_(ls_epoch),
+    tablet_meta_version_(tablet_meta_version),
+    status_(status),
+    tablet_transfer_seq_(tablet_transfer_seq)
+{
+}
+
+bool ObGCTabletLog::is_valid() const
+{
+  return ls_id_.is_valid()
+      && ls_epoch_ >= 0
+      && tablet_id_.is_valid()
+      && tablet_meta_version_ > 0
+      && ObPendingFreeTabletStatus::MAX != status_
+      && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
+}
+
+bool ObGCTabletLog::operator ==(const ObGCTabletLog &other) const
+{
+  return ls_id_               == other.ls_id_
+      && tablet_id_           == other.tablet_id_
+      && ls_epoch_            == other.ls_epoch_
+      && tablet_meta_version_ == other.tablet_meta_version_
+      && status_              == other.status_
+      && tablet_transfer_seq_ == other.tablet_transfer_seq_;
+}
+
+bool ObGCTabletLog::operator !=(const ObGCTabletLog &other) const
+{
+  return !(*this == other);
+}
+
+uint64_t ObGCTabletLog::hash() const
+{
+  uint64_t hash_val = ls_id_.hash() + tablet_id_.hash();
+  hash_val = common::murmurhash(&ls_epoch_, sizeof(ls_epoch_), hash_val);
+  hash_val = common::murmurhash(&tablet_meta_version_, sizeof(tablet_meta_version_), hash_val);
+  hash_val = common::murmurhash(&tablet_transfer_seq_, sizeof(tablet_transfer_seq_), hash_val);
+  return hash_val;
+}
+
+int ObGCTabletLog::hash(uint64_t &hash_val) const
+{
+  int ret = OB_SUCCESS;
+  hash_val = hash();
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObGCTabletLog, ls_id_, ls_epoch_, tablet_id_, tablet_meta_version_, status_, tablet_transfer_seq_);
+
+DEF_TO_STRING(ObGCTabletLog)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ls_id), K_(tablet_id), K_(ls_epoch), K_(tablet_meta_version), K_(status), K_(tablet_transfer_seq));
   J_OBJ_END();
   return pos;
 }
@@ -209,16 +353,20 @@ DEF_TO_STRING(ObDeleteTabletLog)
 ObUpdateTabletLog::ObUpdateTabletLog(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const ObMetaDiskAddr &disk_addr)
+    const ObUpdateTabletPointerParam &param,
+    const int64_t ls_epoch)
   : ls_id_(ls_id),
     tablet_id_(tablet_id),
-    disk_addr_(disk_addr)
+    disk_addr_(param.resident_info_.addr_),
+    ls_epoch_(ls_epoch),
+    tablet_attr_(param.resident_info_.attr_),
+    accelerate_info_(param.accelerate_info_)
 {
 }
 
 bool ObUpdateTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid() && disk_addr_.is_valid();
+  return ls_id_.is_valid() && tablet_id_.is_valid() && disk_addr_.is_valid() && ls_epoch_ >= 0;
 }
 
 OB_SERIALIZE_MEMBER(ObUpdateTabletLog,
@@ -233,7 +381,12 @@ DEF_TO_STRING(ObUpdateTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id), K_(disk_addr));
+  J_KV(K_(ls_id),
+       K_(tablet_id),
+       K_(disk_addr),
+       K_(ls_epoch),
+       K_(tablet_attr),
+       K_(accelerate_info));
   J_OBJ_END();
   return pos;
 }
@@ -241,11 +394,13 @@ DEF_TO_STRING(ObUpdateTabletLog)
 ObEmptyShellTabletLog::ObEmptyShellTabletLog(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
+    const int64_t ls_epoch,
     ObTablet *tablet)
   : version_(EMPTY_SHELL_SLOG_VERSION),
     ls_id_(ls_id),
     tablet_id_(tablet_id),
-    tablet_(tablet)
+    tablet_(tablet),
+    ls_epoch_(ls_epoch)
 {
 }
 
@@ -261,6 +416,8 @@ int ObEmptyShellTabletLog::serialize(
     STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.serialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
+  } else if (OB_FAIL(serialization::encode(buf, data_len, pos, ls_epoch_))) {
+    STORAGE_LOG(WARN, "deserialize ls epoch failed", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(tablet_->serialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize tablet failed", K(ret), KP(data_len), K(pos));
   }
@@ -280,6 +437,8 @@ int ObEmptyShellTabletLog::deserialize_id(
     STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
+  } else if (EMPTY_SHELL_SLOG_VERSION_2 == version_ && OB_FAIL(serialization::decode(buf, data_len, pos, ls_epoch_))) {
+    STORAGE_LOG(WARN, "deserialize ls epoch failed", K(ret), K(data_len), K(pos));
   }
   return ret;
 }
@@ -297,6 +456,12 @@ int ObEmptyShellTabletLog::deserialize(
     STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
+  } else if (EMPTY_SHELL_SLOG_VERSION_1 == version_) {
+    if (OB_FAIL(tablet_->deserialize(buf, data_len, pos))) {
+      STORAGE_LOG(WARN, "deserialize tablet failed", K(ret), KP(data_len), K(pos));
+    }
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, ls_epoch_))) {
+    STORAGE_LOG(WARN, "deserialize ls epoch failed", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(tablet_->deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize tablet failed", K(ret), KP(data_len), K(pos));
   }
@@ -310,20 +475,21 @@ int64_t ObEmptyShellTabletLog::get_serialize_size() const
   size += serialization::encoded_length(version_);
   size += ls_id_.get_serialize_size();
   size += tablet_id_.get_serialize_size();
+  size += serialization::encoded_length(ls_epoch_);
   size += tablet_->get_serialize_size();
   return size;
 }
 
 bool ObEmptyShellTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid();
+  return ls_id_.is_valid() && tablet_id_.is_valid() && ls_epoch_ >= 0;
 }
 
 DEF_TO_STRING(ObEmptyShellTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id));
+  J_KV(K_(ls_id), K_(tablet_id), K_(ls_epoch));
   J_OBJ_END();
   return pos;
 }

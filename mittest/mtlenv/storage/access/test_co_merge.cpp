@@ -72,6 +72,7 @@ void close_builder_and_prepare_sstable(
 
   ObTabletCreateSSTableParam param;
   param.table_key_ = table_key;
+  param.rec_scn_.set_min();
   param.co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
   param.column_group_cnt_ = column_group_cnt;
   param.schema_version_ = ObMultiVersionSSTableTest::SCHEMA_VERSION;
@@ -375,7 +376,8 @@ void TestCOMerge::prepare_co_sstable(
                           DATA_CURRENT_VERSION,
                           table_schema.get_micro_index_clustered(),
                           0 /*tablet_transfer_seq*/,
-                          share::SCN::invalid_scn(),
+                          share::SCN::min_scn(), /*reorganization_scn*/
+                          share::SCN::invalid_scn(), /*end_scn*/
                           &cg_schema,
                           i));
     ASSERT_EQ(OB_SUCCESS, root_index_builder.init(data_store_desc.get_desc()));

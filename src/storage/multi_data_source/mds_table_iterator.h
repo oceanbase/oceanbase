@@ -22,7 +22,7 @@ namespace oceanbase
 namespace storage
 {
 class ObLS;
-class ObTabletPointer;
+class ObTabletBasePointer;
 namespace mds
 {
 

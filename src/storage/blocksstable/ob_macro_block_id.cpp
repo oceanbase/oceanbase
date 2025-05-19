@@ -54,7 +54,7 @@ MacroBlockId::MacroBlockId(const MacroBlockId &id)
   third_id_ = id.third_id_;
   fourth_id_ = id.fourth_id_;
 }
-void MacroBlockId::first_id_to_string(char *buf, const int64_t buf_len, int64_t &pos) const
+void MacroBlockId::first_id_to_string_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   switch ((ObMacroBlockIdMode)id_mode_) {
   case ObMacroBlockIdMode::ID_MODE_LOCAL:
@@ -110,7 +110,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   // 1. print first id
-  first_id_to_string(buf, buf_len, pos);
+  first_id_to_string_(buf, buf_len, pos);
 
   // 2. print other info
   switch ((ObMacroBlockIdMode)id_mode_) {
@@ -120,7 +120,8 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
                     (uint64_t) second_id_);
     break;
   case ObMacroBlockIdMode::ID_MODE_SHARE:
-    databuff_printf(buf, buf_len, pos,
+    if (is_private_data_or_meta()) {
+      databuff_printf(buf, buf_len, pos,
         "[2nd=%lu]"
         "[3rd=%lu]"
         "[4th=(trans_seq=%lu,sec_id=%lu)]}",
@@ -128,6 +129,22 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         (uint64_t) third_id_,
         (int64_t) macro_transfer_seq_,
         (uint64_t) tenant_seq_);
+    } else if (static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META) == storage_object_type_) {
+      databuff_printf(buf, buf_len, pos,
+        "[2nd=%lu]"
+        "[3rd=(op_id=%lu, macro_seq_id=%lu)",
+        (uint64_t) second_id_,
+        (uint64_t) third_id_ >> 32,
+        (uint64_t) third_id_ & 0xFFFFFFFF);
+    } else {
+      databuff_printf(buf, buf_len, pos,
+        "[2nd=%lu]"
+        "[3rd=%lu]"
+        "[4th=(ls_id=%ld)]}",
+        (uint64_t) second_id_,
+        (uint64_t) third_id_,
+        (uint64_t) fourth_id_);
+    }
     break;
   default:
     databuff_printf(buf, buf_len, pos,
@@ -212,9 +229,14 @@ bool MacroBlockId::is_shared_data_or_meta() const
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO) == storage_object_type_ ||
-    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_TABLET_META) == storage_object_type_
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_TABLET_META) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META) == storage_object_type_
   );
 }
 
@@ -224,6 +246,8 @@ bool MacroBlockId::is_private_data_or_meta() const
   (
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_CKPT_FILE) == storage_object_type_  ||
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_SLOG_FILE) == storage_object_type_  ||
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META) == storage_object_type_
   );
 }
@@ -235,6 +259,8 @@ bool MacroBlockId::is_data() const
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO) == storage_object_type_
   );
 }
@@ -244,9 +270,14 @@ bool MacroBlockId::is_meta() const
   return is_id_mode_share() &&
   (
     static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_META_MACRO) == storage_object_type_ ||
-    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO) == storage_object_type_
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_TABLET_META) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META) == storage_object_type_
   );
 }
 
@@ -359,19 +390,21 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
 /* read through the following object types:
  * SHARED_MAJOR_TABLET_META, COMPACTION_SERVER, SVR_COMPACTION_STATUS, COMPACTION_REPORT,
  * SHARED_MAJOR_GC_INFO, SHARED_MAJOR_META_LIST, MAJOR_PREWARM_DATA, MAJOR_PREWARM_DATA_INDEX,
- * MAJOR_PREWARM_META, MAJOR_PREWARM_META_INDEX
+ * MAJOR_PREWARM_META, MAJOR_PREWARM_META_INDEX, ROOT_KEY
  */
 bool is_read_through_storage_object_type(const ObStorageObjectType type)
 {
   bool read_through = false;
   switch (type) {
-#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+#define REGISTER_MACRO_BLOCK_ID
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_write_through, is_overwrite, is_support_fd_cache, is_valid, to_local_path_format, local_path_to_macro_id, to_remote_path_format, get_parent_dir, create_parent_dir) \
     case ObStorageObjectType::obj_id: { \
       read_through = is_read_through; \
       break; \
     }
-    OB_STORAGE_OBJECT_TYPE_LIST
+    #include "storage/blocksstable/ob_macro_block_id_register.h"
 #undef STORAGE_OBJECT_TYPE_INFO
+#undef REGISTER_MACRO_BLOCK_ID
     default: {
       read_through = false;
       break;
@@ -380,31 +413,48 @@ bool is_read_through_storage_object_type(const ObStorageObjectType type)
   return read_through;
 }
 
-// judge object type is only store in remote object storage
-bool is_object_type_only_store_remote(const ObStorageObjectType type)
+// judge whether object type need alloc disk space
+// 1. is_write_through = true: means write through object storage and do not write local cache file,
+//    thus no need to alloc file size
+// 2. is_overwrite = true: do not alloc/free file size for this kind of object, ignore these disk
+//    space usage.
+bool is_need_alloc_file_size(const ObStorageObjectType type)
 {
-  bool is_store_remote = is_read_through_storage_object_type(type) ||
-                         (ObStorageObjectType::SHARED_MAJOR_DATA_MACRO == type) ||
-                         (ObStorageObjectType::SHARED_MAJOR_META_MACRO == type);
-  return is_store_remote;
+  bool is_need_alloc = false;
+  switch (type) {
+#define REGISTER_MACRO_BLOCK_ID
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_write_through, is_overwrite, is_support_fd_cache, is_valid, to_local_path_format, local_path_to_macro_id, to_remote_path_format, get_parent_dir, create_parent_dir) \
+    case ObStorageObjectType::obj_id: { \
+      is_need_alloc = (!is_write_through && !is_overwrite); \
+      break; \
+    }
+    #include "storage/blocksstable/ob_macro_block_id_register.h"
+#undef STORAGE_OBJECT_TYPE_INFO
+#undef REGISTER_MACRO_BLOCK_ID
+    default: {
+      is_need_alloc = false;
+      break;
+    }
+  }
+  return is_need_alloc;
 }
 
 /* files with the following object types are pin:
- * LS_META, PRIVATE_TABLET_META, PRIVATE_TABLET_CURRENT_VERSION, LS_TRANSFER_TABLET_ID_ARRAY,
- * LS_ACTIVE_TABLET_ARRAY, LS_PENDING_FREE_TABLET_ARRAY, LS_DUP_TABLE_META,
- * SERVER_META, TENANT_SUPER_BLOCK and TENANT_UNIT_META
+ * SERVER_META and TENANT_DISK_SPACE_META
  */
 bool is_pin_storage_object_type(const ObStorageObjectType type)
 {
   bool is_pin = false;
   switch (type) {
-#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+#define REGISTER_MACRO_BLOCK_ID
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_write_through, is_overwrite, is_support_fd_cache, is_valid, to_local_path_format, local_path_to_macro_id, to_remote_path_format, get_parent_dir, create_parent_dir) \
     case ObStorageObjectType::obj_id: { \
       is_pin = is_pin_local; \
       break; \
     }
-    OB_STORAGE_OBJECT_TYPE_LIST
+    #include "storage/blocksstable/ob_macro_block_id_register.h"
 #undef STORAGE_OBJECT_TYPE_INFO
+#undef REGISTER_MACRO_BLOCK_ID
     default: {
       is_pin = false;
       break;
@@ -416,10 +466,66 @@ bool is_pin_storage_object_type(const ObStorageObjectType type)
 // judge object type is need ls replica prewarm
 bool is_ls_replica_prewarm_filter_object_type(const ObStorageObjectType type)
 {
-  bool is_filter = ((ObStorageObjectType::PRIVATE_DATA_MACRO == type) ||
-                    (ObStorageObjectType::PRIVATE_META_MACRO == type));
+  bool is_filter = ((ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != type) &&
+                    (ObStorageObjectType::SHARED_MAJOR_META_MACRO != type));
   return is_filter;
 }
+
+//TODO(lingchuan) Remove this type checker
+bool need_check_inner_tablet_type(const ObStorageObjectType type)
+{
+  bool b_ret = false;
+#ifdef OB_BUILD_SHARED_STORAGE
+
+  switch (type) {
+    case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MINI_META_MACRO:
+    case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MINOR_META_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
+    case ObStorageObjectType::SHARED_TABLET_SUB_META:
+    //TODO(jianyue) below type will be removed
+    case ObStorageObjectType::SHARED_TABLET_META_CURRENT:
+    case ObStorageObjectType::SHARED_TABLET_META_OLDEST:
+    case ObStorageObjectType::SHARED_TABLET_META_OP_ID:
+    case ObStorageObjectType::SHARED_TABLET_META:
+    case ObStorageObjectType::SHARED_TABLET_META_TASK:
+    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_CURRENT:
+    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_OLDEST:
+    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_OP_ID:
+    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST:
+    case ObStorageObjectType::SHARED_MINI_SSTABLE_LIST_TASK:
+    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_CURRENT:
+    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_OLDEST:
+    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_OP_ID:
+    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST:
+    case ObStorageObjectType::SHARED_MINOR_SSTABLE_LIST_TASK:
+    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_CURRENT:
+    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_OLDEST:
+    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_OP_ID:
+    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST:
+    case ObStorageObjectType::SHARED_MDS_MINI_SSTABLE_LIST_TASK:
+    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_CURRENT:
+    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_OLDEST:
+    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_OP_ID:
+    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST:
+    case ObStorageObjectType::SHARED_MDS_MINOR_SSTABLE_LIST_TASK: {
+      b_ret = true;
+      break;
+    }
+    default: {
+      int ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected share storage object type", K(ret), K(type));
+      break;
+    }
+  }
+#endif
+  return b_ret;
+}
+
 
 } // namespace blocksstable
 } // namespace oceanbase

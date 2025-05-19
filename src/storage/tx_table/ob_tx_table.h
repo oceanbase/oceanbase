@@ -43,6 +43,27 @@ class ObTxTableGuard;
 
 class ObTxTable
 {
+#ifdef OB_BUILD_SHARED_STORAGE
+  struct SSUploadSCNCache
+  {
+    share::SCN tx_table_upload_max_scn_cache_;
+    share::SCN data_upload_min_end_scn_cache_;
+    // we use update ts also as an atomic concurrent variable.
+    int64_t update_ts_;
+
+    SSUploadSCNCache() { reset(); }
+
+    void reset() {
+      tx_table_upload_max_scn_cache_.reset();
+      data_upload_min_end_scn_cache_.reset();
+      update_ts_ = 0;
+    }
+
+    TO_STRING_KV(K(tx_table_upload_max_scn_cache_),
+                 K(data_upload_min_end_scn_cache_),
+                 K(update_ts_));
+  };
+#endif
   struct RecycleRecord
   {
     share::SCN last_recycle_scn_;
@@ -127,7 +148,11 @@ public:
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
         recycle_record_(),
-        ctx_min_start_scn_info_() {}
+        ctx_min_start_scn_info_()
+#ifdef OB_BUILD_SHARED_STORAGE
+        ,ss_upload_scn_cache_()
+#endif
+	{}
 
   ObTxTable(ObTxDataTable &tx_data_table)
       : is_inited_(false),
@@ -141,7 +166,12 @@ public:
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
         recycle_record_(),
-        ctx_min_start_scn_info_() {}
+        ctx_min_start_scn_info_()
+#ifdef OB_BUILD_SHARED_STORAGE
+        ,ss_upload_scn_cache_()
+#endif
+	{}
+
   ~ObTxTable() {}
 
   int init(ObLS *ls);
@@ -272,7 +302,8 @@ public:
    * @param[out] recycle_scn the tx data whose end_scn is smaller or equals to the recycle_scn can
    * be cleared.
    */
-  int get_recycle_scn(share::SCN &recycle_scn);
+  int get_recycle_scn(share::SCN &recycle_scn,
+                      const bool is_shared_minor = false);
 
   /**
    * @brief Get the upper trans version for each given end_scn
@@ -396,12 +427,16 @@ private:
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int put_tx_data_into_kv_cache_(const ObTxData &tx_data);
-  int get_recycle_scn_(const int64_t tx_result_retention_s, share::SCN &real_recycle_scn);
+  int get_recycle_scn_(const int64_t tx_result_retention_s,
+                       share::SCN &real_recycle_scn,
+                       const bool is_shared_minor);
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
                               const bool need_log_error,
                               int &ret);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  int resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_scn);
+#endif
 private:
   static const int64_t LS_TX_CTX_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;
@@ -421,6 +456,10 @@ private:
   int64_t read_tx_data_table_cnt_;
   RecycleRecord recycle_record_;
   CtxMinStartScnInfo ctx_min_start_scn_info_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // The shared storage upload info cache
+  SSUploadSCNCache ss_upload_scn_cache_;
+#endif
 };
 }  // namespace storage
 }  // namespace oceanbase

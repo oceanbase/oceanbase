@@ -13,8 +13,6 @@
 #define private public
 #define protected public
 #include "unittest/logservice/test_shared_log_common.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#endif
 #undef protected
 #undef private
 

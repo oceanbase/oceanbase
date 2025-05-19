@@ -20,6 +20,7 @@
 #include "ob_disaster_recovery_info.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "ob_disaster_recovery_task.h"
+#include "ob_disaster_recovery_task_utils.h"
 #include "ob_disaster_recovery_task_table_operator.h"
 
 namespace oceanbase
@@ -65,7 +66,8 @@ public:
       const common::ObReplicaType &source_replica_type,
       const int64_t &source_replica_paxos_replica_number,
       const common::ObAddr &execute_server,
-      const ObString &comment);
+      const ObString &comment,
+      const palf::LogConfigVersion &config_version = palf::LogConfigVersion());
   inline bool is_valid() const;
 
   int assign(const ObLSReplicaTaskDisplayInfo &other);
@@ -82,7 +84,7 @@ public:
   inline const int64_t &get_source_replica_paxos_replica_number() const { return source_replica_paxos_replica_number_; }
   inline const common::ObAddr &get_execute_server() const { return execute_server_; }
   inline const ObSqlString &get_comment() const { return comment_; }
-
+  inline const palf::LogConfigVersion &get_config_version() const { return config_version_; }
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -96,16 +98,21 @@ private:
   int64_t source_replica_paxos_replica_number_;
   common::ObAddr execute_server_;
   ObSqlString comment_;
+  palf::LogConfigVersion config_version_;
 };
 
 class ObDRWorker
 {
 public:
-  ObDRWorker();
+  ObDRWorker(const int64_t service_epoch = DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE,
+             const uint64_t tenant_id = OB_INVALID_TENANT_ID);
   virtual ~ObDRWorker();
 public:
-  void set_service_epoch(const int64_t service_epoch) { service_epoch_ = service_epoch; }
-  int try_tenant_disaster_recovery(
+  int try_tenant_single_replica_task(
+      const uint64_t tenant_id,
+      const bool only_for_display,
+      int64_t &acc_dr_task);
+  int try_tenant_common_dr_task(
       const uint64_t tenant_id,
       const bool only_for_display,
       int64_t &acc_dr_task);
@@ -125,6 +132,7 @@ public:
       common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan);
 
 private:
+
   // check new task if conflict with task in task_keys array
   // @params[in]  dr_task_keys, task_keys array
   // @params[in]  task_key, target task's task_key to check
@@ -138,6 +146,7 @@ private:
   // @params[in]  trans, trans to use
   int check_clone_status_and_insert_task_(
       const ObDRTask &task,
+      const uint64_t persistent_tenant,
       common::ObMySQLTransaction &trans);
   // add task to inner table
   // @param [out] task, the task to execute
@@ -769,10 +778,23 @@ private:
       DRLSInfo &dr_ls_info,
       bool &locality_is_matched);
 
-  int check_ls_disaster_recovery_tasks_(
+  int check_ls_common_dr_tasks_(
       const bool only_for_display,
       DRLSInfo &dr_ls_info,
       DRLSInfo &dr_ls_info_with_flag,
+      int64_t &acc_dr_task);
+
+  int check_ls_single_replica_dr_tasks_(
+      DRLSInfo &dr_ls_info,
+      const bool only_for_display,
+      int64_t &ls_acc_dr_task);
+
+  int generate_single_replica_task_(
+      const bool only_for_display,
+      const palf::LogConfigVersion &config_version,
+      const share::ObServerInfoInTable &src_server_info,
+      const share::ObUnit &dest_unit,
+      DRLSInfo &dr_ls_info,
       int64_t &acc_dr_task);
 
   int try_ls_disaster_recovery(
@@ -793,6 +815,9 @@ private:
       bool &has_leader);
 
 private:
+  int build_disaster_ls_info_(
+      const share::ObLSStatusInfo &ls_status_info,
+      DRLSInfo &dr_ls_info);
   void reset_task_plans_() { display_tasks_.reset(); }
 
   int check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id);
@@ -1134,6 +1159,7 @@ private:
 
 private:
   int64_t service_epoch_;
+  uint64_t tenant_id_;
   TaskCountStatistic task_count_statistic_;
   common::ObSArray<ObLSReplicaTaskDisplayInfo> display_tasks_;
   common::SpinRWLock display_tasks_rwlock_;  // to protect display_tasks_

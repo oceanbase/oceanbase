@@ -3738,15 +3738,12 @@ OB_INLINE bool ObIndexBlockRebuilder::need_index_tree_dumper() const
 }
 
 int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
+                                const blocksstable::ObMacroSeqParam &macro_seq_param,
                                 const int64_t *task_idx,
                                 const ObITable::TableKey &table_key,
                                 common::ObIArray<ObIODevice *> *device_handle_array)
 {
   int ret = OB_SUCCESS;
-
-  blocksstable::ObMacroSeqParam macro_seq_param;
-  macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
-  macro_seq_param.start_ = 0;
   int64_t parallel_task_idx = -1;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -3757,20 +3754,12 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
       LOG_WARN("Unexpected task idx value", K(ret), K(task_idx));
     } else {
       parallel_task_idx = *task_idx;
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (GCTX.is_shared_storage_mode()) {
-        macro_seq_param.start_ = parallel_task_idx * oceanbase::compaction::MACRO_STEP_SIZE;
-      }
-#endif
     }
   }
-
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(inner_init(
-      sstable_builder, macro_seq_param, parallel_task_idx, table_key, device_handle_array, nullptr))) {
+  } else if (OB_FAIL(inner_init(sstable_builder, macro_seq_param, parallel_task_idx, table_key, device_handle_array, nullptr))) {
     LOG_WARN("failed to init index block rebuilder", K(ret));
   }
-
   return ret;
 }
 

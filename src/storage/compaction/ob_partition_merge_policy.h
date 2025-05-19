@@ -56,13 +56,17 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_ss_minor_merge_tables(
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
+#endif
   static int get_hist_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int get_medium_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
@@ -106,7 +110,7 @@ public:
       const storage::ObTablet &tablet);
 
   static int get_multi_version_start(
-      const compaction::ObMergeType merge_type,
+      const ObMergeType merge_type,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       ObVersionRange &result_version_range,
@@ -147,8 +151,14 @@ private:
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result,
       bool &need_check_tablet);
+  static int refine_and_get_minor_merge_result(
+      const ObGetMergeTablesParam &param,
+      const ObTablet &tablet,
+      const int64_t minor_compact_trigger,
+      ObTablesHandleArray &tables,
+      ObGetMergeTablesResult &result);
   static int refine_minor_merge_result(
-      const ObMergeType merge_type,
+      const compaction::ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       const bool is_tablet_referenced_by_collect_mv,
       storage::ObGetMergeTablesResult &result);
@@ -172,7 +182,17 @@ private:
   static int deal_hist_minor_merge(
       const storage::ObTablet &tablet,
       int64_t &max_snapshot_version);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_ss_minor_boundary_snapshot_version(
+      ObLS &ls,
+      const ObTablet &tablet,
+      int64_t &min_snapshot,
+      int64_t &max_snapshot);
+  static int deal_with_ss_minor_result(
+      ObLS &ls,
+      const ObTablet &tablet,
+      ObGetMergeTablesResult &result);
+#endif
   // diagnose part
   static int diagnose_minor_dag(
       compaction::ObMergeType merge_type,

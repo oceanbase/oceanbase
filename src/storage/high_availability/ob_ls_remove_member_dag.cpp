@@ -403,13 +403,19 @@ int ObLSRemoveMemberTask::report_to_disaster_recovery_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member handler do not init", KR(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_ should not be null", KR(ret), KP(ctx_));
   } else {
-    res.task_id_ = ctx_->arg_.task_id_;
-    res.tenant_id_ = ctx_->arg_.tenant_id_;
-    res.ls_id_ = ctx_->arg_.ls_id_;
-    res.result_ = ctx_->result_;
+    obrpc::ObDRTaskType dr_type = obrpc::ObDRTaskType::MAX_TYPE;
+    const ObLSRemoveMemberArg &arg = ctx_->arg_;
     uint64_t sys_data_version = 0;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    if (OB_FAIL(arg.type_.convert_to_dr_type(arg.is_paxos_member_, dr_type))) {
+      LOG_WARN("fail to convert dr task type", KR(ret), K(arg));
+    } else if (OB_FAIL(res.init(arg.task_id_, arg.tenant_id_, arg.ls_id_, ctx_->result_, dr_type))) {
+      // for dr_type, no compatibility processing required
+      LOG_WARN("failed to init res", KR(ret), K(arg), KPC(ctx_), K(dr_type));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
     } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
       if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_meta_tenant(res))) {
@@ -421,5 +427,3 @@ int ObLSRemoveMemberTask::report_to_disaster_recovery_()
   }
   return ret;
 }
-
-

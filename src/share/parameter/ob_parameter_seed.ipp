@@ -74,6 +74,10 @@ DEF_STR(zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(ob_startup_mode, OB_CLUSTER_PARAMETER, "NORMAL", "specifies the observer startup mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
+DEF_STR_LIST(logservice_access_point, OB_CLUSTER_PARAMETER, "", "the access point string for logservice. The default value is empty str",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_logservice, OB_CLUSTER_PARAMETER, "False", "specifies whether to use logservice. The default value is False",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 1h]",
          "the number of microseconds an internal DML request is permitted to "
          "execute before it is terminated. Range: [1000us, 1h]",
@@ -2470,6 +2474,10 @@ DEF_INT(_dop_of_collect_external_table_statistics, OB_TENANT_PARAMETER, "0", "[0
 DEF_INT(_max_partition_count_to_collect_statistic, OB_TENANT_PARAMETER, "5", "[0,)",
         "force odps external table to using block granule iterator when count of partition is under this config",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(inc_sstable_upload_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of upload incremental sstable to shared storage"
+        " Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(ob_encoding_granularity, OB_TENANT_PARAMETER, "65536", "[8192, 1048576]",
         "Maximum rows for encoding in one micro block. Range:[8192,1048576]",
@@ -2599,6 +2607,21 @@ DEF_BOOL(_enable_topn_runtime_filter, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_parallel_tenant_creation, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable parallel create meta and user tenants.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_enable_garbage_collection_service, OB_TENANT_PARAMETER, "True",
+         "The garbage collection service toggle on shared storage.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_garbage_collect_interval, OB_TENANT_PARAMETER, "1h", "[10s,12h]",
+         "The execution interval for the garbage collection service on shared storage."
+         "Range: [10s, 12h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_garbage_collect_file_expiration_time, OB_TENANT_PARAMETER, "6h", "[10s,365d]",
+         "The file expiration threshold on shared storage. The garbage collection service periodically reclaims expired files."
+         "Range: [10s, 365d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_schedule_upload_interval, OB_TENANT_PARAMETER, "1m", "[1s,12h]",
+         "The execution interval for the inc sstable upload task"
+         "Range: [1s, 12h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",

@@ -23,6 +23,25 @@ uint32_t gHashItemNum = 128;
 typedef uint64_t HashKey;
 typedef uint64_t HashValue;
 
+class SetCallback
+{
+  public:
+    SetCallback() : v_(-1) {}
+    virtual ~SetCallback() {}
+    int operator ()(const HashMapPair<HashKey, HashValue> &pair)
+    {
+      int ret = OB_SUCCESS;
+      v_ = pair.second;
+      return ret;
+    };
+    HashValue get_v() const
+    {
+      return v_;
+    };
+  private:
+    HashValue v_;
+};
+
 class CallBack
 {
   public:
@@ -304,6 +323,32 @@ TEST(TestObHashMap, set_or_update)
   uint64_t value_update = 3000;
   callback.set_v(value_update);
   EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value_update, value_tmp);
+}
+
+TEST(TestObHashMap, set_or_update_with_set_callback)
+{
+  ObHashMap<HashKey, HashValue> hm;
+  uint64_t key = 1;
+  uint64_t value = 100;
+  SetCallback set_callback;
+  CallBack update_callback;
+  HashValue value_tmp;
+
+  // 没有create
+  EXPECT_EQ(OB_NOT_INIT, hm.set_or_update(key, value, set_callback, update_callback));
+  hm.create(cal_next_prime(gHashItemNum), ObModIds::OB_HASH_BUCKET);
+
+  EXPECT_EQ(OB_HASH_NOT_EXIST, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, set_callback, update_callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value, value_tmp);
+  EXPECT_EQ(set_callback.get_v(), value);
+
+  uint64_t value_update = 3000;
+  update_callback.set_v(value_update);
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, set_callback, update_callback));
   EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
   EXPECT_EQ(value_update, value_tmp);
 }

@@ -346,10 +346,15 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       ObLSTransferMetaInfo &transfer_meta_info);
-  int get_dest_ls_max_desided_scn_(
+  int get_dest_ls_max_decided_scn_(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx,
-      share::SCN &dest_desided_scn);
+      share::SCN &dest_decided_scn);
+  int get_ls_max_decided_scn_(
+      const share::ObLSID &ls_id,
+      ObTimeoutCtx &timeout_ctx,
+      share::SCN &ls_decided_scn);
+
   int get_local_ls_member_list_(
       common::ObMemberList &member_list);
   int check_transfer_in_tablet_abort_(
@@ -396,6 +401,19 @@ private:
       const share::ObTransferTaskInfo &task_info);
   void finish_parallel_tablet_info_dag_(
       const share::ObTransferTaskInfo &task_info);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  int set_member_table_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      common::ObMySQLTransaction &trans);
+  int set_member_table_data_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      const ObTabletStatus &tablet_status,
+      common::ObMySQLTransaction &trans);
+#endif
+
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;

@@ -1250,6 +1250,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
                                param_->data_format_version_,
                                micro_index_clustered,
                                tablet_handle.get_obj()->get_transfer_seq(),
+                               tablet_handle.get_obj()->get_reorganization_scn(),
                                write_sstable_ctx.table_key_.get_end_scn()))) {
       LOG_WARN("fail to init data store desc", K(ret), "dest_tablet_id", new_tablet_id, KPC(param_), KPC(ctx_));
     } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = index_builder)) {

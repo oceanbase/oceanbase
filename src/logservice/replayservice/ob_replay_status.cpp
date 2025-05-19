@@ -11,6 +11,7 @@
  */
 
 #include "ob_replay_status.h"
+#include "logservice/ipalf/ipalf_env.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
@@ -118,8 +119,8 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));
     }
-    CLOG_LOG(INFO, "submit log task init success", K(type_), K(next_to_submit_lsn_),
-             K(next_to_submit_scn_), K(replay_status_));
+    CLOG_LOG(INFO, "submit log task init success", KR(ret), K(id), K(type_), K(next_to_submit_lsn_),
+             K(next_to_submit_scn_), K(base_scn), K(replay_status_));
   }
   return ret;
 }
@@ -234,10 +235,19 @@ int ObReplayServiceSubmitTask::need_skip(const SCN &scn, bool &need_skip)
 }
 
 
-int ObReplayServiceSubmitTask::get_log(const char *&buffer, int64_t &nbytes, SCN &scn, palf::LSN &offset)
+int ObReplayServiceSubmitTask::get_log(const char *&buffer, int64_t &nbytes, SCN &scn, palf::LSN &lsn, palf::LSN &end_lsn)
 {
   bool unused_is_raw_write = true;
-  return iterator_.get_entry(buffer, nbytes, scn, offset, unused_is_raw_write);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(iterator_.get_entry(buffer, nbytes, scn, lsn, unused_is_raw_write))) {
+    // skip, may return iterator end
+  } else if (GCONF.enable_logservice) {
+    share::SCN end_scn;
+    ret = iterator_.get_consumed_info(end_lsn, end_scn);
+  } else {
+    end_lsn = lsn + nbytes + sizeof(LogEntryHeader);
+  }
+  return ret;
 }
 
 int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
@@ -257,17 +267,26 @@ int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
         CLOG_LOG(INFO, "next_min_scn is invalid", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
       } else if (OB_UNLIKELY(next_min_scn < next_to_submit_scn_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LSN unused_lsn;
+        // TODO @yunlong: 维护next_min_scn, 当前实现会导致replay卡住
+        ret = OB_SUCCESS;
+        // LSN unused_lsn;
         // updating next to submit log info is failed, set fatal error for replay status.
-        replay_status_->set_err_info(unused_lsn, next_min_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,
-                                     0, true, ObClockGenerator::getClock(), ret);
+        // replay_status_->set_err_info(unused_lsn, next_min_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,
+        //                              0, true, ObClockGenerator::getClock(), ret);
         CLOG_LOG(ERROR, "failed to update next_to_submit_scn_", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
       } else {
         next_to_submit_scn_ = next_min_scn;
         CLOG_LOG(INFO, "update next_to_submit_scn_", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
+      }
+      // Read padding log in logservice mode will return ITER_END, we need to update next_to_submit_lsn
+      palf::LSN consumed_end_lsn;
+      share::SCN consumed_scn;
+      if (GCONF.enable_logservice &&
+          OB_SUCCESS == iterator_.get_consumed_info(consumed_end_lsn, consumed_scn) &&
+          consumed_end_lsn > next_to_submit_lsn_) {
+        next_to_submit_lsn_ = consumed_end_lsn;
       }
     } else {
       // ignore other err ret of iterator
@@ -588,7 +607,7 @@ ObReplayStatus::ObReplayStatus():
     rp_sv_(NULL),
     submit_log_task_(),
     palf_env_(NULL),
-    palf_handle_(),
+    palf_handle_(NULL),
     fs_cb_(),
     get_log_info_debug_time_(OB_INVALID_TIMESTAMP),
     try_wrlock_debug_time_(OB_INVALID_TIMESTAMP),
@@ -602,7 +621,7 @@ ObReplayStatus::~ObReplayStatus()
 }
 
 int ObReplayStatus::init(const share::ObLSID &id,
-                         PalfEnv *palf_env,
+                         ipalf::IPalfEnv *palf_env,
                          ObLogReplayService *rp_sv)
 {
   //TODO: use replica type init need_replay
@@ -624,7 +643,7 @@ int ObReplayStatus::init(const share::ObLSID &id,
     rp_sv_ = rp_sv;
     IGNORE_RETURN new (&fs_cb_) ObReplayFsCb(this);
     is_inited_ = true;
-    if (OB_FAIL(palf_handle_.register_file_size_cb(&fs_cb_))) {
+    if (OB_FAIL(palf_handle_->register_file_size_cb(&fs_cb_))) {
       CLOG_LOG(ERROR, "failed to register cb", K(ret));
     } else {
       CLOG_LOG(INFO, "replay status init success", K(ret), KPC(this));
@@ -641,7 +660,7 @@ void ObReplayStatus::destroy()
 {
   int ret = OB_SUCCESS;
   //注意: 虽然replay status的引用计数已归0, 但此时fs_cb_依然可能访问replay status，需要先调用unregister_file_size_cb
-  if (OB_FAIL(palf_handle_.unregister_file_size_cb())) {
+  if (OB_NOT_NULL(palf_handle_) && OB_FAIL(palf_handle_->unregister_file_size_cb())) {
     CLOG_LOG(ERROR, "failed to unregister cb", K(ret));
   }
   WLockGuard wlock_guard(rwlock_);
@@ -651,7 +670,7 @@ void ObReplayStatus::destroy()
     CLOG_LOG(ERROR, "is_enable when destucting", K(this));
   } else {
     is_inited_ = false;
-    if (palf_handle_.is_valid()) {
+    if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
     }
     submit_log_task_.destroy();
@@ -704,7 +723,7 @@ int ObReplayStatus::enable_(const LSN &base_lsn, const SCN &base_scn)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "remain pending task when enable replay status", K(ret), KPC(this));
   } else if (OB_FAIL(submit_log_task_.init(base_lsn, base_scn, ls_id_, this))) {
-    CLOG_LOG(WARN, "failed to init submit_log_task", K(ret), K(&palf_handle_));
+    CLOG_LOG(WARN, "failed to init submit_log_task", K(ret), K(palf_handle_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < REPLAY_TASK_QUEUE_SIZE; ++i) {
       if (OB_FAIL(task_queues_[i].init(this, i))) {
@@ -1083,7 +1102,7 @@ int ObReplayStatus::get_replay_process(int64_t &submitted_log_size,
     replayed_log_size = min_unreplayed_lsn.val_ - base_lsn.val_;
     unreplayed_log_size = 0;
     CLOG_LOG(INFO, "replay status is not follower", K(min_unreplayed_lsn), K(base_lsn), KPC(this));
-  } else if (OB_FAIL(palf_handle_.get_end_lsn(committed_end_lsn))) {
+  } else if (OB_FAIL(palf_handle_->get_end_lsn(committed_end_lsn))) {
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
   } else {
     submitted_log_size = next_to_submit_lsn.val_ - base_lsn.val_;
@@ -1366,7 +1385,7 @@ int ObReplayStatus::stat(LSReplayStat &stat) const
     if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(stat.unsubmitted_lsn_,
                                                              stat.unsubmitted_scn_))) {
       CLOG_LOG(WARN, "get_next_to_submit_log_info failed", KPC(this), K(ret));
-    } else if (OB_FAIL(palf_handle_.get_end_lsn(stat.end_lsn_))) {
+    } else if (OB_FAIL(palf_handle_->get_end_lsn(stat.end_lsn_))) {
       CLOG_LOG(WARN, "get_end_lsn from palf failed", KPC(this), K(ret));
     }
   }

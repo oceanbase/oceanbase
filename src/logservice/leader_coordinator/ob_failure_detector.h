@@ -18,6 +18,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "share/ob_occam_timer.h"
+#include "logservice/ipalf/ipalf_handle.h"
 #include "logservice/palf/palf_handle.h"        // PalfHandle
 
 namespace oceanbase

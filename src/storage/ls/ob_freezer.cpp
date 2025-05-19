@@ -810,7 +810,7 @@ void ObFreezer::async_tablet_freeze_consumer(const int64_t trace_id)
 void ObFreezer::try_freeze_tx_data_()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_RETRY_DURATION = 5LL * 1000LL * 1000LL;  // 5 seconds
+  const int64_t MAX_RETRY_DURATION = 1LL * 1000LL * 1000LL;  // 1 seconds
   int64_t retry_times = 0;
   int64_t start_freeze_ts = ObClockGenerator::getClock();
   do {

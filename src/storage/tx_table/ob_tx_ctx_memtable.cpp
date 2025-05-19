@@ -13,6 +13,9 @@
 #include "share/scn.h"
 #include "storage/tx_table/ob_tx_ctx_memtable.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/compaction/ob_tablet_merge_task.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/ls/ob_freezer.h"                   // ObFreezer
 
 namespace oceanbase
 {
@@ -27,6 +30,7 @@ ObTxCtxMemtable::ObTxCtxMemtable()
     is_inited_(false),
     is_frozen_(false),
     ls_ctx_mgr_guard_(),
+    freezer_(nullptr),
     flush_lock_(),
     max_end_scn_(share::SCN::min_scn())
 {
@@ -43,13 +47,15 @@ void ObTxCtxMemtable::reset()
   ls_id_.reset();
   ObITable::reset();
   is_frozen_ = false;
+  freezer_ = nullptr;
   max_end_scn_.set_min();
   is_inited_ = false;
   reset_trace_id();
 }
 
 int ObTxCtxMemtable::init(const ObITable::TableKey &table_key,
-                          const ObLSID &ls_id)
+                          const ObLSID &ls_id,
+                          ObFreezer *freezer)
 {
   int ret = OB_SUCCESS;
 
@@ -62,6 +68,7 @@ int ObTxCtxMemtable::init(const ObITable::TableKey &table_key,
     STORAGE_LOG(WARN, "ls ctx mgr guard acquire ref failed", K(ret), K(ls_id));
   } else {
     ls_id_ = ls_id;
+    freezer_ = freezer;
     max_end_scn_.set_min();
     is_inited_ = true;
     TRANS_LOG(INFO, "ob tx ctx memtable init successfully", K(ls_id), K(table_key));
@@ -228,35 +235,37 @@ int ObTxCtxMemtable::flush(SCN recycle_scn, const int64_t trace_id, bool need_fr
     if (rec_scn >= recycle_scn) {
       TRANS_LOG(INFO, "no need to freeze", K(rec_scn), K(recycle_scn));
     } else if (is_active_memtable()) {
-      int64_t cur_time_us = ObTimeUtility::current_time();
-      share::SCN cur_time_scn;
-      ObScnRange scn_range;
-      if (OB_FAIL(cur_time_scn.convert_for_tx(cur_time_us))) {
-        TRANS_LOG(WARN, "failed to convert_from_ts", K(ret), K(cur_time_us));
-      } else {
-        scn_range.start_scn_.set_base();
-        scn_range.end_scn_ = MAX(cur_time_scn, share::SCN::scn_inc(max_end_scn_));
-        set_scn_range(scn_range);
-        set_snapshot_version(scn_range.end_scn_);
-        ATOMIC_STORE(&is_frozen_, true);
-      }
+      ATOMIC_STORE(&is_frozen_, true);
     }
   }
 
   if (OB_SUCC(ret) && is_frozen_memtable()) {
-    compaction::ObTabletMergeDagParam param;
-    param.ls_id_ = ls_id_;
-    param.tablet_id_ = LS_TX_CTX_TABLET;
-    param.merge_type_ = compaction::MINI_MERGE;
-    param.merge_version_ = ObVersionRange::MIN_VERSION;
-    set_trace_id(trace_id);
-    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
-      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-          TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
-      }
+    // TODO: yanyuan.cxf the end scn and rec scn may not match
+    SCN max_consequent_callbacked_scn = SCN::min_scn();
+    if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
+      TRANS_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(ls_id_));
     } else {
-      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(), get_start_scn(), get_end_scn());
-      TRANS_LOG(INFO, "tx ctx memtable flush successfully", KPC(this), K(ls_id_));
+      ObScnRange scn_range;
+      scn_range.start_scn_.set_base();
+      scn_range.end_scn_ = max_consequent_callbacked_scn;
+      scn_range.end_scn_ = MAX(max_consequent_callbacked_scn, share::SCN::scn_inc(max_end_scn_));
+      set_scn_range(scn_range);
+      set_snapshot_version(scn_range.end_scn_);
+
+      compaction::ObTabletMergeDagParam param;
+      param.ls_id_ = ls_id_;
+      param.tablet_id_ = LS_TX_CTX_TABLET;
+      param.merge_type_ = compaction::MINI_MERGE;
+      param.merge_version_ = ObVersionRange::MIN_VERSION;
+      set_trace_id(trace_id);
+      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
+        if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+          TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
+        }
+      } else {
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(), get_start_scn(), get_end_scn());
+        TRANS_LOG(INFO, "tx ctx memtable flush successfully", KPC(this), K(ls_id_));
+      }
     }
   }
 

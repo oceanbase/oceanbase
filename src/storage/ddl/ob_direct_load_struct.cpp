@@ -549,7 +549,8 @@ ObTabletDDLParam::ObTabletDDLParam()
     data_format_version_(0),
     table_key_(),
     snapshot_version_(0),
-    trans_id_()
+    trans_id_(),
+    rec_scn_()
 {
 
 }
@@ -1268,6 +1269,7 @@ int ObColumnSliceStore::dump_macro_block()
                                         tenant_data_version_,
                                         is_micro_index_clustered_,
                                         tablet_transfer_seq_,
+                                        SCN::min_scn()/*reorganization_scn, only for ss*/,
                                         SCN::min_scn()/*end_scn, unused for major*/,
                                         &cur_cg_schema,
                                         i/*cg_idx*/,
@@ -1665,6 +1667,7 @@ int ObColumnBatchSliceStore::dump_macro_block()
                                     tenant_data_version_,
                                     is_micro_index_clustered_,
                                     tablet_transfer_seq_,
+                                    SCN::min_scn()/*reorganization_scn unused for mjor*/,
                                     SCN::min_scn()/*end_scn, unused for major*/,
                                     &cur_cg_schema,
                                     i/*cg_idx*/,
@@ -2097,7 +2100,8 @@ bool ObTabletDDLParam::is_valid() const
     && commit_scn_.is_valid() && commit_scn_ != SCN::max_scn()
     && snapshot_version_ > 0
     && data_format_version_ > 0
-    && (is_incremental_direct_load(direct_load_type_) ? trans_id_.is_valid() : !trans_id_.is_valid());
+    && (is_incremental_direct_load(direct_load_type_) ? trans_id_.is_valid() : !trans_id_.is_valid())
+    && rec_scn_.is_valid();
 }
 
 ObDirectLoadSliceWriter::ObDirectLoadSliceWriter()
@@ -3678,6 +3682,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
                                 data_format_version,
                                 tablet_direct_load_mgr->get_micro_index_clustered(),
                                 tablet_direct_load_mgr->get_tablet_transfer_seq(),
+                                SCN::min_scn(), /*reorganization_scn : only for ss*/
                                 SCN::min_scn(),
                                 &cg_schema,
                                 cg_idx,

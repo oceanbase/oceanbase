@@ -13,8 +13,7 @@
 #define OCEANBASE_STORAGE_META_STORE_SERVER_STORAGE_META_SERVICE_
 
 #include <stdint.h>
-#include "storage/meta_store/ob_server_storage_meta_persister.h"
-#include "storage/meta_store/ob_server_storage_meta_replayer.h"
+
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 
@@ -22,7 +21,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObServerStorageMetaService
+class ObServerStorageMetaService final
 {
 public:
   static ObServerStorageMetaService &get_instance();
@@ -31,15 +30,29 @@ public:
   void stop();
   void wait();
   void destroy();
-  ObServerStorageMetaPersister &get_persister() { return persister_; }
   bool is_started() const { return ATOMIC_LOAD(&is_started_); }
 
-  int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  ObStorageLoggerManager &get_slogger_manager() { return slogger_mgr_; }
+  // for tenant operation
+  int prepare_create_tenant(const omt::ObTenantMeta &meta, int64_t &epoch);
+  int prepare_delete_tenant(const uint64_t tenant_id, const int64_t epoch);
+  int commit_delete_tenant(const uint64_t tenant_id, const int64_t epoch);
+  int commit_create_tenant(const uint64_t tenant_id, const int64_t epoch);
+  int abort_create_tenant(const uint64_t tenant_id, const int64_t epoch);
+  int update_tenant_super_block(const int64_t tenant_epoch, const ObTenantSuperBlock &super_block);
+  int update_tenant_unit(const int64_t epoch, const share::ObUnitInfoGetter::ObTenantConfig &unit);
+  int clear_tenant_log_dir(const uint64_t tenant_id);
+  int get_tenant_items_by_status(
+      const storage::ObTenantCreateStatus status,
+      ObIArray<storage::ObTenantItem> &tenant_items) const;
+
+  // for slog & checkpoint operations
+  int write_checkpoint(bool is_force);
+  int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list) const;
   int get_reserved_size(int64_t &reserved_size) const;
   int get_server_slogger(ObStorageLogger *&slogger) const;
-  int write_checkpoint(bool is_force);
+  ObStorageLoggerManager &get_slogger_manager() { return slogger_mgr_; }
 
+private:
   class ObTenantItemIterator final
   {
   public:
@@ -59,31 +72,26 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObTenantItemIterator);
   };
 
-  int get_tenant_items_by_status(
-      const storage::ObTenantCreateStatus status,
-      ObIArray<storage::ObTenantItem> &tenant_items);
-
 private:
   ObServerStorageMetaService();
   ~ObServerStorageMetaService() = default;
-  ObServerStorageMetaService(const ObServerStorageMetaService &) = delete;
-  ObServerStorageMetaService &operator=(const ObServerStorageMetaService &) = delete;
+
+private:
+  int try_write_checkpoint_for_compat();
+  int start_complete_and_online_ls() const;
 
 private:
   bool is_inited_;
   bool is_started_;
   bool is_shared_storage_;
-  ObServerStorageMetaPersister persister_;
-  ObServerStorageMetaReplayer replayer_;
   ObStorageLoggerManager slogger_mgr_;
   ObStorageLogger *server_slogger_;
   ObServerCheckpointSlogHandler ckpt_slog_handler_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObServerStorageMetaService);
 };
 
 #define SERVER_STORAGE_META_SERVICE (oceanbase::storage::ObServerStorageMetaService::get_instance())
-#define SERVER_STORAGE_META_PERSISTER (oceanbase::storage::ObServerStorageMetaService::get_instance().get_persister())
-
-
 
 } // namespace storage
 } // namespace oceanbase

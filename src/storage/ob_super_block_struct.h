@@ -142,7 +142,7 @@ public:
   bool is_valid() const;
   void reset();
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(header), K_(body));
+  TO_STRING_KV(K_(header), K_(body), K_(min_file_id), K_(max_file_id));
 
   OB_INLINE int64_t get_macro_block_size() const
   {
@@ -161,6 +161,11 @@ public:
 
   ObServerSuperBlockHeader header_;
   ServerSuperBlockBody body_;
+
+  // Don't need to be serialized. It is only meaningful in shared storage.
+  // And it is used for recycling slog checkpoint objects.
+  int64_t min_file_id_;
+  int64_t max_file_id_;
 };
 
 struct ObTenantSnapshotMeta final
@@ -196,7 +201,8 @@ public:
     epoch_(0),
     status_(ObLSItemStatus::MAX),
     min_macro_seq_(UINT64_MAX),
-    max_macro_seq_(UINT64_MAX) {}
+    max_macro_seq_(UINT64_MAX)
+  {}
   virtual ~ObLSItem() { reset(); }
 
   void reset()
@@ -234,7 +240,7 @@ public:
   static const int64_t TENANT_SUPER_BLOCK_VERSION = 4;
   static const int64_t MAX_LS_COUNT = 128;
   ObTenantSuperBlock();
-  ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
+  explicit ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
   ~ObTenantSuperBlock() = default;
   ObTenantSuperBlock(const ObTenantSuperBlock &other);
   ObTenantSuperBlock &operator==(const ObTenantSuperBlock &other) = delete;
@@ -252,31 +258,40 @@ public:
   TO_STRING_KV(K_(tenant_id),
                K_(replay_start_point),
                K_(ls_meta_entry),
+               K_(wait_gc_tablet_entry),
                K_(tablet_meta_entry),
                K_(is_hidden),
                K_(version),
                K_(snapshot_cnt),
                K_(preallocated_seqs),
                K_(auto_inc_ls_epoch),
-               K_(ls_cnt));
+               K_(ls_cnt),
+               K_(min_file_id),
+               K_(max_file_id));
 
   OB_UNIS_VERSION(TENANT_SUPER_BLOCK_VERSION);
 public:
   uint64_t tenant_id_;
-  // only meaningful for shared-nothing
   common::ObLogCursor replay_start_point_;
   blocksstable::MacroBlockId ls_meta_entry_;
-  blocksstable::MacroBlockId tablet_meta_entry_;
+  blocksstable::MacroBlockId tablet_meta_entry_; // discarded
 
   bool is_hidden_;
   int64_t version_;
   int64_t snapshot_cnt_;
   ObTenantSnapshotMeta tenant_snapshots_[MAX_SNAPSHOT_NUM];
+
   // only meaningful for shared-storage
   ObTenantMonotonicIncSeqs preallocated_seqs_;
   int64_t auto_inc_ls_epoch_;
   int64_t ls_cnt_;
   ObLSItem ls_item_arr_[MAX_LS_COUNT];
+  blocksstable::MacroBlockId wait_gc_tablet_entry_;
+
+  // Don't need to be serialized. It is only meaningful in shared storage.
+  // And it is used for recycling slog checkpoint objects.
+  int64_t min_file_id_;
+  int64_t max_file_id_;
 };
 
 #define IS_EMPTY_BLOCK_LIST(entry_block) (entry_block == oceanbase::storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK)
@@ -372,7 +387,7 @@ public:
            tablet_transfer_seq_ == other.tablet_transfer_seq_;
   }
 
-  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status), K_(tablet_transfer_seq));
+  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version), K_(status), K_(gc_type), K_(tablet_transfer_seq));
   OB_UNIS_VERSION(1);
 
 public:
@@ -385,19 +400,21 @@ public:
   int64_t tablet_transfer_seq_;
 };
 
-struct ObLSPendingFreeTabletArray
+struct ObLSPendingFreeTabletArray final
 {
 public:
   ObLSPendingFreeTabletArray()
-    : items_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("PendFreeItems", MTL_ID())) {}
+    : ls_id_(),
+      ls_epoch_(0),
+      items_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("PendFreeItems", MTL_ID())) {}
 
   ObLSPendingFreeTabletArray(const ObLSPendingFreeTabletArray &) = delete;
   ObLSPendingFreeTabletArray &operator=(const ObLSPendingFreeTabletArray &) = delete;
 
-  bool is_valid() const { return items_.count() >= 0; }
+  bool is_valid() const { return ls_id_.is_valid() && ls_epoch_ >= 0 && items_.count() >= 0; }
   int assign(const ObLSPendingFreeTabletArray &other);
 
-  TO_STRING_KV(K_(items));
+  TO_STRING_KV(K_(ls_id), K_(ls_epoch), K_(items));
 
   OB_UNIS_VERSION(1);
 

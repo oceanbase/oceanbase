@@ -17,6 +17,9 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -226,6 +229,28 @@ int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const com
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTabletEmptyShellHandler::get_ss_checkpoint_scn_(
+    share::SCN &ss_checkpoint_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSSMetaService *ss_meta_srv = nullptr;
+  oceanbase::storage::ObSSLSMeta ls_meta;
+  if (OB_ISNULL(ss_meta_srv = MTL(ObSSMetaService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObSSMetaService shuold not be null", KR(ret));
+  } else if (OB_FAIL(ss_meta_srv->get_ls_meta(ls_->get_ls_id(), ls_meta, true /* force */))) {
+    LOG_WARN("get ls meta failed", KR(ret));
+  } else if (!ls_meta.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get ls meta failed", KR(ret), K(ls_meta));
+  } else {
+    ss_checkpoint_scn = ls_meta.get_ss_checkpoint_scn();
+  }
+  return ret;
+}
+#endif
+
 int ObTabletEmptyShellHandler::check_candidate_tablet_(const ObTablet &tablet, bool &can_become_shell, bool &need_retry)
 {
   int ret = OB_SUCCESS;
@@ -324,13 +349,35 @@ int ObTabletEmptyShellHandler::check_tablet_from_deleted_tx_(
   ObTabletStatus::Status tablet_status = user_data.get_tablet_status();
   share::SCN readable_scn = SCN::base_scn();
   const uint64_t tenant_id = MTL_ID();
+  share::SCN ss_checkpoint_scn;
+  bool is_shared_storage = GCTX.is_shared_storage_mode();
+  bool skip_for_ss_checkpoint = false;
 
   if (OB_UNLIKELY(!user_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(user_data));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage) {
+    // dump memtable, so all data can upload soon.
+    if (OB_FAIL(ls_->tablet_freeze(tablet_id, false /* is_sync */,
+            0 /* timeout */, false /* need_rewrite_meta */, ObFreezeSourceFlag::GC_TABLET))) {
+      STORAGE_LOG(WARN, "failed to tablet_freeze", K(ret), K(tablet_id));
+    } else if (OB_FAIL(get_ss_checkpoint_scn_(ss_checkpoint_scn))) {
+      STORAGE_LOG(WARN, "failed to get_ss_clog_checkpoint", K(ret), K(tablet_id));
+    } else if (OB_UNLIKELY(!ss_checkpoint_scn.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ss_checkpoint_scn is invalid", K(ret), K(tablet_id));
+    } else if (user_data.delete_commit_scn_ > ss_checkpoint_scn) {
+      skip_for_ss_checkpoint = true;
+      need_retry = true;
+      STORAGE_LOG(INFO, "ss_checkpoint_scn is less than delete commit scn, skip", KR(ret), K(tablet_id), K(user_data), K(ss_checkpoint_scn));
+    }
+  }
+  if (OB_FAIL(ret) || skip_for_ss_checkpoint) {
+#endif
   } else if (!is_user_tenant(tenant_id)) {
     can_become_shell = true;
-    STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id));
+    STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id), K(ss_checkpoint_scn));
   } else if (OB_FAIL(get_readable_scn(readable_scn))) {
     STORAGE_LOG(WARN, "failed to get readable scn", K(ret));
   } else if (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status
@@ -341,7 +388,7 @@ int ObTabletEmptyShellHandler::check_tablet_from_deleted_tx_(
   } else if (ObTabletStatus::DELETED == tablet_status || not_depend_on) {
     if (user_data.delete_commit_scn_.is_valid() && user_data.delete_commit_scn_ <= readable_scn) {
       can_become_shell = true;
-      STORAGE_LOG(INFO, "readable scn is bigger than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data));
+      STORAGE_LOG(INFO, "readable scn is bigger than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data), K(ss_checkpoint_scn));
     } else {
       need_retry = true;
       if (REACH_THREAD_TIME_INTERVAL(1_s)) {

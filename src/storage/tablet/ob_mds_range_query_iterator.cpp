@@ -23,7 +23,7 @@ int ObMdsRangeQueryIteratorHelper::get_mds_table(const ObTabletHandle &tablet_ha
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObTabletPointer *tablet_pointer = nullptr;
+  ObTabletBasePointer *tablet_pointer = nullptr;
 
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_INVALID_ARGUMENT;

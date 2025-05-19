@@ -105,6 +105,9 @@ private:
   virtual int check_is_all_server_empty(bool &is_empty);
   virtual int check_all_server_bootstrap_mode_match(bool &match);
   virtual int notify_sys_tenant_root_key();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int check_and_notify_logservice_access_point();
+#endif
 #ifdef OB_BUILD_SHARED_STORAGE
   virtual int check_and_notify_shared_storage_info();
 #endif

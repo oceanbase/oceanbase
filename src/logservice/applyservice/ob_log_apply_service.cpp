@@ -11,8 +11,11 @@
  */
 
 #include "ob_log_apply_service.h"
+#include "logservice/ob_append_callback.h"
+#include "logservice/ob_log_handler.h"
 #include "logservice/ob_ls_adapter.h"
-#include "src/storage/tx_storage/ob_ls_map.h"
+#include "logservice/ipalf/ipalf_handle.h"
+#include "logservice/palf/palf_env.h"
 
 namespace oceanbase
 {
@@ -256,7 +259,7 @@ ObApplyStatus::ObApplyStatus()
       max_applied_cb_scn_(),
       submit_task_(),
       palf_env_(NULL),
-      palf_handle_(),
+      palf_handle_(NULL),
       fs_cb_(),
       lock_(ObLatchIds::APPLY_STATUS_LOCK),
       mutex_(common::ObLatchIds::MAX_APPLY_SCN_LOCK),
@@ -276,14 +279,14 @@ ObApplyStatus::~ObApplyStatus()
 }
 
 int ObApplyStatus::init(const share::ObLSID &id,
-                        palf::PalfEnv *palf_env,
+                        ipalf::IPalfEnv *palf_env,
                         ObLogApplyService *ap_sv)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "apply status has already been inited", K(ret));
-  } else if (!id.is_valid() || OB_ISNULL(ap_sv)) {
+  } else if (!id.is_valid() || OB_ISNULL(palf_env) || OB_ISNULL(ap_sv)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(id), K(ap_sv), K(ret));
   } else if (OB_FAIL(palf_env->open(id.id(), palf_handle_))) {
@@ -308,7 +311,7 @@ int ObApplyStatus::init(const share::ObLSID &id,
       try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
       IGNORE_RETURN new (&fs_cb_) ObApplyFsCb(this);
       is_in_stop_state_ = false;
-      if (OB_FAIL(palf_handle_.register_file_size_cb(&fs_cb_))) {
+      if (OB_FAIL(palf_handle_->register_file_size_cb(&fs_cb_))) {
         CLOG_LOG(ERROR, "failed to register cb", K(ret), K(id));
       } else {
         is_inited_ = true;
@@ -622,8 +625,10 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
         //skip
         CLOG_LOG(WARN, "apply status has been stopped", K(ret), KPC(this));
       } else if (proposal_id == curr_proposal_id && LEADER == role_) {
-        if (palf_committed_end_lsn_ >= end_lsn) {
+        if (palf_committed_end_lsn_ > end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
+        } else if (palf_committed_end_lsn_ == end_lsn) {
+            // ignore
         } else {
           palf_committed_end_scn_.atomic_store(end_scn);
           palf_committed_end_lsn_ = end_lsn;
@@ -655,19 +660,23 @@ share::SCN ObApplyStatus::get_palf_committed_end_scn() const
 int ObApplyStatus::unregister_file_size_cb()
 {
   int ret = OB_SUCCESS;
-  if (palf_handle_.is_valid()) {
-    if (OB_FAIL(palf_handle_.unregister_file_size_cb())) {
-      CLOG_LOG(ERROR, "failed to unregister cb", K(ret), K(ls_id_));
-    } else {
-      // do nothing
-    }
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "apply status has not been inited", K(ret));
+  } else if (is_in_stop_state_) {
+    // file size cb already unregistered
+    CLOG_LOG(WARN, "apply status has been stopped", K(ret), K(ls_id_));
+  } else if (OB_FAIL(palf_handle_->unregister_file_size_cb())) {
+    CLOG_LOG(WARN, "failed to unregister cb", K(ret), K(ls_id_));
+  } else {
+    // do nothing
   }
   return ret;
 }
 
 void ObApplyStatus::close_palf_handle()
 {
-  if (palf_handle_.is_valid()) {
+  if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
     palf_env_->close(palf_handle_);
   } else {
     // do nothing
@@ -830,9 +839,15 @@ int ObApplyStatus::update_last_check_scn_()
   int64_t palf_proposal_id = -1;
   bool is_pending_state = true;
   SCN palf_max_scn;
-  if (OB_FAIL(palf_handle_.get_max_scn(palf_max_scn))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObApplyStatus not init", K(ret), K(ls_id_));
+  } else if (is_in_stop_state_) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is in stop state", K(ret), K(ls_id_));
+  } else if (OB_FAIL(palf_handle_->get_max_scn(palf_max_scn))) {
     CLOG_LOG(WARN, "get_max_scn failed", K(ret), K(ls_id_));
-  } else if (OB_FAIL(palf_handle_.get_role(palf_role, palf_proposal_id, is_pending_state))) {
+  } else if (OB_FAIL(palf_handle_->get_role(palf_role, palf_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "palf get_role failed", K(ret), K(ls_id_));
   } else if (max_applied_cb_scn_.is_valid() && palf_max_scn < max_applied_cb_scn_) {
     //防御性检查, palf的max_scn不应该回退到已达成一致的max_applied_cb_scn_之前
@@ -1040,7 +1055,7 @@ ObLogApplyService::~ObLogApplyService()
   destroy();
 }
 
-int ObLogApplyService::init(PalfEnv *palf_env,
+int ObLogApplyService::init(ipalf::IPalfEnv *palf_env,
                             ObLSAdapter *ls_adapter)
 {
   int ret = OB_SUCCESS;

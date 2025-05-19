@@ -424,6 +424,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11118	__all_virtual_ddl_sim_point	2	201001	1
 11119	__all_virtual_ddl_sim_point_stat	2	201001	1
 11120	__all_virtual_res_mgr_sysstat	2	201001	1
+11124	__all_virtual_ss_tablet_meta	2	201001	1
+11125	__all_virtual_ss_ls_meta	2	201001	1
+11126	__all_virtual_ss_sstable_mgr	2	201001	1
+11127	__all_virtual_ss_ls_tablet_reorganization_info	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
 12008	SESSION_STATUS	2	201002	1
@@ -828,6 +832,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12517	__all_virtual_catalog_history	2	201001	1
 12518	__all_virtual_catalog_privilege	2	201001	1
 12519	__all_virtual_catalog_privilege_history	2	201001	1
+12520	__all_virtual_sswriter_group_stat	2	201001	1
+12521	__all_virtual_sswriter_lease_mgr	2	201001	1
 12523	__all_virtual_pl_recompile_objinfo	2	201001	1
 12524	__all_virtual_vector_index_task	2	201001	1
 12525	__all_virtual_vector_index_task_history	2	201001	1
@@ -1378,6 +1384,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21655	DBA_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21656	CDB_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21657	V$OB_DYNAMIC_PARTITION_TABLES	1	201001	1
+21660	V$OB_SS_SSTABLES	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

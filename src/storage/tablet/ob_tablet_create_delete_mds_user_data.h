@@ -87,8 +87,8 @@ private:
   void finish_transfer_in_on_redo_(const share::SCN &redo_scn);
   void create_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void delete_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-  void start_transfer_in_on_commit_(const share::SCN &commit_version);
-  void start_transfer_out_on_commit_(const share::SCN &commit_version);
+  void start_transfer_in_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
+  void start_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
 
   void start_split_src_on_commit_(const share::SCN &commit_version);

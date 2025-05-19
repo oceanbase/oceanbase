@@ -73,7 +73,7 @@ public:
       const char *leaf_index_block_buf,
       const int64_t block_size);
   int close();
-
+  int64_t get_last_macro_seq() const { return macro_writer_ ? macro_writer_->get_last_macro_seq() : 0; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObClusteredIndexBlockWriter);
 

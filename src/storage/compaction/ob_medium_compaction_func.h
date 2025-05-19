@@ -35,7 +35,6 @@ class ObMediumCompactionScheduleFunc
 public:
   ObMediumCompactionScheduleFunc(
     ObLS &ls,
-    ObTabletHandle &tablet_handle,
     const SCN &weak_read_ts,
     const ObMediumCompactionInfoList &medium_info_list,
     ObScheduleTabletCnt *schedule_tablet_cnt,
@@ -43,7 +42,6 @@ public:
     const int64_t least_medium_snapshot = 0)
     : allocator_("MediumSchedule"),
       ls_(ls),
-      tablet_handle_(tablet_handle),
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
       medium_info_list_(&medium_info_list),
       schedule_tablet_cnt_(schedule_tablet_cnt),
@@ -51,7 +49,10 @@ public:
       least_medium_snapshot_(least_medium_snapshot)
   {}
   ~ObMediumCompactionScheduleFunc() {}
-
+  int init_tablet_handle(ObTabletHandle &tablet_handle)
+  {
+    return tablet_handle_.assign(tablet_handle);
+  }
   /*
    * see
    * standby tenant should catch up broadcast scn when freeze info is recycled

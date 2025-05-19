@@ -33,20 +33,6 @@ using namespace oceanbase::blocksstable;
 
 static const int64_t DEFAULT_BLOCK_SIZE = 2 * 1024 * 1024; // 2MB
 
-struct TestSSMicroDataInfo
-{
-public:
-  MacroBlockId macro_id_;
-  ObArray<ObSSMicroBlockIndex> micro_index_arr_;
-  int32_t total_micro_size_;
-
-  TestSSMicroDataInfo() { reset(); }
-  void reset() { macro_id_.reset(); micro_index_arr_.reset(); total_micro_size_ = 0; }
-  int32_t get_micro_count() const { return micro_index_arr_.count(); }
-
-  TO_STRING_KV(K_(macro_id), K_(total_micro_size), "micro_cnt", get_micro_count());
-};
-
 class TestSSCommonUtil
 {
 public:
@@ -73,24 +59,26 @@ public:
 public:
   static MacroBlockId gen_macro_block_id(const int64_t second_id);
   static ObMicroBlockId gen_micro_block_id(const MacroBlockId &macro_id, const int64_t offset, const int64_t size);
-  static int gen_random_data(char *buf, const int64_t size);
   static ObSSMicroBlockCacheKey gen_phy_micro_key(const MacroBlockId &macro_id, const int32_t offset, const int32_t size);
-  static int init_io_info(ObIOInfo &io_info, const ObSSMicroBlockCacheKey &micro_key, const int32_t size, char *read_buf);
-  static int prepare_micro_blocks(const int64_t macro_block_cnt, const int64_t block_size, ObArray<MicroBlockInfo> &micro_block_arr,
-      const int64_t start_macro_id = 1, const bool random_micro_size = true, const int32_t min_micro_size = 16 * 1024,
-      const int32_t max_micro_size = 16 * 1024);
-  static int get_micro_block(const MicroBlockInfo &micro_info, char *read_buf);
+  static int gen_random_data(char *buf, const int64_t size);
+  static ObCompressorType get_random_compress_type();
   static int wait_for_persist_task();
   static int alloc_micro_block_meta(ObSSMicroBlockMeta *&micro_meta);
-  static ObCompressorType get_random_compress_type();
+  static int prepare_micro_blocks(const int64_t macro_block_cnt, const int64_t block_size,
+      ObArray<MicroBlockInfo> &micro_block_arr, const int64_t start_macro_id = 1, const bool random_micro_size = true,
+      const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
+  static int get_micro_block(const MicroBlockInfo &micro_info, char *read_buf);
+  static int init_io_info(ObIOInfo &io_info, const ObSSMicroBlockCacheKey &micro_key, const int32_t size, char *read_buf);
+  static int clear_micro_cache(ObSSMicroMetaManager *micro_meta_mgr, ObSSPhysicalBlockManager *phy_blk_mgr,
+                               ObSSMicroRangeManager *micro_range_mgr, int64_t &micro_data_blk_cnt,
+                               int64_t &range_micro_sum);
   static void stop_all_bg_task(ObSSMicroCache *micro_cache);
   static void resume_all_bg_task(ObSSMicroCache *micro_cache);
 };
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
 {
-  MacroBlockId macro_id;
-  macro_id.second_id_ = second_id;
+  MacroBlockId macro_id(0, second_id, 0);
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
   return macro_id;
@@ -103,6 +91,19 @@ ObMicroBlockId TestSSCommonUtil::gen_micro_block_id(
 {
   ObMicroBlockId micro_id(macro_id, offset, size);
   return micro_id;
+}
+
+ObSSMicroBlockCacheKey TestSSCommonUtil::gen_phy_micro_key(
+    const MacroBlockId &macro_id,
+    const int32_t offset,
+    const int32_t size)
+{
+  ObSSMicroBlockCacheKey micro_key;
+  micro_key.mode_ = ObSSMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE;
+  micro_key.micro_id_.macro_id_ = macro_id;
+  micro_key.micro_id_.offset_ = offset;
+  micro_key.micro_id_.size_ = size;
+  return micro_key;
 }
 
 int TestSSCommonUtil::gen_random_data(char *buf, const int64_t size)
@@ -121,17 +122,84 @@ int TestSSCommonUtil::gen_random_data(char *buf, const int64_t size)
   return ret;
 }
 
-ObSSMicroBlockCacheKey TestSSCommonUtil::gen_phy_micro_key(
-    const MacroBlockId &macro_id,
-    const int32_t offset,
-    const int32_t size)
+ObCompressorType TestSSCommonUtil::get_random_compress_type()
 {
-  ObSSMicroBlockCacheKey micro_key;
-  micro_key.mode_ = ObSSMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE;
-  micro_key.micro_id_.macro_id_ = macro_id;
-  micro_key.micro_id_.offset_ = offset;
-  micro_key.micro_id_.size_ = size;
-  return micro_key;
+  const int64_t random_val = ObRandom::rand(1, 2);
+  const ObCompressorType compress_type = (random_val % 2 == 0) ? ObCompressorType::SNAPPY_COMPRESSOR : ObCompressorType::NONE_COMPRESSOR;
+  return compress_type;
+}
+
+int TestSSCommonUtil::wait_for_persist_task()
+{
+  int ret = OB_SUCCESS;
+  const int64_t interval_us = 10 * 1000 * 1000L;
+  const int64_t start_us = ObTimeUtility::current_time();
+  while (ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_fg_used_cnt_) > 1 ||
+         ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_bg_used_cnt_) > 1) {
+    ob_usleep(1000);
+    const int64_t cur_us = ObTimeUtility::current_time();
+    if (cur_us - start_us > interval_us) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("waiting time is too long", KR(ret), "cache_stat", SSMicroCacheStat);
+      break;
+    }
+  }
+  return ret;
+}
+
+int TestSSCommonUtil::alloc_micro_block_meta(ObSSMicroBlockMeta *&micro_meta)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = SSMicroMetaAlloc.alloc();
+  if (OB_ISNULL(ptr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc micro_meta mem", KR(ret));
+  } else {
+    micro_meta = new(ptr) ObSSMicroBlockMeta();
+    SSMicroCacheStat.micro_stat().update_micro_pool_alloc_cnt(1);
+  }
+  return ret;
+}
+
+int TestSSCommonUtil::get_micro_block(const MicroBlockInfo &micro_info, char *read_buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!micro_info.is_valid()|| OB_ISNULL(read_buf))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_info), KP(read_buf));
+  } else {
+    ObStorageObjectHandle object_handle;
+    ObIOInfo io_info;
+    io_info.tenant_id_ = MTL_ID();
+    io_info.offset_ = micro_info.offset_;
+    io_info.size_ = micro_info.size_;
+    io_info.flag_.set_wait_event(1);
+    io_info.timeout_us_ = 5 * 1000 * 1000;
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
+    ObSSMicroBlockId phy_micro_id(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
+    ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+    if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, phy_micro_id,
+        ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, object_handle,
+        ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+      LOG_WARN("fail to get micro block cache", KR(ret), K(micro_info));
+    } else if (OB_FAIL(object_handle.wait())) {
+      LOG_WARN("fail to wait until get micro block data", KR(ret), K(micro_info));
+    } else if (OB_UNLIKELY(io_info.size_ != object_handle.get_data_size())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get data size wrong", KR(ret), K(io_info.size_), K(object_handle.get_data_size()), K(micro_info));
+    } else {
+      char c = micro_info.macro_id_.hash() % 128;
+      for (int64_t i = 0; OB_SUCC(ret) && i < micro_info.size_; i++) {
+        if (c != read_buf[i]) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get wrong data", KR(ret), K(i), K(c), K(read_buf[i]));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int TestSSCommonUtil::prepare_micro_blocks(
@@ -157,8 +225,7 @@ int TestSSCommonUtil::prepare_micro_blocks(
     } else {
       const int64_t random_min_micro_size = 200;
       const int64_t random_max_micro_size = 16 * 1024;
-      const int64_t start_offset = ObSSPhyBlockCommonHeader::get_serialize_size() +
-                                   ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
+      const int64_t start_offset = ObSSMemBlock::get_reserved_size();
       for (int64_t i = start_macro_id; OB_SUCC(ret) && i < (macro_block_cnt + start_macro_id); ++i) {
         MacroBlockId macro_id = gen_macro_block_id(i);
         char c = macro_id.hash() % 128;
@@ -212,47 +279,6 @@ int TestSSCommonUtil::prepare_micro_blocks(
   return ret;
 }
 
-int TestSSCommonUtil::get_micro_block(const MicroBlockInfo &micro_info, char *read_buf)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!micro_info.is_valid()|| OB_ISNULL(read_buf))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(micro_info), KP(read_buf));
-  } else {
-    ObStorageObjectHandle object_handle;
-    ObIOInfo io_info;
-    io_info.tenant_id_ = MTL_ID();
-    io_info.offset_ = micro_info.offset_;
-    io_info.size_ = micro_info.size_;
-    io_info.flag_.set_wait_event(1);
-    io_info.timeout_us_ = 5 * 1000 * 1000;
-    io_info.buf_ = read_buf;
-    io_info.user_data_buf_ = read_buf;
-    ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
-    ObSSMicroBlockId phy_micro_id(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
-    ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-    if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, phy_micro_id,
-        MicroCacheGetType::FORCE_GET_DATA, io_info, object_handle,
-        ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
-      LOG_WARN("fail to get micro block cache", KR(ret), K(micro_info));
-    } else if (OB_FAIL(object_handle.wait())) {
-      LOG_WARN("fail to wait until get micro block data", KR(ret), K(micro_info));
-    } else if (OB_UNLIKELY(io_info.size_ != object_handle.get_data_size())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get data size wrong", KR(ret), K(io_info.size_), K(object_handle.get_data_size()), K(micro_info));
-    } else {
-      char c = micro_info.macro_id_.hash() % 128;
-      for (int64_t i = 0; OB_SUCC(ret) && i < micro_info.size_; i++) {
-        if (c != read_buf[i]) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get wrong data", KR(ret), K(i), K(c), K(read_buf[i]));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int TestSSCommonUtil::init_io_info(
     ObIOInfo &io_info,
     const ObSSMicroBlockCacheKey &micro_key,
@@ -260,7 +286,7 @@ int TestSSCommonUtil::init_io_info(
     char *read_buf)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!micro_key.is_valid() || micro_key.is_logic_key()) || OB_ISNULL(read_buf)) {
+  if (OB_UNLIKELY(!micro_key.is_valid() || micro_key.is_logical_key()) || OB_ISNULL(read_buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(micro_key), K(read_buf));
   } else {
@@ -275,51 +301,73 @@ int TestSSCommonUtil::init_io_info(
   return ret;
 }
 
-int TestSSCommonUtil::wait_for_persist_task()
+int TestSSCommonUtil::clear_micro_cache(
+    ObSSMicroMetaManager *micro_meta_mgr,
+    ObSSPhysicalBlockManager *phy_blk_mgr,
+    ObSSMicroRangeManager *micro_range_mgr,
+    int64_t &micro_data_blk_cnt,
+    int64_t &range_micro_sum)
 {
   int ret = OB_SUCCESS;
-  const int64_t interval_us = 10 * 1000 * 1000L;
-  const int64_t start_us = ObTimeUtility::current_time();
-  while (ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_fg_used_cnt_) > 1 ||
-         ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_bg_used_cnt_) > 1) {
-    ob_usleep(1000);
-    const int64_t cur_us = ObTimeUtility::current_time();
-    if (cur_us - start_us > interval_us) {
+  if (OB_ISNULL(micro_meta_mgr) || OB_ISNULL(phy_blk_mgr) || OB_ISNULL(micro_range_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(micro_meta_mgr), K(phy_blk_mgr), K(micro_range_mgr));
+  } else {
+    // clear micro_meta map
+    micro_meta_mgr->micro_meta_map_.clear();
+    const int64_t cur_micro_cnt = micro_meta_mgr->micro_meta_map_.count();
+    if (cur_micro_cnt != 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("waiting time is too long", KR(ret), "cache_stat", SSMicroCacheStat);
-      break;
+      LOG_WARN("unexpected micro_meta map", KR(ret), K(cur_micro_cnt));
+    }
+
+    // clear phy_block
+    if (OB_SUCC(ret)) {
+      const int64_t total_blk_cnt = phy_blk_mgr->blk_cnt_info_.total_blk_cnt_;
+      for (int64_t i = SS_SUPER_BLK_COUNT; OB_SUCC(ret) && i < total_blk_cnt; ++i) {
+        ObSSPhysicalBlock *phy_blk = phy_blk_mgr->inner_get_phy_block_by_idx(i);
+        if (OB_NOT_NULL(phy_blk)) {
+          if (phy_blk->get_block_type() == ObSSPhyBlockType::SS_MICRO_DATA_BLK) {
+            phy_blk->valid_len_ = 0;
+            phy_blk->is_sealed_ = 0;
+            phy_blk->is_free_ = 1;
+            phy_blk_mgr->free_bitmap_->set(i, true);
+            ++micro_data_blk_cnt;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("phy_block should not be null", KR(ret), K(i), K(total_blk_cnt));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else {
+        phy_blk_mgr->blk_cnt_info_.reuse();
+        phy_blk_mgr->reusable_blks_.reuse();
+        phy_blk_mgr->super_blk_.reuse();
+      }
+    }
+    // clear micro_range
+    if (OB_SUCC(ret)) {
+      ObSSMicroRangeInfo **range_info_arr = micro_range_mgr->get_range_info_arr();
+      const int64_t init_range_cnt = micro_range_mgr->get_init_range_cnt();
+      range_micro_sum = 0;
+      for (int64_t i = 0; i < init_range_cnt; ++i) {
+        range_micro_sum += range_info_arr[i]->micro_meta_cnt_;
+        range_info_arr[i]->micro_meta_cnt_ = 0;
+        range_info_arr[i]->micro_header_ = nullptr;
+      }
     }
   }
   return ret;
-}
-
-int TestSSCommonUtil::alloc_micro_block_meta(ObSSMicroBlockMeta *&micro_meta)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = SSMicroMetaAlloc.alloc();
-  if (OB_ISNULL(ptr)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc micro_meta mem", KR(ret));
-  } else {
-    micro_meta = new(ptr) ObSSMicroBlockMeta();
-    SSMicroCacheStat.micro_stat().update_micro_pool_alloc_cnt(1);
-  }
-  return ret;
-}
-
-ObCompressorType TestSSCommonUtil::get_random_compress_type()
-{
-  const int64_t random_val = ObRandom::rand(1, 2);
-  const ObCompressorType compress_type = (random_val % 2 == 0) ? ObCompressorType::SNAPPY_COMPRESSOR : ObCompressorType::NONE_COMPRESSOR;
-  return compress_type;
 }
 
 void TestSSCommonUtil::stop_all_bg_task(ObSSMicroCache *micro_cache)
 {
   if (nullptr != micro_cache) {
     ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
-    task_runner.persist_task_.is_inited_ = false;
-    task_runner.micro_ckpt_task_.is_inited_ = false;
+    task_runner.persist_data_task_.is_inited_ = false;
+    task_runner.persist_meta_task_.is_inited_ = false;
     task_runner.release_cache_task_.is_inited_ = false;
     task_runner.blk_ckpt_task_.is_inited_ = false;
   }
@@ -329,8 +377,8 @@ void TestSSCommonUtil::resume_all_bg_task(ObSSMicroCache *micro_cache)
 {
   if (nullptr != micro_cache) {
     ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
-    task_runner.persist_task_.is_inited_ = true;
-    task_runner.micro_ckpt_task_.is_inited_ = true;
+    task_runner.persist_data_task_.is_inited_ = true;
+    task_runner.persist_meta_task_.is_inited_ = true;
     task_runner.release_cache_task_.is_inited_ = true;
     task_runner.blk_ckpt_task_.is_inited_ = true;
   }

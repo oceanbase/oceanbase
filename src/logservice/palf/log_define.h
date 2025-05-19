@@ -55,6 +55,7 @@ class ILogBlockPool;
 
 // ==================== palf env start =============================
 const int64_t MIN_DISK_SIZE_PER_PALF_INSTANCE = 512 * 1024 * 1024ul;
+const int64_t SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE = 256 * 1024 * 1024ul;
 // =====================palf env end ===============================
 
 // ==================== block and log start ========================

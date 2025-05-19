@@ -362,10 +362,16 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObBasicTablet
       STORAGE_LOG(WARN, "Invalid argument to calc mini minor parallel degree", K(ret), K(tablet_size),
                 K(range_info), K(tables.count()), K(merge_ctx));
     } else {
-      calc_adaptive_parallel_degree(ObDagPrio::DAG_PRIO_COMPACTION_MID,
-                                    ObCompactionEstimator::MINOR_MEM_PER_THREAD,
-                                    (range_info.total_size_ / tables.count() + tablet_size - 1) / tablet_size,
-                                    range_info.parallel_target_count_);
+      const ObDagPrio::ObDagPrioEnum priority = merge_ctx.get_dag_priority();
+      if (priority == ObDagPrio::ObDagPrioEnum::DAG_PRIO_MAX) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "Invalid dag priority", K(priority));
+      } else {
+        calc_adaptive_parallel_degree(priority,
+                                      ObCompactionEstimator::MINOR_MEM_PER_THREAD,
+                                      (range_info.total_size_ / tables.count() + tablet_size - 1) / tablet_size,
+                                      range_info.parallel_target_count_);
+      }
     }
 
     if (OB_FAIL(ret)) {

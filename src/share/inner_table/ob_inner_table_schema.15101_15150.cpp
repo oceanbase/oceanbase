@@ -6985,7 +6985,7 @@ int ObInnerTableSchema::all_virtual_table_real_agent_ora_schema(ObTableSchema &t
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObIntType, //column_type
+      ObNumberType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       38, //column_length
       38, //column_precision

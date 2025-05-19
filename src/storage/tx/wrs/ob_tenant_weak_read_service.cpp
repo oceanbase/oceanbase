@@ -719,7 +719,9 @@ bool ObTenantWeakReadService::check_can_skip_ls(ObLS *ls)
   share::SCN offline_scn;
 
   if (OB_NOT_NULL(ls)) {
-    if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+    if (is_tenant_sslog_ls(ls->get_tenant_id(), ls->get_ls_id())) {
+      bool_ret = true;
+    } else if (ls->get_ls_wrs_handler()->can_skip_ls()) {
       bool_ret = true;
     } else if (OB_SUCC(ls->get_offline_scn(offline_scn)) && offline_scn.is_valid()) {
       bool_ret = true;

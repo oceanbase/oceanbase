@@ -121,83 +121,6 @@ public:
             int64_t &real_read_size,
             palf::LogIOContext &io_ctx);
 
-  #ifdef OB_BUILD_SHARED_STORAGE
-  // NB: Thread safe and synchronous interface.
-  // @brief: Uploading count bytes from the buffer starting at write_buf to the file with name
-  //         'tenant_id/palf_id/block_id'.
-  // @param[in]:  tenant_id
-  // @param[in]:  palf_id
-  // @param[in]:  block_id
-  // @param[in]:  write_buf, the write buffer.
-  // @param[in]:  write_buf_size, the write buffer length.
-  // @return value:
-  //   OB_SUCCESS, read successfully.
-  //   OB_INVALID_ARGUMENT, invalid argument.
-  //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
-  //   OB_OBJECT_STORAGE_PERMISSION_DENIED, permission denied.
-  //   OB_OBJECT_NOT_EXIST, uri not exist.
-  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
-  //   OB_NOT_INIT
-  //   OB_NOT_RUNNING
-	int upload(const uint64_t tenant_id,
-	           const int64_t palf_id,
-	           const palf::block_id_t block_id,
-	           const char *write_buf,
-	           const int64_t write_buf_size);
-  // NB: Thread safe and synchronous interface.
-  // @brief: Reading up to count bytes from to a uri with storage info at a given offset.
-  // @param[in]:  uri, a unique sequence of characters that identifies a logical or physical resource used by
-  //              object storage system(e.g.: just like this 'oss://xxx/xxx/...').
-  // @param[in]:  storage_info, the meta info used to access object storage system(e.g.: just like this
-  //              'endpoint&access_id&access_key').
-  // @param[in]:  offset, the given offset which want to read.
-  // @param[in]:  read_buf, the read buffer.
-  // @param[in]:  read_buf_size, the maximum read length.
-  // @param[out]: real_read_size, the really read length.
-  // @return value:
-  //   OB_SUCCESS, read successfully.
-  //   OB_INVALID_ARGUMENT, invalid argument.
-  //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
-  //   OB_FILE_LENGTH_INVALID, read offset is greater than file size.
-  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
-  //   OB_FILE_OR_DIRECTORY_NOT_EXIST, file not exist
-  //   OB_NOT_INIT
-  //   OB_NOT_RUNNING
-  //
-  // NB:
-  // 1. A fixed number of asynchronous tasks will be generated based on the read length, and the minimum
-  //    read length of single asynchronous task is 2MB.
-  // 2. Don't generate asynchronous task when concurrency_ is 0, and execute pread in current thread.
-  //
-  // Recommend:
-  // A maximum of N asynchronous tasks can be generated for a single pread operation(i.e. N =
-  // MIN(read_buf_size/2M, concurrency)), we recommend the total length of concurrent read
-  // requests not exceeded 2M*concurrency, in this way, pread can get better performance.
-  //
-  int pread(const uint64_t tenant_id,
-            const int64_t palf_id,
-            const palf::block_id_t block_id,
-            const int64_t offset,
-            char *read_buf,
-            const int64_t read_buf_size,
-            int64_t &real_read_size,
-            palf::LogIOContext &io_ctx);
-
-  // TODO by runlin: support parallel upload
-  int init_multi_upload(const uint64_t tenant_id,
-                        const int64_t palf_id,
-                        const palf::block_id_t block_id,
-                        const int64_t count,
-                        ObLogExternalStorageCtx &run_ctx);
-  int upload_one_part(const char *write_buff,
-                      const int64_t write_buff_size,
-                      const int64_t offset,
-                      const int64_t part_id,
-                      ObLogExternalStorageCtx &run_ctx);
-  int complete_multi_upload(ObLogExternalStorageCtx &run_ctx);
-  int abort_multi_upload(ObLogExternalStorageCtx &run_ctx);
-  #endif
-
 	int64_t get_recommend_concurrency_in_single_file() const;
 
   TO_STRING_KV(K_(concurrency), K_(capacity), K_(is_running), K_(is_inited), KP(handle_adapter_), KP(this));
@@ -233,21 +156,6 @@ private:
 
   bool check_need_resize_(const int64_t concurrency) const;
 
-  #ifdef OB_BUILD_SHARED_STORAGE
-  int do_upload_(const char *uri,
-                 const share::ObBackupStorageInfo *info,
-                 const uint64_t storage_id,
-                 const char *write_buf,
-                 const int64_t write_buf_size);
-
-  enum class EnumMultiUploadResult {
-    COMPLETE = 0,
-    ABORT = 1,
-    INVALID = 2
-  };
-  int finish_multi_upload_(const EnumMultiUploadResult enum_result,
-                           ObLogExternalStorageCtx &run_ctx);
-  #endif
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;

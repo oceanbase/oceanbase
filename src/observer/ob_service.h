@@ -232,6 +232,7 @@ public:
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   int check_server_empty_with_result(const obrpc::ObCheckServerEmptyArg &arg, obrpc::ObCheckServerEmptyResult &result);
   static int do_migrate_ls_replica(const obrpc::ObLSMigrateReplicaArg &arg);
+  static int do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg);
   // ObRpcIsEmptyServerP @RS bootstrap
 
   // ObRpcCheckDeploymentModeP

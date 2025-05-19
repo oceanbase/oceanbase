@@ -63,5 +63,11 @@ int64_t ObLSID::get_serialize_size() const
   size += serialization::encoded_length_i64(id_);
   return size;
 }
+
+bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  return is_meta_tenant(tenant_id) && ls_id.is_sslog_ls();
+}
+
 } // end namespace share
 } // end namespace oceanbase

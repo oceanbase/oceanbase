@@ -24,7 +24,9 @@
 #include "share/ob_primary_zone_util.h"
 #include "rootserver/ob_tenant_thread_helper.h"
 #include "share/ls/ob_ls_operator.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
 #include "rootserver/ob_ddl_operator.h"
+#include "rootserver/ob_table_creator.h"
 
 namespace oceanbase
 {
@@ -135,7 +137,7 @@ int ObParallelCreateTenantExecutor::wait_all_(
     } // end for
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ret_code)) {
-    } else if (OB_FAIL(wait_ls_leader_(user_tenant_id, true/*force_renew*/))) {
+    } else if (OB_FAIL(wait_ls_leader_(user_tenant_id, SYS_LS, true/*force_renew*/))) {
       LOG_WARN("failed to wait user sys ls exists in meta table", KR(ret), K(user_tenant_id));
       // To avoid load_sys_package and tenant DDL operations competing for DDL threads
       // wait for all load_sys_package tasks to complete before returning to the user.
@@ -191,6 +193,19 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_()
     LOG_WARN("failed to get tenant_info", KR(ret), K(meta_tenant_id));
   } else if (OB_FAIL(ObTenantDDLService::get_pools(create_tenant_arg_.pool_list_, pools))) {
     LOG_WARN("failed to init pools", KR(ret), K(create_tenant_arg_.pool_list_));
+  } else if (GCTX.is_shared_storage_mode()) {
+    FLOG_INFO("[CREATE_TENANT] create sslog log stream", K(meta_tenant_id));
+    if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
+          meta_palf_base_info, OB_INVALID_TENANT_ID/*source_tenant_id_to_use*/, tenant_info, true /*is_sslog*/))) {
+      LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
+        K(pools), K(meta_palf_base_info), K(create_tenant_arg_));
+    } else if (OB_FAIL(wait_ls_leader_(meta_tenant_id, SSLOG_LS))) {
+      LOG_WARN("failed to wait ls leader", KR(ret), K(meta_tenant_id));
+    } else if (OB_FAIL(create_sslog_tablet_())) {
+      LOG_WARN("failed to create sslog tablet", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(create_tenant_sys_ls_(meta_tenant_schema_, pools, false /*create_ls_with_palf*/,
           meta_palf_base_info, create_tenant_arg_.source_tenant_id_, tenant_info))) {
     LOG_WARN("failed to create meta tenant sys ls", KR(ret), K(meta_tenant_schema_),
@@ -322,7 +337,7 @@ int ObParallelCreateTenantExecutor::async_call_create_normal_tenant_(
     LOG_WARN("failed to check_inner_stat_", KR(ret));
   } else if (!tenant_schema.is_creating()) {
     // non primary tenant do not need to create normal tenant
-  } else if (OB_FAIL(wait_ls_leader_(tenant_id))) {
+  } else if (OB_FAIL(wait_ls_leader_(tenant_id, SYS_LS))) {
     LOG_WARN("failed to wait ls leader", KR(ret), K(tenant_id));
   } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(addr))) {
     LOG_WARN("failed to get rs addr", KR(ret));
@@ -336,21 +351,75 @@ int ObParallelCreateTenantExecutor::async_call_create_normal_tenant_(
   return ret;
 }
 
+int ObParallelCreateTenantExecutor::create_sslog_tablet_()
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("start creating sslog table");
+  const uint64_t tenant_id = meta_tenant_schema_.get_tenant_id();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check_inner_stat failed", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is NULL", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    ObMySQLTransaction trans;
+    ObTableSchema table_schema;
+    ObTableCreator table_creator(tenant_id, SCN::base_scn(), trans);
+    common::ObArray<const share::schema::ObTableSchema*> table_schema_ptrs;
+    common::ObArray<share::ObLSID> ls_id_array;
+    common::ObArray<bool> need_create_empty_majors;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start trans", KR(ret));
+    } else if (OB_FAIL(table_creator.init(false))) {
+      LOG_WARN("fail to init tablet creator", KR(ret));
+    } else if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
+      LOG_WARN("fail to get schema", KR(ret));
+    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
+      LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(table_schema_ptrs.push_back(&table_schema))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(ls_id_array.push_back(SSLOG_LS))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
+                                table_schema_ptrs,
+                                ls_id_array,
+                                DATA_CURRENT_VERSION,
+                                need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+      LOG_WARN("fail to add create tablet arg", KR(ret));
+    } else if (OB_FAIL(table_creator.execute())) {
+      LOG_WARN("execute create partition failed", K(ret));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      bool commit = OB_SUCC(ret);
+      if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        LOG_WARN("trans end failed", K(commit), K(temp_ret));
+      }
+    }
+  }
+  FLOG_INFO("finish creating sslog table", KR(ret));
+  return ret;
+}
+
 int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
     const ObTenantSchema &tenant_schema,
     const ObIArray<share::ObResourcePoolName> &pool_list,
     const bool create_ls_with_palf,
     const palf::PalfBaseInfo &palf_base_info,
     const uint64_t source_tenant_id,
-    const ObAllTenantInfo &tenant_info)
+    const ObAllTenantInfo &tenant_info,
+    const bool is_sslog)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  FLOG_INFO("[CREATE_TENANT] STEP 2.1. start create sys log stream", K(tenant_schema), K(source_tenant_id));
+  const ObLSID ls_id = is_sslog ? SSLOG_LS : SYS_LS;
+  FLOG_INFO("[CREATE_TENANT] STEP 2.1. start create sys log stream", K(tenant_schema), K(source_tenant_id), K(ls_id));
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   // meta tenant do not have to reference source tenant id
   const uint64_t source_tenant_id_to_use = is_user_tenant(tenant_id) ? source_tenant_id : OB_INVALID_TENANT_ID;
-  int64_t wait_leader = 0;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (is_sys_tenant(tenant_id)) {
@@ -362,7 +431,7 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
     ObSqlString zone_priority;
     share::schema::ObSchemaGetterGuard schema_guard; // not used
     int64_t paxos_replica_num = OB_INVALID_ID;
-    ObLSCreator ls_creator(*rpc_proxy_, tenant_id, SYS_LS, sql_proxy_);
+    ObLSCreator ls_creator(*rpc_proxy_, tenant_id, ls_id, sql_proxy_);
     if (OB_FAIL(tenant_schema.get_zone_replica_attr_array(locality))) {
       LOG_WARN("fail to get tenant's locality", KR(ret), K(locality));
     } else if (OB_FAIL(tenant_schema.get_paxos_replica_num(schema_guard, paxos_replica_num))) {
@@ -378,17 +447,18 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_(
                K(locality), K(paxos_replica_num), K(tenant_schema), K(zone_priority), K(source_tenant_id_to_use));
     }
   }
-  if (is_meta_tenant(tenant_id)) {
+  if (is_sslog) {
+  } else if (is_meta_tenant(tenant_id)) {
     DEBUG_SYNC(AFTER_CREATE_META_TENANT_SYS_LOGSTREAM);
   } else {
     DEBUG_SYNC(AFTER_CREATE_USER_TENANT_SYS_LOGSTREAM);
   }
-  FLOG_INFO("[CREATE_TENANT] STEP 2.1. finish create sys log stream", KR(ret), K(tenant_schema),
+  FLOG_INFO("[CREATE_TENANT] STEP 2.1. finish create sys log stream", KR(ret), K(tenant_schema), K(ls_id),
            "cost", ObTimeUtility::fast_current_time() - start_time);
   return ret;
 }
 
-int ObParallelCreateTenantExecutor::wait_ls_leader_(const uint64_t tenant_id, const bool force_renew)
+int ObParallelCreateTenantExecutor::wait_ls_leader_(const uint64_t tenant_id, const ObLSID &ls_id, const bool force_renew)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -412,7 +482,7 @@ int ObParallelCreateTenantExecutor::wait_ls_leader_(const uint64_t tenant_id, co
       } else if (!first_round && OB_TMP_FAIL(location_service_->renew_all_ls_locations_by_rpc())) {
         LOG_WARN("failed to renew all ls locations by rpc", KR(tmp_ret));
       } else if (OB_TMP_FAIL(location_service_->get(GCONF.cluster_id, tenant_id,
-              SYS_LS, expire_renew_time, is_cache_hit, location))) {
+        ls_id, expire_renew_time, is_cache_hit, location))) {
         LOG_WARN("failed to get ls location", KR(tmp_ret), K(tenant_id));
       } else if (location.is_valid()) {
         if (OB_TMP_FAIL(location.get_leader(leader))) {
@@ -457,6 +527,44 @@ bool ObParallelCreateTenantExecutor::get_create_ls_with_palf_()
   return create_tenant_arg_.is_restore_tenant() || create_tenant_arg_.is_clone_tenant();
 }
 
+int ObParallelCreateTenantExecutor::do_check_can_create_user_ls_(bool &can_create)
+{
+  int ret = OB_SUCCESS;
+  can_create = false;
+  ObLSAttrArray array;
+  ObAllTenantInfo tenant_info;
+  const uint64_t user_tenant_id = user_tenant_schema_.get_tenant_id();
+  ObLSAttrOperator ls_operator(user_tenant_id, sql_proxy_);
+  ObTimeoutCtx ctx;
+  const int64_t default_timeout = GCONF.internal_sql_execute_timeout;
+  if (OB_FAIL(ctx.set_timeout(default_timeout))) {
+    /*
+    Hear, we are checking whether it is possible to create a user LS, which is a separate thread from create_normal_tenant().
+    At the end of each while loop, async_rpc_has_error() will be used to check if create_normal_tenant() returns an error code,
+    so that when the create_normal_tenant() fails, the while loop can be exited.
+    But if the while loop gets stuck(such as due to schema related ...) in the middle step and cannot detect the create_normal_tenant() error code,
+    it will need to wait until timeout to exit, subsequent step drop tenant force will ultimately failed due to timeout.
+    For example:
+      Injecting ERRSIM_BROADCAST_SCHEMA into z2 (z1 is normal) when creating tenant and broadcast schema,
+      due to schema related modifications in the __all_sslog_table, it is assumed that version 1 of the schema is also readable,
+      however, if a inner sql request reaches z2, it will cause z2's machine to repeatedly refresh the schema,
+      which has not yet been written into the inner table, the refresh in z2 will not be successful and will be stuck until timeout occurs.
+    Here we manually set the ctx timeout for each round to ensure that it will not be hung.
+    Note that the ctx timeout needs to be restored later.
+    */
+    LOG_WARN("failed to set default timeout ctx", KR(ret), K(default_timeout));
+  } else if (OB_FAIL(ls_operator.get_all_ls_by_order(array))) {
+    LOG_WARN("failed to get all ls", KR(ret), K(user_tenant_id));
+  } else if (array.count() == 0) {
+    LOG_INFO("sys ls is not in __all_ls, need wait", KR(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(user_tenant_id, sql_proxy_, false/*for_update*/, tenant_info))) {
+    LOG_WARN("failed to get tenant info, need wait", KR(ret), K(user_tenant_id));
+  } else {
+    can_create = true;
+  }
+  return ret;
+}
+
 // wait meta tenant sys table tablet created
 int ObParallelCreateTenantExecutor::check_can_create_user_ls_(ObParallelCreateNormalTenantProxy &proxy)
 {
@@ -467,26 +575,18 @@ int ObParallelCreateTenantExecutor::check_can_create_user_ls_(ObParallelCreateNo
     LOG_WARN("failed to check_inner_stat", KR(ret));
   } else {
     const int64_t retry_interval_us = 200l * 1000l; // 200ms
-    ObLSAttrOperator ls_operator(user_tenant_id, sql_proxy_);
-    ObLSAttrArray array;
-    ObAllTenantInfo tenant_info;
     // ignore LOG_USER_ERROR when trying to read from __all_ls
     ObWarningBufferIgnoreScope ignore_errors_in_warning_buffer;
     while (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
-      uint64_t tmp_value = 0;
+      bool can_create = false;
       if (ctx_.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("wait tenant table writable failed", KR(ret));
-      } else if (OB_TMP_FAIL(ls_operator.get_all_ls_by_order(array))) {
-        LOG_WARN("meta table is not created", KR(ret), K(user_tenant_id));
-      } else if (array.count() == 0) {
-        LOG_INFO("sys ls is not in __all_ls, need wait", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::load_tenant_info(user_tenant_id, sql_proxy_,
-            false/*for_update*/, tenant_info))) {
-        LOG_WARN("failed to get tenant info, need wait", KR(tmp_ret), K(user_tenant_id));
-      } else {
-        // meta tenant tablet is created, ready to write data
+      } else if (OB_TMP_FAIL(do_check_can_create_user_ls_(can_create))) {
+        LOG_WARN("failed to check can create ls", KR(tmp_ret), K(user_tenant_id));
+      } else if (can_create) {
+        LOG_INFO("meta tenant tablet is created, ready to write data", K(user_tenant_id));
         break;
       }
       if (OB_FAIL(ret)) {
@@ -500,7 +600,7 @@ int ObParallelCreateTenantExecutor::check_can_create_user_ls_(ObParallelCreateNo
       }
     }
   }
-  FLOG_INFO("[CREATE_TENANT] finish check create user ls", KR(ret));
+  FLOG_INFO("[CREATE_TENANT] finish check create user ls", KR(ret), "timeout", ctx_.get_abs_timeout());
   return ret;
 }
 

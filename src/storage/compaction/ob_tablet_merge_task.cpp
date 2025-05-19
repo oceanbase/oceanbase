@@ -22,6 +22,9 @@
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_minor_compaction.h"
+#endif
 
 namespace oceanbase
 {
@@ -253,6 +256,7 @@ ObTabletMergeDagParam::ObTabletMergeDagParam()
      merge_type_(INVALID_MERGE_TYPE),
      merge_version_(0),
      schedule_transfer_seq_(-1),
+     reorganization_scn_(),
      ls_id_(),
      tablet_id_()
 {
@@ -270,6 +274,7 @@ ObTabletMergeDagParam::ObTabletMergeDagParam(
      merge_type_(merge_type),
      merge_version_(0),
      schedule_transfer_seq_(schedule_transfer_seq),
+     reorganization_scn_(),
      ls_id_(ls_id),
      tablet_id_(tablet_id)
 {
@@ -281,7 +286,8 @@ bool ObTabletMergeDagParam::is_valid() const
          && tablet_id_.is_valid()
          && is_valid_merge_type(merge_type_)
          && (!is_multi_version_merge(merge_type_) || merge_version_ >= 0)
-         && is_valid_exec_mode(exec_mode_);
+         && is_valid_exec_mode(exec_mode_)
+         && (is_local_exec_mode(exec_mode_) || reorganization_scn_.is_valid());
 }
 
 ObTabletMergeDag::ObTabletMergeDag(
@@ -806,10 +812,18 @@ int ObTabletMergeDag::alloc_merge_ctx()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid exec mode", KR(ret), K_(param));
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_minor_merge(merge_type) && is_output_exec_mode(param_.exec_mode_)) {
+    ctx_ = NEW_CTX(ObTabletSSMinorMergeCtx);
+#endif
   } else if (is_multi_version_merge(merge_type) && !is_mds_minor_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletExeMergeCtx);
   } else if (is_mds_mini_merge(merge_type) || is_backfill_tx_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMergeCtx);
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_mds_minor_merge(merge_type) && is_output_exec_mode(param_.exec_mode_)) {
+    ctx_ = NEW_CTX(ObTabletSSMinorMergeCtx);
+#endif
   } else if (is_mds_minor_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMdsMinorMergeCtx);
   } else {

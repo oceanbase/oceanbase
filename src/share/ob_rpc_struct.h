@@ -89,7 +89,7 @@
 #include "share/ob_heartbeat_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
-#include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
@@ -5286,6 +5286,53 @@ public:
   common::ObMemberList member_list_;
 };
 
+struct ObLSReplaceReplicaArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObLSReplaceReplicaArg()
+    : task_id_(),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      dst_member_(),
+      config_version_() {}
+public:
+  int assign(const ObLSReplaceReplicaArg &that);
+
+  int init(
+      const share::ObTaskId &task_id,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObReplicaMember &dst_member,
+      const palf::LogConfigVersion &config_version);
+
+  TO_STRING_KV(K_(task_id),
+               K_(tenant_id),
+               K_(ls_id),
+               K_(dst_member),
+               K_(config_version));
+
+  bool is_valid() const {
+    return !task_id_.is_invalid()
+           && common::OB_INVALID_TENANT_ID != tenant_id_
+           && ls_id_.is_valid()
+           && dst_member_.is_valid()
+           && config_version_.is_valid();
+  }
+  const share::ObTaskId &get_task_id() const { return task_id_; }
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const common::ObReplicaMember &get_dst_member() const { return dst_member_; }
+  const palf::LogConfigVersion &get_config_version() const { return config_version_; }
+private:
+  share::ObTaskId task_id_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObReplicaMember dst_member_;
+  palf::LogConfigVersion config_version_;
+};
+
 enum class ObDRTaskType : int64_t
 {
   LS_MIGRATE_REPLICA = 0,
@@ -5318,12 +5365,14 @@ public:
       const share::ObTaskId &task_id,
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
-      const int result);
+      const int result,
+      const ObDRTaskType &task_type);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),
                K_(ls_id),
-               K_(result));
+               K_(result),
+               K_(task_type));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -11557,39 +11606,16 @@ public:
   storage::ObSSMicroBlockCacheKey micro_key_;
 };
 
-struct ObSSMicroMetaInfo
+struct ObGetSSMicroBlockMetaRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSSMicroMetaInfo() : reuse_version_(0), data_dest_(0), access_time_(0), length_(0), is_in_l1_(0),
-    is_in_ghost_(0), is_persisted_(0), is_reorganizing_(0), ref_cnt_(0), crc_(0), micro_key_() {}
-  ~ObSSMicroMetaInfo() {}
-  TO_STRING_KV(K_(reuse_version), K_(data_dest), K_(access_time), K_(length), K_(is_in_l1), K_(is_in_ghost),
-      K_(is_persisted), K_(is_reorganizing), K_(ref_cnt), K_(crc), K_(micro_key));
-public:
-  uint64_t reuse_version_;
-  uint64_t data_dest_;
-  uint64_t access_time_;
-  uint64_t length_;
-  uint64_t is_in_l1_;
-  uint64_t is_in_ghost_;
-  uint64_t is_persisted_;
-  uint64_t is_reorganizing_;
-  uint32_t ref_cnt_;
-  uint32_t crc_;
-  ObSSMicroBlockCacheKey micro_key_;
-};
-
-struct ObGetSSMicroBlockMetaResult final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObGetSSMicroBlockMetaResult() : micro_meta_info_(), ret_(common::OB_ERROR) {}
-  ~ObGetSSMicroBlockMetaResult() {}
-  int assign(const ObGetSSMicroBlockMetaResult &rhs);
+  ObGetSSMicroBlockMetaRes() : micro_meta_info_(), ret_(common::OB_ERROR) {}
+  ~ObGetSSMicroBlockMetaRes() {}
+  int assign(const ObGetSSMicroBlockMetaRes &rhs);
   TO_STRING_KV(K_(micro_meta_info), K_(ret));
 public:
-  ObSSMicroMetaInfo micro_meta_info_;
+  ObSSMicroBlockMetaInfo micro_meta_info_;
   int ret_;
 };
 
@@ -11668,12 +11694,12 @@ public:
   bool is_enabled_;
 };
 
-struct ObGetSSMicroCacheInfoArg final
+struct ObGetSSMicroCacheAllInfoArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetSSMicroCacheInfoArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
-  ~ObGetSSMicroCacheInfoArg() {}
+  ObGetSSMicroCacheAllInfoArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObGetSSMicroCacheAllInfoArg() {}
   bool is_valid() const
   {
     return OB_INVALID_TENANT_ID != tenant_id_ ;
@@ -11683,16 +11709,16 @@ public:
   uint64_t tenant_id_;
 };
 
-struct ObGetSSMicroCacheInfoResult final
+struct ObGetSSMicroCacheAllInfoResult final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetSSMicroCacheInfoResult() : micro_cache_stat_(), super_block_(), arc_info_() {}
-  ~ObGetSSMicroCacheInfoResult() {}
-  TO_STRING_KV(K_(micro_cache_stat), K_(super_block), K_(arc_info));
+  ObGetSSMicroCacheAllInfoResult() : micro_cache_stat_(), super_blk_(), arc_info_() {}
+  ~ObGetSSMicroCacheAllInfoResult() {}
+  TO_STRING_KV(K_(micro_cache_stat), K_(super_blk), K_(arc_info));
 public:
   ObSSMicroCacheStat micro_cache_stat_;
-  ObSSMicroCacheSuperBlock super_block_;
+  ObSSMicroCacheSuperBlk super_blk_;
   ObSSARCInfo arc_info_;
 };
 
@@ -11766,7 +11792,7 @@ struct ObSetSSCkptCompressorArg final
 public:
   ObSetSSCkptCompressorArg()
       : tenant_id_(OB_INVALID_TENANT_ID),
-        block_type_(ObSSPhyBlockType::SS_INVALID_BLK_TYPE),
+        block_type_(ObSSPhyBlockType::SS_INVALID_TYPE),
         compressor_type_(common::ObCompressorType::INVALID_COMPRESSOR)
   {}
   ~ObSetSSCkptCompressorArg()
@@ -11774,7 +11800,7 @@ public:
   bool is_valid() const
   {
     return OB_INVALID_TENANT_ID != tenant_id_ && compressor_type_ != common::ObCompressorType::INVALID_COMPRESSOR &&
-           is_ckpt_block_type(block_type_);
+           is_ss_ckpt_block(block_type_);
   }
   TO_STRING_KV(K_(tenant_id), K_(block_type), K_(compressor_type));
 public:
@@ -13616,15 +13642,15 @@ public:
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE
-struct ObLSSyncHotMicroKeyArg
+struct ObLSSyncHotMicroMetaArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObLSSyncHotMicroKeyArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), leader_addr_(), micro_keys_() {}
-  ~ObLSSyncHotMicroKeyArg() {}
-  int assign(const ObLSSyncHotMicroKeyArg &other);
+  ObLSSyncHotMicroMetaArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), leader_addr_(), micro_keys_() {}
+  ~ObLSSyncHotMicroMetaArg() {}
+  int assign(const ObLSSyncHotMicroMetaArg &other);
   bool is_valid() const;
-  // return reserved serialize size besides ObSSMicroBlockCacheKeyMeta elements (including
+  // return reserved serialize size besides ObSSMicroPrewarmMeta elements (including
   // OB_UNIS_VERSION, tenant_id_, ls_id_, leader_addr_.get_serialize_size(), count of ObSArray,
   // and NS_::OB_SERIALIZE_SIZE_NEED_BYTES), which is smaller than 4KB.
   OB_INLINE int64_t get_reserved_serialize_size() const { return 4096; }
@@ -13634,7 +13660,7 @@ public:
   uint64_t tenant_id_;
   int64_t ls_id_;
   ObAddr leader_addr_;
-  ObSArray<ObSSMicroBlockCacheKeyMeta> micro_keys_;
+  ObSArray<ObSSMicroPrewarmMeta> micro_keys_;
 };
 #endif
 
@@ -13820,6 +13846,42 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRefreshServiceNameRes);
 };
+
+struct ObNotifyLogServiceAccessPointArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyLogServiceAccessPointArg() : logservice_access_point_(),
+                                       allocator_() {}
+  ~ObNotifyLogServiceAccessPointArg() {}
+  void reset();
+  bool is_valid() const { return !logservice_access_point_.empty(); }
+  int init(const common::ObString &logservice_access_point);
+  int assign(const ObNotifyLogServiceAccessPointArg &other);
+  const common::ObString &get_logservice_access_point() const {
+    return logservice_access_point_;
+  }
+  TO_STRING_KV(K_(logservice_access_point));
+private:
+  common::ObString logservice_access_point_;
+  common::ObArenaAllocator allocator_;
+};
+
+struct ObNotifyLogServiceAccessPointResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyLogServiceAccessPointResult();
+  ~ObNotifyLogServiceAccessPointResult();
+  int assign(const ObNotifyLogServiceAccessPointResult &other);
+  void reset();
+  void set_ret(int ret);
+  int get_ret() const;
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
 struct ObNotifySharedStorageInfoArg final
 {
   OB_UNIS_VERSION(1);
@@ -13958,6 +14020,56 @@ public:
   common::ObSArray<common::ObTabletID> tablet_id_array_;
   share::ObRebuildTabletLocation dest_;
   share::ObRebuildTabletLocation src_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRebuildTabletArg);
+};
+
+struct ObWriteInnerTabletArg final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObWriteInnerTabletArg();
+  ~ObWriteInnerTabletArg() = default;
+  bool is_valid() const;
+  void reset();
+  int init(const uint64_t tenant_id,
+           const transaction::ObTxDesc &tx_desc,
+           const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id,
+           const common::ObString &buf);
+  TO_STRING_KV(K_(tenant_id),
+               KPC_(tx_desc),
+               K_(ls_id),
+               K_(tablet_id),
+               KP(buf_.length()));
+
+public:
+  uint64_t tenant_id_;
+  transaction::ObTxDesc *tx_desc_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  common::ObString buf_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObWriteInnerTabletArg);
+};
+
+struct ObWriteInnerTabletResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObWriteInnerTabletResult() : result_(common::OB_SUCCESS), tx_result_(), affected_rows_(0) {}
+  ~ObWriteInnerTabletResult() {}
+  bool is_valid() const;
+  void reset();
+  int init(const transaction::ObTxExecResult &tx_result);
+  TO_STRING_KV(K_(result), K_(tx_result), K_(affected_rows));
+public:
+  int64_t result_;
+  transaction::ObTxExecResult tx_result_;
+  int64_t affected_rows_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObWriteInnerTabletResult);
 };
 
 }//end namespace obrpc

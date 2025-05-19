@@ -20,7 +20,7 @@
 #include "storage/tablet/ob_tablet.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
-#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"
 #include "close_modules/shared_storage/storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
 #endif
 

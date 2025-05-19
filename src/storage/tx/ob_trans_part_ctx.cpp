@@ -22,6 +22,9 @@
 #include "logservice/ob_log_service.h"
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
 #include "storage/tx/ob_tx_log_operator.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
+#endif
 
 namespace oceanbase {
 
@@ -1067,6 +1070,14 @@ int ObPartTransCtx::trans_replay_commit_(const SCN &commit_version,
                   KPC(this));
       }
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
+      ret = OB_SUCCESS;
+      TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
+    } else {
+      MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+    }
+#endif
   }
 
   return ret;
@@ -1577,6 +1588,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     } else if (!is_local_tx_() && OB_FAIL(ObTxCycleTwoPhaseCommitter::recover_from_tx_table())) {
       TRANS_LOG(ERROR, "recover_from_tx_table failed", K(ret), KPC(this));
     } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+      ctx_info.notify_task_queue_view_.move_to(sslog_notify_queue_);
+#endif
       is_ctx_table_merged_ = true;
       replay_completeness_.set(true);
     }
@@ -2126,6 +2140,16 @@ int ObPartTransCtx::tx_end_(const bool commit)
   } else if (has_persisted_log_() && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
     TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_SUCC(ret) && OB_LIKELY(commit)) {
+    if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
+      ret = OB_SUCCESS;
+      TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
+    } else {
+      MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+    }
+  }
+#endif
 
   return ret;
 }
@@ -6987,6 +7011,9 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
     info.cluster_id_ = cluster_id_;
+#ifdef OB_BUILD_SHARED_STORAGE
+    info.notify_task_queue_view_.view_from(sslog_notify_queue_);
+#endif
     if (cluster_version_accurate_) {
       info.cluster_version_ = cluster_version_;
     } else {

@@ -274,6 +274,7 @@ ob_set_subtarget(ob_share common
   ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
   ob_device_credential_task.cpp
+  ob_define.cpp
   ob_dynamic_partition_manager.cpp
   ob_scheduled_manage_dynamic_partition.cpp
   ob_timezone_importer.cpp
@@ -305,6 +306,7 @@ ob_set_subtarget(ob_share common_mixed
   inner_table/ob_inner_table_schema.vt.cpp
   inner_table/ob_inner_table_schema.lob.cpp
   inner_table/ob_inner_table_schema_misc.ipp
+  inner_table/ob_sslog_table_schema.cpp
   object/ob_obj_cast.cpp
   parameter/ob_parameter_seed.ipp
   ratelimit/ob_rl_mgr.cpp

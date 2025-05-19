@@ -279,7 +279,14 @@ public:// for mds
                                  const char *buf,
                                  const int64_t buf_len,
                                  const transaction::ObRegisterMdsFlag &register_flag = transaction::ObRegisterMdsFlag());
-
+public:// for inner tablet with memtable
+  int execute_inner_tablet_write(
+      const uint64_t &tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const char *buf,
+      const int64_t buf_len,
+      int64_t &affected_rows);
 public:
   static int process_record(sql::ObResultSet &result_set,
                             sql::ObSqlCtx &sql_ctx,

@@ -159,7 +159,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_enough_memory) {
                                                             v_key[i].tablet_id_,
                                                             share::ObLSID(1),
                                                             share::SCN::min_scn(),
-                                                            (ObTabletPointer*)0x111,
+                                                            (ObTabletBasePointer*)0x111,
                                                             &mgr));
     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
     p_mds_table->rec_scn_ = v_key[i].rec_scn_;
@@ -194,7 +194,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_limitted_memory_reserve_fai
                                                             v_key[i].tablet_id_,
                                                             share::ObLSID(1),
                                                             share::SCN::min_scn(),
-                                                            (ObTabletPointer*)0x111,
+                                                            (ObTabletBasePointer*)0x111,
                                                             &mgr));
     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
     p_mds_table->rec_scn_ = v_key[i].rec_scn_;
@@ -240,7 +240,7 @@ TEST_F(TestMdsTableFlush, flusher_for_one) {
 //                                                            v_key[i].tablet_id_,
 //                                                            share::ObLSID(1),
 //                                                            share::SCN::min_scn(),
-//                                                            (ObTabletPointer*)0x111,
+//                                                            (ObTabletBasePointer*)0x111,
 //                                                            &mgr));
 //     MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
 //     p_mds_table->rec_scn_ = v_key[i].rec_scn_;
@@ -268,7 +268,7 @@ TEST_F(TestMdsTableFlush, flusher_for_one) {
 //                                                              v_key[i].tablet_id_,
 //                                                              share::ObLSID(1),
 //                                                              share::SCN::min_scn(),
-//                                                              (ObTabletPointer*)0x111,
+//                                                              (ObTabletBasePointer*)0x111,
 //                                                              &mgr));
 //       MdsTableBase *p_mds_table = mds_table.p_mds_table_base_.data_;
 //       p_mds_table->rec_scn_ = v_key[i].rec_scn_;

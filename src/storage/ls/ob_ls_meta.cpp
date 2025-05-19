@@ -23,11 +23,11 @@ using namespace share;
 using namespace transaction;
 namespace storage
 {
-typedef ObFunction<int(const int64_t, const ObLSMeta &)> WriteSlog;
-WriteSlog ObLSMeta::write_slog_ = [](const int64_t ls_epoch, const ObLSMeta &ls_meta) {
+typedef ObFunction<int(const ObLSMeta &)> WriteSlog;
+WriteSlog ObLSMeta::write_slog_ = [](const ObLSMeta &ls_meta) {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.update_ls_meta(ls_epoch, ls_meta))) {
-    LOG_WARN("fail to update ls meta", K(ret), K(ls_epoch), K(ls_meta));
+  if (OB_FAIL(TENANT_STORAGE_META_SERVICE.update_ls_meta(ls_meta))) {
+    LOG_WARN("fail to update ls meta", K(ret), K(ls_meta));
   }
   return ret;
 };
@@ -54,7 +54,8 @@ ObLSMeta::ObLSMeta()
     rebuild_info_(),
     transfer_meta_info_(),
     major_mv_merge_info_(),
-    store_format_()
+    store_format_(),
+    ls_epoch_(0)
 {
 }
 
@@ -79,10 +80,12 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     rebuild_info_(ls_meta.rebuild_info_),
     transfer_meta_info_(ls_meta.transfer_meta_info_),
     major_mv_merge_info_(ls_meta.major_mv_merge_info_),
-    store_format_(ls_meta.store_format_)
+    store_format_(ls_meta.store_format_),
+    ls_epoch_(ls_meta.ls_epoch_)
 {
   int ret = OB_SUCCESS;
-  all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
+  bool unused_updated = false;
+  all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_, unused_updated);
 }
 
 int ObLSMeta::set_start_work_state()
@@ -123,6 +126,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
   ObReentrantWLockGuard update_guard_myself(update_lock_);
   ObReentrantRLockGuard guard(other.rw_lock_);
   ObReentrantWLockGuard guard_myself(rw_lock_);
+  bool unused_updated = false;
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
@@ -137,13 +141,14 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     restore_status_ = other.restore_status_;
     replayable_point_ = other.replayable_point_;
     tablet_change_checkpoint_scn_ = other.tablet_change_checkpoint_scn_;
-    all_id_meta_.update_all_id_meta(other.all_id_meta_);
+    all_id_meta_.update_all_id_meta(other.all_id_meta_, unused_updated);
     saved_info_ = other.saved_info_;
     transfer_scn_ = other.transfer_scn_;
     rebuild_info_ = other.rebuild_info_;
     transfer_meta_info_ = other.transfer_meta_info_;
     major_mv_merge_info_ = other.major_mv_merge_info_;
     store_format_ = other.store_format_;
+    ls_epoch_ = other.ls_epoch_;
   }
   return *this;
 }
@@ -154,6 +159,7 @@ void ObLSMeta::reset()
   ObReentrantWLockGuard guard(rw_lock_);
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
+  ls_epoch_ = 0;
   unused_replica_type_ = REPLICA_TYPE_FULL;
   clog_base_lsn_.reset();
   clog_checkpoint_scn_ = ObScnRange::MIN_SCN;
@@ -184,8 +190,7 @@ SCN ObLSMeta::get_clog_checkpoint_scn() const
 	return clog_checkpoint_scn_;
 }
 
-int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
-                                  const LSN &clog_checkpoint_lsn,
+int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
                                   const SCN &clog_checkpoint_scn,
                                   const bool write_slog)
 {
@@ -199,7 +204,7 @@ int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
     tmp.clog_checkpoint_scn_ = clog_checkpoint_scn;
 
     if (write_slog) {
-      if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+      if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("clog_checkpoint write slog failed", K(ret));
       }
     }
@@ -217,8 +222,7 @@ SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 	return tablet_change_checkpoint_scn_;
 }
 
-int ObLSMeta::set_tablet_change_checkpoint_scn(
-    const int64_t ls_epoch, const SCN &tablet_change_checkpoint_scn)
+int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoint_scn)
 {
   ObReentrantWLockGuard update_guard(update_lock_);
   int ret = OB_SUCCESS;
@@ -232,7 +236,7 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(
     ObLSMeta tmp(*this);
     tmp.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -251,7 +255,7 @@ ObMajorMVMergeInfo ObLSMeta::get_major_mv_merge_info() const
   return major_mv_merge_info_;
 }
 
-int ObLSMeta::set_major_mv_merge_scn(const int64_t ls_epoch, const SCN &major_mv_merge_scn)
+int ObLSMeta::set_major_mv_merge_scn(const SCN &major_mv_merge_scn)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -264,7 +268,7 @@ int ObLSMeta::set_major_mv_merge_scn(const int64_t ls_epoch, const SCN &major_mv
     ObLSMeta tmp(*this);
     tmp.major_mv_merge_info_.major_mv_merge_scn_ = major_mv_merge_scn;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -277,7 +281,7 @@ int ObLSMeta::set_major_mv_merge_scn(const int64_t ls_epoch, const SCN &major_mv
   return ret;
 }
 
-int ObLSMeta::set_major_mv_merge_scn_safe_calc(const int64_t ls_epoch, const SCN &major_mv_merge_scn_safe_calc)
+int ObLSMeta::set_major_mv_merge_scn_safe_calc(const SCN &major_mv_merge_scn_safe_calc)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -290,7 +294,7 @@ int ObLSMeta::set_major_mv_merge_scn_safe_calc(const int64_t ls_epoch, const SCN
     ObLSMeta tmp(*this);
     tmp.major_mv_merge_info_.major_mv_merge_scn_safe_calc_ = major_mv_merge_scn_safe_calc;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -303,7 +307,7 @@ int ObLSMeta::set_major_mv_merge_scn_safe_calc(const int64_t ls_epoch, const SCN
   return ret;
 }
 
-int ObLSMeta::set_major_mv_merge_scn_publish(const int64_t ls_epoch, const SCN &major_mv_merge_scn_publish)
+int ObLSMeta::set_major_mv_merge_scn_publish(const SCN &major_mv_merge_scn_publish)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -316,7 +320,7 @@ int ObLSMeta::set_major_mv_merge_scn_publish(const int64_t ls_epoch, const SCN &
     ObLSMeta tmp(*this);
     tmp.major_mv_merge_info_.major_mv_merge_scn_publish_ = major_mv_merge_scn_publish;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -335,7 +339,7 @@ share::SCN ObLSMeta::get_transfer_scn() const
   return transfer_scn_;
 }
 
-int ObLSMeta::inc_update_transfer_scn(const int64_t ls_epoch, const share::SCN &transfer_scn)
+int ObLSMeta::inc_update_transfer_scn(const share::SCN &transfer_scn)
 {
   ObReentrantWLockGuard update_guard(update_lock_);
   int ret = OB_SUCCESS;
@@ -347,7 +351,7 @@ int ObLSMeta::inc_update_transfer_scn(const int64_t ls_epoch, const share::SCN &
     ObLSMeta tmp(*this);
     tmp.transfer_scn_ = transfer_scn;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret), K(*this));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -375,7 +379,6 @@ int64_t ObLSMeta::get_rebuild_seq() const
 }
 
 int ObLSMeta::set_migration_status(
-    const int64_t ls_epoch,
     const ObMigrationStatus &migration_status,
     const bool write_slog)
 {
@@ -405,7 +408,7 @@ int ObLSMeta::set_migration_status(
                                 ObLSRestoreStatus::NONE == restore_status_ ?
                                 ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
 
-    if (write_slog && OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (write_slog && OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("migration_status write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -437,7 +440,7 @@ int ObLSMeta::get_migration_status(ObMigrationStatus &migration_status) const
   return ret;
 }
 
-int ObLSMeta::set_gc_state(const int64_t ls_epoch, const logservice::LSGCState &gc_state, const SCN &scn)
+int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -452,7 +455,7 @@ int ObLSMeta::set_gc_state(const int64_t ls_epoch, const logservice::LSGCState &
     ObLSMeta tmp(*this);
     tmp.gc_state_ = gc_state;
     tmp.offline_scn_ = scn;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("gc_state write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -489,7 +492,7 @@ int ObLSMeta::get_offline_scn(SCN &offline_scn)
   return ret;
 }
 
-int ObLSMeta::set_restore_status(const int64_t ls_epoch, const ObLSRestoreStatus &restore_status)
+int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -506,7 +509,7 @@ int ObLSMeta::set_restore_status(const int64_t ls_epoch, const ObLSRestoreStatus
     tmp.ls_persistent_state_ = (ObLSRestoreStatus::NONE == restore_status &&
                                 OB_MIGRATION_STATUS_NONE == migration_status_ ?
                                 ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("restore_status write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -538,7 +541,7 @@ int ObLSMeta::get_restore_status(ObLSRestoreStatus &restore_status) const
   return ret;
 }
 
-int ObLSMeta::update_ls_replayable_point(const int64_t ls_epoch, const SCN &replayable_point)
+int ObLSMeta::update_ls_replayable_point(const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -553,7 +556,7 @@ int ObLSMeta::update_ls_replayable_point(const int64_t ls_epoch, const SCN &repl
   } else {
     ObLSMeta tmp(*this);
     tmp.replayable_point_ = replayable_point;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("replayable_point_ write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -578,7 +581,6 @@ int ObLSMeta::get_ls_replayable_point(SCN &replayable_point)
 
 //This interface for ha. Add parameters should check meta value need to update from src
 int ObLSMeta::update_ls_meta(
-    const int64_t ls_epoch,
     const bool update_restore_status,
     const ObLSMeta &src_ls_meta)
 {
@@ -596,6 +598,7 @@ int ObLSMeta::update_ls_meta(
     LOG_WARN("failed to get restore status", K(ret), K(src_ls_meta));
   } else {
     ObLSMeta tmp(*this);
+    bool unused_updated = false;
     tmp.clog_base_lsn_ = src_ls_meta.clog_base_lsn_;
     tmp.clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
     tmp.replayable_point_ = src_ls_meta.replayable_point_;
@@ -608,13 +611,13 @@ int ObLSMeta::update_ls_meta(
     tmp.gc_state_ = src_ls_meta.gc_state_;
     tmp.offline_scn_ = src_ls_meta.offline_scn_;
     update_guard.click();
-    tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
+    tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_, unused_updated);
     tmp.transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
     // TODO(muwei.ym): now do not allow clog checkpoint ts rollback, may support it in 4.3
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("do not allow clog checkpoint ts rollback", K(ret), K(src_ls_meta), KPC(this));
-    } else if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
       update_guard.click();
@@ -623,7 +626,7 @@ int ObLSMeta::update_ls_meta(
       clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
       replayable_point_ = src_ls_meta.replayable_point_;
       tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
-      all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
+      all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_, unused_updated);
       rebuild_seq_ = tmp.rebuild_seq_;
       gc_state_ = tmp.gc_state_;
       offline_scn_ = src_ls_meta.offline_scn_;
@@ -640,7 +643,7 @@ int ObLSMeta::update_ls_meta(
   return ret;
 }
 
-int ObLSMeta::set_ls_rebuild(const int64_t ls_epoch)
+int ObLSMeta::set_ls_rebuild()
 {
   int ret = OB_SUCCESS;
   const ObMigrationStatus change_status = ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD;
@@ -665,7 +668,7 @@ int ObLSMeta::set_ls_rebuild(const int64_t ls_epoch)
       tmp.migration_status_ = change_status;
       tmp.rebuild_seq_++;
       tmp.ls_persistent_state_ = persistent_state;
-      if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+      if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("clog_checkpoint write slog failed", K(ret));
       } else {
         ObReentrantWLockGuard guard(rw_lock_);
@@ -712,7 +715,7 @@ int ObLSMeta::get_saved_info(ObLSSavedInfo &saved_info)
   return ret;
 }
 
-int ObLSMeta::set_saved_info(const int64_t ls_epoch, const ObLSSavedInfo &saved_info)
+int ObLSMeta::set_saved_info(const ObLSSavedInfo &saved_info)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -724,7 +727,7 @@ int ObLSMeta::set_saved_info(const int64_t ls_epoch, const ObLSSavedInfo &saved_
   } else {
     ObLSMeta tmp(*this);
     tmp.saved_info_ = saved_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -734,7 +737,7 @@ int ObLSMeta::set_saved_info(const int64_t ls_epoch, const ObLSSavedInfo &saved_
   return ret;
 }
 
-int ObLSMeta::build_saved_info(const int64_t ls_epoch)
+int ObLSMeta::build_saved_info()
 {
   int ret = OB_SUCCESS;
   ObLSSavedInfo saved_info;
@@ -751,7 +754,7 @@ int ObLSMeta::build_saved_info(const int64_t ls_epoch)
     saved_info.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn_;
     ObLSMeta tmp(*this);
     tmp.saved_info_ = saved_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -761,7 +764,7 @@ int ObLSMeta::build_saved_info(const int64_t ls_epoch)
   return ret;
 }
 
-int ObLSMeta::clear_saved_info(const int64_t ls_epoch)
+int ObLSMeta::clear_saved_info()
 {
   int ret = OB_SUCCESS;
   ObLSSavedInfo saved_info;
@@ -773,7 +776,7 @@ int ObLSMeta::clear_saved_info(const int64_t ls_epoch)
     saved_info.reset();
     ObLSMeta tmp(*this);
     tmp.saved_info_ = saved_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -817,8 +820,7 @@ int ObLSMeta::init(
   return ret;
 }
 
-int ObLSMeta::update_id_meta(const int64_t ls_epoch,
-                             const int64_t service_type,
+int ObLSMeta::update_id_meta(const int64_t service_type,
                              const int64_t limited_id,
                              const SCN &latest_scn,
                              const bool write_slog)
@@ -831,16 +833,17 @@ int ObLSMeta::update_id_meta(const int64_t ls_epoch,
   } else {
     // TODO: write slog may failed, but the content is updated.
     ObLSMeta tmp(*this);
-    tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
+    bool unused_updated = false;
+    tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
     update_guard.click();
     if (write_slog) {
-      if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+      if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("id service flush write slog failed", K(ret));
       }
     }
     ObReentrantWLockGuard guard(rw_lock_);
     update_guard.click();
-    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
+    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn, unused_updated);
   }
   LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_scn),
            K(*this));
@@ -853,7 +856,8 @@ int ObLSMeta::get_all_id_meta(ObAllIDMeta &all_id_meta) const
   int ret = OB_SUCCESS;
 
   ObReentrantRLockGuard guard(rw_lock_);
-  all_id_meta.update_all_id_meta(all_id_meta_);
+  bool unused_updated = false;
+  all_id_meta.update_all_id_meta(all_id_meta_, unused_updated);
   return ret;
 }
 
@@ -890,7 +894,7 @@ int ObLSMeta::get_migration_and_restore_status(
   return ret;
 }
 
-int ObLSMeta::set_rebuild_info(const int64_t ls_epoch, const ObLSRebuildInfo &rebuild_info)
+int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -910,7 +914,7 @@ int ObLSMeta::set_rebuild_info(const int64_t ls_epoch, const ObLSRebuildInfo &re
   } else {
     ObLSMeta tmp(*this);
     tmp.rebuild_info_ = rebuild_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -957,7 +961,6 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
 }
 
 int ObLSMeta::set_transfer_meta_info(
-    const int64_t ls_epoch,
     const share::SCN &replay_scn,
     const share::ObLSID &src_ls,
     const share::SCN &src_scn,
@@ -1003,7 +1006,7 @@ int ObLSMeta::set_transfer_meta_info(
     if (FALSE_IT(tmp.transfer_scn_ = replay_scn)) {
     } else if (OB_FAIL(tmp.transfer_meta_info_.set_transfer_info(src_ls, src_scn, trans_status, tablet_id_array, data_version))) {
       LOG_WARN("failed to set transfer meta info", K(ret), K(src_ls), K(src_scn), K(trans_status), K(tablet_id_array));
-    } else if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       transfer_meta_info_ = tmp.transfer_meta_info_;
@@ -1026,9 +1029,7 @@ int ObLSMeta::get_transfer_meta_info(ObLSTransferMetaInfo &transfer_meta_info) c
   return ret;
 }
 
-int ObLSMeta::cleanup_transfer_meta_info(
-    const int64_t ls_epoch,
-    const share::SCN &replay_scn)
+int ObLSMeta::cleanup_transfer_meta_info(const share::SCN &replay_scn)
 {
   int ret = OB_SUCCESS;
   bool need_update = true;
@@ -1059,7 +1060,7 @@ int ObLSMeta::cleanup_transfer_meta_info(
     if (FALSE_IT(tmp.transfer_scn_ = replay_scn)) {
     } else if (OB_FAIL(tmp.transfer_meta_info_.cleanup_transfer_info())) {
       LOG_WARN("failed to set transfer meta info", K(ret), K(tmp));
-    } else if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       transfer_meta_info_ = tmp.transfer_meta_info_;
@@ -1171,6 +1172,7 @@ ObLSMeta::ObReentrantRLockGuard::~ObReentrantRLockGuard()
     }
   }
 }
+
 
 // add field should also consider ObLSMeta::update_ls_meta function
 OB_SERIALIZE_MEMBER(ObLSMeta,

@@ -789,7 +789,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to check has ref assign user var", K(ret));
   } else if (OB_FAIL(session.is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
     LOG_WARN("fail to get force_serial_set_order", K(ret));
-  } else if (OB_FAIL(check_force_default_stat())) {
+  } else if (OB_FAIL(check_force_default_stat(stmt))) {
     LOG_WARN("failed to check force default stat", K(ret));
   } else if (OB_FAIL(init_system_stat())) {
     LOG_WARN("failed to init system stat", K(ret));
@@ -1419,7 +1419,7 @@ int ObOptimizer::update_column_usage_infos()
   return ret;
 }
 
-int ObOptimizer::check_force_default_stat()
+int ObOptimizer::check_force_default_stat(const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard* schema_guard = ctx_.get_schema_guard();
@@ -1447,6 +1447,13 @@ int ObOptimizer::check_force_default_stat()
   } else if (is_exists_opt && use_default_opt_stat) {
     ctx_.set_use_default_stat();
   }
+  #ifdef OB_BUILD_SHARED_STORAGE
+  else if (stmt.is_single_table_stmt()
+        && OB_NOT_NULL(stmt.get_table_item(0))
+        && is_shared_storage_sslog_table(stmt.get_table_item(0)->ref_id_)) {
+    ctx_.set_use_default_stat();
+  }
+  #endif
   return ret;
 }
 
@@ -1460,6 +1467,8 @@ int ObOptimizer::init_system_stat()
   if (OB_ISNULL(opt_stat_manager) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret));
+  } else if (ctx_.use_default_stat()) {
+    // skip
   } else if (OB_FAIL(opt_stat_manager->check_system_stat_validity(ctx_.get_exec_ctx(),
                                                                   session->get_effective_tenant_id(),
                                                                   is_valid))) {

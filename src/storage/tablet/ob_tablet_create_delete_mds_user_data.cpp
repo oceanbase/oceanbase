@@ -152,7 +152,7 @@ void ObTabletCreateDeleteMdsUserData::on_commit(const share::SCN &commit_version
     break;
   }
   case ObTabletMdsUserDataType::START_TRANSFER_IN : {
-    start_transfer_in_on_commit_(commit_version);
+    start_transfer_in_on_commit_(commit_version, commit_scn);
     break;
   }
   case ObTabletMdsUserDataType::REMOVE_TABLET : {
@@ -164,7 +164,7 @@ void ObTabletCreateDeleteMdsUserData::on_commit(const share::SCN &commit_version
     break;
   }
   case ObTabletMdsUserDataType::START_TRANSFER_OUT : {
-    start_transfer_out_on_commit_(commit_version);
+    start_transfer_out_on_commit_(commit_version, commit_scn);
     break;
   }
   case ObTabletMdsUserDataType::START_SPLIT_SRC : {
@@ -205,16 +205,20 @@ void ObTabletCreateDeleteMdsUserData::delete_tablet_on_commit_(
 }
 
 void ObTabletCreateDeleteMdsUserData::start_transfer_in_on_commit_(
-    const share::SCN &commit_version)
+    const share::SCN &commit_version,
+    const share::SCN &commit_scn)
 {
   start_transfer_commit_version_ = commit_version.get_val_for_tx();
+  start_transfer_commit_scn_ = commit_scn;
   LOG_INFO("[TRANSFER] start transfer in on commit", KPC(this));
 }
 
 void ObTabletCreateDeleteMdsUserData::start_transfer_out_on_commit_(
-    const share::SCN &commit_version)
+    const share::SCN &commit_version,
+    const share::SCN &commit_scn)
 {
   start_transfer_commit_version_ = commit_version.get_val_for_tx();
+  start_transfer_commit_scn_ = commit_scn;
   LOG_INFO("[TRANSFER] start transfer out on commit", KPC(this));
 }
 

@@ -157,7 +157,8 @@ int ObTxTableGuard::cleanout_tx_node(const transaction::ObTransID tx_id,
   }
 }
 
-int ObTxTableGuard::get_recycle_scn(share::SCN &recycle_scn) { return tx_table_->get_recycle_scn(recycle_scn); }
+int ObTxTableGuard::get_recycle_scn(share::SCN &recycle_scn, const bool is_shared_minor)
+{ return tx_table_->get_recycle_scn(recycle_scn, is_shared_minor); }
 
 int ObTxTableGuard::self_freeze_task()
 {

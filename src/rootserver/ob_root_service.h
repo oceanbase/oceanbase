@@ -973,6 +973,8 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_config_after_bootstrap_();
+  int set_static_config_after_bootstrap_();
+  int set_dynamic_config_after_bootstrap_();
   int wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list);
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 

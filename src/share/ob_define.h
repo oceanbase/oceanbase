@@ -488,6 +488,11 @@ inline bool is_query_killed_return(const int ret)
     || OB_DEAD_LOCK == ret;
 }
 
+OB_NOINLINE bool is_shared_storage_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_shared_storage_sslog_exist();
+OB_NOINLINE bool is_hardcode_schema_table(const uint64_t tid);
+
 //@TODO shanyan.g Temporary settings for elr
 static const bool CAN_ELR = false;
 

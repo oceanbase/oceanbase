@@ -267,7 +267,7 @@ public:
         sum += sizeof(ObDatum) + cur_vec.get_length();
       } else {
         int32_t len = cur_vec.get_length();
-        const char *payload = reinterpret_cast<const char *>(cur_vec.get_data() + len * batch_idx);;
+        const char *payload = reinterpret_cast<const char *>(cur_vec.get_data() + len * batch_idx);
         ret = sum_lob_length(payload, len, sum);
       }
     }

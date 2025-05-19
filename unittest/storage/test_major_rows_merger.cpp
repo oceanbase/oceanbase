@@ -131,6 +131,7 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
                                                   const ObVersionRange &trans_version_range,
                                                   ObTabletMergeCtx &merge_context)
 {
+  merge_context.merge_dag_ = &merge_dag_;
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
@@ -141,7 +142,6 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.assign(index_desc_.get_desc()));
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
-  merge_context.merge_dag_ = &merge_dag_;
 }
 
 

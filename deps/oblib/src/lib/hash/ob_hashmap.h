@@ -322,6 +322,26 @@ public:
     }
     return ret;
   };
+
+  // 1. if key not exist, set node and execute set_callback.
+  //    if set_callback failed, erase the node
+  // 2. if key already exist, execute update_callback.
+  //
+  // callback is executed within bucket writelocker
+  template <class _set_callback, class _update_callback>
+  int set_or_update(const _key_type &key, const _value_type &value,
+                    _set_callback &set_callback, _update_callback &update_callback)
+  {
+    int ret = OB_SUCCESS;
+    pair_type pair;
+    if (OB_FAIL(pair.init(key, value))) {
+      HASH_WRITE_LOG(HASH_WARNING, "init pair failed, ret=%d", ret);
+    } else {
+      ret = ht_.set_or_update(key, pair, set_callback, update_callback);
+    }
+    return ret;
+  };
+
   // erase key value pair if pred is met
   // thread safe erase, will add write lock to the bucket
   // return value:

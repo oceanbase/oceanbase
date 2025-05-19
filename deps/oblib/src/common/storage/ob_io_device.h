@@ -46,6 +46,7 @@ struct ObIOFd
   bool is_backup_block_file() const;
   void reset();
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator == (const ObIOFd& other) const
   {
     return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.third_id_ == this->third_id_

@@ -157,6 +157,8 @@ int TestTabletCreateMemtable::build_table_handle(
   param.rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
           + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_flag_.reset();
+  param.rec_scn_.set_min();
+
   ObTenantMetaMemMgr &meta_mem_mgr = *(MTL(ObTenantMetaMemMgr*));
   common::ObIAllocator &allocator = meta_mem_mgr.get_tenant_allocator();
   ObTableHandleV2 handle;

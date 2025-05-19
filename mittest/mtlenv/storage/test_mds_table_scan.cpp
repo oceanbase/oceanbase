@@ -235,8 +235,10 @@ int TestMdsTableScan::try_schedule_mds_minor(const common::ObTabletID &tablet_id
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObApplyStatusGuard guard;
-
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("logservice is not supported", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls", K(ret));
   } else {
     int times = 0;
@@ -255,7 +257,7 @@ int TestMdsTableScan::try_schedule_mds_minor(const common::ObTabletID &tablet_id
         LOG_WARN("failed to get apply status", K(ret), K(LS_ID));
       } else if (OB_FALSE_IT(guard.apply_status_->max_applied_cb_scn_ = share::SCN::plus(share::SCN::min_scn(), 350+100))) {
       } else if (OB_FALSE_IT(guard.apply_status_->last_check_scn_ = share::SCN::plus(share::SCN::min_scn(), 350+100))) {
-      } else if (OB_FALSE_IT(static_cast<palf::PalfHandleImpl* >(guard.apply_status_->palf_handle_.palf_handle_impl_)->sw_.lsn_allocator_.lsn_ts_meta_.scn_delta_ =450)) {
+      } else if (OB_FALSE_IT(static_cast<palf::PalfHandleImpl* >(static_cast<palf::PalfHandle*>(guard.apply_status_->palf_handle_)->palf_handle_impl_)->sw_.lsn_allocator_.lsn_ts_meta_.scn_delta_ =450)) {
       } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_tablet_minor_merge<compaction::ObTabletMergeExecuteDag>(
           compaction::MDS_MINOR_MERGE, ls_handle, tablet_handle))) {
         STORAGE_LOG(WARN, "fail to schedule mds minor merge", K(ret));

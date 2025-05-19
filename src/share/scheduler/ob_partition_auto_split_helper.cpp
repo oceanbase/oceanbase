@@ -741,7 +741,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   int64_t auto_split_tablet_size = OB_INVALID_SIZE;
   int64_t real_auto_split_size = OB_INVALID_SIZE;
   ObTablet *tablet = nullptr;
-  ObTabletPointer *tablet_ptr = nullptr;
+  ObTabletBasePointer *tablet_ptr = nullptr;
   ObRole role = INVALID_ROLE;
   const share::ObLSID ls_id = ls.get_ls_id();
   bool num_sstables_exceed_limit = false;
@@ -775,7 +775,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
 
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(tablet_ptr = static_cast<ObTabletPointer *>(tablet->get_pointer_handle().get_resource_ptr()))) {
+  } else if (OB_ISNULL(tablet_ptr = static_cast<ObTabletBasePointer *>(tablet->get_pointer_handle().get_resource_ptr()))) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null tablet pointer", K(ret), KP(tablet));
   } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {

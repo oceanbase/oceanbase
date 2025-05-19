@@ -107,11 +107,12 @@ int ObDDLIncRedoClogCb::init(const share::ObLSID &ls_id,
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.inc_ref(macro_block_id))) {
     LOG_WARN("inc reference count failed", K(ret), K(macro_block_id));
+  } else if (OB_FAIL(tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else {
     redo_info_ = redo_info;
     ls_id_ = ls_id;
     macro_block_id_ = macro_block_id;
-    tablet_handle_ = tablet_handle;
   }
   return ret;
 }

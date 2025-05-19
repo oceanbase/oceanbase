@@ -489,6 +489,7 @@ public:
   ~ObIndexBlockRebuilder();
   int init(
       ObSSTableIndexBuilder &sstable_builder,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
       const int64_t *task_idx,
       const ObITable::TableKey &table_key,
       common::ObIArray<ObIODevice *> *device_handle_array = nullptr);
@@ -508,6 +509,7 @@ public:
       const ObDataMacroBlockMeta &macro_meta,
       const char *leaf_index_block_buf,
       const int64_t block_size);
+  int64_t get_last_macro_seq() const { return clustered_index_writer_ ? clustered_index_writer_->get_last_macro_seq() : 0; }
   int close();
   void reset();
   static int get_macro_meta(

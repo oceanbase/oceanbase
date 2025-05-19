@@ -20,6 +20,10 @@
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_inc_checkpoint.h"
+#endif
+
 namespace oceanbase
 {
 
@@ -80,10 +84,10 @@ private:
   int64_t pos_;
 };
 
-class ObIDService : public logservice::ObIReplaySubHandler,
-                    public logservice::ObICheckpointSubHandler,
-                    public logservice::ObIRoleChangeSubHandler
-{
+class ObIDService :
+    public logservice::ObIReplaySubHandler,
+    public logservice::ObICheckpointSubHandler,
+    public logservice::ObIRoleChangeSubHandler {
 public:
   ObIDService() : rwlock_(ObLatchIds::ID_SOURCE_LOCK), log_interval_(100 * 1000) { reset(); }
   virtual ~ObIDService() {}
@@ -138,6 +142,12 @@ public:
                         int64_t &submit_log_ts, bool &is_master);
   static const int64_t SUBMIT_LOG_ALARM_INTERVAL = 100 * 1000;
   static const int64_t MIN_LAST_ID = 1;
+
+public:
+#ifdef OB_BUILD_SHARED_STORAGE
+
+#endif
+
 protected:
   typedef common::SpinWLockGuard  WLockGuard;
   typedef common::SpinRLockGuard  RLockGuard;
@@ -184,10 +194,12 @@ class ObAllIDMeta
 public:
   ObAllIDMeta() : count_(ObIDService::MAX_SERVICE_TYPE) {}
   ~ObAllIDMeta() {}
-  void update_all_id_meta(const ObAllIDMeta &all_id_meta);
+  void update_all_id_meta(const ObAllIDMeta &all_id_meta,
+                          bool &updated);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
-                     const share::SCN &latest_log_ts);
+                     const share::SCN &latest_log_ts,
+                     bool &updated);
   int get_id_meta(const int64_t service_type,
                   int64_t &limited_id,
                   share::SCN &latest_log_ts) const;

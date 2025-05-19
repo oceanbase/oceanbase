@@ -29,7 +29,7 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
                                             const share::ObLSID &ls_id,
                                             const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
                                             const bool not_exist_create,
-                                            ObTabletPointer *pointer)
+                                            ObTabletBasePointer *pointer)
 {
   #define PRINT_WRAPPER KR(ret), K(tablet_id), K(ls_id), K(not_exist_create), K(*this)
   int ret = OB_SUCCESS;
@@ -181,7 +181,7 @@ ObMdsTableHandler &ObMdsTableHandler::operator=(const ObMdsTableHandler &rhs)// 
   #undef PRINT_WRAPPER
 }
 
-void ObMdsTableHandler::mark_removed_from_t3m(ObTabletPointer *pointer)
+void ObMdsTableHandler::mark_removed_from_t3m(ObTabletBasePointer *pointer)
 {
   int ret = OB_SUCCESS;
   MdsRLockGuard guard(lock_);

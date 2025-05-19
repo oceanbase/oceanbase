@@ -17,10 +17,40 @@
 #include "logservice/ob_log_compression.h"
 #endif
 #include "logservice/ob_log_service.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-// shared log start
-#include "log/ob_shared_log_interface.h"
+#include "logservice/ob_reconfig_checker_adapter.h"
+
+#define INVOKE_PALF_HANDLE_FN(fn, args...) \
+  do { \
+      palf::PalfHandle *cast_palf_handle = nullptr; \
+      if (OB_FAIL(ret)) { \
+      } else if (OB_ISNULL(cast_palf_handle = static_cast<palf::PalfHandle*>(palf_handle_))) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN(#fn " failed: palf_handle is invalid", KR(ret)); \
+      } else if (OB_FAIL(cast_palf_handle->fn(args))) { \
+        LOG_WARN(#fn " failed on palf_handle", KR(ret)); \
+      } \
+  } while(0)
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#define INVOKE_LIBPALF_CONFIG_MGR_FN(fn, args...) \
+  do { \
+      if (FAILEDx(libpalf_proposer_config_mgr_.fn(args))) { \
+        LOG_WARN(#fn " failed on proposer_config_mgr", KR(ret)); \
+      } \
+  } while(0)
+#define PALF_MEMBER_PROXY_WITH_RET(fn, args...) \
+  do { \
+    if (enable_logservice_) { \
+      INVOKE_LIBPALF_CONFIG_MGR_FN(fn, args); \
+    } else { \
+      INVOKE_PALF_HANDLE_FN(fn, args); \
+    } \
+  } while(0)
+
+#else
+#define PALF_MEMBER_PROXY_WITH_RET(fn, args...)  INVOKE_PALF_HANDLE_FN(fn, args)
 #endif
+
 
 namespace oceanbase
 {
@@ -44,11 +74,10 @@ ObLogHandler::ObLogHandler() : self_(),
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
                                compressor_wrapper_(),
 #endif
-                               get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
-#ifdef OB_BUILD_SHARED_STORAGE
-                               , rebuild_cb_adapter_()
-                               , locate_by_scn_stat_("[SHARED LOG STAT COST TIME]", 1 * 1000 * 1000)
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+                               libpalf_proposer_config_mgr_(),
 #endif
+                               get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -62,7 +91,7 @@ int ObLogHandler::init(const int64_t id,
                        ObLogApplyService *apply_service,
                        ObLogReplayService *replay_service,
                        ObRoleChangeService *rc_service,
-                       PalfEnv *palf_env,
+                       ipalf::IPalfEnv *palf_env,
                        PalfLocationCacheCb *lc_cb,
                        obrpc::ObLogServiceRpcProxy *rpc_proxy,
                        common::ObILogAllocator *alloc_mgr)
@@ -91,6 +120,10 @@ int ObLogHandler::init(const int64_t id,
   } else if (OB_FAIL(compressor_wrapper_.init(id, alloc_mgr))) {
     CLOG_LOG(WARN, "failed to init compressor_wrapper_", K(id));
 #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice && OB_FAIL(libpalf_proposer_config_mgr_.init(MTL_ID(), id, palf_handle_))) {
+    CLOG_LOG(WARN, "failed to init libpalf_proposer_config_mgr_", K(id));
+#endif
   } else {
     get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
@@ -106,6 +139,7 @@ int ObLogHandler::init(const int64_t id,
     lc_cb_ = lc_cb;
     rpc_proxy_ = rpc_proxy;
     is_in_stop_state_ = false;
+    enable_logservice_ = GCONF.enable_logservice;
     is_offline_ = true; // offline at default.
     is_inited_ = true;
     FLOG_INFO("ObLogHandler init success", K(id));
@@ -121,7 +155,8 @@ bool ObLogHandler::is_valid() const
   return true == is_inited_ &&
          false == is_in_stop_state_ &&
          self_.is_valid() &&
-         true == palf_handle_.is_valid() &&
+         NULL != palf_handle_ &&
+         true == palf_handle_->is_valid() &&
          NULL != palf_env_ &&
          NULL != apply_status_ &&
          NULL != apply_service_ &&
@@ -146,15 +181,15 @@ int ObLogHandler::stop()
     tg.click("unreg cb end");
     if (OB_FAIL(apply_status_->stop())) {
       CLOG_LOG(INFO, "apply_status stop failed", KPC(this), KPC(apply_status_), KR(ret));
-    } else if (false == palf_handle_.is_valid()) {
+    } else if (OB_NOT_NULL(palf_handle_) && false == palf_handle_->is_valid()) {
     // Note: we disable log sync in here, therefore executing ObLogHander::offline()
     // is safe after ObLogHandler::stop() has been executed
-    } else if (OB_FAIL(palf_handle_.disable_sync())) {
+    } else if (OB_NOT_NULL(palf_handle_) && OB_FAIL(palf_handle_->disable_sync())) {
       CLOG_LOG(WARN, "disable_sync failed", KPC(this), KR(ret));
     } else {
       tg.click("apply stop end");
       palf_env_->close(palf_handle_);
-      tg.click("palf close end");
+      tg.click("ipalf close end");
     }
     CLOG_LOG(INFO, "stop log handler finish", KPC(this), KPC(apply_status_), KR(ret), K(tg));
   }
@@ -171,7 +206,7 @@ int ObLogHandler::safe_to_destroy(bool &is_safe_destroy)
   is_safe_destroy = true;
   WLockGuard guard(lock_);
   if (IS_INIT) {
-    if (palf_handle_.is_valid() || !is_in_stop_state_) {
+    if ((OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) || !is_in_stop_state_) {
       ret = OB_STATE_NOT_MATCH;
     } else if (OB_FAIL(apply_status_->is_apply_done(is_done, end_lsn))) {
       CLOG_LOG(ERROR, "check apply status is_apply_done failed", K(ret), K(is_done), K(end_lsn), KPC(apply_status_));
@@ -201,15 +236,16 @@ void ObLogHandler::destroy()
   apply_status_ = NULL;
   apply_service_ = NULL;
   replay_service_ = NULL;
-#ifdef OB_BUILD_SHARED_STORAGE
-  rebuild_cb_adapter_.destroy();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  libpalf_proposer_config_mgr_.destroy();
 #endif
-  if (NULL != palf_env_ && true == palf_handle_.is_valid()) {
+  if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && true == palf_handle_->is_valid()) {
     palf_env_->close(palf_handle_);
   }
   rc_service_ = NULL;
   lc_cb_ = NULL;
   rpc_proxy_ = NULL;
+  palf_handle_ = NULL;
   palf_env_ = NULL;
   id_ = -1;
   get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
@@ -263,6 +299,11 @@ void ObLogHandler::switch_role(const common::ObRole &role, const int64_t proposa
   WLockGuard guard(lock_);
   role_ = role;
   proposal_id_ = proposal_id;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (enable_logservice_) {
+    libpalf_proposer_config_mgr_.on_role_change(role, proposal_id);
+  }
+#endif
 }
 
 int ObLogHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
@@ -278,7 +319,7 @@ int ObLogHandler::get_access_mode(int64_t &mode_version, palf::AccessMode &acces
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.get_access_mode(mode_version, access_mode))) {
+  } else if (OB_FAIL(palf_handle_->get_access_mode(mode_version, access_mode))) {
     CLOG_LOG(WARN, "palf get_access_mode failed", K(ret), K_(id));
   } else {
   }
@@ -297,7 +338,7 @@ int ObLogHandler::get_append_mode_initial_scn(share::SCN &ref_scn) const
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.get_access_mode_ref_scn(mode_version, access_mode, curr_ref_scn))) {
+  } else if (OB_FAIL(palf_handle_->get_access_mode_ref_scn(mode_version, access_mode, curr_ref_scn))) {
     CLOG_LOG(WARN, "get_access_mode_ref_scn failed", K(ret), K_(id));
   } else if (AccessMode::APPEND == access_mode) {
     ref_scn = curr_ref_scn;
@@ -321,7 +362,7 @@ int ObLogHandler::change_access_mode(const int64_t mode_version,
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.change_access_mode(proposal_id, mode_version, access_mode, ref_scn))) {
+  } else if (OB_FAIL(palf_handle_->change_access_mode(proposal_id, mode_version, access_mode, ref_scn))) {
     CLOG_LOG(WARN, "palf change_access_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version),
              K(access_mode), K(ref_scn));
   } else {
@@ -390,8 +431,16 @@ int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_lis
                                           const int64_t paxos_replica_num,
                                           const common::GlobalLearnerList &learner_list)
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.set_initial_member_list(member_list, paxos_replica_num, learner_list);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(set_initial_member_list, member_list, paxos_replica_num, learner_list);
+  }
+  return ret;
 }
 
 #ifdef OB_BUILD_ARBITRATION
@@ -400,46 +449,58 @@ int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_lis
                                           const int64_t paxos_replica_num,
                                           const common::GlobalLearnerList &learner_list)
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.set_initial_member_list(member_list, arb_member, paxos_replica_num, learner_list);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = static_cast<palf::PalfHandle*>(palf_handle_)->set_initial_member_list(member_list, arb_member, paxos_replica_num, learner_list);
+  }
+  return ret;
 }
 #endif
 
 int ObLogHandler::set_election_priority(palf::election::ElectionPriority *priority)
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.set_election_priority(priority);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->set_election_priority(priority);
+  }
+  return ret;
 }
 
 int ObLogHandler::reset_election_priority()
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.reset_election_priority();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->reset_election_priority();
+  }
+  return ret;
 }
 
 int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    int64_t start_ts = ObTimeUtility::current_time();
-    if (OB_FAIL(ObSharedLogInterface::locate_by_scn_coarsely(ObLSID(id_), scn, result_lsn))) {
-      CLOG_LOG(WARN, "locate_by_scn_coarsely from ObLogService failed", K(id_), K(scn));
-    }
-    int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    locate_by_scn_stat_.stat(cost_ts);
-  } else {
-    RLockGuard guard(lock_);
-    if (OB_FAIL(palf_handle_.locate_by_scn_coarsely(scn, result_lsn))) {
-      CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", K(id_), K(scn));
-    }
-  }
-#else
   RLockGuard guard(lock_);
-  if (OB_FAIL(palf_handle_.locate_by_scn_coarsely(scn, result_lsn))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_->locate_by_scn_coarsely(scn, result_lsn))) {
     CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", K(id_), K(scn));
   }
-#endif
 
   return ret;
 }
@@ -447,23 +508,14 @@ int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(ObSharedLogInterface::locate_by_lsn_coarsely(ObLSID(id_), lsn, result_scn))) {
-      CLOG_LOG(WARN, "locate_by_scn_coarsely from ObLogService failed", KR(ret), K(id_), K(lsn));
-    }
-  } else {
-    RLockGuard guard(lock_);
-    if (OB_FAIL(palf_handle_.locate_by_lsn_coarsely(lsn, result_scn))) {
-      CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
-    }
-  }
-#else
   RLockGuard guard(lock_);
-  if (OB_FAIL(palf_handle_.locate_by_lsn_coarsely(lsn, result_scn))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_->locate_by_lsn_coarsely(lsn, result_scn))) {
     CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
   }
-#endif
   return ret;
 }
 
@@ -492,73 +544,114 @@ int ObLogHandler::get_begin_lsn(LSN &lsn) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (!GCTX.is_shared_storage_mode()) {
-    ret = palf_handle_.get_begin_lsn(lsn);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
   } else {
-    LSN local_lsn, shared_lsn;
-    if (OB_FAIL(palf_handle_.get_begin_lsn(local_lsn))) {
-      CLOG_LOG(WARN, "get_begin_lsn from palf failed", KR(ret), K_(id));
-    } else if (OB_SUCC(ObSharedLogInterface::get_begin_lsn(ObLSID(id_), shared_lsn))) {
-    } else if (OB_ENTRY_NOT_EXIST == ret) {
-      CLOG_LOG(TRACE, "there is no log blocks on shared storage", KR(ret), K(id_), K(local_lsn));
-      shared_lsn = LSN(LOG_MAX_LSN_VAL);
-      ret = OB_SUCCESS;
-    }
-    if (OB_FAIL(ret)) {
-      CLOG_LOG(WARN, "get_begin_lsn_ failed", KR(ret), K(id_));
-    } else {
-      lsn = MIN(shared_lsn, local_lsn);
-    }
+    ret = palf_handle_->get_begin_lsn(lsn);
   }
-#else
-  ret = palf_handle_.get_begin_lsn(lsn);
-#endif
   return ret;
 }
 
 int ObLogHandler::get_end_lsn(LSN &lsn) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_end_lsn(lsn);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->get_end_lsn(lsn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_max_lsn(LSN &lsn) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_max_lsn(lsn);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->get_max_lsn(lsn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_max_scn(SCN &scn) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_max_scn(scn);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->get_max_scn(scn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_end_scn(SCN &scn) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_end_scn(scn);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->get_end_scn(scn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_paxos_member_list(member_list, paxos_replica_num);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list, member_list, paxos_replica_num);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                          int64_t &paxos_replica_num,
                                                          common::GlobalLearnerList &learner_list) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list_and_learner_list, member_list, paxos_replica_num, learner_list);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_global_learner_list(common::GlobalLearnerList &learner_list) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_global_learner_list(learner_list);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(get_global_learner_list, learner_list);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_stable_membership(
@@ -575,41 +668,88 @@ int ObLogHandler::get_stable_membership(
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "loghandler is stopped", K(ret), K_(id));
-  } else if (OB_FAIL(palf_handle_.get_stable_membership(config_version,
-      member_list, paxos_replica_num, learner_list))) {
-    CLOG_LOG(WARN, "get_stable_membership failed", K(ret), KPC(this));
-  } else {/*do nothing*/}
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(get_stable_membership, config_version,
+      member_list, paxos_replica_num, learner_list);
+  }
   return ret;
 }
 
 int ObLogHandler::get_election_leader(common::ObAddr &addr) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_election_leader(addr);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->get_election_leader(addr);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_parent(common::ObAddr &parent) const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.get_parent(parent);
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "get_parent is not supported by libpalf", K(ret), K_(id));
+  } else if (OB_FAIL(palf_handle->get_parent(parent))) {
+    CLOG_LOG(WARN, "get_parent failed", K(ret), KPC(this));
+  } else {
+    // do nothing
+  }
+  return ret;
 }
 
 int ObLogHandler::enable_sync()
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.enable_sync();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->enable_sync();
+  }
+  return ret;
 }
 
 int ObLogHandler::disable_sync()
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.disable_sync();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->disable_sync();
+  }
+  return ret;
 }
 
 bool ObLogHandler::is_sync_enabled() const
 {
+  int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  return palf_handle_.is_sync_enabled();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    ret = palf_handle_->is_sync_enabled();
+  }
+  return ret;
 }
 
 int ObLogHandler::advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild)
@@ -618,10 +758,15 @@ int ObLogHandler::advance_base_info(const PalfBaseInfo &palf_base_info, const bo
   bool is_replay_enabled = false;
   WLockGuard guard(lock_);
   share::ObLSID ls_id;
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "advance_base_info is not supported by libpalf", K(ret), K_(id));
   } else if (FALSE_IT(ls_id = id_)) {
   } else if (OB_FAIL(replay_service_->is_enabled(ls_id, is_replay_enabled))) {
     CLOG_LOG(WARN, "check replay status failed", K(ret), K(ls_id));
@@ -629,7 +774,7 @@ int ObLogHandler::advance_base_info(const PalfBaseInfo &palf_base_info, const bo
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay is not disabled", K(ret), K(ls_id));
   } else {
-    if (OB_FAIL(palf_handle_.advance_base_info(palf_base_info, is_rebuild))) {
+    if (OB_FAIL(palf_handle->advance_base_info(palf_base_info, is_rebuild))) {
       CLOG_LOG(WARN, "advance_base_info failed", K(ret), K_(id), K(palf_base_info));
     } else {
       CLOG_LOG(INFO, "advance_base_info success", K(ret), K_(id), K(palf_base_info));
@@ -652,19 +797,7 @@ int ObLogHandler::get_palf_base_info(const LSN &base_lsn, PalfBaseInfo &palf_bas
     CLOG_LOG(ERROR, "Invalid argument", K(ret), K(base_lsn), K(lbt()));
   } else if (FALSE_IT(new_base_lsn.val_ = lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE)) {
   } else {
-    #ifdef OB_BUILD_SHARED_STORAGE
-    if (!GCTX.is_shared_storage_mode()) {
-      ret = palf_handle_.get_base_info(new_base_lsn, palf_base_info);
-    } else if (OB_FAIL(palf_handle_.get_base_info(new_base_lsn, palf_base_info))
-               && !need_get_palf_base_info_on_shared_stoarge_(ret, new_base_lsn)) {
-      CLOG_LOG(WARN, "get_base_info from palf failed", KR(ret), K(new_base_lsn), K_(id));
-    } else if (need_get_palf_base_info_on_shared_stoarge_(ret, new_base_lsn)
-               && OB_FAIL(ObSharedLogInterface::get_palf_base_info(ObLSID(id_), new_base_lsn, palf_base_info))) {
-      CLOG_LOG(WARN, "get_base_info from shared storage failed", KR(ret), K(new_base_lsn), K_(id));
-    }
-    #else
-    ret = palf_handle_.get_base_info(new_base_lsn, palf_base_info);
-    #endif
+    ret = palf_handle_->get_base_info(new_base_lsn, palf_base_info);
     CLOG_LOG(INFO, "get_palf_base_info finish", KR(ret), K_(id), K(base_lsn), K(new_base_lsn), K(palf_base_info));
   }
   return ret;
@@ -682,7 +815,7 @@ int ObLogHandler::is_in_sync(bool &is_log_sync,
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.stat(palf_stat))) {
+  } else if (OB_FAIL(palf_handle_->stat(palf_stat))) {
     CLOG_LOG(WARN, "palf stat failed", K(ret), K_(id));
   } else {
     is_log_sync = palf_stat.is_in_sync_;
@@ -710,19 +843,20 @@ int ObLogHandler::get_leader_config_version(LogConfigVersion &config_version) co
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "loghandler is stopped", K(ret), K_(id));
-  } else if (OB_FAIL(palf_handle_.get_role(role, proposal_id, is_pending_state))) {
+  } else if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "get_role failed", K(ret), KPC(this));
   } else if (LEADER != role || true == is_pending_state) {
     ret = OB_NOT_MASTER;
-  } else if (OB_FAIL(palf_handle_.get_config_version(config_version))) {
-    CLOG_LOG(WARN, "get_config_version failed", K(ret), KPC(this));
-  } else if (OB_FAIL(palf_handle_.get_role(new_role, new_proposal_id, is_pending_state))) {
-    CLOG_LOG(WARN, "get_role failed", K(ret), KPC(this));
-  } else if (role != new_role || proposal_id != new_proposal_id) {
-    ret = OB_NOT_MASTER;
-    CLOG_LOG(INFO, "role changed during getting config version", K(ret), KPC(this), K(role),
-             K(new_role), K(proposal_id), K(new_proposal_id));
-  } else {/*do nothing*/}
+  } else {
+    PALF_MEMBER_PROXY_WITH_RET(get_config_version, config_version);
+    if (FAILEDx(palf_handle_->get_role(new_role, new_proposal_id, is_pending_state))) {
+      CLOG_LOG(WARN, "get_role failed", K(ret), KPC(this));
+    } else if (role != new_role || proposal_id != new_proposal_id) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(INFO, "role changed during getting config version", K(ret), KPC(this), K(role),
+              K(new_role), K(proposal_id), K(new_proposal_id));
+    }
+  }
   return ret;
 }
 
@@ -778,18 +912,28 @@ int ObLogHandler::force_set_as_single_replica()
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
-    common::ObMemberList dummy_member_list;
-    int64_t dummy_replica_num = -1, new_replica_num = 1;
-    const int64_t timeout_us = 10 * 1000 * 1000L;
-    LogConfigChangeCmd req(self_, id_, dummy_member_list, dummy_replica_num, new_replica_num,
-        FORCE_SINGLE_MEMBER_CMD, timeout_us);
-    ConfigChangeCmdHandler cmd_handler(&palf_handle_);
-    LogConfigChangeCmdResp resp;
-    if (OB_FAIL(cmd_handler.handle_config_change_cmd(req, resp))) {
-      CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), K_(id));
-    } else {
-      CLOG_LOG(INFO, "force_set_as_single_replica success", KR(ret), K_(id), K_(self));
+    PALF_MEMBER_PROXY_WITH_RET(force_set_as_single_replica);
+  }
+  return ret;
+}
+
+int ObLogHandler::force_set_as_single_replica(const palf::LogConfigVersion &config_version, const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  common::TCWLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (! enable_logservice_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "force_set_as_single_replica is not supported in shared nothing mode", KR(ret), K_(id));
+  } else {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (OB_FAIL(libpalf_proposer_config_mgr_.force_set_as_single_replica(config_version, timeout_us))) {
+      CLOG_LOG(WARN, "force_set_as_single_replica failed", KR(ret), K_(id), K(config_version), K(timeout_us));
     }
+#endif
   }
   return ret;
 }
@@ -805,16 +949,7 @@ int ObLogHandler::force_set_member_list(const common::ObMemberList &new_member_l
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObLogHandler is in stop state", KR(ret));
   } else {
-    const int64_t timeout_us = 10 * 1000L * 1000L;
-    LogConfigChangeCmd req(self_, id_, new_member_list, new_replica_num,
-                           FORCE_SET_MEMBER_LIST_CMD, timeout_us);
-    ConfigChangeCmdHandler cmd_handler(&palf_handle_);
-    LogConfigChangeCmdResp resp;
-    if (OB_FAIL(cmd_handler.handle_config_change_cmd(req, resp))) {
-      CLOG_LOG(WARN, "handle force_set_member_list_cmd failed", KR(ret), K_(id), K(req));
-    } else {
-      CLOG_LOG(INFO, "force_set_member_list success", K_(id), K_(self), K(new_member_list), K(new_replica_num), K(resp));
-    }
+    PALF_MEMBER_PROXY_WITH_RET(force_set_member_list, new_member_list, new_replica_num);
   }
 
   return ret;
@@ -1263,7 +1398,7 @@ int ObLogHandler::degrade_acceptor_to_learner(const palf::LogMemberAckInfoList &
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(degrade_servers), K(timeout_us));
-  } else if (OB_FAIL(palf_handle_.degrade_acceptor_to_learner(degrade_servers, timeout_us))) {
+  } else if (OB_FAIL(static_cast<palf::PalfHandle*>(palf_handle_)->degrade_acceptor_to_learner(degrade_servers, timeout_us))) {
     CLOG_LOG(WARN, "degrade_acceptor_to_learner failed", KR(ret), K_(id), K(degrade_servers), K(timeout_us));
   } else {
     CLOG_LOG(INFO, "degrade_acceptor_to_learner success", KR(ret), K_(id), K(degrade_servers));
@@ -1288,7 +1423,7 @@ int ObLogHandler::upgrade_learner_to_acceptor(const palf::LogMemberAckInfoList &
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(upgrade_servers), K(timeout_us));
-  } else if (OB_FAIL(palf_handle_.upgrade_learner_to_acceptor(upgrade_servers, timeout_us))) {
+  } else if (OB_FAIL(static_cast<palf::PalfHandle*>(palf_handle_)->upgrade_learner_to_acceptor(upgrade_servers, timeout_us))) {
     CLOG_LOG(WARN, "upgrade_learner_to_acceptor failed", KR(ret), K_(id), K(upgrade_servers), K(timeout_us));
   } else {
     CLOG_LOG(INFO, "upgrade_learner_to_acceptor success", KR(ret), K_(id), K(upgrade_servers));
@@ -1298,7 +1433,6 @@ int ObLogHandler::upgrade_learner_to_acceptor(const palf::LogMemberAckInfoList &
 #endif
 
 int ObLogHandler::try_lock_config_change(const int64_t lock_owner, const int64_t timeout_us)
-
 {
   int ret = OB_SUCCESS;
   RLockGuard deps_guard(deps_lock_);
@@ -1421,12 +1555,11 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
       }
 
       common::ObAddr leader;
-      ConfigChangeCmdHandler cmd_handler(&palf_handle_);
       bool need_renew_leader = false;
       if (OB_FAIL(lc_cb_->get_leader(id_, leader))) {
         need_renew_leader = true;
         ret = OB_SUCCESS;
-      } else if (leader == self_ && FALSE_IT(cmd_handler.handle_config_change_cmd(req, resp))) {
+      } else if (leader == self_ && FALSE_IT(handle_config_change_cmd(req, resp))) {
         CLOG_LOG(WARN, "failed to handle_config_change_cmd", KR(ret), K_(id), K(req));
       } else if (leader != self_  && OB_FAIL(rpc_proxy_->to(leader).timeout(conn_timeout_us).trace_time(true).
                          max_process_handler_time(timeout_us).by(MTL_ID()).send_log_config_change_cmd(req, resp))) {
@@ -1476,6 +1609,33 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
   return ret;
 }
 
+int ObLogHandler::stat(palf::PalfStat &palf_stat) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler not init", K_(id));
+  } else if (OB_UNLIKELY(is_in_stop_state_)) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler not running", K_(id));
+  } else if (OB_FAIL(palf_handle_->stat(palf_stat))) {
+    CLOG_LOG(WARN, "palf_handle_ stat failed", K(ret), K_(id));
+  } else if (enable_logservice_) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (OB_FAIL(libpalf_proposer_config_mgr_.get_membership_without_config_change_lock(
+        palf_stat.config_version_,
+        palf_stat.paxos_member_list_,
+        palf_stat.paxos_replica_num_,
+        palf_stat.learner_list_))) {
+      CLOG_LOG(WARN, "get_membership_without_config_change_lock failed", K(ret), K_(id));
+    }
+#endif
+  }
+  return ret;
+}
+
 int ObLogHandler::append_(const void *buffer,
                           const int64_t nbytes,
                           const share::SCN &ref_scn,
@@ -1517,7 +1677,7 @@ int ObLogHandler::append_(const void *buffer,
         ret = OB_NOT_RUNNING;
       } else if (LEADER != ATOMIC_LOAD(&role_)) {
         ret = OB_NOT_MASTER;
-      } else if (OB_FAIL(palf_handle_.append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
+      } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
         if (REACH_TIME_INTERVAL(1*1000*1000)) {
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
         }
@@ -1598,20 +1758,17 @@ int ObLogHandler::get_member_gc_stat(const common::ObAddr &addr,
   } else if (!addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "invalid arguments", K(ret), K(addr), K(id_));
-  } else if (OB_FAIL(palf_handle_.get_role(role, proposal_id, is_pending_state))) {
+  } else if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
   } else if (LEADER != role) {
     ret = OB_NOT_MASTER;
-  } else if (OB_FAIL(palf_handle_.get_paxos_member_list_and_learner_list(member_list,
-      paxos_replica_num, learner_list))) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "get_paxos_member_list_and_learner_list failed", K(ret), KPC(this));
-  } else if (OB_FAIL(palf_handle_.get_role(new_role, new_proposal_id, is_pending_state))) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
   } else {
-    if (role == new_role && proposal_id == new_proposal_id) {
+    PALF_MEMBER_PROXY_WITH_RET(get_paxos_member_list_and_learner_list, member_list, paxos_replica_num, learner_list);
+    if (FAILEDx(palf_handle_->get_role(new_role, new_proposal_id, is_pending_state))) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
+    } else if (role == new_role && proposal_id == new_proposal_id) {
       is_valid_member = member_list.contains(addr) || learner_list.contains(addr);
       if (learner_list.contains(addr)) {
         ObMember member;
@@ -1643,6 +1800,7 @@ int ObLogHandler::enable_replay(const palf::LSN &lsn,
   share::ObLSID id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "loghandler not inited or maybe destroyed", K(ret), K(id));
   } else if (FALSE_IT(id = id_)) {
   } else if (!lsn.is_valid() || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1764,12 +1922,17 @@ int ObLogHandler::disable_vote(const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "libpalf votes automatically", K(ret), K_(id));
   } else {
-    ret = palf_handle_.disable_vote(need_check_log_missing);
+    ret = palf_handle->disable_vote(need_check_log_missing);
   }
   return ret;
 }
@@ -1778,12 +1941,17 @@ int ObLogHandler::enable_vote()
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "libpalf votes automatically", K(ret), K_(id));
   } else {
-    ret = palf_handle_.enable_vote();
+    ret = palf_handle->enable_vote();
   }
   return ret;
 }
@@ -1792,26 +1960,18 @@ int ObLogHandler::register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(rebuild_cb_adapter_.register_rebuild_cb(rebuild_cb))) {
-      CLOG_LOG(WARN, "adapter register_rebuild_cb failed", K(ret), KPC(this));
-    } else if (OB_FAIL(palf_handle_.register_rebuild_cb(&rebuild_cb_adapter_))) {
-      CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
-      rebuild_cb_adapter_.unregister_rebuild_cb();
-    }
-  } else if (OB_FAIL(palf_handle_.register_rebuild_cb(rebuild_cb))) {
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "rebuild is not supported by libpalf", K(ret), K_(id));
+  } else if (OB_FAIL(palf_handle->register_rebuild_cb(rebuild_cb))) {
     CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
   }
-#else
-  } else if (OB_FAIL(palf_handle_.register_rebuild_cb(rebuild_cb))) {
-    CLOG_LOG(WARN, "register_rebuild_cb failed", K(ret), KPC(this));
-  }
-#endif
 	return ret;
 }
 
@@ -1819,18 +1979,18 @@ int ObLogHandler::unregister_rebuild_cb()
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
+  palf::PalfHandle *palf_handle = static_cast<palf::PalfHandle*>(palf_handle_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.unregister_rebuild_cb())) {
+  } else if (enable_logservice_) {
+    // TODO by qingxia: finish
+    // do nothing
+    CLOG_LOG(INFO, "rebuild is not supported by libpalf", K(ret), K_(id));
+  } else if (OB_FAIL(palf_handle->unregister_rebuild_cb())) {
     CLOG_LOG(WARN, "unregister_rebuild_cb failed", K(ret), KPC(this));
   } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      ret = rebuild_cb_adapter_.unregister_rebuild_cb();
-    }
-#endif
   }
 	return ret;
 }
@@ -1901,7 +2061,9 @@ int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(palf_handle_.diagnose(diagnose_info))) {
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_->diagnose(diagnose_info))) {
     CLOG_LOG(WARN, "palf handle diagnose failed", K(ret), KPC(this));
   } else {
     // do nothing
@@ -1962,16 +2124,126 @@ int ObLogHandler::is_replay_fatal_error(bool &has_fatal_error)
   return ret;
 }
 
+int ObLogHandler::handle_config_change_cmd(
+    const LogConfigChangeCmd &req,
+    LogConfigChangeCmdResp &resp)
+{
+  int ret = OB_SUCCESS;
+  ObLogReporterAdapter *reporter;
+  logservice::ObLogService *log_service = NULL;
+  logservice::ObReconfigCheckerAdapter reconfig_checker;
+  RLockGuard guard(lock_);
+
+  if (IS_NOT_INIT || OB_ISNULL(palf_handle_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(is_in_stop_state_)) {
+    ret = OB_NOT_RUNNING;
+  } else if (false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "get_log_service failed", K(ret));
+  } else if (OB_ISNULL(reporter = log_service->get_reporter())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_service.get_reporter failed", K(ret));
+  } else if (OB_FAIL(reconfig_checker.init(MTL_ID(), share::ObLSID(req.palf_id_), req.timeout_us_))) {
+    CLOG_LOG(WARN, "ObReconfigCheckerAdapter init failed", K(ret), K(req.palf_id_));
+  } else if (OB_FAIL(palf_handle_->set_reconfig_checker_cb(&reconfig_checker))) {
+    CLOG_LOG(WARN, "set_reconfig_checker_cb failed, another reconfiguration is running", K(ret), K(req.palf_id_));
+    ret = OB_EAGAIN;
+  } else {
+    switch (req.cmd_type_) {
+      case FORCE_SINGLE_MEMBER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(force_set_as_single_replica);
+        break;
+      case FORCE_SET_MEMBER_LIST_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(force_set_member_list, req.new_member_list_, req.new_replica_num_);
+        break;
+      case CHANGE_REPLICA_NUM_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(change_replica_num, req.curr_member_list_, req.curr_replica_num_,
+            req.new_replica_num_, req.timeout_us_);
+        break;
+      case ADD_MEMBER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(add_member, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
+        break;
+      case REMOVE_MEMBER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(remove_member, req.removed_member_, req.new_replica_num_, req.timeout_us_);
+        break;
+#ifdef OB_BUILD_ARBITRATION
+      case ADD_ARB_MEMBER_CMD:
+        ret = static_cast<palf::PalfHandle*>(palf_handle_)->add_arb_member(req.added_member_, req.timeout_us_);
+        break;
+      case REMOVE_ARB_MEMBER_CMD:
+        ret = static_cast<palf::PalfHandle*>(palf_handle_)->remove_arb_member(req.removed_member_, req.timeout_us_);
+        break;
+#endif
+      case REPLACE_MEMBER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(replace_member, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
+        break;
+      case ADD_LEARNER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(add_learner, req.added_member_, req.timeout_us_);
+        break;
+      case REMOVE_LEARNER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(remove_learner, req.removed_member_, req.timeout_us_);
+        break;
+      case SWITCH_TO_ACCEPTOR_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(switch_learner_to_acceptor, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
+        break;
+      case SWITCH_TO_LEARNER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(switch_acceptor_to_learner, req.removed_member_, req.new_replica_num_, req.timeout_us_);
+        break;
+      case TRY_LOCK_CONFIG_CHANGE_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(try_lock_config_change, req.lock_owner_, req.timeout_us_);
+        break;
+      case UNLOCK_CONFIG_CHANGE_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(unlock_config_change, req.lock_owner_, req.timeout_us_);
+        break;
+      case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(get_config_change_lock_stat, resp.lock_owner_, resp.is_locked_);
+        break;
+      case REPLACE_LEARNERS_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(replace_learners, req.added_list_, req.removed_list_, req.timeout_us_);
+        break;
+      case REPLACE_MEMBER_WITH_LEARNER_CMD:
+        PALF_MEMBER_PROXY_WITH_RET(replace_member_with_learner, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
+        break;
+      default:
+        break;
+    }
+    palf_handle_->reset_reconfig_checker_cb();
+  }
+  resp.ret_ = ret;
+  if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {
+    CLOG_LOG(WARN, "report_replica_info failed", K(ret), K(req.palf_id_), K(req));
+  }
+  return OB_SUCCESS;
+}
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+void ObLogHandler::refresh_proposer_member_info() const
+{
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    CLOG_LOG(TRACE, "ObLogHandler is not init", K_(id));
+  } else if (OB_UNLIKELY(is_in_stop_state_)) {
+    CLOG_LOG(TRACE, "ObLogHandler is not running", K_(id));
+  } else {
+    libpalf_proposer_config_mgr_.try_refresh_member_info();
+  }
+}
+#endif
+
 int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  if (GCTX.is_shared_storage_mode()) {
-    // no need advance_base_lsn when it's in shared storage mode.
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not init", KR(ret), K_(id));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
-  } else if (OB_FAIL(palf_handle_.advance_base_lsn(lsn))) {
+  } else if (OB_FAIL(palf_handle_->advance_base_lsn(lsn))) {
     CLOG_LOG(WARN, "advance_base_lsn failed", KR(ret), K(lsn));
   } else {}
   return ret;
@@ -1999,86 +2271,5 @@ int __get_log_handler(const ObLSID &ls_id,
   } else {}
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObLogHandler::init_log_fast_rebuild_engine(ObLogFastRebuildEngine *log_fast_rebuild_engine)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(log_fast_rebuild_engine)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), KP(log_fast_rebuild_engine));
-  } else if (OB_FAIL(rebuild_cb_adapter_.init(self_, id_, log_fast_rebuild_engine, rpc_proxy_, lc_cb_))) {
-    CLOG_LOG(WARN, "rebuild_cb_adapter_ init failed", K(ret), K_(id),
-        KP(log_fast_rebuild_engine), KP_(rpc_proxy), KP_(lc_cb));
-  }
-  return ret;
-}
-
-int ObLogHandler::handle_acquire_log_rebuild_info_msg(const LogAcquireRebuildInfoMsg &msg)
-{
-  int ret = common::OB_SUCCESS;
-  const common::ObAddr &server = msg.src_;
-  const bool is_req = msg.is_req();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (false == msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(msg));
-  } else if (is_req) {
-    RLockGuard guard(lock_);
-    const int64_t CONN_TIMEOUT_US = GCONF.rpc_timeout;
-    // TODO by yunlong
-    const int64_t FAST_REBUILD_THRESHOLD = 1 * 1024 * 1024 * 1024;
-    palf::LSN leader_begin_lsn, leader_end_lsn;
-    common::ObAddr election_leader;
-
-    if (OB_FAIL(palf_handle_.get_election_leader(election_leader))) {
-      CLOG_LOG(WARN, "get_election_leader failed", K(ret), K_(id));
-    } else if (self_ != election_leader) {
-      CLOG_LOG(WARN, "self is not election leader, ignore", K(ret), K_(id), K(election_leader), K(msg));
-    } else if (OB_FAIL(palf_handle_.get_begin_lsn(leader_begin_lsn))) {
-      CLOG_LOG(WARN, "get_begin_lsn failed", K(ret), K_(id));
-    } else if (OB_FAIL(palf_handle_.get_end_lsn(leader_end_lsn))) {
-      CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id));
-    } else if (msg.rebuild_replica_end_lsn_ > leader_begin_lsn) {
-      CLOG_LOG(INFO, "stale msg, ignore", K(ret), K_(id), K(msg), K(leader_begin_lsn));
-    } else {
-      // const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
-      //     LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
-      // always execute fast rebuild
-      const LogRebuildType type = LogRebuildType::FAST_REBUILD;
-      palf::LSN base_lsn;
-      palf::PalfBaseInfo base_info;
-      if (OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
-        CLOG_LOG(WARN, "get_base_lsn failed", K(ret), K_(id));
-      } else if (FALSE_IT(base_lsn = LSN(lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE))) {
-      } else if (OB_FAIL(palf_handle_.get_base_info(base_lsn, base_info))) {
-        CLOG_LOG(WARN, "get_base_info failed", K(ret), K_(id));
-      } else {
-        LogAcquireRebuildInfoMsg resp(self_, id_, msg.rebuild_replica_end_lsn_, base_info, type);
-        if (OB_FAIL(rpc_proxy_->to(server).timeout(CONN_TIMEOUT_US).trace_time(true).
-            max_process_handler_time(CONN_TIMEOUT_US).by(MTL_ID()).acquire_log_rebuild_info(resp, NULL))) {
-          CLOG_LOG(WARN, "acquire_log_rebuild_info failed", K(ret), K_(id), K(server), K(resp));
-        } else {
-          CLOG_LOG(INFO, "handle_acquire_log_rebuild_info_req success", K(ret), K(msg), K(resp));
-        }
-      }
-    }
-  } else {
-    if (OB_FAIL(rebuild_cb_adapter_.handle_acquire_log_rebuild_info_resp(msg))) {
-      CLOG_LOG(WARN, "handle_acquire_log_rebuild_info_resp failed", K(ret), K_(id), K(server), K(msg));
-    } else {
-      CLOG_LOG(INFO, "handle_acquire_log_rebuild_info_resp success", K(ret), K(msg));
-    }
-  }
-  return ret;
-}
-
-bool ObLogHandler::need_get_palf_base_info_on_shared_stoarge_(const int ret,
-                                                              const palf::LSN base_lsn) const
-{
-  return OB_ERR_OUT_OF_LOWER_BOUND == ret;
-}
-#endif
 } // end namespace logservice
 } // end napespace oceanbase

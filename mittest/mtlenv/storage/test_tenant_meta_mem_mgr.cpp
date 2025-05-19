@@ -49,11 +49,6 @@ int ObIMemtable::get_ls_id(share::ObLSID &ls_id)
   return OB_SUCCESS;
 }
 
-int ObTablet::check_and_set_initial_state()
-{
-  return OB_SUCCESS;
-}
-
 int ObTabletPersister::acquire_tablet(
     const ObTabletPoolType &type,
     const ObTabletMapKey &key,
@@ -251,6 +246,7 @@ void TestTenantMetaMemMgr::prepare_create_sstable_param()
   param_.occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
+  param_.rec_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;
@@ -623,7 +619,8 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
 
   ObMetaDiskAddr old_addr;
   old_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet(key, old_addr, addr);
+  ObUpdateTabletPointerParam tablet_ptr_param;
+  ret = t3m_.compare_and_swap_tablet(key, old_addr, addr, tablet_ptr_param);
   ASSERT_EQ(common::OB_NOT_THE_OBJECT, ret);
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
@@ -734,7 +731,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
+    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  }
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
   ObUpdateTabletPointerParam param;
@@ -758,7 +758,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
 
   ObMetaDiskAddr none_addr;
   none_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr);
+  ObUpdateTabletPointerParam tablet_ptr_param;
+  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr, tablet_ptr_param);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
@@ -837,7 +838,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
+    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  }
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
 
@@ -859,7 +863,6 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_NE(tmp_handle.get_obj(), new_handle.get_obj()); // get tablet allocated by allocator
   ASSERT_TRUE(tmp_handle.get_obj()->get_tablet_addr().is_block());
   ASSERT_EQ(tmp_handle.allocator_, tmp_handle.get_obj()->allocator_);
-  ASSERT_FALSE(tmp_handle.allow_copy_and_assign_);
   tmp_handle.reset();
 
   void *free_obj = nullptr;
@@ -875,7 +878,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObMetaDiskAddr mem_addr;
   ret = mem_addr.set_mem_addr(0, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ret = t3m_.compare_and_swap_tablet(key, addr, mem_addr);
+  ret = t3m_.compare_and_swap_tablet(key, addr, mem_addr, param);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
   handle.reset();
@@ -951,7 +954,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
+    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  }
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
 
   ObUpdateTabletPointerParam param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(param);
@@ -1052,7 +1058,10 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
+    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  }
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
 
   ObUpdateTabletPointerParam update_pointer_param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(update_pointer_param);
@@ -1157,6 +1166,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.rec_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
@@ -1204,7 +1214,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
 
   ObMetaDiskAddr none_addr;
   none_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr);
+  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr, update_pointer_param);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
   handle.reset();
@@ -1284,7 +1294,6 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ASSERT_EQ(tmp_handle.get_obj(), handle.get_obj()); // get full tablet
   ASSERT_TRUE(tmp_handle.get_obj()->get_tablet_addr().is_memory());
   ASSERT_EQ(handle.allocator_, tmp_handle.allocator_);
-  ASSERT_TRUE(tmp_handle.allow_copy_and_assign_);
   tmp_handle.reset();
 
   ObMetaDiskAddr addr;
@@ -1396,12 +1405,13 @@ TEST_F(TestTenantMetaMemMgr, test_tablet_wash_priority)
 
   ASSERT_TRUE(high_priority_handle.calc_wash_score(high_priority_handle.wash_priority_) > handle.calc_wash_score(handle.wash_priority_));
 
-  ObTabletHandle handle1(handle);
+  ObTabletHandle handle1;
+  handle1.assign(handle);
   ASSERT_TRUE(handle1.calc_wash_score(handle1.wash_priority_) < 0);
 
   ObTabletHandle handle2;
   ASSERT_TRUE(handle2.calc_wash_score(handle2.wash_priority_) == INT64_MIN);
-  handle2 = high_priority_handle;
+  handle2.set_wash_priority(WashTabletPriority::WTP_HIGH);
   ASSERT_TRUE(handle2.calc_wash_score(handle2.wash_priority_) > 0);
 }
 
@@ -1633,7 +1643,7 @@ TEST_F(TestTenantMetaMemMgr, test_leak_checker_copy)
     tb_handle_1.get_obj()->tablet_meta_.transfer_info_.transfer_seq_ = 0;
     ASSERT_EQ(MTL(ObTenantMetaMemMgr*)->leak_checker_.tb_ref_bucket_[index_1], 1);
     ObTabletHandle tb_handle_2;
-    tb_handle_2 = tb_handle_1;
+    tb_handle_2.assign(tb_handle_1);
     ASSERT_EQ(MTL(ObTenantMetaMemMgr*)->leak_checker_.tb_ref_bucket_[tb_handle_2.index_], 1);
     MTL(ObTenantMetaMemMgr *)->del_tablet(ObTabletMapKey(ls_id_, tablet_id_1));
   }

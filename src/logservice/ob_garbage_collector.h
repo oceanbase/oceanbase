@@ -317,6 +317,14 @@ public:
                K(log_sync_stopped_),
                K(rec_scn_));
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for share storage
+private:
+  int update_ss_ls_meta_(const share::ObLSID &ls_id,
+                         const logservice::LSGCState &gc_state,
+                         const share::SCN &offline_scn);
+#endif
+
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;

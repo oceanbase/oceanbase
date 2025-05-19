@@ -125,7 +125,7 @@ int MdsTableHandle::init(ObIAllocator &allocator,
                          const ObTabletID tablet_id,
                          const share::ObLSID ls_id,
                          const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
-                         ObTabletPointer *pointer,
+                         ObTabletBasePointer *pointer,
                          ObMdsTableMgr *p_mgr)
 {
   int ret = OB_SUCCESS;
@@ -907,7 +907,7 @@ inline int MdsTableHandle::fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable
   return ret;
 }
 
-inline int MdsTableHandle::mark_removed_from_t3m(ObTabletPointer *pointer) const
+inline int MdsTableHandle::mark_removed_from_t3m(ObTabletBasePointer *pointer) const
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();

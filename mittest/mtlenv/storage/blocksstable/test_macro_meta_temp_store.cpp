@@ -132,7 +132,10 @@ TEST_F(TestMacroMetaTempStore, test_macro_meta_temp_store)
   table_key.table_type_ = ObITable::MAJOR_SSTABLE;
   table_key.tablet_id_ = tablet_id_;
   table_key.version_range_.snapshot_version_ = SNAPSHOT_VERSION;
-  ASSERT_EQ(OB_SUCCESS, index_block_rebuilder.init(sst_index_builder, nullptr, table_key));
+  blocksstable::ObMacroSeqParam macro_seq_param;
+  macro_seq_param.start_ = 0;
+  macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
+  ASSERT_EQ(OB_SUCCESS, index_block_rebuilder.init(sst_index_builder, macro_seq_param, nullptr, table_key));
 
   int64_t iter_cnt = 0;
   ObDataMacroBlockMeta macro_meta;

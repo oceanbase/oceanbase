@@ -25,9 +25,9 @@ namespace share
 {
 class SCN;
 }
-namespace palf
+namespace ipalf
 {
-class PalfEnv;
+class IPalfEnv;
 }
 namespace logservice
 {
@@ -71,7 +71,7 @@ class ObLogReplayService: public lib::TGTaskHandler, public ObILogReplayService
 public:
   ObLogReplayService();
   virtual ~ObLogReplayService();
-  int init(palf::PalfEnv *palf_env,
+  int init(ipalf::IPalfEnv *palf_env,
            ObLSAdapter *ls_adapter,
            ObILogAllocator *allocator);
 public:
@@ -262,7 +262,7 @@ private:
   int tg_id_;
   ReplayProcessStat replay_stat_;
   ObLSAdapter *ls_adapter_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
   ObILogAllocator *allocator_;
   share::SCN replayable_point_;
   // 考虑到迁出迁入场景, 不能只通过map管理replay status的生命周期

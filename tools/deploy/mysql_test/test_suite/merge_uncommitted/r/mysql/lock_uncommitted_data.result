@@ -1,9 +1,9 @@
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
-set SESSION ob_query_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_timeout = 60 * 1000 * 1000;
-set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
 drop table if exists test_lock_uncommitted_data_t;
 create table test_lock_uncommitted_data_t(a int primary key, b int);
 begin;

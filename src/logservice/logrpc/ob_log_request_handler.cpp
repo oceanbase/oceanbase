@@ -149,27 +149,30 @@ int LogRequestHandler::handle_sync_request<LogConfigChangeCmd, LogConfigChangeCm
     LogConfigChangeCmdResp &resp)
 {
   int ret = common::OB_SUCCESS;
+  ObLogReporterAdapter *reporter;
+  logservice::ObLogService *log_service = NULL;
+
   if (false == req.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(req));
+  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "get_log_service failed", K(ret));
+  } else if (OB_ISNULL(reporter = log_service->get_reporter())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_service.get_reporter failed", K(ret));
   } else {
     const int64_t palf_id = req.palf_id_;
     const common::ObAddr &server = req.src_;
-    palf::PalfHandleGuard palf_handle_guard;
-    if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
-      CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
-    } else {
-      palf::PalfHandle *palf_handle = palf_handle_guard.get_palf_handle();
-      ConfigChangeCmdHandler cmd_handler(palf_handle);
-      if (OB_FAIL(cmd_handler.handle_config_change_cmd(req, resp))) {
-        CLOG_LOG(WARN, "handle_config_change_cmd failed", K(ret), K(palf_id), K(server), K(req));
-      } else {
-        CLOG_LOG(INFO, "handle_config_change_cmd success", K(ret), K(palf_id), K(server), K(req), K(resp));
-      }
-      resp.ret_ = ret;
-      ret = OB_SUCCESS;
+    storage::ObLSHandle ls_handle;
+    logservice::ObLogHandler *log_handler = nullptr;
+    if (OB_FAIL(get_log_handler_(palf_id, ls_handle, log_handler))) {
+      CLOG_LOG(WARN, "get_log_handler_ failed", K(ret), K(palf_id), K(server));
+    } else if (OB_FAIL(log_handler->handle_config_change_cmd(req, resp))) {
+      CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), K(palf_id), K(server), K(req));
     }
   }
+
   return ret;
 }
 
@@ -183,126 +186,29 @@ int LogRequestHandler::handle_sync_request<LogGetPalfStatReq, LogGetPalfStatResp
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(req));
   } else {
-    palf::PalfHandleGuard palf_handle_guard;
     const int64_t palf_id = req.palf_id_;
     const common::ObAddr &server = req.src_;
     common::ObRole role = FOLLOWER;
+    storage::ObLSHandle ls_handle;
+    logservice::ObLogHandler *log_handler = nullptr;
     int64_t unused_pid;
-    bool is_pending_state = true;
     int64_t paxos_replica_num = 0;
+    palf::PalfHandleGuard palf_handle_guard;
+
     if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
       CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
-    } else if (req.is_to_leader_ && OB_FAIL(palf_handle_guard.get_role(role, unused_pid, is_pending_state))) {
-      CLOG_LOG(WARN, "palf_handle get_role failed", K(ret), K(palf_id), K(server));
-    } else if (req.is_to_leader_ && (role != LEADER || true == is_pending_state)) {
+    } else if (req.is_to_leader_ && OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+      CLOG_LOG(WARN, "get_role failed when handling LogProbeRsReq", K(ret));
+    } else if (req.is_to_leader_ && role != LEADER) {
       ret = OB_NOT_MASTER;
-      CLOG_LOG(WARN, "get_palf_stat failed", K(ret), K(req), K(role), K(is_pending_state));
-    } else if (OB_FAIL(palf_handle_guard.stat(resp.palf_stat_))) {
+      CLOG_LOG(WARN, "get_palf_stat failed", K(ret), K(req), K(role));
+    } else if (OB_FAIL(get_log_handler_(palf_id, ls_handle, log_handler))) {
+      CLOG_LOG(WARN, "get_log_handler_ failed", K(ret), K(palf_id), K(server));
+    } else if (OB_FAIL(log_handler->stat(resp.palf_stat_))) {
       CLOG_LOG(WARN, "palf stat failed", K(ret), K(palf_id), K(server));
     } else {
       CLOG_LOG(TRACE, "get_palf_stat success", K(ret), K(palf_id), K(server), K(req), K(resp));
     }
-  }
-  return ret;
-}
-
-int ConfigChangeCmdHandler::get_reporter_(ObLogReporterAdapter *&reporter) const
-{
-  int ret = OB_SUCCESS;
-  logservice::ObLogService *log_service = NULL;
-  if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "get_log_service failed", K(ret));
-  } else if (OB_ISNULL(reporter = log_service->get_reporter())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "log_service.get_reporter failed", K(ret));
-  } else {
-    CLOG_LOG(TRACE, "__get_reporter", KP(reporter), KP(log_service), K(MTL_ID()));
-  }
-  return ret;
-}
-
-int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &req,
-                                                     LogConfigChangeCmdResp &resp) const
-{
-  int ret = OB_SUCCESS;
-  ObLogReporterAdapter *reporter;
-  logservice::ObReconfigCheckerAdapter reconfig_checker;
-  if (NULL == palf_handle_) {
-    ret = OB_NOT_INIT;
-  } else if (false == req.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(get_reporter_(reporter))) {
-    CLOG_LOG(ERROR, "get_reporter failed", K(req.palf_id_));
-  } else if (OB_FAIL(reconfig_checker.init(MTL_ID(), share::ObLSID(req.palf_id_), req.timeout_us_))) {
-    CLOG_LOG(WARN, "ObReconfigCheckerAdapter init failed", K(ret), K(req.palf_id_));
-  } else if (OB_FAIL(palf_handle_->set_reconfig_checker_cb(&reconfig_checker))) {
-    CLOG_LOG(WARN, "set_reconfig_checker_cb failed, another reconfiguration is running", K(ret), K(req.palf_id_));
-    ret = OB_EAGAIN;
-  } else {
-    switch (req.cmd_type_) {
-      case FORCE_SINGLE_MEMBER_CMD:
-        ret = palf_handle_->force_set_as_single_replica();
-        break;
-      case FORCE_SET_MEMBER_LIST_CMD:
-        ret = palf_handle_->force_set_member_list(req.new_member_list_, req.new_replica_num_);
-        break;
-      case CHANGE_REPLICA_NUM_CMD:
-        ret = palf_handle_->change_replica_num(req.curr_member_list_, req.curr_replica_num_,
-            req.new_replica_num_, req.timeout_us_);
-        break;
-      case ADD_MEMBER_CMD:
-        ret = palf_handle_->add_member(req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
-        break;
-      case REMOVE_MEMBER_CMD:
-        ret = palf_handle_->remove_member(req.removed_member_, req.new_replica_num_, req.timeout_us_);
-        break;
-#ifdef OB_BUILD_ARBITRATION
-      case ADD_ARB_MEMBER_CMD:
-        ret = palf_handle_->add_arb_member(req.added_member_, req.timeout_us_);
-        break;
-      case REMOVE_ARB_MEMBER_CMD:
-        ret = palf_handle_->remove_arb_member(req.removed_member_, req.timeout_us_);
-        break;
-#endif
-      case REPLACE_MEMBER_CMD:
-        ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
-        break;
-      case ADD_LEARNER_CMD:
-        ret = palf_handle_->add_learner(req.added_member_, req.timeout_us_);
-        break;
-      case REMOVE_LEARNER_CMD:
-        ret = palf_handle_->remove_learner(req.removed_member_, req.timeout_us_);
-        break;
-      case SWITCH_TO_ACCEPTOR_CMD:
-        ret = palf_handle_->switch_learner_to_acceptor(req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
-        break;
-      case SWITCH_TO_LEARNER_CMD:
-        ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.new_replica_num_, req.timeout_us_);
-        break;
-      case TRY_LOCK_CONFIG_CHANGE_CMD:
-        ret = palf_handle_->try_lock_config_change(req.lock_owner_, req.timeout_us_);
-        break;
-      case UNLOCK_CONFIG_CHANGE_CMD:
-        ret = palf_handle_->unlock_config_change(req.lock_owner_, req.timeout_us_);
-        break;
-      case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
-        ret = palf_handle_->get_config_change_lock_stat(resp.lock_owner_, resp.is_locked_);
-        break;
-      case REPLACE_LEARNERS_CMD:
-        ret = palf_handle_->replace_learners(req.added_list_, req.removed_list_, req.timeout_us_);
-        break;
-      case REPLACE_MEMBER_WITH_LEARNER_CMD:
-        ret = palf_handle_->replace_member_with_learner(req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
-        break;
-      default:
-        break;
-    }
-    palf_handle_->reset_reconfig_checker_cb();
-  }
-  resp.ret_ = ret;
-  if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {
-    CLOG_LOG(WARN, "report_replica_info failed", K(ret), K(req.palf_id_), K(req));
   }
   return ret;
 }
@@ -476,66 +382,6 @@ int LogRequestHandler::handle_sync_request<LogGetCkptReq, LogGetCkptResp>(
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-template <>
-int LogRequestHandler::handle_request<LogSyncBaseLSNReq>(const LogSyncBaseLSNReq &req)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!req.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "Invalid argument!!!", K(req));
-  } else if (!GCTX.is_shared_storage_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "unexcepted error, mustn't use this interface in non-shared storage mode, ", K(req));
-  } else {
-    LSN end_lsn;
-    LSN base_lsn;
-    palf::PalfHandleGuard palf_handle_guard;
-    if (OB_FAIL(get_palf_handle_guard_(req.ls_id_.id(), palf_handle_guard))) {
-      CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(req));
-    } else if (OB_FAIL(palf_handle_guard.get_end_lsn(end_lsn))) {
-      CLOG_LOG(WARN, "get_end_lsnf failed", KR(ret), K(req));
-    } else if (FALSE_IT(base_lsn = MIN(end_lsn, req.base_lsn_))) {
-    } else if (OB_FAIL(palf_handle_guard.advance_base_lsn(base_lsn))) {
-      PALF_LOG(WARN, "PalfHandleImpl update_base_lsn failed", K(req));
-    } else {
-      PALF_LOG(TRACE, "handle sync_base_lsn success", K(req));
-    }
-  }
-  return ret;
-}
-
-template <>
-int LogRequestHandler::handle_request<LogAcquireRebuildInfoMsg>(const LogAcquireRebuildInfoMsg &req)
-{
-  int ret = common::OB_SUCCESS;
-  if (false == req.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(req));
-  } else if (OB_FAIL(handle_acquire_log_rebuild_info_msg_(req))) {
-    CLOG_LOG(WARN, "handle_acquire_log_rebuild_info_msg_ failed", K(ret), K(req));
-  }
-  return ret;
-}
-
-int LogRequestHandler::handle_acquire_log_rebuild_info_msg_(const LogAcquireRebuildInfoMsg &req)
-{
-  int ret = common::OB_SUCCESS;
-  const int64_t palf_id = req.palf_id_;
-  const bool is_req = req.is_req();
-  storage::ObLSHandle ls_handle;
-  logservice::ObLogHandler *log_handler = nullptr;
-  if (OB_FAIL(get_log_handler_(palf_id, ls_handle, log_handler))) {
-    CLOG_LOG(WARN, "get_log_handler_ failed", K(ret), K(palf_id));
-  } else if (OB_FAIL(log_handler->handle_acquire_log_rebuild_info_msg(req))) {
-    CLOG_LOG(WARN, "handle_acquire_log_rebuild_info_msg failed", K(ret), K(palf_id), K(req));
-  } else {
-    CLOG_LOG(INFO, "handle_acquire_log_rebuild_info_msg success", K(ret), K(req));
-  }
-  return ret;
-}
-#endif
 
 } // end namespace logservice
 } // end namespace oceanbase

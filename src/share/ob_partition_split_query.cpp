@@ -203,6 +203,7 @@ int ObPartitionSplitQuery::copy_split_key(
   return ret;
 }
 
+
 int ObPartitionSplitQuery::get_tablet_split_ranges(
     const ObTablet &tablet,
     const common::ObIArray<common::ObStoreRange> &ori_ranges,
@@ -279,14 +280,15 @@ int ObPartitionSplitQuery::get_tablet_split_info(
   return ret;
 }
 
+
 int ObPartitionSplitQuery::set_split_info(const ObTabletSplitTscInfo &split_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(split_info_.is_split_dst_with_partkey())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("split info is already valid", K(ret), K(split_info_));
-  } else {
-    split_info_ = split_info;
+  } else if (OB_FAIL(split_info_.assign(split_info))) {
+    LOG_WARN("failed to assign split_info", K(ret), K(split_info));
   }
   return ret;
 }

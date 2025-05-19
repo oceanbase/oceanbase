@@ -63,6 +63,7 @@ public:
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
     const uint64_t encoding_granularity = 0);
   bool is_valid() const;
@@ -92,6 +93,7 @@ public:
       K_(need_submit_io),
       K_(is_delete_insert_table),
       K_(encoding_granularity),
+      K_(reorganization_scn),
       K_(semistruct_encoding_type));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
@@ -129,6 +131,7 @@ public:
   bool need_submit_io_;
   bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
+  share::SCN reorganization_scn_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
 };
 
@@ -297,6 +300,7 @@ public:
   STATIC_DESC_FUNC(const char *, encrypt_key);
   STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
+  STATIC_DESC_FUNC(share::SCN, reorganization_scn);
   STATIC_DESC_FUNC(bool, is_delete_insert_table);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
@@ -386,6 +390,7 @@ struct ObWholeDataStoreDesc
     const int64_t cluster_version,
     const bool micro_index_clustered,
     const int64_t tablet_transfer_seq,
+    const share::SCN &reorganization_scn,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,

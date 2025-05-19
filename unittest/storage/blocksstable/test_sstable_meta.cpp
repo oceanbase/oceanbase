@@ -253,6 +253,7 @@ void TestSSTableMacroInfo::prepare_create_sstable_param()
   param_.sstable_logic_seq_ = 0;
   param_.nested_offset_ = 0;
   param_.nested_size_ = 0;
+  param_.rec_scn_.set_min();
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -372,6 +373,7 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.sstable_logic_seq_ = 0;
   param_.nested_offset_ = 0;
   param_.nested_size_ = 0;
+  param_.rec_scn_.set_min();
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -1036,6 +1038,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   src_sstable_param.sstable_logic_seq_ = 0;
   src_sstable_param.nested_offset_ = 0;
   src_sstable_param.nested_size_ = 0;
+  src_sstable_param.rec_scn_.set_min();
   ret = src_sstable_param.column_checksums_.push_back(2022);
   ASSERT_EQ(OB_SUCCESS, ret);
 

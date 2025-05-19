@@ -23,6 +23,29 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+struct ObMinMaxFilterParam {
+  ObMinMaxFilterParam() : null_count_(), min_datum_(),
+                          max_datum_(), is_min_prefix_(false),
+                          is_max_prefix_(false) {}
+  ObMinMaxFilterParam(blocksstable::ObStorageDatum &null_count,
+                   blocksstable::ObStorageDatum &min_datum,
+                   blocksstable::ObStorageDatum &max_datum,
+                   bool is_min_prefix,
+                   bool is_max_prefix) : null_count_(null_count), min_datum_(min_datum),
+                                         max_datum_(max_datum), is_min_prefix_(is_min_prefix),
+                                         is_max_prefix_(is_max_prefix) {}
+  ObMinMaxFilterParam(blocksstable::ObStorageDatum &null_count,
+                   blocksstable::ObStorageDatum &min_datum,
+                   blocksstable::ObStorageDatum &max_datum)
+                   : null_count_(null_count), min_datum_(min_datum),
+                     max_datum_(max_datum), is_min_prefix_(false),
+                     is_max_prefix_(false) {}
+  blocksstable::ObStorageDatum null_count_;
+  blocksstable::ObStorageDatum min_datum_;
+  blocksstable::ObStorageDatum max_datum_;
+  bool is_min_prefix_;
+  bool is_max_prefix_;
+};
 class ObAggRowReader;
 class ObSkipIndexFilterExecutor final
 {
@@ -50,11 +73,20 @@ public:
                                   sql::ObPhysicalFilterExecutor &filter,
                                   common::ObIAllocator &allocator,
                                   const bool use_vectorize);
+  int falsifiable_pushdown_filter(const uint32_t col_idx,
+                                  const ObObjMeta &obj_meta,
+                                  const ObSkipIndexType index_type,
+                                  const int64_t row_count,
+                                  ObMinMaxFilterParam &param,
+                                  sql::ObPhysicalFilterExecutor &filter,
+                                  common::ObIAllocator &allocator,
+                                  const bool use_vectorize);
 
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
                         const ObObjMeta &obj_meta,
+                        const ObMinMaxFilterParam &param,
                         sql::ObWhiteFilterExecutor &filter,
                         common::ObIAllocator &allocator);
 
@@ -63,11 +95,7 @@ private:
                    const share::schema::ObColumnParam *col_param,
                    const ObObjMeta &obj_meta,
                    const bool is_padding_mode,
-                   ObStorageDatum &null_count,
-                   ObStorageDatum &min_datum,
-                   bool &is_min_prefix,
-                   ObStorageDatum &max_datum,
-                   bool &is_max_prefix);
+                   ObMinMaxFilterParam &param);
   int pad_column(const ObObjMeta &obj_meta,
                  const share::schema::ObColumnParam *col_param,
                  const bool is_padding_mode,
@@ -133,6 +161,7 @@ private:
   int black_filter_on_min_max(const uint32_t col_idx,
                               const uint64_t row_count,
                               const ObObjMeta &obj_meta,
+                              ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
                               common::ObIAllocator &allocator,
                               const bool use_vectorize);

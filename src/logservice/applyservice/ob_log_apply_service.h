@@ -17,6 +17,8 @@
 #include "lib/queue/ob_link_queue.h"
 #include "lib/thread/ob_thread_lease.h"
 #include "logservice/palf/palf_callback.h"
+#include "logservice/ipalf/ipalf_handle.h"
+#include "logservice/ipalf/ipalf_env.h"
 #include "logservice/palf/palf_handle.h"
 #include "share/scn.h"
 #include "share/ob_ls_id.h"
@@ -157,7 +159,7 @@ public:
   ~ObApplyStatus();
 public:
   int init(const share::ObLSID &id,
-           palf::PalfEnv *palf_env,
+           ipalf::IPalfEnv *palf_env,
            ObLogApplyService *ap_sv);
   void destroy();
   int stop();
@@ -256,8 +258,8 @@ private:
   share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
-  palf::PalfEnv *palf_env_;
-  palf::PalfHandle palf_handle_;
+  ipalf::IPalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
   ObApplyFsCb fs_cb_;
   mutable RWLock lock_; //保护role_, proposal_id_及is_in_stop_state_
   mutable lib::ObMutex mutex_; //互斥获取最大连续位点不会被并发调用
@@ -276,7 +278,7 @@ public:
   ObLogApplyService();
   virtual ~ObLogApplyService();
 public:
-  int init(palf::PalfEnv *palf_env,
+  int init(ipalf::IPalfEnv *palf_env,
            ObLSAdapter *ls_adapter);
   void destroy();
   int start();
@@ -348,7 +350,7 @@ private:
   bool is_inited_;
   bool is_running_;
   int tg_id_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
   ObLSAdapter *ls_adapter_;
   common::ObLinearHashMap<share::ObLSID, ObApplyStatus*> apply_status_map_;
   DISALLOW_COPY_AND_ASSIGN(ObLogApplyService);
