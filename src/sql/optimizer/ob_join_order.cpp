@@ -14857,7 +14857,8 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
     if (NULL != log_join_hint && NULL != log_join_hint->nl_material_) {
       path_info.force_mat_ = log_join_hint->nl_material_->is_enable_hint();
       path_info.force_no_mat_ = log_join_hint->nl_material_->is_disable_hint();
-      if (log_hint.is_outline_data_ && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_0)) {
+      if (log_hint.is_outline_data_ && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4, COMPAT_VERSION_4_3_0,
+                                                                           COMPAT_VERSION_4_3_5_BP3)) {
         path_info.force_normal_nlj_ = true;
       }
     } else if (log_hint.is_outline_data_) {

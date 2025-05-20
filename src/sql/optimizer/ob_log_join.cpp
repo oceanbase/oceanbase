@@ -139,7 +139,8 @@ uint64_t ObLogJoin::hash(uint64_t seed) const
   if (is_nlj_without_param_down() &&
       OB_NOT_NULL(get_plan()) && OB_NOT_NULL(get_plan()->get_stmt()) &&
       OB_NOT_NULL(query_ctx = get_plan()->get_stmt()->get_query_ctx()) &&
-      query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_0)) {
+      query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4, COMPAT_VERSION_4_3_0,
+                                          COMPAT_VERSION_4_3_5_BP3)) {
     seed = do_hash(is_nlj_without_param_down(), seed);
   }
   seed = ObLogicalOperator::hash(seed);
@@ -567,7 +568,8 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
       LOG_WARN("fail to print pq distribute hint", K(ret));
     } else if (is_nlj_without_param_down() &&
                !join_path->need_mat_ &&
-               query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_0) &&
+               query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP4, COMPAT_VERSION_4_3_0,
+                                                   COMPAT_VERSION_4_3_5_BP3) &&
                OB_FAIL(print_join_hint_outline(*stmt,
                                                T_NO_USE_NL_MATERIALIZATION,
                                                qb_name,
