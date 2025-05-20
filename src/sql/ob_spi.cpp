@@ -8149,22 +8149,29 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         calc_array->at(i), calc_array->at(i).get_type(), pl_integer_ranges[i]));
     }
   } else if (obj_array.at(0).is_null()) { //null into extend variable，generate extend null obj
-    if (row_desc.at(0).get_meta_type().is_ext() &&
-      (PL_RECORD_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
-       PL_NESTED_TABLE_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
-       PL_VARRAY_TYPE == row_desc.at(0).get_meta_type().get_extend_type())) {
-      int64_t udt_id = row_desc.at(0).get_udt_id();
-      const ObUserDefinedType *type = nullptr;
-      int64_t ptr = 0;
-      int64_t init_size = OB_INVALID_SIZE;
-      ObObj   tmp_obj;
-      OX (tmp_obj.reset());
-      OZ (ctx->get_user_type(udt_id, type));
-      OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
-      OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
-      OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
-      OZ (tmp_obj_array.push_back(tmp_obj));
-      OX (calc_array = &tmp_obj_array);
+    if (row_desc.at(0).get_meta_type().is_ext()) {
+      if (PL_RECORD_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+          PL_NESTED_TABLE_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+          PL_VARRAY_TYPE == row_desc.at(0).get_meta_type().get_extend_type()) {
+        int64_t udt_id = row_desc.at(0).get_udt_id();
+        const ObUserDefinedType *type = nullptr;
+        int64_t ptr = 0;
+        int64_t init_size = OB_INVALID_SIZE;
+        ObObj   tmp_obj;
+        OX (tmp_obj.reset());
+        OZ (ctx->get_user_type(udt_id, type));
+        OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
+        OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+        OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
+        OZ (tmp_obj_array.push_back(tmp_obj));
+        OX (calc_array = &tmp_obj_array);
+      } else if (PL_REF_CURSOR_TYPE == row_desc.at(0).get_meta_type().get_extend_type()) {
+        ObObj tmp_obj;
+        OX (tmp_obj.reset());
+        OX (tmp_obj.set_extend(NULL, PL_REF_CURSOR_TYPE));
+        OZ (tmp_obj_array.push_back(tmp_obj));
+        OX (calc_array = &tmp_obj_array);
+      }
     }
   }
   // 向变量赋值
