@@ -359,6 +359,7 @@ GLOBAL_ERRSIM_POINT_DEF(558, EN_CHECK_REWRITE_ITER_CONVERGE, "Reporting error wh
 GLOBAL_ERRSIM_POINT_DEF(559, EN_PRINT_CONSTRAINTS_INFO, "show constraints info when explain query plan");
 GLOBAL_ERRSIM_POINT_DEF(560, EN_CBQT_IGNORE_COST, "Whether ignore the cost when do cost based transformation");
 GLOBAL_ERRSIM_POINT_DEF(561, EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION, "Use px random shuffle even statistical information do not exist.");
+GLOBAL_ERRSIM_POINT_DEF(566, EN_COST_MODEL_TEST, "test cost model for mysqltest case");
 
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
