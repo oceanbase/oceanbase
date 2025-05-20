@@ -689,5 +689,49 @@ bool ObDiagnosticInfoContainer::check_element_all_freed() const
   return bret;
 }
 
+int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
+    std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObDiagnosticInfo *> di_array;
+  ObRunningDiagnosticInfoContainer &runnings = runnings_;
+  std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn_wrapper =
+      [&di_array, &runnings, &fn](const SessionID &id, ObDiagnosticInfo *di) {
+        int ret = OB_SUCCESS;
+        if (OB_FAIL(runnings.inc_ref(di))) {
+          LOG_WARN("failed to inc ref di", K(ret));
+        } else if (OB_FAIL(di_array.push_back(di))) {
+          LOG_WARN("faield to push back id to di_array", K(ret));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(runnings.dec_ref(di))) {
+            LOG_ERROR("failed to dec ref", K(tmp_ret));
+          }
+
+          if (tmp_ret != OB_SUCCESS) {
+            ret = tmp_ret;
+          }
+        } else if (OB_FAIL(fn(id, di))) {
+          LOG_DEBUG("faield to exec fn", K(ret));
+        }
+        return ret;
+      };
+
+  if (OB_FAIL(for_each_running_di(fn_wrapper))) {
+    LOG_ERROR("failed to for each running di", K(ret));
+  }
+
+  for (int i = 0; i < di_array.count(); i++) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(runnings.dec_ref(di_array[i]))) {
+      LOG_ERROR("failed to dec ref", K(tmp_ret));
+    }
+
+    if (tmp_ret != OB_SUCCESS) {
+      ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
 } /* namespace common */
 } /* namespace oceanbase */
