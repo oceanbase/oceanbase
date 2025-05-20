@@ -173,6 +173,7 @@ struct InParamMeta
     ObKeyPartPos pos_;
     ObArray<ObObj> vals_;
     int assign(const InParamMeta &other, ObIAllocator &alloc);
+    int deep_copy( ObIAllocator &alloc, const InParamMeta &other);
     TO_STRING_KV(K_(pos), K_(vals));
 };
 
