@@ -2388,15 +2388,28 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
       ObSchemaObjVersion obj_version;
       schema_routine_type = schema_routine_info->get_routine_type();
       if (ROUTINE_PACKAGE_TYPE == schema_routine_type) {
-        const ObPackageInfo *pkg_info = nullptr;
-        if (OB_FAIL(resolve_ctx_.schema_guard_.get_package_info(resolve_ctx_.session_info_.get_effective_tenant_id(),
+        const ObPackageInfo *spec_info = nullptr;
+        const ObPackageInfo *body_info = nullptr;
+        if (OB_FAIL(ObPLPackageManager::get_package_schema_info(resolve_ctx_.schema_guard_,
                                                                 schema_routine_info->get_package_id(),
-                                                                pkg_info))) {
+                                                                spec_info,
+                                                                body_info))) {
           LOG_WARN("fail to get package info", K(ret));
-        } else if (OB_NOT_NULL(pkg_info)) {
-          obj_version.object_id_ = pkg_info->get_package_id();
-          obj_version.object_type_ = DEPENDENCY_PACKAGE;
-          obj_version.version_ = pkg_info->get_schema_version();
+        } else {
+          if (OB_NOT_NULL(spec_info)) {
+            obj_version.object_id_ = spec_info->get_package_id();
+            obj_version.object_type_ = DEPENDENCY_PACKAGE;
+            obj_version.version_ = spec_info->get_schema_version();
+          }
+          if (OB_NOT_NULL(body_info) && resolve_ctx_.is_sql_scope_) {
+            ObSchemaObjVersion ver;
+            ver.object_id_ = body_info->get_package_id();
+            ver.version_ = body_info->get_schema_version();
+            ver.object_type_ = DEPENDENCY_PACKAGE_BODY;
+            if (OB_FAIL(ObPLDependencyUtil::add_dependency_object_impl(get_dependency_table(), ver))) {
+              LOG_WARN("add dependency object failed", K(ret), K(ver));
+            }
+          }
         }
       } else if (ROUTINE_UDT_TYPE == schema_routine_type) {
         const ObUDTTypeInfo *udt_info = nullptr;
