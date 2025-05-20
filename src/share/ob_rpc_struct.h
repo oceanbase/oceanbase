@@ -11858,14 +11858,16 @@ public:
            const share::ObLSID &ls_id,
            const common::ObTabletID tablet_id,
            const common::ObTabletID lob_meta_tablet_id,
-           transaction::ObTxDesc *tx_desc);
+           transaction::ObTxDesc *tx_desc,
+           const ObDirectLoadType direct_load_type = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL);
   int release();
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid() &&
-           OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid();
+           OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid() && is_incremental_direct_load(direct_load_type_);
   }
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
+               K_(need_release), K_(direct_load_type));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -11873,6 +11875,7 @@ public:
   common::ObTabletID lob_meta_tablet_id_;
   transaction::ObTxDesc *tx_desc_;
   bool need_release_;
+  ObDirectLoadType direct_load_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };

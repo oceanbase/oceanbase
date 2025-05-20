@@ -11558,7 +11558,9 @@ OB_SERIALIZE_MEMBER(ObSetSSCacheSizeRatioArg, tenant_id_, micro_cache_size_ratio
 #endif
 
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false)
+  : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(),
+    lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false),
+    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID)
 {}
 
 ObRpcRemoteWriteDDLIncCommitLogArg::~ObRpcRemoteWriteDDLIncCommitLogArg()
@@ -11573,13 +11575,17 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
                                              const share::ObLSID &ls_id,
                                              const common::ObTabletID tablet_id,
                                              const common::ObTabletID lob_meta_tablet_id,
-                                             transaction::ObTxDesc *tx_desc)
+                                             transaction::ObTxDesc *tx_desc,
+                                             const ObDirectLoadType direct_load_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id_ = OB_INVALID_ID && !ls_id.is_valid() || !tablet_id.is_valid() ||
                   OB_ISNULL(tx_desc) || !tx_desc->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(lob_meta_tablet_id), KPC(tx_desc));
+  } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only support incremental direct load type", KR(ret), K(direct_load_type));
   } else if (OB_FAIL(release())) {
     LOG_WARN("fail to release tx_desc", K(ret));
   } else {
@@ -11588,6 +11594,7 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
     tablet_id_ = tablet_id;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
     tx_desc_ = tx_desc;
+    direct_load_type_ = direct_load_type;
   }
   return ret;
 }
@@ -11623,6 +11630,9 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
       LST_DO_CODE(OB_UNIS_ENCODE, *tx_desc_);
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_);
+  }
   return ret;
 }
 
@@ -11643,6 +11653,9 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
       need_release_ = true;
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_);
+  }
   return ret;
 }
 
@@ -11653,6 +11666,7 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   if (tx_desc_ != nullptr) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
   }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_);
   return len;
 }
 

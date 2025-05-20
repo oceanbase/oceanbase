@@ -21,19 +21,28 @@ namespace storage
 using namespace common;
 
 ObDDLIncLogBasic::ObDDLIncLogBasic()
-  : tablet_id_(), lob_meta_tablet_id_()
+  : tablet_id_(),
+    lob_meta_tablet_id_(),
+    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID)
 {
 }
 
-int ObDDLIncLogBasic::init(const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
+int ObDDLIncLogBasic::init(
+    const ObTabletID &tablet_id,
+    const ObTabletID &lob_meta_tablet_id,
+    const ObDirectLoadType direct_load_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tablet_id));
+  } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only support incremental direct load type", KR(ret), K(direct_load_type));
   } else {
     tablet_id_ = tablet_id;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
+    direct_load_type_ = direct_load_type;
   }
 
   return ret;
@@ -53,7 +62,7 @@ int ObDDLIncLogBasic::hash(uint64_t &hash_val) const
   return OB_SUCCESS;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_);
+OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_, direct_load_type_);
 
 ObDDLIncStartLog::ObDDLIncStartLog()
   : log_basic_()
