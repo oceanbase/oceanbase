@@ -494,6 +494,8 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   ObSQLSessionInfo *session_info = ctx_->get_session_info();
   bool need_restore_session = false;
   transaction::ObTxDesc *tx_desc = NULL;
+  bool is_sess_in_retry = false;
+  int last_query_retry_err = OB_SUCCESS;
   if (!is_big_table_ && OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
   } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, is_big_table_ ? 1 : degree))) {
@@ -503,7 +505,9 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   } else if (OB_FAIL(pack(raw_sql_str))) {
     LOG_WARN("failed to pack dynamic sampling", K(ret));
   } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
-                                               nested_count, is_no_backslash_escapes, tx_desc))) {
+                                               nested_count, is_no_backslash_escapes, tx_desc,
+                                               is_sess_in_retry,
+                                               last_query_retry_err))) {
     throw_ds_error = true;//here we must throw error, because the session may be unavailable.
     LOG_WARN("failed to prepare and store session", K(ret));
   } else {
@@ -521,7 +525,9 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   if (need_restore_session) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = restore_session(session_info, session_value,
-                                                 nested_count, is_no_backslash_escapes, tx_desc))) {
+                                                 nested_count, is_no_backslash_escapes, tx_desc,
+                                                 is_sess_in_retry,
+                                                 last_query_retry_err))) {
       throw_ds_error = true;//here we must throw error, because the session may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
@@ -1081,7 +1087,9 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
                                                  sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
                                                  int64_t &nested_count,
                                                  bool &is_no_backslash_escapes,
-                                                 transaction::ObTxDesc *&tx_desc)
+                                                 transaction::ObTxDesc *&tx_desc,
+                                                 bool &is_sess_in_retry,
+                                                 int &last_query_retry_err)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -1097,6 +1105,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
       LOG_WARN("failed to save session", K(ret));
     } else {
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+      is_sess_in_retry = session->get_is_in_retry();
+      last_query_retry_err = session->get_retry_info().get_last_query_retry_err();
       nested_count = session->get_nested_count();
       IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_no_backslash_escapes);
       session->set_sql_mode(session->get_sql_mode() & ~SMO_NO_BACKSLASH_ESCAPES);
@@ -1119,7 +1129,9 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
                                        sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                                        int64_t nested_count,
                                        bool is_no_backslash_escapes,
-                                       transaction::ObTxDesc *tx_desc)
+                                       transaction::ObTxDesc *tx_desc,
+                                       bool &is_sess_in_retry,
+                                       int &last_query_retry_err)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session) || OB_ISNULL(session_value)) {
@@ -1127,6 +1139,7 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
     LOG_WARN("get unexpected error", K(ret), K(session), K(session_value));
   } else if (OB_FAIL(session->restore_session(*session_value))) {
     LOG_WARN("failed to restore session", K(ret));
+  } else if (OB_FALSE_IT(session->set_session_in_retry(is_sess_in_retry, last_query_retry_err))) {
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     session->set_nested_count(nested_count);
