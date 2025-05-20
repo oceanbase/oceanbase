@@ -5010,8 +5010,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 {
   ObBasicSessionInfo::set_ash_stat_value(ash_stat);
   if (!get_module_name().empty()) {
-    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
-                      ? ASH_MODULE_STR_LEN
+    int64_t size = get_module_name().length() >= ASH_MODULE_STR_LEN
+                      ? ASH_MODULE_STR_LEN - 1
                       : get_module_name().length();
     MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
     ash_stat.module_[size] = '\0';
@@ -5019,8 +5019,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 
   // fill action for user session
   if (!get_action_name().empty()) {
-    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
-                      ? ASH_ACTION_STR_LEN
+    int64_t size = get_action_name().length() >= ASH_ACTION_STR_LEN
+                      ? ASH_ACTION_STR_LEN - 1
                       : get_action_name().length();
     MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
     ash_stat.action_[size] = '\0';
@@ -5028,8 +5028,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 
   // fill client id for user session
   if (!get_client_identifier().empty()) {
-    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
-                      ? ASH_CLIENT_ID_STR_LEN
+    int64_t size = get_client_identifier().length() >= ASH_CLIENT_ID_STR_LEN
+                      ? ASH_CLIENT_ID_STR_LEN - 1
                       : get_client_identifier().length();
     MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
     ash_stat.client_id_[size] = '\0';
