@@ -7071,8 +7071,7 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
     val.reset();
     if (is_mysql && PLSQL_CCFLAGS == i) {
       // do nothing ...
-    } else if (!is_mysql && (SQL_MODE == i ||
-                             COLLATION_DATABASE == i)) {
+    } else if (!is_mysql && SQL_MODE == i) {
       // do nothing ...
     } else if (OB_FAIL(session.get_sys_variable(ExecEnvMap[i], val))) {
       LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
@@ -7159,8 +7158,7 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     if (OB_FAIL(ret)) {
     } else if (is_mysql && PLSQL_CCFLAGS == i) {
       // do nothing ...
-    } else if (!is_mysql && (SQL_MODE == i ||
-                             COLLATION_DATABASE == i)) {
+    } else if (!is_mysql && SQL_MODE == i) {
       // do nothing ...
     } else if (OB_FAIL(session.update_sys_variable(ExecEnvMap[i], val))) {
       LOG_WARN("failed to get sys_variable", K(ExecEnvMap[i]), K(ret));
