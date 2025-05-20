@@ -683,6 +683,8 @@ int ObMemberTable::init_tablet_for_compat()
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
+  const share::SCN create_scn(SCN::base_scn());
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("member table is not init.", KR(ret));
@@ -690,7 +692,7 @@ int ObMemberTable::init_tablet_for_compat()
     LOG_WARN("failed to check tablet exist", K(ret));
   } else if (is_exist) {
     //do nothing
-  } else if (OB_FAIL(create_tablet(ls_->get_clog_checkpoint_scn()))) {
+  } else if (OB_FAIL(create_tablet(create_scn))) {
     LOG_WARN("failed to create member tablet", K(ret), KPC(ls_));
   }
   return ret;

@@ -248,7 +248,6 @@ private:
   int create_or_update_tablets_();
   int build_tablets_sstable_info_();
   int generate_sys_tablet_restore_dag_();
-
 private:
   bool is_inited_;
   ObLSHandle ls_handle_;

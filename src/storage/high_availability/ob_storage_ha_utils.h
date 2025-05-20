@@ -88,6 +88,7 @@ public:
   static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
   static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
   static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
+  static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
 private:
   struct TableKeySnapshotVersionComparator final
   {
@@ -108,6 +109,9 @@ private:
     const ObTabletHandle &tablet_handle,
     ObMacroBlockReuseMgr &macro_block_reuse_mgr);
   static int get_latest_available_major_(const storage::ObSSTableArray & major_sstables, ObITable *&latest_major);
+  static int create_ls_inner_tablet_for_compat_(
+      const common::ObIArray<ObTabletID> &tablet_id_array,
+      ObLS *ls);
 };
 
 struct ObTransferUtils

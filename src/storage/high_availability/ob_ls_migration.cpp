@@ -3848,7 +3848,7 @@ int ObDataTabletsMigrationTask::process()
     LOG_WARN("failed to check tx data continue", K(ret), KPC(ctx_));
   } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(deal_compat_with_ls_inner_tablet_())) {
+  } else if (OB_FAIL(ObStorageHAUtils::deal_compat_with_ls_inner_tablet(ctx_->arg_.ls_id_))) {
     LOG_WARN("failed to deal compat with ls inner tablet", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start replay log", K(ret), K(*ctx_));
@@ -4342,90 +4342,6 @@ int ObDataTabletsMigrationTask::try_offline_ls_()
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to offline ls", K(ret), KPC(ctx_));
-  }
-  return ret;
-}
-
-int ObDataTabletsMigrationTask::deal_compat_with_ls_inner_tablet_()
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  ObTabletHandle tablet_handle;
-  ObArray<ObTabletID> tablet_id_array;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
-  } else {
-    ObLS::ObLSInnerTabletIDIter tablet_iter;
-    ObTabletID tablet_id;
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_iter.get_next(tablet_id))) {
-        tablet_id.reset();
-        tablet_handle.reset();
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next tablet id", K(ret));
-        }
-      } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
-        if (OB_TABLET_NOT_EXIST == ret) {
-          //overwrite ret
-          if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
-            LOG_WARN("failed to push tablet id into array", K(ret));
-          }
-        } else {
-          LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_ls_inner_tablet_for_compat_(tablet_id_array, ls))) {
-      LOG_WARN("failed to create ls inner tablet for compat", K(ret), K(tablet_id_array));
-    }
-  }
-  return ret;
-}
-
-int ObDataTabletsMigrationTask::create_ls_inner_tablet_for_compat_(
-    const common::ObIArray<ObTabletID> &tablet_id_array,
-    ObLS *ls)
-{
-  int ret = OB_SUCCESS;
-  share::SCN clog_checkpoint_scn;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start migration task do not init", K(ret));
-  } else if (OB_ISNULL(ls)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("create ls inner tablet for compat get invalid argument", K(ret), KP(ls));
-  } else if (tablet_id_array.empty()) {
-    //do nothing
-  } else if (FALSE_IT(clog_checkpoint_scn = ls->get_clog_checkpoint_scn())) {
-    LOG_WARN("failed to get clog checkpoint scn", K(ret), KPC(ls));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
-      const ObTabletID &tablet_id = tablet_id_array.at(i);
-      switch (tablet_id.id()) {
-      case ObTabletID::LS_MEMBER_TABLET_ID: {
-        if (OB_FAIL(ls->get_member_table()->create_tablet(clog_checkpoint_scn))) {
-          LOG_WARN("failed to create member table", K(ret), KPC(ls));
-        }
-        break;
-      }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_ERROR("ls inner tablet create do not supported", K(ret), K(tablet_id));
-      }
-      }
-    }
   }
   return ret;
 }
