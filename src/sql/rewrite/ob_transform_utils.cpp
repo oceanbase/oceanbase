@@ -5002,6 +5002,14 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::need_compute_fd_item_set(ObIArray<ObRawExpr*> &exprs)
+{
+  bool need = true;
+  if (exprs.count() > 32) {
+    need = false;
+  }
+  return need;
+}
 //extract rowid in select_exprs
 //add table fd for related table.
 int ObTransformUtils::try_add_table_fd_for_rowid(const ObSelectStmt *stmt,

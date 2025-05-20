@@ -887,7 +887,7 @@ public:
                                           const TableItem *table,
                                           ObIArray<ObRawExpr*> &cond_exprs,
                                           UniqueCheckInfo &res_info);
-
+  static int need_compute_fd_item_set(ObIArray<ObRawExpr*> &exprs);
   static int try_add_table_fd_for_rowid(const ObSelectStmt *stmt,
                                         ObFdItemFactory &fd_factory,
                                         ObIArray<ObFdItem *> &fd_item_set,

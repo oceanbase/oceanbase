@@ -490,6 +490,38 @@ public:
     return ret;
   }
 
+  int init_mask(int64_t mask_bits)
+  {
+    int ret = OB_SUCCESS;
+    if (!is_valid()) {
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
+    } else if (OB_UNLIKELY (mask_bits < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(mask_bits));
+    } else if (0 == mask_bits) {
+      // do nothing
+    } else {
+      int64_t pos = mask_bits >> PER_BITSETWORD_MOD_BITS;
+      if (OB_UNLIKELY(pos + 1 > INT16_MAX)) {
+        ret = OB_SIZE_OVERFLOW;
+        SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(mask_bits), K(pos));
+      } else if (OB_UNLIKELY(pos >= desc_.cap_)) {
+        int64_t new_word_cnt = pos + 1;
+        if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
+          SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        desc_.len_ = pos + 1;
+        MEMSET(bit_set_word_array_, UINT8_MAX, pos * sizeof(BitSetWord));
+        MEMSET(bit_set_word_array_ + pos, 0, (desc_.cap_ - pos) * sizeof(BitSetWord));
+        bit_set_word_array_[pos] |= (1 << (mask_bits % PER_BITSETWORD_BITS)) - 1;
+      }
+    }
+    return ret;
+  }
+
   template<int64_t M, typename FlagType2, bool auto_free2>
   int add_members(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {

@@ -206,6 +206,8 @@ int ObLogSet::compute_fd_item_set()
     LOG_WARN("failed to create fd item set", K(ret));
   } else if (OB_FAIL(get_set_exprs(select_exprs))) {
     LOG_WARN("failed to get set exprs", K(ret));
+  } else if (!ObTransformUtils::need_compute_fd_item_set(select_exprs)) {
+    //do nothing
   } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_expr_fd_item(
                                                       fd_item,
                                                       true,
