@@ -17,6 +17,7 @@
 #include "share/ob_lease_struct.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ob_lonely_table_clean_rpc_struct.h"
 #include "share/ob_rs_mgr.h"
 #include "share/ob_time_zone_info_manager.h"
 #include "common/storage/ob_freeze_define.h" // for ObFrozenStatus

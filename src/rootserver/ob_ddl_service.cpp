@@ -26804,12 +26804,20 @@ int ObDDLService::drop_aux_table_in_drop_table(
     }
   } else if (AUX_LOB_META == table_type) {
     const uint64_t aux_lob_meta_tid = table_schema.get_aux_lob_meta_tid();
-    if (OB_INVALID_ID != aux_lob_meta_tid && OB_FAIL(aux_tid_array.push_back(aux_lob_meta_tid))) {
+    ret = OB_E(EventTable::EN_SKIP_DROP_LOB_AUX_TABLE) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("skip drop lob meta table", KR(ret), K(aux_lob_meta_tid), K(table_schema));
+      ret = OB_SUCCESS;
+    } else if (OB_INVALID_ID != aux_lob_meta_tid && OB_FAIL(aux_tid_array.push_back(aux_lob_meta_tid))) {
       LOG_WARN("push back aux_lob_meta_tid failed", K(ret));
     }
   } else if (AUX_LOB_PIECE == table_type) {
     const uint64_t aux_lob_piece_tid = table_schema.get_aux_lob_piece_tid();
-    if (OB_INVALID_ID != aux_lob_piece_tid && OB_FAIL(aux_tid_array.push_back(aux_lob_piece_tid))) {
+    ret = OB_E(EventTable::EN_SKIP_DROP_LOB_AUX_TABLE) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("skip drop lob piece table", KR(ret), K(aux_lob_piece_tid), K(table_schema));
+      ret = OB_SUCCESS;
+    } else if (OB_INVALID_ID != aux_lob_piece_tid && OB_FAIL(aux_tid_array.push_back(aux_lob_piece_tid))) {
       LOG_WARN("push back aux_lob_meta_tid failed", K(ret));
     }
   } else if (AUX_VERTIAL_PARTITION_TABLE == table_type) {

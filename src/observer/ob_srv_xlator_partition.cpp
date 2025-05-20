@@ -107,6 +107,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObTabletLocationReceiveP, gctx_);
   RPC_PROCESSOR(ObForceSetTenantLogDiskP, gctx_);
   RPC_PROCESSOR(ObForceDumpServerUsageP, gctx_);
+  RPC_PROCESSOR(ObAdminForceDropLonelyLobAuxTableP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_migrator(ObSrvRpcXlator *xlator) {

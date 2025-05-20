@@ -2179,6 +2179,7 @@ public:
       ALTER_SCHEMA &alter_schema);
 
   int drop_lob(const obrpc::ObDropLobArg &arg);
+  int force_drop_lonely_lob_aux_table(const obrpc::ObForceDropLonelyLobAuxTableArg &arg);
   int build_unbind_lob_args(const uint64_t tenant_id,
       const common::ObArray<ObTabletID> &tablet_ids,
       common::ObIArray<ObBatchUnbindLobTabletArg> &args,
@@ -2655,6 +2656,8 @@ private:
   int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                ObTableSchema &new_table_schema);
 
+  int check_and_get_aux_table_schema(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const uint64_t aux_table_id,
+                                     const uint64_t data_table_id, const ObTableType table_type, const ObTableSchema *&table_schema);
 private:
   bool inited_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

@@ -1313,6 +1313,11 @@ PCODE_DEF(OB_WRITE_INNER_TABLET, 0x1657)
 // PCODE_DEF(OB_LOAD_TENANT_TABLE_SCHEMA, 0x1661)
 // PCODE_DEF(OB_SET_MASTER_KEY, 0x1662)
 
+// ob_admin can not call rs rpc directly, so add svr rpc for ob_adim.
+// then call rs rpc in srv rpc processor
+PCODE_DEF(OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, 0x1663)
+PCODE_DEF(OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, 0x1664)
+
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

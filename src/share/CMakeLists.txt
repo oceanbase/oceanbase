@@ -80,6 +80,7 @@ ob_set_subtarget(ob_share ALONE
   ob_common_rpc_proxy.cpp
   ob_ddl_args.cpp
   ob_mview_args.cpp
+  ob_lonely_table_clean_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

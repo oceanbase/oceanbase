@@ -85,6 +85,7 @@ public:
                          const common::ObString *ddl_stmt_str,
                          const bool is_truncate_table,
                          const bool is_drop_db,
+                         const bool is_force_drop_lonely_lob_aux_table,
                          share::schema::ObSchemaGetterGuard *schema_guard,
                          share::schema::DropTableIdHashSet *drop_table_set);
 

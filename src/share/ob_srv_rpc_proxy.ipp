@@ -282,3 +282,4 @@
 #endif
   RPC_S(PR5 estimate_skip_rate, OB_ESTIMATE_SKIP_RATE, (obrpc::ObEstSkipRateArg), ObEstSkipRateRes);
   RPC_S(PR5 write_inner_tablet, OB_WRITE_INNER_TABLET, (ObWriteInnerTabletArg), ObWriteInnerTabletResult);
+  RPC_S(PR5 force_drop_lonely_lob_aux_table, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));

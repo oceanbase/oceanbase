@@ -18,6 +18,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_common_id.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ob_lonely_table_clean_rpc_struct.h"
 #include "share/ob_server_struct.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
 #include "observer/net/ob_shared_storage_net_throt_rpc_struct.h"

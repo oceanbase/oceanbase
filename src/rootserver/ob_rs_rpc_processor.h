@@ -725,6 +725,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ROOT_REBUILD_TABLET, ObRpcRebuildTabletP, root
 // catalog ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_CATALOG_DDL, ObRpcHandleCatalogDDLP, handle_catalog_ddl(arg_));
 
+// for ob_admin
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDropLonelyLobAuxTableP, force_drop_lonely_lob_aux_table(arg_));
+
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR
 #undef DEFINE_LIMITED_RS_RPC_PROCESSOR

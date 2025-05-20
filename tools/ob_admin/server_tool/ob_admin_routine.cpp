@@ -978,6 +978,42 @@ DEF_COMMAND(SERVER, dump_server_usage, 1, "output: [server_info]\n\
   return ret;
 }
 
+DEF_COMMAND(SERVER, force_drop_lonely_lob_aux_table, 1, "tenant_id:data_table_id:lob_meta_table_id:lob_piece_table_id # force_drop_lonely_lob_aux_table")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObForceDropLonelyLobAuxTableArg arg;
+  uint64_t tenant_id = common::OB_INVALID_ID;
+  uint64_t data_table_id = common::OB_INVALID_ID;
+  uint64_t lob_meta_table_id = common::OB_INVALID_ID;
+  uint64_t lob_piece_table_id = common::OB_INVALID_ID;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("invalid argument");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (4 != sscanf(arg_str.c_str(), "%ld:%ld:%ld:%ld", &tenant_id, &data_table_id, &lob_meta_table_id, &lob_piece_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", KR(ret), K(arg_str.c_str()));
+  } else if (OB_FAIL(arg.init(tenant_id, data_table_id, lob_meta_table_id, lob_piece_table_id))) {
+    COMMON_LOG(WARN, "init arg fail", KR(ret), K(tenant_id), K(data_table_id), K(lob_meta_table_id), K(lob_piece_table_id));
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid client", KR(ret));
+  } else if (OB_FAIL(client_->force_drop_lonely_lob_aux_table(arg))) {
+    COMMON_LOG(ERROR, "send req fail", KR(ret), K(arg));
+  }
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to force_drop_lonely_lob_aux_table, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "force_drop_lonely_lob_aux_table", KR(ret), K(arg));
+  return ret;
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_id:cg_id:second_id:third_id:fourth_id #dump ss_macro_block")
 {
