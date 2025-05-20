@@ -2052,16 +2052,7 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
         mysql_bind[i].is_null = &out_param->is_null_;
         if (OB_ISNULL(mysql_bind[i].buffer)) {
           void *tmp_buf = NULL;
-          int64_t tmp_buf_len = 0;
-          if (MYSQL_TYPE_DATETIME == out_param->buffer_type_) {
-            tmp_buf_len = sizeof(MYSQL_TIME);
-          } else if (MYSQL_TYPE_FLOAT == out_param->buffer_type_) {
-            tmp_buf_len = sizeof(float);
-          } else if (MYSQL_TYPE_DOUBLE ==  out_param->buffer_type_) {
-            tmp_buf_len = sizeof(double);
-          } else if (MYSQL_TYPE_LONG == out_param->buffer_type_) {
-            tmp_buf_len = sizeof(int64_t);
-          }
+          int64_t tmp_buf_len = get_alloca_size_by_mysql_type(out_param->buffer_type_);
           if (tmp_buf_len > 0) {
             if (OB_ISNULL(tmp_buf = allocator.alloc(tmp_buf_len))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2094,19 +2085,7 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
           mysql_bind[idx_in_result].is_null = &out_param->is_null_;
           if (OB_ISNULL(mysql_bind[idx_in_result].buffer)) {
             void *tmp_buf = NULL;
-            int64_t tmp_buf_len = 0;
-            if (MYSQL_TYPE_DATETIME == out_param->buffer_type_) {
-              tmp_buf_len = sizeof(MYSQL_TIME);
-            } else if (MYSQL_TYPE_FLOAT == out_param->buffer_type_) {
-              tmp_buf_len = sizeof(float);
-            } else if (MYSQL_TYPE_DOUBLE ==  out_param->buffer_type_) {
-              tmp_buf_len = sizeof(double);
-            } else if (MYSQL_TYPE_LONG == out_param->buffer_type_
-                       || MYSQL_TYPE_LONGLONG == out_param->buffer_type_) {
-              tmp_buf_len = sizeof(int64_t);
-            } else if (MYSQL_TYPE_TINY == out_param->buffer_type_) {
-              tmp_buf_len = sizeof(int);
-            }
+            int64_t tmp_buf_len = get_alloca_size_by_mysql_type(out_param->buffer_type_);
             if (tmp_buf_len > 0) {
               if (OB_ISNULL(tmp_buf = allocator.alloc(tmp_buf_len))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3307,6 +3286,33 @@ int ObMySQLProcStatement::get_anonymous_param_count(ParamStore &params,
     }
   }
   return ret;
+}
+
+int64_t ObMySQLProcStatement::get_alloca_size_by_mysql_type(enum_field_types buffer_type)
+{
+  int64_t len = 0;
+  switch (buffer_type)
+  {
+    case MYSQL_TYPE_DATETIME:
+      len = sizeof(MYSQL_TIME);
+      break;
+    case MYSQL_TYPE_FLOAT:
+      len = sizeof(float);
+      break;
+    case MYSQL_TYPE_DOUBLE:
+      len = sizeof(double);
+      break;
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG:
+      len = sizeof(int64_t);
+      break;
+    case MYSQL_TYPE_TINY:
+      len = sizeof(int);
+      break;
+    default:
+      break;
+  }
+  return len;
 }
 
 #ifdef OB_BUILD_ORACLE_PL
