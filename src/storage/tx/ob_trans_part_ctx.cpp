@@ -1071,11 +1071,13 @@ int ObPartTransCtx::trans_replay_commit_(const SCN &commit_version,
       }
     }
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
-      ret = OB_SUCCESS;
-      TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
-    } else {
-      MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+    if (GCTX.is_shared_storage_mode() && sslog_notify_queue_.count_ > 0) {
+      if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
+        ret = OB_SUCCESS;
+        TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
+      } else {
+        MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+      }
     }
 #endif
   }
@@ -1589,7 +1591,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       TRANS_LOG(ERROR, "recover_from_tx_table failed", K(ret), KPC(this));
     } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-      ctx_info.notify_task_queue_view_.move_to(sslog_notify_queue_);
+      if (GCTX.is_shared_storage_mode()) {
+        ctx_info.notify_task_queue_view_.move_to(sslog_notify_queue_);
+      }
 #endif
       is_ctx_table_merged_ = true;
       replay_completeness_.set(true);
@@ -2141,12 +2145,14 @@ int ObPartTransCtx::tx_end_(const bool commit)
     TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
   }
 #ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_SUCC(ret) && OB_LIKELY(commit)) {
-    if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
-      ret = OB_SUCCESS;
-      TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
-    } else {
-      MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+  if (GCTX.is_shared_storage_mode() && sslog_notify_queue_.count_ > 0) {
+    if (OB_SUCC(ret) && OB_LIKELY(commit)) {
+      if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
+        ret = OB_SUCCESS;
+        TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
+      } else {
+        MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+      }
     }
   }
 #endif
@@ -7012,7 +7018,9 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     info.ls_id_ = ls_id_;
     info.cluster_id_ = cluster_id_;
 #ifdef OB_BUILD_SHARED_STORAGE
-    info.notify_task_queue_view_.view_from(sslog_notify_queue_);
+    if (GCTX.is_shared_storage_mode()) {
+      info.notify_task_queue_view_.view_from(sslog_notify_queue_);
+    }
 #endif
     if (cluster_version_accurate_) {
       info.cluster_version_ = cluster_version_;

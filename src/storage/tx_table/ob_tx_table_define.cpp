@@ -115,8 +115,12 @@ int ObTxCtxTableInfo::serialize_(char *buf,
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, (int64_t)cluster_version_))) {
     TRANS_LOG(WARN, "encode cluster_version fail", K(buf_len), K(pos), K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (OB_FAIL(notify_task_queue_view_.serialize(buf, buf_len, pos))) {
-    TRANS_LOG(WARN, "encode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
+  } else {
+    if (GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(notify_task_queue_view_.serialize(buf, buf_len, pos))) {
+        TRANS_LOG(WARN, "encode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
+      }
+    }
 #endif
   }
 
@@ -180,13 +184,15 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
     }
   }
 #ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_SUCC(ret)) {
-    if (pos == buf_len) {
-      if (REACH_TIME_INTERVAL(1_s)) {
-        TRANS_LOG(INFO, "skip deserialize notify_task_queue_ in compat scenario", K(buf_len), K(pos), K(ret));
+  if (GCTX.is_shared_storage_mode()) {
+    if (OB_SUCC(ret)) {
+      if (pos == buf_len) {
+        if (REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(INFO, "skip deserialize notify_task_queue_ in compat scenario", K(buf_len), K(pos), K(ret));
+        }
+      } else if (OB_FAIL(notify_task_queue_view_.deserialize(buf, buf_len, pos))) {
+        TRANS_LOG(WARN, "dencode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
       }
-    } else if (OB_FAIL(notify_task_queue_view_.deserialize(buf, buf_len, pos))) {
-      TRANS_LOG(WARN, "dencode notify_task_queue_ fail", K(buf_len), K(pos), K(ret));
     }
   }
 #endif
@@ -217,7 +223,9 @@ int64_t ObTxCtxTableInfo::get_serialize_size_(void) const
   len += exec_info_.get_serialize_size();
   len += table_lock_info_.get_serialize_size();
 #ifdef OB_BUILD_SHARED_STORAGE
-  len += notify_task_queue_view_.get_serialize_size();
+  if (GCTX.is_shared_storage_mode()) {
+    len += notify_task_queue_view_.get_serialize_size();
+  }
 #endif
   return len;
 }
