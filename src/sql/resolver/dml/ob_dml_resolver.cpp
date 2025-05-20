@@ -7445,7 +7445,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
           table_version.object_id_ = tab_schema->get_table_id();
           table_version.object_type_ = DEPENDENCY_TABLE;
           table_version.version_ = tab_schema->get_schema_version();
-          table_version.is_db_explicit_ = is_db_explicit;
+          table_version.is_db_explicit_ = params_.is_in_view_ ? true : is_db_explicit;
           uint64_t dep_db_id = tab_schema->get_database_id();
           if (common::is_cte_table(table_version.object_id_)) {
             // do nothing
@@ -7471,7 +7471,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
       table_version.object_id_ = tschema->get_table_id();
       table_version.object_type_ = tschema->is_view_table() ? DEPENDENCY_VIEW : DEPENDENCY_TABLE;
       table_version.version_ = tschema->get_schema_version();
-      table_version.is_db_explicit_ = is_db_explicit;
+      table_version.is_db_explicit_ = params_.is_in_view_ ? true : is_db_explicit;
       uint64_t dep_db_id = tschema->get_database_id();
       if (common::is_cte_table(table_version.object_id_)) {
          // do nothing
@@ -7635,6 +7635,7 @@ int ObDMLResolver::expand_view(TableItem &view_item)
 int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &view_resolver)
 {
   int ret = OB_SUCCESS;
+  ObViewStateGuard view_state_guard(static_cast<ObSelectResolver &>(view_resolver).params_);
   ObDMLStmt *stmt = get_stmt();
 
   if (OB_ISNULL(stmt)) {
@@ -10907,7 +10908,7 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
       obj_version.object_id_ = object_id;
       obj_version.object_type_ = table_type,
       obj_version.version_ = schema_version;
-      obj_version.is_db_explicit_  = is_db_expilicit;
+      obj_version.is_db_explicit_  = params_.is_in_view_ ? true : is_db_expilicit;
       obj_version.invoker_db_id_ = params_.session_info_->get_database_id();
       uint64_t dep_db_id = database_id;
       if (OB_FAIL(get_stmt()->add_global_dependency_table(obj_version))) {
