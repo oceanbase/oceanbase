@@ -700,7 +700,8 @@ int JVMFunctionHelper::do_init_() {
     LOG_WARN("failed to init useful classes", K(ret));
   } else { /* do nothing */}
 
-  if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
     LOG_WARN("current env loaded with unexpected jar version", K(ret));
   }
 
