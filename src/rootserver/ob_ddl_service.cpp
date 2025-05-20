@@ -21323,6 +21323,7 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
                                                   ObSchemaGetterGuard &schema_guard,
                                                   const common::ObIArray<uint64_t> &drop_cols_id_arr,
                                                   const ObColumnNameMap &col_name_map,
+                                                  const bool is_oracle_mode,
                                                   ObTableSchema &new_table_schema,
                                                   ObTableSchema &index_schema,
                                                   const ObIArray<ObColumnSortItem> &domain_index_columns,
@@ -21432,33 +21433,131 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
       }
     }
     OZ(ObIndexBuilderUtil::set_index_table_columns(create_index_arg, new_table_schema, index_schema));
-    tmp_begin = orig_index_schema.column_begin();
-    tmp_end = orig_index_schema.column_end();
-    for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
-      ObColumnSchemaV2 *orig_col = (*tmp_begin);
-      ObString col_name;
-      if (OB_ISNULL(orig_col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col is NULL", K(ret));
-      } else if (orig_col->is_tbl_part_key_column()) {
-        if (OB_UNLIKELY(orig_col->is_shadow_column())) {
+
+    bool drop_idx_partkey = false;
+    if (OB_SUCC(ret) && index_schema.is_global_index_table()) {
+      tmp_begin = orig_index_schema.column_begin();
+      tmp_end = orig_index_schema.column_end();
+      for (; OB_SUCC(ret) && !drop_idx_partkey && tmp_begin != tmp_end; tmp_begin++) {
+        ObColumnSchemaV2 *orig_col = (*tmp_begin);
+        ObString col_name;
+        if (OB_ISNULL(orig_col)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("shadow column as part key", K(ret), KPC(orig_col));
-        } else if (OB_FAIL(col_name_map.get(orig_col->get_column_name_str(), col_name))) {
-          LOG_WARN("invalid column name", K(ret), KPC(orig_col));
-        } else {
-          ObColumnSchemaV2 *col = index_schema.get_column_schema(col_name);
-          if (OB_ISNULL(col)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("col is NULL", K(ret));
+          LOG_WARN("col is NULL", K(ret));
+        } else if (orig_col->is_tbl_part_key_column() && is_contain(drop_cols_id_arr, orig_col->get_column_id())) {
+          drop_idx_partkey = true;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && drop_idx_partkey) {
+      const ObPartitionFuncType part_func_type = index_schema.get_part_option().get_part_func_type();
+      if (index_schema.is_global_index_table()
+          && PARTITION_LEVEL_ONE == index_schema.get_part_level()
+          && (PARTITION_FUNC_TYPE_RANGE == part_func_type
+            || PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type)) {
+        // fix partition key infos
+        if (OB_SUCC(ret)) {
+          index_schema.reset_column_part_key_info();
+          int64_t partkey_pos = 0;
+          const ObPartitionKeyInfo &partkey_info = orig_index_schema.get_partition_key_info();
+          for (int64_t i = 0; OB_SUCC(ret) && i < partkey_info.get_size(); i++) {
+            const ObPartitionKeyColumn *partkey_column = nullptr;
+            if (OB_ISNULL(partkey_column = partkey_info.get_column(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partkey not found", K(ret), K(partkey_info), K(i), K(orig_index_schema.get_table_id()));
+            } else if (!is_contain(drop_cols_id_arr, partkey_column->column_id_)) {
+              const ObColumnSchemaV2 *orig_column = nullptr;
+              ObString col_name;
+              if (OB_ISNULL(orig_column = orig_index_schema.get_column_schema(partkey_column->column_id_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("partkey not found", K(ret), K(partkey_column->column_id_), K(orig_index_schema.get_table_id()));
+              } else if (OB_FAIL(col_name_map.get(orig_column->get_column_name_str(), col_name))) {
+                LOG_WARN("invalid column name", K(ret), KPC(orig_column));
+              } else if (OB_FAIL(index_schema.add_partition_key(col_name))) {
+                LOG_WARN("failed to add partition key", K(ret), K(orig_index_schema.get_table_id()),
+                  K(index_schema.get_table_id()), K(col_name));
+              }
+            }
+          }
+        }
+
+        // fix part_func_expr
+        if (OB_SUCC(ret)) {
+          ObArray<uint64_t> partkey_column_ids;
+          share::schema::ObSchemaPrinter schema_printer(schema_guard/*unused*/);
+          int64_t buf_len = OB_MAX_TEXT_LENGTH;
+          int64_t pos = 0;
+          char *buf = static_cast<char *>(index_schema.get_allocator()->alloc(buf_len));
+          ObString part_func_expr;
+          ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_RANGE;
+          bool has_partition_range_column_type = false;
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc", KR(ret));
+          } else if (OB_FAIL(index_schema.get_partition_key_info().get_column_ids(partkey_column_ids))) {
+            LOG_WARN("failed to get partkey column ids", K(ret), K(index_schema.get_partition_key_info()));
+          } else if (OB_FAIL(schema_printer.print_column_list(index_schema, partkey_column_ids, buf, buf_len, pos))) {
+            LOG_WARN("failed to print part func expr", K(ret), K(index_schema.get_table_id()), K(partkey_column_ids));
           } else {
-            col->set_tbl_part_key_pos(orig_col->get_tbl_part_key_pos());
-            col->set_part_key_pos(orig_col->get_part_key_pos());
-            col->set_subpart_key_pos(orig_col->get_subpart_key_pos());
+            part_func_expr.assign_ptr(buf, pos);
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < partkey_column_ids.count(); i++) {
+            const ObColumnSchemaV2 *column_schema = index_schema.get_column_schema(partkey_column_ids.at(i));
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column_schema is null", KR(ret));
+            } else if (ObResolverUtils::is_partition_range_column_type(column_schema->get_meta_type().get_type())) {
+              has_partition_range_column_type = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (!is_oracle_mode && (partkey_column_ids.count() > 1 || has_partition_range_column_type)) {
+            part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+          } else {
+            part_func_type = PARTITION_FUNC_TYPE_RANGE;
+          }
+          if (OB_SUCC(ret)) {
+            index_schema.get_part_option().set_part_func_type(part_func_type);
+            index_schema.get_part_option().set_part_expr(part_func_expr);
+          }
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("drop index partkey not supported for such table", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && !drop_idx_partkey) {
+      tmp_begin = orig_index_schema.column_begin();
+      tmp_end = orig_index_schema.column_end();
+      for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+        ObColumnSchemaV2 *orig_col = (*tmp_begin);
+        ObString col_name;
+        if (OB_ISNULL(orig_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("col is NULL", K(ret));
+        } else if (orig_col->is_tbl_part_key_column()) {
+          if (OB_UNLIKELY(orig_col->is_shadow_column())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("shadow column as part key", K(ret), KPC(orig_col));
+          } else if (OB_FAIL(col_name_map.get(orig_col->get_column_name_str(), col_name))) {
+            LOG_WARN("invalid column name", K(ret), KPC(orig_col));
+          } else {
+            ObColumnSchemaV2 *col = index_schema.get_column_schema(col_name);
+            if (OB_ISNULL(col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("col is NULL", K(ret));
+            } else {
+              col->set_tbl_part_key_pos(orig_col->get_tbl_part_key_pos());
+              col->set_part_key_pos(orig_col->get_part_key_pos());
+              col->set_subpart_key_pos(orig_col->get_subpart_key_pos());
+            }
           }
         }
       }
     }
+
   }
   return ret;
 }
@@ -21903,7 +22002,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(gen_hidden_index_schema_columns(
-                     orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns))) {
+                     orig_table_schema, *index_table_schema, schema_guard, drop_cols_id_arr, col_name_map, is_oracle_mode, new_table_schema, new_index_schema, domain_index_columns, domain_store_columns))) {
             LOG_WARN("failed to gen hidden index schema", K(ret));
           } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table())
                      && new_index_schema.is_index_local_storage()

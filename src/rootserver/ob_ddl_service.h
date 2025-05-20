@@ -1742,6 +1742,7 @@ int check_will_be_having_domain_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<uint64_t> &drop_cols_id_arr,
       const share::ObColumnNameMap &col_name_map,
+      const bool is_oracle_mode,
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema,
       const ObIArray<obrpc::ObColumnSortItem> &vec_index_columns,
