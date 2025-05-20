@@ -23,6 +23,8 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
+#include "sql/rewrite/ob_expr_range_converter.h"
+
 
 //if cnd is true get full range key part which is always true
 //else, get empty key part which is always false
@@ -1396,6 +1398,7 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
   if (bret) {
     bool is_cast_monotonic = false;
     int ret = OB_SUCCESS;
+    bool is_valid = false;
     //由于cast对于某些时间类型的某些值域有特殊处理，导致A cast B，不一定可逆，
     //一个表达式能够抽取，需要双向都满足cast单调
     if (OB_FAIL(ObObjCaster::is_cast_monotonic(col_type.get_type(),
@@ -1416,7 +1419,17 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
                && col_type.is_string_or_lob_locator_type()) {
       if (T_OP_LIKE == cmp_type && col_type.is_nstring()) {
         bret = true;
-      } else if (col_type.get_collation_type() != calc_type.get_collation_type()) {
+      } else if (col_type.get_collation_type() == calc_type.get_collation_type()) {
+        bret = true;
+      } else if (OB_FAIL(ObExprRangeConverter::is_implicit_collation_range_valid(
+                                               cmp_type,
+                                               col_type.get_collation_type(),
+                                               calc_type.get_collation_type(),
+                                               is_valid))) {
+        LOG_WARN("failed to check is implicit collation range valid", K(ret));
+      } else if (is_valid) {
+        bret = true;
+      } else {
         bret = false;
         always_true = true;
       }

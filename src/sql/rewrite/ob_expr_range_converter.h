@@ -79,6 +79,10 @@ public:
 
   int sort_range_exprs(const ObIArray<ObRawExpr*> &range_exprs,
                        ObIArray<ObRawExpr*> &out_range_exprs);
+  static int is_implicit_collation_range_valid(ObItemType cmp_type,
+                                               ObCollationType l_collation,
+                                               ObCollationType r_collation,
+                                               bool &is_valid);
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);
@@ -205,7 +209,8 @@ private:
                                      ObItemType cmp_type,
                                      bool is_start,
                                      const ObRawExpr *&out_expr);
-  int can_extract_implicit_cast_range(const ObColumnRefRawExpr &column_expr,
+  int can_extract_implicit_cast_range(ObItemType cmp_type,
+                                      const ObColumnRefRawExpr &column_expr,
                                       const ObRawExpr &const_expr,
                                       bool &can_extract);
   int check_can_use_range_get(const ObRawExpr &const_expr,
@@ -215,6 +220,21 @@ private:
                                       ObItemType cmp_type,
                                       bool &is_precise);
   int ignore_inner_generate_expr(const ObRawExpr *const_expr, bool &can_ignore);
+  int get_implicit_set_collation_range(const ObRawExpr &l_expr,
+                                       const ObRawExpr &r_expr,
+                                       ObItemType cmp_type,
+                                       int64_t expr_depth,
+                                       ObRangeNode *&range_node);
+  int check_can_extract_implicit_collation_range(ObItemType cmp_type,
+                                                 const ObRawExpr *l_expr,
+                                                 const ObRawExpr *&real_expr,
+                                                 bool &can_extract);
+
+  int get_implicit_set_collation_in_range(const ObRawExpr *l_expr,
+                                          const ObRawExpr *r_expr,
+                                          const ObExprResType &result_type,
+                                          int64_t expr_depth,
+                                          ObRangeNode *&range_node);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;
