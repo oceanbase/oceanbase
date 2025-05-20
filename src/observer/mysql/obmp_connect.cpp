@@ -1516,16 +1516,17 @@ int ObMPConnect::get_connection_control_stat(const uint64_t tenant_id,
     int64_t current_gmt = ObTimeUtil::current_time();
     if (threshold <= 0 || current_failed_login_num + 1 < threshold) {
       // do nothing
-    } else if (current_failed_login_num + 1 == threshold ||
-              (current_failed_login_num + 1 > threshold &&
-              current_gmt - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
-      // 1. failed_login_num achieve the threshold exactly
-      // 2. user is unlocked manually need to be locked again, the interval 10s is used to reduce
-      //    concurrent ddl operation
-      need_lock = true;
     } else {
       delay = MIN(MAX((current_failed_login_num + 1 - threshold) * MSECS_PER_SEC, min_delay), max_delay);
       is_locked = current_gmt <= delay * USECS_PER_MSEC + last_failed_login_timestamp;
+      if (current_failed_login_num + 1 == threshold
+          || (current_failed_login_num + 1 > threshold
+              && current_gmt - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
+        // 1. failed_login_num achieve the threshold exactly
+        // 2. user is unlocked manually need to be locked again, the interval 10s is used to reduce
+        //    concurrent ddl operation
+        need_lock = true;
+      }
     }
   }
   return ret;
