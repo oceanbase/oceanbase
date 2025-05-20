@@ -494,8 +494,9 @@ public:
           && ObCtxIds::GLIBC != attr.ctx_id_);
       BASIC_TIME_GUARD(time_guard, "ObMalloc");
       DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
-      bool sample_allowed = malloc_sample_allowed(size, inner_attr);
-      inner_attr.alloc_extra_info_ = sample_allowed;
+      if (malloc_sample_allowed(size, inner_attr)) {
+        inner_attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
+      }
       nobj = allocator.realloc_object(obj, size, inner_attr);
       if (OB_ISNULL(nobj)) {
         int64_t total_size = 0;

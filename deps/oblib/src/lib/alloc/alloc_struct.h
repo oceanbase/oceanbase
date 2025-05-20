@@ -155,8 +155,8 @@ struct ObMemAttr
         use_500_(false),
         expect_500_(true),
         ignore_version_(ObMemVersionNode::tl_ignore_node),
-        alloc_extra_info_(false),
-        use_malloc_v2_(false)
+        use_malloc_v2_(false),
+        extra_size_(0)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
@@ -170,9 +170,9 @@ public:
         uint8_t use_500_ : 1;
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
-        uint8_t alloc_extra_info_ : 1;
         uint8_t use_malloc_v2_ : 1;
       };
+      uint16_t extra_size_;
     };
   };
 };
@@ -390,6 +390,7 @@ struct AObject {
         uint8_t ignore_version_ : 1;
 
       };
+      ABlock *block_;
     };
   };
 
@@ -627,7 +628,8 @@ char *ABlock::data() const
 AObject::AObject()
     : MAGIC_CODE_(FREE_AOBJECT_MAGIC_CODE),
       nobjs_(0), nobjs_prev_(0), obj_offset_(0),
-      alloc_bytes_(0), on_leak_check_(false), on_malloc_sample_(false)
+      alloc_bytes_(0), on_leak_check_(false), on_malloc_sample_(false),
+      block_(NULL)
 {
 }
 

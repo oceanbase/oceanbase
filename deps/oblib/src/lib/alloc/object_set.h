@@ -200,22 +200,12 @@ public:
   public:
     static constexpr int32_t WAIT_MASK = 1<<31;
     static constexpr int32_t WRITE_MASK = 1<<30;
-    Lock() : v_(0), wait_cnt_(0)
+    Lock() : v_(0)
     {}
     void lock()
     {
-      const int32_t MAX_TRY_CNT = 16;
-      bool locked = false;
-      const int32_t tid = static_cast<uint32_t>(GETTID());
-      for (int i = 0; i < MAX_TRY_CNT; ++i) {
-        if (ATOMIC_BCAS(&v_, 0, tid | WRITE_MASK)) {
-          locked = true;
-          break;
-        }
-        sched_yield();
-      }
-      if (OB_UNLIKELY(!locked)) {
-        wait(tid);
+      if (!ATOMIC_BCAS(&v_, 0, WRITE_MASK)) {
+        wait();
       }
     }
     void unlock()
@@ -225,27 +215,31 @@ public:
         futex_wake(&v_, 1);
       }
     }
-    void wait(const int32_t tid)
+    void wait()
     {
       static constexpr timespec TIMEOUT = {0, 100 * 1000 * 1000};
-      ATOMIC_INC(&wait_cnt_);
-      while (true) {
+      const int32_t MAX_TRY_CNT = 16;
+      bool locked = false;
+      for (int i = 0; i < MAX_TRY_CNT && !locked; ++i) {
+        sched_yield();
+        if (ATOMIC_BCAS(&v_, 0, WRITE_MASK)) {
+          locked = true;
+        }
+      }
+      while (!locked) {
         const int32_t v = v_;
         if (WAIT_MASK == (v & WAIT_MASK) || ATOMIC_BCAS(&v_, v | WRITE_MASK, v | WAIT_MASK)) {
           futex_wait(&v_, v | WRITE_MASK | WAIT_MASK, &TIMEOUT);
         }
-        if (ATOMIC_BCAS(&v_, 0, tid | WRITE_MASK | WAIT_MASK)) {
-          break;
+        if (ATOMIC_BCAS(&v_, 0, WRITE_MASK | WAIT_MASK)) {
+          locked = true;
         }
       }
-      ATOMIC_DEC(&wait_cnt_);
     }
     bool trylock() { return false; }
     void enable_record_stat(bool) {}
-    int32_t get_wait_cnt() const { return wait_cnt_; }
   private:
     int32_t v_;
-    int32_t wait_cnt_;
   };
   struct SizeClass
   {

@@ -39,7 +39,7 @@ public:
   {
     static int64_t global_idx = 0;
     static thread_local int idx = ATOMIC_FAA(&global_idx, 1);
-    return obj_sets_[idx % parallel_].alloc_object(size, attr);
+    return obj_sets_[idx & (parallel_ - 1)].alloc_object(size, attr);
   }
   AObject *realloc_object(
       AObject *obj, const uint64_t size, const ObMemAttr &attr);
@@ -47,7 +47,7 @@ public:
   bool check_has_unfree(char *first_label, char *first_bt);
 
 public:
-  int parallel_;
+  const int parallel_;
   ObjectSetV2 obj_sets_[OBJECT_SET_CNT];
 }; // end of class ObjectMgrV2
 

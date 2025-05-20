@@ -334,12 +334,27 @@ TEST(ObLatch, diagnose)
 }
 #endif
 
-typedef lib::ObjectSetV2::Lock TestSpinLock;
+class TestSpinLock : public lib::ObjectSetV2::Lock
+{
+public:
+  void test_lock()
+  {
+    ATOMIC_INC(&wait_cnt_);
+    lock();
+    ATOMIC_DEC(&wait_cnt_);
+  }
+  void test_unlock()
+  {
+    unlock();
+  }
+  int32_t get_wait_cnt() const { return wait_cnt_; }
+  int32_t wait_cnt_;
+};
 void *my_thread_func(void* arg)
 {
   TestSpinLock *lock = (TestSpinLock*)arg;
-  lock->lock();
-  lock->unlock();
+  lock->test_lock();
+  lock->test_unlock();
   return NULL;
 }
 TEST(TestSpinLock, normal)
@@ -348,17 +363,17 @@ TEST(TestSpinLock, normal)
   pthread_t pth[thread_cnt];
   TestSpinLock lock;
   for (int i = 0; i < 100; ++i) {
-    lock.lock();
+    lock.test_lock();
     ASSERT_EQ(0, lock.get_wait_cnt());
-    lock.unlock();
+    lock.test_unlock();
   }
-  lock.lock();
+  lock.test_lock();
   for (int i = 0; i < thread_cnt; ++i) {
     pthread_create(&pth[i], NULL, my_thread_func, (void*)&lock);
   }
   sleep(1);
   ASSERT_EQ(thread_cnt, lock.get_wait_cnt());
-  lock.unlock();
+  lock.test_unlock();
   for (int i = 0; i < thread_cnt; ++i) {
     pthread_join(pth[i], NULL);
   }

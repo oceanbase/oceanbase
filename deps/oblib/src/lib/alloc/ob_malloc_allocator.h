@@ -277,13 +277,13 @@ class ObMallocHook
 {
 public:
   static ObMallocHook &get_instance();
-  void *alloc(const int64_t size);
+  void *alloc(const int64_t size, bool &from_malloc_hook);
   void free(void *ptr);
 private:
   ObMallocHook();
 private:
   char label_[AOBJECT_LABEL_SIZE + 1];
-  ObMemAttr attr_;
+  const ObMemAttr attr_;
   ObTenantCtxAllocatorGuard ta_;
   ObjectMgrV2 &mgr_;
 };

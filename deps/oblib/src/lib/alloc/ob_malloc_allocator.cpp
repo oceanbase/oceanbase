@@ -864,82 +864,57 @@ ObMallocHook &ObMallocHook::get_instance()
   return *instance;
 }
 
-void *ObMallocHook::alloc(const int64_t size)
+void *ObMallocHook::alloc(const int64_t size, bool &from_malloc_hook)
 {
   SANITY_DISABLE_CHECK_RANGE();
-  int ret = EventTable::EN_4;
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    const ObErrsimModuleType type = THIS_WORKER.get_module_type();
-    if (is_errsim_module(attr_.tenant_id_, type.type_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    }
+  from_malloc_hook = g_malloc_v2_enabled
+      && ObMallocHookAttrGuard::get_tl_use_500();
+  if (OB_UNLIKELY(!from_malloc_hook)) {
+    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
+    return ob_malloc(size, attr);
   }
-#endif
   void *ptr = NULL;
-  if (OB_FAIL(ret)) {
-    AllocFailedCtx &afc = g_alloc_failed_ctx();
-    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
+  AObject *obj = NULL;
+  static thread_local ObMallocSampleLimiter sample_limiter;
+  bool sample_allowed = sample_limiter.try_acquire(size);
+  if (OB_LIKELY(!sample_limiter.try_acquire(size))) {
+    obj = mgr_.alloc_object(size, attr_);
   } else {
-    AObject *obj = NULL;
-    static thread_local ObMallocSampleLimiter sample_limiter;
-    bool sample_allowed = sample_limiter.try_acquire(size);
-    if (OB_UNLIKELY(sample_allowed)) {
-      ObMemAttr inner_attr = attr_;
-      inner_attr.alloc_extra_info_ = true;
-      obj = mgr_.alloc_object(size, inner_attr);
-    } else {
-      obj = mgr_.alloc_object(size, attr_);
-    }
-    if (OB_UNLIKELY(NULL == obj)) {
-      if (ta_->sync_wash() >= size) {
-        if (OB_UNLIKELY(sample_allowed)) {
-          ObMemAttr inner_attr = attr_;
-          inner_attr.alloc_extra_info_ = true;
-          obj = mgr_.alloc_object(size, inner_attr);
-        } else {
-          obj = mgr_.alloc_object(size, attr_);
-        }
-      }
-    }
-    if (OB_LIKELY(NULL != obj)) {
-      if (OB_UNLIKELY(sample_allowed)) {
-        void *addrs[100] = {nullptr};
-        backtrace(addrs, ARRAYSIZEOF(addrs));
-        MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
-        obj->on_malloc_sample_ = true;
-      }
-      MEMCPY(obj->label_, label_, AOBJECT_LABEL_SIZE + 1);
-      obj->ignore_version_ = true;
-      SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
-      SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-      SANITY_POISON(obj->data_ + obj->alloc_bytes_,
-          AOBJECT_TAIL_SIZE + (obj->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0));
-      ptr = (void*)obj->data_;
-    }
+    ObMemAttr attr = attr_;
+    attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
+    obj = mgr_.alloc_object(size, attr);
+    void *addrs[100] = {nullptr};
+    backtrace(addrs, ARRAYSIZEOF(addrs));
+    MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
+    obj->on_malloc_sample_ = true;
   }
-  if (OB_UNLIKELY(NULL == ptr)) {
-    if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      const char *msg = alloc_failed_msg();
-      LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
-    }
+  if (OB_UNLIKELY(NULL == obj)) {
+    ta_->sync_wash();
+    obj = mgr_.alloc_object(size, attr_);
+  }
+  if (OB_LIKELY(obj)) {
+    MEMCPY(obj->label_, label_, AOBJECT_LABEL_SIZE + 1);
+    obj->ignore_version_ = true;
+    SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
+    SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+    SANITY_POISON(obj->data_ + obj->alloc_bytes_,
+        AOBJECT_TAIL_SIZE + (obj->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0));
+    ptr = (void*)obj->data_;
+  } else {
+    print_alloc_failed_msg(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC,
+        ta_->get_hold(), ta_->get_limit(),
+        ta_->get_tenant_hold(), ta_->get_tenant_limit());
   }
   return ptr;
 }
 
 void ObMallocHook::free(void *ptr)
 {
-  ObDisableDiagnoseGuard disable_diagnose_guard;
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    abort_unless(obj->is_valid());
-    abort_unless(obj->in_use_);
     SANITY_POISON(obj->data_, obj->alloc_bytes_);
-    ABlock *block = obj->block();
-    abort_unless(block->is_valid());
-    abort_unless(block->in_use_);
-    abort_unless(NULL != block->obj_set_);
+    ABlock *block = obj->block_;
     block->obj_set_v2_->free_object(obj, block);
   }
 }

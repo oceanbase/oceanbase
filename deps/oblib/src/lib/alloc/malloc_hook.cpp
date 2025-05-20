@@ -59,21 +59,11 @@ struct Header
 } __attribute__((aligned (16)));
 
 const uint32_t Header::SIZE = offsetof(Header, data_);
-
 void *ob_malloc_retry(size_t size, bool &from_malloc_hook)
 {
   void *ptr = nullptr;
   do {
-    bool use_500 = ObMallocHookAttrGuard::get_tl_use_500();
-    if (OB_LIKELY(use_500 && is_malloc_v2_enabled())) {
-      ptr = global_malloc_hook.alloc(size);
-      from_malloc_hook = true;
-    } else {
-      ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
-      SET_USE_500(attr);
-      ptr = ob_malloc(size, attr);
-      from_malloc_hook = false;
-    }
+    ptr = global_malloc_hook.alloc(size, from_malloc_hook);
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
@@ -108,7 +98,6 @@ OBMALLOC_ATTR(malloc) OBMALLOC_ALLOC_SIZE(1)
 malloc(size_t size)
 {
   void *ptr = nullptr;
-  abort_unless(size <= UINT32_MAX - Header::SIZE);
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
@@ -140,17 +129,12 @@ free(void *ptr)
     abort_unless(header->check_magic_code());
     header->mark_unused();
     void *orig_ptr = (char*)header - header->offset_;
-    if (OB_UNLIKELY(header->from_mmap_)) {
+    if (OB_LIKELY(header->from_malloc_hook_)) {
+      global_malloc_hook.free(orig_ptr);
+    } else if (header->from_mmap_) {
       ob_munmap(orig_ptr, header->data_size_ + Header::SIZE + header->offset_);
     } else {
-      bool in_hook_bak = in_hook();
-      in_hook()= true;
-      if (OB_LIKELY(header->from_malloc_hook_)) {
-        global_malloc_hook.free(orig_ptr);
-      } else {
-        ob_free(orig_ptr);
-      }
-      in_hook()= in_hook_bak;
+      ob_free(orig_ptr);
     }
   }
 }
@@ -165,7 +149,6 @@ realloc(void *ptr, size_t size)
     return nullptr;
   }
   void *nptr = nullptr;
-  abort_unless(size <= UINT32_MAX - Header::SIZE);
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
@@ -202,7 +185,6 @@ memalign(size_t alignment, size_t size)
 {
   void *ptr = nullptr;
   // avoid alignment overflow
-  abort_unless(alignment <= UINT32_MAX / 2);
   // Make sure alignment is power of 2
   {
     size_t a = 8;
@@ -210,8 +192,7 @@ memalign(size_t alignment, size_t size)
       a <<= 1;
     alignment = a;
   }
-  abort_unless(size <= UINT32_MAX - 2 * MAX(alignment, Header::SIZE));
-  size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
+  size_t real_size = alignment + Header::SIZE + size;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
   bool from_malloc_hook = false;

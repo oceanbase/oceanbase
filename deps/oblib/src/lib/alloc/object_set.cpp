@@ -49,7 +49,7 @@ AObject *ObjectSet::alloc_object(
     const uint64_t size, const ObMemAttr &attr)
 {
   const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
-  const uint64_t meta_size = AOBJECT_META_SIZE + (attr.alloc_extra_info_ ? AOBJECT_EXTRA_INFO_SIZE : 0);
+  const uint64_t meta_size = AOBJECT_META_SIZE + attr.extra_size_;
   const uint64_t all_size = align_up2(adj_size + meta_size, 16);
 
   const int64_t ctx_id = blk_mgr_->get_ctx_id();
@@ -771,14 +771,13 @@ ObjectSetV2::~ObjectSetV2()
 AObject *ObjectSetV2::alloc_object(const uint64_t size, const ObMemAttr &attr)
 {
   AObject *obj = NULL;
-  const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
-  const uint64_t meta_size = AOBJECT_META_SIZE + (attr.alloc_extra_info_ ? AOBJECT_EXTRA_INFO_SIZE : 0);
-  const uint64_t all_size = align_up2(adj_size + meta_size, 16);
+  const uint64_t all_size = size + AOBJECT_META_SIZE + attr.extra_size_;
   if (OB_UNLIKELY(all_size >= ABLOCK_SIZE)) {
     ABlock *block = alloc_block(all_size, attr);
     if (NULL != block) {
       obj = new (block->data()) AObject();
       obj->is_large_ = true;
+      obj->block_ = block;
       SizeClass &sc = scs[LARGE_SC_IDX];
       sc.lock_.lock();
       DEFER(sc.lock_.unlock());
@@ -824,6 +823,7 @@ l_new:
         AObject *cur = NULL;
         for (int i = 0; i < block->max_cnt_; i++) {
           cur = new (data + bin_size * i) AObject();
+          cur->block_ = block;
           cur->nobjs_ = cls;
           cur->obj_offset_ = cls * i;
           cur->next_ = freelist;
@@ -900,6 +900,7 @@ void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
 
 ABlock *ObjectSetV2::alloc_block(const uint64_t size, const ObMemAttr &attr)
 {
+  if (OB_UNLIKELY(errsim_alloc(attr))) { return NULL; }
   BASIC_TIME_GUARD(time_guard, "ALLOC_BLOCK");
   DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, attr));
   ABlock *block = blk_mgr_->alloc_block(size, attr);

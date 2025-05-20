@@ -459,7 +459,7 @@ void ObTenantCtxAllocatorV2::update_wash_stat(int64_t related_chunks, int64_t bl
 void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
 {
   obj.set_label(attr.label_.str_);
-  if (attr.alloc_extra_info_) {
+  if (attr.extra_size_ > 0) {
     void *addrs[100] = {nullptr};
     ob_backtrace(addrs, ARRAYSIZEOF(addrs));
     STATIC_ASSERT(AOBJECT_BACKTRACE_SIZE < sizeof(addrs), "AOBJECT_BACKTRACE_SIZE must be less than addrs!");

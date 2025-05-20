@@ -357,12 +357,9 @@ bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
 }
 
 ObjectMgrV2::ObjectMgrV2(int parallel, IBlockMgr *blk_mgr)
-  : parallel_(parallel)
+  : parallel_(blk_mgr->get_tenant_id() == OB_SERVER_TENANT_ID &&
+    blk_mgr->get_ctx_id() == ObCtxIds::GLIBC ? OBJECT_SET_CNT : parallel)
 {
-  if (blk_mgr->get_tenant_id() == OB_SERVER_TENANT_ID &&
-      blk_mgr->get_ctx_id() == ObCtxIds::GLIBC) {
-    parallel_ = OBJECT_SET_CNT;
-  }
   for (int i = 0; i < parallel_; ++i) {
     obj_sets_[i].set_block_mgr(blk_mgr);
   }

@@ -98,16 +98,11 @@ inline ObMallocSampleLimiter::ObMallocSampleLimiter()
 inline bool ObMallocSampleLimiter::try_acquire(int64_t alloc_bytes)
 {
   // Condition sample: controlled by sampler interval and Cumulative hold.
-  if (min_sample_size > alloc_bytes) {
-    hold_ += min_sample_size;
-  } else {
-    hold_ += alloc_bytes;
-  }
-  if (OB_LIKELY(hold_ < CUMULATIVE_SAMPLE_SIZE)) {
-    return false;
-  }
-  hold_ = 0;
-  return true;
+  const int64_t MASK = CUMULATIVE_SAMPLE_SIZE - 1;
+  hold_ += (min_sample_size | alloc_bytes);
+  bool ret = hold_ & ~MASK;
+  hold_ &= MASK;
+  return ret;
 }
 
 inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
