@@ -427,9 +427,11 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to fill backup storage info", K(ret), K(job_info));
   } else if (OB_FAIL(fill_restore_statistics(job_info))) {
     LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
+  } else if (OB_FAIL(convert_tde_parameters(job_info))) {
+    LOG_WARN("fail to convert tde parameters", K(ret), K(job_info));
   }
 
-  if (OB_IO_ERROR == ret || OB_RESTORE_TENANT_FAILED == ret ||  OB_SUCC(ret)) {
+  if (OB_IO_ERROR == ret || OB_RESTORE_TENANT_FAILED == ret || OB_KMS_SERVER_CONNECT_ERROR == ret || OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
       LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
@@ -574,8 +576,10 @@ int ObRestoreScheduler::convert_tde_parameters(
     if (OB_FAIL(ret)) {
     } else if (!ObTdeMethodUtil::is_valid(tde_method)) {
       // do nothing
-    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, rpc_proxy_,
-                                    tenant_id, tde_method, kms_info))) {
+    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_,
+                                                               tenant_id,
+                                                               tde_method,
+                                                               kms_info))) {
       LOG_WARN("failed to set_tde_parameters", KR(ret), K(tenant_id), K(tde_method));
     }
   }
@@ -704,10 +708,8 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
 
   if (FAILEDx(ObRestoreCommonUtil::process_schema(sql_proxy_, tenant_id_))) {
     LOG_WARN("failed to process schema", KR(ret));
-  }
-
-  if (FAILEDx(convert_tde_parameters(job_info))) {
-    LOG_WARN("fail to convert parameters", K(ret), K(job_info));
+  } else if (OB_FAIL(ObRestoreCommonUtil::rebuild_master_key_version(rpc_proxy_, tenant_id_))) {
+    LOG_WARN("fail to rebuild master key version", K(ret), K(tenant_id_));
   }
 
   if (OB_SUCC(ret)) {
