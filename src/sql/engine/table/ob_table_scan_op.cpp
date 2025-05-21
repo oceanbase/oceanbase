@@ -3553,13 +3553,13 @@ int ObTableScanOp::inner_get_next_row()
         LOG_WARN("spatial index ddl : get next spatial index row failed", K(ret));
       }
     }
-  } else if (OB_UNLIKELY(MY_SPEC.is_fts_ddl_)) {
+  } else if (OB_UNLIKELY(MY_SPEC.is_fts_ddl_ && nullptr == tsc_rtdef_.scan_rtdef_.sample_info_)) {
     if (OB_FAIL(inner_get_next_fts_index_row())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next fts index row", K(ret));
       }
     }
-  } else if (OB_UNLIKELY(MY_SPEC.is_multivalue_ddl())) {
+  } else if (OB_UNLIKELY(MY_SPEC.is_multivalue_ddl() && nullptr == tsc_rtdef_.scan_rtdef_.sample_info_)) {
     if (OB_FAIL(inner_get_next_multivalue_index_row())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("multivalue index ddl : get next multivalue index row failed", K(ret));

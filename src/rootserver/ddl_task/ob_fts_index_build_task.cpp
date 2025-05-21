@@ -115,6 +115,9 @@ int ObFtsIndexBuildTask::init(
                                          create_index_arg,
                                          create_index_arg_))) {
     LOG_WARN("fail to copy create index arg", K(ret), K(create_index_arg));
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::decide_parallelism(create_index_arg.index_type_, parallelism, parallelism_))) {
+    // TODO (youchuan.yc): after change aux build task sequentially, remove decide_parallelism and use original value instead
+    LOG_WARN("fail to decide parallelism", K(ret), K(create_index_arg.index_type_), K(parallelism));
   } else {
     LOG_INFO("create_index_arg.index_type_x", K(create_index_arg.index_type_), K(create_index_arg.index_key_));
 
@@ -126,14 +129,6 @@ int ObFtsIndexBuildTask::init(
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     schema_version_ = schema_version;
-    // temporaty disabled parallel post-build index
-    // do sample failed when enable
-    // ref: issue workItemId=2024092400104554530
-    // todo yunyi, jinzhu
-    if (parallelism > 0) {
-      FLOG_INFO("post-create multivalue index or fts index, prune parallel", K(parallelism), K(task_type_));
-    }
-    parallelism_ = 1; // std::max(parallelism, 1L);
     consumer_group_id_ = consumer_group_id;
     parent_task_id_ = parent_task_id;
     if (snapshot_version > 0) {
