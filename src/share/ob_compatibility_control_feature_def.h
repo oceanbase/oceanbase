@@ -51,4 +51,10 @@ DEF_COMPAT_CONTROL_FEATURE(INVOKER_RIGHT_COMPILE,
 DEF_COMPAT_CONTROL_FEATURE(RECV_PLAIN_PASSWORD,
     "The set password command is different in different OceanBase versions",
     CLUSTER_VERSION_4_3_5_2)
+
+DEF_COMPAT_CONTROL_FEATURE(OUT_ANONYMOUS_COLLECTION_IS_ALLOW,
+    "The output parameter is returned according to the original input param \n"
+    "type which is not empty for inout anonymous array which used in anonymous block",
+    MOCK_CLUSTER_VERSION_4_2_5_5, CLUSTER_VERSION_4_3_0_0,
+    MOCK_CLUSTER_VERSION_4_3_5_3)
 #endif
