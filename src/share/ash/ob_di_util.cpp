@@ -107,7 +107,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
       if (!is_virtual_tenant_id(cur_tenant_id)) {
         MTL_SWITCH(cur_tenant_id)
         {
-          if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_running_di(fn))) {
+          if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn))) {
             LOG_WARN("failed to get all diag info", K(ret));
           }
         }
@@ -116,7 +116,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get all diag info from global di", K(ret), K(tenant_id));
     }
   }
@@ -139,7 +139,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -157,7 +157,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
 
@@ -242,7 +242,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -253,7 +253,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
