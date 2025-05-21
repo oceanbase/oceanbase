@@ -413,16 +413,13 @@ int ObPartitionPreSplit::do_pre_split_global_index(
   int ret = OB_SUCCESS;
   ObTableSchema inc_partition_schema;
   ObArray<TabletIDSize> tablets_size_array;
-  ObTabletID source_tablet_id(OB_INVALID_ID);
+  ObTabletID source_tablet_id;
   int64_t physical_size = 0;
   int64_t data_table_physical_size = 0;
   int64_t split_num = 0;
   int64_t split_size = auto_part_size;
   const int64_t tenant_id = new_index_schema.get_tenant_id();
   const bool need_generate_part_name = true;
-#ifdef ERRSIM
-  split_size = 30;
-#endif
   DEBUG_SYNC(START_DDL_PRE_SPLIT_PARTITION);
   if (OB_FAIL(get_estimated_table_size(data_table_schema, new_index_schema, physical_size))) { // estimate global index table size
     LOG_WARN("[PRE_SPLIT] fail to get create table size", K(ret), K(new_index_schema));
@@ -604,7 +601,7 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
     } else if (has_modify_partition_rule) {
       const bool need_generate_part_name = true;
       int64_t data_table_phycical_size = 0;
-      ObTabletID split_source_id(OB_INVALID_ID);
+      ObTabletID split_source_id;
       for (int64_t i = 0; i < tablet_size_array.count(); ++i) {
         data_table_phycical_size += tablet_size_array[i].second;
       }
