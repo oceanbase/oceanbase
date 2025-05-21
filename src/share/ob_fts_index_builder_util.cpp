@@ -1007,6 +1007,38 @@ int ObFtsIndexBuilderUtil::generate_doc_id_column(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::decide_parallelism(
+    const share::schema::ObIndexType index_type,
+    const int64_t original_parallelism,
+    int64_t &decided_parallelism)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(original_parallelism <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid original parallelism", K(ret), K(original_parallelism));
+  } else {
+    switch (index_type) {
+      case share::schema::ObIndexType::INDEX_TYPE_ROWKEY_DOC_ID_LOCAL:
+        decided_parallelism = MAX(original_parallelism, 1L);
+        break;
+      case share::schema::ObIndexType::INDEX_TYPE_DOC_ID_ROWKEY_LOCAL:
+      case share::schema::ObIndexType::INDEX_TYPE_FTS_INDEX_LOCAL:
+      case share::schema::ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL:
+        decided_parallelism = MAX(original_parallelism / 3, 1L);
+        break;
+      case share::schema::ObIndexType::INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL:
+      case share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL:
+        decided_parallelism = MAX(original_parallelism / 2, 1L);
+        break;
+      default:
+        decided_parallelism = 1;
+        LOG_WARN("index type may be wrong", K(ret), K(index_type));
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::generate_word_segment_column(
     const ObCreateIndexArg *index_arg,
     const uint64_t col_id,
