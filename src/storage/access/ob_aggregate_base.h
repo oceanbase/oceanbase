@@ -48,6 +48,8 @@ enum ObPDAggType
   PD_STR_PREFIX_MIN,
   PD_STR_PREFIX_MAX,
   PD_COUNT_SUM,
+  PD_RB_AND,
+  PD_RB_OR,
   PD_MAX_TYPE
 };
 
