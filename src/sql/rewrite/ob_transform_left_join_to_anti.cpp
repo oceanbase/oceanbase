@@ -85,7 +85,7 @@ int ObTransformLeftJoinToAnti::construct_transform_hint(ObDMLStmt &stmt, void *t
   } else {
     hint->set_qb_name(ctx_->src_qb_name_);
     for (int64_t i = 0; OB_SUCC(ret) && i < trans_tables->count(); ++i) {
-      ObSEArray<ObTableInHint, 4> single_or_joined_hint_table;
+      ObHint::TablesInHint single_or_joined_hint_table;
       if (OB_FAIL(ObTransformUtils::get_sorted_table_hint(trans_tables->at(i),
                                                           single_or_joined_hint_table))) {
         LOG_WARN("failed to get table hint", K(ret));

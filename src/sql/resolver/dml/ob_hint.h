@@ -424,6 +424,10 @@ public:
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
 
+  // basic/generated table: size = 1
+  // joined table: size > 1
+  typedef ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> TablesInHint;
+
   ObHint(ObItemType hint_type = T_INVALID)
     : hint_class_(HINT_INVALID_CLASS),
       qb_name_(),
@@ -606,9 +610,6 @@ private:
 class ObLeftToAntiHint : public ObTransHint
 {
 public:
-  // basic/generated table: size = 1
-  // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> single_or_joined_table;
   
   ObLeftToAntiHint(ObItemType hint_type)
     : ObTransHint(hint_type),
@@ -621,21 +622,18 @@ public:
 
   virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
-  common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
-  const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
+  common::ObIArray<TablesInHint> & get_tb_name_list() { return table_list_; }
+  const common::ObIArray<TablesInHint> & get_tb_name_list() const { return table_list_; }
   bool enable_left_to_anti(ObCollationType cs_type, const TableItem &table) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<single_or_joined_table, 4, common::ModulePageAllocator, true> table_list_;
+  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
 };
 class ObEliminateJoinHint : public ObTransHint
 {
 public:
-  // basic/generated table: size = 1
-  // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> single_or_joined_table;
   
   ObEliminateJoinHint(ObItemType hint_type)
     : ObTransHint(hint_type),
@@ -648,22 +646,19 @@ public:
 
   virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
-  common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
-  const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
+  common::ObIArray<TablesInHint> & get_tb_name_list() { return table_list_; }
+  const common::ObIArray<TablesInHint> & get_tb_name_list() const { return table_list_; }
   bool enable_eliminate_join(ObCollationType cs_type, const TableItem &table) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<single_or_joined_table, 4, common::ModulePageAllocator, true> table_list_;
+  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
 };
 
 class ObGroupByPlacementHint : public ObTransHint
 {
 public:
-  // basic/generated table: size = 1
-  // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> single_or_joined_table;
   
   ObGroupByPlacementHint(ObItemType hint_type)
     : ObTransHint(hint_type),
@@ -676,15 +671,15 @@ public:
 
   virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
-  common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
-  const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
+  common::ObIArray<TablesInHint> & get_tb_name_list() { return table_list_; }
+  const common::ObIArray<TablesInHint> & get_tb_name_list() const { return table_list_; }
   bool enable_groupby_placement(ObCollationType cs_type, const TableItem &table) const;
   bool enable_groupby_placement(ObCollationType cs_type, const ObIArray<TableItem *> &tables) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table_list));
 
 private:
-  common::ObSEArray<single_or_joined_table, 4, common::ModulePageAllocator, true> table_list_;
+  common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
 };
 class ObWinMagicHint : public ObTransHint
 {

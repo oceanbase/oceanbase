@@ -1875,7 +1875,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret), K(hint));
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
-          LOG_WARN("failed to print index hint", K(ret), K(*hint));
+          LOG_WARN("failed to print index hint", K(ret), KPC(hint));
         }
       }
     }

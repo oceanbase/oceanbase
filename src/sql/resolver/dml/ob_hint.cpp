@@ -1490,7 +1490,7 @@ int ObLeftToAntiHint::print_hint_desc(PlanText &plan_text) const
     int64_t &buf_len = plan_text.buf_len_;
     int64_t &pos = plan_text.pos_;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
         LOG_WARN("failed to do BUF_PRINTF", K(ret));
       } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
@@ -1521,7 +1521,7 @@ bool ObLeftToAntiHint::enable_left_to_anti(ObCollationType cs_type, const TableI
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
     }
     bret |= table_list_.empty();
@@ -1548,7 +1548,7 @@ int ObEliminateJoinHint::print_hint_desc(PlanText &plan_text) const
     int64_t &buf_len = plan_text.buf_len_;
     int64_t &pos = plan_text.pos_;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
         LOG_WARN("failed to do BUF_PRINTF", K(ret));
       } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
@@ -1579,7 +1579,7 @@ bool ObEliminateJoinHint::enable_eliminate_join(ObCollationType cs_type, const T
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
     }
     bret |= table_list_.empty();
@@ -1607,7 +1607,7 @@ int ObGroupByPlacementHint::print_hint_desc(PlanText &plan_text) const
     int64_t &buf_len = plan_text.buf_len_;
     int64_t &pos = plan_text.pos_;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
         LOG_WARN("failed to do BUF_PRINTF", K(ret));
       } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
@@ -1638,7 +1638,7 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type, c
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); i++) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
     }
     bret |= table_list_.empty();
@@ -1657,7 +1657,7 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
       LOG_WARN("assign failed", K(ret));
     }
     for (int64_t i = 0; !bret && i < table_list_.count(); i++) {
-      single_or_joined_table cur_table = table_list_.at(i);
+      const TablesInHint &cur_table = table_list_.at(i);
       bret = ObTableInHint::is_match_table_items(cs_type, cur_table, check_tables);
     }
     bret |= table_list_.empty();
