@@ -3297,7 +3297,7 @@ int ObPLExecState::final(int ret)
     }
   }
 
-  //release the out ref cursor param when failed
+  //release the out ref cursor formal param when failed
   for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); i++) {
     if (func_.get_out_args().has_member(i)
         && get_params().at(i).is_pl_extend()
