@@ -229,6 +229,10 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObBasicTabletMerge
       || !first_table->is_sstable())) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "Unexpected first table", K(ret), K(merge_ctx.get_tables_handle()));
+  } else if (merge_ctx.static_param_.data_version_ > DATA_VERSION_4_3_5_2 && merge_ctx.get_tables_handle().get_count() == 1) {
+    if (OB_FAIL(init_serial_merge())) {
+      STORAGE_LOG(WARN, "failed to init serial merge", K(ret));
+    }
   } else {
     const int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
     const ObSSTable *first_sstable = static_cast<const ObSSTable *>(first_table);

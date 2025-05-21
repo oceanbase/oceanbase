@@ -803,7 +803,7 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
     const int64_t macro_block_cnt = first_sstable->get_data_macro_block_count();
     int64_t inc_row_cnt = 0;
     int64_t inc_macro_cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
+    for (int64_t i = 1; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) { // skip first sstable (major) for incremental row cnt
       inc_row_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_row_count();
       inc_macro_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_data_macro_block_count();
     }

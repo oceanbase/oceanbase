@@ -165,7 +165,9 @@ int ObProgressiveMergeHelper::init(
     if (OB_FAIL(ret)) {
       reset();
     } else {
-      check_macro_need_merge_ = rewrite_macro_cnt <= (reduce_macro_cnt * 2);
+      if (static_param.data_version_ <= DATA_VERSION_4_3_5_2 || reduce_macro_cnt > 0) {
+        check_macro_need_merge_ = rewrite_macro_cnt <= (reduce_macro_cnt * 2);
+      }
       if (static_param.data_version_ < DATA_VERSION_4_3_2_0
           && sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
         check_macro_need_merge_ = true;
