@@ -2744,11 +2744,15 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
         } // fall through. continue resolve parameter expression of type method.
         case PL_VAR: {
           if (func_node.num_child_ != 2 || OB_ISNULL(func_node.children_[1])) {
-            ret = OB_ERR_NO_FUNCTION_EXIST;
-            LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
-                           ident_name.length(), ident_name.ptr());
-            LOG_WARN("PLS-00222: no function with name 'string' exists in this scope",
-                     K(ret), K(func_node.num_child_), K(access_ident));
+            if (0 == access_ident.access_name_.case_compare("UID")) {
+              // do nothing
+            } else {
+              ret = OB_ERR_NO_FUNCTION_EXIST;
+              LOG_USER_ERROR(OB_ERR_NO_FUNCTION_EXIST,
+                             ident_name.length(), ident_name.ptr());
+              LOG_WARN("PLS-00222: no function with name 'string' exists in this scope",
+                       K(ret), K(func_node.num_child_), K(access_ident));
+            }
           } else if (T_EXPR_LIST != func_node.children_[1]->type_) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("not expr list node!", K(func_node.children_[1]->type_), K(func_node.children_[1]->num_child_), K(ret));
