@@ -15999,6 +15999,7 @@ int ObDDLService::check_long_run_ddl_has_index_(const ObTableSchema *orig_table_
   bool has_index_operation = false;
   bool will_be_having_domain_index_operation = false;
   bool has_fts_or_multivalue_index = false;
+  bool has_sparse_vector_index = false;
   bool has_vec_index = false;
   uint64_t tenant_id =  alter_table_arg.alter_table_schema_.get_tenant_id();
   uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
@@ -16015,7 +16016,8 @@ int ObDDLService::check_long_run_ddl_has_index_(const ObTableSchema *orig_table_
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                             tenant_id,
                                             table_id,
-                                            has_fts_or_multivalue_index))) {
+                                            has_fts_or_multivalue_index,
+                                            has_sparse_vector_index))) {
     LOG_WARN("check has fts index failed", KR(ret));
   } else if (OB_FAIL(check_will_be_having_domain_index_operation(alter_table_arg,
                                                                   will_be_having_domain_index_operation))) {
@@ -16028,6 +16030,10 @@ int ObDDLService::check_long_run_ddl_has_index_(const ObTableSchema *orig_table_
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.");
+  } else if (has_sparse_vector_index) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("The DDL cannot be run, table with sparse vector index is not supported.", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with sparse vector index");
   } else if (has_fts_or_multivalue_index && GCTX.is_shared_storage_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("The DDL cannot be run, table with fulltext/multivalue/vector index in ss mode is not supported", KR(ret));
@@ -16267,7 +16273,8 @@ int ObDDLService::check_has_domain_index(
     ObSchemaGetterGuard &schema_guard,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
-    bool &domain_index_exist)
+    bool &domain_index_exist,
+    bool &sparse_vector_index_exist)
 {
   int ret = OB_SUCCESS;
   domain_index_exist = false;
@@ -16287,9 +16294,12 @@ int ObDDLService::check_has_domain_index(
     if (index_infos.count() > 0) {
       // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
-        if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_)) {
-          domain_index_exist = true;
+        if (share::schema::is_vec_dim_docid_value_type(index_infos.at(i).index_type_)) {
+          sparse_vector_index_exist = true;
           break;
+        } else if (share::schema::is_fts_index_aux(index_infos.at(i).index_type_) || share::schema::is_fts_doc_word_aux(index_infos.at(i).index_type_) ||
+                   share::schema::is_multivalue_index_aux(index_infos.at(i).index_type_)) {
+          domain_index_exist = true;
         }
       }
     }

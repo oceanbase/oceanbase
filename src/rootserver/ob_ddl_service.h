@@ -1169,7 +1169,8 @@ private:
       ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id,
       const uint64_t data_table_id,
-      bool &domain_index_exist);
+      bool &domain_index_exist,
+      bool &sparse_vector_index_exist);
 int check_will_be_having_domain_index_operation(
     const obrpc::ObAlterTableArg &alter_table_arg,
     bool &will_be_having_domain_index_operation);
