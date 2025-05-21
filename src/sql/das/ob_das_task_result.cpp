@@ -255,7 +255,9 @@ int ObDASTCB::register_exiting(bool &is_already_exiting)
 }
 
 ObDASTaskResultMgr::ObDASTaskResultMgr()
-  : tcb_map_(),
+  : mem_map_mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK),
+    mem_profile_map_(),
+    tcb_map_(),
     gc_()
 {
 }
@@ -286,17 +288,39 @@ int ObDASTaskResultMgr::init()
 
 void ObDASTaskResultMgr::destory()
 {
-  tcb_map_.~DASTCBMap();
+  int ret = OB_SUCCESS;
+  LOG_INFO("[DAS TASK RESULT MGR] begin destory", K(MTL_ID()), K(mem_profile_map_.size()), K(tcb_map_.size()));
   gc_.~ObDASTaskResultGC();
+  ObDASTaskResultErase tcb_erase(this);
+  while(OB_SUCC(ret) && tcb_map_.size() != 0) {
+    if (OB_FAIL(tcb_map_.remove_if(tcb_erase))) {
+      LOG_WARN("tcb map remove if failed", KR(ret));
+    } else if (tcb_erase.ret_ == OB_EAGAIN) {
+      tcb_erase.ret_ = OB_SUCCESS;
+      if (REACH_TIME_INTERVAL(5 * 1000 * 1000L)) {
+        LOG_INFO("[DAS TASK RESULT MGR] keep trying to clear the tcb map", K(tcb_map_.size()), K(mem_profile_map_.size()), K(MTL_ID()));
+      }
+    } else if (tcb_erase.ret_ != OB_SUCCESS) {
+      // an unexpected error occurs, may never be able to fully delete the tcb properly
+      // exit the loop to force a memory cleanup
+      ret = tcb_erase.ret_;
+      LOG_WARN("[DAS TASK RESULT MGR] unexpected error", K(ret), K(tcb_map_.size()), K(mem_profile_map_.size()), K(MTL_ID()));
+    }
+  }
+  tcb_map_.~DASTCBMap();
 
   lib::ObMutexGuard guard(mem_map_mutex_);
   if (!mem_profile_map_.empty()) {
+    // expected mem_profile_map_ to be empty
+    // if this occurs, force to clear the memory
+    LOG_WARN("[DAS TASK RESULT MGR] expect mem_profile_map_ is empty, but not", K(MTL_ID()), K(mem_profile_map_.size()));
+    ret = OB_SUCCESS;
     bool it_end = false;
     int64_t mem_profile_map_size = mem_profile_map_.size();
     MemProfileMap::bucket_iterator bucket_it = mem_profile_map_.bucket_begin();
-    while (bucket_it != mem_profile_map_.bucket_end()) {
+    while (OB_SUCC(ret) && bucket_it != mem_profile_map_.bucket_end()) {
       it_end = false;
-      while (!it_end) {
+      while (OB_SUCC(ret) && !it_end) {
         ObDASTCBMemProfileKey key;
         {
           MemProfileMap::hashtable::bucket_lock_cond blc(*bucket_it);
@@ -310,14 +334,25 @@ void ObDASTaskResultMgr::destory()
         }
 
         if (!it_end) {
-          destroy_mem_profile(key);
+          ObDASMemProfileInfo *info = NULL;
+          if (OB_FAIL(mem_profile_map_.erase_refactored(key, &info))) {
+            // may lead to a dead loop
+            LOG_WARN("erase mem profile failed", K(ret), K(key), K(mem_profile_map_.size()));
+          } else if (OB_ISNULL(info)) {
+            // ignore ret
+            LOG_WARN("[DAS TASK RESULT MGR] Exception mem profile is null", K(key));
+          } else {
+            // ignore ret
+            LOG_WARN("[DAS TASK RESULT MGR] Exception mem profile", K(key), KPC(info));
+            free_mem_profile(info);
+          }
         }
       }
       ++ bucket_it;
     }
-    LOG_TRACE("clear mem profile map", K(MTL_ID()), K(mem_profile_map_size));
   }
   mem_profile_map_.destroy();
+  LOG_INFO("[DAS TASK RESULT MGR] end destory", K(MTL_ID()));
 }
 
 int ObDASTaskResultMgr:: check_mem_profile_key(ObDASTCBMemProfileKey &key) {
@@ -755,20 +790,20 @@ int ObDASTaskResultMgr::erase_task_result(int64_t task_id, bool need_unreg_dm)
         ObDASMemProfileInfo *mem_profile_info = NULL;
         if (OB_UNLIKELY(!mem_profile_key.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("mem profile key is invalid when destory tcb, it should not happen", K(ret), K(mem_profile_key));
+          LOG_WARN("mem profile key is invalid when destory tcb, it should not happen", K(ret), K(mem_profile_key), KPC(tcb));
         } else if (OB_FAIL(mem_profile_map_.get_refactored(mem_profile_key,
                                                            mem_profile_info))) {
-          LOG_WARN("get mem_profile failed", K(ret), K(mem_profile_key));
+          LOG_WARN("get mem_profile failed", K(ret), K(mem_profile_key), KPC(tcb));
         } else if (OB_ISNULL(mem_profile_info)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("mem profile is null when destory tcb, it should not happen", K(ret), K(mem_profile_key));
+          LOG_WARN("mem profile is null when destory tcb, it should not happen", K(ret), K(mem_profile_key), KPC(tcb));
         } else {
           // we have registered exiting flag for the first time, need to reset tcb
           tcb->destory(mem_profile_info);
           if (OB_FAIL(dec_mem_profile_ref_count(mem_profile_key, mem_profile_info))) {
-            LOG_WARN("dec mem profile info ref count failed", K(ret), K(mem_profile_key));
+            LOG_WARN("dec mem profile info ref count failed", K(ret), K(mem_profile_key), KPC(tcb));
           } else if (OB_FAIL(tcb_map_.del(tcb_info))) {
-            LOG_WARN("delete tcb failed", KR(ret), K(task_id));
+            LOG_WARN("delete tcb failed", KR(ret), K(task_id), KPC(tcb));
           }
         }
       } else {
@@ -1337,6 +1372,27 @@ int ObDASTaskResultMgr::check_interrupt() {
   }
   return ret;
 }
+
+bool ObDASTaskResultErase::operator() (const DASTCBInfo &tcb_info, ObDASTCB *tcb)
+{
+  int ret = OB_SUCCESS;
+  bool remove = false;
+  OB_ASSERT(NULL != task_result_mgr_);
+  if (OB_FAIL(task_result_mgr_->erase_task_result(tcb_info.get_value(), true))) {
+    if (ret == OB_EAGAIN) {
+      ret_ = ret_ == OB_SUCCESS ? ret : ret_;
+      LOG_WARN("there is task which reding tcb when destory ObDASTaskResultMgr", K(ret), K(tcb_info.get_value()), K(tcb));
+    } else {
+      ret_ = ret;
+      LOG_WARN("erase task result failed when destory ObDASTaskResultMgr", K(ret), K(tcb_info.get_value()), K(tcb));
+    }
+    remove = false;
+  } else {
+    remove = true;
+  }
+  return remove;
+}
+
 
 bool ObDASTaskResultGC::operator() (const DASTCBInfo &tcb_info, ObDASTCB *tcb)
 {
