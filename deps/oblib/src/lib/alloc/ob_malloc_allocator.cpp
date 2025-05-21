@@ -877,22 +877,24 @@ void *ObMallocHook::alloc(const int64_t size, bool &from_malloc_hook)
   AObject *obj = NULL;
   static thread_local ObMallocSampleLimiter sample_limiter;
   bool sample_allowed = sample_limiter.try_acquire(size);
-  if (OB_LIKELY(!sample_limiter.try_acquire(size))) {
+  if (OB_LIKELY(!sample_allowed)) {
     obj = mgr_.alloc_object(size, attr_);
   } else {
     ObMemAttr attr = attr_;
     attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
     obj = mgr_.alloc_object(size, attr);
-    void *addrs[100] = {nullptr};
-    backtrace(addrs, ARRAYSIZEOF(addrs));
-    MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
-    obj->on_malloc_sample_ = true;
   }
   if (OB_UNLIKELY(NULL == obj)) {
     ta_->sync_wash();
     obj = mgr_.alloc_object(size, attr_);
   }
   if (OB_LIKELY(obj)) {
+    if (OB_UNLIKELY(sample_allowed)) {
+      void *addrs[100] = {nullptr};
+      backtrace(addrs, ARRAYSIZEOF(addrs));
+      MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
+      obj->on_malloc_sample_ = true;
+    }
     MEMCPY(obj->label_, label_, AOBJECT_LABEL_SIZE + 1);
     obj->ignore_version_ = true;
     SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
