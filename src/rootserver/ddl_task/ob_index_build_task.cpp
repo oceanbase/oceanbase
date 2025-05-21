@@ -129,6 +129,14 @@ int ObIndexSSTableBuildTask::process()
         LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(is_oracle_mode), K(partition_names));
       }
     }
+    #ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_INDEX_BUILD_SSTABLE_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          SHARE_LOG(WARN, "errsim ddl execute inner sql failed", KR(ret));
+        }
+      }
+    #endif
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                             dest_table_id_,
@@ -1204,6 +1212,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     if (OB_FAIL(check_build_local_index_single_replica(is_request_end))) {
       LOG_WARN("fail to check build single replica", K(ret));
     } else if (is_request_end) {
+      ret = complete_sstable_job_ret_code_;
       state_finished = true;
     }
   }
@@ -1212,15 +1221,14 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
-    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
-        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
-      need_verify_checksum = false;
-    }
 #ifdef ERRSIM
     // when the major compaction is delayed, skip verify column checksum
     need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
 #endif
-
+    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
+        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
+      need_verify_checksum = false;
+    }
     ObArray<int64_t> ignore_col_ids;
     const ObTableSchema *data_table_schema = nullptr;
     uint64_t doc_id_col_id = OB_INVALID_ID;
