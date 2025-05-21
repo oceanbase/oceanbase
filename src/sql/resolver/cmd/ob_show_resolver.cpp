@@ -2029,6 +2029,8 @@ int ObShowResolver::resolve_show_check_table(const ParseNode &parse_tree,
   ObArenaAllocator alloc("ShowCKTable", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info_->get_effective_tenant_id());
   ObSEArray<ObCheckTableInfo, 1> infos;
   TableInfoSet tables_set;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  share::schema::ObSessionPrivInfo session_priv;
   if (OB_UNLIKELY(is_oracle_mode)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "check table oracle mode is");
@@ -2045,30 +2047,56 @@ int ObShowResolver::resolve_show_check_table(const ParseNode &parse_tree,
   } else if (infos.count() >= MAX_CHECK_TABLE_CNT) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "check table count exceed 10000 is");
+  } else if (OB_ISNULL(session_info_) ||
+    OB_ISNULL(params_.schema_checker_) ||
+    OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got null ptr", K(ret));
+  } else if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
+    LOG_WARN("fail to get session priv info", K(ret));
   }
   if (OB_SUCC(ret)) {
     ObSqlString check_table_str;
+    bool allow_show = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      if (i > 0) {
-        OZ (check_table_str.append(" UNION ALL "));
+      const common::ObIArray<uint64_t> &enable_role_id_array = session_info_->get_enable_role_array();
+      if (OB_FAIL(schema_guard->check_db_show(
+        session_priv, enable_role_id_array, infos.at(i).db_name_, allow_show))) {
+        LOG_WARN("Check db show failed", K(ret));
+      } else if (allow_show && OB_FAIL(schema_guard->check_table_show(
+              session_priv, enable_role_id_array, infos.at(i).db_name_, infos.at(i).table_name_, allow_show))) {
+        LOG_WARN("Check table show failed", K(ret));
       }
-      if (!infos.at(i).db_exist_) {
-        OZ (check_table_str.append_fmt(check_table_db_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
-                                                                   infos.at(i).db_name_.ptr()));
-        OZ (check_table_str.append(" UNION ALL "));
-        OZ (check_table_str.append_fmt(check_table_db_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
-      } else if (!infos.at(i).table_exist_) {
-        OZ (check_table_str.append_fmt(check_table_table_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
-                                                                      infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
-        OZ (check_table_str.append(" UNION ALL "));
-        OZ (check_table_str.append_fmt(check_table_table_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
-      } else if (infos.at(i).is_view_ && !infos.at(i).valid_) {
-        OZ (check_table_str.append_fmt(check_table_view_invalid1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
-                                                                  infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
-        OZ (check_table_str.append(" UNION ALL "));
-        OZ (check_table_str.append_fmt(check_table_view_invalid2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+      if (OB_FAIL(ret)) {
+      } else if (!allow_show) {
+      ret = OB_ERR_NO_TABLE_PRIVILEGE;
+      LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                infos.at(i).table_name_.length(),
+                infos.at(i).table_name_.ptr());
       } else {
-        OZ (check_table_str.append_fmt(check_table_ok_template, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        if (i > 0) {
+          OZ (check_table_str.append(" UNION ALL "));
+        }
+        if (!infos.at(i).db_exist_) {
+          OZ (check_table_str.append_fmt(check_table_db_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                     infos.at(i).db_name_.ptr()));
+          OZ (check_table_str.append(" UNION ALL "));
+          OZ (check_table_str.append_fmt(check_table_db_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        } else if (!infos.at(i).table_exist_) {
+          OZ (check_table_str.append_fmt(check_table_table_not_exists1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                        infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+          OZ (check_table_str.append(" UNION ALL "));
+          OZ (check_table_str.append_fmt(check_table_table_not_exists2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        } else if (infos.at(i).is_view_ && !infos.at(i).valid_) {
+          OZ (check_table_str.append_fmt(check_table_view_invalid1, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr(),
+                                                                    infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+          OZ (check_table_str.append(" UNION ALL "));
+          OZ (check_table_str.append_fmt(check_table_view_invalid2, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        } else {
+          OZ (check_table_str.append_fmt(check_table_ok_template, infos.at(i).db_name_.ptr(), infos.at(i).table_name_.ptr()));
+        }
       }
     }
     OZ (check_table_str.append(";"));
