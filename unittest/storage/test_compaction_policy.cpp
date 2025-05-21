@@ -90,6 +90,7 @@ public:
     const int64_t end_scn,
     const int64_t max_merged_trans_version,
     const int64_t upper_trans_version,
+    const int64_t filled_tx_scn,
     ObTableHandleV2 &table_handle);
   static int mock_sstable_meta(
     const int64_t row_count,
@@ -276,6 +277,7 @@ int TestCompactionPolicy::mock_sstable(
   const int64_t end_scn,
   const int64_t max_merged_trans_version,
   const int64_t upper_trans_version,
+  const int64_t filled_scn_scn,
   ObTableHandleV2 &table_handle)
 {
   int ret = OB_SUCCESS;
@@ -294,6 +296,7 @@ int TestCompactionPolicy::mock_sstable(
   } else {
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
+    param.filled_tx_scn_.convert_for_tx(filled_scn_scn);
   }
 
   void *buf = nullptr;
@@ -539,7 +542,8 @@ int TestCompactionPolicy::batch_mock_sstables(
     ObTableHandleV2 table_handle;
     const int64_t type = cells[0].get_int();
     ObITable::TableType table_type = (type == 10) ? ObITable::MAJOR_SSTABLE : ((type == 11) ? ObITable::MINOR_SSTABLE : ObITable::MINI_SSTABLE);
-    if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
+    if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(),
+        cells[4].get_int(), cells[5].get_int(), table_handle))) {
       LOG_WARN("failed to mock sstable", K(ret));
     } else if (ObITable::MAJOR_SSTABLE == table_type) {
       if (OB_FAIL(major_tables.push_back(table_handle))) {
@@ -608,9 +612,10 @@ int TestCompactionPolicy::batch_mock_tables(
       }
     } else {
       ObITable::TableType table_type = (type == 10) ? ObITable::MAJOR_SSTABLE : ((type == 11) ? ObITable::MINOR_SSTABLE : ObITable::MINI_SSTABLE);
-      if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
+      if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(),
+          cells[4].get_int(), cells[5].get_int(), table_handle))) {
         LOG_WARN("failed to mock sstable", K(ret));
-      } else if (have_row_cnt && OB_FAIL(mock_sstable_meta(cells[5].get_int(), table_handle))) {
+      } else if (have_row_cnt && OB_FAIL(mock_sstable_meta(cells[6].get_int(), table_handle))) {
         LOG_WARN("failed to mock sstable meta", KR(ret));
       } else if (ObITable::MAJOR_SSTABLE == table_type) {
         if (OB_FAIL(major_tables.push_back(table_handle))) {
@@ -748,15 +753,15 @@ TEST_F(TestCompactionPolicy, basic_create_sstable)
   ASSERT_NE(nullptr, t3m);
 
   ObTableHandleV2 major_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, 0, major_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableHandleV2 mini_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 120, 120, 120, mini_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 120, 120, 120, 120 ,mini_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableHandleV2 minor_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINOR_SSTABLE, 120, 180, 180, INT64_MAX, minor_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINOR_SSTABLE, 120, 180, 180, INT64_MAX, 180, minor_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -828,34 +833,34 @@ TEST_F(TestCompactionPolicy, basic_create_table_store)
 
   ObSEArray<ObTableHandleV2, 4> major_tables;
   ObTableHandleV2 major_table_handle_1;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 1, 1, 1, major_table_handle_1);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 1, 1, 1, 0, major_table_handle_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_1));
 
   ObTableHandleV2 major_table_handle_2;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle_2);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, 0, major_table_handle_2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_2));
 
   ObTableHandleV2 major_table_handle_3;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 150, 150, 150, major_table_handle_3);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 150, 150, 150, 0, major_table_handle_3);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_3));
 
 
   ObSEArray<ObTableHandleV2, 4> minor_tables;
   ObTableHandleV2 minor_table_handle_1;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 150, 150, 160, minor_table_handle_1);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 150, 150, 160, 150 ,minor_table_handle_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_1));
 
   ObTableHandleV2 minor_table_handle_2;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 150, 200, 190, 200, minor_table_handle_2);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 150, 200, 190, 200, 200, minor_table_handle_2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_2));
 
   ObTableHandleV2 minor_table_handle_3;
-  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 200, 350, 350, INT64_MAX, minor_table_handle_3);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 200, 350, 350, INT64_MAX, 350, minor_table_handle_3);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_3));
 
@@ -869,11 +874,11 @@ TEST_F(TestCompactionPolicy, basic_batch_create_sstable)
 {
   int ret = OB_SUCCESS;
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "10            0            100        100        100      \n"
-      "11            1            80         80         120      \n"
-      "11            80           150        150        500      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "10            0            100        100        100          0            \n"
+      "11            1            80         80         120          80           \n"
+      "11            80           150        150        500          150          \n";
 
   ObArray<ObTableHandleV2> major_tables;
   ObArray<ObTableHandleV2> minor_tables;
@@ -887,13 +892,13 @@ TEST_F(TestCompactionPolicy, basic_prepare_tablet)
 {
   int ret = OB_SUCCESS;
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "10            0            100        100        100      \n"
-      "11            1            80         80         120      \n"
-      "11            80           150        150        500      \n"
-      "0             150          200        180        180      \n"
-      "0             200          0          0          0        \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "10            0            100        100        100          0            \n"
+      "11            1            80         80         120          80           \n"
+      "11            80           150        150        500          150          \n"
+      "0             150          200        180        180          200          \n"
+      "0             200          0          0          0            0            \n";
 
   ret = prepare_tablet(key_data, 150, 150);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -910,14 +915,14 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
 {
   int ret = OB_SUCCESS;
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            1            160        150        150      \n"
-      "11            160          300        300        300      \n"
-      "0             1            160        150        150      \n"
-      "0             160          200        210        210      \n"
-      "0             200          300        300        300      \n"
-      "0             300          0          0          0        \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "11            1            160        150        150          160          \n"
+      "11            160          300        300        300          300          \n"
+      "0             1            160        150        150          160          \n"
+      "0             160          200        210        210          200          \n"
+      "0             200          300        300        300          300          \n"
+      "0             300          0          0          0            0            \n";
 
   ret = prepare_tablet(key_data, 150, 150);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -946,13 +951,13 @@ TEST_F(TestCompactionPolicy, check_minor_merge_basic)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            1            150        150        150      \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          350        350        350      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "11            1            150        150        150          150          \n"
+      "11            150          200        200        200          200          \n"
+      "11            200          250        250        250          250          \n"
+      "11            250          300        300        300          300          \n"
+      "11            300          350        350        350          350          \n";
 
   ret = prepare_tablet(key_data, 350, 350);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -982,14 +987,14 @@ TEST_F(TestCompactionPolicy, check_no_need_minor_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            1            150        150        150      \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          310        310        310      \n"
-      "11            310          375        375        375      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "11            1            150        150        150          150          \n"
+      "11            150          200        200        200          200          \n"
+      "11            200          250        250        250          250          \n"
+      "11            250          300        300        300          300          \n"
+      "11            300          310        310        310          310          \n"
+      "11            310          375        375        375          375          \n";
 
   ret = prepare_tablet(key_data, 375, 375);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1017,13 +1022,13 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            1            150        150        150      \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          350        350        350      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "11            1            150        150        150          150          \n"
+      "11            150          200        200        200          200          \n"
+      "11            200          250        250        250          250          \n"
+      "11            250          300        300        300          300          \n"
+      "11            300          350        350        350          350          \n";
 
   ret = prepare_tablet(key_data, 350, 350);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1053,13 +1058,13 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "10            0            340        340        340      \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          340        340        340      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "10            0            340        340        340          0            \n"
+      "11            150          200        200        200          200          \n"
+      "11            200          250        250        250          250          \n"
+      "11            250          300        300        300          300          \n"
+      "11            300          340        340        340          340          \n";
 
   ret = prepare_tablet(key_data, 340, 340);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1135,13 +1140,13 @@ TEST_F(TestCompactionPolicy, check_sstable_continue_failed)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            1            150        150        150      \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            900          1000       1000       1000      \n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
+      "10            0            1          1          1            0            \n"
+      "11            1            150        150        150          150          \n"
+      "11            150          200        200        200          200          \n"
+      "11            200          250        250        250          250          \n"
+      "11            250          300        300        300          300          \n"
+      "11            900          1000       1000       1000         1000         \n";
 
   ret = prepare_tablet(key_data, 1000, 1000);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1169,11 +1174,11 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
-      "10            0            1          1          1             1\n"
-      "11            1            150        150        150           3000000\n"
-      "12            150          200        200        200           100\n"
-      "12            200          350        350        350           10000\n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn    row_cnt\n"
+      "10            0            1          1          1            0                1\n"
+      "11            1            150        150        150          150              3000000\n"
+      "12            150          200        200        200          200              100\n"
+      "12            200          350        350        350          350              10000\n";
 
   ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1201,11 +1206,11 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor2)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
-      "10            0            1          1          1             1\n"
-      "11            1            150        150        150           3000000\n"
-      "12            150          300        200        200           100\n"
-      "12            300          350        350        350           750000\n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn    row_cnt\n"
+      "10            0            1          1          1            0                1\n"
+      "11            1            150        150        150          150              3000000\n"
+      "12            150          300        200        200          300              100\n"
+      "12            300          350        350        350          350              750000\n";
 
   ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1236,12 +1241,12 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor3)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    row_cnt\n"
-      "10            0            1          1          1             1\n"
-      "11            1            150        150        150           3000000\n"
-      "12            150          250        200        200           100\n"
-      "12            250          300        200        200           100\n"
-      "12            300          350        350        350           600\n";
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn    row_cnt\n"
+      "10            0            1          1          1            0                1\n"
+      "11            1            150        150        150          150              3000000\n"
+      "12            150          250        200        200          250              100\n"
+      "12            250          300        200        200          300              100\n"
+      "12            300          350        350        350          350              600\n";
 
   ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1257,6 +1262,71 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor3)
   ASSERT_EQ(150, result.scn_range_.start_scn_.get_val_for_tx());
   ASSERT_EQ(350, result.scn_range_.end_scn_.get_val_for_tx());
 }
+
+TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_unexpected_filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
+  common::ObArray<share::ObSnapshotInfo> snapshots;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn    row_cnt\n"
+      "10            0            1          1          1            0                1\n"
+      "11            1            150        150        150          150              3000000\n"
+      "11            150          200        200        200          200              100\n"
+      "11            200          350        350        350          550              10000\n"
+      "11            350          400        400        400          550              10000\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+}
+
+TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_max_filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
+  common::ObArray<share::ObSnapshotInfo> snapshots;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn                    row_cnt\n"
+      "10            0            1          1          1            0                                1\n"
+      "11            1            150        150        150          150                              3000000\n"
+      "11            150          200        200        200          4611686018427387903              100\n"
+      "11            200          350        350        350          550                              10000\n"
+      "11            350          400        400        400          550                              10000\n";
+
+  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+}
+
 
 } //unittest
 } //oceanbase

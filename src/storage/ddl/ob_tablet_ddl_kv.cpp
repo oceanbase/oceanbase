@@ -126,6 +126,7 @@ int ObDDLKV::init_sstable_param(ObTablet &tablet,
       sstable_param.use_old_macro_block_count_ = 0; // all new, no reuse
       sstable_param.index_blocks_cnt_ = 0; // index macro block count, the index is in memory, so be 0.
       sstable_param.other_block_ids_.reset(); // other blocks contains only index macro blocks now, so empty.
+      sstable_param.filled_tx_scn_ = table_key.get_end_scn();
     }
 
     if (OB_SUCC(ret)) {

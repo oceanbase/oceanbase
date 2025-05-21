@@ -1349,8 +1349,8 @@ int ObTabletTableStore::build_minor_tables(
         ret = OB_ERR_SYS;
         LOG_ERROR("table must be minor sstable", K(ret), KPC(table));
       } else if (OB_NOT_NULL(new_table) && new_table->is_minor_sstable()) {
+        ObSSTable *sstable = static_cast<ObSSTable *>(table);
         if (new_table->get_key() == table->get_key()) {
-          ObSSTable *sstable = static_cast<ObSSTable *>(table);
           if (sstable->get_max_merged_trans_version() <= new_sstable->get_max_merged_trans_version()) {
             need_add = false;
             LOG_INFO("new table's max merge trans version is not less than the old table, "

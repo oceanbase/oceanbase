@@ -522,6 +522,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   param.ddl_scn_.set_min();
+  param.filled_tx_scn_ = table_key_.get_end_scn();
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

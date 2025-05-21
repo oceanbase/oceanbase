@@ -794,6 +794,8 @@ int ObTabletMergeExecutePrepareTask::get_result_by_table_key()
     LOG_WARN("tablet store is invalid", K(ret), KPC(table_store_wrapper.get_member()));
   } else {
     ObITable *table = nullptr;
+    ObSSTable *sstable = nullptr;
+    SCN max_filled_tx_scn(SCN::min_scn());
     for (int64_t i = 0; OB_SUCC(ret) && i < table_key_array_.count(); ++i) {
       const ObITable::TableKey &table_key = table_key_array_.at(i);
       if (OB_FAIL(table_store_wrapper.get_member()->get_table(table_key, table))) {
@@ -804,11 +806,20 @@ int ObTabletMergeExecutePrepareTask::get_result_by_table_key()
         }
       } else if (OB_FAIL(result_.handle_.add_sstable(table, table_store_wrapper.get_meta_handle()))) {
         LOG_WARN("failed to add sstable into result", K(ret), KPC(table));
+      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+      } else if (!sstable->get_filled_tx_scn().is_max()) {
+        max_filled_tx_scn = SCN::max(max_filled_tx_scn, sstable->get_filled_tx_scn());
       }
     } // end of for
-    if (OB_SUCC(ret) && result_.handle_.get_count() != table_key_array_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected tables from current tablet", K(ret), K(table_key_array_), K(ctx_->tables_handle_));
+
+    if (OB_SUCC(ret)) {
+      if (result_.handle_.get_count() != table_key_array_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected tables from current tablet", K(ret), K(table_key_array_), K(ctx_->tables_handle_));
+      } else if (max_filled_tx_scn > result_.scn_range_.end_scn_) {
+        ret = OB_NO_NEED_MERGE;
+        LOG_WARN("max filled tx scn is bigger than merge scn, no need merge", K(ret) ,K(max_filled_tx_scn), K(result_));
+      }
     }
   }
   return ret;
