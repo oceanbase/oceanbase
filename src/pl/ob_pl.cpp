@@ -1635,10 +1635,11 @@ int ObPL::execute(ObExecContext &ctx,
     if (OB_SUCC(ret)) {
       // process out arguments
       for (int64_t i = 0; OB_SUCC(ret) && i < routine.get_arg_count(); ++i) {
-        if (routine.get_out_args().has_member(i)) {
-          if (pl.get_params().at(i).is_pl_extend()) {
-            if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
-                && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
+        CK (i < routine.get_variables().count());
+        if (OB_SUCC(ret) && routine.get_out_args().has_member(i)) {
+          const ObPLDataType &arg_pl_type = routine.get_variables().at(i);
+          if (!arg_pl_type.is_obj_type()) {
+            if (!arg_pl_type.is_cursor_type()
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
               OX (params->at(i) = pl.get_params().at(i));
               params->at(i).set_int(0);
@@ -1646,8 +1647,7 @@ int ObPL::execute(ObExecContext &ctx,
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
-            } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
-                       || pl.get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE) {
+            } else if (arg_pl_type.is_cursor_type()) {
               ObObjParam &cursor_param = pl.get_params().at(i);
               const ObPLCursorInfo *cursor = NULL;
               OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
