@@ -417,6 +417,9 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
       LOG_WARN("failed to prepare eval cost stmt", K(ret));
     } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt*&>(root_stmt)))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+      // jinmao TODO: defensive code, remove it later
+      LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       LOG_DEBUG("get transformed heuristic rule stmt when evaluate_cost", K(*root_stmt));
       CREATE_WITH_TEMP_CONTEXT(param) {

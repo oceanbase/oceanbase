@@ -1086,14 +1086,25 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
-  if (const_ctx.allow_trans_) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (const_ctx.allow_trans_) {
     ObSEArray<ObRawExpr *, 8> parent_exprs;
+    bool is_happened = false;
     if (OB_FAIL(recursive_replace_expr(cur_expr,
                                       parent_exprs,
                                       const_ctx,
                                       used_in_compare,
-                                      trans_happened))) {
+                                      is_happened))) {
       LOG_WARN("failed to recursive");
+    } else if (OB_ISNULL(cur_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter", K(ret));
+    } else if (is_happened && OB_FAIL(cur_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else {
+      trans_happened |= is_happened;
     }
   }
   return ret;
@@ -1381,9 +1392,11 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     // for static engine, all params in rigth side of in or not in should have same type
     need_cast = true;
   } else if (const_expr->get_expr_type() == T_NULL &&
-             ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type())) {
+             (ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type()) ||
+              ObDecimalIntType == expr->get_result_type().get_type())) {
     // To adapt to the behavior of casting NULL values for hash compare
     // cast need to be added above NULL for null aware hash type.
+    // cast need to be added above NULL for decimalInt type in in-expr (e.g. c1 in (1.1,1.2))
     need_cast = true;
   } else if (parent_expr->is_win_func_expr()) {
     ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(parent_expr);

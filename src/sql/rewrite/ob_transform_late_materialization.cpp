@@ -505,6 +505,9 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to fill eval cost helper", K(ret));
   } else if (OB_FAIL(prepare_eval_cost_stmt(parent_stmts, *stmt, root_stmt, is_trans_stmt))) {
     LOG_WARN("failed to prepare eval cost stmt", K(ret));
+  } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+    // jinmao TODO: defensive code, remove it later
+    LOG_WARN("failed to formalize stmt", K(ret));
   } else {
     ctx_->eval_cost_ = true;
     lib::ContextParam param;
