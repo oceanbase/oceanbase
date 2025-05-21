@@ -20,6 +20,9 @@
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 #include "rootserver/backup/ob_backup_param_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "share/ob_tablet_replica_checksum_operator.h"
+#include "share/ob_zone_merge_info.h"
+#include "share/ob_global_merge_table_operator.h"
 
 using namespace oceanbase;
 using namespace omt;
@@ -209,6 +212,8 @@ int ObBackupSetTaskMgr::persist_sys_ls_task_()
 #endif
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_merge_error_())) {
+    LOG_WARN("failed to check merge error", K(ret), KPC_(job_attr));
   } else if (OB_FAIL(write_backup_set_placeholder_(true/*start*/))) {
     LOG_WARN("fail to write backup set start placeholder", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
@@ -1213,6 +1218,27 @@ int ObBackupSetTaskMgr::get_resource_pool_infos_(
   return ret;
 }
 
+int ObBackupSetTaskMgr::full_tablet_checksum_verification_()
+{
+  int ret = OB_SUCCESS;
+  static const int64_t BATCH_SIZE = 4096;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(job_attr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), KP_(sql_proxy), KP_(job_attr));
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::full_tablet_checksum_verification(
+      *sql_proxy_, job_attr_->tenant_id_, BATCH_SIZE))) {
+    LOG_WARN("failed to full tablet checksum verification", K(ret));
+  }
+  const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
+  ROOTSERVICE_EVENT_ADD("backup_data", "batch_check_tablet_checksum",
+                        "tenant_id", job_attr_->tenant_id_,
+                        "backup_set_id", job_attr_->backup_set_id_,
+                        "cost_time_us", cost_us,
+                        "result", ret);
+  return ret;
+}
+
 int ObBackupSetTaskMgr::backup_data_finish_(
     const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
     const ObBackupLSTaskAttr &build_index_attr)
@@ -1226,6 +1252,8 @@ int ObBackupSetTaskMgr::backup_data_finish_(
   } else if (ObBackupStatus::Status::BACKUP_USER_DATA == set_task_attr_.status_.status_
              && OB_FAIL(write_table_list_(end_scn))) {
     LOG_WARN("[DATA_BACKUP] fail to write table list", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_FAIL(full_tablet_checksum_verification_())) {
+    LOG_WARN("failed to full tablet checksum verification", K(ret));
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
   } else if (OB_FAIL(ObBackupLSTaskOperator::delete_build_index_task(trans_, build_index_attr))) {
@@ -2295,6 +2323,8 @@ int ObBackupSetTaskMgr::backup_completing_log_()
     ObBackupStatus next_status = ObBackupStatus::COMPLETED;
     if (OB_FAIL(write_extern_infos_())) {
       LOG_WARN("fail to write_extern_infos", K(ret), K(set_task_attr_));
+    } else if (OB_FAIL(check_merge_error_())) {
+      LOG_WARN("failed to check merge error", K(ret), KPC_(job_attr));
     } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret), K(meta_tenant_id_));
     } else {
@@ -2776,6 +2806,24 @@ int ObBackupSetTaskMgr::set_backup_set_files_failed_(ObMySQLTransaction &trans)
     } else if (OB_FAIL(ObBackupSetFileOperator::update_backup_set_file(trans, backup_set_file))) {
       LOG_WARN("failed to update backup set", K(ret), K(backup_set_file));
     } 
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::check_merge_error_()
+{
+  int ret = OB_SUCCESS;
+  share::ObGlobalMergeInfo merge_info;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(job_attr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret), KP_(sql_proxy), KP_(job_attr));
+  } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*sql_proxy_, job_attr_->tenant_id_, merge_info))) {
+    LOG_WARN("failed to laod global merge info", K(ret), KPC_(job_attr));
+  } else if (merge_info.is_merge_error()) {
+    ret = OB_CHECKSUM_ERROR;
+    LOG_ERROR("merge error, can not backup ", K(ret), KPC_(job_attr), K(merge_info));
+  } else {
+    LOG_INFO("check merge error", KPC_(job_attr));
   }
   return ret;
 }

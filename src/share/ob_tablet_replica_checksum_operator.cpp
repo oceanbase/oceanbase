@@ -1070,6 +1070,53 @@ int ObTabletReplicaChecksumOperator::recover_mock_column_meta(ObTabletReplicaRep
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::full_tablet_checksum_verification(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t last_end_tablet_id = 0;
+  bool is_finished = false;
+
+  if (OB_INVALID_ID == tenant_id || batch_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(batch_size));
+  } else {
+    while (OB_SUCC(ret) && !is_finished) {
+      int64_t start_tablet_id = 0;
+      int64_t end_tablet_id = 0;
+
+      // 1. Fetch a batch of tablet_id range (based on distinct tablet_ids)
+      if (OB_FAIL(batch_iterate_replica_checksum_range_(
+                  sql_client, tenant_id, last_end_tablet_id,
+                  batch_size, start_tablet_id, end_tablet_id, is_finished))) {
+        LOG_WARN("failed to batch iterate replica checksum range", KR(ret));
+      } else if (!is_finished && start_tablet_id != 0) {
+        // 2. Check checksum consistency within the batch range
+        if (OB_FAIL(batch_check_tablet_checksum_in_range_(
+                    sql_client, tenant_id,
+                    common::ObTabletID(start_tablet_id),
+                    common::ObTabletID(end_tablet_id)))) {
+          if (OB_CHECKSUM_ERROR == ret) {
+            LOG_ERROR("checksum mismatch detected", KR(ret),
+                      K(tenant_id), K(start_tablet_id), K(end_tablet_id));
+            // Exit immediately if checksum mismatch is detected
+          } else {
+            LOG_WARN("failed to check tablet checksum in range", KR(ret),
+                     K(tenant_id), K(start_tablet_id), K(end_tablet_id));
+          }
+        }
+      }
+
+      // 3. Update last_end_tablet_id to proceed to the next batch
+      last_end_tablet_id = end_tablet_id;
+    }
+  }
+
+  return ret;
+}
+
 int ObTabletReplicaChecksumOperator::inner_batch_insert_or_update_by_sql_(
     const uint64_t tenant_id,
     const ObIArray<ObTabletReplicaChecksumItem> &items,
@@ -1696,6 +1743,110 @@ int ObTabletReplicaChecksumOperator::get_min_compaction_scn(
     }
     LOG_INFO("finish to get min_compaction_scn", KR(ret), K(tenant_id), K(min_compaction_scn),
              "cost_time_us", ObTimeUtil::current_time() - start_time_us, K(estimated_timeout_us));
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::batch_iterate_replica_checksum_range_(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const int64_t last_end_tablet_id,
+    const int64_t batch_size,
+    int64_t &start_tablet_id,
+    int64_t &end_tablet_id,
+    bool &is_finished)
+{
+  int ret = OB_SUCCESS;
+  start_tablet_id = 0;
+  end_tablet_id = 0;
+  is_finished = false;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+
+  if (OB_INVALID_ID == tenant_id || batch_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(batch_size));
+  } else {
+    common::ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+          "SELECT MIN(t.tablet_id) AS start_tablet_id, MAX(t.tablet_id) AS end_tablet_id "
+          "FROM (SELECT DISTINCT tablet_id FROM %s "
+          "WHERE tenant_id = %lu AND tablet_id > %lu "
+          "ORDER BY tenant_id, tablet_id ASC LIMIT %ld) t",
+          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME,
+          tenant_id, last_end_tablet_id, batch_size))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = nullptr;
+        if (OB_FAIL(sql_client.read(res, meta_tenant_id, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", KR(ret), K(meta_tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null result", KR(ret));
+        } else if (OB_SUCC(result->next())) {
+          // Extract start_tablet_id and end_tablet_id safely
+          EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "start_tablet_id", start_tablet_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "end_tablet_id", end_tablet_id, int64_t);
+
+          // If both extracted fields are 0, treat it as finished
+          if (0 == start_tablet_id && 0 == end_tablet_id) {
+            is_finished = true;
+          }
+        } else {
+          is_finished = true;
+          LOG_WARN("failed to get next, mark is finished", K(ret), K(sql));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::batch_check_tablet_checksum_in_range_(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const common::ObTabletID &start_tablet_id,
+    const common::ObTabletID &end_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_INVALID_ID == tenant_id || !start_tablet_id.is_valid() || !end_tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(start_tablet_id), K(end_tablet_id));
+  } else {
+    ObSqlString query_string;
+    sqlclient::ObMySQLResult *result = nullptr;
+    ObTimeoutCtx timeout_ctx;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(query_string.append(" SELECT tenant_id, tablet_id FROM "))) {
+        LOG_WARN("assign sql string failed", K(ret), K(query_string));
+      } else if (OB_FAIL(query_string.append_fmt(
+          "( SELECT tenant_id,tablet_id,row_count,data_checksum,b_column_checksums,compaction_scn,data_checksum_type "
+          " FROM %s WHERE tenant_id = %lu AND tablet_id >= %lu AND tablet_id <= %lu) as J ",
+          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, start_tablet_id.id(), end_tablet_id.id()))) {
+        LOG_WARN("assign sql string failed for range condition", K(ret), K(query_string), K(tenant_id));
+      } else if (OB_FAIL(query_string.append(" GROUP BY J.tablet_id, J.compaction_scn, J.data_checksum_type"
+          " HAVING MIN(J.data_checksum) != MAX(J.data_checksum)"
+          " OR MIN(J.row_count) != MAX(J.row_count)"
+          " OR MIN(J.b_column_checksums) != MAX(J.b_column_checksums) LIMIT 1"))) {
+        LOG_WARN("assign sql string failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+        LOG_WARN("failed to set timeout ctx", K(ret), K(timeout_ctx));
+      } else if (OB_FAIL(sql_client.read(res, meta_tenant_id, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(meta_tenant_id), K(query_string));
+      } else if ((OB_ISNULL(result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next()) && ret != OB_ITER_END) {
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_CHECKSUM_ERROR; // we expect the sql to return an empty result
+        LOG_WARN("tablet replicas checksum error", K(ret), K(tenant_id), K(meta_tenant_id));
+      }
+    }
   }
   return ret;
 }

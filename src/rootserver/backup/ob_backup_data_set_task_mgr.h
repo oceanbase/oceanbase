@@ -80,6 +80,7 @@ private:
   int do_backup_fuse_tablet_meta_(ObArray<ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int do_backup_data_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt, 
       share::ObBackupLSTaskAttr *& build_index_attr);
+  int full_tablet_checksum_verification_();
   int backup_data_finish_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
                           const ObBackupLSTaskAttr &build_index_attr);
   int build_index_(share::ObBackupLSTaskAttr *build_index_attr, bool &finish_build_index);
@@ -150,6 +151,7 @@ private:
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
   int get_backup_end_scn_(share::SCN &end_scn) const;
   int get_resource_pool_infos_(ObIArray<ObBackupResourcePool> &resource_pool_infos) const;
+  int check_merge_error_();
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

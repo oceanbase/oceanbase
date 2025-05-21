@@ -196,6 +196,11 @@ public:
       const ObTabletReplicaReportColumnMeta &column_meta,
       ObTabletReplicaReportColumnMeta &mock_column_meta);
   static int recover_mock_column_meta(ObTabletReplicaReportColumnMeta &column_meta);
+  static int full_tablet_checksum_verification(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const int64_t batch_size);
+
 private:
   struct ObSimpleCkmInfo
   {
@@ -297,6 +302,20 @@ private:
   static int construct_tablet_replica_checksum_item_(
       common::sqlclient::ObMySQLResult &res,
       ObTabletReplicaChecksumItem &item);
+
+  static int batch_iterate_replica_checksum_range_(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const int64_t last_end_tablet_id,
+      const int64_t batch_size,
+      int64_t &start_tablet_id,
+      int64_t &end_tablet_id,
+      bool &is_finished);
+  static int batch_check_tablet_checksum_in_range_(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObTabletID &start_tablet_id,
+      const common::ObTabletID &end_tablet_id);
 
 public:
   // get column checksum from item and store result in map
