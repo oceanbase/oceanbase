@@ -438,7 +438,7 @@ private:
   int inner_init_macro_index_store_for_turn_(const ObLSBackupDagInitParam &param,
       const share::ObBackupDataType &backup_data_type, const ObBackupReportCtx &report_ctx);
   int64_t get_prev_turn_id_(const int64_t cur_turn_id);
-  int inner_process_();
+  int inner_process_(int64_t &task_id);
   int check_backup_items_valid_(const common::ObIArray<ObBackupProviderItem> &items);
   int get_prev_backup_set_desc_(const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &cur_backup_set_desc,
       share::ObBackupSetFileDesc &prev_backup_set_info);
@@ -455,6 +455,7 @@ private:
       const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
   int generate_next_prefetch_dag_();
   int generate_backup_dag_(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &items);
+  void record_server_event_(const int64_t task_id, const int64_t cost_us) const;
 
 private:
   bool is_inited_;
@@ -496,6 +497,7 @@ private:
   int do_wait_index_builder_ready_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int do_backup_single_macro_block_data_(ObMultiMacroBlockBackupReader *macro_reader,
       const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle);
+  int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
   int check_and_prepare_sstable_index_builders_(const common::ObTabletID &tablet_id);
   int do_backup_single_meta_data_(const ObBackupProviderItem &item, ObIODevice *device_handle);
   int do_wait_sstable_index_builder_ready_(ObTabletHandle &tablet_handle);
@@ -582,6 +584,7 @@ private:
 
 private:
   static const int64_t CHECK_DISK_SPACE_INTERVAL = 5 * 1000 * 1000;  // 5s;
+  static const int64_t CHECK_MERGE_ERROR_INTERVAL = 30_s;
 
 private:
   bool is_inited_;

@@ -1869,8 +1869,7 @@ void ObBackupTabletProvider::reuse()
 
 bool ObBackupTabletProvider::is_run_out()
 {
-  ObMutexGuard guard(mutex_);
-  return is_run_out_;
+  return ATOMIC_LOAD(&is_run_out_);
 }
 
 void ObBackupTabletProvider::set_backup_data_type(const share::ObBackupDataType &backup_data_type)
@@ -1920,7 +1919,7 @@ int ObBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupProvid
       } else if (OB_FAIL(inner_get_batch_items_(batch_size, tmp_items))) {
         LOG_WARN("failed to inner get batch item", K(ret), K(batch_size));
       } else if (tmp_items.empty() && meet_end_) {
-        is_run_out_ = true;
+        ATOMIC_SET(&is_run_out_, true);
         LOG_INFO("no provider items");
         break;
       } else if (OB_FAIL(append(items, tmp_items))) {
@@ -2008,7 +2007,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   ObArray<storage::ObSSTableWrapper> sstable_array;
   ObBackupTabletHandleRef *tablet_ref = NULL;
   bool is_normal = false;
-  bool can_explain = false;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   bool need_skip_tablet = false;
   bool is_major_compaction_mview_dep_tablet = false;
@@ -2048,13 +2046,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     } else {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
     }
-  } else if (OB_FAIL(check_tx_data_can_explain_user_data_(tablet_ref->tablet_handle_, can_explain))) {
-    LOG_WARN("failed to check tx data can explain user data", K(ret), K(ls_id), K(tablet_id));
-  } else if (!can_explain) {
-    ret = OB_REPLICA_CANNOT_BACKUP;
-    LOG_WARN("can not backup replica", K(ret), K(tablet_id), K(ls_id));
-  } else if (OB_FAIL(check_tablet_replica_validity_(tenant_id, ls_id, tablet_id, backup_data_type))) {
-    LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(backup_data_type));
   } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet_id, mview_dep_scn, is_major_compaction_mview_dep_tablet))) {
@@ -2104,69 +2095,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     }
   }
   LOG_INFO("prepare tablet", K(tenant_id), K(ls_id), K(tablet_id), K(sstable_array), K_(backup_data_type), K(total_count));
-  return ret;
-}
-
-int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
-    const storage::ObTabletHandle &tablet_handle,
-    bool &can_explain)
-{
-  int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  can_explain = true;
-  // Only backup minor needs to check whether tx data can explain user data.
-  // If tablet has no minor sstable, or has no uncommitted row in sstable, it's also no need to check tx_data.
-  // The condition that tx_data can explain user data is that tx_data_table's filled_tx_scn is less than the
-  // minimum tablet's minor sstable's filled_tx_scn.
-  // TODO(zeyong): 4.3 But when transfer supports not killing transaction, minor sstable may have uncommitted rows and it's
-  // filled_tx_scn may less than tx_data_table's filled_tx_scn, which is a bad case. Fix this in future by handora.qc.
-
-  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet is nullptr.", K(ret), K(tablet_handle));
-  } else if (!ls_backup_ctx_->backup_data_type_.is_user_backup()) {
-  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
-  } else if (table_store_wrapper.get_member()->get_minor_sstables().empty()) {
-  } else {
-    const ObSSTableArray &sstable_array = table_store_wrapper.get_member()->get_minor_sstables();
-    share::SCN min_filled_tx_scn = SCN::max_scn();
-    ARRAY_FOREACH(sstable_array, i) {
-      ObITable *table_ptr = sstable_array[i];
-      ObSSTable *sstable = NULL;
-      ObSSTableMetaHandle sst_meta_hdl;
-      if (OB_ISNULL(table_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr should not be null", K(ret));
-      } else if (!table_ptr->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr type not expectedd", K(ret));
-      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
-      } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-        LOG_WARN("fail to get sstable meta", K(ret));
-      } else if (!sst_meta_hdl.get_sstable_meta().contain_uncommitted_row()) { // just skip.
-        // ls inner tablet and tablet created by transfer after backfill has no uncommited row.
-      } else {
-        min_filled_tx_scn = std::min(
-          std::max(sst_meta_hdl.get_sstable_meta().get_filled_tx_scn(), sstable->get_end_scn()), min_filled_tx_scn);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      can_explain = min_filled_tx_scn >= ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
-      if (!can_explain) {
-        const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-        FLOG_WARN("tx data can't explain user data",
-                 K(OB_REPLICA_CANNOT_BACKUP), K(can_explain),
-                 K(tablet_id), K(min_filled_tx_scn),
-                 "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_, K(sstable_array));
-      } else {
-        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-          LOG_INFO("tx data can explain user data", K(ret), K(tablet_handle));
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -2788,30 +2716,6 @@ int ObBackupTabletProvider::get_tenant_meta_index_retry_id_(
     LOG_WARN("failed to init retry id getter", K(ret), K(turn_id), K_(param));
   } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
     LOG_WARN("failed to get max retry id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupTabletProvider::check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type)
-{
-  int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
-  if (!backup_data_type.is_user_backup()) {
-    // do nothing
-  } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(ls_backup_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy should not be null", K(ret), KP_(sql_proxy), KP_(ls_backup_ctx));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(tenant_id), K(ls_id), K(tablet_id));
-  } else {
-    const common::ObAddr &src_addr = GCTX.self_addr();
-    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *sql_proxy_))) {
-      LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
-    } else {
-      ls_backup_ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
-    }
   }
   return ret;
 }
