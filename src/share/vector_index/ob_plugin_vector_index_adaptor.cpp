@@ -2570,8 +2570,15 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     const ObVsagQueryResult delta_data = {delta_res_cnt, delta_vids, delta_distances, delta_extra_info_ptr};
     const ObVsagQueryResult snap_data = {snap_res_cnt, snap_vids, snap_distances, snap_extra_info_ptr};
     uint64_t tmp_result_cnt = delta_res_cnt + snap_res_cnt;
-    uint64_t max_res_cnt = tmp_result_cnt < query_cond->query_limit_ ? tmp_result_cnt : query_cond->query_limit_;
-    LOG_DEBUG("query result info", K(delta_res_cnt), K(snap_res_cnt));
+    uint64_t max_res_cnt = 0;
+    // for iter-filter, return all result of delta_res and snap_res, the results will be filter later and make sure final res is less than limit K
+    if (query_cond->is_post_with_filter_) {
+      max_res_cnt = tmp_result_cnt;
+    } else {
+    // but for other situation, merge and make sure result is less than limit K, cuz its the final res
+      max_res_cnt = tmp_result_cnt < query_cond->query_limit_ ? tmp_result_cnt : query_cond->query_limit_;
+    }
+    LOG_TRACE("query result info", K(delta_res_cnt), K(snap_res_cnt));
 
     if (max_res_cnt == 0) {
       // when max_res_cnt == 0, it means (snap_res_cnt == 0 && delta_res_cnt == 0), there is no data in table, do not need alloc memory for res_vid_array
@@ -2648,6 +2655,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   return ret;
 }
 
+// used only for query next result
 int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultContext *ctx,
                                                   ObVectorQueryConditions *query_cond,
                                                   ObVectorQueryVidIterator *&vids_iter)
@@ -2684,11 +2692,8 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
     ObHnswBitmapFilter ifilter(tenant_id_);
     ObHnswBitmapFilter dfilter(tenant_id_);
     if (OB_NOT_NULL(ctx->bitmaps_)) {
-      if (OB_NOT_NULL(ctx->bitmaps_->insert_bitmap_)) {
-        ifilter.set_roaring_bitmap(ctx->bitmaps_->insert_bitmap_);
-      }
-      if (OB_NOT_NULL(ctx->bitmaps_->delete_bitmap_)) {
-        ifilter.set_roaring_bitmap(ctx->bitmaps_->delete_bitmap_);
+      if (OB_FAIL(merge_and_generate_bitmap(ctx, ifilter, dfilter))) {
+        LOG_WARN("failed to merge and generate bitmap.", K(ret));
       }
     }
 
@@ -2786,9 +2791,8 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
       int64_t actual_res_cnt = 0;
       const ObVsagQueryResult delta_data = {delta_res_cnt, delta_vids, delta_distances, delta_extra_info_ptr};
       const ObVsagQueryResult snap_data = {snap_res_cnt, snap_vids, snap_distances, snap_extra_info_ptr};
-      uint64_t tmp_result_cnt = delta_res_cnt + snap_res_cnt;
-      uint64_t max_res_cnt = tmp_result_cnt < query_cond->query_limit_ ? tmp_result_cnt : query_cond->query_limit_;
-      LOG_DEBUG("query result info", K(delta_res_cnt), K(snap_res_cnt));
+      uint64_t max_res_cnt = delta_res_cnt + snap_res_cnt;
+      LOG_TRACE("query result info", K(delta_res_cnt), K(snap_res_cnt));
 
       if (max_res_cnt == 0) {
         // when max_res_cnt == 0, it means (snap_res_cnt == 0 && delta_res_cnt == 0), there is no data in table, do not need alloc memory for res_vid_array
