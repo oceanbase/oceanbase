@@ -430,6 +430,10 @@ ObPluginVectorIndexAdaptor::~ObPluginVectorIndexAdaptor()
       allocator_->free(algo_data_);
       algo_data_ = nullptr;
     }
+    if(!snapshot_key_prefix_.empty()) {
+      allocator_->free(snapshot_key_prefix_.ptr());
+      snapshot_key_prefix_.reset();
+    }
   }
 }
 
