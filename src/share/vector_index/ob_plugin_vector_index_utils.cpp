@@ -574,6 +574,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
   ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
   int64_t index_count = 0;
+  bool has_replace_old_adapter = false;
 
   void *adpt_buff = nullptr;
   if (OB_FAIL(read_local_tablet(ls_id,
@@ -677,11 +678,13 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     RWLock::WLockGuard lock_guard(vec_idx_mgr->get_adapter_map_lock());
     if (OB_FAIL(vec_idx_mgr->replace_old_adapter(new_adapter))) {
      LOG_WARN("failed to replace old adapter", K(ret));
+    } else {
+      has_replace_old_adapter = true;
     }
   }
   // free adapter memory when failed
-  if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter)) {
-    LOG_INFO("release new adapter memory in failure", K(ret));
+  if ((OB_FAIL(ret) || !has_replace_old_adapter) && OB_NOT_NULL(new_adapter)) {
+    LOG_INFO("release new adapter memory in failure", K(ret), K(has_replace_old_adapter));
     new_adapter->~ObPluginVectorIndexAdaptor();
     vector_index_service->get_allocator().free(adpt_buff);
     adpt_buff = nullptr;
