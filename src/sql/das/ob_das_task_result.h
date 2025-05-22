@@ -283,6 +283,20 @@ public:
   bool operator() (common::hash::HashMapPair<ObDASTCBMemProfileKey, ObDASMemProfileInfo *> &entry);
 };
 
+class ObDASTaskResultErase
+{
+  friend class ObDASTaskResultMgr;
+public:
+  ObDASTaskResultErase(ObDASTaskResultMgr *task_result_mgr) : ret_(OB_SUCCESS), task_result_mgr_(task_result_mgr) {}
+  ~ObDASTaskResultErase() = default;
+  bool operator() (const DASTCBInfo &tcb_info, ObDASTCB *tcb);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDASTaskResultErase);
+private:
+  int ret_;
+  ObDASTaskResultMgr *task_result_mgr_;
+};
+
 class ObDASTaskResultMgr
 {
 public:
