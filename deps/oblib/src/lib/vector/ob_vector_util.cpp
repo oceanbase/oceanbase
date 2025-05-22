@@ -258,6 +258,18 @@ void delete_iter_ctx(void *iter_ctx)
 #endif
 }
 
+// return byte
+uint64_t estimate_memory(obvectorlib::VectorIndexPtr& index_handler, uint64_t row_count)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+  return obvectorlib::estimate_memory(index_handler, row_count);
+#endif
+
+}
+
 } //namespace obvectorlib
 } //namespace common
 } //namespace oceanbase
