@@ -533,7 +533,7 @@ public:
   int prepare_ddl_merge_param(
       const ObTablet &tablet,
       ObDDLTableMergeDagParam &merge_param);
-  int prepare_major_merge_param(ObTabletDDLParam &param);
+  int prepare_major_merge_param(ObTablet &tablet, ObTabletDDLParam &param);
   void cleanup_slice_writer(const int64_t context_id);
   INHERIT_TO_STRING_KV("ObTabletDirectLoadMgr", ObTabletDirectLoadMgr, K_(start_scn), K_(commit_scn), K_(execution_id));
 private:

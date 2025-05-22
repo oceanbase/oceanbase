@@ -3301,10 +3301,12 @@ int ObTabletFullDirectLoadMgr::prepare_ddl_merge_param(
 }
 
 int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
+    ObTablet &tablet,
     ObTabletDDLParam &param)
 {
   int ret = OB_SUCCESS;
   uint32_t lock_tid = 0;
+  param.table_key_.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -3322,6 +3324,29 @@ int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
     param.snapshot_version_ = table_key_.get_snapshot_version();
     param.data_format_version_ = data_format_version_;
   }
+
+  /* set table type & base cg id according to the current storage schema
+   * since column store replica may exist
+   */
+  ObArenaAllocator arena;
+  int64_t base_cg_idx = -1;
+  ObStorageSchema *storage_schema = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
+    LOG_WARN("failed to get storage schema", K(ret));
+  } else if (OB_ISNULL(storage_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid storage schema, should not be null", K(ret), K(param));
+  } else if (!storage_schema->is_row_store()) {
+    param.table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
+  } else if (storage_schema->is_row_store()) {
+    param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  } else if (OB_FAIL(ObCODDLUtil::get_base_cg_idx(storage_schema, base_cg_idx))) {
+    LOG_WARN("get base cg idx failed", K(ret));
+  } else {
+    param.table_key_.column_group_idx_ = static_cast<uint16_t>(base_cg_idx);
+  }
+  ObTabletObjLoadHelper::free(arena, storage_schema);
   if (0 != lock_tid) {
     unlock(lock_tid);
   }
