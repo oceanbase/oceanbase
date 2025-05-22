@@ -2061,7 +2061,9 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
     const ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
     if (row_store_type == data_store_desc_->get_row_store_type()) {
       const int64_t max_block_row_count = data_store_desc_->static_desc_->encoding_granularity_;
-      if (data_version >= DATA_VERSION_4_3_4_1 && max_block_row_count > 0) {
+      if (data_version > DATA_VERSION_4_3_5_2 && micro_writer_->get_row_count() <= 0) {
+        need_merge = false;
+      } else if (data_version >= DATA_VERSION_4_3_4_1 && max_block_row_count > 0) {
         // we should consider row count first
         if (micro_block.header_.row_count_ >= max_block_row_count /  2) {
           need_merge = false;
