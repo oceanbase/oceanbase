@@ -131,6 +131,7 @@ struct ObDSResultItem
     type_ = OB_DS_INVALID_STAT;
     index_id_ = OB_INVALID_ID;
     exprs_.reset();
+    non_ds_exprs_.reset();
     stat_key_.reset();
     stat_handle_.reset();
     stat_ = nullptr;
@@ -141,10 +142,13 @@ struct ObDSResultItem
     if (OB_FAIL(this->stat_handle_.assign(other.stat_handle_))) {
       COMMON_LOG(WARN, "failed to assign stat_handle");
       this->reset();
+    } else if (OB_FAIL(exprs_.assign(other.exprs_))) {
+      COMMON_LOG(WARN, "failed to assign exprs", K(ret));
+    } else if (OB_FAIL(non_ds_exprs_.assign(other.non_ds_exprs_))) {
+      COMMON_LOG(WARN, "failed to assign exprs", K(ret));
     } else {
       this->type_ = other.type_;
       this->index_id_ = other.index_id_;
-      this->exprs_ = other.exprs_;
       this->stat_key_ = other.stat_key_;
       this->stat_ = other.stat_;
     }
