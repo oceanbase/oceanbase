@@ -11019,6 +11019,11 @@ int ObDDLService::alter_table_update_aux_column(
               // VP column of primary table need not update.
               new_aux_column_schema.set_column_flags(AUX_VP_COLUMN_FLAG);
             }
+            if (OB_SUCC(ret) && is_index && aux_table_schema->is_vec_hnsw_index() &&
+                OB_FAIL(ObVectorIndexUtil::alter_vec_aux_column_schema(*aux_table_schema, new_column_schema, new_aux_column_schema))) {
+              LOG_WARN("fail to alter vec aux column schema", KR(ret), K(new_aux_column_schema), K(new_column_schema),
+                       K(aux_table_schema));
+            }
           }
           //will only update some attribute, not include rowkey postion or aux position
           if (FAILEDx(ddl_operator.update_column_and_column_group(trans, *aux_table_schema, *aux_table_schema,
