@@ -279,6 +279,7 @@ class ObEvoPlanGuard {
       reset();
       obj_guard_.swap(other);
     }
+    const ObILibCacheObject* get_cache_obj() const  { return obj_guard_.get_cache_obj();  }
     TO_STRING_KV(K_(obj_guard));
   private:
     ObCacheObjGuard obj_guard_;

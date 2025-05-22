@@ -80,7 +80,7 @@ public:
     }
     for (int i = 0; OB_SUCC(ret) && i < RECORDS_SIZE; ++i) {
       use_evo_plan = use_evo_plan_[i] > 0 ? 1 : 0;
-      receive_ts = 0 < i ? (uint32_t)((receive_ts_[i] - receive_ts_[0]) & 0xFFFFFFFF) : 0;
+      receive_ts = (0 < i && receive_ts_[i] > receive_ts_[0]) ? (uint32_t)((receive_ts_[i] - receive_ts_[0]) & 0xFFFFFFFF) : 0;
       elapsed_t = UINT32_MAX < elapsed_t_[i] ? UINT32_MAX : elapsed_t_[i];
       if (OB_FAIL(common::serialization::encode_i8(buf, buf_len, pos, use_evo_plan))) {
       } else if (OB_FAIL(common::serialization::encode_i32(buf, buf_len, pos, receive_ts))) {
