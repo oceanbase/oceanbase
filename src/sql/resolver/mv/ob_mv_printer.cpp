@@ -54,6 +54,7 @@ int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
   } else {
     ObObjPrintParams obj_print_params(mv_def_stmt_.get_query_ctx()->get_timezone_info());
     obj_print_params.print_origin_stmt_ = true;
+    obj_print_params.not_print_internal_catalog_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmts.count(); ++i) {
       if (OB_FAIL(ObSQLUtils::reconstruct_sql(str_alloc,
                                               dml_stmts.at(i),

@@ -1374,7 +1374,7 @@ struct ObObjPrintParams
       uint32_t refine_range_max_value_:1;
       uint32_t character_hex_safe_represent_:1;
       uint32_t binary_string_print_base64_:1;
-      uint32_t print_view_definition_:1;
+      uint32_t not_print_internal_catalog_:1;
       uint32_t reserved_:19;
     };
   };

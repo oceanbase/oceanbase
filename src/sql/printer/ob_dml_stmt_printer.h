@@ -150,10 +150,6 @@ public:
   int print_search_and_cycle(const ObSelectStmt *sub_select_stmt);
   bool is_root_stmt() const { return is_root_; }
   int print_with();
-  void set_is_print_view_definition(bool is_print_view_definition) {
-    print_params_.print_view_definition_ = is_print_view_definition;
-  }
-  bool is_print_view_definition() { return print_params_.print_view_definition_; }
   bool need_print_catalog_name(const ObString& catalog_name);
 private:
   // added for json table
