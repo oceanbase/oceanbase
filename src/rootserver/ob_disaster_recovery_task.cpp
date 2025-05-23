@@ -200,6 +200,7 @@ static const char* disaster_recovery_task_ret_comment_strs[] = {
   "[rs] task can not persist because conflict with clone operation",
   "[rs] task can not execute because destination has no sslog LS replica",
   "[rs] task can not execute because config version not match",
+  "[rs] task can not execute because need generate replace replica task",
   ""/*default max*/
 };
 
