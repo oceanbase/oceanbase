@@ -235,8 +235,9 @@ int ObGetDiagnosticsExecutor::assign_condition_val(ObExecContext &ctx, ObGetDiag
                 /* do nothing */
                 break;
               default:
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected type", K(ret), K(info_type));
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support diag info type", K(ret), K(info_type));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "diag info type");
                 break;
             }
           }
