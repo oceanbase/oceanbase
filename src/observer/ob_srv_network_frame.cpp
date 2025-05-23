@@ -82,11 +82,9 @@ static int update_tcp_keepalive_parameters_for_sql_nio_server(int tcp_keepalive_
   return ret;
 }
 
-int ObSrvNetworkFrame::init()
+int ObSrvNetworkFrame::init(const char* mysql_unix_path, const char* rpc_unix_path)
 {
   int ret = OB_SUCCESS;
-  const char* mysql_unix_path = "unix:run/sql.sock";
-  const char* rpc_unix_path = "unix:run/rpc.sock";
   const uint32_t rpc_port = static_cast<uint32_t>(GCONF.rpc_port);
   ObNetOptions opts;
   int io_cnt = static_cast<int>(GCONF.net_thread_count);

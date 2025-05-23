@@ -404,6 +404,9 @@ private:
   char *curr_dir_;
   std::string run_dir_;
   std::string env_dir_;
+  std::string unix_dir_;
+  std::string mysql_unix_path_;
+  std::string rpc_unix_path_;
   std::string sstable_dir_;
   std::string clog_dir_;
   std::string slog_dir_;
@@ -513,22 +516,29 @@ int MockTenantModuleEnv::init_dir()
   clog_dir_ = env_dir_ + "/clog";
   slog_dir_ = env_dir_ + "/slog";
   if (OB_FAIL(mkdir(run_dir_.c_str(), 0777))) {
-  } else if (OB_FAIL(chdir(run_dir_.c_str()))) {
-  } else if (OB_FAIL(mkdir("./run", 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(run_dir_.c_str()));
   } else if (OB_FAIL(mkdir(env_dir_.c_str(), 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(env_dir_.c_str()));
   } else if (OB_FAIL(mkdir(clog_dir_.c_str(), 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(clog_dir_.c_str()));
   } else if (OB_FAIL(mkdir(sstable_dir_.c_str(), 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(sstable_dir_.c_str()));
   } else if (OB_FAIL(mkdir(slog_dir_.c_str(), 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(slog_dir_.c_str()));
+  } else if (OB_FAIL(mkdir(unix_dir_.c_str(), 0777))) {
+    STORAGE_LOG(WARN, "init_dir", K(ret), K(unix_dir_.c_str()));
+    ret = OB_SUCCESS;
   }
-
-  // 因为改变了工作目录，设置为绝对路径
-  for (int i=0;i<MAX_FD_FILE;i++) {
-    int len = strlen(OB_LOGGER.log_file_[i].filename_);
-    if (len > 0) {
-      std::string ab_file = std::string(curr_dir_) + "/" + std::string(OB_LOGGER.log_file_[i].filename_);
-      SERVER_LOG(INFO, "convert ab file", K(ab_file.c_str()));
-      MEMCPY(OB_LOGGER.log_file_[i].filename_, ab_file.c_str(), ab_file.size());
+  if (OB_SUCC(ret)) {
+    for (int i=0;i<MAX_FD_FILE;i++) {
+      int len = strlen(OB_LOGGER.log_file_[i].filename_);
+      if (len > 0) {
+        std::string ab_file = std::string(curr_dir_) + "/" + std::string(OB_LOGGER.log_file_[i].filename_);
+        SERVER_LOG(INFO, "convert ab file", K(ab_file.c_str()));
+        MEMCPY(OB_LOGGER.log_file_[i].filename_, ab_file.c_str(), ab_file.size());
+      }
     }
+
   }
   return ret;
 }
@@ -754,11 +764,17 @@ int MockTenantModuleEnv::init_before_start_mtl()
 {
   int ret = OB_SUCCESS;
   const int64_t ts_ns = ObTimeUtility::current_time_ns();
-  env_dir_ = "./env_" + std::to_string(rpc_port_) + "_" + std::to_string(ts_ns);
-  run_dir_ = "./run_" + std::to_string(rpc_port_) + "_" + std::to_string(ts_ns);
+  srand(ts_ns);
+  std::string rand_val = std::to_string(rand());
+  run_dir_ = "run_" + std::to_string(rpc_port_) + "_" + rand_val;
+  env_dir_ = run_dir_ + "/env";
   GCONF.cpu_count = 2;
   uint64_t start_time = 10000000;
   scramble_rand_.init(static_cast<uint64_t>(start_time), static_cast<uint64_t>(start_time / 2));
+  unix_dir_ = "r" + rand_val;
+  mysql_unix_path_  = "unix:" + unix_dir_ + "/sql"+rand_val+".sock";
+  rpc_unix_path_ = "unix:" + unix_dir_ + "/rpc"+rand_val+".sock";
+  STORAGE_LOG(INFO, "path", K(mysql_unix_path_.c_str()), K(rpc_unix_path_.c_str()));
   if (OB_FAIL(init_dir())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(locality_manager_.init(self_addr_, &sql_proxy_))) {
@@ -779,7 +795,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
 #endif
   } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(GCTX.is_shared_storage_mode(), 2*1024*1024UL))) {
     STORAGE_LOG(WARN, "fail to init server object manager", K(ret));
-  } else if (OB_FAIL(net_frame_.init())) {
+  } else if (OB_FAIL(net_frame_.init(mysql_unix_path_.c_str(), rpc_unix_path_.c_str()))) {
     STORAGE_LOG(WARN, "net", "ss", _executeShellCommand("ss -antlp").c_str());
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(net_frame_.start())) {
@@ -1067,8 +1083,9 @@ void MockTenantModuleEnv::destroy()
 
   destroyed_ = true;
 
-  chdir(curr_dir_);
   system(("rm -rf " + run_dir_).c_str());
+  system(("rm -rf " + mysql_unix_path_).c_str());
+  system(("rm -rf " + rpc_unix_path_).c_str());
 }
 
 } // namespace storage

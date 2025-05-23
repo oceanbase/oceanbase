@@ -2720,10 +2720,13 @@ int ObServer::init_loaddata_global_stat()
 int ObServer::init_network()
 {
   int ret = OB_SUCCESS;
+  const char* mysql_unix_path = "unix:run/sql.sock";
+  const char* rpc_unix_path = "unix:run/rpc.sock";
 
   obrpc::ObIRpcExtraPayload::set_extra_payload(ObRpcExtraPayload::extra_payload_instance());
 
-  if (OB_FAIL(net_frame_.init())) {
+
+  if (OB_FAIL(net_frame_.init(mysql_unix_path, rpc_unix_path))) {
     LOG_ERROR("init server network fail");
   } else if (OB_FAIL(net_frame_.get_proxy(srv_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));

@@ -43,7 +43,8 @@ public:
 
   virtual ~ObSrvNetworkFrame();
 
-  int init();
+  int init(const char* mysql_unix_path,
+           const char* rpc_unix_path);
   void destroy();
   int start();
   int mysql_shutdown();
