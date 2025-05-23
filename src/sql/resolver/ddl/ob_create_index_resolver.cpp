@@ -990,6 +990,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
     index_arg.sql_mode_ = session_info_->get_sql_mode();
+    index_arg.is_index_scope_specified_ = !(NOT_SPECIFIED == index_scope_);
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
     create_index_stmt->set_storage_cache_policy(storage_cache_policy_);
