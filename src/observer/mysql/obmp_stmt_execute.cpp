@@ -1724,6 +1724,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     LOG_TRACE("sql retry",
               K(ret), "retry_times", retry_ctrl_.get_retry_times(), "sql", ctx_.cur_sql_);
   }
+  ctx_.spm_ctx_.reset();
   return ret;
 }
 
