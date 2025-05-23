@@ -3755,6 +3755,10 @@ routine_body	longtext	YES		NULL
 comment	varchar(4096)	YES		NULL	
 route_sql	longtext	YES		NULL	
 type_id	bigint(20)	YES		-1	
+external_routine_type	bigint(20)	YES		NULL	
+external_routine_entry	varchar(65535)	YES		NULL	
+external_routine_url	varchar(65535)	YES		NULL	
+external_routine_resource	varchar(65535)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3782,6 +3786,10 @@ routine_body	longtext	YES		NULL
 comment	varchar(4096)	YES		NULL	
 route_sql	longtext	YES		NULL	
 type_id	bigint(20)	YES		-1	
+external_routine_type	bigint(20)	YES		NULL	
+external_routine_entry	varchar(65535)	YES		NULL	
+external_routine_url	varchar(65535)	YES		NULL	
+external_routine_resource	varchar(65535)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine_history;
 IF(count(*) >= 0, 1, 0)
 1

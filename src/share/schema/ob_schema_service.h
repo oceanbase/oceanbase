@@ -474,6 +474,7 @@ public:
     uint64_t catalog_id_;
     uint64_t obj_type_;
     uint64_t ccl_rule_id_;
+    uint64_t external_resource_id_;
   };
   union {
     common::ObString table_name_;

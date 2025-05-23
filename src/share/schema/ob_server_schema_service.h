@@ -108,6 +108,7 @@ struct SchemaKey
     uint64_t routine_type_;
     uint64_t column_priv_id_;
     uint64_t catalog_id_;
+    uint64_t external_resource_id_;
   };
   union {
     common::ObString table_name_;

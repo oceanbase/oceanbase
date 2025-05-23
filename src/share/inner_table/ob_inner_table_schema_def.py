@@ -1595,7 +1595,11 @@ all_routine_def = dict(
       ('routine_body', 'longtext', 'true'),
       ('comment', 'varchar:MAX_TENANT_COMMENT_LENGTH', 'true'),
       ('route_sql', 'longtext', 'true'),
-      ('type_id', 'int', 'true', 'OB_INVALID_ID')
+      ('type_id', 'int', 'true', 'OB_INVALID_ID'),
+      ('external_routine_type', 'int', 'true'),
+      ('external_routine_entry', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH', 'true'),
+      ('external_routine_url', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH', 'true'),
+      ('external_routine_resource', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH', 'true'),
     ],
 )
 
