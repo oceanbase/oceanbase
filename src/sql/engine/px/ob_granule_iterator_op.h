@@ -295,6 +295,7 @@ private:
   ObSEArray<ObP2PDhKey, 2> query_range_rf_keys_;
   ObSEArray<ObP2PDatahubMsgBase *, 2> query_range_rf_msgs_;
   ObGranuleSplitterType splitter_type_;
+  ObGranulePumpArgs *pump_arg_;
 };
 
 } // end namespace sql

@@ -1791,12 +1791,13 @@ ObGranulePumpArgs *ObGranulePump::get_granule_pump_arg(const int64_t gi_op_id)
 int ObGranulePump::regenerate_gi_task()
 {
   int ret = common::OB_SUCCESS;
-  pump_version_ += 1;
   reset_task_array();
   for (int i = 0; i < pump_args_.count() && OB_SUCC(ret); ++i) {
     ObGranulePumpArgs &arg = pump_args_.at(i);
     if (OB_FAIL(add_new_gi_task(arg, false))) {
       LOG_WARN("failed to add new gi task", K(ret));
+    } else {
+      arg.pump_version_++;
     }
   }
   return ret;
@@ -1805,9 +1806,10 @@ int ObGranulePump::regenerate_gi_task()
 int ObGranulePump::regenerate_gi_task(ObGranulePumpArgs &args)
 {
   int ret = common::OB_SUCCESS;
-  pump_version_ += 1;
   if (OB_FAIL(add_new_gi_task(args, true))) {
     LOG_WARN("failed to add new gi task", K(ret));
+  } else {
+    args.pump_version_++;
   }
   return ret;
 }
