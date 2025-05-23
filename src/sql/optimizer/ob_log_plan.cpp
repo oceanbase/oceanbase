@@ -7763,7 +7763,7 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
 }
 
 int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
-                                                 ObExchangeInfo &exch_info,
+                                                 const ObExchangeInfo &exch_info,
                                                  const ObIArray<OrderItem> &sort_keys,
                                                  const bool need_sort,
                                                  const int64_t prefix_pos,
@@ -7854,31 +7854,23 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     // allocate exchange if necessary
     if (OB_SUCC(ret) && exch_info.need_exchange()) {
       if (!sort_keys.empty() &&
-         (top->is_distributed() || is_local_order) &&
-         (!need_sort || exch_info.is_pq_local())) {
-        if (hash_sortkey != NULL) {
-          if (OB_FAIL(exch_info.sort_keys_.push_back(*hash_sortkey))) {
+          (top->is_distributed() || is_local_order) &&
+          (!need_sort || exch_info.is_pq_local())) {
+        ObExchangeInfo cur_exch_info;
+        if (OB_FAIL(cur_exch_info.assign(exch_info))) {
+          LOG_WARN("failed to assign exchange info", K(ret));
+        } else {
+          cur_exch_info.is_merge_sort_ = true;
+          cur_exch_info.is_sort_local_order_ = exch_info.is_pq_local() ? false : is_local_order;
+          cur_exch_info.sort_keys_.reuse();
+          if (hash_sortkey != NULL && OB_FAIL(cur_exch_info.sort_keys_.push_back(*hash_sortkey))) {
             LOG_WARN("failed to add hash sort key", K(ret));
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
-            if (OB_FAIL(exch_info.sort_keys_.push_back(sort_keys.at(i)))) {
-              LOG_WARN("failed to add sort key", K(ret));
-            }
-          }
-        } else if (OB_FAIL(exch_info.sort_keys_.assign(sort_keys))) {
-          LOG_WARN("failed to allocate sort keys", K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          exch_info.is_merge_sort_ = true;
-          if (exch_info.is_pq_local()) {
-            exch_info.is_sort_local_order_ = false;
-          } else {
-            exch_info.is_sort_local_order_ = is_local_order;
+          } else if (OB_FAIL(append(cur_exch_info.sort_keys_, sort_keys))) {
+            LOG_WARN("failed to append sort keys", K(ret));
+          } else if (OB_FAIL(allocate_exchange_as_top(top, cur_exch_info))) {
+            LOG_WARN("failed to allocate exchange as top", K(ret));
           }
         }
-      }
-      if (OB_FAIL(ret)) {
-        /*do nothing*/
       } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
         LOG_WARN("failed to allocate exchange as top", K(ret));
       } else { /*do nothing*/ }

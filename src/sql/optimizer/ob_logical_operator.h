@@ -493,7 +493,7 @@ struct ObExchangeInfo
   int init_calc_part_id_expr(ObOptimizerContext &opt_ctx);
   void set_calc_part_id_expr(ObRawExpr *expr) { calc_part_id_expr_ = expr; }
   int append_hash_dist_expr(const common::ObIArray<ObRawExpr *> &exprs);
-  int assign(ObExchangeInfo &other);
+  int assign(const ObExchangeInfo &other);
 
   bool is_remote_;
   bool is_task_order_;

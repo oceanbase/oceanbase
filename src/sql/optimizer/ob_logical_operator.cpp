@@ -143,7 +143,7 @@ int ObExchangeInfo::append_hash_dist_expr(const common::ObIArray<ObRawExpr *> &e
   return ret;
 }
 
-int ObExchangeInfo::assign(ObExchangeInfo &other)
+int ObExchangeInfo::assign(const ObExchangeInfo &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sort_keys_.assign(other.sort_keys_))) {
@@ -160,6 +160,8 @@ int ObExchangeInfo::assign(ObExchangeInfo &other)
     LOG_WARN("failed to assign exprs", K(ret));
   } else if (OB_FAIL(weak_sharding_.assign(other.weak_sharding_))) {
     LOG_WARN("failed to assign weak sharding", K(ret));
+  } else if (OB_FAIL(wf_hybrid_pby_exprs_cnt_array_.assign(other.wf_hybrid_pby_exprs_cnt_array_))) {
+    LOG_WARN("failed to assign hybrid phy exprs cnt array", K(ret));
   } else if (OB_FAIL(repart_all_tablet_ids_.assign(other.repart_all_tablet_ids_))) {
     LOG_WARN("failed to assign partition ids", K(ret));
   } else if (OB_FAIL(server_list_.assign(other.server_list_))) {
@@ -178,7 +180,14 @@ int ObExchangeInfo::assign(ObExchangeInfo &other)
     dist_method_ = other.dist_method_;
     unmatch_row_dist_method_ = other.unmatch_row_dist_method_;
     null_row_dist_method_ = other.null_row_dist_method_;
+    slave_mapping_type_ = other.slave_mapping_type_;
     strong_sharding_ = other.strong_sharding_;
+    need_null_aware_shuffle_ = other.need_null_aware_shuffle_;
+    is_rollup_hybrid_ = other.is_rollup_hybrid_;
+    is_wf_hybrid_ = other.is_wf_hybrid_;
+    wf_hybrid_aggr_status_expr_ = other.wf_hybrid_aggr_status_expr_;
+    may_add_interval_part_ = other.may_add_interval_part_;
+    sample_type_ = other.sample_type_;
     parallel_ = other.parallel_;
     server_cnt_ = other.server_cnt_;
   }

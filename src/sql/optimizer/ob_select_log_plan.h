@@ -685,11 +685,9 @@ private:
                                 const bool single_part_parallel,
                                 const bool is_partition_wise,
                                 const int64_t prefix_pos,
-                                const int64_t part_cnt,
                                 ObIArray<CandidatePlan> &all_plans);
   int create_range_list_dist_win_func(ObLogicalOperator *top,
                                       const WinFuncOpHelper &win_func_helper,
-                                      const int64_t part_cnt,
                                       ObIArray<CandidatePlan> &all_plans);
   int get_range_dist_keys(const WinFuncOpHelper &win_func_helper,
                           const ObWinFunRawExpr *win_func,
@@ -705,14 +703,12 @@ private:
                                 const WinFuncOpHelper &win_func_helper,
                                 const bool need_sort,
                                 const int64_t prefix_pos,
-                                const int64_t part_cnt,
                                 ObIArray<CandidatePlan> &all_plans);
 
   int create_hash_local_dist_win_func(ObLogicalOperator *top,
                                       const WinFuncOpHelper &win_func_helper,
                                       const bool need_sort,
                                       const int64_t prefix_pos,
-                                      const int64_t part_cnt,
                                       ObIArray<CandidatePlan> &all_plans);
 
   int create_normal_hash_dist_win_func(ObLogicalOperator *&top,
@@ -749,11 +745,8 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                    ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
                                    ObIArray<CandidatePlan> &total_plans,
                                    CandidatePlan &orig_candidate_plan);
-  int check_win_func_need_sort(const ObLogicalOperator &top,
-                               const WinFuncOpHelper &win_func_helper,
-                               bool &need_sort,
-                               int64_t &prefix_pos,
-                               int64_t &part_cnt);
+  int prune_win_func_plan_by_sort_method(ObIArray<CandidatePlan> &candi_plans,
+                                         ObIArray<CandidatePlan> &final_plans);
   int prepare_next_group_win_funcs(const bool distributed,
                                    const ObIArray<OrderItem> &op_ordering,
                                    const int64_t dop,
@@ -860,23 +853,6 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                   const ObIArray<ObRawExpr *> &part_exprs,
                                   const EqualSets &equal_sets,
                                   ObIArray<ObOrderDirection> &directions);
-
-  /**
-   * @brief allocate_window_function_group
-   * 为一组窗口函数表达式分配 ObLogWindowFunction 算子
-   */
-  int create_merge_window_function_plan(ObLogicalOperator *&top,
-                                        const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                                        const ObRawExpr *limit_expr,
-                                        const ObIArray<OrderItem> &sort_keys,
-                                        const ObIArray<ObRawExpr*> &partition_exprs,
-                                        WinDistAlgo dist_method,
-                                        const bool is_pushdown,
-                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
-                                        const ObIArray<bool> &pushdown_info,
-                                        bool need_sort,
-                                        int64_t prefix_pos,
-                                        int64_t part_cnt);
 
   //init topn_filter,topn_const and is_fetch_with_ties flag
   int init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool wf_topn_hint);
