@@ -139,7 +139,7 @@ int ObOldRowCheckDumper::dump_diag_tables()
       getter = nullptr;
     }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObOldRowCheckDumper::dump_diag_merge()
@@ -191,7 +191,7 @@ int ObOldRowCheckDumper::dump_diag_merge()
     get_merge->~ObSingleMerge();
     get_merge = nullptr;
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObOldRowCheckDumper::dump_diag_log()
