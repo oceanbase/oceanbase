@@ -749,6 +749,9 @@ int ObDbmsSpace::estimate_index_table_size(ObMySQLProxy *sql_proxy,
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "unexpected null ptr of table schema", K(ret), K(table_schema));
   } else if (OB_FAIL(get_optimizer_stats(info, opt_stats))) {
     SQL_ENG_LOG(WARN, "fail to get opt stats", K(ret));
   } else if (OB_FAIL(check_stats_valid(opt_stats, is_valid))) {
@@ -757,8 +760,10 @@ int ObDbmsSpace::estimate_index_table_size(ObMySQLProxy *sql_proxy,
     if (OB_FAIL(estimate_index_table_size_by_opt_stats(sql_proxy, table_schema, opt_stats, info, table_size))) {
       SQL_ENG_LOG(WARN, "fail to estimate index table size", K(ret));
     }
-  } else if (OB_FAIL(estimate_index_table_size_default(sql_proxy, table_schema, info, table_size))) {
-    SQL_ENG_LOG(WARN, "fail to estimate index table size by default", K(ret));
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    SQL_ENG_LOG(WARN, "not supported to estimate the size of the index table without optimizer stats", K(ret), "main table schema", *table_schema,
+        K(info));
   }
 
   if (OB_SUCC(ret)) {
@@ -809,8 +814,7 @@ int ObDbmsSpace::estimate_index_table_size_by_opt_stats(ObMySQLProxy *sql_proxy,
                                               info.tablet_ids_,
                                               info.table_tenant_id_))) {
     SQL_ENG_LOG(WARN, "fail to get info from schema", K(ret));
-  } else if (OB_FAIL(inner_get_compressed_ratio(sql_proxy, info))) {
-    SQL_ENG_LOG(WARN, "fail to get compression ratio", K(ret));
+  } else if (OB_FALSE_IT(info.compression_ratio_ = 0.5)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < info.part_ids_.count(); i++) {
       uint64_t dummy_alloc_size = 0;
