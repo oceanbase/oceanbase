@@ -1267,18 +1267,18 @@ int ObCOSSTableRowScanner::construct_cg_iter_params_for_rowkey(
   return ret;
 }
 
-int ObCOSSTableRowScanner::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
-                                            int64_t &curr_scan_index,
-                                            blocksstable::ObDatumRowkey &border_rowkey,
-                                            common::ObIAllocator &allocator,
-                                            bool need_set_border_rowkey)
+int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
+                                           int64_t &curr_scan_index,
+                                           blocksstable::ObDatumRowkey& rowkey,
+                                           blocksstable::ObDatumRowkey &border_rowkey,
+                                           common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObCSRowId current_row_id;
+  ObCSRowId current_row_id = OB_INVALID_CS_ROW_ID;
   ObICGIterator *scanner = nullptr;
-  const ObDatumRow* row;
-  ObDatumRowkey tmp_rowkey;
+  const ObDatumRow* row = nullptr;
   common::ObSEArray<ObTableIterParam*, 8> iter_params;
+  ObDatumRowkey tmp_rowkey;
   rowkey.reset();
   border_rowkey.reset();
 
@@ -1334,7 +1334,7 @@ int ObCOSSTableRowScanner::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
     } else if (row->count_ != iter_param_->read_info_->get_schema_rowkey_count()) {
       LOG_ERROR("row key count mismatch!", K(row->count_), K(iter_param_->read_info_->get_schema_rowkey_count()));
     } else if (OB_FAIL(tmp_rowkey.assign(row->storage_datums_, row->count_))) {
-      LOG_WARN("assign rowkey failed", K(ret), K(tmp_rowkey), K(row->count_));
+      LOG_WARN("assign rowkey failed", K(ret), K(row));
     } else if (OB_UNLIKELY(!tmp_rowkey.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey));
@@ -1347,13 +1347,7 @@ int ObCOSSTableRowScanner::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
 
   // get di base border rowkey
   if (OB_SUCC(ret) && need_set_border_rowkey) {
-    const blocksstable::ObDatumRowkey &tmp_border_rowkey = row_scanner_->prefetcher_.get_border_rowkey();
-    if (!tmp_border_rowkey.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "border rowkey is invalid", K(ret), K(tmp_border_rowkey));
-    } else if (OB_FAIL(tmp_border_rowkey.deep_copy(border_rowkey, allocator))) {
-      STORAGE_LOG(WARN, "fail to deep copy rowkey", K(ret), K(tmp_border_rowkey));
-    }
+    border_rowkey = row_scanner_->prefetcher_.get_border_rowkey();
   }
 
   if (OB_NOT_NULL(scanner)) {

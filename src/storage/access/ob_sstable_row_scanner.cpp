@@ -953,32 +953,21 @@ int ObSSTableRowScanner<PrefetchType>::try_refreshing_blockscan_checker_for_colu
 }
 
 template<typename PrefetchType>
-int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
-                                                        int64_t &curr_scan_index,
-                                                        blocksstable::ObDatumRowkey &border_rowkey,
-                                                        common::ObIAllocator &allocator,
-                                                        bool need_set_border_rowkey)
+int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_border_rowkey,
+                                                       int64_t &curr_scan_index,
+                                                       blocksstable::ObDatumRowkey& rowkey,
+                                                       blocksstable::ObDatumRowkey &border_rowkey,
+                                                       common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const ObDatumRow *row;
+  const ObDatumRow *row = nullptr;
   ObDatumRowkey tmp_rowkey;
   border_rowkey.reset();
   rowkey.reset();
+  block_row_store_->disable();
 
-  // get di base border rowkey
-  if (need_set_border_rowkey) {
-    const blocksstable::ObDatumRowkey &tmp_border_rowkey = prefetcher_.get_border_rowkey();
-    if (!tmp_border_rowkey.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("border rowkey is invalid", K(ret), K(tmp_border_rowkey), KPC(this));
-    } else if (OB_FAIL(tmp_border_rowkey.deep_copy(border_rowkey, allocator))) {
-      LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_border_rowkey), KPC(this));
-    }
-  }
   // get next row
-  if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(block_row_store_->disable())) {
-  } else if (OB_FAIL(get_next_row(row))) {
+  if (OB_FAIL(get_next_row(row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to get next row from di base iterator", K(ret), KPC(this));
     } else {
@@ -992,14 +981,19 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(blocksstable::ObDatumRowk
       ret = OB_SUCCESS;
     }
   } else if (OB_FAIL(tmp_rowkey.assign(row->storage_datums_, iter_param_->get_schema_rowkey_count()))) {
-    LOG_WARN("assign rowkey failed", K(ret), K(tmp_rowkey), K(iter_param_->get_schema_rowkey_count()), KPC(this));
+    LOG_WARN("assign rowkey failed", K(ret), K(row), K(iter_param_->get_schema_rowkey_count()));
   } else if (OB_UNLIKELY(!tmp_rowkey.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey), KPC(this));
+    LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey));
   } else if (OB_FAIL(tmp_rowkey.deep_copy(rowkey, allocator))) {
-    LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey), KPC(this));
+    LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey));
   } else {
     curr_scan_index = cur_range_idx_;
+  }
+
+  // get di base border rowkey
+  if (OB_SUCC(ret) && need_set_border_rowkey) {
+    border_rowkey = prefetcher_.get_border_rowkey();
   }
   return ret;
 }
