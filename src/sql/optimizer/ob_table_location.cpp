@@ -6238,7 +6238,9 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
       } else if (OB_FAIL(part_column_exprs.push_back(cur_col_expr))) {
         LOG_WARN("failed to push back part column expr");
       } else if ((ObIntTC == cur_col_expr->get_type_class() && ObIntType != cur_col_expr->get_data_type()) ||
-                 (ObUIntTC == cur_col_expr->get_type_class() && ObUInt64Type != cur_col_expr->get_data_type())) {
+                 (ObUIntTC == cur_col_expr->get_type_class() && ObUInt64Type != cur_col_expr->get_data_type()) ||
+                 ObTimestampLTZType == cur_col_expr->get_data_type()
+                 ) {
         /*对于int类型分区键，OB内部存储的分区定义值是用INT64保存的，因此这里需要把column expr也mock成int64的，
           否则表达式计算时会出现column的预期类型与实际类型不符的问题*/
         need_replace_column = true;
@@ -6255,12 +6257,20 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
           res_type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
           new_expr->set_data_type(ObIntType);
           new_expr->set_result_type(res_type);
-        } else {
+        } else if (ObUIntTC == cur_col_expr->get_type_class()) {
           ObExprResType res_type;
           res_type.set_uint64();
           res_type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].scale_);
           res_type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].precision_);
           new_expr->set_data_type(ObUInt64Type);
+          new_expr->set_result_type(res_type);
+        } else {
+          // timestemp with local time zone类型的分区键会把分区定义值转成timestamp with time zone 保存
+          // 相关实现请参考ObPartitionExecutorUtils::expr_cal_and_cast
+          ObExprResType res_type;
+          res_type.set_timestamp_tz();
+          res_type.set_scale(cur_col_expr->get_scale());
+          new_expr->set_data_type(ObTimestampTZType);
           new_expr->set_result_type(res_type);
         }
         if (OB_FAIL(ret)) {
