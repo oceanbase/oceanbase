@@ -957,7 +957,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_arc_limit)
 
   micro_ckpt_op.dynamic_update_arc_limit();
 
-  const int64_t new_limit = phy_blk_mgr.get_cache_limit_size() * SS_ARC_LIMIT_PCT / 100;
+  const int64_t arc_limit_pct = micro_cache->is_mini_mode_ ? SS_MINI_MODE_ARC_LIMIT_PCT : SS_ARC_LIMIT_PCT;
+  const int64_t new_limit = phy_blk_mgr.get_cache_limit_size() * arc_limit_pct / 100;
   const int64_t new_work_limit = (static_cast<double>(prewarm_work_limit) / origin_limit) * new_limit;
   ori_pct = static_cast<double>(p1 * 100) / prewarm_work_limit;
   const int64_t p2 = static_cast<int64_t>((static_cast<double>(new_work_limit * ori_pct) / 100.0));

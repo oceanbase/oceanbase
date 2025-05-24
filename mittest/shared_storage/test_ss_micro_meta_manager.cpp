@@ -683,7 +683,7 @@ TEST_F(TestSSMicroMetaManager, micro_meta_manager)
   ObConcurrentFIFOAllocator &allocator = MTL(ObSSMicroCache *)->get_allocator();
   ObSSMicroCacheStat cache_stat;
   ObSSMicroMetaManager micro_meta_mgr(cache_stat);
-  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.init(tenant_id, block_size, cache_limit_size, allocator));
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.init(tenant_id, false/*s_mini_mode*/, block_size, cache_limit_size, allocator));
 
   ObSSMemDataManager &mem_data_mgr = MTL(ObSSMicroCache *)->mem_data_mgr_;
   ObSSMemBlockPool &mem_blk_pool = mem_data_mgr.mem_block_pool_;
