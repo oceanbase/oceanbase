@@ -165,6 +165,7 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
   ObAddr addr;
   uint32_t client_sess_id = arg.sess_id_;
   uint32_t server_sess_id = INVALID_SESSID;
+  int64_t local_session_create_time = 0;
   // Proxy connection scenario kill session
   if (OB_ISNULL(curr_sess_info = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -185,23 +186,29 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(client_sess_id));
+  } else if (OB_FAIL(arg.check_auth_for_kill(sess_info->get_priv_tenant_id(), sess_info->get_user_id()))) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("no permissions for kill", K(ret), K(arg.sess_id_));
   } else {
     // sess_info is the session need to be killed.
     // 1. If the current session is the session currently executing the kill command
     // it can directly return the error code (OB_ERR_KILL_CLIENT_SESSION) to the proxy.
     // 2. If not, return OB_SUCCESS.
-    sess_info->set_mark_killed(true);
-    sess_info->set_session_state(SESSION_KILLED);
-    if (client_sess_id == curr_sess_info->get_client_sid()) {
-      ret = OB_ERR_KILL_CLIENT_SESSION;
+    local_session_create_time = sess_info->get_client_create_time();
+    if (OB_FAIL(sess_mgr.kill_session(*sess_info))) {
+        LOG_WARN("fail to kill session", K(ret), K(arg));
     } else {
-      ret = OB_SUCCESS;
+      if (client_sess_id == curr_sess_info->get_client_sid()) {
+        ret = OB_ERR_KILL_CLIENT_SESSION;
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
     LOG_INFO("current server conclude kill client session", K(arg.sess_id_));
   }
   if (OB_SUCC(ret)) {
     ObAddr cs_addr;
-    int64_t create_time = 0;
+    int64_t create_time = local_session_create_time;
     // current server not have cs_id, find it in remote.
     // If there is no link between proxy and server,
     // unknown client session id will be reported.
@@ -209,9 +216,11 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
       LOG_WARN("fail to get client session location, unknown client sessid",
               K(ret), K(arg), K(ctx), K(cs_addr));
       // Obtain the client establishment time for map maintenance.
-    } else if (OB_FAIL(get_client_session_create_time_and_auth(arg, ctx, cs_addr, create_time))) {
-      LOG_WARN("fail to get client session create time or no auth",
-              K(ret), K(arg), K(ctx), K(cs_addr), K(ret));
+    } else if (cs_addr != GCTX.self_addr() &&
+               OB_FAIL(get_client_session_create_time_and_auth(
+                   arg, ctx, cs_addr, create_time))) {
+      LOG_WARN("fail to get client session create time or no auth", K(ret),
+               K(arg), K(ctx), K(cs_addr), K(ret));
       // If the time cannot be obtained, return kill failure.
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_ERR_KILL_CLIENT_SESSION_FAILED;
@@ -374,9 +383,10 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
   } else if (sess_info->is_real_inner_session()) {
     ret = OB_ERR_KILL_DENIED;
     LOG_WARN("It is not allowed to close the inner session", K(ret), K(arg));
-  } else if ((OB_SYS_TENANT_ID == arg.tenant_id_)
-             || ((arg.tenant_id_ == sess_info->get_priv_tenant_id())
-                 && (arg.has_user_super_privilege_ || arg.user_id_ == sess_info->get_user_id()))) {
+  } else if (OB_FAIL(arg.check_auth_for_kill(sess_info->get_priv_tenant_id(), sess_info->get_user_id()))) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("no permissions for kill", K(ret), K(arg.sess_id_));
+  } else {
     if (arg.is_query_) {
       if (OB_FAIL(sess_mgr.kill_query(*sess_info))) {
         LOG_WARN("fail to kill query", K(ret), K(arg));
@@ -386,8 +396,6 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
         LOG_WARN("fail to kill session", K(ret), K(arg));
       }
     }
-  } else {
-    ret = OB_ERR_KILL_DENIED;
   }
   return ret;
 }
