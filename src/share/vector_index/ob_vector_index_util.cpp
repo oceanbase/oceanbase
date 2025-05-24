@@ -246,6 +246,52 @@ int ObVectorIndexUtil::parser_params_from_string(
   return ret;
 }
 
+int ObVectorIndexUtil::filter_index_param(const ObString &index_param_str, const char *to_filter, char *filtered_param_str, int32_t &res_len)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_param_str = index_param_str;
+  ObArray<ObString> tmp_param_strs;
+  if (tmp_param_str.empty() ||OB_ISNULL(filtered_param_str) ||OB_ISNULL(to_filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty", K(ret), K(tmp_param_str), K(filtered_param_str), K(to_filter));
+  } else if (OB_FAIL(split_on(tmp_param_str, ',', tmp_param_strs))) {
+    LOG_WARN("fail to split func expr", K(ret), K(tmp_param_str));
+  } else if (tmp_param_strs.count() < 2) {  // at lease two params(distance, type) should be set
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
+  } else {
+    bool first_item = true;
+    int64_t print_pos = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
+      ObString one_tmp_param_str = tmp_param_strs.at(i).trim();
+      ObArray<ObString> one_tmp_param_strs;
+      if (OB_FAIL(split_on(one_tmp_param_str, '=', one_tmp_param_strs))) {
+        LOG_WARN("fail to split one param str", K(ret), K(one_tmp_param_str));
+      } else if (one_tmp_param_strs.count() != 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector index one param pair count", K(one_tmp_param_strs.count()));
+      } else {
+        ObString new_param_name = one_tmp_param_strs.at(0).trim();
+        ObString new_param_value = one_tmp_param_strs.at(1).trim();
+        // filter EXTRA_INFO_ACTUAL_SIZE
+        if (new_param_name != to_filter) {
+          if (OB_FAIL(databuff_printf(filtered_param_str, OB_MAX_TABLE_NAME_LENGTH, print_pos,
+                                      first_item ? "%.*s=%.*s" : ", %.*s=%.*s", new_param_name.length(),
+                                      new_param_name.ptr(), new_param_value.length(), new_param_value.ptr()))) {
+            LOG_WARN("fail to databuff printf", K(ret), K(print_pos), K(new_param_name), K(new_param_value));
+          } else {
+            first_item = false;
+          }
+        } else {
+          LOG_INFO("do not print: ", K(new_param_name), K(new_param_value));
+        }
+      }
+    }
+    res_len = print_pos;
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::print_index_param(const ObTableSchema &table_schema, char *buf, const int64_t &buf_len,
                                          int64_t &pos)
 {
@@ -253,55 +299,16 @@ int ObVectorIndexUtil::print_index_param(const ObTableSchema &table_schema, char
   bool has_extra_param = false;
   const ObString &index_param_str = table_schema.get_index_params();
   if (share::schema::is_vec_hnsw_index(table_schema.get_index_type())) {
-    const char *to_find = "EXTRA_INFO_ACTUAL_SIZE";
-    const char *position = strstr(index_param_str.ptr(), to_find);
+    const char *to_filter = "EXTRA_INFO_ACTUAL_SIZE";
+    const char *position = strstr(index_param_str.ptr(), to_filter);
     if (position != NULL) {
       has_extra_param = true;
       char print_params_str[OB_MAX_TABLE_NAME_LENGTH];
       int32_t len = 0;
-      ObString tmp_param_str = index_param_str;
-      ObArray<ObString> tmp_param_strs;
-      if (tmp_param_str.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector index param, is empty", K(ret));
-      } else if (OB_FAIL(split_on(tmp_param_str, ',', tmp_param_strs))) {
-        LOG_WARN("fail to split func expr", K(ret), K(tmp_param_str));
-      } else if (tmp_param_strs.count() < 2) {  // at lease two params(distance, type) should be set
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector index param count", K(tmp_param_strs.count()));
-      } else {
-        bool first_item = true;
-        int64_t print_pos = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
-          ObString one_tmp_param_str = tmp_param_strs.at(i).trim();
-          ObArray<ObString> one_tmp_param_strs;
-          if (OB_FAIL(split_on(one_tmp_param_str, '=', one_tmp_param_strs))) {
-            LOG_WARN("fail to split one param str", K(ret), K(one_tmp_param_str));
-          } else if (one_tmp_param_strs.count() != 2) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector index one param pair count", K(one_tmp_param_strs.count()));
-          } else {
-            ObString new_param_name = one_tmp_param_strs.at(0).trim();
-            ObString new_param_value = one_tmp_param_strs.at(1).trim();
-            // filter EXTRA_INFO_ACTUAL_SIZE
-            if (new_param_name != "EXTRA_INFO_ACTUAL_SIZE") {
-              if (OB_FAIL(databuff_printf(print_params_str, OB_MAX_TABLE_NAME_LENGTH, print_pos,
-                                          first_item ? "%.*s=%.*s" : ", %.*s=%.*s", new_param_name.length(),
-                                          new_param_name.ptr(), new_param_value.length(), new_param_value.ptr()))) {
-                LOG_WARN("fail to databuff printf", K(ret), K(print_pos), K(new_param_name), K(new_param_value));
-              } else {
-                first_item = false;
-              }
-            } else {
-              LOG_INFO("do not print: ", K(new_param_name), K(new_param_value));
-            }
-          }
-        }
-        len = print_pos;
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH (%.*s) ", len, print_params_str))) {
-          SHARE_SCHEMA_LOG(WARN, "print WITH vector index param failed", K(ret), K(print_params_str));
-        }
+      if (OB_FAIL(filter_index_param(index_param_str, to_filter, print_params_str, len))) {
+        LOG_WARN("fail to filter index param", K(ret), K(index_param_str));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH (%.*s) ", len, print_params_str))) {
+        LOG_WARN("print WITH vector index param failed", K(ret), K(print_params_str));
       }
     }
   }
@@ -1246,12 +1253,64 @@ int ObVectorIndexUtil::get_vector_index_tids(share::schema::ObSchemaGetterGuard 
   return ret;
 }
 
+int ObVectorIndexUtil::update_param_extra_actual_size(const ObTableSchema &data_schema, ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObString &old_param_str = index_schema.get_index_params();
+  if (!old_param_str.empty() && share::schema::is_vec_hnsw_index(index_schema.get_index_type())) {
+    ObVectorIndexParam old_param;
+    if (OB_FAIL(parser_params_from_string(old_param_str, ObVectorIndexType::VIT_HNSW_INDEX, old_param))) {
+      LOG_WARN("failed to parser_params_from_string", K(ret), K(old_param_str));
+    } else {
+      int64_t old_extra_info_actual_size = old_param.extra_info_actual_size_;
+      int64_t new_extra_info_actual_size = 0;
+      int64_t extra_info_max_size = old_param.extra_info_max_size_;
+      if (extra_info_max_size <= 0) {
+        // do nothing, extra_info is closed
+      } else if (data_schema.get_index_type() != ObIndexType::INDEX_TYPE_IS_NOT) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("must not index table", K(ret), K(data_schema));
+      } else if (OB_FAIL(check_extra_info_size(data_schema, nullptr /*seesion_info*/, true /*is_set_extra_info*/,
+                                               extra_info_max_size, new_extra_info_actual_size))) {
+        LOG_WARN("fail to check extra info size", K(ret), K(extra_info_max_size));
+      } else if (old_extra_info_actual_size == new_extra_info_actual_size) {
+         // do nothing, extra_info_actual_size is not change
+      } else {
+        int64_t pos = 0;
+        const char *to_filter= "EXTRA_INFO_ACTUAL_SIZE";
+        char new_params_str[OB_MAX_TABLE_NAME_LENGTH];
+        int32_t res_len = 0;
+        if (OB_FAIL(filter_index_param(old_param_str, to_filter, new_params_str, res_len))) {
+          LOG_WARN("fail to filter index param", K(ret), K(old_param_str));
+        } else if (OB_FALSE_IT(pos = res_len)) {
+        } else if (new_extra_info_actual_size > 0 &&
+                   OB_FAIL(databuff_printf(new_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+                                           ", EXTRA_INFO_ACTUAL_SIZE=%ld", new_extra_info_actual_size))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        } else {
+          ObString new_index_params;
+          new_index_params.assign_ptr(new_params_str, pos);
+          if (OB_FAIL(index_schema.set_index_params(new_index_params))) {
+            LOG_WARN("fail to set index params", K(ret), K(new_index_params));
+          } else {
+            LOG_DEBUG("vector index params", K(new_index_params));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::check_extra_info_size(const ObTableSchema &tbl_schema,
-                                             const sql::ObSQLSessionInfo &session_info, bool is_extra_max_size_set,
+                                             const sql::ObSQLSessionInfo *session_info, bool is_extra_max_size_set,
                                              int64_t extra_info_max_size, int64_t &extra_info_actual_size)
 {
   int ret = OB_SUCCESS;
-  if (is_extra_max_size_set && extra_info_max_size == 0) {
+  if (!is_extra_max_size_set &&OB_ISNULL(session_info)){
+    // !is_extra_max_size_set and session_info is null, means not use extra_info
+    extra_info_actual_size = 0;
+  } else if (is_extra_max_size_set && extra_info_max_size == 0) {
     extra_info_actual_size = 0;
   } else {
     const common::ObRowkeyInfo &rowkey_info = tbl_schema.get_rowkey_info();
@@ -1306,6 +1365,7 @@ int ObVectorIndexUtil::check_extra_info_size(const ObTableSchema &tbl_schema,
         // !is_extra_max_size_set, means use seesion extra param
         uint64_t session_extra_info_max_size = 0;
         // todo(wmj): not use session extra param, because some mr not ready to use extra_info
+        // ***if use session extra param, need update extra_info_max_size in index param***
         // if (OB_FAIL(session_info.get_ob_hnsw_extra_info_max_size(session_extra_info_max_size))) {
         //   LOG_WARN("fail to get session extra info max size", K(ret));
         // }
@@ -2053,12 +2113,15 @@ int ObVectorIndexUtil::check_index_param(
                    OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
                                            ", SAMPLE_PER_NLIST=%ld", default_sample_per_nlist_value))) {
           LOG_WARN("fail to printf databuff", K(ret));
-        } else if (hnsw_is_set && OB_FAIL(check_extra_info_size(tbl_schema, *session_info, extra_info_max_size_is_set,
+        } else if (hnsw_is_set && OB_FAIL(check_extra_info_size(tbl_schema, session_info, extra_info_max_size_is_set,
                                                                 extra_info_max_size, extra_info_actual_size))) {
           LOG_WARN("check_extra_info_size failed", K(ret), K(extra_info_max_size), K(tbl_schema));
         } else if (hnsw_is_set && extra_info_actual_size > 0 && OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
                                                           ", EXTRA_INFO_ACTUAL_SIZE=%ld", extra_info_actual_size))) {
           LOG_WARN("fail to printf databuff", K(ret));
+        } else if (extra_info_actual_size > 0 && extra_info_max_size <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("extra_info_actual_size > 0 && extra_info_max_size <= 0", K(ret), K(extra_info_actual_size), K(extra_info_max_size));
         } else {
           char *buf = nullptr;
           const int64_t alloc_len = index_params.length() + pos;
@@ -2088,7 +2151,8 @@ int ObVectorIndexUtil::check_index_param(
             || sample_per_nlist_is_set
             || type_ivf_flat_is_set
             || type_ivf_sq8_is_set
-            || type_ivf_pq_is_set) {
+            || type_ivf_pq_is_set
+            || extra_info_max_size_is_set) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("sparce vector index only support to set distance algorithm", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparce vector index only support to set distance algorithm");

@@ -22064,6 +22064,10 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
                 LOG_WARN("failed to check table exist", K(ret));
               } else if (is_exist) {
                 LOG_INFO("index already existed, skip", K(new_index_schema.get_table_id()), K(new_index_schema.get_table_name_str()));
+              } else if (new_index_schema.is_vec_hnsw_index() &&
+                         OB_FAIL(ObVectorIndexUtil::update_param_extra_actual_size(hidden_table_schema,
+                                                                                   new_index_schema))) {
+                LOG_WARN("update index param failed", K(ret));
               } else if (OB_FAIL(new_table_schemas.push_back(new_index_schema))) {
                 LOG_WARN("failed to add table schema!", K(ret));
               } else if (OB_FAIL(index_ids.push_back(new_idx_tid))) {
