@@ -4430,7 +4430,7 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::cursor_release(ObPLExecCtx *ctx,
+int ObSPIService::cursor_release(ObSQLSessionInfo *session,
                                 ObPLCursorInfo *cursor,
                                 bool is_refcursor,
                                 uint64_t package_id,
@@ -4439,16 +4439,14 @@ int ObSPIService::cursor_release(ObPLExecCtx *ctx,
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(cursor));
-  CK (OB_NOT_NULL(ctx));
-  CK (OB_NOT_NULL(ctx->exec_ctx_));
-  CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(session));
   if (OB_SUCC(ret)) {
     if (cursor->is_session_cursor()) {  //session cursor need to release cursor info source
-      if (OB_FAIL(ctx->exec_ctx_->get_my_session()->close_cursor(cursor->get_id()))) {
+      if (OB_FAIL(session->close_cursor(cursor->get_id()))) {
         LOG_WARN("fail to close session cursor source", K(ret), K(cursor));
       }
     } else {
-      if (OB_FAIL(cursor_close_impl(ctx, cursor, is_refcursor, package_id, routine_id, ignore))) {
+      if (OB_FAIL(cursor_close_impl(session, cursor, is_refcursor, package_id, routine_id, ignore))) {
         LOG_WARN("fail to close non session cursor", K(ret), K(cursor));
       }
     }
@@ -4456,7 +4454,7 @@ int ObSPIService::cursor_release(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::cursor_close_impl(ObPLExecCtx *ctx,
+int ObSPIService::cursor_close_impl(ObSQLSessionInfo *session,
                                         ObPLCursorInfo *cursor,
                                         bool is_refcursor,
                                         uint64_t package_id,
@@ -4484,7 +4482,8 @@ int ObSPIService::cursor_close_impl(ObPLExecCtx *ctx,
       }
       is_server_cursor ? cursor->reuse() : cursor->reset();
     } else {
-      OZ (cursor->close(*ctx->exec_ctx_->get_my_session(), is_server_cursor));
+      CK (OB_NOT_NULL(session))
+      OZ (cursor->close(*session, is_server_cursor));
     }
   }
   return ret;
@@ -4515,7 +4514,7 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
   if (OB_NOT_NULL(cursor)) {
     FLT_SET_TAG(pl_spi_streaming_cursor, cursor->is_streaming());
   }
-  OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
+  OZ (cursor_close_impl(ctx->exec_ctx_->get_my_session(), cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
       package_id, routine_id, cursor_index, cur_var);
   if (OB_SUCC(ret) && DECL_PKG == loc) {
     OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
@@ -6014,7 +6013,6 @@ int ObSPIService::spi_get_package_allocator(
 
 int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, int64_t addend)
 {
-  UNUSED(ctx);
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor_info = NULL;
   CK (OB_NOT_NULL(cursor));
@@ -6026,7 +6024,9 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
       (1 == addend) ? cursor_info->inc_ref_count() : cursor_info->dec_ref_count();
       bool is_session_cursor = cursor_info->is_session_cursor();
       if (0 == cursor_info->get_ref_count()) {
-        OZ (cursor_release(ctx, cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
+        CK (OB_NOT_NULL(ctx));
+        CK (OB_NOT_NULL(ctx->exec_ctx_));
+        OZ (cursor_release(ctx->exec_ctx_->get_my_session(), cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
         OX (is_session_cursor ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL); //session cursorInfo is released, so set cursor obj null
       }
     }
@@ -8274,8 +8274,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           if (!calc_array->at(0).is_pl_extend()) {
             ret =OB_ERR_EXPRESSION_WRONG_TYPE;
             LOG_WARN("expr is wrong type", K(ret));
-          } else if (PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
-                    PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
+          } else if (PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
                     PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
             ObIAllocator *tmp_alloc = PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type() ? ctx->allocator_
                                                                                                        : &ctx->exec_ctx_->get_allocator();
@@ -8284,12 +8283,9 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             } else {
               OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
             }
-            if (OB_SUCC(ret) && PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
-                ObPLCursorInfo *cursor_info = reinterpret_cast<ObPLCursorInfo*>(result.get_ext());
-                if (cursor_info->isopen() && !cursor_info->is_server_cursor()) {
-                  OZ (ctx->exec_ctx_->get_my_session()->add_non_session_cursor(cursor_info));
-                }
-              }
+          } else if (PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected PL_CURSOR_TYPE to store datum", K(calc_array->at(0).get_meta()), K(ret));
           } else {
             dst_id = var_type.get_user_type_id();
             ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(calc_array->at(0).get_ext());
@@ -8743,14 +8739,25 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
           ObObj& obj = tmp_row.get_cell(i);
           ObObj tmp;
-          if (obj.is_pl_extend() && pl::PL_REF_CURSOR_TYPE != obj.get_meta().get_extend_type()) {
-            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
-              LOG_WARN("failed to copy pl extend", K(ret));
+          if (obj.is_pl_extend()) {
+            if (pl::PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
+              pl::ObPLCursorInfo* cursor_info = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext());
+              if (OB_NOT_NULL(cursor_info)) {
+                if (OB_FAIL(cursor->complex_objs_.push_back(obj))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else {
+                  cursor_info->inc_ref_count();
+                }
+              }
             } else {
-              obj = tmp;
-              if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
-                int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
-                LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
+                LOG_WARN("failed to copy pl extend", K(ret));
+              } else {
+                obj = tmp;
+                if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
+                  int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
+                  LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+                }
               }
             }
           }
@@ -9857,6 +9864,26 @@ ObPLPartitionHitGuard::~ObPLPartitionHitGuard()
   }
 }
 
+int ObSPICursor::release_complex_obj(ObObj &complex_obj)
+{
+  int ret = OB_SUCCESS;
+  if (complex_obj.is_pl_extend() && pl::PL_REF_CURSOR_TYPE == complex_obj.get_meta().get_extend_type()) {
+    pl::ObPLCursorInfo* cursor = reinterpret_cast<pl::ObPLCursorInfo*>(complex_obj.get_ext());
+    if (OB_NOT_NULL(cursor) && OB_NOT_NULL(session_info_)) {
+      cursor->dec_ref_count();
+      if (0 == cursor->get_ref_count()) {
+        if (OB_FAIL(ObSPIService::cursor_release(session_info_, cursor, true, OB_INVALID_ID, OB_INVALID_ID, true))) {
+          LOG_WARN("failed to release cursor", K(ret), K(complex_obj), K(session_info_));
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(pl::ObUserDefinedType::destruct_obj(complex_obj, session_info_))) {
+      LOG_WARN("failed to destruct obj", K(ret));
+    }
+  }
+  return ret;
+}
 
 }
 }
