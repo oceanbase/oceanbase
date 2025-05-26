@@ -248,7 +248,7 @@ int TestSSExecuteCheckpointTask::check_micro_meta(
                                  micro_meta->is_in_ghost_ != micro_meta_info.is_in_ghost_ ||
                                  micro_meta->is_data_persisted_ != micro_meta_info.is_data_persisted_ ||
                                  micro_meta->is_meta_persisted_ != micro_meta_info.is_meta_persisted_ ||
-                                 micro_meta->is_meta_updated_ != micro_meta_info.is_meta_updated_ ||
+                                 micro_meta->is_meta_dirty_ != micro_meta_info.is_meta_dirty_ ||
                                  micro_meta->is_meta_partial_ != micro_meta_info.is_meta_partial_ ||
                                  micro_meta->is_meta_deleted_ != micro_meta_info.is_meta_deleted_)) {
             ret = OB_ERR_UNEXPECTED;

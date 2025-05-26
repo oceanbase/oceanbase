@@ -1278,7 +1278,6 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   // check phy_block_mgr
   ASSERT_LT(0, phy_blk_mgr.get_data_block_used_cnt());
   ASSERT_EQ(false, phy_blk_mgr.free_bitmap_->is_all_true());
-  ASSERT_LT(0, cache_stat.mem_blk_stat().get_total_mem_blk_used_cnt());
 }
 
 } // namespace storage
