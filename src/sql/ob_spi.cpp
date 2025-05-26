@@ -1089,8 +1089,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
           if (has_lob_header) {
             result->ObObj::set_has_lob_header();
           }
-          if (is_ref_cursor &&
-              param.get_ext() != 0 && result->is_null()) {
+          if (is_ref_cursor && result->is_null()) {
             OZ (spi_add_ref_cursor_refcount(ctx, &param, -1));
             OX (result->set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE));
             OX (result->set_param_meta());
