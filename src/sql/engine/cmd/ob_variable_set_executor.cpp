@@ -912,7 +912,7 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
     static const common::ObString INNODB_STORAGE_ENGINE("InnoDB");
     const ObString new_value = out_val.get_string();
     if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0
-        || new_value.case_compare(INNODB_STORAGE_ENGINE) != 0) {
+        && new_value.case_compare(INNODB_STORAGE_ENGINE) != 0) {
       ret = OB_ERR_PARAM_VALUE_INVALID;
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     }
