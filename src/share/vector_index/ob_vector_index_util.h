@@ -26,6 +26,20 @@ namespace oceanbase
 {
 namespace share
 {
+
+enum VecColType {
+  IVF_CENTER_ID_COL = 0,
+  IVF_CENTER_VECTOR_COL,
+  IVF_FLAT_DATA_VECTOR_COL,
+  IVF_SQ8_DATA_VECTOR_COL,
+  IVF_META_ID_COL,
+  IVF_META_VECTOR_COL,
+  IVF_PQ_CENTER_ID_COL,
+  IVF_PQ_CENTER_IDS_COL,
+  IVF_PQ_CENTER_VECTOR_COL,
+  MAX_COL_TYPE
+};
+
 enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
   VALID_VID_SCAN_IDX = 0,
   FIRST_VEC_AUX_TBL_IDX = 1,
@@ -293,6 +307,19 @@ public:
       const ObTableSchema &index_table_schema,
       const ObTableSchema &data_table_schema,
       int64_t &dim);
+  static int check_rowkey_cid_table_readable(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      const uint64_t column_id,
+      uint64_t &tid,
+      const bool allow_unavailable = false);
+  static int get_right_index_tid_in_rebuild(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      const ObIndexType index_type,
+      const int64_t base_col_id,
+      const ObColumnSchemaV2 *column_schema,
+      uint64_t &tid);
   static int get_vector_index_tid(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -313,7 +340,7 @@ public:
     const int64_t col_id,
     ObString &index_prefix,
     uint64_t &tid);
-  static int get_vector_index_tid(
+  static int get_vector_index_tid_check_valid(
       sql::ObSqlSchemaGuard *schema_guard,
       const ObTableSchema &data_table_schema,
       const ObIndexType index_type,
@@ -334,7 +361,7 @@ public:
       sql::ObRawExpr *&raw_expr,
       const ObVectorIndexParam &param,
       ObIArray<ObIndexType> &type_array);
-  static int get_vector_index_type(
+  static int get_vector_domain_index_type(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
       const int64_t col_id, // index col id
@@ -375,7 +402,24 @@ public:
       ObSchemaGetterGuard &schema_guard,
       common::ObMySQLTransaction &trans,
       ObIArray<ObTableSchema> &table_schemas);
+  static int construct_new_column_schema_from_exist(
+      const ObColumnSchemaV2 *old_column_ptr,
+      const ObColumnSchemaV2 *&new_column_ptr,
+      const VecColType col_type,
+      ObColumnSchemaV2 &new_column,
+      uint64_t &available_col_id);
+  static int set_new_index_column(
+      ObTableSchema &new_index_schema,
+      const ObColumnSchemaV2 *old_column_ptr,
+      const ObColumnSchemaV2 *&new_column_ptr);
+  static int reconstruct_ivf_index_schema_in_rebuild(
+      rootserver::ObDDLSQLTransaction &trans,
+      rootserver::ObDDLService &ddl_service,
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObTableSchema &data_table_schema,
+      ObTableSchema &new_index_schema);
   static int generate_index_schema_from_exist_table(
+      rootserver::ObDDLSQLTransaction &trans,
       const int64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       rootserver::ObDDLService &ddl_service,
@@ -483,6 +527,10 @@ public:
                                          ObColumnSchemaV2 &new_aux_column_schema);
 
 private:
+  static void save_column_schema(
+      const ObColumnSchemaV2 *&old_column,
+      const ObColumnSchemaV2 *&new_column,
+      const ObColumnSchemaV2 *cur_column);
   static int check_index_param(
       const ParseNode *option_node,
       common::ObIAllocator &allocator,

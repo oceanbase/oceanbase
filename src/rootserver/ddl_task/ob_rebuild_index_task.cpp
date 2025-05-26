@@ -284,6 +284,14 @@ int ObRebuildIndexTask::rebuild_index_impl()
       create_index_arg.is_inner_ = true;  // is ddl task inner task
       create_index_arg.task_id_ = task_id_;
       ObColumnSortItem empty_item;
+      if (index_schema->is_vec_index()) {
+        ObSEArray<ObString, 1> col_names;
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_name(*table_schema, *index_schema, col_names))) {
+          LOG_WARN("failed to get vector index column name", K(ret));
+        } else if (!col_names.empty()) {
+          empty_item.column_name_ = col_names[0];
+        }
+      }
       create_index_arg.index_using_type_ = USING_BTREE;
       create_index_arg.index_columns_.push_back(empty_item);
       create_index_arg.index_option_.block_size_ = 1;
@@ -293,7 +301,8 @@ int ObRebuildIndexTask::rebuild_index_impl()
       create_index_arg.vidx_refresh_info_.exec_env_ = job_info.get_exec_env();
       create_index_arg.vidx_refresh_info_.index_params_ = rebuild_index_arg_.vidx_refresh_info_.index_params_;
 
-      if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));
       } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
         ret = OB_INVALID_ARGUMENT;

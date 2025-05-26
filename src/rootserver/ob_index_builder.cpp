@@ -1349,7 +1349,8 @@ int ObIndexBuilder::do_create_local_index(
         // 2. otherwise generate vec index aux schema
       } else if (create_index_arg.is_rebuild_index_) {
         if (ObIndexBuilderUtil::is_do_create_dense_vec_index(my_arg.index_type_)) {
-          if (OB_FAIL(ObVectorIndexUtil::generate_index_schema_from_exist_table(tenant_id,
+          if (OB_FAIL(ObVectorIndexUtil::generate_index_schema_from_exist_table(trans,
+                                                                              tenant_id,
                                                                               schema_guard,
                                                                               ddl_service_,
                                                                               create_index_arg,
