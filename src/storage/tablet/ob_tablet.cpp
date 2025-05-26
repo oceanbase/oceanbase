@@ -5686,7 +5686,8 @@ int ObTablet::build_read_info(
                                              false /*is_cg_sstable*/,
                                              false /*use_default_compat_version*/,
                                              is_cs_replica_compat,
-                                             storage_schema->is_delete_insert_merge_engine()))) {
+                                             storage_schema->is_delete_insert_merge_engine(),
+                                             storage_schema->is_global_index_table()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
