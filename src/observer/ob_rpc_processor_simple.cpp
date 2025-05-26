@@ -3468,10 +3468,8 @@ int ObKillClientSessionP::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(arg_.get_client_sess_id()));
-  } else {
-    session->set_mark_killed(true);
-    // Ensure smooth exit of executed requests.
-    session->set_session_state(SESSION_KILLED);
+  } else if(OB_FAIL(gctx_.session_mgr_->kill_session(*session))){
+    LOG_WARN("fail to kill session", K(ret), K(arg_));
   }
   if (NULL != session) {
     gctx_.session_mgr_->revert_session(session);

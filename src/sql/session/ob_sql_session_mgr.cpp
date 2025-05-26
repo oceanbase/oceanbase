@@ -733,6 +733,7 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
   session.set_query_start_time(ObTimeUtility::current_time());
+  session.set_mark_killed(true);
   if (session.is_in_transaction()) {
     if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::kill_tx_on_session_killed(&session))) {
       LOG_WARN("fail to rollback transaction", K(session.get_server_sid()),
@@ -753,7 +754,8 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
              "proxy", session.get_proxy_addr(),
              "peer", session.get_peer_addr(),
              "real_client_ip", session.get_client_ip(),
-             "sessid", session.get_server_sid(),
+             "server_sid", session.get_server_sid(),
+             "client_sid", session.get_client_sid(),
              "proxy_sessid", session.get_proxy_sessid(),
              "query_str", session.get_current_query_string());
   } else {
