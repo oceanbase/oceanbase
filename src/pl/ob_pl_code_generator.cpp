@@ -477,9 +477,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
           if (OB_ISNULL(ns)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Assign stmt must have a valid namespace", K(ret));
-          } else if (PL_CONSTRUCT_COLLECTION == s.get_value_index(i)) {
+          } else if (PL_CONSTRUCT_COLLECTION == s.get_value_index(i) && into_expr->is_obj_access_expr()) {
             ObPLDataType final_type;
-            CK (into_expr->is_obj_access_expr());
             OZ (static_cast<const ObObjAccessRawExpr*>(into_expr)->get_final_type(final_type));
             CK (final_type.is_collection_type());
           } else {

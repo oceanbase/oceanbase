@@ -4344,6 +4344,7 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
             }
             if (OB_SUCC(ret)) {
               if (lib::is_oracle_mode()) {
+                bool is_question_mark = is_question_mark_value(into_expr, &(current_block_->get_namespace()));
                 CK (OB_LIKELY(T_SP_DECL_DEFAULT == value_node->type_));
                 if (OB_SUCC(ret)) {
                   need_expect_type = T_DEFAULT == value_node->children_[0]->type_ ? false : need_expect_type;
@@ -4358,14 +4359,14 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                 }
                 if (OB_SUCC(ret)) {
                   if (T_FUN_PL_COLLECTION_CONSTRUCT == value_expr->get_expr_type()
-                      && 0 == value_expr->get_param_count()) {
+                      && 0 == value_expr->get_param_count() && !is_question_mark) {
                     stmt->add_value(PL_CONSTRUCT_COLLECTION);
                   } else {
                     stmt->add_value(func.get_expr_count() - 1);
                   }
                 }
                 // 目标是QuestionMark, 需要设置目标的类型, 因为QuestionMark默认是无类型的, 在赋值时确定类型
-                if (OB_SUCC(ret) && is_question_mark_value(into_expr, &(current_block_->get_namespace()))) {
+                if (OB_SUCC(ret) && is_question_mark) {
                   if (value_expr->get_result_type().is_ext()) {
                     const ObUserDefinedType *user_type = NULL;
                     OZ (current_block_->get_namespace().get_pl_data_type_by_id(
