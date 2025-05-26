@@ -38,6 +38,7 @@ struct ObObjCastParams;
 namespace sql
 {
 typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObPartitionNameHashWrapper, common::OB_MAX_PARTITION_NUM_ORACLE> ObPartitionNameSet;
 struct ObExternalFileFormat;
 struct PartitionInfo
 {
@@ -1055,7 +1056,8 @@ protected:
                                     bool is_subpart);
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
-
+  int set_partition_name_in_hashset(const share::schema::ObPartitionNameHashWrapper &partition_name_key,
+                                    ObPartitionNameSet &partition_name_set);
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
