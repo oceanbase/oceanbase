@@ -16999,7 +16999,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15517'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15518', all_def_keywords['__all_virtual_ss_ls_meta'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15519', all_def_keywords['__all_virtual_ss_sstable_mgr'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15520', all_def_keywords['__all_virtual_ss_ls_tablet_reorganization_info']))
-# 15521: __all_virtual_tenant_vector_mem_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
