@@ -372,10 +372,12 @@ int ObPLObjectValue::set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx)
 int ObPLObjectValue::set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
-  const ObString sql_id(pl_routine_obj_->get_stat().sql_id_);
+  ObString sql_id;
   const uint64_t database_id = pc_ctx.session_info_->get_database_id();
   const ObOutlineInfo *outline_info = NULL;
   ObOutlineState state;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  OZ (ob_write_string(tmp_alloc, pl_routine_obj_->get_stat().sql_id_, sql_id));
   OZ (pc_ctx.schema_guard_->get_outline_info_with_sql_id(
                         pc_ctx.session_info_->get_effective_tenant_id(),
                         database_id,
