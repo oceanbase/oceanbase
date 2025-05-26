@@ -371,10 +371,16 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_TDE_SECURITY
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
                   || NULL == rpc_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(rpc_proxy));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant config", K(ret), K(tenant_id));
+  } else if (!ObTdeMethodUtil::is_valid(ObString(tenant_config->tde_method.get_value()))) {
+    //do nothing
   } else {
     const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
     obrpc::ObReloadMasterKeyArg arg;
