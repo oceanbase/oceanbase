@@ -7809,6 +7809,8 @@ int TenantServerUnitConfig::assign(const TenantServerUnitConfig &other)
     replica_type_ = other.replica_type_;
     if_not_grant_ = other.if_not_grant_;
     is_delete_ = other.is_delete_;
+    data_version_ = other.data_version_;
+    meta_tenant_data_version_ = other.meta_tenant_data_version_;
   }
   return ret;
 }
@@ -7893,6 +7895,8 @@ void TenantServerUnitConfig::reset()
   with_root_key_ = false;
   root_key_.reset();
 #endif
+  data_version_ = 0;
+  meta_tenant_data_version_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
@@ -7907,6 +7911,8 @@ OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
                     , with_root_key_
                     , root_key_
 #endif
+                    , data_version_
+                    , meta_tenant_data_version_
 		                );
 
 int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_version)

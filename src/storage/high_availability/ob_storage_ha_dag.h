@@ -63,6 +63,8 @@ public:
     BACKFILL_TX = 5,
     TRANSFER_BACKFILL_TX = 6,
     REBUILD_TABLET = 7,
+    SS_LS_MIGRATION = 8,
+    SS_TRANSFER_BACKFILL_TX = 9,
     MAX
   };
 

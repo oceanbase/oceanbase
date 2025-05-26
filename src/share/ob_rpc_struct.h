@@ -10619,6 +10619,8 @@ public:
       , with_root_key_(false),
       root_key_()
 #endif
+      , data_version_(0),
+      meta_tenant_data_version_(0)
       {}
   int assign(const TenantServerUnitConfig &other);
   int init(const uint64_t tenant_id,
@@ -10646,6 +10648,11 @@ public:
   bool with_root_key_;  // true if root_key_ is explicitly assigned
   ObRootKeyResult root_key_;
 #endif
+  // data_version_ is the data version corresponding to the tenant_id of this unit,
+  // which may be a sys tenant, or a user tenant. If it is a user tenant, an additional
+  // data_version of the meta tenant will be set.
+  uint64_t data_version_;
+  uint64_t meta_tenant_data_version_;
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id),
                K_(unit_id),
@@ -10658,6 +10665,8 @@ public:
                , K_(with_root_key)
                , K_(root_key)
 #endif
+               , KDV_(data_version)
+               , KDV_(meta_tenant_data_version)
                );
 public:
   OB_UNIS_VERSION(1);

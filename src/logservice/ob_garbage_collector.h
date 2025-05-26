@@ -167,7 +167,8 @@ public:
     INVALID_GC_REASON = 0,          //不需要GC
     NOT_IN_LEADER_MEMBER_LIST = 1,  //不在成员列表中
     LS_STATUS_ENTRY_NOT_EXIST = 2,  //日志流状态表已删除该日志流
-    MAX_GC_REASON = 3,
+    MIGRATION_FAILED = 3,           //迁移复制相关场景失败的日志流
+    MAX_GC_REASON = 4,
   };
 
   struct GCCandidate
