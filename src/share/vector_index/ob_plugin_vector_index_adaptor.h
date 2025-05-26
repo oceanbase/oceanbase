@@ -662,16 +662,24 @@ public:
     extra_info_column_count_ = extra_info_column_count;
   }
   int get_extra_info_actual_size(int64_t &extra_info_actual_size);
-  bool can_do_vector_index_task()
+  bool has_doing_vector_index_task()
   {
-    bool bret = !is_in_opt_task_;
-    is_in_opt_task_ |= bret;
+    common::ObSpinLockGuard ctx_guard(opt_task_lock_);
+    bool bret = is_in_opt_task_;
+    if (!bret) {
+      is_in_opt_task_ = true;
+    }
     return bret;
   }
 
   int check_if_need_optimize(ObVectorQueryAdaptorResultContext *ctx = nullptr);
 
-  void vector_index_task_finish() { is_in_opt_task_ = false; need_be_optimized_ = false; }
+  void vector_index_task_finish()
+  {
+    common::ObSpinLockGuard ctx_guard(opt_task_lock_);
+    is_in_opt_task_ = false;  // multiple thread modify is_in_opt_task_
+    need_be_optimized_ = false;   // single thread modify need_be_optimized_
+  }
 
   ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
   int set_snapshot_key_prefix(ObString &key_prefix) { return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_); }
@@ -775,6 +783,7 @@ private:
   bool need_be_optimized_;
   int64_t extra_info_column_count_;
   ObString snapshot_key_prefix_; // name rule: TabletID_SCN
+  common::ObSpinLock opt_task_lock_;
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;

@@ -4659,12 +4659,16 @@ int ObLSTabletService::process_lob_before_insert(
   int ret = OB_SUCCESS;
   int64_t col_cnt = run_ctx.col_descs_->count();
   ObLobManager *lob_mngr = MTL(ObLobManager*);
+  const ObTableSchemaParam &table_param = run_ctx.dml_param_.table_param_->get_data_table();
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
   } else if (datum_row.count_ != col_cnt) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]column count invalid", K(ret), K(col_cnt), K(datum_row.count_), KPC(run_ctx.col_descs_));
+  } else if (table_param.is_vector_index_snapshot()) {
+    // dml insert to 5 table skip insert lob locator;
+    LOG_DEBUG("dml insert to 5 table skip insert lob locator");
   } else {
     const int64_t cur_time = ObClockGenerator::getClock();
     const int64_t relative_timeout = run_ctx.dml_param_.timeout_ - cur_time;
@@ -5038,8 +5042,12 @@ int ObLSTabletService::process_lob_before_update(
 {
   int ret = OB_SUCCESS;
   const int64_t col_cnt = run_ctx.col_descs_->count();
+  const ObTableSchemaParam &table_param = run_ctx.dml_param_.table_param_->get_data_table();
 
-  if (OB_FAIL(update_lob_meta_table_seq_no(run_ctx, 1/*row_count*/))) {
+  if (table_param.is_vector_index_snapshot()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected process vec table update in process_lob_before_update", K(ret));
+  } else if (OB_FAIL(update_lob_meta_table_seq_no(run_ctx, 1/*row_count*/))) {
     LOG_WARN("update_lob_meta_table_seq_no fail", K(ret), K(run_ctx.dml_param_));
   } else {
     const int64_t cur_time = ObClockGenerator::getClock();
@@ -6098,7 +6106,10 @@ int ObLSTabletService::delete_lob_tablet_rows(
 {
   int ret = OB_SUCCESS;
   int64_t col_cnt = run_ctx.col_descs_->count();
-  if (datum_row.count_ != col_cnt) {
+  const ObTableSchemaParam &table_param = run_ctx.dml_param_.table_param_->get_data_table();
+  if (table_param.is_vector_index_snapshot()) {
+    LOG_INFO("vector index skip dml delete lob tablet", K(ret));
+  } else if (datum_row.count_ != col_cnt) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]Invliad row col cnt", K(col_cnt), K(datum_row));
   } else if (OB_FAIL(update_lob_meta_table_seq_no(run_ctx, 1/*row_count*/))) {
