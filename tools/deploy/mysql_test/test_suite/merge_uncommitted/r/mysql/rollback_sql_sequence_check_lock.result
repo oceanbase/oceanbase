@@ -1,7 +1,6 @@
 set GLOBAL ob_query_timeout = 1000000000000;
 set GLOBAL ob_trx_timeout = 10000000000000;
 set GLOBAL ob_trx_idle_timeout = 10000000000;
-alter system set syslog_io_bandwidth_limit = '100G';
 alter system set minor_compact_trigger = 10;
 drop table if exists t1;
 create table t1(num int, str varchar(2000), tag int);

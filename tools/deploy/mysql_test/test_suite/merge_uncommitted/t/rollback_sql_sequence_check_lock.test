@@ -12,9 +12,6 @@ connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
 
-connection conn0;
-alter system set syslog_io_bandwidth_limit = '100G';
-
 connection conn1;
 alter system set minor_compact_trigger = 10;
 sleep 2;
