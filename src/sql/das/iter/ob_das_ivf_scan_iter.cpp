@@ -1546,6 +1546,7 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
     // 1.1 Calculate the residual r(x) = x - cid_vec
     //     split r(x) into m parts, the jth part is called r(x)[j]
     float *residual = nullptr;
+    splited_residual.reset();
     if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(mem_context_->get_arena_allocator(), dim_, search_vec, cur_cid_vec, residual))) {
       LOG_WARN("fail to calc residual vector", K(ret), K(dim_));
     } else if (OB_FAIL(ObVectorIndexUtil::split_vector(mem_context_->get_arena_allocator(), m_, dim_, residual, splited_residual))) {

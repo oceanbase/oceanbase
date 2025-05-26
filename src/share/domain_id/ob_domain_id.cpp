@@ -252,21 +252,21 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
         break;
       }
       case ObDomainIDType::IVFFLAT_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }
         break;
       }
       case ObDomainIDType::IVFSQ_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }
         break;
       }
       case ObDomainIDType::IVFPQ_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }

@@ -5349,7 +5349,7 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
           ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
           if (col_item->expr_->is_vec_cid_column()) {
             if (col_item->expr_->is_vec_pq_cids_column() || col_item->expr_->is_vec_cid_column()) {
-              if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(
+              if (OB_FAIL(ObVectorIndexUtil::get_vector_domain_index_type(
                   schema_guard->get_schema_guard(), *table_schema, col_item->expr_->get_column_id(), index_type))) {
                 LOG_WARN("fail to get vector index type", K(ret), KPC(col_item->expr_));
               }
@@ -5358,7 +5358,11 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
           if (FAILEDx(ObDomainIdUtils::check_column_need_domain_id_merge(*table_schema, cur_type, col_item->expr_, index_type, res))) {
             LOG_WARN("fail to check column need domain id merge", K(ret), K(cur_type), KPC(col_item));
           } else if (res) {
-            if (OB_FAIL(with_domain_types_.push_back(j))) {
+            uint64_t domain_table_id = common::OB_INVALID_ID;
+            if (OB_FAIL(ObDomainIdUtils::get_domain_tid_table_by_cid(static_cast<ObDomainIdUtils::ObDomainIDType>(j), schema_guard, table_schema, col_item->expr_->get_column_id(), domain_table_id))) {
+              LOG_WARN("failed to get domain_tid", K(ret));
+            } else if (common::OB_INVALID_ID == domain_table_id) {
+            } else if (OB_FAIL(with_domain_types_.push_back(j))) {
               LOG_WARN("fail to push back domain types", K(ret), K(j));
             } else if (OB_FAIL(vec_id_cols.push_back(col_item->expr_->get_column_id()))) {
               LOG_WARN("failed to push back col id", K(ret), K(col_item->expr_->get_column_id()));

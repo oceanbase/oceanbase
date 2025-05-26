@@ -2061,10 +2061,12 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
   uint64_t center_id_col_id = OB_INVALID_ID;
   uint64_t center_vector_col_id = OB_INVALID_ID;
   uint64_t pq_center_id_col_id = OB_INVALID_ID;
+  uint64_t pq_center_vector_col_id = OB_INVALID_ID;
   uint64_t pq_center_ids_col_id = OB_INVALID_ID;
   const ObColumnSchemaV2 *existing_center_id_col = nullptr;
   const ObColumnSchemaV2 *existing_center_vector_col = nullptr;
   const ObColumnSchemaV2 *existing_pq_center_id_col = nullptr;
+  const ObColumnSchemaV2 *existing_pq_center_vector_col = nullptr;
   const ObColumnSchemaV2 *existing_pq_center_ids_col = nullptr;
 
   ObArray<const ObColumnSchemaV2 *> tmp_cols;
@@ -2085,12 +2087,14 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
   } else if (OB_FAIL(check_vec_cols(&index_arg, data_schema))) {
     LOG_WARN("check cols check failed", K(ret));
   } else if (OB_FAIL(get_vec_ivfpq_col(data_schema, &index_arg,
-      existing_center_id_col, existing_center_vector_col, existing_pq_center_id_col, existing_pq_center_ids_col))) {
+      existing_center_id_col, existing_center_vector_col, existing_pq_center_id_col,
+      existing_pq_center_vector_col, existing_pq_center_ids_col))) {
     LOG_WARN("failed to get ivfpq column", K(ret));
   } else {
     ObColumnSchemaV2 *generated_center_id_col = nullptr;
     ObColumnSchemaV2 *generated_center_vector_col = nullptr;
     ObColumnSchemaV2 *generated_pq_center_id_col = nullptr;
+    ObColumnSchemaV2 *generated_pq_center_vector_col = nullptr;
     ObColumnSchemaV2 *generated_pq_center_ids_col = nullptr;
     // 1. generate index table (generate) columns
     if (is_centroid_table) {    // generate center_id, center_vector column
@@ -2114,12 +2118,12 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
         }
       }
     } else if (is_pq_centroid_table) {  // generate center_vector, pq_center_id column
-      if (OB_ISNULL(existing_center_vector_col)) {
-        center_vector_col_id = available_col_id++;
+      if (OB_ISNULL(existing_pq_center_vector_col)) {
+        pq_center_vector_col_id = available_col_id++;
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, pq_center_vector_col_id, IVF_PQ_CENTER_VECTOR_COL, data_schema, generated_pq_center_vector_col))) {
           LOG_WARN("failed to generate ivf column", K(ret));
-        } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
+        } else if (OB_FAIL(gen_columns.push_back(generated_pq_center_vector_col))) {
           LOG_WARN("failed to push ivf column", K(ret));
         }
       }
@@ -2169,8 +2173,8 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
       int64_t rowkey_size = 0;
       if (OB_FAIL(push_back_gen_col(tmp_cols, existing_pq_center_id_col, generated_pq_center_id_col))) {
         LOG_WARN("failed to push back pq center id col", K(ret));
-      } else if (OB_FAIL(push_back_gen_col(tmp_cols, existing_center_vector_col, generated_center_vector_col))) {
-        LOG_WARN("failed to push back center vector col", K(ret));
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols, existing_pq_center_vector_col, generated_pq_center_vector_col))) {
+        LOG_WARN("failed to push back pq center vector col", K(ret));
       } else if (OB_FAIL(adjust_vec_ivf_arg(&index_arg, data_schema, rowkey_size, allocator, tmp_cols))) {
         LOG_WARN("failed to adjust vec ivfpq arg", K(ret));
       }
@@ -3725,22 +3729,18 @@ int ObVecIndexBuilderUtil::set_extra_info_columns(const ObTableSchema &data_sche
   return ret;
 }
 
-int ObVecIndexBuilderUtil::construct_ivf_col_name(
-    const ObCreateIndexArg *index_arg,
-    const ObTableSchema &data_schema,
+int ObVecIndexBuilderUtil::generate_ivf_col_name_prefix(
     const VecColType col_type,
     char *col_name_buf,
     const int64_t buf_len,
     int64_t &name_pos)
 {
   int ret = OB_SUCCESS;
-  name_pos = 0;
-  if (OB_ISNULL(index_arg) || !data_schema.is_valid() || OB_ISNULL(col_name_buf)) {
+  if (OB_ISNULL(col_name_buf)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema), K(col_name_buf));
+    LOG_WARN("invalid argument", K(ret), K(col_name_buf));
   } else {
     MEMSET(col_name_buf, 0, buf_len);
-    const ObColumnSchemaV2 *col_schema = NULL;
     switch (col_type) {
       case IVF_CENTER_ID_COL: {
         if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos,
@@ -3749,10 +3749,16 @@ int ObVecIndexBuilderUtil::construct_ivf_col_name(
         }
         break;
       }
-      case IVF_CENTER_VECTOR_COL:
-      case IVF_PQ_CENTER_VECTOR_COL: {
+      case IVF_CENTER_VECTOR_COL: {
         if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos,
             OB_VEC_IVF_CENTER_VECTOR_COLUMN_NAME_PREFIX))) {
+          LOG_WARN("print generate column prefix name failed", K(ret));
+        }
+        break;
+      }
+      case IVF_PQ_CENTER_VECTOR_COL: {
+        if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos,
+            OB_VEC_IVF_PQ_CENTER_VECTOR_COLUMN_NAME_PREFIX))) {
           LOG_WARN("print generate column prefix name failed", K(ret));
         }
         break;
@@ -3797,6 +3803,27 @@ int ObVecIndexBuilderUtil::construct_ivf_col_name(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column type", K(ret), K(col_type));
     }
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::construct_ivf_col_name(
+    const ObCreateIndexArg *index_arg,
+    const ObTableSchema &data_schema,
+    const VecColType col_type,
+    char *col_name_buf,
+    const int64_t buf_len,
+    int64_t &name_pos)
+{
+  int ret = OB_SUCCESS;
+  name_pos = 0;
+  if (OB_ISNULL(index_arg) || !data_schema.is_valid() || OB_ISNULL(col_name_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema), K(col_name_buf));
+  } else if (OB_FAIL(generate_ivf_col_name_prefix(col_type, col_name_buf, buf_len, name_pos))) {
+    LOG_WARN("fail to generate ivf column name prefix", K(ret));
+  } else {
+    const ObColumnSchemaV2 *col_schema = NULL;
     // 这里的index_arg->index_columns_表示的是向量索引列，构造辅助表列名时，需要加上索引列id
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
       const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
@@ -3812,6 +3839,35 @@ int ObVecIndexBuilderUtil::construct_ivf_col_name(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+      LOG_WARN("fail to printf current time", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexBuilderUtil::construct_ivf_col_name(
+    const ObIArray<uint64_t> &cascaded_col_ids,
+    const VecColType col_type,
+    char *col_name_buf,
+    const int64_t buf_len,
+    int64_t &name_pos)
+{
+  int ret = OB_SUCCESS;
+  name_pos = 0;
+  if (cascaded_col_ids.empty() || OB_ISNULL(col_name_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(cascaded_col_ids), K(col_name_buf));
+  } else if (OB_FAIL(generate_ivf_col_name_prefix(col_type, col_name_buf, buf_len, name_pos))) {
+    LOG_WARN("fail to generate ivf column name prefix", K(ret));
+  } else {
+    // 这里的cascaded_col_ids表示的是向量索引列id，构造辅助表列名时，需要加上索引列id
+    for (int64_t i = 0; OB_SUCC(ret) && i < cascaded_col_ids.count(); ++i) {
+      if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos, "_%ld", cascaded_col_ids.at  (i)))) {
+        LOG_WARN("print column id to buffer failed", K(ret), K(cascaded_col_ids.at(i)));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu",   ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -4311,6 +4367,7 @@ int ObVecIndexBuilderUtil::get_vec_ivfpq_col(
     const ObColumnSchemaV2 *&center_id_col,
     const ObColumnSchemaV2 *&center_vector_col,
     const ObColumnSchemaV2 *&pq_center_id_col,
+    const ObColumnSchemaV2 *&pq_center_vector_col,
     const ObColumnSchemaV2 *&pq_center_ids_col)
 {
   int ret = OB_SUCCESS;
@@ -4342,7 +4399,12 @@ int ObVecIndexBuilderUtil::get_vec_ivfpq_col(
         if (OB_FAIL(check_index_match(*column_schema, index_col_set, is_match))) {
           LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_col_set));
         } else if (is_match) {
-          center_vector_col = column_schema;
+          // check name
+          if (column_schema->get_column_name_str().prefix_match(OB_VEC_IVF_PQ_CENTER_VECTOR_COLUMN_NAME_PREFIX)) {
+            pq_center_vector_col = column_schema;
+          } else {
+            center_vector_col = column_schema;
+          }
         }
       } else if (column_schema->is_vec_ivf_pq_center_id_column()) {
         bool is_match = false;
