@@ -494,6 +494,10 @@ int ObThWorker::check_status()
     if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
     } else if (is_timeout()) {
       ret = OB_TIMEOUT;
+    } else if (IS_INTERRUPTED()) {
+      ObInterruptCode &ic = GET_INTERRUPT_CODE();
+      ret = ic.code_;
+      LOG_WARN("received a interrupt", K(ic), K(ret));
     } else {
       if (WS_OUT_OF_THROTTLE == check_wait()) {
         ret = OB_KILLED_BY_THROTTLING;
