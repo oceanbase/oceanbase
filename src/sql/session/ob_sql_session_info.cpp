@@ -3084,11 +3084,17 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
 {
   int tmp_ret = OB_SUCCESS;
   int64_t cur_ts = ObClockGenerator::getClock();
+  bool disable_cache = false;
+  int ret = OB_E(EventTable::EN_ENABLE_TENANT_CONFIG_CACHED) OB_SUCCESS;
+  if (ret == OB_ERR_UNEXPECTED) {
+    disable_cache = true;
+  }
   if (OB_ISNULL(session_)) {
     tmp_ret = OB_ERR_UNEXPECTED;
     LOG_WARN_RET(tmp_ret, "session_ is null");
   } else if ((saved_tenant_info_ != session_->get_effective_tenant_id())
-             || cur_ts - last_check_ec_ts_ > 5000000) {
+             || cur_ts - last_check_ec_ts_ > 5000000
+             || disable_cache) {
     const uint64_t effective_tenant_id = session_->get_effective_tenant_id();
     const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
     if (change_tenant) {
