@@ -2591,6 +2591,8 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
       if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
           *ctx_->expr_factory_, ctx_->session_info_, T_OP_MUL,
           mul_expr, mul_expr, new_view_exprs.at(i)))) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, aggr_expr, mul_expr, ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(new_agg_exprs.push_back(mul_expr))) {
         LOG_WARN("failed to push_back to new_agg_exprs", K(ret));
       }
