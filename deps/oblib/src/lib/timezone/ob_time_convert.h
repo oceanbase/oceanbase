@@ -219,7 +219,8 @@ struct ObDateSqlMode {
       // the key words "SELECT DAYOFMONTH('2001-11-00'), MONTH('2005-00-00');"
       // https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
       uint64_t allow_incomplete_dates_:1;
-      uint64_t reserved_:28;
+      uint64_t implicit_first_century_year_:1;
+      uint64_t reserved_:59;
     };
   };
   ObDateSqlMode() : date_sql_mode_(0) {};
@@ -856,7 +857,9 @@ private:
   static int get_datetime_delims(const char *&str, const char *end, ObTimeDelims &delims);
   static int get_datetime_digits_delims(const char *&str, const char *end,
                                         int32_t max_len, ObTimeDigits &digits, ObTimeDelims &delims);
-  static int str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &obtime, const bool &need_truncate = false);
+  static int str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &obtime,
+                                    const bool &need_truncate = false,
+                                    const bool implicit_first_century_year = false);
   static int get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, const char *end_ptr);
   static void skip_delims(const char *&str, const char *end);
   static bool is_year4(int64_t first_token_len);
@@ -870,7 +873,7 @@ private:
                                      const bool use_strict_check = false, const bool &need_truncate = false);
   static int normalize_usecond_trunc(ObTimeDigits &digits, bool need_trunc);
   static int apply_date_space_rule(const ObTimeDelims *delims);
-  static void apply_date_year2_rule(ObTimeDigits &year);
+  static void apply_date_year2_rule(ObTimeDigits &year, const bool implicit_first_century_year = false);
   static void apply_date_year2_rule(int32_t &year);
   static void apply_date_year2_rule(int64_t &year);
   static int apply_usecond_delim_rule(ObTimeDelims &second, ObTimeDigits &usecond, const int64_t max_precision, const bool use_strict_check, const bool &truncate = false);

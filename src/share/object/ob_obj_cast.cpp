@@ -6370,6 +6370,7 @@ static int common_string_datetime(const ObObjType expect_type, ObObjCastParams &
         CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
       date_sql_mode.no_zero_in_date_ =
         CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+      date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
       ObMySQLDateTime mdt_value = 0;
       ret = ObMySQLDateTimeType == expect_type ?
               ObTimeConverter::str_to_mdatetime(utf8_string, cvrt_ctx, mdt_value, &res_scale,
@@ -6462,6 +6463,7 @@ static int string_date(const ObObjType expect_type, ObObjCastParams &params,
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
   date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
                   && ObTextTC != in.get_type_class()
                   && ObGeometryTC != in.get_type_class())
@@ -6496,6 +6498,7 @@ static int string_mdate(const ObObjType expect_type, ObObjCastParams &params,
     CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_DATE(cast_mode);
   date_sql_mode.no_zero_in_date_ =
     CM_IS_EXPLICIT_CAST(cast_mode) ? false : CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
                   && ObTextTC != in.get_type_class()
                   && ObGeometryTC != in.get_type_class())
@@ -7618,6 +7621,7 @@ static int bit_datetime(const ObObjType expect_type, ObObjCastParams &params,
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
   date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class()
                    || (ObDateTimeTC != ob_obj_type_class(expect_type)
                        && ObMySQLDateTimeTC != ob_obj_type_class(expect_type))))) {
@@ -7684,6 +7688,7 @@ static int bit_date(const ObObjType expect_type, ObObjCastParams &params,
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
   date_sql_mode.no_zero_in_date_ = CM_IS_NO_ZERO_IN_DATE(cast_mode);
+  date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
   ObMySQLDate md_value = 0;
   if (OB_UNLIKELY((ObBitTC != in.get_type_class()
                    || (ObDateTC != ob_obj_type_class(expect_type)

@@ -617,6 +617,17 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       type1.set_calc_accuracy(type.get_accuracy());
     }
   }
+  bool implicit_first_century_year = false;
+  ObCastMode cast_mode = cast_raw_expr->get_cast_mode();
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+               type_ctx.get_compat_version(), ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
+               implicit_first_century_year))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (implicit_first_century_year) {
+    cast_mode |= CM_IMPLICIT_FIRST_CENTURY_YEAR;
+  }
+  cast_raw_expr->set_cast_mode(cast_mode);
   LOG_DEBUG("calc result type", K(type1), K(type2), K(type), K(dst_type),
             K(type1.get_calc_accuracy()));
   return ret;
@@ -1403,8 +1414,9 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprCast, raw_expr) {
     ObObjType src = raw_expr->get_param_expr(0)->get_result_type().get_type();
     ObObjType dst = raw_expr->get_result_type().get_type();
     if (is_mysql_mode()) {
-      SET_LOCAL_SYSVAR_CAPACITY(3);
+      SET_LOCAL_SYSVAR_CAPACITY(4);
       EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_OB_COMPATIBILITY_VERSION);
     } else {
       SET_LOCAL_SYSVAR_CAPACITY(5);
     }
