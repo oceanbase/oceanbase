@@ -602,7 +602,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     parser_name_(),
     parser_properties_(),
     est_cost_simple_info_(),
-    pseudo_column_exprs_(alloc)
+    pseudo_column_exprs_(alloc),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
 {
 }
 
@@ -630,7 +631,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     partition_id_calc_type_,
                     parser_name_,
                     parser_properties_,
-                    pseudo_column_exprs_);
+                    pseudo_column_exprs_,
+                    lob_inrow_threshold_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -657,7 +659,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K_(ddl_output_cids),
        K_(tenant_id_col_idx),
        K_(parser_name),
-       K_(parser_properties));
+       K_(parser_properties),
+       K_(lob_inrow_threshold));
   J_OBJ_END();
   return pos;
 }
@@ -834,6 +837,7 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     group_id_(0),
     das_tasks_key_(),
     tsc_monitor_info_(),
+    need_check_outrow_lob_(false),
     rand_scan_processor_()
 {
 }
@@ -1761,6 +1765,23 @@ int ObTableScanOp::init_converter()
   return ret;
 }
 
+int ObTableScanOp::set_need_check_outrow_lob()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && MY_SPEC.need_check_outrow_lob_ && i < MY_SPEC.output_.count(); ++i) {
+    const ObExpr *e = MY_SPEC.output_[i];
+    if (OB_ISNULL(e)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (e->obj_meta_.is_lob_storage()) {
+      need_check_outrow_lob_ = true;
+      break;
+    }
+  }
+  LOG_TRACE("set need check outrow lob", K(ret), K(MY_SPEC.need_check_outrow_lob_), K(need_check_outrow_lob_), K(MY_SPEC.output_));
+  return ret;
+}
+
 int ObTableScanOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -1800,6 +1821,8 @@ int ObTableScanOp::inner_open()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_ddl_column_checksum())) {
       LOG_WARN("init ddl column checksum", K(ret));
+    } else if (OB_FAIL(set_need_check_outrow_lob())) {
+      LOG_WARN("fail to determine whether need check outrow lob", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -2592,6 +2615,8 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
     }
     if (OB_FAIL(add_ddl_column_checksum())) {
       LOG_WARN("add ddl column checksum failed", K(ret));
+    } else if (OB_FAIL(check_has_invalid_outrow_lob(false/*is_batch*/))) {
+      LOG_WARN("fail to check whether has outrow lob column", K(ret));
     }
   }
   if (OB_UNLIKELY(OB_ITER_END == ret && OB_NOT_NULL(scan_iter_) && scan_iter_->has_task())) {
@@ -2723,6 +2748,8 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
     }
     if (OB_FAIL(add_ddl_column_checksum_batch(brs_.size_))) {
       LOG_WARN("add ddl column checksum failed", K(ret));
+    } else if (OB_FAIL(check_has_invalid_outrow_lob(true/*is_batch*/))) {
+      LOG_WARN("fail to check whether has outrow lob column", K(ret));
     }
   }
 
@@ -3324,6 +3351,59 @@ int ObTableScanOp::add_ddl_column_checksum_batch(const int64_t row_count)
   }
   return ret;
 }
+
+#define CHECK_DATUM_OUTROW(store_datum, obj_meta)                                         \
+  if (!store_datum.is_null() && !store_datum.is_nop()) {                                  \
+    const ObString &data = store_datum.get_string();                                      \
+    const bool has_lob_header = obj_meta.has_lob_header();                                \
+    ObLobLocatorV2 locator(data, has_lob_header);                                         \
+    if (!locator.is_inrow_disk_lob_locator()) {                                           \
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;                                                   \
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, MY_SPEC.lob_inrow_threshold_);           \
+      STORAGE_LOG(WARN, "outrow lob is not supported in index table", K(ret), K(locator), \
+        K(store_datum), K(has_lob_header), K(data), K(MY_SPEC.lob_inrow_threshold_));     \
+    }                                                                                     \
+  }
+
+int ObTableScanOp::check_has_invalid_outrow_lob(const bool is_batch)
+{
+  int ret = OB_SUCCESS;
+  if (need_check_outrow_lob_) {
+    ObDatum store_datum;
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.output_.count(); ++i) {
+      ObDatum *datum = NULL;
+      const ObExpr *e = MY_SPEC.output_[i];
+      if (OB_ISNULL(e)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, expr is nullptr", K(ret));
+      } else if (!e->obj_meta_.is_lob_storage()) {
+      } else if (is_batch) {
+        if (OB_FAIL(e->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
+          LOG_WARN("evaluate expression failed", K(ret));
+        } else {
+          ObDatumVector datum_array = e->locate_expr_datumvector(eval_ctx_);
+          for (int64_t j = 0; OB_SUCC(ret) && j < brs_.size_; j++) {
+            if (brs_.skip_->at(j)) {
+              continue;
+            } else {
+              store_datum = *datum_array.at(j);
+              CHECK_DATUM_OUTROW(store_datum, e->obj_meta_)
+            }
+          }
+        }
+      } else {
+        if (OB_FAIL(e->eval(eval_ctx_, datum))) {
+          LOG_WARN("evaluate expression failed", K(ret));
+        } else {
+          store_datum = *datum;
+          CHECK_DATUM_OUTROW(store_datum, e->obj_meta_)
+        }
+      }
+    }
+  }
+  return ret;
+}
+#undef CHECK_DATUM_OUTROW
 
 int ObTableScanOp::report_ddl_column_checksum()
 {

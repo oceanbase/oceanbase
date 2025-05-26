@@ -5832,6 +5832,15 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_property_str(), spec.parser_properties_));
         }
+      } else if (ddl_table_schema->is_index_table()) {
+        const bool is_vec_data_complement = (ddl_table_schema->is_vec_index_snapshot_data_type() ||
+                                             ddl_table_schema->is_vec_ivfflat_index() ||
+                                             ddl_table_schema->is_vec_ivfsq8_index() ||
+                                             ddl_table_schema->is_vec_ivfpq_index());
+        if (!is_vec_data_complement) {
+          spec.need_check_outrow_lob_ = true;
+          spec.lob_inrow_threshold_ = ddl_table_schema->get_lob_inrow_threshold();
+        }
       }
     }
   }

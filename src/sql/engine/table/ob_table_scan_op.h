@@ -465,7 +465,8 @@ public:
       uint64_t is_fts_index_aux_                : 1; // mark if ddl table is the fts index aux table.
       uint64_t is_multivalue_ddl_               : 1;
       uint64_t can_be_paused_                   : 1;
-      uint64_t reserved_                        : 49;
+      uint64_t need_check_outrow_lob_           : 1;
+      uint64_t reserved_                        : 48;
     };
   };
   int64_t tenant_id_col_idx_;
@@ -475,6 +476,7 @@ public:
   common::ObString parser_properties_;
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   ExprFixedArray pseudo_column_exprs_;
+  int64_t lob_inrow_threshold_;
 };
 
 // for random batch_size & skip
@@ -618,6 +620,7 @@ protected:
                                uint32_t& record_num,
                                bool& is_save_rowkey);
   int inner_get_next_multivalue_index_row();
+  int set_need_check_outrow_lob();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
 
@@ -648,6 +651,7 @@ protected:
   int init_ddl_column_checksum();
   int add_ddl_column_checksum();
   int add_ddl_column_checksum_batch(const int64_t row_count);
+  int check_has_invalid_outrow_lob(const bool is_batch);
   static int corrupt_obj(ObObj &obj);
   int report_ddl_column_checksum();
   int get_next_batch_with_das(int64_t &count, int64_t capacity);
@@ -801,6 +805,7 @@ protected:
   // all tasks belonging to this op share the same key
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
+  bool need_check_outrow_lob_;
 private:
   ObRandScanProcessor rand_scan_processor_;
  };
