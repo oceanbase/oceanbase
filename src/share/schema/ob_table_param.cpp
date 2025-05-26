@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_param.h"
+#include "share/ob_compute_property.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
@@ -633,7 +634,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_normal_cgs_at_the_end_(false),
     is_mlog_table_(false),
     is_enable_semistruct_encoding_(false),
-    has_lob_column_pushdown_(false)
+    has_lob_column_pushdown_(false),
+    aggregate_param_props_(allocator)
 {
   reset();
 }
@@ -670,6 +672,7 @@ void ObTableParam::reset()
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
   has_lob_column_pushdown_ = false;
+  aggregate_param_props_.reset();
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -728,6 +731,9 @@ OB_DEF_SERIALIZE(ObTableParam)
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
                 has_lob_column_pushdown_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(aggregate_param_props_);
   }
   return ret;
 }
@@ -843,6 +849,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_enable_semistruct_encoding_,
                 has_lob_column_pushdown_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
+  }
   return ret;
 }
 
@@ -908,6 +917,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
                 has_lob_column_pushdown_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                aggregate_param_props_);
   }
   return len;
 }

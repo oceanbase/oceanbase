@@ -31,6 +31,7 @@ class ObTableReadInfo;
 }
 namespace share
 {
+class ObAggrParamProperty;
 namespace schema
 {
 // A customized hash map to store schema information in plan
@@ -438,6 +439,7 @@ private:
   bool is_enable_semistruct_encoding_;
   // for delete_insert, whether lob columns included in pushdown filters
   bool has_lob_column_pushdown_;
+  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
 };
 } //namespace schema
 } //namespace share
