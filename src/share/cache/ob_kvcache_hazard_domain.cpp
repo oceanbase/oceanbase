@@ -76,6 +76,7 @@ HazardDomain::HazardDomain()
   lib::DoNotUseMe(bit_set_attr_);
   lib::DoNotUseMe(hazptr_attr_);
   bit_set_.set_attr(bit_set_attr_);
+  bit_set_mu_.enable_record_stat(false);
 }
 
 int HazardDomain::init(int64_t mb_handle_num)
