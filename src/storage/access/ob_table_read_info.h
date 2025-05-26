@@ -243,7 +243,8 @@ public:
                        const bool is_oracle_mode,
                        const bool is_cg_sstable,
                        const bool is_cs_replica_compat,
-                       const bool is_delete_insert_table);
+                       const bool is_delete_insert_table,
+                       const bool is_global_index_table);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
@@ -254,8 +255,10 @@ protected:
   static const int64_t READ_INFO_VERSION_V2 = 2;
   static const int64_t READ_INFO_VERSION_V3 = 3;
   static const int64_t READ_INFO_VERSION_V4 = 4;
+  static const int64_t READ_INFO_VERSION_V5 = 5; // after V4.3.5 bp3
+  static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V5;
   static const int32_t READ_INFO_ONE_BIT = 1;
-  static const int32_t READ_INFO_RESERVED_BITS = 14;
+  static const int32_t READ_INFO_RESERVED_BITS = 13;
 
   bool is_inited_;
   bool is_oracle_mode_;
@@ -268,6 +271,7 @@ protected:
       uint16_t compat_version_;
       uint16_t is_cs_replica_compat_   : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
+      uint16_t is_global_index_table_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t reserved_               : READ_INFO_RESERVED_BITS;
     };
   };
@@ -414,7 +418,8 @@ public:
       const bool is_cg_sstable = false,
       const bool use_default_compat_version = false,
       const bool is_cs_replica_compat = false,
-      const bool is_delete_insert_table = false);
+      const bool is_delete_insert_table = false,
+      const bool is_global_index = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
@@ -422,6 +427,9 @@ public:
   virtual int64_t get_request_count() const override;
   OB_INLINE bool is_access_rowkey_only() const override
   { return false; }
+  OB_INLINE bool is_global_index_valid() const { return compat_version_ >= READ_INFO_VERSION_V5; }
+   // accurate when is_global_index_valid() = true
+  OB_INLINE bool is_global_index_table() const { return is_global_index_table_; }
   int deep_copy(char *buf, const int64_t buf_len, ObRowkeyReadInfo *&value) const;
   int64_t get_deep_copy_size() const;
   int deserialize(
