@@ -1620,6 +1620,7 @@ private:
     };
   };
   ObTabletID split_src_tablet_id_;
+  share::SCN split_start_scn_; // clog/mds_ckpt_scn of the split dest tablet when created.
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;
