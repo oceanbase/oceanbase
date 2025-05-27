@@ -1260,6 +1260,8 @@ int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     // child is questionmark, do not need evaluation.
     const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
@@ -1283,6 +1285,8 @@ static int _eval_questionmark_nmb2decint(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     // child is questionmark, do not need evaluation.
     const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
@@ -1311,6 +1315,8 @@ static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, 
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     ObScale out_scale = expr.datum_meta_.scale_;
     ObPrecision out_prec = expr.datum_meta_.precision_;
