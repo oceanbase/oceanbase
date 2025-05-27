@@ -66,6 +66,43 @@ if (OB_BUILD_STANDALONE)
   COMPONENT server)
 endif()
 
+set(INSTALL_EXTRA_FILES "")
+if (NOT OB_BUILD_OPENSOURCE)
+  # Merge standalone or storage extra file
+  set(PARAMS_EXTRA_DIR "${CMAKE_SOURCE_DIR}/src/share/parameter")
+  set(VARIABLE_EXTRA_DIR "${CMAKE_SOURCE_DIR}/src/share/system_variable")
+
+  message(STATUS "Merge parameter and variable file")
+  execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/merge_extra --inputpa=${PARAMS_EXTRA_DIR} --inputva=${VARIABLE_EXTRA_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    RESULT_VARIABLE result_var
+    )
+  if(NOT result_var EQUAL 0)
+    message(FATAL_ERROR "merge_extra execution failed.")
+  endif()
+
+  if (OB_BUILD_STANDALONE)
+    set(EXTRA_FILE_PATTERNS
+      "${PARAMS_EXTRA_DIR}/standalone_default_parameter.json"
+      "${VARIABLE_EXTRA_DIR}/standalone_default_system_variable.json")
+  else()
+    set(EXTRA_FILE_PATTERNS
+      "${PARAMS_EXTRA_DIR}/shared_storage_default_parameter.json"
+      "${VARIABLE_EXTRA_DIR}/shared_storage_default_system_variable.json")
+  endif()
+
+  # Add install files for standalone or storage business
+  foreach(EXTRA_FILE_PATTERN IN LISTS EXTRA_FILE_PATTERNS)
+    file(GLOB EXTRA_FILES
+      LIST_DIRECTORIES false
+      "${EXTRA_FILE_PATTERN}")
+    if (EXTRA_FILES)
+      list(APPEND INSTALL_EXTRA_FILES "${EXTRA_FILE_PATTERN}")
+    endif()
+  endforeach()
+endif()
+
 install(FILES
   src/sql/fill_help_tables-ob.sql
   src/share/parameter/default_parameter.json
@@ -82,6 +119,7 @@ install(FILES
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
+  ${INSTALL_EXTRA_FILES}
   DESTINATION etc
   COMPONENT server)
 
