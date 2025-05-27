@@ -1716,7 +1716,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     } else if (OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
-      need_response_error = false;
       bool optimization_done = false;
       if (ctx_.can_reroute_sql_) {
         ctx_.can_reroute_sql_ = false;
@@ -1733,6 +1732,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
                                                            async_resp_used, optimization_done))) {
         LOG_WARN("fail to try_batch_multi_stmt_optimization", K(ret));
       } else if (!optimization_done) {
+        need_response_error = false;
         ctx_.multi_stmt_item_.set_ps_mode(true);
         ctx_.multi_stmt_item_.set_ab_cnt(0);
         for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
