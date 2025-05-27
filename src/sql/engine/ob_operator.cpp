@@ -927,7 +927,9 @@ void ObOperator::reset_output_format()
 {
   if (spec_.plan_->get_use_rich_format() && !spec_.use_rich_format_) {
     FOREACH_CNT(e, spec_.output_) {
-      (*e)->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+      if (!is_uniform_format((*e)->get_format(eval_ctx_))) {
+        (*e)->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+      }
     }
   }
 }
