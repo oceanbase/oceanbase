@@ -1118,7 +1118,6 @@ ObTabletMergeTask::~ObTabletMergeTask()
     merger_->~ObPartitionMerger();
     merger_ = nullptr;
   }
-  allocator_.~ObLocalArena();
 }
 
 int ObTabletMergeTask::init(const int64_t idx, ObBasicTabletMergeCtx &ctx)

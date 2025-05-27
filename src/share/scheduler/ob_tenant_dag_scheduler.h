@@ -1605,7 +1605,7 @@ inline bool is_reserve_mode()
       if (worker->hold_by_compaction_dag()) {                                  \
         mem_ctx = worker->get_mem_ctx();                                       \
       } else if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000L /*30s*/)) {      \
-        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                                \
+        COMMON_LOG_RET(WARN, OB_STATE_NOT_MATCH,                               \
                        "memctx only provided for compaction dag", K(worker),   \
                        K(lbt()));                                              \
       }                                                                        \
