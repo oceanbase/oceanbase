@@ -3650,22 +3650,17 @@ int ObVecIndexBuilderUtil::set_part_key_columns(
       LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
     } else if (!col_schema->is_tbl_part_key_column()) {
     } else if (is_column_exist(index_schema, *col_schema)) {
+    } else if (OB_FAIL(ObIndexBuilderUtil::add_column(col_schema,
+                                                      false /*is_index_column*/,
+                                                      false /*is_rowkey*/,
+                                                      ObOrderType::DESC,
+                                                      row_desc,
+                                                      index_schema,
+                                                      false /*is_hidden*/,
+                                                      true /*is_specified_storing_col*/))) {
+      LOG_WARN("add_column failed", K(ret), KPC(col_schema), K(index_schema));
     } else {
-      ObColumnSchemaV2 column;
-      if (OB_FAIL(column.assign(*col_schema))) {
-        LOG_WARN("fail to assign column", KR(ret), KPC(col_schema));
-      } else {
-        // extra_info colum can null
-        column.set_nullable(true);
-        column.drop_not_null_cst();
-        if (OB_FAIL(ObIndexBuilderUtil::add_column(&column, false /*is_index_column*/, false /*is_rowkey*/,
-                                                   ObOrderType::DESC, row_desc, index_schema, false /*is_hidden*/,
-                                                   true /*is_specified_storing_col*/))) {
-          LOG_WARN("add_column failed", K(ret), K(column), K(index_schema));
-        } else {
-          LOG_INFO("success to add part key column", K(ret), KPC(col_schema), K(column));
-        }
-      }
+      LOG_INFO("success to add part key column", K(ret), KPC(col_schema));
     }
   }
   } // row_desc
