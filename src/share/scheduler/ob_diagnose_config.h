@@ -94,10 +94,11 @@ enum ObDiagnoseTabletType {
   TYPE_REPORT,
   TYPE_RS_MAJOR_MERGE, // for tenant major in RS
   TYPE_TX_TABLE_MERGE,
-  TYPE_MDS_MINI_MERGE,
+  TYPE_MDS_MINI_MERGE, // for mds mini merge
   TYPE_BATCH_EXECUTE, // for batch execute dag
   TYPE_S2_REFRESH, // for shared storage
   TYPE_MICRO_MINI_MERGE,
+  TYPE_MDS_MINOR_MERGE, // for mds minor merge
   TYPE_DIAGNOSE_TABLET_MAX
 };
 
