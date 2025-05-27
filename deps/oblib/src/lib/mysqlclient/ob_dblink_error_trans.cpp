@@ -114,15 +114,21 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
 {
   int ret = OB_SUCCESS;
   int64_t value = 0;
+  obsys::ObWLockGuard wg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));
-  } else if (OB_FAIL(dblink_conn_map_.erase_refactored(sessid, &value))) {
+  } else if (OB_FAIL(dblink_conn_map_.get_refactored(sessid, value))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to erase_refactored", K(ret), K(tenant_id_), K(sessid));
+      LOG_WARN("failed to get connection from map", K(ret), K(sessid));
     }
+  } else if (0 == value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("value is 0", K(ret), K(value), K(sessid));
+  } else if (OB_FAIL(dblink_conn_map_.erase_refactored(sessid))) {
+    LOG_ERROR("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));
   } else {
     common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(value);
     while (OB_NOT_NULL(connection) && OB_SUCC(ret)) {
@@ -146,36 +152,10 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
   return ret;
 }
 
-int ObTenantDblinkKeeper::AppendDblinkConnCall::operator() (common::hash::HashMapPair<uint32_t, int64_t> &entry)
-{
-  int ret = OB_SUCCESS;
-  common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(entry.second);
-  if (OB_ISNULL(connection)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("connection is null", K(ret));
-  } else {
-    while (OB_NOT_NULL(connection)) {
-      if ((&dblink_conn_) == connection) {
-        break;
-      }
-      connection = connection->get_next_conn();
-    }
-    if (OB_NOT_NULL(connection)) {
-      //already exists, do nothing
-    } else {
-      common::sqlclient::ObISQLConnection *header = reinterpret_cast<common::sqlclient::ObISQLConnection *>(entry.second);
-      common::sqlclient::ObISQLConnection *temp = header->get_next_conn();
-      header->set_next_conn(&dblink_conn_);
-      dblink_conn_.set_next_conn(temp);
-      LOG_TRACE("session succ to hold a dblink connection", K(&dblink_conn_), K(entry.first), K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTenantDblinkKeeper::set_dblink_conn(uint32_t sessid, common::sqlclient::ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
+  obsys::ObWLockGuard wg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));
@@ -183,37 +163,41 @@ int ObTenantDblinkKeeper::set_dblink_conn(uint32_t sessid, common::sqlclient::Ob
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret), K(tenant_id_), K(sessid));
   } else {
-    dblink_conn->set_next_conn(NULL);
-    AppendDblinkConnCall append_call(*dblink_conn);
-    if (OB_FAIL(dblink_conn_map_.set_or_update(sessid, reinterpret_cast<int64_t>(dblink_conn), append_call))) {
-      LOG_WARN("set or update failed", K(ret), K(sessid));
+    int64_t value = 0;
+    if (OB_FAIL(dblink_conn_map_.get_refactored(sessid, value))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(dblink_conn_map_.set_refactored(sessid, reinterpret_cast<int64_t>(dblink_conn)))) {
+          LOG_WARN("failed to set refactored", K(ret), K(tenant_id_), K(sessid));
+        } else {
+          dblink_conn->set_next_conn(NULL);
+        }
+      } else {
+        LOG_WARN("failed to get connection from map", K(ret), K(sessid));
+      }
+    } else if (0 == value) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value is 0", K(ret), K(value), K(sessid));
+    } else {
+      common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(value);
+      while (OB_NOT_NULL(connection)) {
+        if (dblink_conn == connection) {
+          break;
+        }
+        connection = connection->get_next_conn();
+      }
+      if (OB_NOT_NULL(connection)) {
+        //do nothing
+      } else {
+        common::sqlclient::ObISQLConnection *header = reinterpret_cast<common::sqlclient::ObISQLConnection *>(value);
+        common::sqlclient::ObISQLConnection *temp = header->get_next_conn();
+        header->set_next_conn(dblink_conn);
+        dblink_conn->set_next_conn(temp);
+        LOG_TRACE("session succ to hold a dblink connection", KP(dblink_conn), K(sessid), K(tenant_id_), K(ret));
+      }
     }
   }
   return ret;
-}
-
-void ObTenantDblinkKeeper::GetDblinkConnCall::operator() (common::hash::HashMapPair<uint32_t, int64_t> &entry)
-{
-  int ret = OB_SUCCESS;
-  dblink_conn_ = NULL;
-  uint32_t sessid = entry.first;
-  common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(entry.second);
-  if (OB_ISNULL(connection)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("connection is null", K(ret));
-  } else {
-    while (OB_NOT_NULL(connection)) {
-      if (dblink_id_ == connection->get_dblink_id()) {
-        break;
-      }
-      connection = connection->get_next_conn();
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(connection)) {
-      dblink_conn_ = connection;
-      dblink_conn_->dblink_rlock();
-    }
-    LOG_TRACE("session get a dblink connection", K(ret), K(dblink_id_), KP(dblink_conn_), K(sessid));
-  }
 }
 
 int ObTenantDblinkKeeper::get_dblink_conn(uint32_t sessid, uint64_t dblink_id,
@@ -223,24 +207,37 @@ int ObTenantDblinkKeeper::get_dblink_conn(uint32_t sessid, uint64_t dblink_id,
   dblink_conn = NULL;
   ObArray<int64_t> *dblink_conn_array = NULL;
   int64_t value = 0;
-  GetDblinkConnCall get_conn_call(dblink_id);
+  obsys::ObRLockGuard rg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));
-  } else if (OB_FAIL(dblink_conn_map_.atomic_refactored(sessid, get_conn_call))) {
+  } else if (OB_FAIL(dblink_conn_map_.get_refactored(sessid, value))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get connection", K(ret), K(sessid));
     }
-  } else if (NULL != get_conn_call.dblink_conn_) {
-    if (OB_SUCCESS != get_conn_call.dblink_conn_->ping()) {
-      ret = OB_ERR_DBLINK_SESSION_KILLED;
-      get_conn_call.dblink_conn_->dblink_unrlock();
-      LOG_WARN("connection is invalid", K(ret), K(get_conn_call.dblink_conn_->usable()),
-               KP(get_conn_call.dblink_conn_), K(sessid), K(tenant_id_));
-    } else {
-      dblink_conn = get_conn_call.dblink_conn_;
+  } else if (0 == value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("value is NULL", K(ret), K(value), K(sessid));
+  } else {
+    common::sqlclient::ObISQLConnection *connection = reinterpret_cast<common::sqlclient::ObISQLConnection *>(value);
+    common::sqlclient::ObISQLConnection *temp_conn = NULL;
+    while (OB_NOT_NULL(connection)) {
+      if (dblink_id == connection->get_dblink_id()) {
+        temp_conn = connection;
+        break;
+      }
+      connection = connection->get_next_conn();
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(temp_conn)) {
+      if (OB_SUCCESS != temp_conn->ping()) {
+        ret = OB_ERR_DBLINK_SESSION_KILLED;
+        LOG_WARN("connection is invalid", K(ret), K(temp_conn->usable()), KP(temp_conn), K(sessid), K(tenant_id_));
+      } else {
+        dblink_conn = temp_conn;
+        dblink_conn->dblink_rlock();
+      }
     }
     LOG_TRACE("session get a dblink connection", K(ret), K(dblink_id), K(tenant_id_), KP(dblink_conn), K(sessid));
   }

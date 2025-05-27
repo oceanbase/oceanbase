@@ -71,27 +71,6 @@ public:
     virtual ~CleanDblinkArrayFunc() = default;
     int operator()(common::hash::HashMapPair<uint32_t, int64_t> &kv);
   };
-  class GetDblinkConnCall
-  {
-  public:
-    GetDblinkConnCall(uint64_t dblink_id)
-      : dblink_id_(dblink_id), dblink_conn_(nullptr) {}
-    ~GetDblinkConnCall() = default;
-    void operator() (common::hash::HashMapPair<uint32_t, int64_t> &entry);
-  public:
-    uint64_t dblink_id_;
-    common::sqlclient::ObISQLConnection *dblink_conn_;
-  };
-  class AppendDblinkConnCall
-  {
-  public:
-    AppendDblinkConnCall(common::sqlclient::ObISQLConnection &dblink_conn)
-      : dblink_conn_(dblink_conn) {}
-    ~AppendDblinkConnCall() = default;
-    int operator() (common::hash::HashMapPair<uint32_t, int64_t> &entry);
-  public:
-    common::sqlclient::ObISQLConnection &dblink_conn_;
-  };
 public:
   static int mtl_new(ObTenantDblinkKeeper *&dblink_keeper);
   static int mtl_init(ObTenantDblinkKeeper *&dblink_keeper);
