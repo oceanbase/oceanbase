@@ -562,6 +562,7 @@ int ObMViewRefresher::fast_refresh()
       LOG_WARN("fail to execute write", KR(ret), K(fast_refresh_sql));
     }
     const int64_t exec_end_time = ObTimeUtil::current_time();
+    LOG_INFO("mview_refresh", K(tenant_id), K(mview_id), K(parallelism), K(i), K(fast_refresh_sql), "time", exec_end_time - exec_start_time);
     // collect stmt stats
     if (OB_SUCC(ret) && nullptr != refresh_stats_collection_) {
       const int64_t execution_time = (exec_end_time - exec_start_time) / 1000 / 1000;

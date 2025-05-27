@@ -193,7 +193,12 @@ int ObMLogPurger::prepare_for_purge()
             } else {
               ret = OB_SUCCESS;
             }
-          } else if (OB_INVALID_SCN_VAL != mview_info.get_last_refresh_scn()) {
+          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn()) {
+            // do nothing
+          } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
+              || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
+              || table_schema->mv_on_query_computation()) {
+            // for fast refresh mv or real-query mv
             min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
           }
         }
@@ -235,6 +240,7 @@ int ObMLogPurger::do_purge()
     LOG_WARN("fail to execute sql", KR(ret), K(purge_sql_));
   }
   const int64_t end_time = ObTimeUtil::current_time();
+  LOG_INFO("do_purge", K(tenant_id), K_(purge_sql), "time", end_time - start_time);
   // 2. update mlog last purge info
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)
