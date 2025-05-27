@@ -634,7 +634,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_normal_cgs_at_the_end_(false),
     is_mlog_table_(false),
     is_enable_semistruct_encoding_(false),
-    has_lob_column_pushdown_(false),
+    is_safe_filter_with_di_(true),
     aggregate_param_props_(allocator)
 {
   reset();
@@ -671,7 +671,7 @@ void ObTableParam::reset()
   is_normal_cgs_at_the_end_ = false;
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
-  has_lob_column_pushdown_ = false;
+  is_safe_filter_with_di_ = true;
   aggregate_param_props_.reset();
 }
 
@@ -730,7 +730,7 @@ OB_DEF_SERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                has_lob_column_pushdown_);
+                is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(aggregate_param_props_);
@@ -847,7 +847,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                has_lob_column_pushdown_);
+                is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
@@ -916,7 +916,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                has_lob_column_pushdown_);
+                is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
@@ -1671,17 +1671,25 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   return ret;
 }
 
-int ObTableParam::check_lob_column_pushdown(sql::ObPushdownFilterNode &pushdown_filters)
+int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters)
 {
   int ret = OB_SUCCESS;
-  has_lob_column_pushdown_ = false;
+  bool has_lob_column_out = false;
+  is_safe_filter_with_di_ = true;
   if (OB_UNLIKELY(!main_read_info_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not valid read info", K(ret), K_(main_read_info));
   } else {
-    has_lob_column_pushdown_ = pushdown_filters.check_filter_on_lob(main_read_info_);
+    const ObColDescIArray &out_cols = main_read_info_.get_columns_desc();
+    for (int64_t i = 0; !has_lob_column_out && i < out_cols.count(); i++) {
+      has_lob_column_out = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
+    }
+    if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
+                                                   has_lob_column_out,
+                                                   is_safe_filter_with_di_))) {
+      LOG_WARN("Fail to check filter info", K(ret));
+    }
   }
-
   return ret;
 }
 
@@ -1709,7 +1717,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_normal_cgs_at_the_end),
        K_(is_mlog_table),
        K_(is_enable_semistruct_encoding),
-       K_(has_lob_column_pushdown));
+       K_(is_safe_filter_with_di));
   J_OBJ_END();
 
   return pos;
