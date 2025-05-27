@@ -11873,7 +11873,7 @@ public:
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid() &&
-           OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid() && is_incremental_direct_load(direct_load_type_);
+           OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid();
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
                K_(need_release), K_(direct_load_type));
