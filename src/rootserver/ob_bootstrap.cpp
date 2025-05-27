@@ -669,8 +669,8 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
 {
   int ret = OB_SUCCESS;
   bool already_bootstrap = true;
-  ObSArray<ObTableSchema> table_schemas;
   ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
+  ObSArray<ObTableSchema> table_schemas;
   begin_ts_ = ObTimeUtility::current_time();
 
   BOOTSTRAP_LOG(INFO, "start do execute_bootstrap");
