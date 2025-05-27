@@ -3586,6 +3586,7 @@ def_table_schema(
     ('init_learner_list', 'longtext', 'true'),
     ('b_init_learner_list', 'longtext', 'true'),
     ('flag', 'varchar:OB_MAX_LS_FLAG_LENGTH', 'false', ''),
+    ('unit_list', 'varchar:MAX_UNIT_LIST_LENGTH','false',''),
     ],
 )
 
