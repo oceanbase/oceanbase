@@ -9875,6 +9875,9 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
                 node->children_[0], format.csv_format_.cs_type_, params,
                 format.csv_format_.field_term_str_))) {
           LOG_WARN("failed to resolve file format field terminated str", K(ret));
+        } else if (0 == format.csv_format_.field_term_str_.length()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("length of field terminator is zero", K(ret));
         } else {
           format.origin_file_format_str_.origin_field_term_str_.assign_ptr(node->str_value_, node->str_len_);
         }
