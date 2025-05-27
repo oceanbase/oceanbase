@@ -1544,8 +1544,15 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
 
       if (brs_.end_ && 0 == brs_.size_) {
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-          // const expr's must be uniform const, do not need to init vector
-          if (!(*e)->is_const_expr() && UINT32_MAX != (*e)->vector_header_off_) {
+          if (UINT32_MAX != (*e)->vector_header_off_) {
+            // op's parent may not support vectoriation format, we need reset vector to VEC_UNIFORM/VEC_UNIFORM_CONST
+            // for op's parent to read data correctly.
+
+            // for static const expr (not question mark or calculable expr), its vector header will always be VEC_UNIFORM_CONST
+            // and not changed since plan generation.
+            // for other exprs, if its vec format is already VEC_UNIFROM/VEC_UNIFORM_CONST, nothing should be done.
+            VectorFormat expr_fmt = (*e)->get_format(eval_ctx_);
+            if (expr_fmt == VEC_UNIFORM || expr_fmt == VEC_UNIFORM_CONST) { continue; }
             if (OB_FAIL((*e)->init_vector(eval_ctx_, (*e)->is_batch_result()
                                           ? VEC_UNIFORM : VEC_UNIFORM_CONST, brs_.size_))) {
               LOG_WARN("failed to init vector", K(ret));
