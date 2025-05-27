@@ -63,11 +63,12 @@ int ObExprAssign::calc_result_type2(ObExprResType &type,
     type.set_collation_level(common::CS_LEVEL_IMPLICIT);
     type.set_collation_type(value.get_collation_type());
   }
-  type.set_precision(value.get_precision());
-  type.set_scale(value.get_scale());
   //set length
   if (ob_is_string_type(type.get_type())) {
-   type.set_full_length(value.get_length(), value.get_length_semantics());
+    type.set_full_length(value.get_length(), value.get_length_semantics());
+  } else {
+    type.set_precision(value.get_precision());
+    type.set_scale(value.get_scale());
   }
 
   value.set_calc_meta(type.get_obj_meta());

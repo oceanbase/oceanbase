@@ -437,8 +437,9 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info,
   //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   int ret = OB_SUCCESS;
   ObRawExprTypeDemotion type_demotion(session_info, expr_factory_);
+  const bool idempotency_check = true;
   ObRawExprDeduceType expr_deducer(session_info, expr_factory_, solidify_session_vars, local_vars,
-                                   local_var_id, type_demotion);
+                                   local_var_id, type_demotion, idempotency_check);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
     if (OB_NOT_NULL(session_info) && session_info->is_varparams_sql_prepare() &&
         OB_ERR_INVALID_COLUMN_NUM != ret &&

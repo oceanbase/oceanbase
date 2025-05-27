@@ -47,6 +47,7 @@ int ObExprTimestampNvl::calc_result_type2(ObExprResType &type,
   type.set_collation_type(type1.get_collation_type());
 
   type1.set_calc_meta(type.get_obj_meta());
+  type1.set_calc_scale(type.get_scale());
   type2.set_calc_meta(type.get_obj_meta());
   return ret;
 }

@@ -3232,6 +3232,19 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                 result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
               }
             }
+            if (ob_is_int_tc(result_type.get_type()) && result_type.get_accuracy_length() == -1) {
+              const int64_t int_val = param.get_int();
+              uint64_t uint_val = static_cast<uint64_t>(int_val);
+              uint32_t str_len = 0;
+              if (int_val < 0) {
+                uint_val = (int_val == INT64_MIN) ? static_cast<uint64_t>(INT64_MAX) + 1 :
+                  static_cast<uint64_t>(-int_val);
+                str_len += 1; // sign flag
+              }
+              str_len += ob_fast_digits10(uint_val);
+              result_type.set_length(str_len);
+              LOG_TRACE("integer length", K(int_val), K(str_len), K(result_type));
+            }
             if (-1 == result_type.get_length_semantics() &&
               ObNullType == param.get_type() &&
               ob_is_string_tc(param.get_param_meta().get_type())) {
@@ -3239,6 +3252,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
             c_expr->set_result_type(result_type);
           }
+
           if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
             const pl::ObPLSymbolTable* symbol_table = NULL;
             const pl::ObPLVar* var = NULL;

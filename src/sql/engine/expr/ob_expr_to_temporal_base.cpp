@@ -249,7 +249,7 @@ int ObExprToTemporalBase::calc_result_typeN(ObExprResType &type,
           ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][get_my_target_obj_type()].get_scale();
       ObScale result_scale = 0;
       if (input_char.is_null()) {
-        //do nothing
+        result_scale = max_scale;
       } else if (input_char.is_string_type()) {
         result_scale = max_scale;
       } else if (input_char.is_datetime() || input_char.is_otimestamp_type()) {

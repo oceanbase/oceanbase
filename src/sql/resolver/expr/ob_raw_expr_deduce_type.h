@@ -25,6 +25,22 @@ namespace oceanbase
 {
 namespace sql
 {
+
+class DisableIdempotencyCheckGuard
+{
+public:
+  explicit DisableIdempotencyCheckGuard(bool &idempotency_check)
+  {
+    idempotency_check_ = &idempotency_check;
+    *idempotency_check_ = false;
+  }
+  ~DisableIdempotencyCheckGuard()
+  {
+    *idempotency_check_ = true;
+  }
+private:
+  bool *idempotency_check_;
+};
 class ObRawExprDeduceType: public ObRawExprVisitor
 {
 public:
@@ -33,7 +49,8 @@ public:
                       bool solidify_session_vars,
                       const ObLocalSessionVar *local_vars,
                       int64_t local_vars_id,
-                      ObRawExprTypeDemotion &type_demotion)
+                      ObRawExprTypeDemotion &type_demotion,
+                      bool idempotency_check)
     : ObRawExprVisitor(),
       my_session_(my_session),
       alloc_(),
@@ -41,7 +58,8 @@ public:
       my_local_vars_(local_vars),
       local_vars_id_(local_vars_id),
       solidify_session_vars_(solidify_session_vars),
-      type_demotion_(type_demotion)
+      type_demotion_(type_demotion),
+      idempotency_check_(idempotency_check)
   {}
   virtual ~ObRawExprDeduceType()
   {
@@ -161,6 +179,12 @@ private:
 
   int try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx);
   int build_subschema_for_enum_set_type(ObRawExpr &expr);
+
+  template<typename RawExprType>
+  int deduce_type_idempotency_check(RawExprType &expr);
+  static int diff_result_type(const ObExprResType &type1, const ObExprResType &type2,
+                              const ObItemType expr_type);
+  void refine_result_type_accuracy(ObExprResType &result_type);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;
@@ -171,6 +195,7 @@ private:
   int64_t local_vars_id_;
   bool solidify_session_vars_;
   ObRawExprTypeDemotion &type_demotion_;
+  bool idempotency_check_;
   // data members
 };
 
@@ -363,6 +388,32 @@ int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
         SQL_RESV_LOG(WARN, "failed to push back array", K(ret));
       } else if (OB_FAIL(expr.set_enum_set_values(enum_set_values))) {
         SQL_RESV_LOG(WARN, "failed to set values", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename RawExprType>
+int ObRawExprDeduceType::deduce_type_idempotency_check(RawExprType &expr)
+{
+  int ret = OB_SUCCESS;
+  if (idempotency_check_) {
+    if (OB_ISNULL(my_session_) || my_session_->is_varparams_sql_prepare()) {
+      // skip to idempotency check in ps prepare phase
+    } else {
+      DisableIdempotencyCheckGuard guard(idempotency_check_);
+      ObExprResType last_type;
+      if (OB_FAIL(last_type.assign(expr.get_result_type()))) {
+        SQL_RESV_LOG(WARN, "fail to assign expr result type", K(ret));
+      } else if (OB_FAIL(visit(expr))) { // visit expr again
+        SQL_RESV_LOG(WARN, "fail to visit expr to deduce type", K(ret), K(expr));
+      } else if (OB_FAIL(diff_result_type(last_type, expr.get_result_type(),
+                                           expr.get_expr_type()))) {
+        const ObExprResType &res_type1 = last_type;
+        const ObExprResType &res_type2 = expr.get_result_type();
+        SQL_RESV_LOG(WARN, "Deduce type idempotency check failed", K(ret),
+          K(res_type1), K(res_type2), K(expr));
       }
     }
   }

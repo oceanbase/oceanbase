@@ -71,6 +71,7 @@ inline int ObExprSubstringIndex::calc_result_type3(ObExprResType &type,
       LOG_WARN("aggregate_charsets_for_string_result_with_comparison failed", K(ret));
 
     } else {
+      str.set_calc_length(str.get_length());
       str.set_calc_collation_type(type.get_collation_type());
       str.set_calc_collation_level(type.get_collation_level());
       delim.set_calc_collation_type(type.get_collation_type());

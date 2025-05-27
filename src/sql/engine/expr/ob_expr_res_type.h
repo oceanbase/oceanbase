@@ -158,7 +158,10 @@ public:
     if (!is_string_type() && !is_enum_or_set() && !is_enumset_inner_type()
         && !is_ext() && !is_lob_locator() && !is_user_defined_sql_type()
         && !is_collection_sql_type()) {
-      if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
+      if (ob_is_int_uint_tc(get_type()) && is_literal() &&
+          length > 0 && length < OB_DECIMAL_LONGLONG_DIGITS) {
+        // use length in accuracy if expr is integer literal
+      } else if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        common::CS_TYPE_INVALID,
                                                        length))) {
@@ -166,6 +169,10 @@ public:
       }
     }
     return length;
+  }
+  OB_INLINE common::ObLength get_accuracy_length() const
+  {
+    return accuracy_.get_length();
   }
   OB_INLINE common::ObLengthSemantics get_length_semantics() const
   {

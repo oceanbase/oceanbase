@@ -39,6 +39,7 @@ int ObExprSysExtractUtc::calc_result_type1(ObExprResType &type,
     type.set_timestamp_nano();
     type.set_scale(input.get_scale());
     input.set_calc_type(ObTimestampTZType);
+    input.set_calc_scale(input.get_scale());
   }
   return ret;
 }

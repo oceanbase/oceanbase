@@ -74,6 +74,7 @@ int ObRawExprDeduceType::visit(ObConstRawExpr &expr)
       }
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -119,6 +120,7 @@ int ObRawExprDeduceType::visit(ObVarRawExpr &expr)
   } else if (!(expr.get_result_type().is_null())) {
     expr.set_result_flag(NOT_NULL_FLAG);
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -155,6 +157,7 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
     // `ObRawExprWrapEnumSet::visit_query_ref_expr`
     expr.set_data_type(ObIntType);
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -239,6 +242,7 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
       expr.set_has_lob_header();
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -657,10 +661,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     }
     if (OB_SUCC(ret)) {
       // refine result type precision and scale here
-      if (lib::is_mysql_mode() && result_type.is_decimal_int()) {
-        result_type.set_precision(MIN(result_type.get_precision(),
-                                      OB_MAX_DECIMAL_POSSIBLE_PRECISION));
-      }
+        refine_result_type_accuracy(result_type);
     }
     if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
       // the ps prepare stage does not do type deduction, and directly gives a default type.
@@ -1886,6 +1887,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             }
             result_type.set_precision(static_cast<ObPrecision>(result_precision));
           }
+          if (ob_is_numeric_type(result_type.get_type())) {
+            result_type.set_length(DEFAULT_LENGTH_FOR_NUMERIC);
+          }
           result_type.unset_result_flag(ZEROFILL_FLAG);
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
@@ -2203,6 +2207,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       }
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -2713,6 +2718,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
       }
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -2725,6 +2731,7 @@ int ObRawExprDeduceType::visit(ObSetOpRawExpr &expr)
       LOG_WARN("failed to construct collection attr expr", K(ret));
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -2747,6 +2754,7 @@ int ObRawExprDeduceType::visit(ObAliasRefRawExpr &expr)
       } else {}
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -3218,6 +3226,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       }
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -3242,6 +3251,7 @@ int ObRawExprDeduceType::visit(ObUDFRawExpr &expr)
 		  LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -3274,6 +3284,7 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
       LOG_WARN("add_implicit_cast failed", K(ret));
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -4384,6 +4395,64 @@ int ObRawExprDeduceType::build_subschema_for_enum_set_type(ObRawExpr &expr)
     expr.mark_enum_set_with_subschema();
   }
   return ret;
+}
+
+int ObRawExprDeduceType::diff_result_type(const ObExprResType &type1, const ObExprResType &type2,
+                                          const ObItemType expr_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(type1.get_type() != type2.get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Result type is different", K(ret),
+      "type1", inner_obj_type_str(type1.get_type()), "type2", inner_obj_type_str(type2.get_type()),
+      "expr_name", get_type_name(expr_type));
+  } else if (OB_UNLIKELY(type1.get_accuracy() != type2.get_accuracy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Result accuracy is different", K(ret), "type", inner_obj_type_str(type1.get_type()),
+      "accuracy1", type1.get_accuracy(), "accuracy2", type2.get_accuracy(),
+      "expr_name", get_type_name(expr_type));
+  } else if (OB_UNLIKELY(type1 != type2)) {
+    ret = OB_ERR_UNEXPECTED;
+    const ObObjMeta meta1 = type1;
+     const ObObjMeta meta2 = type2;
+    LOG_WARN("Result cs_type/cs_level is different", K(ret), K(meta1), K(meta2),
+      "expr_name", get_type_name(expr_type));
+  } else if (OB_UNLIKELY(type1.get_result_flag() != type2.get_result_flag())) {
+    ret = OB_ERR_UNEXPECTED;
+    const uint32_t res_flag1 = type1.get_result_flag();
+    const uint32_t res_flag2 = type2.get_result_flag();
+    LOG_WARN("Result flag is different", K(ret), K(res_flag1), K(res_flag2),
+      "expr_name", get_type_name(expr_type));
+  }
+  return ret;
+}
+
+void ObRawExprDeduceType::refine_result_type_accuracy(ObExprResType &result_type)
+{
+  // refine result type precision and scale here
+  if (lib::is_mysql_mode()) {
+    if (ob_is_number_or_decimal_int_tc(result_type.get_type())) {
+      result_type.set_precision(MIN(result_type.get_precision(),
+        OB_MAX_DECIMAL_POSSIBLE_PRECISION));
+      result_type.set_length(DEFAULT_LENGTH_FOR_NUMERIC);
+    } else if (ob_is_int_uint_tc(result_type.get_type())) {
+      if (result_type.get_precision() != PRECISION_UNKNOWN_YET) {
+        result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+      }
+      result_type.set_length(DEFAULT_LENGTH_FOR_NUMERIC);
+    } else if (ob_is_real_type(result_type.get_type())) {
+      if (SCALE_UNKNOWN_YET == result_type.get_scale()
+          || PRECISION_UNKNOWN_YET == result_type.get_precision()) {
+        result_type.set_precision(PRECISION_UNKNOWN_YET);
+        result_type.set_scale(SCALE_UNKNOWN_YET);
+      }
+      result_type.set_length(DEFAULT_LENGTH_FOR_NUMERIC);
+    }
+  } else if (lib::is_oracle_mode()) {
+    if (ob_is_number_tc(result_type.get_type()) || ob_is_real_type(result_type.get_type())) {
+      result_type.set_length(DEFAULT_LENGTH_FOR_NUMERIC);
+    }
+  }
 }
 
 }  // namespace sql

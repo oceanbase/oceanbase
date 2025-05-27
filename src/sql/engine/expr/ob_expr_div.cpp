@@ -66,7 +66,8 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
       } else if (type.has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
         if (type1.is_decimal_int() && type2.is_decimal_int() && type.is_number()) {
           ObScale res_scale = type1.get_scale() - type2.get_precision() - extra_scale_for_decint_div;
-          ObPrecision res_prec = type1.get_precision() - type2.get_precision() - extra_scale_for_decint_div;
+          ObPrecision res_prec = type1.get_precision() - type2.get_precision() + type2.get_scale()
++                                 - extra_scale_for_decint_div;
           if (OB_UNLIKELY(res_scale < 0 || res_prec < 0 || res_prec < res_scale)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected result precision & scale", K(ret), K(res_scale), K(res_prec));
