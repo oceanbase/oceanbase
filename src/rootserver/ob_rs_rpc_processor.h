@@ -44,6 +44,22 @@ inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
   return obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT != pcode;
 }
 
+inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
+{
+  return obrpc::OB_RUN_JOB == pcode
+         || obrpc::OB_ALTER_RESOURCE_POOL == pcode
+         || obrpc::OB_ALTER_RESOURCE_TENANT == pcode
+         || obrpc::OB_CREATE_RESOURCE_UNIT == pcode
+         || obrpc::OB_DROP_RESOURCE_UNIT == pcode
+         || obrpc::OB_CLONE_RESOURCE_POOL == pcode
+         || obrpc::OB_CREATE_RESOURCE_POOL == pcode
+         || obrpc::OB_DROP_RESOURCE_POOL == pcode
+         || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
+         || obrpc::OB_MERGE_RESOURCE_POOL == pcode
+         || obrpc::OB_BACKUP_DATABASE == pcode
+         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode;
+}
+
 // precondition: enable_ddl = false
 inline bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg)
 {
@@ -206,7 +222,8 @@ protected:
       RS_LOG(WARN, "fail to check RS status", KR(ret), K(pcode));
     } else {
       // check whether the thread name and rpc type match
-      if ((is_ddl_like_ && !is_ddl_thread()) || (!is_ddl_like_ && is_ddl_thread())) {
+      if (!allow_ddl_thread_rpc_not_match(pcode)
+           && ((is_ddl_like_ && !is_ddl_thread()) || (!is_ddl_like_ && is_ddl_thread()))) {
         LOG_ERROR("thread name and rpc type not match, need fix", K(is_ddl_thread()), K_(is_ddl_like), K(pcode));
       }
       // check other conditions
