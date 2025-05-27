@@ -187,7 +187,9 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     selectivity_ = vec_aux_ctdef_->selectivity_;
     extra_column_count_ = vec_aux_ctdef_->extra_column_count_;
     is_primary_pre_with_rowkey_with_filter_ = is_pre_filter_ && vec_aux_ctdef_->can_use_vec_pri_opt();
-    if (OB_NOT_NULL(rowkey_vid_iter_)) {
+    if (OB_SUCC(ret) && extra_column_count_ > 0 && OB_FAIL(get_extra_idx_in_outexprs(extra_in_rowkey_idxs_))) {
+      LOG_WARN("failed to get extra idx in outexprs", K(ret), K(extra_column_count_));
+    } else if (OB_NOT_NULL(rowkey_vid_iter_)) {
       rowkey_vid_iter_->set_scan_param(rowkey_vid_scan_param_);
     }
   }
@@ -852,6 +854,44 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   return ret;
 }
 
+
+int ObDASHNSWScanIter::build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey)
+{
+  int ret = OB_SUCCESS;
+  ObObj *extra_info_objs = nullptr;
+  if (OB_FALSE_IT(extra_rowkey.reset())) {
+  } else if (OB_FAIL(build_extra_info_obj_from_rowkey(rowkey.get_obj_ptr(), extra_info_objs))) {
+    LOG_WARN("failed to build rowkey obj from extra info.", K(ret));
+  } else {
+    extra_rowkey.assign(extra_info_objs, extra_column_count_);
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range)
+{
+  int ret = OB_SUCCESS;
+  ObNewRange *extra_range = nullptr;
+  void *buf = nullptr;
+  if (extra_column_count_ <= 1) {
+    const_extra_range = &range;
+  } else if (OB_ISNULL(buf = mem_context_->get_arena_allocator().alloc(sizeof(ObNewRange)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc mem for new range.", K(ret));
+  } else if (OB_FALSE_IT(extra_range = new (buf) ObNewRange())) {
+  } else if (OB_FALSE_IT(*extra_range = range)) {
+  } else if (OB_FAIL(build_extra_info_rowkey(range.start_key_, extra_range->start_key_))) {
+    LOG_WARN("failed to build rowkey obj from extra info.", K(ret), K(range));
+  } else if (OB_FAIL(build_extra_info_rowkey(range.end_key_, extra_range->end_key_))) {
+    LOG_WARN("failed to build rowkey obj from extra info.", K(ret), K(range));
+  } else {
+    const_extra_range = extra_range;
+  }
+
+  return ret;
+}
+
 int ObDASHNSWScanIter::init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVectorQueryAdaptorResultContext *ada_ctx)
 {
   int ret = OB_SUCCESS;
@@ -865,8 +905,10 @@ int ObDASHNSWScanIter::init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVe
       // check key range
       const ObRangeArray& key_range = rowkey_vid_iter_->get_scan_param().key_ranges_;
       for (int64_t i = 0; i < key_range.count() && OB_SUCC(ret); i++) {
-        const ObNewRange *range = &key_range.at(i);
-        if (OB_FAIL(rk_range.push_back(range))) {
+        const ObNewRange *range = nullptr;
+        if (OB_FAIL(build_extra_info_range(key_range.at(i), range))) {
+          LOG_WARN("failed to build extra info range.", K(ret), K(i));
+        } else if (OB_FAIL(rk_range.push_back(range))) {
           LOG_WARN("fail to push back range", K(ret), K(i));
         }
       }
@@ -1389,10 +1431,16 @@ int ObDASHNSWScanIter::set_rowkey_by_vid(ObNewRow *row)
       }
     } else {
       // if there is extro info, set rowkey directly
-      ObRowkey rowkey(&row->get_cell(ObAdaptorIterRowIdx::ROWKEY_START_IDX), extra_column_cnt);
-      if (!data_filter_iter_first_scan_ && OB_FAIL(reuse_filter_data_table_iter())) {
+      ObRowkey rowkey;
+      ObObj *rowkey_objs = nullptr;
+      if (OB_FAIL(build_rowkey_obj_from_extra_info(&row->get_cell(ObAdaptorIterRowIdx::ROWKEY_START_IDX),
+                                                   rowkey_objs))) {
+        LOG_WARN("failed to build rowkey from extra info obj", K(ret));
+      } else if (OB_FALSE_IT(rowkey.assign(rowkey_objs, extra_column_count_))) {
+      } else if (!data_filter_iter_first_scan_ && OB_FAIL(reuse_filter_data_table_iter())) {
         LOG_WARN("failed to reuse com aux vec iter.", K(ret));
-      } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(rowkey, data_filter_scan_param_, data_filter_ctdef_->ref_table_id_))) {
+      } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(rowkey, data_filter_scan_param_,
+                                                           data_filter_ctdef_->ref_table_id_))) {
         LOG_WARN("failed to set lookup key", K(ret));
       }
     }
@@ -1418,6 +1466,9 @@ int ObDASHNSWScanIter::get_simple_cmp_filter_res(ObNewRow *row, bool& res)
     } else if (extra_column_cnt <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shouldn't be null.", K(ret), K(extra_column_count_), K(extra_column_cnt));
+    } else if (extra_column_cnt > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("simple_cmp_filter extra_column_cnt must 1", K(ret), K(extra_column_count_), K(extra_column_cnt));
     } else {
       int result = 0;
       ObExpr *arg1 = filter_expr->args_[0];
@@ -1893,6 +1944,80 @@ int ObDASHNSWScanIter::get_extra_idx_in_outexprs(ObIArray<int64_t> &extra_in_row
   return ret;
 }
 
+
+int ObDASHNSWScanIter::prepare_extra_objs(ObIAllocator &allocator, ObObj *&objs)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (extra_column_count_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra column count is 0.", K(ret), K(extra_column_count_));
+  } else if (extra_in_rowkey_idxs_.count() != extra_column_count_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra info column count is not equal.", K(ret), K(extra_column_count_),
+             K(extra_in_rowkey_idxs_.count()));
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * extra_column_count_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(extra_column_count_));
+  } else if (OB_FALSE_IT(objs = new (buf) ObObj[extra_column_count_])) {
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::build_extra_info_obj_from_rowkey(const ObObj *rowkey_objs, ObObj *&extra_info_objs)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(rowkey_objs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey_objs is null.", K(ret));
+  } else if (OB_FAIL(prepare_extra_objs(mem_context_->get_arena_allocator(), extra_info_objs))) {
+    LOG_WARN("prepare extra info obj failed", K(ret));
+  } else {
+    int64_t rowkey_idx = 0;
+    for (int64_t i = 0; i < extra_column_count_ && OB_SUCC(ret); ++i) {
+      rowkey_idx = extra_in_rowkey_idxs_.at(i);
+      if (OB_UNLIKELY(OB_ISNULL(rowkey_objs + rowkey_idx) || rowkey_idx >= extra_column_count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rowkey_obj is null, or rowkey_idx invalid", K(ret), K(i), K(rowkey_idx), K(extra_column_count_));
+      } else {
+        extra_info_objs[i] = rowkey_objs[rowkey_idx];
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::build_rowkey_obj_from_extra_info(ObObj *extra_info_objs, ObObj *&rowkey_objs)
+{
+  int ret = OB_SUCCESS;
+
+  void *buf = nullptr;
+  if (OB_ISNULL(extra_info_objs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra info obj is null.", K(ret));
+  } else if (extra_column_count_ == 1) {
+    rowkey_objs = extra_info_objs;
+  } else if (OB_FAIL(prepare_extra_objs(mem_context_->get_arena_allocator(), rowkey_objs))) {
+    LOG_WARN("prepare extra info obj failed", K(ret));
+  } else {
+    int64_t rowkey_idx = 0;
+    for (int64_t i = 0; i < extra_column_count_ && OB_SUCC(ret); ++i) {
+      rowkey_idx = extra_in_rowkey_idxs_.at(i);
+      if (OB_UNLIKELY(OB_ISNULL(extra_info_objs + i) || rowkey_idx >= extra_column_count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra_info_obj is null, or rowkey_idx invalid", K(ret), K(i), K(rowkey_idx), K(extra_column_count_));
+      } else {
+        rowkey_objs[rowkey_idx] = extra_info_objs[i];
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDASHNSWScanIter::prepare_complete_vector_data(ObVectorQueryAdaptorResultContext& ada_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1904,7 +2029,7 @@ int ObDASHNSWScanIter::prepare_complete_vector_data(ObVectorQueryAdaptorResultCo
   if (OB_ISNULL(vids = ada_ctx.get_vids())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get vectors.", K(ret));
-  } else if (extra_column_count_ > 0 && OB_FAIL(get_extra_idx_in_outexprs(extra_in_rowkey_idxs))) {
+  } else if (extra_column_count_ > 0 && extra_in_rowkey_idxs_.empty()) {
     // get extra info column index in output_exprs
     LOG_WARN("failed to get extra idx in output exprs", K(ret), K(extra_column_count_));
   }
@@ -1931,8 +2056,8 @@ int ObDASHNSWScanIter::prepare_complete_vector_data(ObVectorQueryAdaptorResultCo
       ada_ctx.set_vector(i, vector.ptr(), vector.length());
       if (extra_column_count_ > 0) {
         // Note: extra_colunm is rowkey + partition_key, rowkey must must include all partition columns
-        if (OB_FAIL(ada_ctx.set_extra_info(i, *rowkey, extra_in_rowkey_idxs))) {
-          LOG_WARN("failed to set_extra_info.", K(ret), K(i), KP(rowkey), K(extra_in_rowkey_idxs));
+        if (OB_FAIL(ada_ctx.set_extra_info(i, *rowkey, extra_in_rowkey_idxs_))) {
+          LOG_WARN("failed to set_extra_info.", K(ret), K(i), KP(rowkey), K(extra_in_rowkey_idxs_));
         }
       }
     }

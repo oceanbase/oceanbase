@@ -196,6 +196,7 @@ public:
       post_with_filter_(false),
       extra_column_count_(0),
       simple_cmp_info_() {
+        extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
 
   virtual ~ObDASHNSWScanIter() {}
@@ -306,6 +307,11 @@ private:
   int init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVectorQueryAdaptorResultContext *ada_ctx);
   int check_is_simple_cmp_filter();
   int get_simple_cmp_filter_res(ObNewRow *row, bool& res);
+  int build_rowkey_obj_from_extra_info(ObObj *extra_info_objs, ObObj *&rowkey_objs);
+  int build_extra_info_obj_from_rowkey(const ObObj *rowkey_objs, ObObj *&extra_info_objs);
+  int prepare_extra_objs(ObIAllocator &allocator, ObObj *&objs);
+  int build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey);
+  int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
@@ -380,6 +386,9 @@ private:
   bool post_with_filter_;
   int64_t extra_column_count_;
   ObHnswSimpleCmpInfo simple_cmp_info_;
+  // extra_info idx to rowkey idx, because of extra_info is sort by column id
+  // if extra_column_count_ <= 0, extra_in_rowkey_idxs_ is empty
+  ObSEArray<int64_t, 4> extra_in_rowkey_idxs_;
 };
 
 
