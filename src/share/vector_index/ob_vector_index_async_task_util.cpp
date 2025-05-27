@@ -163,7 +163,10 @@ bool ObVecIndexAsyncTaskUtil::check_can_do_work()
   bool is_oracle_mode = false;
   const bool is_not_support = true;
   int64_t tenant_id = MTL_ID();
-  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+  if (is_not_support) {
+    bret = false;
+    LOG_DEBUG("can not do work, not support async task");
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", K(ret), K(tenant_id));
   } else if (is_oracle_mode) {
     bret = false;
