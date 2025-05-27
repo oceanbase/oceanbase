@@ -1849,12 +1849,12 @@ void ObTenantDagWorker::run1()
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
-      reset_compaction_thread_locals();
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*cur_task, *this, ret/*task error_code*/))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
+      reset_compaction_thread_locals();
     } else {
       ObThreadCondGuard guard(cond_);
       while (NULL == task_ && DWS_FREE == status_ && !has_set_stop()) {
