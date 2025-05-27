@@ -191,10 +191,11 @@ public:
       common::ObIAllocator *allocator);
   static int check_extra_info_size(
       const ObTableSchema &tbl_schema,
-      const sql::ObSQLSessionInfo &session_info,
+      const sql::ObSQLSessionInfo *session_info,
       bool is_extra_max_size_set,
       int64_t extra_info_max_size,
       int64_t& extra_info_actual_size);
+  static int update_param_extra_actual_size(const ObTableSchema &data_schema, ObTableSchema &index_schema);
   static int check_vec_index_param(
       const uint64_t tenant_id,
       const ParseNode *option_node,
@@ -209,6 +210,11 @@ public:
       ObVectorIndexType vector_index_type,
       ObVectorIndexParam &param,
       const bool set_default=true);
+  static int filter_index_param(
+    const ObString &index_param_str,
+    const char *to_filter,
+    char *filtered_param_str,
+    int32_t &res_len);
   static int print_index_param(
       const ObTableSchema &table_schema,
       char *buf,
