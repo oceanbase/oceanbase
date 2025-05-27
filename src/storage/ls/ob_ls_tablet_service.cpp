@@ -4873,10 +4873,6 @@ int ObLSTabletService::insert_vector_index_rows(
           LOG_DEBUG("show all vector del buffer row for insert", K(rows[k].storage_datums_));
           // set vector null for not to storage
           rows[k].storage_datums_[vector_idx].set_null();
-          // set extra_info null for not to storage
-          for (int i = 0; OB_SUCC(ret) && i < extra_info_id_types.count(); i++) {
-            rows[k].storage_datums_[extra_info_id_types[i].idx_].set_null();
-          }
         }
       }
     }
