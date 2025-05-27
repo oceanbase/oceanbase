@@ -142,12 +142,7 @@ int ObTmpWriteBufferPool::inner_alloc_page_(const int64_t fd,
       new_page_id = curr_first_free_page_id;
       new_page_buf = fat_[new_page_id].buf_;
       ATOMIC_INC(&used_page_num_);
-
-      const int64_t current_used_page_percent = ATOMIC_LOAD(&used_page_num_) * 100 / fat_.size();
-      if (ATOMIC_LOAD(&max_used_watermark_after_shrinking_) < current_used_page_percent) {
-        // compare and set max_used_watermark_ is protected by free_list_lock_
-        ATOMIC_STORE(&max_used_watermark_after_shrinking_, current_used_page_percent);
-      }
+      update_current_max_used_percent_();
     }
   }
 
@@ -194,6 +189,7 @@ int ObTmpWriteBufferPool::alloc_page_(const int64_t fd,
 
   if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_OP_NOT_ALLOW == ret ||
       (OB_SUCC(ret) && ObTmpFileGlobal::INVALID_PAGE_ID == new_page_id)) {
+    LOG_DEBUG("fail to alloc page", KR(ret), K(new_page_id));
     ret = OB_ALLOCATE_TMP_FILE_PAGE_FAILED;  // can not allocate new page
   }
 
@@ -549,7 +545,7 @@ int ObTmpWriteBufferPool::expand_()
     }
   }
 
-  LOG_INFO("wbp expand", KR(ret), K(expect_capacity), K(memory_limit), K(ATOMIC_LOAD(&capacity_)));
+  LOG_INFO("wbp expand", KR(ret), K(expect_capacity), K(memory_limit), K(ATOMIC_LOAD(&capacity_)), K(fat_.size()), K(ATOMIC_LOAD(&used_page_num_)));
 
   return ret;
 }
@@ -571,6 +567,15 @@ int ObTmpWriteBufferPool::release_all_blocks_()
     }
   }
   return ret;
+}
+
+// ensure the accuracy of comparing and setting max_used_watermark_after_shrinking_ by protecting it with free_list_lock_
+void ObTmpWriteBufferPool::update_current_max_used_percent_()
+{
+  const int64_t page_num = fat_.size();
+  const int64_t current_used_page_percent = page_num > 0 ? ATOMIC_LOAD(&used_page_num_) * 100 / page_num : 0;
+  int64_t current_max_used_watermark = ATOMIC_LOAD(&max_used_watermark_after_shrinking_);
+  ATOMIC_SET(&max_used_watermark_after_shrinking_, max(current_used_page_percent, current_max_used_watermark));
 }
 
 int ObTmpWriteBufferPool::cal_target_shrink_range_(const bool is_auto, int64_t &lower_page_id, int64_t &upper_page_id)
@@ -649,13 +654,16 @@ bool ObTmpWriteBufferPool::need_to_shrink(bool &is_auto)
   int64_t max_used_page_watermark = ATOMIC_LOAD(&max_used_watermark_after_shrinking_);
   is_auto = false;
 
-  if (current_capacity > memory_limit) {
+  if (!ATOMIC_LOAD(&is_inited_)) {
+    LOG_INFO("buffer pool is not init, no need to shrink", K(ATOMIC_LOAD(&is_inited_)));
+  } else if (current_capacity > memory_limit) {
     b_ret = true;
   } else if (current_capacity <= memory_limit) {
     if (shrink_ctx_.is_valid()) {
       if (shrink_ctx_.is_auto()) {
         // if used_page_num exceeds threshold during auto-shrinking, stop shrinking
         b_ret = AUTO_SHRINKING_WATERMARK_L1 / 2 >= max_used_page_watermark;
+        LOG_DEBUG("need to shrink after auto shrinking begin", K(b_ret));
       } else {
         // manual-shrinking would stop if memory_limit increase during shrinking
         b_ret = false;
@@ -668,10 +676,12 @@ bool ObTmpWriteBufferPool::need_to_shrink(bool &is_auto)
         LOG_INFO("invoke auto shrinking due to low watermark", K(max_used_page_watermark));
       } else {
         // re-count max watermark for the next period
+        ObSpinLockGuard list_guard(free_list_lock_);
         b_ret = false;
         LOG_DEBUG("re-count max watermark for the next period", K(max_used_page_watermark), K(current_capacity), K(memory_limit));
         ATOMIC_STORE(&max_used_watermark_after_shrinking_, 0);
         ATOMIC_STORE(&last_shrink_complete_ts_, ObTimeUtility::current_time());
+        update_current_max_used_percent_();
       }
     }
   }

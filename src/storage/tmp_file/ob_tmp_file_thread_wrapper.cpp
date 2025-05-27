@@ -1270,7 +1270,9 @@ int ObTmpFileSwapTG::shrink_wbp_if_needed_()
 
   // abort shrinking if wbp memory limit enlarge or flush fail with OB_SERVER_OUTOF_DISK_SPACE
   int io_finished_ret = flush_tg_ref_.get_flush_io_finished_ret();
-  if (wbp_.get_shrink_ctx().is_valid() && (!wbp_.need_to_shrink(is_auto) || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
+  bool need_to_shrink = false;
+  if (wbp_.get_shrink_ctx().is_valid() && ((need_to_shrink = wbp_.need_to_shrink(is_auto)) == false || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
+    LOG_DEBUG("abort reason", KR(io_finished_ret), K(need_to_shrink));
     wbp_.finish_shrinking();
   }
   time_guard.click("wbp_shrink finish one step");
