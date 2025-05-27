@@ -1260,9 +1260,13 @@ bool ObDASHNSWScanIter::can_be_last_search(int64_t old_ef,
                                            float select_ratio)
 {
   bool ret_bool = false;
-  int64_t expect_get = std::ceil(static_cast<float>(need_cnt_next) / select_ratio);
-  ret_bool = expect_get * 2 <= old_ef;
-  LOG_TRACE("iteractive filter log: need get next batch", K(ret_bool), K(old_ef), K(select_ratio));
+  if (select_ratio < ITER_CONSIDER_LAST_SEARCH_SELETIVITY) {
+    ret_bool = false;
+  } else {
+    int64_t expect_get = std::ceil(static_cast<float>(need_cnt_next) / select_ratio);
+    ret_bool = expect_get * 2 <= old_ef;
+  }
+  LOG_TRACE("iteractive filter log: can be last search", K(ret_bool), K(old_ef), K(select_ratio));
   return ret_bool;
 }
 
@@ -1321,10 +1325,10 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   bool end_search = false;
   bool first_search = true;
   int recycle_times = 0;
-  float query_ratio = 2.0;
   if (post_with_filter_) {
-    query_cond_.query_limit_ = static_cast<uint32_t>(std::ceil(query_cond_.query_limit_ * query_ratio));
+    query_cond_.query_limit_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(std::ceil(query_cond_.query_limit_ * FIXEX_MAGNIFICATION_RATIO)));
     query_cond_.ef_search_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(query_cond_.query_limit_));
+    query_cond_.ef_search_ = query_cond_.ef_search_ > VSAG_MAX_EF_SEARCH ? VSAG_MAX_EF_SEARCH : query_cond_.ef_search_;
     if (OB_FAIL(check_is_simple_cmp_filter())) {
       LOG_WARN("failed to check can filter in hnsw.", K(ret));
     }
@@ -1343,7 +1347,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shouldn't be null.", K(ret), K(tmp_adaptor_vid_iter_));
     } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, is_vectorized))) {
-      LOG_WARN("failed to query vid with filter.", K(ret));
+      LOG_WARN("failed to query vid with filter.", K(ret), K(extra_column_count_), K(recycle_times));
     } else if (query_cond_.query_limit_ == 0) {
       end_search = true;
     }
@@ -1481,6 +1485,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       const float* unfiltered_distance = tmp_adaptor_vid_iter_->get_distance();
       const ObVecExtraInfoPtr &unfiltered_extra_info = tmp_adaptor_vid_iter_->get_extra_info();
       int64_t total_before_add = adaptor_vid_iter_->get_total();
+      int64_t extra_column_cnt = tmp_adaptor_vid_iter_->get_extra_column_count();
       for (int i = 0; OB_SUCC(ret) && i < unfiltered_vid_cnt && !adaptor_vid_iter_->get_enough(); ++i) {
         ObNewRow *row = nullptr;
         if (OB_FAIL(tmp_adaptor_vid_iter_->get_next_row(row, vec_aux_ctdef_->result_output_))) {
@@ -1500,7 +1505,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
           }
         } else if (OB_FAIL(set_rowkey_by_vid(row))) {
           if (OB_ITER_END != ret) {
-            LOG_WARN("failed to set rowkey by vid.", K(unfiltered_vids[i]), K(ret), K(i));
+            LOG_WARN("failed to set rowkey by vid.", K(unfiltered_vids[i]), K(ret), K(i), K(extra_column_cnt));
           } else {
             ret = OB_SUCCESS;
           }
@@ -1513,20 +1518,21 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
           LOG_WARN("failed to do data filter table scan.", K(ret), K(i), K(data_filter_iter_first_scan_));
         } else if (OB_FAIL(get_single_row_from_data_filter_iter(is_vectorized))) {
           if (OB_ITER_END != ret) {
-            LOG_WARN("failed to scan vid rowkey iter", K(unfiltered_vids[i]), K(ret), K(i));
+            LOG_WARN("failed to scan vid rowkey iter", K(unfiltered_vids[i]), K(ret), K(i), K(extra_column_cnt));
           } else {
             ret = OB_SUCCESS;
           }
         } else if (OB_FAIL(adaptor_vid_iter_->add_result(
                         unfiltered_vids[i], unfiltered_distance[i],
                         unfiltered_extra_info.is_null() ? nullptr : unfiltered_extra_info[i]))) {
-          LOG_WARN("failed to add result", K(ret), K(i));
+          LOG_WARN("failed to add result", K(ret), K(i), K(extra_column_cnt));
         }
       } // end for
       if (OB_FAIL(ret)) {
       } else if (tmp_adaptor_vid_iter_->get_total() < query_cond_.query_limit_) {
         // res is already less than limit, no need to find again
         query_cond_.query_limit_ = 0;
+        LOG_TRACE("iteractive filter log:", K(tmp_adaptor_vid_iter_->get_total()), K(query_cond_.query_limit_), K(total_before_add), K(adaptor_vid_iter_->get_total()));
       } else {
         int64_t need_cnt_next = adaptor_vid_iter_->get_alloc_size() - adaptor_vid_iter_->get_total();
         int total_after_add = adaptor_vid_iter_->get_total();
@@ -1534,21 +1540,30 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
         float old_limit = static_cast<float>(query_cond_.query_limit_);
         float old_ef = static_cast<float>(query_cond_.ef_search_);
         if (need_cnt_next > 0) {
-          float need_ratio = static_cast<float>(need_cnt_next) / static_cast<float>(added_cnt);
-          float select_ratio = static_cast<float>(added_cnt) / static_cast<float>(unfiltered_vid_cnt);
-          int need_res_cnt = select_ratio > 0 ? static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio)) : need_cnt_next;
           uint32_t new_limit = 0;
           int64_t new_ef = old_ef;
-          if (can_be_last_search(old_ef, need_cnt_next, select_ratio)) {
-            new_limit = old_ef;
-            query_cond_.is_last_search_ = true;
-          } else {
-            new_limit = static_cast<uint32_t>(std::ceil(need_res_cnt));
+          float select_ratio = 0.0;
+          if (added_cnt == 0) {
+            // selectivity is 0, amplify directly
+            new_limit = old_ef * FIXEX_MAGNIFICATION_RATIO;
             new_ef = std::max(query_cond_.ef_search_, static_cast<int64_t>(new_limit));
+            new_ef = new_ef > VSAG_MAX_EF_SEARCH ? VSAG_MAX_EF_SEARCH : new_ef;
+            query_cond_.is_last_search_ = false;
+          } else {
+            select_ratio = static_cast<float>(added_cnt) / static_cast<float>(unfiltered_vid_cnt);
+            int need_res_cnt = static_cast<int64_t>(std::ceil(need_cnt_next / select_ratio));
+            if (can_be_last_search(old_ef, need_cnt_next, select_ratio)) {
+              new_limit = old_ef;
+              query_cond_.is_last_search_ = true;
+            } else {
+              new_limit = need_res_cnt;
+              new_ef = std::max(query_cond_.ef_search_, static_cast<int64_t>(new_limit));
+              new_ef = new_ef > VSAG_MAX_EF_SEARCH ? VSAG_MAX_EF_SEARCH : new_ef;
+            }
           }
           query_cond_.query_limit_ = new_limit;
           query_cond_.ef_search_ = new_ef;
-          LOG_TRACE("iteractive filter perf log:", K(total_after_add), K(total_before_add), K(unfiltered_vid_cnt), K(select_ratio), K(need_ratio), K(old_limit), K(new_limit),
+          LOG_TRACE("iteractive filter arg log:", K(total_after_add), K(total_before_add), K(unfiltered_vid_cnt), K(select_ratio),  K(old_limit), K(new_limit),
                                                   K(old_ef), K(new_ef), K(query_cond_.query_limit_), K(query_cond_.ef_search_));
         } else {
           query_cond_.query_limit_ = 0;
