@@ -963,8 +963,8 @@ public:
   {
     // FIXME: opt performance
     sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
-    char mock_skip_data[1] = {0};
-    ObBitVector &mock_skip = *to_bit_vector(mock_skip_data);
+    int64_t mock_skip_data = 0;
+    ObBitVector &mock_skip = *to_bit_vector(&mock_skip_data);
     return static_cast<Aggregate *>(agg_)->add_batch_rows(agg_ctx, agg_col_idx, mock_skip, bound,
                                                           agg_cell);
   }
@@ -1199,8 +1199,8 @@ public:
   {
     // FIXME: opt performance
     sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
-    char mock_skip_data[1] = {0};
-    ObBitVector &mock_skip = *to_bit_vector(mock_skip_data);
+    int64_t mock_skip_data = 0;
+    ObBitVector &mock_skip = *to_bit_vector(&mock_skip_data);
     return static_cast<Aggregate *>(agg_)->add_batch_rows(agg_ctx, agg_col_idx, mock_skip, bound,
                                                           agg_cell);
   }
