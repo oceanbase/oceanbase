@@ -45,11 +45,7 @@ bool ObVecAsyncTaskExector::check_operation_allow()
   uint64_t tenant_data_version = 0;
   bool bret = true;
   bool is_active_time = true;
-  const bool is_not_support = true;
-  if (is_not_support) {
-    bret = false;
-    LOG_DEBUG("skip this round, not support async task.");
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     bret = false;
     LOG_WARN("get tenant data version failed", K(ret));
   } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
@@ -85,12 +81,9 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
-  const bool is_not_support = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
-  } else if (is_not_support) {
-    // skip
   } else if (OB_ISNULL(vector_index_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(tenant_id_));
@@ -344,14 +337,16 @@ int ObVecAsyncTaskExector::start_task()
             common::ObSpinLockGuard ctx_guard(task_ctx->lock_);
             ObVecIndexAsyncTaskHandler &task_handle = vector_index_service_->get_vec_async_task_handle();
             int tmp_ret = OB_SUCCESS;
-
-            if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
+            if (task_ctx->in_thread_pool_) {                // skip push task
+              LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
+            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
               LOG_WARN("add sys task failed", K(tmp_ret));
+            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             }
             break;
           }

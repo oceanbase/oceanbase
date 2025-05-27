@@ -142,17 +142,19 @@ public:
         retry_time_(0),
         ls_(nullptr),
         task_status_(),
-        sys_task_id_()
+        sys_task_id_(),
+        in_thread_pool_(false)
   {}
   ~ObVecIndexAsyncTaskCtx() {}
 
-  TO_STRING_KV(K_(tenant_id), KP_(ls), K_(task_status), K_(sys_task_id));
+  TO_STRING_KV(K_(tenant_id), KP_(ls), K_(task_status), K_(sys_task_id), K_(in_thread_pool));
 
   uint64_t tenant_id_;
   uint64_t retry_time_;
   storage::ObLS *ls_;
   ObVecIndexTaskStatus task_status_;
   TraceId sys_task_id_;
+  bool in_thread_pool_;
   common::ObSpinLock lock_; // lock for update task_status_
 };
 
