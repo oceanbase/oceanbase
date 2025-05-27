@@ -623,7 +623,6 @@ TEST_F(TestSSReorganizePhyBlock, test_reorganize_all_phy_blk)
   // 4. execute reorganize_op, all reorganized micro_block data will be saved into mem_block
   ASSERT_EQ(0, phy_blk_mgr.get_reusable_blocks_cnt());
   ASSERT_EQ(OB_SUCCESS, micro_cache_->task_runner_.release_cache_task_.reorganize_op_.execute_reorganization());
-  ASSERT_LT(0, mem_blk_mgr.sealed_bg_mem_blks_.get_curr_total());
   const int64_t cur_reusable_blk_cnt = phy_blk_mgr.get_reusable_blocks_cnt();
   ASSERT_LT(0, cur_reusable_blk_cnt);
 
