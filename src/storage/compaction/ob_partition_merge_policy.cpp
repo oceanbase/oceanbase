@@ -1699,6 +1699,8 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
 
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
+  ObArenaAllocator tmp_allocator;
+  ObStorageSchema *schema_on_tablet = nullptr;
 
   if (tablet_id.is_special_merge_tablet()) {
     // do nothing
@@ -1713,14 +1715,22 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   } else if (OB_TMP_FAIL(check_adaptive_merge_reason(tablet, tablet_analyzer, reason))) {
     LOG_WARN("failed to check adaptive merge reason", K(tmp_ret), K(ls_id), K(tablet_id));
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || AdaptiveMergeReason::NONE != reason) {
+  } else if (OB_FAIL(tablet.load_storage_schema(tmp_allocator, schema_on_tablet))) {
+    LOG_WARN("failed to load storage schema", K(ret), K(ls_id), K(tablet_id));
+  } else if (!schema_on_tablet->is_global_index_table()) {
+    LOG_DEBUG("only read truncate info for global_index tablet", KR(ret), K(ls_id), K(tablet_id), K(schema_on_tablet->is_global_index_table()));
   } else if (OB_TMP_FAIL(tablet.get_truncate_info_newest_version(truncate_newest_commit_version, truncate_info_count))) {
     LOG_WARN("failed to get truncate info range", KR(tmp_ret));
-  } else if ((AdaptiveMergeReason::NONE != reason && truncate_info_count > RECYCLE_TRUNCATE_INFO_THRESHOLD)
-            || AdaptiveMergeReason::NONE == reason) {
+  } else if (truncate_info_count > 0) {
     reason = AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO;
     least_medium_snapshot = truncate_newest_commit_version;
     LOG_INFO("[TRUNCATE INFO]success to get adaptive merge reason", KR(tmp_ret), K(ls_id), K(tablet_id), K(reason), K(least_medium_snapshot));
+  }
+  if (OB_NOT_NULL(schema_on_tablet)) {
+    schema_on_tablet->~ObStorageSchema();
+    tmp_allocator.free(schema_on_tablet);
+    schema_on_tablet = nullptr;
   }
 
 #ifdef ERRSIM

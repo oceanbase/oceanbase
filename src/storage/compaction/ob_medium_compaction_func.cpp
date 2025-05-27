@@ -1565,7 +1565,8 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
   int ret = OB_SUCCESS;
   ObMdsInfoDistinctMgr mds_info_mgr;
   ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
-  if (OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
+  if (medium_info.storage_schema_.is_global_index_table()
+      && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
   } else if (mds_info_mgr.empty()) {
     medium_info.contain_mds_filter_info_ = false;
@@ -1631,9 +1632,9 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (!memtables.empty()) {
     // tablet has memtable, exist inc data to merge
-  } else if (OB_FAIL(tablet.get_truncate_info_newest_version(newest_truncate_version, truncate_info_count))) {
+  } else if (medium_info.storage_schema_.is_global_index_table() && OB_FAIL(tablet.get_truncate_info_newest_version(newest_truncate_version, truncate_info_count))) {
     LOG_WARN("failed to get newest truncate version", KR(ret));
-  } else if (newest_truncate_version > last_major_snapshot) {
+  } else if (medium_info.storage_schema_.is_global_index_table() && newest_truncate_version > last_major_snapshot) {
     LOG_TRACE("exist truncate info, should not do skip merge", KR(ret), K(newest_truncate_version), K(truncate_info_count));
   } else if (0 == tablet.get_minor_table_count()) {
     no_inc_data = true;

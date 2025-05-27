@@ -1328,7 +1328,7 @@ int ObTablet::read_truncate_info_array(
     storage::ObTruncateInfoArray &truncate_info_array)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObTablet::read_truncate_info_array", 10 * 1000 * 1000/* 10s */);
+  ObTimeGuard time_guard("ObTablet::read_truncate_info_array", 5 * 1000 * 1000/* 5s */);
   bool need_read_truncate_info = true;
   ObMdsReadInfoCollector collector;
   const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
@@ -1376,12 +1376,13 @@ int ObTablet::read_truncate_info_array(
       LOG_INFO("[TRUNCATE INFO] exist new truncate info or not complete version range, should not update cache", KR(ret), K(tablet_id),
         K(collector), K(read_version_range), K(last_major_snapshot));
     } else {
-      LOG_INFO("[TRUNCATE INFO] read truncate info from mds", KR(ret), K(tablet_id), K(truncate_info_array.count()), K(read_version_range), K_(truncate_info_cache), K(collector));
+      LOG_INFO("[TRUNCATE INFO] read truncate info from mds", KR(ret), K(tablet_id), K(replay_seq), K(truncate_info_array.count()), K(read_version_range), K_(truncate_info_cache), K(collector));
       if (replay_seq >= 0 && mds_cache_lock_.try_wrlock()) {
         // step3. update tablet cache
         if (replay_seq == truncate_info_cache_.replay_seq()) { // there is no new mds trans during mds_query
           if (truncate_info_array.empty()) {
             truncate_info_cache_.set_empty();
+            LOG_TRACE("[TRUNCATE INFO] set truncate info cache empty", KR(ret), K(tablet_id), K(truncate_info_cache_), K(truncate_info_cache_.is_valid()));
           } else {
             const ObTruncateInfo *last_info = truncate_info_array.at(truncate_info_array.count() - 1);
             if (OB_ISNULL(last_info)) {
