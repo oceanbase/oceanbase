@@ -17,6 +17,7 @@
 #include "share/ob_index_builder_util.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
 #include "rootserver/ob_split_partition_helper.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 
 namespace oceanbase
@@ -265,6 +266,51 @@ int ObPartitionPreSplit::get_exist_table_size(
   return ret;
 }
 
+int ObPartitionPreSplit::get_exist_table_size(
+    const ObTableSchema &table_schema,
+    int64_t &table_size)
+{
+  int ret = OB_SUCCESS;
+  table_size = 0;
+  if (OB_UNLIKELY(!table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(table_schema));
+  } else {
+    uint64_t tenant_id = table_schema.get_tenant_id();
+    uint64_t table_id = table_schema.get_table_id();
+    int64_t part_id = -1;
+    if (!table_schema.is_partitioned_table()) {
+      part_id = table_id;
+    } else {
+      part_id = -1;
+    }
+    ObDbmsSpace::OptStats opt_stats;
+    ObSEArray<int64_t, 1> part_ids;
+    bool is_valid = false;
+    if (OB_FAIL(part_ids.push_back(part_id))) {
+      LOG_WARN("failed to push back into part ids", K(ret), K(table_schema));
+    } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(tenant_id,
+                                                                       table_id,
+                                                                       part_ids,
+                                                                       opt_stats.table_stats_))) {
+      SQL_ENG_LOG(WARN, "fail to get table stat", K(ret));
+    } else if (OB_FAIL(ObDbmsSpace::check_stats_valid(opt_stats, is_valid))) {
+      LOG_WARN("failed to check stats valid", K(ret), K(opt_stats));
+    } else if (!is_valid) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported to get the size of the table without stats", K(ret), K(table_schema), K(is_valid));
+    } else if (OB_UNLIKELY(opt_stats.table_stats_.count() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected stats number", K(ret), K(opt_stats), K(table_schema));
+    } else {
+      ObOptTableStat &stat = opt_stats.table_stats_.at(0);
+      double compression_ratio = 0.5;
+      table_size = stat.get_row_count() * stat.get_avg_row_size() * compression_ratio;
+    }
+  }
+  return ret;
+}
+
 int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
     const int64_t tenant_id,
     const int64_t session_id,
@@ -426,18 +472,11 @@ int ObPartitionPreSplit::do_pre_split_global_index(
   DEBUG_SYNC(START_DDL_PRE_SPLIT_PARTITION);
   if (OB_FAIL(get_estimated_table_size(data_table_schema, new_index_schema, physical_size))) { // estimate global index table size
     LOG_WARN("[PRE_SPLIT] fail to get create table size", K(ret), K(new_index_schema));
-  } else if (OB_FAIL(get_exist_table_size(data_table_schema, tablets_size_array))) {  // get data table size
+  } else if (OB_FAIL(get_exist_table_size(data_table_schema, data_table_physical_size))) {  // get data table size
     LOG_WARN("[PRE_SPLIT] fail to get data table size", K(ret), K(data_table_schema));
-  }
-  if (OB_SUCC(ret)) {
-    // calculate data table size.
-    for (int64_t i = 0; i < tablets_size_array.count(); ++i) {
-      data_table_physical_size += tablets_size_array[i].second;
-    }
   }
   LOG_DEBUG("[PRE_SPLIT] size for create global index",
     K(ret), K(split_size), K(data_table_physical_size), K(physical_size), K(tablets_size_array));
-
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(get_split_num(physical_size, split_size, split_num))) {
   } else if (split_num < 2) {
@@ -453,6 +492,8 @@ int ObPartitionPreSplit::do_pre_split_global_index(
       data_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",
       K(ret), K(source_tablet_id), K(tenant_id), K(physical_size));
+  }
+  if(OB_FAIL(ret)) {
   } else if (OB_FAIL(build_split_tablet_partition_schema(
       tenant_id,
       source_tablet_id,
