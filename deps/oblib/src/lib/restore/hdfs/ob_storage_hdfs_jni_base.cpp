@@ -656,7 +656,7 @@ int ObStorageHdfsReader::open(const ObString &uri,
       if (OB_FAIL(get_hdfs_file_meta(uri, meta))) {
         OB_LOG(WARN, "failed to get hdfs object meta", K(ret), K(uri));
       } else if (!meta.is_exist_) {
-        ret = OB_BACKUP_FILE_NOT_EXIST;
+        ret = OB_OBJECT_NOT_EXIST;
         OB_LOG(WARN, "backup file is not exist", K(ret), K(uri));
       } else {
         file_length_ = meta.length_;
