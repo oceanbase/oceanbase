@@ -451,6 +451,9 @@ public:
     return static_cast<sql::ObColumnRefRawExpr *>(lhs)->get_column_id() <
            static_cast<sql::ObColumnRefRawExpr *>(rhs)->get_column_id();
   }
+  static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
+                                         const ObColumnSchemaV2 &new_column_schema,
+                                         ObColumnSchemaV2 &new_aux_column_schema);
 
 private:
   static int check_index_param(
