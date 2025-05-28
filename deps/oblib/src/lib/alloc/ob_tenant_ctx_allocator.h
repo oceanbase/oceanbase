@@ -497,20 +497,28 @@ public:
       if (malloc_sample_allowed(size, inner_attr)) {
         inner_attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
       }
-      nobj = allocator.realloc_object(obj, size, inner_attr);
-      if (OB_ISNULL(nobj)) {
-        int64_t total_size = 0;
-        if (g_alloc_failed_ctx().need_wash_block()) {
-          total_size += ta.sync_wash();
-          BASIC_TIME_GUARD_CLICK("WASH_BLOCK_END");
-        } else if (g_alloc_failed_ctx().need_wash_chunk()) {
-          total_size += CHUNK_MGR.sync_wash();
-          BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
+      do {
+        nobj = allocator.realloc_object(obj, size, inner_attr);
+        if (OB_ISNULL(nobj)) {
+          int64_t total_size = 0;
+          if (g_alloc_failed_ctx().need_wash_block()) {
+            total_size += ta.sync_wash();
+            BASIC_TIME_GUARD_CLICK("WASH_BLOCK_END");
+          } else if (g_alloc_failed_ctx().need_wash_chunk()) {
+            total_size += CHUNK_MGR.sync_wash();
+            BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
+          }
+          if (total_size > 0) {
+            nobj = allocator.realloc_object(obj, size, inner_attr);
+          }
         }
-        if (total_size > 0) {
-          nobj = allocator.realloc_object(obj, size, inner_attr);
+        if (OB_UNLIKELY(OB_ISNULL(nobj) && inner_attr.enable_malloc_hang_)) {
+          ::usleep(10000);  // 10ms
+        } else {
+          break;
         }
-      }
+      } while (OB_ISNULL(nobj));
+
       if (OB_UNLIKELY(NULL == nobj && NULL != obj)) {
         SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
       }

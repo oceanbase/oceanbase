@@ -156,6 +156,7 @@ struct ObMemAttr
         expect_500_(true),
         ignore_version_(ObMemVersionNode::tl_ignore_node),
         use_malloc_v2_(false),
+        enable_malloc_hang_(false),
         extra_size_(0)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
@@ -171,6 +172,7 @@ public:
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
         uint8_t use_malloc_v2_ : 1;
+        uint8_t enable_malloc_hang_ : 1;
       };
       uint16_t extra_size_;
     };
