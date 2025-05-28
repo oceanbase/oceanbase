@@ -337,7 +337,7 @@ int ObMergeLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
   return ret;
 }
 
-typedef ObMergeLoserTree<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp, common::MAX_TABLE_CNT_IN_STORAGE> ObScanMergeLoserTree;
+typedef ObMergeLoserTree<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp, 2*common::MAX_TABLE_CNT_IN_STORAGE> ObScanMergeLoserTree;
 } //namespace storage
 } //namespace oceanbase
 #endif /* OB_SCAN_MERGE_LOSER_TREE_H_ */

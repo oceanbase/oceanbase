@@ -63,7 +63,7 @@ protected:
   ObScanSimpleMerger *simple_merge_;
   ObScanMergeLoserTree *loser_tree_;
   common::ObRowsMerger<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp> *rows_merger_;
-  int64_t consumers_[common::MAX_TABLE_CNT_IN_STORAGE];
+  int64_t consumers_[2*common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t consumer_cnt_;
 private:
   int64_t filt_del_count_;
