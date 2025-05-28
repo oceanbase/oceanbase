@@ -449,6 +449,7 @@ private:
   int generate_tablet_group_dag_();
   int try_remove_unneeded_tablets_();
   int try_offline_ls_();
+  int check_tx_data_continue_();
   int record_server_event_();
 
 private:

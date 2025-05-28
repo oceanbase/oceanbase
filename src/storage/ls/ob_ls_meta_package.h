@@ -36,11 +36,12 @@ public:
   bool is_valid() const;
   bool is_valid_for_4_1_0_0() const;
 
-  TO_STRING_KV(K_(ls_meta), K_(palf_meta), K_(dup_ls_meta));
+  TO_STRING_KV(K_(ls_meta), K_(palf_meta), K_(dup_ls_meta), K_(tx_data_recycle_scn));
 public:
   ObLSMeta ls_meta_;                // the meta of ls
   palf::PalfBaseInfo palf_meta_;    // the meta of palf
   transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta_; // the meta of dup_ls_meta_;
+  share::SCN tx_data_recycle_scn_;
 };
 
 } // storage

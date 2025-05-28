@@ -260,6 +260,7 @@ public:
   const char* get_state_string(const int64_t state) const;
 
   void update_calc_upper_info() { tx_data_table_.update_calc_upper_info(); }
+  int get_tx_data_sstable_recycle_scn(share::SCN &recycle_scn);
 
   TO_STRING_KV(KP(this),
                K_(is_inited),
