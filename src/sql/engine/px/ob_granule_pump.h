@@ -69,15 +69,13 @@ public :
       pruning_status_(READY_PRUNING),
       pruning_ret_(OB_SUCCESS),
       partitions_info_(), parallelism_(0),
-      tablet_size_(0), gi_attri_flag_(0),
-      gi_op_id_(common::OB_INVALID_ID) {}
+      tablet_size_(0), gi_attri_flag_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
   TO_STRING_KV(K(partitions_info_),
                K(parallelism_),
                K(tablet_size_),
-               K(gi_attri_flag_),
-               K_(gi_op_id));
+               K(gi_attri_flag_));
 
   bool need_partition_granule();
   bool is_finish_pruning() { return pruning_status_ == FINISH_PRUNING; }
@@ -111,7 +109,6 @@ public :
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
-  int64_t gi_op_id_;
 };
 
 // 引入 TaskSet 的概念，是为了处理一个 GI 下管多张表的场景。
@@ -177,18 +174,12 @@ typedef common::ObIArray<ObGITaskSet> GITaskIArray;
 
 struct GITaskArrayItem
 {
-  GITaskArrayItem() :
-    tsc_op_id_(common::OB_INVALID_ID),
-    no_more_task_from_shared_pool_(false)
-  {}
-
   TO_STRING_KV(K(tsc_op_id_), K(taskset_array_));
   // table scan operator id or insert op id
   // TODO: jiangting.lk 先不修改变量名字，后期统一调整
   uint64_t tsc_op_id_;
   // gi task set array
   ObGITaskArray taskset_array_;
-  volatile bool no_more_task_from_shared_pool_;
 };
 
 typedef common::ObArray<GITaskArrayItem> GITaskArrayMap;
@@ -241,7 +232,6 @@ public :
   int split_granule(ObGranulePumpArgs &args,
                     common::ObIArray<const ObTableScanSpec *> &scan_ops,
                     GITaskArrayMap &gi_task_array_result,
-                    bool check_task_exist,
                     ObGITaskSet::ObGIRandomType random_type,
                     bool partition_granule = true);
 private:
@@ -255,7 +245,6 @@ public :
   int split_granule(ObGranulePumpArgs &args,
                     common::ObIArray<const ObTableScanSpec *> &scan_ops,
                     GITaskArrayMap &gi_task_array_result,
-                    bool check_task_exist,
                     ObGITaskSet::ObGIRandomType random_type,
                     bool partition_granule = true);
 private :
@@ -296,7 +285,6 @@ int split_tsc_gi_task(ObGranulePumpArgs &args,
                       common::ObIArray<const ObTableScanSpec *> &scan_ops,
                       const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                       int64_t tsc_begin_idx,
-                      int64_t task_begin_idx,
                       GITaskArrayMap &gi_task_array_result,
                       bool partition_granule,
                       ObGITaskSet::ObGIRandomType random_type);
@@ -357,6 +345,7 @@ public:
   parallelism_(-1),
   tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
   partition_wise_join_(false),
+  no_more_task_from_shared_pool_(false),
   gi_task_array_map_(),
   splitter_type_(GIT_UNINITIALIZED),
   pump_args_(),
@@ -381,8 +370,7 @@ public:
                            int64_t parallelism,
                            int64_t tablet_size,
                            uint64_t gi_attri_flag,
-                           const ObIArray<std::pair<int64_t, bool>> &locations_order,
-                           int64_t gi_op_id);
+                           const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
    int init_pump_args(ObExecContext *ctx,
                       ObIArray<const ObTableScanSpec*> &scan_ops,
@@ -393,10 +381,9 @@ public:
                       int64_t parallelism,
                       int64_t tablet_size,
                       uint64_t gi_attri_flag,
-                      const ObIArray<std::pair<int64_t, bool>> &locations_order,
-                      int64_t gi_op_id);
-  ObGranulePumpArgs *get_granule_pump_arg(const int64_t gi_op_id);
-  int add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exist);
+                      const ObIArray<std::pair<int64_t, bool>> &locations_order);
+
+  int add_new_gi_task(ObGranulePumpArgs &args);
 
   void destroy();
 
@@ -419,7 +406,6 @@ public:
 public:
 
   int regenerate_gi_task();
-  int regenerate_gi_task(ObGranulePumpArgs &args);
 
   int reset_gi_task();
 
@@ -432,9 +418,6 @@ public:
   common::ObIArray<ObTableLocation> *get_pruning_table_location() { return &pruning_table_locations_; }
   int get_first_tsc_range_cnt(int64_t &cnt);
   const GITaskArrayMap &get_task_array_map() const { return gi_task_array_map_; }
-  static int find_task_array_item(GITaskArrayMap &gi_task_map,
-                              common::ObIArray<const ObTableScanSpec *> &scan_ops,
-                              const bool check_task_exist, int64_t &idx);
 private:
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
@@ -455,7 +438,7 @@ private:
                                         ObGranuleSplitterType splitter_type);
   int check_pw_end(int64_t end_tsc_count, int64_t op_count, int64_t task_count);
 
-  int find_taskset_by_tsc_id(uint64_t op_id, GITaskArrayItem *&taskset_array_item);
+  int find_taskset_by_tsc_id(uint64_t op_id, ObGITaskArray *&taskset_array);
 
   int init_arg(ObGranulePumpArgs &arg,
                ObExecContext *ctx,
@@ -467,16 +450,17 @@ private:
                int64_t parallelism,
                int64_t tablet_size,
                uint64_t gi_attri_flag,
-               const ObIArray<std::pair<int64_t, bool>> &locations_order,
-               int64_t gi_op_id);
+               const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
   int check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize);
+
 private:
   //TODO::muhang 自旋锁还是阻塞锁，又或者按静态划分任务避免锁竞争？
   common::ObSpinLock lock_;
   int64_t parallelism_;
   int64_t tablet_size_;
   bool partition_wise_join_;
+  volatile bool no_more_task_from_shared_pool_; // try notify worker exit earlier
   GITaskArrayMap gi_task_array_map_;
   ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;

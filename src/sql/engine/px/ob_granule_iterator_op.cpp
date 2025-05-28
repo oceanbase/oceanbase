@@ -290,7 +290,7 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info)
           rescan_taskset_ = taskset;
         } else if (rescan_taskset_ != taskset) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("taskset changed", K(ret), K(rescan_taskset_), K(taskset), K(tsc_op_id_));
+          LOG_WARN("taskset changed", K(ret));
         }
       }
     }
@@ -1227,67 +1227,64 @@ int ObGranuleIteratorOp::do_single_runtime_filter_pruning(
 int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
 {
   int ret = OB_SUCCESS;
-  ObGranulePumpArgs *args = NULL;
-  if (OB_ISNULL(pump_)) {
+  if (OB_ISNULL(pump_) || 1 != pump_->get_pump_args().count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is unexpected", K(pump_), K(ret));
-  } else if (OB_ISNULL(args = pump_->get_granule_pump_arg(get_spec().id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pump is unexpected", K(ret), K(pump_->get_pump_args()), K(get_spec().id_));
   } else {
+    ObGranulePumpArgs &args = pump_->get_pump_args().at(0);
     int64_t cur_tablet_idx = -1;
     int64_t finish_tablet_idx = -1;
-    int64_t tablet_cnt = args->run_time_pruning_flags_.count();
+    int64_t tablet_cnt = args.run_time_pruning_flags_.count();
     bool is_pruning = false;
     CK(0 != tablet_cnt);
     // 1 Firstly, all threads(not all is also ok)
     //   come to do the parallel pruning together via aotimic operations
     // 2 The last worker to finish pruning will be responsible for regenerating the gi task
     // 3 Other threads need to sleep to wait to be woken up
-    while (OB_SUCC(ret) && args->cur_tablet_idx_ < tablet_cnt) {
+    while (OB_SUCC(ret) && args.cur_tablet_idx_ < tablet_cnt) {
       // Concurrency controls the tablet idx of the current operation
-      cur_tablet_idx = ATOMIC_FAA(&args->cur_tablet_idx_, 1);
+      cur_tablet_idx = ATOMIC_FAA(&args.cur_tablet_idx_, 1);
       if (cur_tablet_idx >= tablet_cnt) {
       } else {
-        DASTabletLocArray &tablet_array = args->tablet_arrays_.at(0);
+        DASTabletLocArray &tablet_array = args.tablet_arrays_.at(0);
         is_pruning = false;
         if (OB_FAIL(do_join_filter_partition_pruning(
             tablet_array.at(cur_tablet_idx)->tablet_id_.id(), is_pruning))) {
           LOG_WARN("fail to do join filter partition pruning", K(ret));
         } else if (is_pruning) {
-          args->run_time_pruning_flags_.at(cur_tablet_idx) = true;
+          args.run_time_pruning_flags_.at(cur_tablet_idx) = true;
         }
         // Record the current finish_tablet_idx
         // To find who is the last finished worker
-        finish_tablet_idx = ATOMIC_AAF(&args->finish_pruning_tablet_idx_, 1);
+        finish_tablet_idx = ATOMIC_AAF(&args.finish_pruning_tablet_idx_, 1);
       }
     }
     if (OB_SUCC(ret)) {
       is_parallel_runtime_filtered_ = true;
       if (finish_tablet_idx == tablet_cnt) {
         DASTabletLocArray pruning_remain_tablets;
-        DASTabletLocArray &tablet_array = args->tablet_arrays_.at(0);
+        DASTabletLocArray &tablet_array = args.tablet_arrays_.at(0);
         for (int i = 0; OB_SUCC(ret) && i < tablet_array.count(); ++i) {
-          if (!args->run_time_pruning_flags_.at(i)) {
+          if (!args.run_time_pruning_flags_.at(i)) {
             OZ(pruning_remain_tablets.push_back(tablet_array.at(i)));
           }
         }
         if (OB_SUCC(ret)) {
           if (pruning_remain_tablets.empty()) {
             ret = OB_ITER_END;
-            args->sharing_iter_end_ = true;
+            args.sharing_iter_end_ = true;
           } else if (pruning_remain_tablets.count() == tablet_array.count()) {
             /* do nothing*/
           } else {
-            args->tablet_arrays_.reset();
-            OZ(args->tablet_arrays_.push_back(pruning_remain_tablets));
-            OZ(pump_->regenerate_gi_task(*args));
+            args.tablet_arrays_.reset();
+            OZ(args.tablet_arrays_.push_back(pruning_remain_tablets));
+            OZ(pump_->regenerate_gi_task());
           }
         }
-        args->set_pruning_ret(ret);
-        args->set_finish_pruning();
+        args.set_pruning_ret(ret);
+        args.set_finish_pruning();
       } else {
-        while (OB_SUCC(ret) && !args->is_finish_pruning()) {
+        while (OB_SUCC(ret) && !args.is_finish_pruning()) {
           if (OB_FAIL(ctx_.fast_check_status())) {
             LOG_WARN("fail to fast check status", K(ret));
           } else {
@@ -1295,7 +1292,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
           }
         }
         if (OB_SUCC(ret)
-           && (args->sharing_iter_end_ || OB_UNLIKELY(OB_SUCCESS != args->get_pruning_ret()))) {
+           && (args.sharing_iter_end_ || OB_UNLIKELY(OB_SUCCESS != args.get_pruning_ret()))) {
           ret = OB_ITER_END;
         }
       }
