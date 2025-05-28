@@ -4036,19 +4036,8 @@ int ObPLResolver::is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_
         // ret = OB_ERR_UNEXPECTED;
         // do nothing, may be something like( return 1; )
         // LOG_WARN("const expr", K(const_expr->get_value()), K(current_block_), K(ret));
-      } else if (OB_ISNULL(current_block_)
-              || OB_ISNULL(symbol_table = current_block_->get_symbol_table())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(current_block_), K(ret));
-      } else if (OB_ISNULL(var = symbol_table->get_symbol(const_expr->get_value().get_unknown()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get symble var is null", K(var),
-                                           K(const_expr->get_value().get_unknown()), K(ret));
-      } else if (var->get_name().case_compare("\"anonymous argument\"") != 0) {
-        src_type = &(var->get_type());
-        if (src_type->is_ref_cursor_type()) {
-          is_ref_cursor_type = true;
-        }
+      } else {
+        is_ref_cursor_type = expr->get_result_type().is_pl_extend_type() && (expr->get_result_type().get_extend_type() == pl::PL_REF_CURSOR_TYPE);
       }
     } else if (expr->is_obj_access_expr()) {
       OZ (static_cast<const ObObjAccessRawExpr*>(expr)->get_final_type(type_local));
