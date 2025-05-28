@@ -834,6 +834,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
   int64_t &max_wa_memory_size, const bool auto_calc)
 {
   int ret = OB_SUCCESS;
+  const int64_t MIN_TENANT_MEMORY = 1;
   ObSchemaGetterGuard schema_guard;
   const ObSysVarSchema *var_schema = NULL;
   ObObj value;
@@ -860,13 +861,13 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
     int64_t tenant_work_area_max_size = tenant_max_memory_limit * pctg / 100;
     int64_t tenant_work_area_memory_hold =
       get_tenant_memory_hold(tenant_id_, common::ObCtxIds::WORK_AREA);
-    int64_t max_tenant_memory_size = tenant_max_memory_limit - tenant_memory_hold;
-    int64_t max_workarea_memory_size = tenant_work_area_max_size - tenant_work_area_memory_hold;
+    int64_t max_tenant_memory_size = std::max(MIN_TENANT_MEMORY,
+      tenant_max_memory_limit - tenant_memory_hold);
+    int64_t max_workarea_memory_size = std::max(MIN_TENANT_MEMORY,
+    tenant_work_area_max_size - tenant_work_area_memory_hold);
     int64_t washable_size = -2;
     int wash_ratio = 6; // valid value: [0-6]
-    if (max_workarea_memory_size > 0 &&
-        max_tenant_memory_size > 0 &&
-        max_workarea_memory_size > max_tenant_memory_size) {
+    if (max_workarea_memory_size > max_tenant_memory_size) {
       int tmp_ret = EVENT_CALL(EventTable::EN_AMM_WASH_RATIO);
       if (0 != tmp_ret) {
         wash_ratio = -tmp_ret;
@@ -901,9 +902,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
       }
     }
     // 取租户最大可用内存和ctx最大可用内存的最小值
-    int64_t remain_memory_size = max_tenant_memory_size > 0
-              ? min(max_workarea_memory_size, max_tenant_memory_size)
-              : max_tenant_memory_size;
+    int64_t remain_memory_size = min(max_workarea_memory_size, max_tenant_memory_size);
     int64_t total_alloc_size = sql_mem_callback_.get_total_alloc_size();
     double ratio = total_alloc_size * 1.0 / tenant_work_area_memory_hold;
     // 1 - x^3函数，表示随着hold内存越多，可用内存越少，同时alloc越多，可用内存越少
@@ -931,7 +930,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
     max_workarea_size_ = tenant_work_area_max_size;
     workarea_hold_size_ = tenant_work_area_memory_hold;
     max_auto_workarea_size_ = max_wa_memory_size;
-    if (0 > max_wa_memory_size) {
+    if (0 >= max_wa_memory_size) {
       max_wa_memory_size = 0;
       LOG_INFO("max work area is 0", K(tenant_max_memory_limit), K(total_alloc_size),
       K(tenant_work_area_memory_hold), K(tenant_work_area_max_size));
