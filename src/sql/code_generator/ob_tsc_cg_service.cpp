@@ -818,7 +818,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
-      } else if (OB_FAIL(scan_ctdef.table_param_.check_lob_column_pushdown(
+      } else if (OB_FAIL(scan_ctdef.table_param_.check_is_safe_filter_with_di(
                   *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to check lob column pushdown", K(ret));
       }
@@ -836,7 +836,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
-      } else if (OB_FAIL(lookup_ctdef->table_param_.check_lob_column_pushdown(
+      } else if (OB_FAIL(lookup_ctdef->table_param_.check_is_safe_filter_with_di(
                   *lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to check lob column pushdown", K(ret));
       }
@@ -1505,7 +1505,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
         if (OB_FAIL(filter_constructor.apply(
                     scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
           LOG_WARN("failed to apply filter constructor", K(ret));
-        } else if (OB_FAIL(scan_ctdef.table_param_.check_lob_column_pushdown(
+        } else if (OB_FAIL(scan_ctdef.table_param_.check_is_safe_filter_with_di(
                     *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
           LOG_WARN("failed to check lob column pushdown", K(ret));
         }
