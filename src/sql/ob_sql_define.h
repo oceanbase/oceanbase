@@ -143,6 +143,14 @@ enum ObMatchAgainstMode {
   MAX_MATCH_AGAINST_MODE = 4,
 };
 
+#define IS_HASH_SLAVE_MAPPING(type)                                                                \
+  (((type) == SlaveMappingType::SM_PWJ_HASH_HASH)                                                  \
+   || ((type) == SlaveMappingType::SM_PPWJ_HASH_HASH))
+
+#define IS_BCAST_SLAVE_MAPPING(type)                                                               \
+  (((type) == SlaveMappingType::SM_PPWJ_BCAST_NONE)                                                \
+   || ((type) == SlaveMappingType::SM_PPWJ_NONE_BCAST))
+
 #define IS_JOIN(type) \
 (((type) == PHY_MERGE_JOIN) || \
  ((type) == PHY_NESTED_LOOP_JOIN) || \

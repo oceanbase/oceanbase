@@ -4754,3 +4754,33 @@ int ObPXServerAddrUtil::get_cluster_server_cnt(const ObIArray<ObAddr> &server_li
   }
   return ret;
 }
+
+// for slave mapping under union all, the parent dfo may also contain scan ops,
+// thus we should check the sqc addr is match
+int ObPXServerAddrUtil::check_slave_mapping_location_constraint(ObDfo &child, ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(child.get_sqcs_count() != parent.get_sqcs_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc count not match for slave_mapping", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+  } else {
+    common::ObIArray<ObPxSqcMeta> &child_sqcs = child.get_sqcs();
+    common::ObIArray<ObPxSqcMeta> &parent_sqcs = parent.get_sqcs();
+    for (int64_t i = 0; i < child_sqcs.count() && OB_SUCC(ret); ++i) {
+      bool match = false;
+      const ObAddr &child_addr = child_sqcs.at(i).get_exec_addr();
+      for (int64_t j = 0; j < parent_sqcs.count() && OB_SUCC(ret); ++j) {
+        const ObAddr &parent_addr = parent_sqcs.at(j).get_exec_addr();
+        if (child_addr == parent_addr) {
+          match = true;
+          break;
+        }
+      }
+      if (OB_UNLIKELY(!match)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sqc addr not match", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+      }
+    }
+  }
+  return ret;
+}

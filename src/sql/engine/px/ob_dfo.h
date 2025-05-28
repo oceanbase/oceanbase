@@ -576,6 +576,7 @@ public:
   inline bool has_das_op() const { return has_das_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
+  bool need_access_store() { return has_scan_op() || has_dml_op(); }
   inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
   inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
