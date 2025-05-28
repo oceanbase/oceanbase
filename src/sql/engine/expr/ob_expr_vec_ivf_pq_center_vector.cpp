@@ -109,6 +109,7 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
       LOG_WARN("failed to eval ivf centers", K(ret), K(expr), K(eval_ctx));
     } else if (contain_null) {
       // do nothing
+      expr_datum.set_null();
     } else {
       ObVectorNormalizeInfo norm_info;
       float *residual_vec = nullptr;
