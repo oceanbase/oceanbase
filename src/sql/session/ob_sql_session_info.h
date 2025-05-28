@@ -630,6 +630,9 @@ public:
     #ifdef OB_BUILD_SPM
       select_plan_type_ = ObSpmCacheCtx::INVALID_TYPE;
     #endif
+      catalog_id_ = OB_INVALID_ID;
+      db_id_ = OB_INVALID_ID;
+      db_name_.reset();
     }
   public:
     ObAuditRecordData audit_record_;
@@ -639,6 +642,9 @@ public:
   #ifdef OB_BUILD_SPM
     ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
   #endif
+    uint64_t catalog_id_;
+    uint64_t db_id_;
+    common::ObSqlString db_name_;
   };
 
   class CursorCache {

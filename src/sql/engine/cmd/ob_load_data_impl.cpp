@@ -27,6 +27,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "src/observer/mysql/ob_query_driver.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -3340,14 +3341,21 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   common::sqlclient::ObISQLConnection *conn = NULL;
   ObInnerSQLConnectionPool *pool = NULL;
   ObSQLSessionInfo *session = NULL;
-
+  ObSwitchCatalogHelper switch_catalog_helper;
+  int tmp_ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(session = ctx.get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is null", K(ret));
-    } else if (load_stmt.get_load_arguments().is_diagnosis_enabled_) {
-      session->set_diagnosis_enabled(true);
-      session->set_diagnosis_limit_num(load_stmt.get_load_arguments().diagnosis_limit_num_);
+    } else {
+      if (load_stmt.get_load_arguments().is_diagnosis_enabled_) {
+        session->set_diagnosis_enabled(true);
+        session->set_diagnosis_limit_num(load_stmt.get_load_arguments().diagnosis_limit_num_);
+      }
+      if (session->is_in_external_catalog()
+          && OB_FAIL(session->set_internal_catalog_db(&switch_catalog_helper))) {
+        LOG_WARN("failed to set catalog", K(ret));
+      }
     }
   }
 
@@ -3376,6 +3384,13 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
     session->set_diagnosis_enabled(false);
     session->set_diagnosis_limit_num(0);
+  }
+
+  if (OB_NOT_NULL(session) && switch_catalog_helper.is_set()) {
+    if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
+    }
   }
 
   if (OB_SUCC(ret)) {

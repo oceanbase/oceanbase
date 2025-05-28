@@ -3026,12 +3026,16 @@ int ObSQLSessionInfo::save_sql_session(StmtSavedValue &saved_value)
 #ifdef OB_BUILD_SPM
   OX (saved_value.select_plan_type_ = select_plan_type_);
 #endif
+  OX (saved_value.catalog_id_ = get_current_default_catalog());
+  OX (saved_value.db_id_ = get_database_id());
+  OZ (saved_value.db_name_.assign(get_database_name()));
   return ret;
 }
 
 int ObSQLSessionInfo::restore_sql_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
+  ObObj obj;
   OX (session_type_ = saved_value.session_type_);
   OX (inner_flag_ = saved_value.inner_flag_);
   OX (read_uncommited_ = saved_value.read_uncommited_);
@@ -3040,6 +3044,10 @@ int ObSQLSessionInfo::restore_sql_session(StmtSavedValue &saved_value)
 #ifdef OB_BUILD_SPM
   OX (select_plan_type_ = saved_value.select_plan_type_);
 #endif
+  OX (obj.set_uint64(saved_value.catalog_id_));
+  OZ (update_sys_variable(share::SYS_VAR__CURRENT_DEFAULT_CATALOG, obj));
+  OX (set_database_id(saved_value.db_id_));
+  OZ (set_default_database(saved_value.db_name_.string()));
   return ret;
 }
 

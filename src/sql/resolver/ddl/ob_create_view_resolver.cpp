@@ -258,7 +258,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
           ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-          LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+          LOG_WARN("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
         } else {
           session_info_->set_database_id(old_database_id);
         }
@@ -1058,6 +1058,7 @@ int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
       pos = 0;
       ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
       obj_print_params.print_origin_stmt_ = true;
+      obj_print_params.not_print_internal_catalog_ = true;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
                                       params_.schema_checker_->get_schema_guard(),
                                       obj_print_params, true);

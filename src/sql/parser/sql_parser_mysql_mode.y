@@ -4969,6 +4969,12 @@ relation_name '.' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_FACTOR, 2, $1, $3);
 }
+| id_dot_id
+{
+  ParseNode* catalog_node = $1->children_[0];
+  ParseNode* db_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_FACTOR, 2, catalog_node, db_node);
+}
 ;
 
 opt_database_option_list:

@@ -1165,6 +1165,9 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
     session_value = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
     if (OB_FAIL(session->save_session(*session_value))) {
       LOG_WARN("failed to save session", K(ret));
+    } else if (session->is_in_external_catalog()
+               && OB_FAIL(session->set_internal_catalog_db())) {
+      LOG_WARN("failed to set catalog", K(ret));
     } else {
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       is_sess_in_retry = session->get_is_in_retry();

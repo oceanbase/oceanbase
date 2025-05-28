@@ -2719,6 +2719,24 @@ int ObDMLStmtPrinter::print_with()
   return ret;
 }
 
+// 0. oracle模式不拼，因为oracle还不支持catalog.db.table的语法
+// 1. external catalog一定要反拼，当解析出external catalog时说明已经升级完成了
+// 2. internal catalog不一定反拼
+// 2.1 反拼view definition时不拼internal（否则要刷case且会被用户感知）
+// 2.2 升级期间不拼（旧的server解析不了拼出来的sql）
+bool ObDMLStmtPrinter::need_print_catalog_name(const ObString& catalog_name)
+{
+  bool need_print = false;
+  if (is_oracle_mode()) {
+  } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+    need_print = true;
+  } else if (print_params_.not_print_internal_catalog_ || GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_3_5_2) {
+  } else {
+    need_print = true;
+  }
+  return need_print;
+}
+
 } //end of namespace sql
 } //end of namespace oceanbase
 
