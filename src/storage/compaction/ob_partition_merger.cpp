@@ -1452,8 +1452,9 @@ int ObPartitionMinorMerger::compact_delete_insert_iters(MERGE_ITER_ARRAY &merge_
     int schema_rowkey_column_cnt = data_store_desc_.get_schema_rowkey_col_cnt();
     const blocksstable::ObDatumRow *base_row = minimum_iters.at(0)->get_curr_row();
     const int64_t base_version = base_row->storage_datums_[schema_rowkey_column_cnt].get_int();
+    const int64_t base_seq = base_row->storage_datums_[schema_rowkey_column_cnt + 1].get_int();
 
-    if (base_row->row_flag_.is_insert()) {
+    if (base_row->row_flag_.is_insert() || base_row->is_uncommitted_row()) {
       if (OB_FAIL(row_queue_.add_empty_row(obj_copy_allocator_))) {
         LOG_WARN("Failed to add empty row into row queue", K(ret));
       } else if (OB_FAIL(row_queue_.compact_border_row(base_row, false/*last_row*/, nop_pos_[ObRowQueue::QI_FIRST_ROW], obj_copy_allocator_))) {
@@ -1478,6 +1479,12 @@ int ObPartitionMinorMerger::compact_delete_insert_iters(MERGE_ITER_ARRAY &merge_
           if (OB_ISNULL(merge_row = merge_iter->get_curr_row())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected null merge row", K(ret), KPC(merge_iter));
+          } else if (base_row->is_uncommitted_row()) {
+            if (merge_row->storage_datums_[schema_rowkey_column_cnt + 1].get_int() == base_seq) {
+              // skip
+            } else {
+              break;
+            }
           } else if (merge_row->storage_datums_[schema_rowkey_column_cnt].get_int() != base_version) {
             break;
           } else if (merge_row->row_flag_.is_insert()) {
