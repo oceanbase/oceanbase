@@ -45,7 +45,11 @@ bool ObVecAsyncTaskExector::check_operation_allow()
   uint64_t tenant_data_version = 0;
   bool bret = true;
   bool is_active_time = true;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+  const bool is_not_support = true;
+  if (is_not_support) {
+    bret = false;
+    LOG_DEBUG("skip this round, not support async task.");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     bret = false;
     LOG_WARN("get tenant data version failed", K(ret));
   } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
@@ -81,9 +85,12 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  const bool is_not_support = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
+  } else if (is_not_support) {
+    // skip
   } else if (OB_ISNULL(vector_index_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), K(tenant_id_));
