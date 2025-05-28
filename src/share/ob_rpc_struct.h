@@ -10139,10 +10139,11 @@ public:
       zone_(),
       sql_port_(0),
       build_version_(),
-      startup_mode_(share::ObServerMode::INVALID_MODE)
+      startup_mode_(share::ObServerMode::INVALID_MODE),
+      enable_logservice_(false)
   {
   }
-  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version), K_(startup_mode));
+  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version), K_(startup_mode), K_(enable_logservice));
   int init(
       const bool is_server_empty,
       const ObZone &zone,
@@ -10176,6 +10177,7 @@ private:
   int64_t sql_port_;
   share::ObServerInfoInTable::ObBuildVersion build_version_;
   share::ObServerMode startup_mode_;
+  bool enable_logservice_;
 };
 
 struct ObArchiveLogArg
@@ -10420,8 +10422,10 @@ struct ObCheckDeploymentModeArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false), startup_mode_(share::ObServerMode::INVALID_MODE) {}
-  TO_STRING_KV(K_(single_zone_deployment_on), K_(startup_mode));
+  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false),
+                               startup_mode_(share::ObServerMode::INVALID_MODE),
+                               enable_logservice_(false) {}
+  TO_STRING_KV(K_(single_zone_deployment_on), K_(startup_mode), K_(enable_logservice));
   bool is_valid() const;
   int init(const share::ObServerMode startup_mode);
   int assign(const ObCheckDeploymentModeArg &other);
@@ -10429,6 +10433,7 @@ public:
 private:
   bool single_zone_deployment_on_;  // obsolete, keep it only for compatability
   share::ObServerMode startup_mode_;
+  bool enable_logservice_;
 };
 
 struct ObPreProcessServerArg

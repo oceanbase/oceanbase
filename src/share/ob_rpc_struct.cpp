@@ -8205,7 +8205,8 @@ OB_SERIALIZE_MEMBER(
     zone_,
     sql_port_,
     build_version_,
-    startup_mode_);
+    startup_mode_,
+    enable_logservice_);
 int ObPrepareServerForAddingServerResult::init(
     const bool is_server_empty,
     const ObZone &zone,
@@ -8239,10 +8240,11 @@ int ObPrepareServerForAddingServerResult::assign(const ObPrepareServerForAddingS
     is_server_empty_ = other.is_server_empty_;
     sql_port_ = other.sql_port_;
     startup_mode_ = other.startup_mode_;
+    enable_logservice_ = other.enable_logservice_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_, startup_mode_);
+OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_, startup_mode_, enable_logservice_);
 bool ObCheckDeploymentModeArg::is_valid() const
 {
   return ObServerMode::INVALID_MODE != startup_mode_;
@@ -8262,6 +8264,7 @@ int ObCheckDeploymentModeArg::assign(const ObCheckDeploymentModeArg &other)
 {
   int ret = OB_SUCCESS;
   startup_mode_ = other.startup_mode_;
+  enable_logservice_ = other.enable_logservice_;
   return ret;
 }
 share::ObServerMode ObCheckDeploymentModeArg::get_startup_mode() const
