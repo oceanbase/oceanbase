@@ -1030,7 +1030,7 @@ public:
     spi_cursor_ = spi_cursor;
     is_explicit_ = spi_cursor != NULL;
   }
-  virtual int close(sql::ObSQLSessionInfo &session, bool is_reuse = false);
+  virtual int close(sql::ObSQLSessionInfo &session, bool is_reuse = false, bool close_by_open_thread = false);
 
   inline void set_id(int64_t id) { id_ = id; }
   inline void set_entity(lib::MemoryContext entity) { entity_ = entity; }
@@ -1078,7 +1078,7 @@ public:
   inline const ObNewRow &get_last_row() const { return last_row_; }
   inline ObNewRow &get_last_row() { return last_row_; }
   inline sql::ObSPIResultSet* get_cursor_handler() const { return reinterpret_cast<sql::ObSPIResultSet*>(spi_cursor_); }
-  inline sql::ObSPICursor* get_spi_cursor() const { return reinterpret_cast<sql::ObSPICursor*>(spi_cursor_); }
+  virtual inline sql::ObSPICursor* get_spi_cursor() const { return reinterpret_cast<sql::ObSPICursor*>(spi_cursor_); }
 
   inline bool get_isopen() const { return is_explicit_ ? isopen_ : false; }
   inline bool get_save_exception() const { return save_exception_; }
@@ -1171,10 +1171,14 @@ public:
                           bool is_local_for_update = false,
                           sql::ObSQLSessionInfo* session_info = nullptr);
   ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
-
+  virtual int get_field_count(int64_t &field_count)
+  {
+    return OB_NOT_SUPPORTED;
+  }
 
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }
+  virtual inline bool is_async() { return false; }
 
   TO_STRING_KV(K_(id),
                K_(is_explicit),
@@ -1241,6 +1245,79 @@ protected:
   bool is_packed_;
   ObString sql_text_;     //non seesion的非流式游标保存sql text
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
+};
+
+class ObPsCursorInfo : public ObPLCursorInfo
+{
+public:
+  ObPsCursorInfo(ObIAllocator *allocator) :
+    ObPLCursorInfo(allocator),
+    cursor_store_(NULL),
+    spin_lock_(common::ObLatchIds::PS_CURSOR_LOCK),
+    fetch_size_(512),
+    store_ret_(OB_SUCCESS),
+    client_close_(false),
+    ora_max_ret_rows_(INT64_MAX)
+  {
+    is_async_ = can_open_async_cursor();
+  };
+
+  virtual ~ObPsCursorInfo()
+  {
+    cursor_store_ = NULL;
+    fetch_size_ = 0;
+    store_ret_ = false;
+    client_close_ = false;
+    ps_sql_.reset();
+  }
+
+  inline void set_cursor_store(sql::ObSPICursor *cursor_store) { cursor_store_ = cursor_store; }
+  inline sql::ObSPICursor *get_cursor_store() { return cursor_store_; }
+  virtual inline sql::ObSPICursor* get_spi_cursor() const { return cursor_store_; }
+  inline void set_spi_cursor(sql::ObSPICursor *v) { spi_cursor_ = v; }
+  inline ObSpinLock &get_spin_lock() { return spin_lock_; }
+  inline void set_fetch_size(uint64_t fetch_size) { fetch_size_ = fetch_size; }
+  inline uint64_t get_fetch_size() { return fetch_size_; }
+  inline void set_store_ret(int store_ret) { ATOMIC_STORE(&store_ret_, store_ret); }
+  inline int get_store_ret() { return ATOMIC_LOAD(&store_ret_); }
+  inline void set_client_close(bool client_close) { ATOMIC_STORE(&client_close_, client_close); }
+  inline bool is_client_close() { return ATOMIC_LOAD(&client_close_); }
+  inline void set_ps_sql(ObString &sql) { ps_sql_ = sql; }
+  inline ObString &get_ps_sql() { return ps_sql_; }
+  inline ParamStore &get_exec_params() { return exec_params_; }
+  virtual inline bool is_async() { return is_async_; }
+  inline void set_is_async(bool is_async) { is_async_ = is_async; }
+  inline void set_ora_max_ret_rows(int64_t max_ret_rows) { ora_max_ret_rows_ = max_ret_rows; }
+  inline int64_t get_ora_max_ret_rows() { return ora_max_ret_rows_; }
+  int init_params(ParamStore &exec_params);
+  int prepare_cursor_store(sql::ObSQLSessionInfo &session,
+                           const common::ColumnsFieldIArray &fields);
+  virtual int close(sql::ObSQLSessionInfo &session,
+                    bool is_reuse = false,
+                    bool close_by_open_thread = false);
+  virtual int get_field_columns(const common::ColumnsFieldArray *&fields);
+  virtual int get_field_count(int64_t &field_count);
+  ObPLExecCtx *get_exec_ctx() { return exec_ctx_; }
+  void set_exec_ctx(ObPLExecCtx *exec_ctx) { exec_ctx_ = exec_ctx;}
+  static void reduce_async_cursor_count();
+
+private:
+  // if return true, need to reduce async ps cursor count after detory cursor
+  // if return false, do nothing
+  static bool can_open_async_cursor();
+
+private:
+  ObPLExecCtx *exec_ctx_;
+  sql::ObSPICursor *cursor_store_; // store row data for cursor
+  ObSpinLock spin_lock_; // only use it in async mode
+  uint64_t fetch_size_; // the fetch size of cursor, only make sense in async mode
+  int store_ret_; // the store thread return value, only make sense in async mode
+  volatile bool client_close_; // whether the client has closed the cursor, only make sense in async mode
+  bool is_async_;  // whether the current cursor is asynchronous
+  common::ObString ps_sql_;
+  ParamStore exec_params_; // the params of ps stmt
+  int64_t ora_max_ret_rows_;
+  static int32_t ASYNC_PS_CURSOR_COUNT; // the number of asynchronous cursors on the current server
 };
 
 class ObPLGetCursorAttrInfo

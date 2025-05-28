@@ -242,6 +242,11 @@ int ObMPBase::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_param, ob
   return packet_sender_.send_ok_packet(session, ok_param, pkt);
 }
 
+int ObMPBase::send_ok_packet_without_lock(ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt)
+{
+  return packet_sender_.send_ok_packet_without_lock(session, ok_param, pkt);
+}
+
 int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param)
 {
   return packet_sender_.send_eof_packet(session, result, ok_param);

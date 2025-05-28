@@ -702,7 +702,7 @@ public:
               SQL_ENG_LOG(ERROR, "failed to erase hash map", K(ret), K(iter->first));
               break;
             }
-          } else if (OB_FAIL(session.close_cursor(cursor->get_id()))) {
+          } else if (OB_FAIL(session.close_cursor(cursor->get_id(), false))) {
             SQL_ENG_LOG(WARN, "failed to close session cursor", K(ret), K(cursor->get_id()));
           } else {
             SQL_ENG_LOG(INFO, "clsoe session cursor implicit successed!", K(cursor->get_id()));
@@ -1143,9 +1143,9 @@ public:
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
   pl::ObDbmsCursorInfo *get_dbms_cursor(int64_t cursor_id);
   int add_cursor(pl::ObPLCursorInfo *cursor);
-  int close_cursor(pl::ObPLCursorInfo *&cursor);
-  int close_cursor(int64_t cursor_id);
-  inline void inc_session_cursor() {
+  int close_cursor(pl::ObPLCursorInfo *&cursor, bool close_by_open_thread = false);
+  int close_cursor(int64_t cursor_id, bool close_by_open_thread = false);
+    inline void inc_session_cursor() {
     if (lib::is_diagnose_info_enabled()) {
       EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
       EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
@@ -1163,6 +1163,10 @@ public:
   int make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
                        uint64_t id = OB_INVALID_ID);
   int close_dbms_cursor(int64_t cursor_id);
+  int make_ps_cursor(pl::ObPsCursorInfo *&cursor,
+                     ParamStore &exec_params,
+                     ObString &sql,
+                     uint64_t id);
   int print_all_cursor();
 
   inline void *get_inner_conn() { return inner_conn_; }

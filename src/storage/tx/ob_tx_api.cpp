@@ -226,8 +226,11 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
       }
 #endif
     }
-    // it is safe to operate tx without lock when not shared
-    ret = reinit_tx_(tx, tx.sess_id_, tx.client_sid_, data_version);
+    {
+      // must acquire lock, in async cursor protocol, and ac=1, fetch can access tx while execute do reuse_tx
+      ObSpinLockGuard guard(tx.lock_);
+      ret = reinit_tx_(tx, tx.sess_id_, tx.client_sid_, data_version);
+    }
   }
   TRANS_LOG(DEBUG, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();

@@ -144,6 +144,9 @@ public:
                                 bool is_partition_hit = true,
                                 void *extra_err_info = NULL) override;
   virtual int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL) override;
+  int send_ok_packet_without_lock(sql::ObSQLSessionInfo &session,
+                                  ObOKPParam &ok_param,
+                                  obmysql::ObMySQLPacket* pkt);
   virtual int send_eof_packet(const sql::ObSQLSessionInfo &session,
                               const ObMySQLResultSet &result,
                               ObOKPParam *ok_param = NULL) override;

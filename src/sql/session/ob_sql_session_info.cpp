@@ -1589,7 +1589,7 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
   }
   if (!add_cursor_success && OB_NOT_NULL(cursor)) {
     int64_t id = cursor->get_id();
-    int tmp_ret = close_cursor(cursor);
+    int tmp_ret = close_cursor(cursor, true);
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("close cursor fail when add cursor to sesssion.", K(ret), K(id), K(get_server_sid()));
@@ -1598,12 +1598,12 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
   return ret;
 }
 
-int ObSQLSessionInfo::close_cursor(ObPLCursorInfo *&cursor)
+int ObSQLSessionInfo::close_cursor(ObPLCursorInfo *&cursor, bool close_by_open_thread)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(cursor)) {
     int64_t id = cursor->get_id();
-    OZ (cursor->close(*this));
+    OZ (cursor->close(*this, false, cursor->is_ps_cursor() ? close_by_open_thread : false));
     cursor->~ObPLCursorInfo();
     get_cursor_allocator().free(cursor);
     cursor = NULL;
@@ -1614,22 +1614,26 @@ int ObSQLSessionInfo::close_cursor(ObPLCursorInfo *&cursor)
   return ret;
 }
 
-int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
+int ObSQLSessionInfo::close_cursor(int64_t cursor_id, bool close_by_open_thread)
 {
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   LOG_INFO("ps cursor : remove cursor", K(ret), K(cursor_id), K(get_server_sid()));
   // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
   // so we need get_thread_data_lock there
-  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
-  if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor))) {
-    LOG_WARN("cursor info not exist", K(cursor_id));
+  {
+    ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
+    if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor))) {
+      LOG_WARN("cursor info not exist", K(cursor_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(cursor)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
   } else {
     LOG_DEBUG("close cursor", K(ret), K(cursor_id), K(get_server_sid()));
-    OZ (cursor->close(*this));
+    OZ (cursor->close(*this, false, cursor->is_ps_cursor() ? close_by_open_thread : false));
     cursor->~ObPLCursorInfo();
     get_cursor_allocator().free(cursor);
     cursor = NULL;
@@ -1784,6 +1788,49 @@ int ObSQLSessionInfo::make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
    *    创建entity。
    * 3. spi_result、spi_cursor也要在每次parse时重置。
    */
+  return ret;
+}
+
+int ObSQLSessionInfo::make_ps_cursor(pl::ObPsCursorInfo *&cursor,
+                                     ParamStore &exec_params,
+                                     ObString &sql,
+                                     uint64_t id)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  int64_t ora_max_ret_rows = INT64_MAX;
+
+  if (OB_NOT_NULL(this->get_cursor(id))) {
+    OZ (this->close_cursor(id), id, this->get_server_sid());
+  }
+  if (OB_SUCC(ret)) {
+    if (!pl_cursor_cache_.is_inited()) {
+      OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
+          get_effective_tenant_id(), get_proxy_sessid(), get_server_sid());
+    }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      OZ (get_oracle_sql_select_limit(ora_max_ret_rows));
+    }
+    OV (OB_NOT_NULL(buf = get_cursor_allocator().alloc(sizeof(ObPsCursorInfo))),
+        OB_ALLOCATE_MEMORY_FAILED, sizeof(ObPsCursorInfo));
+    OX (MEMSET(buf, 0, sizeof(ObPsCursorInfo)));
+    OV (OB_NOT_NULL(cursor = new (buf) ObPsCursorInfo(&get_cursor_allocator())));
+    OX (cursor->set_id(id));
+    OX (cursor->set_ps_sql(sql));
+    OX (cursor->set_ora_max_ret_rows(ora_max_ret_rows));
+    OZ (cursor->prepare_entity(*this, cursor->get_cursor_entity()));
+    OZ (cursor->init_params(exec_params));
+    if (OB_FAIL(ret) && NULL != cursor) {
+      cursor->~ObPsCursorInfo();
+      get_cursor_allocator().free(cursor);
+      cursor = NULL;
+    }
+    if (FAILEDx(add_cursor(cursor))) {
+      // cursor has been destoryed in `add_cursor`
+      cursor = NULL;
+      LOG_WARN("add cursor failed", K(ret));
+    }
+  }
   return ret;
 }
 

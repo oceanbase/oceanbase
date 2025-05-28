@@ -108,7 +108,12 @@ public:
   const uint32_t DEFAULT_ITERATION_COUNT = 1;
 
   explicit ObMPStmtExecute(const ObGlobalContext &gctx);
-  virtual ~ObMPStmtExecute() {}
+  virtual ~ObMPStmtExecute()
+  {
+    if (inited_) {
+      DESTROY_CONTEXT(retry_mem_context_);
+    }
+  }
 
   // Parse basic param value, no MYSQL_TYPE_COMPLEX or MYSQL_TYPE_CURSOR.
   // see parse_param_value()
@@ -261,6 +266,17 @@ protected:
   }
   void set_curr_sql_idx(int64_t curr_sql_idx) { curr_sql_idx_ = curr_sql_idx; }
   int64_t get_curr_sql_idx() { return curr_sql_idx_; }
+  int ps_cursor_open(ObSQLSessionInfo &session,
+                     sql::ObSqlCtx &ctx,
+                     ObMySQLResultSet &result,
+                     ParamStore &params,
+                     pl::ObPsCursorInfo *&cursor,
+                     int64_t stmt_id,
+                     bool &need_response_error,
+                     bool enable_perf_event);
+  int ps_cursor_store_data(ObSQLSessionInfo &session,
+                           int64_t pre_store_size);
+
 
 private:
   // for arraybinding
@@ -354,7 +370,7 @@ private:
 
   virtual int before_process();
   virtual int after_process(int error_code);
-  int response_query_header(sql::ObSQLSessionInfo &session, pl::ObDbmsCursorInfo &cursor);
+  int response_query_header(sql::ObSQLSessionInfo &session, pl::ObPsCursorInfo &cursor);
   //重载response，在response中不去调用flush_buffer(true)；flush_buffer(true)在需要回包时显示调用
 
 
@@ -365,6 +381,7 @@ private:
                                  const common::ObString &src,
                                  common::ObString &out,
                                  int64_t extra_buf_len = 0);
+  int is_async_cursor(ObSQLSessionInfo &session, bool &is_async);
 protected:
   ObQueryRetryCtrl retry_ctrl_;
   sql::ObSqlCtx ctx_;
@@ -392,6 +409,9 @@ protected:
   char *params_value_;
   int64_t curr_sql_idx_; // only for arraybinding
   ObPSAnalysisChecker analysis_checker_;
+  bool ps_cursor_has_destroy_;
+  lib::MemoryContext retry_mem_context_; // for retry sql
+  bool inited_; // indicates whether `retry_mem_context_` is initialized
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);
 

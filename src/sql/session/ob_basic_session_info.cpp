@@ -177,8 +177,17 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
-  bool in_txn = OB_NOT_NULL(tx_desc_) && tx_desc_->in_tx_for_free_route();
-  LOG_DEBUG("decide flag: server in transaction", K(in_txn));
+  bool ac = false;
+  bool explicit_txn = false;
+  bool in_txn = OB_NOT_NULL(tx_desc_);
+  if (in_txn) {
+    explicit_txn = tx_desc_->is_explicit();
+    get_autocommit(ac);
+    // for autcommit and no explicit start, always return false
+    if (!explicit_txn && ac) { in_txn = false; }
+    else { in_txn = tx_desc_->in_tx_for_free_route(); }
+  }
+  LOG_DEBUG("decide flag: server in transaction", K(in_txn), KP_(tx_desc), K(explicit_txn), K(ac));
   return in_txn;
 }
 

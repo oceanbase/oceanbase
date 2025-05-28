@@ -2704,3 +2704,7 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(async_ps_cursor_max_count, OB_CLUSTER_PARAMETER, "0", "[0, 1024]",
+        "the max count of async ps cursor. The default value is 0. Range: [0, 1024] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

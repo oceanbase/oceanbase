@@ -3727,7 +3727,9 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   OZ (cursor.prepare_spi_result(ctx, spi_result));
   CK (OB_NOT_NULL(spi_result));
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
-  OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+  if (!cursor.is_ps_cursor()) {
+    OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+  }
 
   // in a streaming cursor, lifetime of ps_sql may be shorter than the cursor itself,
   // so we need to open it with a deep copy.
@@ -3765,7 +3767,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
                            spi_result->get_out_params(),
                            false, /*is_forall*/
                            false, /*is_dynamic_sql*/
-                           is_dbms_cursor /*is_dbms_sql*/));
+                           is_dbms_cursor || cursor.is_ps_cursor() /*is_dbms_sql*/));
           }
         } else {
           OZ (inner_open(ctx,
@@ -3814,7 +3816,9 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         }
       }
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
-    spi_result->end_cursor_stmt(ctx, ret);
+    if (!cursor.is_ps_cursor()) {
+      spi_result->end_cursor_stmt(ctx, ret);
+    }
     cursor.set_last_execute_time(ObTimeUtility::current_time());
   }
   if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
@@ -3904,7 +3908,10 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         (for_update && !is_server_cursor && !is_dbms_cursor),
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
-          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), orc_max_ret_rows));
+          bool is_iter_end = false;
+          CK (OB_NOT_NULL(spi_result.get_result_set()->get_field_columns()));
+          OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
+          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
           OZ (spi_cursor->row_store_.finish_add_row());
           if (OB_FAIL(ret)) {
           } else if (is_dbms_cursor) {
@@ -4530,7 +4537,7 @@ int ObSPIService::dbms_cursor_close(ObExecContext &exec_ctx, ObPLCursorInfo &cur
   // 2. 但只有执行过dbms_sql.execute接口后，cursor.is_open()才返回true。
   if (cursor.isopen()) {
     OV (OB_NOT_NULL(exec_ctx.get_my_session()));
-    OZ (cursor.close(*exec_ctx.get_my_session(),
+    OZ (cursor.ObPLCursorInfo::close(*exec_ctx.get_my_session(),
                      OB_NOT_NULL(cursor.get_cursor_entity()) ? true : false));
   }
   return ret;
@@ -8690,6 +8697,7 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
 int ObSPIService::fill_cursor(ObResultSet &result_set,
                               ObSPICursor *cursor,
                               int64_t new_query_start_time,
+                              bool &is_iter_end,
                               int64_t orc_max_ret_rows) {
   int ret = OB_SUCCESS;
   int64_t old_time_out_ts = THIS_WORKER.get_timeout_ts();
@@ -8698,26 +8706,12 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
     LOG_WARN("Argument passed in is NULL", K(cursor), K(ret));
   } else {
     const common::ObNewRow *row = NULL;
-    const common::ColumnsFieldIArray *fields = result_set.get_field_columns();
-    if (OB_ISNULL(fields)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    }
     if (OB_NOT_NULL(result_set.get_physical_plan()) && new_query_start_time > 0) {
       // fill_dbms_cursor do not need check hint , so only new_query_start_time > 0 will check hint timeout
       ObPhysicalPlan *plan = result_set.get_physical_plan();
       if (plan->get_phy_plan_hint().query_timeout_ > 0) {
         old_time_out_ts = THIS_WORKER.get_timeout_ts();
         THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < fields->count(); ++i) {
-      ObDataType type;
-      type.set_meta_type(fields->at(i).type_.get_meta());
-      type.set_accuracy(fields->at(i).accuracy_);
-      if (OB_FAIL(cursor->row_desc_.push_back(type))) {
-        LOG_WARN("push back error", K(i), K(fields->at(i).type_), K(fields->at(i).accuracy_),
-                 K(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
@@ -8727,6 +8721,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
       if (FAILEDx(result_set.get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+          is_iter_end = true;
         } else {
           LOG_WARN("read result error", K(ret));
         }
@@ -9733,6 +9728,236 @@ int ObSPIService::check_system_trigger_legal(pl::ObPLExecCtx *ctx, const ObStrin
   return ret;
 }
 
+int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
+                                 ObPsCursorInfo &ps_cursor)
+{
+  int ret = OB_SUCCESS;
+  ParamStore &exec_params = ps_cursor.get_exec_params();
+  ObString sql_str;
+  ObResultSet *rs = NULL;
+  const common::ColumnsFieldIArray *fields = NULL;
+  ObSQLSessionInfo *session = NULL;
+  ObPLSubPLSqlTimeGuard guard(ctx);
+
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pointer is NULL", K(ret), K(ctx));
+  } else if (OB_ISNULL(session = ctx->exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FAIL(streaming_cursor_open(ctx,
+                                        ps_cursor,
+                                        *session,
+                                        sql_str,
+                                        ps_cursor.get_ps_sql(),
+                                        stmt::T_SELECT, /*stmt_type*/
+                                        &exec_params,
+                                        exec_params.count(),
+                                        true, /*is_server_cursor*/
+                                        false, /*for_update*/
+                                        ps_cursor.has_hidden_rowid(),
+                                        false /*is_dbms_cursor*/))) {
+    LOG_WARN("streaming cursor open failed", K(ret), K(ps_cursor));
+  } else if (OB_ISNULL(ps_cursor.get_cursor_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor handler is NULL", K(ret));
+  } else if (OB_ISNULL(rs = ps_cursor.get_cursor_handler()->get_result_set())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result set is NULL", K(ret));
+  } else if (OB_ISNULL(fields = rs->get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fields is NULL", K(ret));
+  } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *fields))){
+    LOG_WARN("prepare cursor store failed", K(ret));
+  } else if (OB_ISNULL(rs->get_physical_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan is NULL", K(ret));
+  } else if (!ps_cursor.is_async()) {
+    if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
+      LOG_WARN("fill ps cursor failed", K(ret));
+    }
+  } else {
+    rs->get_physical_plan()->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
+    if (ps_cursor.is_for_update()
+        || rs->get_physical_plan()->contain_pl_udf_or_trigger()
+        || rs->get_physical_plan()->has_link_udf()) {
+      if (ps_cursor.is_async()) {
+        ps_cursor.set_is_async(false);
+        ObPsCursorInfo::reduce_async_cursor_count();
+      }
+      if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
+        LOG_WARN("fill ps cursor failed", K(ret));
+      }
+    }
+  }
+  ps_cursor.set_unstreaming();
+  return ret;
+}
+
+int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
+                                 ObPsCursorInfo &ps_cursor,
+                                 int64_t pre_store_size) {
+  int ret = OB_SUCCESS;
+  ObResultSet *rs = NULL;
+  ObSPICursor *spi_cursor = NULL;
+  bool is_iter_end = false;
+
+#define CHECK_CURSOR_HANDLER                                                  \
+  do {                                                                        \
+    CK (OB_NOT_NULL(ps_cursor.get_cursor_handler()));                         \
+    OV (OB_NOT_NULL(rs = ps_cursor.get_cursor_handler()->get_result_set()));  \
+    OV (OB_NOT_NULL(spi_cursor = ps_cursor.get_cursor_store()));              \
+  } while (0)
+
+#define CLOSE_SPI_RESULT                                                \
+  do {                                                                  \
+    ObSPIResultSet *spi_result = ps_cursor.get_cursor_handler();        \
+    if (OB_NOT_NULL(spi_result)) {                                      \
+      if (OB_NOT_NULL(spi_result->get_result_set())) {                  \
+        int close_ret = spi_result->close_result_set();                 \
+        if (OB_SUCCESS != close_ret) {                                  \
+          LOG_WARN("close mysql result failed", K(ret), K(close_ret));  \
+        }                                                               \
+        ret = (OB_SUCCESS == ret ? close_ret : ret);                    \
+        spi_result->destruct_exec_params(session);                      \
+      }                                                                 \
+      spi_result->~ObSPIResultSet();                                    \
+      ps_cursor.set_spi_cursor(NULL);                                   \
+      if (ps_cursor.is_async()) {                                       \
+        ObPsCursorInfo::reduce_async_cursor_count();                    \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+
+  if (ps_cursor.is_async()) {
+    bool store_end = false;
+    while (OB_SUCC(ret)
+           && OB_SUCCESS == ps_cursor.get_store_ret()
+           && !store_end) {
+      // NOTE: Do not delete the following log line !!!
+      LOG_INFO("async fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
+               K(session.get_effective_tenant_id()));
+      ObSpinLockGuard guard(ps_cursor.get_spin_lock());
+      if (!ps_cursor.is_client_close()) {
+        int64_t max_cnt = ps_cursor.get_fetch_size();
+        CHECK_CURSOR_HANDLER;
+        if (OB_SUCC(ret)) {
+          int64_t v = ps_cursor.get_ora_max_ret_rows() - spi_cursor->row_store_.get_row_cnt();
+          max_cnt = MIN(max_cnt, v);
+          if (pre_store_size > 0) {
+            max_cnt = pre_store_size;
+          }
+        }
+        if (FAILEDx((fill_cursor(*rs,
+                                spi_cursor,
+                                ObTimeUtility::current_time(),
+                                is_iter_end,
+                                max_cnt)))) {
+          LOG_WARN("fill cursor failed", K(ret));
+        } else {
+#ifdef ERRSIM
+          ret = OB_E(EventTable::EN_FILL_PS_CUROSR_ERROR) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            LOG_WARN("async cursor EN_FILL_PS_CUROSR_ERROR", K(ret));
+          }
+#endif
+        }
+        if (OB_FAIL(ret)) {
+          ps_cursor.set_store_ret(ret);
+        } else if (is_iter_end || (spi_cursor->row_store_.get_row_cnt() >= ps_cursor.get_ora_max_ret_rows())) {
+          if (OB_FAIL(spi_cursor->row_store_.finish_add_row())) {
+            LOG_WARN("finish add row failed", K(ret));
+            ps_cursor.set_store_ret(ret);
+          } else {
+            ps_cursor.set_store_ret(OB_ITER_END);
+          }
+        } else if (pre_store_size > 0) {
+          store_end = true;
+        }
+      } else {
+        ps_cursor.set_store_ret(OB_ITER_END);
+      }
+      if (OB_FAIL(ret) || ps_cursor.is_client_close() || OB_SUCCESS != ps_cursor.get_store_ret()) {
+        store_end = true;
+        CLOSE_SPI_RESULT;
+      }
+    }
+  } else {
+    LOG_INFO("sync fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
+             K(session.get_effective_tenant_id()));
+    CHECK_CURSOR_HANDLER;
+    if (FAILEDx(fill_cursor(*rs,
+                            spi_cursor,
+                            ObTimeUtility::current_time(),
+                            is_iter_end,
+                            ps_cursor.get_ora_max_ret_rows()))) {
+      LOG_WARN("fill cursor failed", K(ret));
+    } else {
+#ifdef ERRSIM
+      ret = OB_E(EventTable::EN_FILL_PS_CUROSR_ERROR) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("sync cursor EN_FILL_PS_CUROSR_ERROR", K(ret));
+      }
+#endif
+    }
+    if (OB_FAIL(ret)) {
+      ps_cursor.set_store_ret(ret);
+    } else if (is_iter_end) {
+      if (OB_FAIL(spi_cursor->row_store_.finish_add_row())) {
+        LOG_WARN("finish add row failed", K(ret));
+        ps_cursor.set_store_ret(ret);
+      } else {
+        ps_cursor.set_store_ret(OB_ITER_END);
+      }
+    }
+    CLOSE_SPI_RESULT;
+  }
+#undef CHECK_CURSOR_HANDLER
+#undef CLOSE_SPI_RESULT
+  return ret;
+}
+
+int ObSPIService::ps_cursor_fetch(ObPsCursorInfo &ps_cursor, ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
+  ObSPICursor *cursor = ps_cursor.get_cursor_store();
+  ObNewRow &cur_row = ps_cursor.get_current_row();
+
+  if (OB_ISNULL(cursor)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cursor store is NULL", K(ret));
+  } else if (cur_row.is_invalid()) {
+    ObIAllocator *allocator = ps_cursor.get_allocator();
+    if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret));
+    } else {
+      int64_t column_count = cursor->row_desc_.count();
+      void *ptr = allocator->alloc(column_count * sizeof(ObObj));
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for row failed", "size", column_count * sizeof(ObObj));
+      } else {
+        cur_row.cells_ = new(ptr) common::ObObj[column_count];
+        cur_row.count_ = column_count;
+      }
+    }
+  }
+  if (FAILEDx(cursor->row_store_.get_row(cursor->cur_, cur_row))) {
+    if (OB_INDEX_OUT_OF_RANGE == ret
+        && (0 > cursor->cur_ || cursor->cur_ >= cursor->row_store_.get_row_cnt())) {
+      ret = OB_ITER_END;
+    } else {
+      LOG_WARN("get row from row_store failed", K(cursor->cur_), K(ret));
+    }
+  } else {
+    ++cursor->cur_;
+  }
+  LOG_TRACE("ps cursor fetch row", K(ret), K(session.get_server_sid()), K(ps_cursor.get_id()), K(cur_row));
+  return ret;
+}
+
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
   execute_start_(ObTimeUtility::current_time()),
@@ -9880,6 +10105,19 @@ int ObSPICursor::release_complex_obj(ObObj &complex_obj)
   } else {
     if (OB_FAIL(pl::ObUserDefinedType::destruct_obj(complex_obj, session_info_))) {
       LOG_WARN("failed to destruct obj", K(ret));
+    }
+  }
+  return ret;
+}
+int ObSPICursor::init_row_desc(const common::ColumnsFieldIArray &fields)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); i++) {
+    ObDataType type;
+    type.set_meta_type(fields.at(i).type_.get_meta());
+    type.set_accuracy(fields.at(i).accuracy_);
+    if (OB_FAIL(row_desc_.push_back(type))) {
+      LOG_WARN("push back error", K(ret), K(i), K(fields.at(i)));
     }
   }
   return ret;

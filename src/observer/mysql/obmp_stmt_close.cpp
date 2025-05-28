@@ -62,48 +62,70 @@ int ObMPStmtClose::process()
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
-    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
-    ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    session->set_proxy_version(get_proxy_version());
-    session->init_use_rich_format();
-    const bool enable_flt = session->get_control_info().is_valid();
-    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
-    if (OB_FAIL(session->check_tenant_status())) {
-      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
-    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(
-                 pkt.get_extra_info(), *session,
-                 get_conn()->proxy_cap_flags_.is_full_link_trace_support(),
-                 enable_flt))) {
-      LOG_WARN("failed to init flt extra info", K(ret));
-    }
-    FLTSpanGuardIfEnable(ps_close, enable_flt);
-    if (OB_FAIL(ret)) {
-    } else if (is_cursor_close()) {
-      if (OB_FAIL(session->close_cursor(stmt_id_))) {
-        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
-      }
+    if (OB_FAIL(session->get_query_lock().rdlock())) {
+      LOG_WARN("rdlock failed", K(ret));
     } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
-        if (OB_FAIL(session->close_cursor(stmt_id_))) {
-          tmp_ret = ret;
-          LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
+      pl::ObPLCursorInfo *cursor = session->get_cursor(stmt_id_);
+      if (is_cursor_close() && OB_ISNULL(cursor)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cursor info is NULL", K(ret), K(stmt_id_));
+      }
+      if (OB_NOT_NULL(cursor) && cursor->is_ps_cursor()) {
+        pl::ObPsCursorInfo *ps_cursor = static_cast<pl::ObPsCursorInfo *>(cursor);
+        if (OB_ISNULL(ps_cursor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ps cursor is NULL", K(ret));
+        } else {
+          ps_cursor->set_client_close(true);
         }
       }
-      if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
-        // overwrite ret, 优先级低，被覆盖
-        LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_server_sid()));
-      }
-      if (OB_SUCCESS != tmp_ret) {
-        // close_cursor 失败时错误码的优先级比 close_ps_stmt 高，此处进行覆盖
-        ret = tmp_ret;
-      }
+      session->get_query_lock().unlock();
     }
+
     if (OB_SUCC(ret)) {
-      if (pkt.exist_trace_info()
-          && OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRACE_INFO,
-                                                  pkt.get_trace_info()))) {
-        LOG_WARN("fail to update trace info", K(ret));
+      const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+      ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      session->set_proxy_version(get_proxy_version());
+      session->init_use_rich_format();
+      const bool enable_flt = session->get_control_info().is_valid();
+      LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
+      if (OB_FAIL(session->check_tenant_status())) {
+        LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
+      } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(
+                  pkt.get_extra_info(), *session,
+                  get_conn()->proxy_cap_flags_.is_full_link_trace_support(),
+                  enable_flt))) {
+        LOG_WARN("failed to init flt extra info", K(ret));
+      }
+      FLTSpanGuardIfEnable(ps_close, enable_flt);
+      if (OB_FAIL(ret)) {
+      } else if (is_cursor_close()) {
+        if (OB_FAIL(session->close_cursor(stmt_id_))) {
+          LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
+        }
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
+          if (OB_FAIL(session->close_cursor(stmt_id_))) {
+            tmp_ret = ret;
+            LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_server_sid()));
+          }
+        }
+        if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
+          // overwrite ret, 优先级低，被覆盖
+          LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_server_sid()));
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          // close_cursor 失败时错误码的优先级比 close_ps_stmt 高，此处进行覆盖
+          ret = tmp_ret;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (pkt.exist_trace_info()
+            && OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRACE_INFO,
+                                                    pkt.get_trace_info()))) {
+          LOG_WARN("fail to update trace info", K(ret));
+        }
       }
     }
   }

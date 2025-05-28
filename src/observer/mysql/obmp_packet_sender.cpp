@@ -632,6 +632,16 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
   int ret = OB_SUCCESS;
   LOG_DEBUG("send-ok-packet", K(lbt()));
   ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
+  if (OB_FAIL(send_ok_packet_without_lock(session, ok_param, pkt))) {
+    LOG_WARN("send ok packet fail", K(ret));
+  }
+  return ret;
+}
+
+int ObMPPacketSender::send_ok_packet_without_lock(ObSQLSessionInfo &session,
+                                                  ObOKPParam &ok_param,
+                                                  obmysql::ObMySQLPacket* pkt) {
+  int ret = OB_SUCCESS;
   OMPKOK okp;
   if (!conn_valid_ || OB_ISNULL(conn_)) {
     ret = OB_CONNECT_ERROR;

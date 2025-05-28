@@ -40,7 +40,9 @@ ObMPStmtFetch::ObMPStmtFetch(const ObGlobalContext &gctx)
       offset_type_(OB_OCI_DEFAULT),
       offset_(0),
       extend_flag_(0),
-      column_flag_(NULL)
+      column_flag_(NULL),
+      need_close_cursor_(false),
+      has_process_ok_(false)
 {
 }
 int ObMPStmtFetch::before_process()
@@ -80,15 +82,18 @@ int ObMPStmtFetch::before_process()
             } else if (OB_ISNULL(session)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("session is NULL or invalid", K(ret), K(session));
-            } else if (OB_NOT_NULL(session->get_dbms_cursor(cursor_id_))) {
-              int64_t column_count = session->get_dbms_cursor(cursor_id_)
-                                            ->get_field_columns().count();
-              int64_t len = (column_count + 7) / 8;
-              column_flag_ = static_cast<char*>(THIS_WORKER.get_sql_arena_allocator()
-                                                            .alloc(len + 1));
-              MEMSET(column_flag_, 0, len+1);
-              MEMCPY(column_flag_, pos, len);
-              pos += len;
+            } else if (OB_NOT_NULL(session->get_cursor(cursor_id_))) {
+              int64_t column_count = 0;
+              if (OB_FAIL(session->get_cursor(cursor_id_)->get_field_count(column_count))) {
+                LOG_WARN("get field columns failed", K(ret));
+              } else {
+                int64_t len = (column_count + 7) / 8;
+                column_flag_ = static_cast<char*>(THIS_WORKER.get_sql_arena_allocator()
+                                                              .alloc(len + 1));
+                MEMSET(column_flag_, 0, len+1);
+                MEMCPY(column_flag_, pos, len);
+                pos += len;
+              }
             } else {
               ret = OB_ERR_FETCH_OUT_SEQUENCE;
               LOG_WARN("cursor not found", K(cursor_id_), K(ret));
@@ -182,7 +187,6 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
         session.set_current_execution_id(execution_id);
-        OX(need_response_error = false);
         if (0 == fetch_limit && !cursor->is_streaming() && cursor->is_ps_cursor()
             && lib::is_oracle_mode() && OB_NOT_NULL(cursor->get_spi_cursor())
             && cursor->get_spi_cursor()->row_store_.get_row_cnt() > 0) {
@@ -195,9 +199,9 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
           // oracle return success when read nothing
           ret = OB_SUCCESS;
         }
-        OX(need_response_error = true);
       }
     }
+    int fetch_ret = ret;
     //监控项统计结束
     exec_end_timestamp_ = ObTimeUtility::current_time();
 
@@ -244,17 +248,19 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
         ObPsStmtInfoGuard guard;
         ObPsStmtInfo *ps_info = NULL;
         ObPsStmtId inner_stmt_id = OB_INVALID_ID;
-        if (OB_SUCC(session.get_inner_ps_stmt_id(cursor_id_, inner_stmt_id))
-              && OB_SUCC(session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
+        int aret = OB_SUCCESS;
+        if (OB_SUCCESS == (aret = session.get_inner_ps_stmt_id(cursor_id_, inner_stmt_id))
+              && OB_SUCCESS == (aret = session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
               && OB_NOT_NULL(ps_info = guard.get_stmt_info())) {
           audit_record.ps_inner_stmt_id_ = inner_stmt_id;
           audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
           audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
         } else {
-          LOG_WARN("get sql fail in fetch", K(ret), K(cursor_id_), K(cursor->get_id()));
+          LOG_WARN("get sql fail in fetch", K(ret), K(aret), K(cursor_id_), K(cursor->get_id()));
         }
       }
     }
+    ret = fetch_ret;
     session.partition_hit().freeze();
     session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
 
@@ -302,10 +308,8 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                                    int64_t &row_num)
 {
   int ret = OB_SUCCESS;
-  bool process_ok = false;
   // for select SQL
   bool ac = true;
-  bool admission_fail_and_need_retry = false;
   bool last_row = false;
   int32_t offset = offset_;
   int64_t max_count = 0;
@@ -327,17 +331,14 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
         ObSchemaGetterGuard schema_guard;
         SMART_VAR(ObExecContext, tmp_exec_ctx, allocator) {
-          if (cursor.is_streaming()) {
-            CK (OB_NOT_NULL(cursor.get_cursor_handler()));
-            CK (OB_NOT_NULL(cursor.get_cursor_handler()->get_result_set()));
-            OX (fields = dynamic_cast<const common::ColumnsFieldArray *>(
-              cursor.get_cursor_handler()->get_result_set()->get_field_columns()));
-          } else if (!cursor.is_ps_cursor()) {
-            CK (OB_NOT_NULL(cursor.get_spi_cursor()));
-            CK (cursor.get_spi_cursor()->fields_.count() > 0);
-            OX (fields = &(cursor.get_spi_cursor()->fields_));
+          if (OB_ISNULL(cursor.get_spi_cursor())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cursor is null", K(ret));
+          } else if (cursor.get_spi_cursor()->fields_.count() <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fields count error", K(ret));
           } else {
-            fields = &static_cast<pl::ObDbmsCursorInfo&>(cursor).get_field_columns();
+            fields = &(cursor.get_spi_cursor()->fields_);
           }
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
             // oracle 模式每次都需要返回head packet
@@ -345,25 +346,6 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             OZ (response_query_header(session, fields));
           }
           if (OB_SUCC(ret)) {
-            // offset类型
-            // TODO: 流式只能前滚，所以只能兼容next，default，relative(偏移量大于0)，absolute(其实位置大于当前位置)
-            // 非流式用OB_RA_ROW_STORE实现，可以根据index访问任意行，兼容所有的offset类型
-            if (cursor.is_streaming()) {
-              // 流式结果集需要用到exec_ctx，不能用临时结果代替
-              if (OB_NOT_NULL(cursor.get_cursor_handler()) &&
-                  OB_NOT_NULL(cursor.get_cursor_handler()->get_result_set())){
-                exec_ctx = &cursor.get_cursor_handler()->get_result_set()->get_exec_context();
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get unexpect streaming result set.", K(ret), K(cursor.get_id()));
-              }
-              if (OB_OCI_DEFAULT != offset_type_ && OB_OCI_FETCH_NEXT != offset_type_) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("streaming result set not support this offset type.", K(ret), 
-                                                                               K(cursor.get_id()), 
-                                                                               K(offset_type_));
-              }
-            } else {
               tmp_exec_ctx.set_my_session(&session);
               tmp_exec_ctx.set_mem_attr(ObMemAttr(session.get_effective_tenant_id(),
                                                   ObModIds::OB_SQL_EXEC_CONTEXT,
@@ -382,45 +364,33 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 }
                 cur = cursor.get_current_position();
                 max_count = spi_cursor->row_store_.get_row_cnt();
-                if (max_count > 0) {
+
+                if (max_count > 0 || cursor.is_async()) {
                   switch (offset_type_) {
-                    case OB_OCI_DEFAULT: {
+                    case OB_OCI_DEFAULT:
+                    case OB_OCI_FETCH_NEXT: {
                       cur++;
                       break;
                     }
                     case OB_OCI_FETCH_CURRENT: {
                       break;
                     }
-                    case OB_OCI_FETCH_NEXT: {
-                      cur++;
-                      break;
-                    }
                     case OB_OCI_FETCH_FIRST: {
                       cur = 0;
-                      if (max_count < fetch_limit) {
-                        cursor.set_current_position(fetch_limit);
-                        need_fetch = false;	
-                        ret = OB_ITER_END;
+                      if (!cursor.is_async()) {
+                        if (max_count < fetch_limit) {
+                          cursor.set_current_position(fetch_limit);
+                          need_fetch = false;
+                          ret = OB_ITER_END;
+                        }
                       }
                       break;
                     }
                     case OB_OCI_FETCH_LAST: {
-                      const int64_t row_id = max_count - 1;
-                      cur = max_count - 1;
-                      if (cursor.get_last_row().is_invalid()) {
-                        if (OB_FAIL(spi_cursor->row_store_.get_row(row_id, row))){
-                          LOG_WARN("get first row fail.", K(ret), K(cursor.get_id()));
-                        } else {
-                          if (OB_FAIL(ob_write_row(cursor.get_cursor_entity()->get_arena_allocator(),
-                                                    *row,
-                                                    cursor.get_last_row()))){
-                            LOG_WARN("Fail to get last row", K(ret), K(cursor.get_id()));
-                          }
-                        }
+                      if (OB_FAIL(cursor_fetch_last_row(session, cursor, row, cur))) {
+                        LOG_WARN("fetch last row fail.", K(ret), K(cursor.get_id()), K(cur));
                       } else {
-                        row = &cursor.get_last_row();
-                      }
-                      if (OB_SUCC(ret)) {
+                        last_row = true;
                         need_fetch = false;
                       }
                       break;
@@ -428,7 +398,9 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                     case OB_OCI_FETCH_PRIOR: {
                       // prior协议，无论offset设置为多少，每次都向前滚1行，所以cur需要减1
                       cur = cur - 1;
-                      if (cur + fetch_limit > max_count) {
+                      if (cursor.is_async()) {
+                        // do nothing
+                      } else if (cur + fetch_limit > max_count) {
                         need_fetch = false;
                         cursor.set_current_position(max_count - 1);
                         ret = OB_ITER_END;
@@ -449,62 +421,77 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                     }
                   }
                 }
-                if (OB_SUCC(ret) && (cur >= max_count || cur < 0 || max_count <= 0)) {
-                  // fetch过程中，除了OB_ITER_END扫描到结果集末尾的报错被吞掉，其余报错会断开连接
-                  // oracle中如果扫描超出了范围，不会断开连接，会报OCI_NO_DATA的错误
-                  // 为了兼容这种表现，超出范围时设置OB_ITER_END错误码，不报错不返回数据，由驱动产生OCI_NO_DATA错误码
-                  need_fetch = false;
-                  ret = OB_ITER_END;
+                if (!cursor.is_async()) {
+                  if (OB_SUCC(ret) && (cur >= max_count || cur < 0 || max_count <= 0)) {
+                    // fetch过程中，除了OB_ITER_END扫描到结果集末尾的报错被吞掉，其余报错会断开连接
+                    // oracle中如果扫描超出了范围，不会断开连接，会报OCI_NO_DATA的错误
+                    // 为了兼容这种表现，超出范围时设置OB_ITER_END错误码，不报错不返回数据，由驱动产生OCI_NO_DATA错误码
+                    need_fetch = false;
+                    ret = OB_ITER_END;
+                  }
                 }
-                if (OB_SUCC(ret)) {
-                  // 只要设置了正确的偏移量，cursor里的指针就要跟着移动
-                  OZ (cursor.set_current_position(cur));
-                }
+                // 只要设置了正确的偏移量，cursor里的指针就要跟着移动
+                OZ (cursor.set_current_position(cur));
               }
-            }
           }
           if (OB_FAIL(ret)) {
             // do nothing
           } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
             LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
           } else if (!need_fetch && NULL != row) {
-            if (has_long_data()) {
-              OZ (response_row(session, *(const_cast<common::ObNewRow*>(row)), 
-                               fields, column_flag_, cursor_id_, true, cursor.is_packed(), &schema_guard));
-            } else {
-              OZ (response_row(session, *(const_cast<common::ObNewRow*>(row)), fields, cursor.is_packed(), NULL, &schema_guard));
-            }
-            if (OB_FAIL(ret)) {
-              LOG_WARN("response row fail.", K(ret));
+            if (OB_FAIL(response_row(session,
+                                     *(const_cast<common::ObNewRow*>(row)),
+                                     fields,
+                                     column_flag_,
+                                     cursor_id_,
+                                     true,
+                                     cursor.is_packed(),
+                                     NULL,
+                                     &schema_guard))) {
+              LOG_WARN("response row fail", K(ret), K(cursor.is_packed()));
             }
           }
           ObPLExecCtx pl_ctx(cursor.get_allocator(), exec_ctx, &params,
                             NULL/*result*/, &ret, NULL/*func*/, true);
-          while (OB_SUCC(ret) && need_fetch && row_num < fetch_limit
-                  && OB_SUCC(sql::ObSPIService::dbms_cursor_fetch(&pl_ctx,
-                                                  static_cast<pl::ObDbmsCursorInfo&>(cursor)))) {
-            common::ObNewRow &row = cursor.get_current_row();
-#ifndef NDEBUG
-            LOG_INFO("cursor fetch: ", K(cursor.get_id()),
-                                       K(cursor.is_streaming()),
-                                       K(cursor.is_ps_cursor()),
-                                       K(cursor.get_current_row().cells_[0]),
-                                       K(cursor.get_current_position()),
-                                       K(offset), K(row_num), K(fetch_limit));
-#endif
-            cur = cursor.get_current_position();
-            ++cur;
-            cursor.set_current_position(cur);
-            if (has_long_data()) {
-              OZ (response_row(session, row, fields, column_flag_, cursor_id_,
-                                0 == row_num ? true : false, cursor.is_packed(), &schema_guard));
-            } else {
-              OZ (response_row(session, row, fields, cursor.is_packed(), exec_ctx, &schema_guard));
+          if (OB_FAIL(ret)) {
+          } else if (cursor.is_ps_cursor()) {
+            if (need_fetch
+                && OB_FAIL(ps_cursor_fetch(*exec_ctx, session, *fields, cursor,
+                                           schema_guard, fetch_limit, row_num, cur))) {
+              LOG_WARN("ps cursor fetch failed.", K(ret), K(session.get_server_sid()), K(cursor.get_id()), K(cursor.is_async()));
             }
-            if (OB_SUCC(ret)) {
-              ++row_num;
-            } else {
-              LOG_WARN("response row fail at line: ", K(ret), K(row_num));
+          } else {
+            while (OB_SUCC(ret) && need_fetch && row_num < fetch_limit
+                    && OB_SUCC(sql::ObSPIService::dbms_cursor_fetch(&pl_ctx,
+                                                    static_cast<pl::ObDbmsCursorInfo&>(cursor)))) {
+              common::ObNewRow &row = cursor.get_current_row();
+  #ifndef NDEBUG
+              LOG_INFO("cursor fetch: ", K(cursor.get_id()),
+                                        K(cursor.is_streaming()),
+                                        K(cursor.is_ps_cursor()),
+                                        K(cursor.get_current_row().cells_[0]),
+                                        K(cursor.get_current_position()),
+                                        K(offset), K(row_num), K(fetch_limit));
+  #endif
+              cur = cursor.get_current_position();
+              ++cur;
+              cursor.set_current_position(cur);
+              if (OB_FAIL(response_row(session,
+                                       row,
+                                       fields,
+                                       column_flag_,
+                                       cursor_id_,
+                                       0 == row_num ? true : false,
+                                       cursor.is_packed(),
+                                       exec_ctx,
+                                       &schema_guard))) {
+                LOG_WARN("response row fail", K(ret), K(row_num), K(cursor.is_packed()));
+              }
+              if (OB_SUCC(ret)) {
+                ++row_num;
+              } else {
+                LOG_WARN("response row fail at line: ", K(ret), K(row_num));
+              }
             }
           }
           if (need_fetch) {
@@ -524,7 +511,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
       if (OB_FAIL(ret)) {
         LOG_WARN("response query result fail", K(ret));
       } else {
-        process_ok = true;
+        set_has_process_ok();
         OMPKEOF eofp;
         const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
         uint16_t warning_count = 0;
@@ -541,7 +528,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
         flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_ok_packet() ? true : false; /*no more result*/
         flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = !last_row ? 1 : 0;
-        if ((!cursor.is_streaming()
+        if ((!cursor.is_async()
              && max_count == cursor.get_current_position() + 1)
               || last_row) {
           flags.status_flags_.OB_SERVER_STATUS_LAST_ROW_SENT = 1;
@@ -579,7 +566,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             } else {
               ok_param.affected_rows_ = 0;
             }
-            if ((!cursor.is_streaming()
+            if ((!cursor.is_async()
                  && max_count == cursor.get_current_position() + 1)
                 || last_row) {
               ok_param.send_last_row_ = true;
@@ -588,7 +575,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             }
             ok_param.is_partition_hit_ = session.partition_hit().get_bool();
             ok_param.has_more_result_ = false;
-            if (OB_FAIL(send_ok_packet(session, ok_param, &eofp))) {
+            if (OB_FAIL(send_ok_packet_without_lock(session, ok_param, &eofp))) {
               LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
             }
           } else {
@@ -598,15 +585,6 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
           }
         }
       }
-    }
-  }
-  if (OB_FAIL(ret) &&
-      !process_ok &&
-      !admission_fail_and_need_retry) {
-    int sret = OB_SUCCESS;
-    bool is_partition_hit = session.partition_hit().get_bool();
-    if (OB_SUCCESS != (sret = send_error_packet(ret, NULL, is_partition_hit))) {
-      LOG_WARN("send error packet fail", K(sret), K(ret));
     }
   }
   return ret;
@@ -683,12 +661,13 @@ int ObMPStmtFetch::process()
     LOG_WARN("session is NULL or invalid", K_(cursor_id), K(sess), K(ret));
   } else if (OB_FAIL(update_transmission_checksum_flag(*sess))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
+  } else if (OB_FAIL(sess->get_query_lock().rdlock())) {
+    LOG_WARN("rdlock session failed", K(ret));
   } else {
     ObSQLSessionInfo &session = *sess;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
     THIS_WORKER.set_session(sess);
-    ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -748,11 +727,16 @@ int ObMPStmtFetch::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
+    session.get_query_lock().unlock();
   }
 
   if (OB_FAIL(ret) && is_conn_valid()) {
-    if (need_response_error) {
-      send_error_packet(ret, NULL);
+    bool is_partition_hit = (NULL == sess ? false : sess->partition_hit().get_bool());
+    if (need_response_error && !has_process_ok()) {
+      int sret = OB_SUCCESS;
+      if (OB_SUCCESS != (sret = send_error_packet(ret, NULL, is_partition_hit))) {
+        LOG_WARN("send error packet failed", K(ret), K(sret));
+      }
     }
     if (cursor_fetched || need_disconnect) {
       force_disconnect();
@@ -788,6 +772,7 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
                                 int32_t stmt_id,
                                 bool first_time,
                                 bool is_packed,
+                                sql::ObExecContext *exec_ctx,
                                 ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -797,128 +782,136 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
   ObPieceCache *piece_cache = session.get_piece_cache(true);
   ObArenaAllocator arena_allocator;
 
-  if (OB_ISNULL(piece_cache)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("piece cache is null.", K(ret), K(stmt_id));
-  } else if (NULL != column_map) {
-    if (OB_FAIL(ob_create_row(arena_allocator, src_row.get_count(), row))) {
-      LOG_WARN("create row fail.", K(ret), K(stmt_id));
-    } else if (OB_FAIL(ob_write_row_by_projector(arena_allocator, src_row, row))) {
-      LOG_WARN("wirte tmp row fail.", K(stmt_id));
+  if (has_long_data()) {
+    if (OB_ISNULL(piece_cache)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("piece cache is null.", K(ret), K(stmt_id));
+    } else if (NULL != column_map) {
+      if (OB_FAIL(ob_create_row(arena_allocator, src_row.get_count(), row))) {
+        LOG_WARN("create row fail.", K(ret), K(stmt_id));
+      } else if (OB_FAIL(ob_write_row_by_projector(arena_allocator, src_row, row))) {
+        LOG_WARN("wirte tmp row fail.", K(stmt_id));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column_map is null.", K(stmt_id), K(ret));
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column_map is null.", K(stmt_id), K(ret));
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
-  } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
-  }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
+      LOG_WARN("fail to get result charset", K(ret));
+    } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
+      LOG_WARN("fail to get result charset", K(ret));
+    }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count(); ++i) {
-    ObObj &value = row.get_cell(i);
-    if (OB_SUCC(ret) && NULL != column_map && ObSMUtils::update_from_bitmap(column_map, i)) {
-      bool is_long_data = false;
-      ObString str;
-      ObPiece *piece = NULL;
-      ObCharsetType target_charset_type = charset_type;
+    for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count(); ++i) {
+      ObObj &value = row.get_cell(i);
+      if (OB_SUCC(ret) && NULL != column_map && ObSMUtils::update_from_bitmap(column_map, i)) {
+        bool is_long_data = false;
+        ObString str;
+        ObPiece *piece = NULL;
+        ObCharsetType target_charset_type = charset_type;
 
-      if (OB_FAIL(piece_cache->get_piece(stmt_id, i, piece))) {
-        LOG_WARN("get piece fail", K(stmt_id), K(i), K(ret));
-      } else if (first_time) {
-        if (NULL != piece) {
-          if (OB_FAIL(piece_cache->remove_piece(piece_cache->get_piece_key(stmt_id, i), session))) {
-            LOG_WARN("remove old piece fail.", K(ret), K(stmt_id), K(i));
+        if (OB_FAIL(piece_cache->get_piece(stmt_id, i, piece))) {
+          LOG_WARN("get piece fail", K(stmt_id), K(i), K(ret));
+        } else if (first_time) {
+          if (NULL != piece) {
+            if (OB_FAIL(piece_cache->remove_piece(piece_cache->get_piece_key(stmt_id, i), session))) {
+              LOG_WARN("remove old piece fail.", K(ret), K(stmt_id), K(i));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(piece_cache->make_piece(stmt_id, i, piece, session))) {
+            LOG_WARN("make piece fail.", K(ret), K(stmt_id), K(i));
           }
         }
+        if (lib::is_oracle_mode()
+            && (value.is_nchar() || value.is_nvarchar2())
+            && ncharset_type != CHARSET_INVALID && ncharset_type != CHARSET_BINARY) {
+          target_charset_type = ncharset_type;
+        }
+
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(piece_cache->make_piece(stmt_id, i, piece, session))) {
-          LOG_WARN("make piece fail.", K(ret), K(stmt_id), K(i));
-        }
-      }
-      if (lib::is_oracle_mode()
-          && (value.is_nchar() || value.is_nvarchar2())
-          && ncharset_type != CHARSET_INVALID && ncharset_type != CHARSET_BINARY) {
-        target_charset_type = ncharset_type;
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (NULL == piece) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
-      } else if (is_lob_storage(value.get_type())) {
-        if (OB_FAIL(ObQueryDriver::convert_text_value_charset(
-                value, target_charset_type, arena_allocator, &session))) {
-          LOG_WARN("convert text value charset failed", K(ret), K(value));
-        } else {
-          ObTextStringIter iter(value);
-          if (OB_FAIL(iter.init(0, &session, &arena_allocator))) {
-            LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
-          } else if (OB_FAIL(iter.get_full_data(str))) {
-            LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+          // do nothing
+        } else if (NULL == piece) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
+        } else if (is_lob_storage(value.get_type())) {
+          if (OB_FAIL(ObQueryDriver::convert_text_value_charset(
+                  value, target_charset_type, arena_allocator, &session))) {
+            LOG_WARN("convert text value charset failed", K(ret), K(value));
+          } else {
+            ObTextStringIter iter(value);
+            if (OB_FAIL(iter.init(0, &session, &arena_allocator))) {
+              LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+            } else if (OB_FAIL(iter.get_full_data(str))) {
+              LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+            }
           }
+        } else if (ob_is_string_type(value.get_type())) {
+          if (CS_TYPE_INVALID != value.get_collation_type()
+              && OB_FAIL(value.convert_string_value_charset(target_charset_type, arena_allocator))) {
+            LOG_WARN("convert string value charset failed", K(ret), K(value));
+          } else if (OB_FAIL(value.get_string(str))) {
+            LOG_WARN("get string failed", K(ret), K(value));
+          }
+        } else if (ob_is_raw(value.get_type())) {
+          str = value.get_string();
+        } else if (ob_is_rowid_tc(value.get_type())) {
+          str = value.get_string_ptr();
+          str.set_length(value.get_string_len());
+        } else if (ob_is_lob_locator(value.get_type())) {
+          if (value.is_clob_locator()
+              && OB_FAIL(ObQueryDriver::convert_lob_value_charset(
+                  value, target_charset_type, arena_allocator))) {
+            LOG_WARN("convert lob value charset failed", K(ret));
+          } else if (FALSE_IT(str.assign(
+                        const_cast<char *>(value.get_lob_locator()->get_payload_ptr()),
+                        static_cast<int64_t>(value.get_lob_locator()->get_payload_length())))) {
+          }
+        } else if (ob_is_null(value.get_type())) {
+          str.assign(NULL, 0);
+        } else if (ob_is_extend(value.get_type())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("long data protocol not support array type yet.",
+                      K(stmt_id), K(i), K(value.get_type()));
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("long piece protocol not support type: ", K(value.get_type()));
         }
-      } else if (ob_is_string_type(value.get_type())) {
-        if (CS_TYPE_INVALID != value.get_collation_type()
-            && OB_FAIL(value.convert_string_value_charset(target_charset_type, arena_allocator))) {
-          LOG_WARN("convert string value charset failed", K(ret), K(value));
-        } else if (OB_FAIL(value.get_string(str))) {
-          LOG_WARN("get string failed", K(ret), K(value));
+        /*
+          * Piece's memory management strategy:
+          * 1. All pieces allocate their own memory through session
+          * 2. Each piece has a separate memory, which is maintained by itself,
+          *    and needs to be released when each piece dies
+          * 3. The memory of piecebuffer itself comes from piece,
+          *    and the buf memory on piecebuffer also comes from this
+          * 4. The piecebuffer should be cleaned up immediately after use,
+          *    and two parts should be cleaned up,
+          *    the memory occupied by the buf and the memory of the piecebuffer itself
+          * 5. Clean up all pieces when the connection is closed,
+          *    and clean up the memory of piecebuffer->buf, piecebuffer and piece step by step
+          */
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, ObInvalidPiece, &str))) {
+          LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id));
+        } else {
+          value.set_null();
         }
-      } else if (ob_is_raw(value.get_type())) {
-        str = value.get_string();
-      } else if (ob_is_rowid_tc(value.get_type())) {
-        str = value.get_string_ptr();
-        str.set_length(value.get_string_len());
-      } else if (ob_is_lob_locator(value.get_type())) {
-        if (value.is_clob_locator()
-            && OB_FAIL(ObQueryDriver::convert_lob_value_charset(
-                value, target_charset_type, arena_allocator))) {
-          LOG_WARN("convert lob value charset failed", K(ret));
-        } else if (FALSE_IT(str.assign(
-                       const_cast<char *>(value.get_lob_locator()->get_payload_ptr()),
-                       static_cast<int64_t>(value.get_lob_locator()->get_payload_length())))) {
-        }
-      } else if (ob_is_null(value.get_type())) {
-        str.assign(NULL, 0);
-      } else if (ob_is_extend(value.get_type())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("long data protocol not support array type yet.",  
-                    K(stmt_id), K(i), K(value.get_type()));
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("long piece protocol not support type: ", K(value.get_type()));
-      }
-      /* 
-        * Piece's memory management strategy:
-        * 1. All pieces allocate their own memory through session
-        * 2. Each piece has a separate memory, which is maintained by itself, 
-        *    and needs to be released when each piece dies
-        * 3. The memory of piecebuffer itself comes from piece, 
-        *    and the buf memory on piecebuffer also comes from this
-        * 4. The piecebuffer should be cleaned up immediately after use, 
-        *    and two parts should be cleaned up, 
-        *    the memory occupied by the buf and the memory of the piecebuffer itself
-        * 5. Clean up all pieces when the connection is closed, 
-        *    and clean up the memory of piecebuffer->buf, piecebuffer and piece step by step
-        */ 
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, ObInvalidPiece, &str))) {
-        LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id));
-      } else {
-        value.set_null();
       }
     }
   }
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(response_row(session, row, fields, is_packed, NULL, schema_guard))) {
+  } else if (OB_FAIL(ObMPBase::response_row(session,
+                                            has_long_data() ? row : src_row,
+                                            fields,
+                                            is_packed,
+                                            exec_ctx,
+                                            true,
+                                            schema_guard))) {
     LOG_WARN("response row fail.", K(ret), K(stmt_id));
   } else {
     LOG_DEBUG("response row success.", K(stmt_id));
@@ -926,6 +919,141 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
   return ret;
 }
 
+int ObMPStmtFetch::ps_cursor_fetch(ObExecContext &exec_ctx,
+                                   ObSQLSessionInfo &session,
+                                   const ColumnsFieldArray &fields,
+                                   pl::ObPLCursorInfo &cursor,
+                                   ObSchemaGetterGuard &schema_guard,
+                                   int64_t fetch_limit,
+                                   int64_t &row_num,
+                                   int64_t &cur)
+{
+  int ret = OB_SUCCESS;
+  pl::ObPsCursorInfo &ps_cursor = static_cast<pl::ObPsCursorInfo&>(cursor);
+  ps_cursor.set_fetch_size(fetch_limit);
+  if (ps_cursor.is_async()) {
+    bool has_fetched = false;
+    while (OB_SUCC(ret) && !has_fetched) {
+      LOG_INFO("fetch ps cursor get lock", K(ret));
+      ObSpinLockGuard guard(ps_cursor.get_spin_lock());
+      ObSPICursor *spi_cursor = NULL;
+      if (OB_ISNULL(spi_cursor = ps_cursor.get_cursor_store())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cursor store is NULL", K(ret));
+      } else if ((spi_cursor->row_store_.get_row_cnt() - spi_cursor->cur_) >= fetch_limit
+                  || OB_ITER_END == ps_cursor.get_store_ret()) {
+        has_fetched = true;
+        while (OB_SUCC(ret) && row_num < fetch_limit
+                && OB_SUCC(sql::ObSPIService::ps_cursor_fetch(ps_cursor, session))) {
+          common::ObNewRow &row = cursor.get_current_row();
+          cur = cursor.get_current_position();
+          ++cur;
+          cursor.set_current_position(cur);
+          if (OB_FAIL(response_row(session,
+                                   row,
+                                   &fields,
+                                   column_flag_,
+                                   cursor_id_,
+                                   0 == row_num ? true : false,
+                                   cursor.is_packed(),
+                                   &exec_ctx,
+                                   &schema_guard))) {
+            LOG_WARN("response row fail.", K(ret), K(row_num), K(cursor.is_packed()));
+          } else {
+            ++row_num;
+          }
+        }
+      } else if (OB_SUCCESS != ps_cursor.get_store_ret()) {
+        ret = ps_cursor.get_store_ret();
+        LOG_WARN("fetch ps cursor fail", K(ret));
+      }
+    }
+  } else {
+    while (OB_SUCC(ret) && row_num < fetch_limit
+           && OB_SUCC(sql::ObSPIService::ps_cursor_fetch(ps_cursor, session))) {
+      common::ObNewRow &row = cursor.get_current_row();
+      cur = cursor.get_current_position();
+      ++cur;
+      cursor.set_current_position(cur);
+      if (OB_FAIL(response_row(session,
+                               row,
+                               &fields,
+                               column_flag_,
+                               cursor_id_,
+                               0 == row_num ? true : false,
+                               cursor.is_packed(),
+                               &exec_ctx,
+                               &schema_guard))) {
+        LOG_WARN("response row fail.", K(ret), K(row_num), K(cursor.is_packed()));
+      } else {
+        ++row_num;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtFetch::cursor_fetch_last_row(ObSQLSessionInfo &session,
+                                         pl::ObPLCursorInfo &cursor,
+                                         const common::ObNewRow *&row,
+                                         int64_t &cur)
+{
+  int ret = OB_SUCCESS;
+#define GET_LAST_ROW \
+  do {  \
+    if (OB_SUCC(ret)) { \
+      all_row_cnt = spi_cursor->row_store_.get_row_cnt(); \
+      if (all_row_cnt == 0) { \
+        ret = OB_ITER_END; \
+      } else if (OB_FAIL(spi_cursor->row_store_.get_row(all_row_cnt - 1, row))) { \
+        LOG_WARN("get row from row store fail", K(ret), K(all_row_cnt)); \
+      } else if (OB_FAIL(ob_write_row(cursor.get_cursor_entity()->get_arena_allocator(),  \
+                                      *row, \
+                                      cursor.get_last_row()))) {  \
+        LOG_WARN("write row to last row fail", K(ret)); \
+      } \
+    } \
+  } while (0)
+
+  ObSPICursor *spi_cursor = NULL;
+  int64_t all_row_cnt = 0;
+  if (OB_ISNULL(spi_cursor = cursor.get_spi_cursor())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor store is NULL", K(ret));
+  } else if (cursor.get_last_row().is_valid()) {
+    all_row_cnt = spi_cursor->row_store_.get_row_cnt();
+    row = &cursor.get_last_row();
+  } else {
+    if (cursor.is_ps_cursor()) {
+      pl::ObPsCursorInfo &ps_cursor = static_cast<pl::ObPsCursorInfo&>(cursor);
+      if (ps_cursor.is_async() && OB_SUCCESS == ps_cursor.get_store_ret()) {
+        // fill cursor not end.
+        {
+          ObSpinLockGuard guard(ps_cursor.get_spin_lock());
+          ps_cursor.set_fetch_size(INT64_MAX);
+        }
+        while (OB_SUCCESS == ps_cursor.get_store_ret()) {
+          // do nothing
+        }
+      }
+      if (OB_SUCC(ret)) {
+        // fill cursor has already end successfully.
+        if (OB_ITER_END == ps_cursor.get_store_ret()) {
+          GET_LAST_ROW;
+        } else {
+          ret = ps_cursor.get_store_ret();
+        }
+      }
+    } else {
+      GET_LAST_ROW;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    cur = all_row_cnt - 1;
+  }
+#undef GET_LAST_ROW
+  return ret;
+}
 
 } //end of namespace observer
 } //end of namespace oceanbase

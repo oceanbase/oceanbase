@@ -2350,9 +2350,10 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
   return ret;
 }
 
-int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
+int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool close_by_open_thread)
 {
   int ret = OB_SUCCESS;
+  UNUSED(close_by_open_thread);
   LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_server_sid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
     if (!is_server_cursor()) {   // delete cursor from cursor map first, then release resource
@@ -2643,6 +2644,175 @@ int ObPLCursorInfo::set_current_position(int64_t position) {
   current_position_ = position;
   return ret;
 }
+
+int ObPsCursorInfo::init_params(ParamStore &exec_params)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *alloc = NULL;
+  if (OB_ISNULL(entity_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("entity is null", K(ret));
+  } else if (OB_ISNULL(alloc = &entity_->get_arena_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc is null", K(ret));
+  } else {
+    exec_params_.~Ob2DArray();
+    new (&exec_params_) ParamStore(ObWrapperAllocator(alloc));
+    if (OB_FAIL(exec_params_.assign(exec_params))) {
+      LOG_WARN("assign exec_params failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
+                                         const common::ColumnsFieldIArray &fields)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *allocator = NULL;
+  if (OB_ISNULL(allocator = get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(cursor_store_)) {
+    cursor_store_ = static_cast<ObSPICursor *>(allocator->alloc(sizeof(ObSPICursor)));
+    if (OB_ISNULL(cursor_store_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc cursor store", K(ret));
+    }
+  } else {
+    cursor_store_->~ObSPICursor();
+  }
+  if (OB_SUCC(ret)) {
+    cursor_store_ = new(cursor_store_) ObSPICursor(*allocator, &session);
+    uint64_t mem_limit = OB_INVALID_SIZE;
+    if (OB_FAIL(session.get_tmp_table_size(mem_limit))) {
+      LOG_WARN("fail to get tmp table size", K(ret), K(session.get_server_sid()));
+    } else if (OB_INVALID_SIZE == mem_limit) {
+      mem_limit = GCONF._chunk_row_store_mem_limit;
+    }
+    if (FAILEDx(cursor_store_->row_store_.init(mem_limit,
+                                               session.get_effective_tenant_id(),
+                                               common::ObCtxIds::DEFAULT_CTX_ID,
+                                               "PSCursorRowStore"))) {
+      LOG_WARN("row store init failed", K(ret));
+    } else if (OB_FAIL(ObDbmsInfo::deep_copy_field_columns(*allocator,
+                                                           &fields,
+                                                           cursor_store_->fields_))) {
+      LOG_WARN("deeo copy field columns failed", K(ret));
+    } else if (OB_FAIL(cursor_store_->init_row_desc(fields))) {
+      LOG_WARN("init row desc failed", K(ret), K(fields));
+    }
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
+                          bool is_reuse,
+                          bool close_by_open_thread)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("close ps cursor start", K(ret), K(session.get_server_sid()), K(is_reuse), K(close_by_open_thread), K(lbt()));
+  if (!close_by_open_thread && is_async()) {
+    while (OB_SUCCESS == get_store_ret() && !is_client_close()) {
+      ObSpinLockGuard guard(spin_lock_);
+      set_client_close(true);
+    }
+  } else if (close_by_open_thread && NULL != spi_cursor_) {
+    ObSPIResultSet *spi_result = get_cursor_handler();
+    if (OB_NOT_NULL(spi_result)) {
+      if (OB_NOT_NULL(spi_result->get_result_set())) {
+        int close_ret = spi_result->close_result_set();
+        if (OB_SUCCESS != close_ret) {
+          LOG_WARN("close mysql result failed", K(close_ret));
+        }
+        spi_result->destruct_exec_params(session);
+        spi_result->~ObSPIResultSet();
+      }
+    } else {
+      LOG_WARN("get cursor handler failed, may be lead to memory leak", K(ret));
+    }
+    spi_cursor_ = NULL;
+    if (is_async()) {
+      ObPsCursorInfo::reduce_async_cursor_count();
+    }
+  }
+
+  while (NULL != spi_cursor_) {
+    // do nothing
+  }
+
+  ObSpinLockGuard guard(spin_lock_);
+  exec_params_.reset();
+  fetch_size_ = 0;
+  store_ret_ = OB_SUCCESS;
+  client_close_ = false;
+  ps_sql_.reset();
+  if (OB_ISNULL(get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_NOT_NULL(cursor_store_)) {
+    cursor_store_->~ObSPICursor();
+    get_allocator()->free(cursor_store_);
+    cursor_store_ = NULL;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(exec_ctx_)) {
+    exec_ctx_->~ObPLExecCtx();
+    get_allocator()->free(exec_ctx_);
+    exec_ctx_ = NULL;
+  }
+  if (FAILEDx(ObPLCursorInfo::close(session, is_reuse))) {
+    LOG_WARN("pl cursor info close failed", K(ret));
+  }
+  LOG_INFO("close ps cursor end", K(ret), K(session.get_server_sid()), K(lbt()));
+  return ret;
+}
+
+int ObPsCursorInfo::get_field_columns(const common::ColumnsFieldArray *&fields)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cursor_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor store is null", K(ret));
+  } else {
+    fields = &cursor_store_->fields_;
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::get_field_count(int64_t &field_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cursor_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor store is null", K(ret));
+  } else {
+    field_count = cursor_store_->fields_.count();
+  }
+  return ret;
+}
+
+// if return true, need to reduce async ps cursor count after detory cursor
+// if return false, do nothing
+bool ObPsCursorInfo::can_open_async_cursor()
+{
+  bool can_open = false;
+  int32_t v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, 1);
+  LOG_INFO("not the actual aysnc ps cursor count, the tmp values is ", K(v));
+  if (v <= GCONF.async_ps_cursor_max_count) {
+    can_open = true;
+  } else {
+    v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, -1);
+  }
+  return can_open;
+}
+
+void ObPsCursorInfo::reduce_async_cursor_count()
+{
+  int32_t v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, -1);
+  LOG_INFO("reduce ps cursor count", K(v));
+}
+
+int32_t ObPsCursorInfo::ASYNC_PS_CURSOR_COUNT = 0;
 
 }  // namespace pl
 }  // namespace oceanbase

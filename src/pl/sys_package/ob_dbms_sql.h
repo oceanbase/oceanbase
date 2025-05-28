@@ -68,6 +68,11 @@ public:
   inline void set_stmt_type(sql::stmt::StmtType type) { stmt_type_ = type; }
   ParamStore &get_exec_params() { return exec_params_; }
   common::ColumnsFieldArray &get_field_columns() { return fields_; }
+  virtual int get_field_count(int64_t &field_count)
+  {
+    field_count = fields_.count();
+    return common::OB_SUCCESS;
+  }
   static int deep_copy_field_columns(
     ObIAllocator& allocator,
     const common::ColumnsFieldIArray* src_fields,

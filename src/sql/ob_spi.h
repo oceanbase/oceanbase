@@ -115,6 +115,7 @@ struct ObSPICursor
       (void)release_complex_obj(complex_objs_.at(i));
     }
   }
+  int init_row_desc(const common::ColumnsFieldIArray &fields);
 
   int release_complex_obj(ObObj &complex_obj);
 
@@ -929,6 +930,7 @@ public:
   static int fill_cursor(ObResultSet &result_set,
                          ObSPICursor *cursor,
                          int64_t new_query_start_time,
+                         bool &is_iter_end,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
   static int cursor_release(ObSQLSessionInfo *session,
@@ -943,6 +945,14 @@ public:
   static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
   static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
+  static int ps_cursor_open(pl::ObPLExecCtx *ctx,
+                                pl::ObPsCursorInfo &ps_cursor);
+  static int ps_cursor_fetch(pl::ObPsCursorInfo &ps_cursor,
+                             ObSQLSessionInfo &session);
+  static int fill_ps_cursor(ObSQLSessionInfo &session,
+                            pl::ObPsCursorInfo &ps_cursor,
+                            int64_t pre_store_size = 0);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
