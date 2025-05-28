@@ -324,6 +324,10 @@ int ObSimpleServer::simple_start()
     // fprintf(stdout, "start failed. ret = %d\n", ret);
     ob_abort();
   }
+  // wait rs enter full service
+  while (!GCTX.root_service_->is_full_service()) {
+    ::sleep(1);
+  }
   return ret;
 }
 
