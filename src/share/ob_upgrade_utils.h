@@ -186,7 +186,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 32;
+  static const int64_t DATA_VERSION_NUM = 33;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -263,6 +263,7 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 3)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 4)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 5)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
 
