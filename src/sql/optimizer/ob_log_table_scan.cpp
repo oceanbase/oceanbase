@@ -1471,9 +1471,9 @@ int ObLogTableScan::set_index_merge_scan_filters(const AccessPath *path)
     if (OB_ISNULL(index_merge_path->root_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null index merge node", K(ret), KPC(index_merge_path));
-    } else if (OB_FAIL(get_filter_exprs().assign(index_merge_path->est_cost_info_.table_filters_))) {
+    } else if (OB_FAIL(get_filter_exprs().assign(index_merge_path->filter_))) {
       LOG_WARN("failed to assign filters array", K(ret));
-    } else if (OB_FAIL(full_filters_.assign(index_merge_path->est_cost_info_.table_filters_))) {
+    } else if (OB_FAIL(full_filters_.assign(index_merge_path->filter_))) {
       LOG_WARN("failed to assign filters array", K(ret));
     } else if (OB_FAIL(index_range_conds_.prepare_allocate(index_merge_path->index_cnt_)) ||
                OB_FAIL(index_filters_.prepare_allocate(index_merge_path->index_cnt_))) {

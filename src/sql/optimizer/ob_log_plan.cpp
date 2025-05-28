@@ -742,16 +742,16 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
     } else if (qual->has_flag(CNT_ROWNUM)) {
       ret = add_rownum_expr(qual);
     } else if (qual->has_flag(CNT_SUB_QUERY)) {
-      if (OB_FAIL(ObOptimizerUtil::split_or_quals(get_stmt(),
-                                                  get_optimizer_context().get_expr_factory(),
-                                                  get_optimizer_context().get_session_info(),
-                                                  table_items,
-                                                  qual,
-                                                  quals,
-                                                  new_or_quals_))) {
-        LOG_WARN("failed to split or quals", K(ret));
-      } else if (ObOptimizerUtil::find_item(push_subq_exprs_, qual)) {
+      if (ObOptimizerUtil::find_item(push_subq_exprs_, qual)) {
         ret = normal_quals.push_back(qual);
+      } else if (OB_FAIL(ObOptimizerUtil::split_or_quals(get_stmt(),
+                                                         get_optimizer_context().get_expr_factory(),
+                                                         get_optimizer_context().get_session_info(),
+                                                         table_items,
+                                                         qual,
+                                                         quals,
+                                                         new_or_quals_))) {
+        LOG_WARN("failed to split or quals", K(ret));
       } else {
         ret = add_subquery_filter(qual);
       }

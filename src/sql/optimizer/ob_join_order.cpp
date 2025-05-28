@@ -3234,7 +3234,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
 
 int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
                                                  const uint64_t ref_table_id,
-                                                 PathHelper &helper,
+                                                 const PathHelper &helper,
                                                  ObIndexInfoCache &index_info_cache,
                                                  ObIArray<AccessPath *> &access_paths,
                                                  bool &ignore_normal_access_path)
@@ -3291,7 +3291,7 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
 
 int ObJoinOrder::get_candi_index_merge_trees(const uint64_t table_id,
                                              const uint64_t ref_table_id,
-                                             PathHelper &helper,
+                                             const PathHelper &helper,
                                              ObIArray<ObIndexMergeNode*> &candi_index_trees,
                                              bool &is_match_hint)
 {
@@ -3421,7 +3421,7 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
 }
 
 int ObJoinOrder::generate_candi_index_merge_trees(const uint64_t ref_table_id,
-                                                  ObIArray<ObRawExpr*> &filters,
+                                                  const ObIArray<ObRawExpr*> &filters,
                                                   ObIArray<uint64_t> &valid_index_ids,
                                                   ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                                   ObIArray<ObIndexMergeNode *> &candi_index_trees)
@@ -3803,7 +3803,7 @@ int ObJoinOrder::prune_candi_index_merge_trees(ObIArray<ObIndexMergeNode*> &cand
 
 int ObJoinOrder::do_create_index_merge_paths(const uint64_t table_id,
                                              const uint64_t ref_table_id,
-                                             PathHelper &helper,
+                                             const PathHelper &helper,
                                              ObIndexInfoCache &index_info_cache,
                                              ObIArray<ObIndexMergeNode*> &candi_index_trees,
                                              ObIArray<AccessPath*> &access_paths)
@@ -3812,6 +3812,7 @@ int ObJoinOrder::do_create_index_merge_paths(const uint64_t table_id,
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_trees.count(); ++i) {
     ObIndexMergeNode* root_node = candi_index_trees.at(i);
     IndexMergePath* index_merge_path = NULL;
+    ObSEArray<ObExprConstraint, 4> range_expr_constraint;
     int64_t scan_node_count = 0;
     if (OB_ISNULL(root_node)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3824,12 +3825,14 @@ int ObJoinOrder::do_create_index_merge_paths(const uint64_t table_id,
                                                        ref_table_id,
                                                        helper,
                                                        index_info_cache,
+                                                       range_expr_constraint,
                                                        root_node,
                                                        scan_node_count))) {
       LOG_WARN("failed to build access path for scan node", K(ret));
     } else if (OB_FAIL(create_one_index_merge_path(table_id,
                                                    ref_table_id,
                                                    helper,
+                                                   range_expr_constraint,
                                                    root_node,
                                                    index_merge_path))) {
       LOG_WARN("failed to create one index merge path", K(ret), KPC(root_node));
@@ -3936,8 +3939,9 @@ int ObJoinOrder::calc_selectivity_for_index_merge_node(ObIndexMergeNode* node,
 
 int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
                                                  const uint64_t ref_table_id,
-                                                 PathHelper &helper,
+                                                 const PathHelper &helper,
                                                  ObIndexInfoCache &index_info_cache,
+                                                 ObIArray<ObExprConstraint> &range_expr_constraint,
                                                  ObIndexMergeNode* node,
                                                  int64_t &scan_node_count)
 {
@@ -3956,6 +3960,7 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
                                                                     ref_table_id,
                                                                     helper,
                                                                     index_info_cache,
+                                                                    range_expr_constraint,
                                                                     node->children_.at(i),
                                                                     scan_node_count)))) {
         LOG_WARN("failed to create index merge node", K(ret), KPC(node->children_.at(i)));
@@ -4005,6 +4010,9 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
                                               use_row_store ? false : true, /* use_column_store */
                                               OptSkipScanState::SS_UNSET /* use_skip_scan */ ))) {
       LOG_WARN("failed to create one access path", K(table_id), K(ref_table_id), K(node->index_tid_));
+    } else if (OB_FAIL(append(range_expr_constraint,
+                              index_info_entry->get_range_info().get_expr_constraints()))) {
+      LOG_WARN("failed to append range expr constraint", K(ret));
     }
   }
   return ret;
@@ -4012,7 +4020,8 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
 
 int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
                                              const uint64_t ref_table_id,
-                                             PathHelper &helper,
+                                             const PathHelper &helper,
+                                             const ObIArray<ObExprConstraint> &range_expr_constraint,
                                              ObIndexMergeNode* root_node,
                                              IndexMergePath* &index_merge_path)
 {
@@ -4035,6 +4044,10 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     LOG_WARN("failed to get all match exprs", K(ret), K(table_id));
   } else if (OB_FAIL(index_merge_path->est_cost_info_.table_filters_.assign(helper.filters_))) {
     LOG_WARN("failed to assign filters", K(ret));
+  } else if (OB_FAIL(index_merge_path->filter_.assign(helper.filters_))) {
+    LOG_WARN("failed to assign filters", K(ret));
+  } else if (OB_FAIL(index_merge_path->subquery_exprs_.assign(helper.subquery_exprs_))) {
+    LOG_WARN("failed to assign subquery exprs", K(ret));
   } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id, ref_table_id, rowkey_exprs))) {
     LOG_WARN("failed to get rowkey exprs", K(ret));
   } else if (OB_FAIL(get_index_scan_direction(rowkey_exprs, stmt, get_plan()->get_equal_sets(), index_merge_path->order_direction_))) {
@@ -4047,6 +4060,14 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     LOG_WARN("failed to make rowkey ordering for index merge path", K(ret));
   } else if (OB_FAIL(stmt->get_column_items(table_id, index_merge_path->est_cost_info_.access_column_items_))) {
     LOG_WARN("failed to get column items", K(ret));
+  } else if (OB_FAIL(index_merge_path->equal_param_constraints_.assign(helper.equal_param_constraints_))) {
+    LOG_WARN("failed to assign equal param constraints", K(ret));
+  } else if (OB_FAIL(index_merge_path->const_param_constraints_.assign(helper.const_param_constraints_))) {
+    LOG_WARN("failed to assign equal param constraints", K(ret));
+  } else if (OB_FAIL(index_merge_path->expr_constraints_.assign(helper.expr_constraints_))) {
+    LOG_WARN("failed to assign expr constraints", K(ret));
+  } else if (OB_FAIL(append(index_merge_path->expr_constraints_, range_expr_constraint))) {
+    LOG_WARN("failed to append range expr constraints", K(ret));
   } else {
     index_merge_path->table_id_ = table_id;
     index_merge_path->ref_table_id_ = ref_table_id;

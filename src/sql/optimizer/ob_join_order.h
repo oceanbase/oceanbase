@@ -1845,14 +1845,14 @@ struct NullAwareAntiJoinInfo {
 
     int create_index_merge_access_paths(const uint64_t table_id,
                                         const uint64_t ref_table_id,
-                                        PathHelper &helper,
+                                        const PathHelper &helper,
                                         ObIndexInfoCache &index_info_cache,
                                         ObIArray<AccessPath *> &access_paths,
                                         bool &ignore_normal_access_path);
 
     int get_candi_index_merge_trees(const uint64_t table_id,
                                     const uint64_t ref_table_id,
-                                    PathHelper &helper,
+                                    const PathHelper &helper,
                                     ObIArray<ObIndexMergeNode*> &candi_index_trees,
                                     bool &is_match_hint);
 
@@ -1863,7 +1863,7 @@ struct NullAwareAntiJoinInfo {
                                       bool ignore_hint);
 
     int generate_candi_index_merge_trees(const uint64_t ref_table_id,
-                                         ObIArray<ObRawExpr*> &filters,
+                                         const ObIArray<ObRawExpr*> &filters,
                                          ObIArray<uint64_t> &valid_index_ids,
                                          ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                          ObIArray<ObIndexMergeNode *> &candi_index_trees);
@@ -1893,15 +1893,16 @@ struct NullAwareAntiJoinInfo {
 
     int do_create_index_merge_paths(const uint64_t table_id,
                                     const uint64_t ref_table_id,
-                                    PathHelper &helper,
+                                    const PathHelper &helper,
                                     ObIndexInfoCache &index_info_cache,
                                     ObIArray<ObIndexMergeNode*> &candi_index_trees,
                                     ObIArray<AccessPath*> &access_paths);
 
     int build_access_path_for_scan_node(const uint64_t table_id,
                                         const uint64_t ref_table_id,
-                                        PathHelper &helper,
+                                        const PathHelper &helper,
                                         ObIndexInfoCache &index_info_cache,
+                                        ObIArray<ObExprConstraint> &range_expr_constraint,
                                         ObIndexMergeNode* node,
                                         int64_t &scan_node_count);
 
@@ -1912,7 +1913,8 @@ struct NullAwareAntiJoinInfo {
 
     int create_one_index_merge_path(const uint64_t table_id,
                                     const uint64_t ref_table_id,
-                                    PathHelper &helper,
+                                    const PathHelper &helper,
+                                    const ObIArray<ObExprConstraint> &range_expr_constraint,
                                     ObIndexMergeNode* root_node,
                                     IndexMergePath* &index_merge_path);
 
