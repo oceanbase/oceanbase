@@ -399,13 +399,17 @@ int ObTabletPersister::inner_persist_and_transform(
 
   if (OB_SUCC(ret)) {
     persister.print_time_stats(*time_stats, 20_ms, 1_s);
-    if (new_handle.get_obj()->macro_info_addr_.ptr_ == &tablet_macro_info) {
-      /*
-        if macro_info_addr_.ptr == &tablet_macro_info, set as nullptr, because tablet_macro_info is on stack;
-        if macro_info_addr_.ptr != &tablet_macro_info, keep it as it is, because macro_info_addr_.ptr is deep_copy from tablet_macro_info;
-      */
-      new_handle.get_obj()->macro_info_addr_.ptr_ = nullptr;
-    }
+  }
+  // TODO: @jinzhu, remove me later.
+  //
+  // tablet macro info on stack isn't should be given into new tablet. In order to fix the issue (2025052600109200358) quickly
+  // and not block the test, just a temporary. This code should be completely removed later.
+  if (OB_NOT_NULL(new_handle.get_obj()) && new_handle.get_obj()->macro_info_addr_.ptr_ == &tablet_macro_info) {
+    /*
+      if macro_info_addr_.ptr == &tablet_macro_info, set as nullptr, because tablet_macro_info is on stack;
+      if macro_info_addr_.ptr != &tablet_macro_info, keep it as it is, because macro_info_addr_.ptr is deep_copy from tablet_macro_info;
+    */
+    new_handle.get_obj()->macro_info_addr_.ptr_ = nullptr;
   }
   return ret;
 }
@@ -692,8 +696,12 @@ int ObTabletPersister::delete_blocks_(
     if (OB_SUCC(ret)) {
       time_stats->click("persist_aggregated_meta");
       persister.print_time_stats(*time_stats, 20_ms, 1_s);
-      new_tablet.get_obj()->macro_info_addr_.ptr_ = nullptr;
     }
+    // TODO: @jinzhu, remove me later.
+    //
+    // tablet macro info on stack isn't should be given into new tablet. In order to fix the issue (2025052600109200358) quickly
+    // and not block the test, just a temporary. This code should be completely removed later.
+    new_tablet.get_obj()->macro_info_addr_.ptr_ = nullptr;
   }
   if (OB_NOT_NULL(macro_info) && !in_memory) {
     macro_info->~ObTabletMacroInfo();
@@ -1066,14 +1074,16 @@ int ObTabletPersister::transform_empty_shell(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (new_handle.get_obj()->macro_info_addr_.ptr_ == &tablet_macro_info) {
-      /*
-        if macro_info_addr_.ptr == &tablet_macro_info, set as nullptr, because tablet_macro_info is on stack;
-        if macro_info_addr_.ptr != &tablet_macro_info, keep it as it is, because macro_info_addr_.ptr is deep_copy from tablet_macro_info;
-      */
-      new_handle.get_obj()->macro_info_addr_.ptr_ = nullptr;
-    }
+  // TODO: @jinzhu, remove me later.
+  //
+  // tablet macro info on stack isn't should be given into new tablet. In order to fix the issue (2025052600109200358) quickly
+  // and not block the test, just a temporary. This code should be completely removed later.
+  if (OB_NOT_NULL(new_handle.get_obj()) && new_handle.get_obj()->macro_info_addr_.ptr_ == &tablet_macro_info) {
+    /*
+      if macro_info_addr_.ptr == &tablet_macro_info, set as nullptr, because tablet_macro_info is on stack;
+      if macro_info_addr_.ptr != &tablet_macro_info, keep it as it is, because macro_info_addr_.ptr is deep_copy from tablet_macro_info;
+    */
+    new_handle.get_obj()->macro_info_addr_.ptr_ = nullptr;
   }
   if (OB_SUCC(ret)) {
     new_handle.get_obj()->tablet_meta_.space_usage_ = space_usage;
