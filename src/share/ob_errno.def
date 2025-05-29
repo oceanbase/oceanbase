@@ -2749,6 +2749,8 @@ DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis proto
 DEFINE_ERROR_EXT(OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG, -10516, -1, "HY000", "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t", "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.");
 DEFINE_ERROR_EXT(OB_KV_REDIS_ERROR, -10517, -1, "HY000", "OBKV redis error", "Redis err need return to client");
 DEFINE_ERROR_EXT(OB_KV_CHECK_FAILED, -10518, -1, "HY000", "OBKV check failed", "Check failed in %.*s");
+DEFINE_ERROR_EXT(OB_KV_TABLE_NOT_DISABLED, -10519, -1, "HY000", "OBKV fail to disable table", "'%.*s' is not disabled");
+DEFINE_ERROR_EXT(OB_KV_TABLE_NOT_ENABLED, -10520, -1, "HY000", "OBKV fail to enable table", "'%.*s' is not enabled");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
