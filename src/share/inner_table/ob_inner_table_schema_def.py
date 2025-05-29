@@ -26768,7 +26768,8 @@ def_table_schema(
       MERGE_REASON,
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
-      MDS_FILTER_INFO
+      MDS_FILTER_INFO,
+      EXECUTE_TIME
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -26819,7 +26820,8 @@ def_table_schema(
       MERGE_REASON,
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
-      MDS_FILTER_INFO
+      MDS_FILTER_INFO,
+      EXECUTE_TIME
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -69243,7 +69245,8 @@ def_table_schema(
       MERGE_REASON,
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
-      MDS_FILTER_INFO
+      MDS_FILTER_INFO,
+      EXECUTE_TIME
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -69296,7 +69299,8 @@ def_table_schema(
       MERGE_REASON,
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
-      MDS_FILTER_INFO
+      MDS_FILTER_INFO,
+      EXECUTE_TIME
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()

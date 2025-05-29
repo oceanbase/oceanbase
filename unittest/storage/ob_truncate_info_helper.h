@@ -94,7 +94,8 @@ public:
     }
   static int read_distinct_truncate_info_array(
     common::ObArenaAllocator &allocator,
-    ObTablet &tablet,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
     const common::ObVersionRange &read_version_range,
     storage::ObTruncateInfoArray &truncate_info_array);
   static int batch_mock_truncate_info(

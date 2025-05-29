@@ -154,14 +154,18 @@ int TruncateInfoHelper::mock_part_key_idxs(
 
 int TruncateInfoHelper::read_distinct_truncate_info_array(
     common::ObArenaAllocator &allocator,
-    ObTablet &tablet,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
     const ObVersionRange &read_version_range,
     ObTruncateInfoArray &truncate_info_array)
 {
   int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
   ObMdsInfoDistinctMgr distinct_mgr;
   truncate_info_array.reset();
-  if (OB_FAIL(distinct_mgr.init(allocator, tablet, nullptr, read_version_range, false/*access*/))) {
+  if (OB_FAIL(TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle))) {
+    COMMON_LOG(WARN, "failed to get tablet", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(distinct_mgr.init(allocator, *tablet_handle.get_obj(), nullptr, read_version_range, false/*access*/))) {
     COMMON_LOG(WARN, "failed to init distinct mgr", KR(ret), K(read_version_range));
   } else if (OB_FAIL(truncate_info_array.init_for_first_creation(allocator))) {
     COMMON_LOG(WARN, "failed to init truncate info array", KR(ret));

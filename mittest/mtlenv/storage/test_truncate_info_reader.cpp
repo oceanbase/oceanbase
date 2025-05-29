@@ -87,7 +87,7 @@ TEST_F(TestTruncateInfoReader, read_multi_truncate_info_from_minor)
   if (tablet_handle.is_valid()) {
     ASSERT_EQ(OB_SUCCESS,
               TruncateInfoHelper::read_distinct_truncate_info_array(
-                  allocator_, *tablet_handle.get_obj(),
+                  allocator_, LS_ID, tablet_id,
                   ObVersionRange(0, EXIST_READ_SNAPSHOT_VERSION), truncate_info_array));
 
     ASSERT_EQ(2, truncate_info_array.count());
@@ -100,7 +100,7 @@ TEST_F(TestTruncateInfoReader, read_multi_truncate_info_from_minor)
     // read with version_range, will hit kv cache, will return 2 row
     ASSERT_EQ(OB_SUCCESS,
               TruncateInfoHelper::read_distinct_truncate_info_array(
-                  allocator_, *tablet_handle.get_obj(),
+                  allocator_, LS_ID, tablet_id,
                   ObVersionRange(2000, EXIST_READ_SNAPSHOT_VERSION), truncate_info_array));
 
     ASSERT_EQ(1, truncate_info_array.count());
@@ -415,7 +415,7 @@ TEST_F(TestTruncateInfoReader, test_put_truncate_info_into_cache)
   ObTruncateInfoArray truncate_info_array;
 #define READ_ARRAY(version_range)                                              \
   TruncateInfoHelper::read_distinct_truncate_info_array(                       \
-      allocator_, *tablet_handle.get_obj(), version_range,                     \
+      allocator_, LS_ID, tablet_id, version_range,                             \
       truncate_info_array);                                                    \
   ASSERT_EQ(OB_SUCCESS, ret);
 #define CHECK_RESULT(version_in_array, cache_valid, version_in_cache)          \
