@@ -54,6 +54,11 @@ public:
                               blocksstable::ObDatumRowkey& rowkey,
                               blocksstable::ObDatumRowkey &border_rowkey,
                               common::ObIAllocator &allocator) final;
+  OB_INLINE bool is_end_of_scan() const
+  {
+    return prefetcher_.is_prefetch_end_ &&
+        prefetcher_.cur_range_fetch_idx_ >= prefetcher_.cur_range_prefetch_idx_;
+  }
   TO_STRING_KV(K_(is_opened), K_(is_di_base_iter), K_(cur_range_idx),
                KP_(micro_scanner), KP_(micro_data_scanner), KP_(mv_micro_data_scanner), KP_(mv_di_micro_data_scanner),
                KP_(sstable), KP_(iter_param), KP_(access_ctx), K_(prefetcher));
