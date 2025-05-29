@@ -12266,7 +12266,8 @@ OB_SERIALIZE_MEMBER(ObSAuditSchema,
 OB_SERIALIZE_MEMBER(ObAuxTableMetaInfo,
                     table_id_,
                     table_type_,
-                    index_type_);
+                    index_type_,
+                    is_tmp_mlog_);
 
 ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator *allocator)
   : table_id_(common::OB_INVALID_ID),

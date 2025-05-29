@@ -143,8 +143,7 @@ enum ObDDLType
 };
 const char *get_ddl_type(ObDDLType ddl_type);
 
-enum ObDDLTaskType
-{
+enum ObDDLTaskType {
   INVALID_TASK = 0,
   REBUILD_INDEX_TASK = 1,
   REBUILD_CONSTRAINT_TASK = 2,
@@ -154,7 +153,8 @@ enum ObDDLTaskType
   MODIFY_FOREIGN_KEY_STATE_TASK = 6,
   // used in rollback_failed_add_not_null_columns() in ob_constraint_task.cpp.
   DELETE_COLUMN_FROM_SCHEMA = 7,
-  // remap all index tables to hidden table and take effect through one rpc, applied in drop column for 4.0.
+  // remap all index tables to hidden table and take effect through one rpc, applied in drop column
+  // for 4.0.
   REMAP_INDEXES_AND_TAKE_EFFECT_TASK = 8,
   UPDATE_AUTOINC_SCHEMA = 9,
   CANCEL_DDL_TASK = 10,
@@ -163,6 +163,7 @@ enum ObDDLTaskType
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
+  SWITCH_MLOG_NAME_TASK = 16
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -213,6 +214,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
+  PURGE_OLD_MLOG = 47,
 
   FAIL = 99,
   SUCCESS = 100
@@ -386,6 +388,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
       str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::PURGE_OLD_MLOG:
+      str = "PURGE_OLD_MLOG";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";

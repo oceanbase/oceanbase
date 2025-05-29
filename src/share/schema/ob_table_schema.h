@@ -2383,6 +2383,7 @@ protected:
   common::ObString dynamic_partition_policy_;
   uint64_t external_location_id_;
   common::ObString external_sub_path_;
+  uint64_t tmp_mlog_tid_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

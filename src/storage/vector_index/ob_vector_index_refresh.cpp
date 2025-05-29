@@ -676,7 +676,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     ObTimeoutCtx timeout_ctx;
     ObAddr rs_addr;
     obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
-    ObRebuildIndexArg rebuild_index_arg;
+    SMART_VAR(ObRebuildIndexArg, rebuild_index_arg) {
     obrpc::ObAlterTableRes rebuild_index_res;
     const bool is_support_cancel = true;
     rebuild_index_arg.tenant_id_ = tenant_id;
@@ -714,6 +714,7 @@ int ObVectorIndexRefresher::do_rebuild() {
         LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
       }
     }
+  }
   }
   return ret;
 }

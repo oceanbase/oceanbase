@@ -1739,6 +1739,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
+      tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3874,6 +3875,7 @@ void ObTableSchema::reset()
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
+  tmp_mlog_tid_ = OB_INVALID_ID;
   local_session_vars_.reset();
   mv_mode_.reset();
   storage_cache_policy_.reset();
@@ -7421,6 +7423,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(external_location_id_);
   OB_UNIS_ENCODE(external_sub_path_);
   OB_UNIS_ENCODE(micro_block_format_version_);
+  OB_UNIS_ENCODE(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7670,6 +7673,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(external_location_id_);
   OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
   OB_UNIS_DECODE(micro_block_format_version_);
+  OB_UNIS_DECODE(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7819,6 +7823,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(external_location_id_);
   OB_UNIS_ADD_LEN(external_sub_path_);
   OB_UNIS_ADD_LEN(micro_block_format_version_);
+  OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

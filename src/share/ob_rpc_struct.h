@@ -1451,6 +1451,7 @@ public:
     only_set_status_ = false;
     index_ids_.reset();
     table_id_ = common::OB_INVALID_ID;
+    is_drop_in_rebuild_task_ = false;
   }
   virtual ~ObDropIndexArg() {}
   int assign(const ObDropIndexArg &other);
@@ -1468,6 +1469,7 @@ public:
     only_set_status_ = false;
     index_ids_.reset();
     table_id_ = common::OB_INVALID_ID;
+    is_drop_in_rebuild_task_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1481,6 +1483,7 @@ public:
   bool only_set_status_;
   common::ObSEArray<int64_t, 5> index_ids_;
   uint64_t table_id_;
+  bool is_drop_in_rebuild_task_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -1506,11 +1509,16 @@ struct ObRebuildIndexArg: public ObIndexArg
   OB_UNIS_VERSION(1);
   //if add new member,should add to_string and serialize function
 public:
+  enum RebuildIndexType {
+    REBUILD_INDEX_TYPE_VEC = 0,
+    REBUILD_INDEX_TYPE_MLOG = 1
+  };
   ObRebuildIndexArg() : ObIndexArg(),
     vidx_refresh_info_()
   {
     index_action_type_ = REBUILD_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
+    rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
   }
   virtual ~ObRebuildIndexArg() {}
 
@@ -1518,9 +1526,12 @@ public:
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(ObIndexArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign base", K(ret));
+    } else if (OB_FAIL(create_mlog_arg_.assign(other.create_mlog_arg_))) {
+      SHARE_LOG(WARN, "fail to assign create mlog arg", K(ret));
     } else {
       index_table_id_ = other.index_table_id_;
       vidx_refresh_info_ = other.vidx_refresh_info_;
+      rebuild_index_type_ = other.rebuild_index_type_;
     }
     return ret;
   }
@@ -1530,10 +1541,14 @@ public:
     ObIndexArg::reset();
     index_action_type_ = REBUILD_INDEX;
     vidx_refresh_info_.reset();
+    rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
+    create_mlog_arg_.reset();
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
+  RebuildIndexType rebuild_index_type_;
+  ObCreateMLogArg create_mlog_arg_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -3288,164 +3303,6 @@ public:
 public:
   int64_t info_list_cnt_;
   int64_t primary_compaction_scn_;
-};
-
-struct ObCreateMLogArg : public ObDDLArg
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObCreateMLogArg()
-      : ObDDLArg(),
-        database_name_(),
-        table_name_(),
-        mlog_name_(),
-        tenant_id_(OB_INVALID_TENANT_ID),
-        base_table_id_(common::OB_INVALID_ID),
-        mlog_table_id_(common::OB_INVALID_ID),
-        session_id_(common::OB_INVALID_ID),
-        with_rowid_(false),
-        with_primary_key_(false),
-        with_sequence_(false),
-        include_new_values_(false),
-        purge_options_(),
-        mlog_schema_(),
-        store_columns_(),
-        nls_date_format_(),
-        nls_timestamp_format_(),
-        nls_timestamp_tz_format_(),
-        sql_mode_(0)
-  {
-
-  }
-  virtual ~ObCreateMLogArg() {}
-  bool is_valid() const;
-  int assign(const ObCreateMLogArg &other) {
-    int ret = common::OB_SUCCESS;
-    if (OB_FAIL(ObDDLArg::assign(other))) {
-      SHARE_LOG(WARN, "failed to assign base", KR(ret));
-    } else if (OB_FAIL(mlog_schema_.assign(other.mlog_schema_))) {
-      SHARE_LOG(WARN, "failed to assign mlog schema", KR(ret));
-    } else if (OB_FAIL(store_columns_.assign(other.store_columns_))) {
-      SHARE_LOG(WARN, "failed to assign store columns", KR(ret));
-    } else {
-      database_name_ = other.database_name_;
-      table_name_ = other.table_name_;
-      mlog_name_ = other.mlog_name_;
-      tenant_id_ = other.tenant_id_;
-      base_table_id_ = other.base_table_id_;
-      mlog_table_id_ = other.mlog_table_id_;
-      session_id_ = other.session_id_;
-      with_rowid_ = other.with_rowid_;
-      with_primary_key_ = other.with_primary_key_;
-      with_sequence_ = other.with_sequence_;
-      include_new_values_ = other.include_new_values_;
-      purge_options_ = other.purge_options_;
-      nls_date_format_ = other.nls_date_format_;
-      nls_timestamp_format_ = other.nls_timestamp_format_;
-      nls_timestamp_tz_format_ = other.nls_timestamp_tz_format_;
-      sql_mode_ = other.sql_mode_;
-    }
-
-    return ret;
-  }
-  void reset()
-  {
-    database_name_.reset();
-    table_name_.reset();
-    mlog_name_.reset();
-    tenant_id_ = common::OB_INVALID_TENANT_ID;
-    base_table_id_ = common::OB_INVALID_ID;
-    mlog_table_id_ = common::OB_INVALID_ID;
-    session_id_ = common::OB_INVALID_ID;
-    with_rowid_ = false;
-    with_primary_key_ = false;
-    with_sequence_ = false;
-    include_new_values_ = false;
-    purge_options_.reset();
-    mlog_schema_.reset();
-    store_columns_.reset();
-    nls_date_format_.reset();
-    nls_timestamp_format_.reset();
-    nls_timestamp_tz_format_.reset();
-    sql_mode_ = 0;
-    ObDDLArg::reset();
-  }
-  DECLARE_TO_STRING;
-
-  struct PurgeOptions {
-    OB_UNIS_VERSION(1);
-  public:
-    PurgeOptions() : purge_mode_(share::schema::ObMLogPurgeMode::MAX)
-    {
-    }
-    ~PurgeOptions() {}
-    void reset()
-    {
-      purge_mode_ = share::schema::ObMLogPurgeMode::MAX;
-      start_datetime_expr_.reset();
-      next_datetime_expr_.reset();
-      exec_env_.reset();
-    }
-    bool is_valid() const
-    {
-      return (share::schema::ObMLogPurgeMode::MAX != purge_mode_) && !exec_env_.empty();
-    }
-    TO_STRING_KV(K_(purge_mode),
-                 K_(start_datetime_expr),
-                 K_(next_datetime_expr),
-                 K_(exec_env));
-    share::schema::ObMLogPurgeMode purge_mode_;
-    common::ObObj start_datetime_expr_;
-    common::ObString next_datetime_expr_;
-    common::ObString exec_env_;
-  };
-  common::ObString database_name_;
-  common::ObString table_name_;
-  common::ObString mlog_name_; // for privilege check
-  uint64_t tenant_id_;
-  uint64_t base_table_id_;
-  uint64_t mlog_table_id_;
-  uint64_t session_id_;
-  bool with_rowid_;
-  bool with_primary_key_;
-  bool with_sequence_;
-  bool include_new_values_;
-  PurgeOptions purge_options_;
-  share::schema::ObTableSchema mlog_schema_;
-  common::ObSEArray<common::ObString, common::OB_PREALLOCATED_NUM> store_columns_;
-  common::ObString nls_date_format_;
-  common::ObString nls_timestamp_format_;
-  common::ObString nls_timestamp_tz_format_;
-  ObSQLMode sql_mode_;
-};
-
-struct ObCreateMLogRes
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObCreateMLogRes()
-      : mlog_table_id_(common::OB_INVALID_ID),
-        schema_version_(common::OB_INVALID_VERSION),
-        task_id_(0)
-  {}
-  void reset()
-  {
-    mlog_table_id_ = OB_INVALID_ID;
-    schema_version_ = OB_INVALID_VERSION;
-    task_id_ = 0;
-  }
-  int assign(const ObCreateMLogRes &other) {
-    int ret = common::OB_SUCCESS;
-    mlog_table_id_ = other.mlog_table_id_;
-    schema_version_ = other.schema_version_;
-    task_id_ = other.task_id_;
-    return ret;
-  }
-public:
-  TO_STRING_KV(K_(mlog_table_id), K_(schema_version), K_(task_id));
-  uint64_t mlog_table_id_;
-  int64_t schema_version_;
-  int64_t task_id_;
 };
 
 struct ObCreateForeignKeyArg : public ObIndexArg

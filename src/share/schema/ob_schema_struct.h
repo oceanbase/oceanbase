@@ -7501,14 +7501,14 @@ struct ObAuxTableMetaInfo
   OB_UNIS_VERSION(1);
 public:
   ObAuxTableMetaInfo()
-    : table_id_(common::OB_INVALID_ID),
-      table_type_(MAX_TABLE_TYPE),
-      index_type_(INDEX_TYPE_MAX)
+      : table_id_(common::OB_INVALID_ID), table_type_(MAX_TABLE_TYPE), index_type_(INDEX_TYPE_MAX),
+        is_tmp_mlog_(false)
   {}
   ObAuxTableMetaInfo(
       const uint64_t table_id,
       const ObTableType table_type,
-      const ObIndexType index_type)
+      const ObIndexType index_type,
+      const bool is_tmp_mlog = false)
       : table_id_(table_id),
         table_type_(table_type),
         index_type_(index_type)
@@ -7516,7 +7516,8 @@ public:
   bool operator ==(const ObAuxTableMetaInfo &other) const {
     return (table_id_ == other.table_id_
             && table_type_ == other.table_type_
-            && index_type_ == other.index_type_);
+            && index_type_ == other.index_type_
+            && is_tmp_mlog_ == other.is_tmp_mlog_);
   }
   int64_t get_convert_size() const
   {
@@ -7527,6 +7528,7 @@ public:
   uint64_t table_id_;
   ObTableType table_type_;
   ObIndexType index_type_;
+  bool is_tmp_mlog_;
 };
 
 enum ObConstraintType
