@@ -956,6 +956,7 @@ typedef enum ObItemType
   T_FUN_SYS_SPIV_DIM = 1917,  // sparse vector index
   T_FUN_SYS_SPIV_VALUE = 1918,
   T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
+  T_FUN_STARTUP_MODE = 1920,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

@@ -1400,6 +1400,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
   NULL, //ObExprCheckLocationAccess::eval_check_location_access        /* 849 */
   NULL,// ObExprUDF::eval_external_udf,                                /* 850 */
+  NULL,// ObExprStartUpMode::eval_startup_mode,                        /* 851 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
