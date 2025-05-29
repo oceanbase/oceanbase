@@ -1326,12 +1326,13 @@ private:
 class ObPLConcurrentGuard
 {
 public:
-  ObPLConcurrentGuard(): inner_obj_(NULL) {}
+  ObPLConcurrentGuard(): inner_obj_(NULL), save_ret_(OB_SUCCESS) {}
   ~ObPLConcurrentGuard();
   int set_concurrent_num(ObPLFunction &routine, ObExecContext &ctx, ObPLPackageGuard &package_guard);
 
 private:
   ObPLCacheObject* inner_obj_;
+  int64_t save_ret_;
 };
 
 class ObPLASHGuard
