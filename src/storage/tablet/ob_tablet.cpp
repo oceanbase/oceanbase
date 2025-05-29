@@ -8313,7 +8313,7 @@ int ObTablet::calc_sstable_occupy_size(
       const bool is_shared_sstable = meta_handle.get_sstable_meta().get_basic_meta().table_shared_flag_.is_shared_sstable();
       all_sstable_occupy_size += cur_sstable_occupy_size;
       // cacl shared_block_size
-      if (is_shared_sstable || is_ddl_dump_sstable) {
+      if ((is_shared_sstable || is_ddl_dump_sstable) && GCTX.is_shared_storage_mode()) {
         // TODO gaishun.gs: for major_sstable, should add the meta_block occupy_size;
         ss_public_sstable_occupy_size += cur_sstable_occupy_size;
       }
