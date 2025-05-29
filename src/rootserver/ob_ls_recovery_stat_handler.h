@@ -98,6 +98,7 @@ public:
    * **/
   int check_can_change_member(const ObMemberList &new_member_list,
                               const int64_t paxos_replica_num,
+                              const palf::LogConfigVersion &config_version,
                               const int64_t timeout);
   friend class TestLSRecoveryGuard;
 private:
@@ -193,7 +194,7 @@ public:
    * @return:
   */
   int wait_can_change_member_list(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout);
+      const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, const int64_t timeout);
   TO_STRING_KV(K_(tenant_id), K_(ls), K(ref_cnt_));
   friend class TestLSRecoveryGuard;
   friend class ObLSRecoveryGuard;
@@ -278,7 +279,7 @@ private:
   int wait_func_with_timeout_(const int64_t timeout, Args &&... args);
   int check_member_change_valid_(const common::ObAddr &server, bool &is_valid);
   int check_member_change_valid_(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, bool &is_valid);
+      const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, bool &is_valid);
   DISALLOW_COPY_AND_ASSIGN(ObLSRecoveryStatHandler);
 
 private:

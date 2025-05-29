@@ -168,8 +168,8 @@ int LogRequestHandler::handle_sync_request<LogConfigChangeCmd, LogConfigChangeCm
     logservice::ObLogHandler *log_handler = nullptr;
     if (OB_FAIL(get_log_handler_(palf_id, ls_handle, log_handler))) {
       CLOG_LOG(WARN, "get_log_handler_ failed", K(ret), K(palf_id), K(server));
-    } else if (OB_FAIL(log_handler->handle_config_change_cmd(req, resp))) {
-      CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), K(palf_id), K(server), K(req));
+    } else if (OB_FAIL(log_handler->handle_config_change_cmd_rpc(req, resp))) {
+      CLOG_LOG(WARN, "handle_config_change_cmd_rpc failed", KR(ret), K(palf_id), K(server), K(req));
     }
   }
 

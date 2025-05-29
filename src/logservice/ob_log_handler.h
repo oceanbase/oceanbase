@@ -847,7 +847,7 @@ public:
   // OB_NOT_RUNNING: in stop state
   // OB_EAGAIN: try lock failed, need retry.
   int is_replay_fatal_error(bool &has_fatal_error);
-  int handle_config_change_cmd(
+  int handle_config_change_cmd_rpc(
       const LogConfigChangeCmd &req,
       LogConfigChangeCmdResp &resp);
   int stat(palf::PalfStat &palf_stat) const;
@@ -870,6 +870,9 @@ private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
                                 LogConfigChangeCmdResp &resp);
+  int handle_config_change_cmd_(
+      const LogConfigChangeCmd &req,
+      LogConfigChangeCmdResp &resp);
 
   int append_(const void *buffer,
               const int64_t nbytes,

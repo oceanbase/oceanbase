@@ -1455,9 +1455,17 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
     } else if (OB_SUCC(ret) && DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
         (is_remove_log_sync_member_list(args.type_) || CHANGE_REPLICA_NUM == args.type_)) {
-      ret = plugins_.check_can_change_memberlist(new_config_info.config_.log_sync_memberlist_,
-          new_config_info.config_.log_sync_replica_num_, timeout_us);
-      ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
+      LogConfigVersion cur_config_version;
+      if (OB_FAIL(config_mgr_.get_config_version(cur_config_version))) {
+          PALF_LOG(WARN, "get current config_version failed", KR(ret), K(cur_config_version));
+      } else if (OB_FAIL(plugins_.check_can_change_memberlist(new_config_info.config_.log_sync_memberlist_,
+            new_config_info.config_.log_sync_replica_num_, cur_config_version, timeout_us))) {
+        if (OB_NOT_INIT == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          PALF_LOG(WARN, "check_can_change_memberlist failed", KR(ret), K(new_config_info), K(cur_config_version), K(timeout_us));
+        }
+      }
     }
     time_guard.click("check_deps");
     // step 4: check whether the new config info can be set to the election module

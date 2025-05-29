@@ -1027,7 +1027,8 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
     ret = OB_NOT_ALLOW_REMOVING_LEADER;
     PALF_LOG(WARN, "leader can not remove itself", KR(ret), K_(palf_id), K_(self), K(args));
   } else if (log_ms_meta_.curr_.is_config_change_locked() && is_paxos_member_list_change(args.type_)) {
-    ret = OB_EAGAIN;
+    // member is locked, should unlock before any member change
+    ret = OB_LOCK_NOT_MATCH;
     PALF_LOG(WARN, "paxos_member_change is locked, can't do change config now",
              KR(ret), K_(palf_id), K_(self), K(args), K_(log_ms_meta), K_(state));
   } else if (need_check_config_version(args.type_) && (args.config_version_ > config_version)) {

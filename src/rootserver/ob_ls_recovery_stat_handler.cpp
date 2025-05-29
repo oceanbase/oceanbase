@@ -132,8 +132,11 @@ int ObLSRecoveryGuard::check_can_add_member(const ObAddr &server, const int64_t 
   return ret;
 }
 
-int ObLSRecoveryGuard::check_can_change_member(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout)
+int ObLSRecoveryGuard::check_can_change_member(
+    const ObMemberList &new_member_list,
+    const int64_t paxos_replica_num,
+    const palf::LogConfigVersion &config_version,
+    const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
@@ -145,8 +148,8 @@ int ObLSRecoveryGuard::check_can_change_member(const ObMemberList &new_member_li
     ret = OB_NOT_INIT;
     LOG_WARN("ls recovery stat is null, not init", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(ls_recovery_stat_->wait_can_change_member_list(new_member_list,
-                     paxos_replica_num, timeout))) {
-    LOG_WARN("failed to check can change member", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+                     paxos_replica_num, config_version, timeout))) {
+    LOG_WARN("failed to check can change member", KR(ret), K(new_member_list), K(paxos_replica_num), K(config_version), K(timeout));
   }
   return ret;
 }
@@ -278,7 +281,9 @@ int ObLSRecoveryStatHandler::reset_inner_readable_scn()
 }
 
 int ObLSRecoveryStatHandler::wait_can_change_member_list(
-    const ObMemberList &new_member_list, const int64_t paxos_replica_num,
+    const ObMemberList &new_member_list,
+    const int64_t paxos_replica_num,
+    const palf::LogConfigVersion &config_version,
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
@@ -286,7 +291,7 @@ int ObLSRecoveryStatHandler::wait_can_change_member_list(
   if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
-  } else if (OB_FAIL(wait_func_with_timeout_(timeout, new_member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(wait_func_with_timeout_(timeout, new_member_list, paxos_replica_num, config_version))) {
     LOG_WARN("failed to wait func with timeout", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
   }
   LOG_INFO("finish wait for change member_list", KR(ret), K(new_member_list), K(paxos_replica_num),
@@ -808,7 +813,7 @@ int ObLSRecoveryStatHandler::dump_all_replica_readable_scn_(const bool force_dum
 }
 
 int ObLSRecoveryStatHandler::check_member_change_valid_(
-    const ObMemberList &new_member_list, const int64_t paxos_replica_num, bool &is_valid)
+    const ObMemberList &new_member_list, const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   SCN readable_scn;
@@ -820,25 +825,23 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
     LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_FAIL(get_palf_stat_(palf_stat))) {
-    LOG_WARN("failed to get palf stat", KR(ret));
   } else if (OB_FAIL(new_member_list.get_addr_array(addr_list))) {
     LOG_WARN("failed to get addr array", KR(ret), K(new_member_list));
   } else if (OB_FAIL(do_get_majority_readable_scn_V2_(addr_list,
-     rootserver::majority(paxos_replica_num), palf_stat.config_version_, readable_scn))) {
+     rootserver::majority(paxos_replica_num), config_version, readable_scn))) {
     LOG_WARN("failed to get majority readable scn", KR(ret), K(addr_list),
-    K(paxos_replica_num), K(palf_stat));
+    K(paxos_replica_num), K(config_version));
   } else {
     SpinRLockGuard guard(lock_);
     if (readable_scn >= readable_scn_upper_limit_) {
       is_valid = true;
       LOG_INFO("can change member list", K(new_member_list), K(paxos_replica_num),
          "new readable_scn", readable_scn, "current readable_scn", readable_scn_upper_limit_,
-         "ls_id", ls_->get_ls_id(), K(palf_stat));
+         "ls_id", ls_->get_ls_id());
     } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000L)) {
       LOG_INFO("can not change member list",  K(new_member_list), K(paxos_replica_num),
           K(readable_scn), K(readable_scn_upper_limit_),
-          "ls_id", ls_->get_ls_id(), K(palf_stat));
+          "ls_id", ls_->get_ls_id());
     }
   }
   return ret;

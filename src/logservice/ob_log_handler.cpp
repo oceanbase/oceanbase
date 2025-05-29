@@ -872,9 +872,14 @@ int ObLogHandler::change_replica_num(const common::ObMemberList &member_list,
                                      const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(member_list), K(curr_replica_num), K(new_replica_num),
+        K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!member_list.is_valid() ||
@@ -968,9 +973,14 @@ int ObLogHandler::add_member(const common::ObMember &added_member,
                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_member), K(new_replica_num),
+        K(config_version), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_member.is_valid() ||
@@ -1004,9 +1014,13 @@ int ObLogHandler::remove_member(const common::ObMember &removed_member,
                                 const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(removed_member), K(new_replica_num), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!removed_member.is_valid() ||
@@ -1039,9 +1053,14 @@ int ObLogHandler::replace_member(const common::ObMember &added_member,
                                  const palf::LogConfigVersion &config_version,
                                  const int64_t timeout_us) {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_member), K(removed_member),
+        K(config_version), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_member.is_valid() ||
@@ -1068,9 +1087,14 @@ int ObLogHandler::replace_member_with_learner(const common::ObMember &added_memb
                                               const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_member), K(removed_member),
+        K(config_version), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_member.is_valid() ||
@@ -1104,9 +1128,13 @@ int ObLogHandler::add_learner(const common::ObMember &added_learner,
                               const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_learner), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_learner.is_valid() ||
@@ -1135,9 +1163,13 @@ int ObLogHandler::remove_learner(const common::ObMember &removed_learner,
                                  const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(removed_learner), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!removed_learner.is_valid() ||
@@ -1162,9 +1194,13 @@ int ObLogHandler::replace_learners(const common::ObMemberList &added_learners,
                                    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_learners), K(removed_learners), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_learners.is_valid() ||
@@ -1195,9 +1231,14 @@ int ObLogHandler::switch_learner_to_acceptor(const common::ObMember &learner,
                                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(learner), K(new_replica_num),
+        K(config_version), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!learner.is_valid() ||
@@ -1229,9 +1270,13 @@ int ObLogHandler::switch_acceptor_to_learner(const common::ObMember &member,
                                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(member), K(new_replica_num), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!member.is_valid() ||
@@ -1315,9 +1360,13 @@ int ObLogHandler::add_arbitration_member(const common::ObMember &added_member,
   int ret = OB_SUCCESS;
   const int64_t begin_ts = ObTimeUtility::current_time();
   int64_t current_timeout_us = timeout_us;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(added_member), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!added_member.is_valid() || timeout_us <= 0) {
@@ -1355,9 +1404,13 @@ int ObLogHandler::remove_arbitration_member(const common::ObMember &removed_memb
   int ret = OB_SUCCESS;
   int64_t current_timeout_us = timeout_us;
   const int64_t begin_ts = ObTimeUtility::current_time();
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(removed_member), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!removed_member.is_valid() || timeout_us <= 0) {
@@ -1435,9 +1488,13 @@ int ObLogHandler::upgrade_learner_to_acceptor(const palf::LogMemberAckInfoList &
 int ObLogHandler::try_lock_config_change(const int64_t lock_owner, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(lock_owner), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER == lock_owner || timeout_us <= 0) {
@@ -1459,9 +1516,13 @@ int ObLogHandler::unlock_config_change(const int64_t lock_owner, const int64_t t
   int ret = OB_SUCCESS;
   // Note: rlock is safe, the deps_lock_ is used to protect states of ObLogHandler
   // such as is_in_stop_state_.
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(lock_owner), K(timeout_us));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER == lock_owner || timeout_us <= 0) {
@@ -1482,9 +1543,13 @@ int ObLogHandler::get_config_change_lock_stat(int64_t &lock_owner, bool &is_lock
 {
   int ret = OB_SUCCESS;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
-  RLockGuard deps_guard(deps_lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + CONFIG_CHANGE_TIMEOUT / 2;
+  RLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(lock_owner), K(is_locked));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
@@ -1559,8 +1624,8 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
       if (OB_FAIL(lc_cb_->get_leader(id_, leader))) {
         need_renew_leader = true;
         ret = OB_SUCCESS;
-      } else if (leader == self_ && FALSE_IT(handle_config_change_cmd(req, resp))) {
-        CLOG_LOG(WARN, "failed to handle_config_change_cmd", KR(ret), K_(id), K(req));
+      } else if (leader == self_ && FALSE_IT(handle_config_change_cmd_(req, resp))) {
+        CLOG_LOG(WARN, "failed to handle_config_change_cmd_", KR(ret), K_(id), K(req));
       } else if (leader != self_  && OB_FAIL(rpc_proxy_->to(leader).timeout(conn_timeout_us).trace_time(true).
                          max_process_handler_time(timeout_us).by(MTL_ID()).send_log_config_change_cmd(req, resp))) {
         // if RPC fails, try again
@@ -1596,7 +1661,7 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
           need_renew_leader = true;
         }
       } else {
-        CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), KPC(this), K(req), K(leader));
+        CLOG_LOG(WARN, "handle_config_change_cmd_ failed", KR(ret), KPC(this), K(req), K(leader));
       }
       if (need_renew_leader &&
           common::ObTimeUtility::current_time() - last_renew_leader_time_us > RENEW_LEADER_INTERVAL_US) {
@@ -1606,6 +1671,28 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
       }
     }
   }
+  return ret;
+}
+
+int ObLogHandler::handle_config_change_cmd_rpc(
+    const LogConfigChangeCmd &req,
+    LogConfigChangeCmdResp &resp)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_us = req.timeout_us_;
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us;
+  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "get_lock failed", KR(ret), K_(id), K(req), K(timeout_us));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(handle_config_change_cmd_(req, resp))) {
+    CLOG_LOG(WARN, "handle_config_change_cmd_ failed", KR(ret), K(req), K(resp));
+  }
+
   return ret;
 }
 
@@ -2124,7 +2211,7 @@ int ObLogHandler::is_replay_fatal_error(bool &has_fatal_error)
   return ret;
 }
 
-int ObLogHandler::handle_config_change_cmd(
+int ObLogHandler::handle_config_change_cmd_(
     const LogConfigChangeCmd &req,
     LogConfigChangeCmdResp &resp)
 {
@@ -2132,7 +2219,6 @@ int ObLogHandler::handle_config_change_cmd(
   ObLogReporterAdapter *reporter;
   logservice::ObLogService *log_service = NULL;
   logservice::ObReconfigCheckerAdapter reconfig_checker;
-  RLockGuard guard(lock_);
 
   if (IS_NOT_INIT || OB_ISNULL(palf_handle_)) {
     ret = OB_NOT_INIT;
