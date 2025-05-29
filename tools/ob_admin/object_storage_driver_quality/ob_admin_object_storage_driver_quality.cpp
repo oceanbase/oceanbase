@@ -274,6 +274,40 @@ int OSDQTimeMap::log_entry(const int64_t cost_time_us)
   return ret;
 }
 
+int OSDQTimeMap::get_latency_quantile_vals(ObIArray<int64_t> &latency_quantile_vals) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> latency_quantile_counts;
+
+  const int64_t latency_quantile_cnt = sizeof(LATENCY_QUANTILES) / sizeof(double);
+  for (int i = 0; i < latency_quantile_cnt && OB_SUCC(ret); ++i) {
+    int64_t latency_quantile_val = static_cast<int64_t>(total_entry_ * LATENCY_QUANTILES[i] + 0.5);
+    latency_quantile_val = max(1, latency_quantile_val);
+    latency_quantile_val = min(total_entry_, latency_quantile_val);
+    if (OB_FAIL(latency_quantile_counts.push_back(latency_quantile_val))) {
+      OB_LOG(WARN, "failed push back latency_quantile_val", KR(ret), K(latency_quantile_val));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int64_t current_cnt = 0;
+    int64_t boundary_index = 0;
+    std::map<int64_t, int64_t>::const_iterator it = time_map_.begin();
+    while (boundary_index < latency_quantile_cnt && it != time_map_.end() && OB_SUCC(ret)) {
+      current_cnt += it->second;
+      while (boundary_index < latency_quantile_cnt && current_cnt >= latency_quantile_counts[boundary_index] && OB_SUCC(ret)) {
+        if (OB_FAIL(latency_quantile_vals.push_back(it->first))) {
+          OB_LOG(WARN, "failed push back latency_quantile_val", KR(ret), K(it->first));
+        }
+        boundary_index++;
+      }
+      ++it;
+    }
+  }
+
+  return ret;
+}
+
 int OSDQTimeMap::summary(const char *map_name_str, OSDQLogEntry &log) const
 {
   int ret = OB_SUCCESS;
@@ -284,45 +318,26 @@ int OSDQTimeMap::summary(const char *map_name_str, OSDQLogEntry &log) const
   if (total_entry_ <= 0) {
     log.log_entry(std::string(map_name) + "      0");
   } else {
-    const int64_t latency_quantile_boundaries[] =  {
-      1,
-      static_cast<int64_t>(total_entry_ * 0.5 + 0.5),
-      static_cast<int64_t>(total_entry_ * 0.9 + 0.5),
-      static_cast<int64_t>(total_entry_ * 0.95 + 0.5),
-      static_cast<int64_t>(total_entry_ * 0.99 + 0.5),
-      total_entry_
-    };
-    const int64_t latency_quantile_cnt = sizeof(latency_quantile_boundaries) / sizeof(latency_quantile_boundaries[0]);
-    assert(latency_quantile_cnt == sizeof(latency_quantile_boundaries) / sizeof(latency_quantile_boundaries[0]));
-    int64_t latency_quantile_vals[latency_quantile_cnt] = {0};
-    int64_t boundary_index = 0;
-    int64_t current_cnt = 0;
+    ObArray<int64_t> latency_quantile_vals;
+    if (OB_FAIL(get_latency_quantile_vals(latency_quantile_vals))) {
+      OB_LOG(WARN, "failed get latency_quantile_vals", KR(ret));
+    } else {
+      char buf[2048] = {0};
+      int64_t pos = 0;
 
-    std::map<int64_t, int64_t>::const_iterator it = time_map_.begin();
-    while (boundary_index < latency_quantile_cnt && it != time_map_.end()) {
-      current_cnt += it->second;
-      while (boundary_index < latency_quantile_cnt && current_cnt >= latency_quantile_boundaries[boundary_index]) {
-        latency_quantile_vals[boundary_index] = it->first;
-        boundary_index++;
+      if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%s%7ld ", map_name, total_entry_))) {
+        OB_LOG(WARN, "failed set log str", KR(ret));
       }
-      ++it;
-    }
 
-    char buf[2048] = {0};
-    int64_t pos = 0;
-
-    if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%s%7ld ", map_name, total_entry_))) {
-      OB_LOG(WARN, "failed set log str", KR(ret));
-    }
-
-    for (int i = 0; i < latency_quantile_cnt && OB_SUCC(ret); ++i) {
-      if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%7ld ",
-                                  latency_quantile_vals[i]))) {
-        OB_LOG(WARN, "failed set log str", KR(ret), K(i), K(latency_quantile_vals[i]));
+      for (int i = 0; i < latency_quantile_vals.count() && OB_SUCC(ret); ++i) {
+        if (FAILEDx(databuff_printf(buf, sizeof(buf), pos, "%7ld ",
+                                    latency_quantile_vals[i]))) {
+          OB_LOG(WARN, "failed set log str", KR(ret), K(i), K(latency_quantile_vals[i]));
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      log.log_entry(std::string(buf));
+      if (OB_SUCC(ret)) {
+        log.log_entry(std::string(buf));
+      }
     }
   }
   return ret;
@@ -684,8 +699,8 @@ int OSDQMetric::get_req_latency_map_(OSDQLogEntry &log)
   int64_t cur_pos = 0;
   for (int i = 0; i < latency_maps_num && OB_SUCC(ret); i++) {
     pos = 0;
-    if (FAILEDx(databuff_printf(time_map_str, sizeof(time_map_str), pos, "%s ", osdq_op_type_names[i]))) {
-      OB_LOG(WARN, "failed to printf latency map str", KR(ret), K(osdq_op_type_names[i]));
+    if (FAILEDx(databuff_printf(time_map_str, sizeof(time_map_str), pos, "%s ", OSDQ_OP_TYPE_NAMES[i]))) {
+      OB_LOG(WARN, "failed to printf latency map str", KR(ret), K(OSDQ_OP_TYPE_NAMES[i]));
     } else {
       for (int type = 0; type < ObjectSizeType::MAX_OJBECT_SIZE_TYPE && OB_SUCC(ret); type++) {
         cur_pos = pos;
@@ -860,6 +875,76 @@ int OSDQMetric::get_memory_info_(OSDQLogEntry &log, const bool is_final)
   return ret;
 }
 
+int OSDQMetric::final_dump_()
+{
+  int ret = OB_SUCCESS;
+  std::ofstream ofs;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "metric not init", KR(ret), K(is_inited_));
+  } else if (FALSE_IT(ofs.open(metric_final_dump_file_name, std::ios::app))) {
+  } else if (OB_UNLIKELY(!ofs.is_open())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to open file", KR(ret), K(metric_final_dump_file_name));
+  } else {
+    ofs << "[request statistical info]" << "\n";
+    ofs << "total_operation_num = " << last_req_statistical_info_.total_operation_num_ << "\n";
+    ofs << "total_queued_num = " << last_req_statistical_info_.total_queued_num_ << "\n";
+    ofs << "total_throughput_mb = " << last_req_statistical_info_.total_throughput_mb_ << "\n";
+    ofs << "average_qps = " << last_req_statistical_info_.average_qps_ << "\n";
+    ofs << "average_bw_mb = " << last_req_statistical_info_.average_bw_mb_ << "\n";
+    ofs << "real_qps = " << last_req_statistical_info_.real_qps_ << "\n";
+    ofs << "real_bw_mb = " << last_req_statistical_info_.real_bw_mb_ << "\n";
+    ofs << "[cpu info]" << "\n";
+    ofs << "cpu_usage_for_100MB_bw = " << to_string_with_precision(last_cpu_info_.cpu_usage_for_100MB_bw_, PRECISION) << "\n";
+    ofs << "total_cpu_usage = " << last_cpu_info_.total_cpu_usage_ << "\n";
+    ofs << "total_user_time = " << last_cpu_info_.total_user_time_ << "\n";
+    ofs << "total_system_time = " << last_cpu_info_.total_system_time_ << "\n";
+    ofs << "real_cpu_usage = " << last_cpu_info_.real_cpu_usage_ << "\n";
+    ofs << "[memory info]" << "\n";
+    ofs << "start_vm_size_kb = " << last_mem_info_.start_vm_size_kb_ << "\n";
+    ofs << "start_vm_rss_kb = " << last_mem_info_.start_vm_rss_kb_ << "\n";
+    ofs << "object_storage_hold_kb = " << last_mem_info_.object_storage_hold_kb_ << "\n";
+    ofs << "object_storage_used_kb = " << last_mem_info_.object_storage_used_kb_ << "\n";
+    ofs << "total_hold_kb = " << last_mem_info_.total_hold_kb_ << "\n";
+    ofs << "total_used_kb = " << last_mem_info_.total_used_kb_ << "\n";
+    ofs << "vm_peak_kb = " << last_mem_info_.vm_peak_kb_ << "\n";
+    ofs << "vm_size_kb = " << last_mem_info_.vm_size_kb_ << "\n";
+    ofs << "vm_hwm_kb = " << last_mem_info_.vm_hwm_kb_ << "\n";
+    ofs << "vm_rss_kb = " << last_mem_info_.vm_rss_kb_ << "\n";
+    ofs << "ob_vslice_alloc_used_memory_kb = " << last_mem_info_.ob_vslice_alloc_used_memory_kb_ << "\n";
+    ofs << "ob_vslice_alloc_allocator_cnt = " << last_mem_info_.ob_vslice_alloc_allocator_cnt_ << "\n";
+
+    ofs << "[latency info]" << "\n";
+    ofs << "latency_quantile = ";
+    int64_t latency_quantile_cnt = sizeof(LATENCY_QUANTILES_TITLE) / sizeof(char *);
+    for (int i = 0; i < latency_quantile_cnt; i++) {
+      ofs << LATENCY_QUANTILES_TITLE[i] << ",";
+    }
+    ofs << "\n";
+    static const char *object_size_type_time_map_str[] = {
+      "small", // SMALL
+      "normal", // NORMAL
+      "large"  // LARGE
+    };
+    for (int i = 0; i < MAX_OPERATE_TYPE && OB_SUCC(ret); i++) {
+      for (int type = 0; type < ObjectSizeType::MAX_OJBECT_SIZE_TYPE && OB_SUCC(ret); type++) {
+        ofs << OSDQ_OP_TYPE_NAMES_FOR_FINAL_DUMP[i] << "_" << object_size_type_time_map_str[type] << " = ";
+        ObArray<int64_t> latency;
+        if (OB_FAIL(latency_maps_[i][type].get_latency_quantile_vals(latency))) {
+          OB_LOG(WARN, "failed to get latency", KR(ret), K(i), K(type));
+        } else {
+          for (int j = 0; j < latency.count() && OB_SUCC(ret); j++) {
+            ofs << latency[j] << ",";
+          }
+          ofs << "\n";
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int OSDQMetric::summary(const bool is_final)
 {
   int ret = OB_SUCCESS;
@@ -885,6 +970,12 @@ int OSDQMetric::summary(const bool is_final)
   } else {
     log.print();
     last_real_time_us_ = ObTimeUtility::current_time();
+  }
+
+  if (is_final) {
+    if (FAILEDx(final_dump_())) {
+      OB_LOG(WARN, "failed to final dump", KR(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -985,7 +1076,8 @@ OSDQParameters::OSDQParameters()
     resource_limited_type_(-1),
     limit_run_time_s_(DEFAULT_LIMIT_RUN_TIME_S),
     limit_memory_mb_(DEFAULT_LIMIT_MEMORY_MB),
-    limit_cpu_(DEFAULT_LIMIT_CPU)
+    limit_cpu_(DEFAULT_LIMIT_CPU),
+    use_obdal_(false)
 {
 }
 
@@ -1006,6 +1098,8 @@ int ObAdminObjectStorageDriverQualityExecutor::execute(int argc, char *argv[])
     OB_LOG(WARN, "failed set environment", KR(ret));
   } else if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", KR(ret), K(argc), K(argv));
+  } else if (OB_FAIL(param_dump())) {
+    OB_LOG(WARN, "failed to dump args", KR(ret));
   } else if (OB_FAIL(metric_.init())) {
     OB_LOG(WARN, "failed init metric", KR(ret));
   } else if (OB_ISNULL(scene = create_scene_())) {
@@ -1037,6 +1131,30 @@ int ObAdminObjectStorageDriverQualityExecutor::execute(int argc, char *argv[])
     if (OB_FAIL(metric_.summary(true/*is_final*/))) {
       OB_LOG(WARN, "failed to execute the last summary", KR(ret));
     }
+  }
+  return ret;
+}
+
+int ObAdminObjectStorageDriverQualityExecutor::param_dump()
+{
+  int ret = OB_SUCCESS;
+  std::ofstream ofs;
+  ofs.open(metric_final_dump_file_name, std::ios::out);
+  if (OB_UNLIKELY(!ofs.is_open())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to open file", K(ret), K(metric_final_dump_file_name));
+  } else {
+    ofs << "[parameter]" << "\n";
+    ofs << "base_path = " << params_.base_path_ << "\n";
+    ofs << "interval_s = " << params_.interval_s_ << "\n";
+    ofs << "limit_cpu = " << params_.limit_cpu_ << "\n";
+    ofs << "limit_memory_mb = " << params_.limit_memory_mb_ << "\n";
+    ofs << "limit_run_time_s = " << params_.limit_run_time_s_<< "\n";
+    ofs << "resource_limited_type = " << params_.resource_limited_type_ << "\n";
+    ofs << "run_time_s = " << params_.run_time_s_ << "\n";
+    ofs << "scene_type = " << params_.scene_type_ << "\n";
+    ofs << "thread_cnt = " << params_.thread_cnt_ << "\n";
+    ofs << "use_obdal = " << params_.use_obdal_ << "\n";
   }
   return ret;
 }
@@ -1117,6 +1235,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
       case 'a': {
         // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
         cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+        params_.use_obdal_ = true;
         break;
       }
       case '0': {
@@ -1149,7 +1268,6 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
         exit(1);
       }
     }
-
   }
   return ret;
 }

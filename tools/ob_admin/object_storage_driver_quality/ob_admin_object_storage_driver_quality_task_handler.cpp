@@ -641,9 +641,9 @@ int OSDQTaskHandler::handle_write_task(const OSDQTask *task)
       if (OB_UNLIKELY(!check_parallel_write_result_(task->op_type_, ret1, task->parallel_op_type_, ret2))) {
        OSDQLogEntry log;
        log.init("PARALLEL WRITE FAILED", RED_COLOR_PREFIX);
-       log.log_entry(std::string(osdq_op_type_names[task->op_type_])
+       log.log_entry(std::string(OSDQ_OP_TYPE_NAMES[task->op_type_])
            + ": " + std::to_string(ret1) + " " + std::string(ob_error_name(ret1)));
-       log.log_entry(std::string(osdq_op_type_names[task->parallel_op_type_])
+       log.log_entry(std::string(OSDQ_OP_TYPE_NAMES[task->parallel_op_type_])
            + ": " + std::to_string(ret2) + " " + std::string(ob_error_name(ret2)));
        log.print();
       } else {
