@@ -292,7 +292,11 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
       /*do nothing*/
     }
     if (OB_SUCC(ret)) {
+      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent->get_in_slave_mapping_type());
       if (parent->is_thread_inited()) {
+      } else if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+            coord_info_.pruning_table_location_, ctx, *parent))) {
+        LOG_WARN("alloc distribution of reference child failed", K(ret));
       } else if (parent->has_temp_table_scan()) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_temp_child_distribution(ctx, *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
@@ -307,9 +311,8 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
         }
         LOG_TRACE("alloc_by_data_distribution", K(parent));
-      } else if (IS_HASH_SLAVE_MAPPING(parent->get_in_slave_mapping_type())) {
-        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-                coord_info_.pruning_table_location_, ctx, *parent))) {
+      } else if (has_reference_child) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(*parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
       } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
@@ -1430,7 +1433,11 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     if (!parent.is_scheduled()) {
-      if (parent.has_temp_table_scan()) {
+      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent.get_in_slave_mapping_type());
+      if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+            coord_info_.pruning_table_location_, exec_ctx, parent))) {
+        LOG_WARN("alloc distribution of reference child failed", K(ret));
+      } else if (parent.has_temp_table_scan()) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_temp_child_distribution(exec_ctx,
                                                                          parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
@@ -1472,11 +1479,8 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
           }
           LOG_TRACE("alloc_by_local_distribution", K(parent));
-        } else if (IS_HASH_SLAVE_MAPPING(parent.get_in_slave_mapping_type())) {
-          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-                  coord_info_.pruning_table_location_,
-                  exec_ctx,
-                  parent))) {
+        } else if (has_reference_child) {
+          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent, px_node_pool_))) {

@@ -1109,15 +1109,46 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
  *
  */
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-    const ObIArray<ObTableLocation> *table_locations,
-    ObExecContext &exec_ctx,
     ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) &&
-                      nullptr == reference_child &&
-                      i < parent.get_child_count(); ++i) {
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+    LOG_WARN("failed to alloc by child distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+                                          const ObIArray<ObTableLocation> *table_locations,
+                                          ObExecContext &exec_ctx,
+                                          ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  ObDfo *reference_child = nullptr;
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
+    LOG_WARN("failed to alloc by data distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_child)
+{
+  int ret = OB_SUCCESS;
+  reference_child = nullptr;
+  for (int64_t i = 0;
+       OB_SUCC(ret) && nullptr == reference_child && i < parent.get_child_count();
+       ++i) {
     ObDfo *candi_child = nullptr;
     if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
       LOG_WARN("failed to get dfo", K(ret));
@@ -1128,15 +1159,6 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
                candi_child->is_out_slave_mapping()) {
       reference_child = candi_child;
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(reference_child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null child", K(ret));
-  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
-    LOG_WARN("failed to alloc by data", K(ret));
-  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
-    LOG_WARN("failed to alloc by child distribution", K(ret));
   }
   return ret;
 }
@@ -3530,21 +3552,8 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
     common::ObSEArray<ObPxSqcMeta *, 8> sqcs;
     ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
     ObPxPartChMapArray &map = child.get_part_ch_map();
-    for (int64_t i = 0; OB_SUCC(ret) &&
-                        nullptr == reference_child &&
-                        i < parent.get_child_count(); ++i) {
-      ObDfo *candi_child = nullptr;
-      if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
-        LOG_WARN("failed to get dfo", K(ret));
-      } else if (OB_ISNULL(candi_child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null child", K(ret));
-      } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
-                 candi_child->is_out_slave_mapping()) {
-        reference_child = candi_child;
-      }
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ObPXServerAddrUtil::find_reference_child(parent, reference_child))) {
+      LOG_WARN("find reference child", K(ret));
     } else if (OB_ISNULL(reference_child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child", K(ret));
