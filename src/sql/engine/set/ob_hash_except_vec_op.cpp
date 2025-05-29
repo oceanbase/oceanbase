@@ -34,7 +34,15 @@ ObHashExceptVecOp::ObHashExceptVecOp(ObExecContext &exec_ctx, const ObOpSpec &sp
 
 int ObHashExceptVecOp::inner_open()
 {
-  return ObHashSetVecOp::inner_open();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHashSetVecOp::inner_open())) {
+    LOG_WARN("failed to open in ObHashExceptVecOp", K(ret));
+  } else if (OB_ISNULL(store_rows_ = static_cast<const ObCompactRow **> (ctx_.get_allocator().
+        alloc(MY_SPEC.max_batch_size_ * sizeof(ObCompactRow *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc store rows", K(ret));
+  }
+  return ret;
 }
 
 int ObHashExceptVecOp::inner_close()
@@ -136,7 +144,6 @@ int ObHashExceptVecOp::get_next_batch_from_hashtable(const int64_t batch_size)
   int ret = OB_SUCCESS;
   bool got_batch = false;
   int64_t read_rows = 0;
-  const ObCompactRow *store_rows[batch_size];
   while (OB_SUCC(ret) && !got_batch) {
     if (!get_row_from_hash_table_) {
       if (OB_FAIL(hp_infras_.finish_insert_row())) {
@@ -165,7 +172,7 @@ int ObHashExceptVecOp::get_next_batch_from_hashtable(const int64_t batch_size)
     } else if (OB_FAIL(hp_infras_.get_next_hash_table_batch(MY_SPEC.set_exprs_,
                                                             batch_size,
                                                             read_rows,
-                                                            &store_rows[0]))) {
+                                                            const_cast<const ObCompactRow **>(store_rows_)))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next hash table batch", K(ret));
       } else {
@@ -175,7 +182,7 @@ int ObHashExceptVecOp::get_next_batch_from_hashtable(const int64_t batch_size)
     } else {
       brs_.size_ = read_rows;
       for (int64_t i = 0; i < read_rows; ++i) {
-        const ObHashPartItem *sr = static_cast<const ObHashPartItem *>(store_rows[i]);
+        const ObHashPartItem *sr = static_cast<const ObHashPartItem *>(store_rows_[i]);
         if (sr->is_match(hp_infras_.get_hash_store_row_meta())) {
           brs_.skip_->set(i);
         }
