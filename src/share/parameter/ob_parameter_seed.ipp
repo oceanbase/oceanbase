@@ -1164,6 +1164,11 @@ DEF_BOOL(_enable_adaptive_merge_schedule, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's adaptive merge scheduling is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_compaction_prewarm_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "specifies the fixed percentage data to prewarm in compaction"
+        "Range: [0, 100] in integer"
+        "0 means not use this method, value > 0 means the corresponding percentage of data will be prewarmed",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(sys_bkgd_migration_retry_num, OB_CLUSTER_PARAMETER, "3", "[3,100]",
         "retry num limit during migration. Range: [3, 100] in integer",

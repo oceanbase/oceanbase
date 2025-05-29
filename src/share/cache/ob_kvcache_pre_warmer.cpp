@@ -20,8 +20,9 @@ namespace common
 /*
  * -------------------------------------------- ObDataBlockCachePreWarmer --------------------------------------------
  */
-ObDataBlockCachePreWarmer::ObDataBlockCachePreWarmer()
+ObDataBlockCachePreWarmer::ObDataBlockCachePreWarmer(const int64_t fixed_percentage)
   : share::ObIPreWarmer(),
+    fixed_percentage_(fixed_percentage),
     base_percentage_(0),
     cache_(nullptr),
     rest_size_(0),
@@ -42,6 +43,7 @@ ObDataBlockCachePreWarmer::~ObDataBlockCachePreWarmer()
 void ObDataBlockCachePreWarmer::reset()
 {
   cache_ = nullptr;
+  fixed_percentage_ = 0;
   base_percentage_ = 0;
   rest_size_ = 0;
   warm_size_percentage_ = 100;
@@ -79,6 +81,7 @@ int ObDataBlockCachePreWarmer::reserve(const blocksstable::ObMicroBlockDesc &mic
 {
   int ret = OB_SUCCESS;
   reserve_succ_flag = false;
+  bool warm_block = false;
   int64_t kvpair_size = 0;
   if (IS_NOT_INIT) {
     // do nothing, and do not return errno
@@ -88,10 +91,11 @@ int ObDataBlockCachePreWarmer::reserve(const blocksstable::ObMicroBlockDesc &mic
   } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || level < 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(level));
+  } else if (FALSE_IT(warm_block = fixed_percentage_ > 0 ? warm_block_for_percentage() : warm_block_for_memory(level))) {
+  } else if (!warm_block) {
+    ret = OB_BUF_NOT_ENOUGH;
   } else {
-    if (level < TOP_LEVEL && (rest_size_ <= 0 || !warm_block(level))) {
-      ret = OB_BUF_NOT_ENOUGH;
-    } else if (FALSE_IT(reuse())) {
+    if (FALSE_IT(reuse())) {
     } else if (OB_FAIL(do_reserve_kvpair(micro_block_desc, kvpair_size))) {
       COMMON_LOG(WARN, "Fail to reserve block cache value", K(ret), K(micro_block_desc));
     } else {
@@ -151,18 +155,26 @@ void ObDataBlockCachePreWarmer::calculate_base_percentage(const int64_t free_mem
   base_percentage_ = MIN(free_memory * 200 / lib::get_tenant_memory_limit(MTL_ID()), 50);
 }
 
-bool ObDataBlockCachePreWarmer::warm_block(const int64_t level)
+bool ObDataBlockCachePreWarmer::warm_block_for_memory(const int64_t level)
 {
-  bool bret = true;
-
-  int64_t threshold = MIN(base_percentage_ + 5 * level, 100);
-  int64_t random_value = ObTimeUtility::fast_current_time() % 100;
-  if (100 > threshold) {
-    bret = random_value <= threshold;
+  bool bret = level >= TOP_LEVEL;
+  if (!bret && rest_size_ > 0) {
+    int64_t threshold = MIN(base_percentage_ + 5 * level, 100);
+    int64_t random_value = ObTimeUtility::fast_current_time() % 100;
+    if (100 > threshold) {
+      bret = random_value <= threshold;
+    }
+    COMMON_LOG(DEBUG, "block cache pre warmer filter", K(bret), K(base_percentage_), K(level), K(update_step_),
+                                                       K(random_value), K(threshold));
   }
-  COMMON_LOG(DEBUG, "block cache pre warmer filter", K(bret), K(base_percentage_), K(level), K(update_step_),
-                                                     K(random_value), K(threshold));
+  return bret;
+}
 
+bool ObDataBlockCachePreWarmer::warm_block_for_percentage()
+{
+  const int64_t random_value = ObRandom::rand(0, 99);
+  const bool bret = random_value < fixed_percentage_;
+  COMMON_LOG(DEBUG, "warm block for percentage", K(bret), K(random_value), K_(fixed_percentage));
   return bret;
 }
 
@@ -206,8 +218,8 @@ int ObDataBlockCachePreWarmer::do_put_kvpair(
  * -------------------------------------------- ObIndexBlockCachePreWarmer --------------------------------------------
  */
 
-ObIndexBlockCachePreWarmer::ObIndexBlockCachePreWarmer()
-  : ObDataBlockCachePreWarmer(),
+ObIndexBlockCachePreWarmer::ObIndexBlockCachePreWarmer(const int64_t fixed_percentage)
+  : ObDataBlockCachePreWarmer(fixed_percentage),
     allocator_("IdxBlkPreWarmer", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID()),
     idx_transformer_(),
     key_(),

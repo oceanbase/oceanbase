@@ -341,6 +341,7 @@ _bloom_filter_ratio
 _cache_wash_interval
 _checkpoint_diagnose_preservation_count
 _chunk_row_store_mem_limit
+_compaction_prewarm_percentage
 _complex_cbqt_table_num
 _ctx_memory_limit
 _datafile_usage_lower_bound_percentage
