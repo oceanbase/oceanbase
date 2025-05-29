@@ -290,6 +290,9 @@ STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_MISS, "backup meta cache miss", ObStatClass
 STAT_EVENT_ADD_DEF(TRUNCATE_INFO_CACHE_HIT, "truncate info cache hit", ObStatClassIds::CACHE, 50075, true, true, true)
 STAT_EVENT_ADD_DEF(TRUNCATE_INFO_CACHE_MISS, "truncate info cache miss", ObStatClassIds::CACHE, 50076, true, true, true)
 
+STAT_EVENT_ADD_DEF(EXDATA_PAGE_CACHE_MISS, "external data page cache miss", ObStatClassIds::CACHE, 50077, false, true, true)
+STAT_EVENT_ADD_DEF(EXDATA_PAGE_CACHE_HIT, "external data page cache hit", ObStatClassIds::CACHE, 50078, false, true, true)
+
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES", true, true, false)
