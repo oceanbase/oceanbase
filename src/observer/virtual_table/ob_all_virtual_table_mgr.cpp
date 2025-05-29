@@ -328,6 +328,12 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(v);
           break;
         }
+        // FIXME: the value of SS_TABLET_VERSION is invalid
+        case SS_TABLET_VERSION: {
+          uint64_t v = share::SCN::min_scn().get_val_for_inner_table_field();
+          cur_row_.cells_[i].set_uint64(v);
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

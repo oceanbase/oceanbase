@@ -11359,6 +11359,7 @@ def_table_schema(
       ('data_checksum', 'int'),
       ('table_flag', 'int'),
       ('rec_scn', 'int'),
+      ('ss_tablet_version', 'uint'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
