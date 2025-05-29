@@ -482,7 +482,10 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
       LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(new_tablet));
     } else {
       ObUpdateTabletLog slog(tablet_key.ls_id_, tablet_key.tablet_id_, update_pointer_param, ls_epoch);
-      if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
+      if (OB_UNLIKELY(!slog.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid slog entry", K(ret), K(slog), K(tablet_key), K(ls_epoch), K(update_pointer_param));
+      } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
         LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
       } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
         LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
@@ -558,7 +561,10 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
     LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(tablet));
   } else {
     ObUpdateTabletLog slog(tablet_key.ls_id_, tablet_key.tablet_id_, update_pointer_param, ls_epoch);
-    if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
+    if (OB_UNLIKELY(!slog.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid slog entry", K(ret), K(slog), K(tablet_key), K(ls_epoch), K(update_pointer_param));
+    } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
       LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
     } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
       LOG_WARN("fail to write update tablet slog into ckpt", K(ret));

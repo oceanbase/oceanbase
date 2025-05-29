@@ -282,6 +282,15 @@ DEF_TO_STRING(ObDeleteTabletLog)
   return pos;
 }
 
+ObGCTabletLog::ObGCTabletLog()
+  : ls_id_(),
+    tablet_id_(),
+    ls_epoch_(0),
+    tablet_meta_version_(0),
+    status_(ObPendingFreeTabletStatus::MAX),
+    tablet_transfer_seq_(0)
+{}
+
 ObGCTabletLog::ObGCTabletLog(
     const share::ObLSID &ls_id,
     const int64_t ls_epoch,
@@ -350,6 +359,15 @@ DEF_TO_STRING(ObGCTabletLog)
   return pos;
 }
 
+ObUpdateTabletLog::ObUpdateTabletLog()
+  : ls_id_(),
+    tablet_id_(),
+    disk_addr_(),
+    ls_epoch_(0),
+    tablet_attr_(),
+    accelerate_info_()
+{}
+
 ObUpdateTabletLog::ObUpdateTabletLog(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
@@ -390,6 +408,14 @@ DEF_TO_STRING(ObUpdateTabletLog)
   J_OBJ_END();
   return pos;
 }
+
+ObEmptyShellTabletLog::ObEmptyShellTabletLog()
+  : version_(EMPTY_SHELL_SLOG_VERSION),
+    ls_id_(),
+    tablet_id_(),
+    tablet_(nullptr),
+    ls_epoch_(0)
+{}
 
 ObEmptyShellTabletLog::ObEmptyShellTabletLog(
     const ObLSID &ls_id,

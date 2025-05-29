@@ -406,7 +406,10 @@ int ObTenantStorageMetaService::update_tablet(
     log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
         ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
     log_param.data_ = &slog_entry;
-    if (OB_FAIL(slogger_.write_log(log_param))) {
+    if (OB_UNLIKELY(!slog_entry.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), K(ls_id), K(tablet_id), K(param));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
       LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
     } else {
       do {
@@ -494,7 +497,10 @@ int ObTenantStorageMetaService::write_empty_shell_tablet(
     log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
         ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET);
     log_param.data_ = &slog_entry;
-    if (OB_FAIL(slogger_.write_log(log_param))) {
+    if (OB_UNLIKELY(!slog_entry.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), KPC(tablet));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
       LOG_WARN("fail to write slog for empty shell tablet", K(ret), K(log_param));
     } else if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
       LOG_WARN("fail to report slog", K(ret), K(tablet_key));

@@ -241,7 +241,7 @@ public:
 class ObGCTabletLog : public ObIBaseStorageLogEntry
 {
 public:
-  ObGCTabletLog() = default;
+  ObGCTabletLog();
   ObGCTabletLog(
       const share::ObLSID &ls_id,
       const int64_t ls_epoch,
@@ -271,7 +271,7 @@ public:
 struct ObUpdateTabletLog : public ObIBaseStorageLogEntry
 {
 public:
-  ObUpdateTabletLog() = default;
+  ObUpdateTabletLog();
   ObUpdateTabletLog(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -297,7 +297,7 @@ public:
   const int64_t EMPTY_SHELL_SLOG_VERSION_2 = 2;
   const int64_t EMPTY_SHELL_SLOG_VERSION = EMPTY_SHELL_SLOG_VERSION_2;
 public:
-  ObEmptyShellTabletLog() = default;
+  ObEmptyShellTabletLog();
   ObEmptyShellTabletLog(
       const ObLSID &ls_id_,
       const ObTabletID &tablet_id,
