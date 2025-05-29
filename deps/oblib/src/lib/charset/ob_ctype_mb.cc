@@ -528,6 +528,12 @@ int __attribute__ ((noinline))  ob_strnncollsp_mb_bin_help(
   return 0;
 }
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define zero_count(number) __builtin_ctz(number)
+#else
+#define zero_count(number) __builtin_clz(number)
+#endif
+
 int ob_strnncollsp_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
                       const unsigned char *a, size_t a_length,
                       const unsigned char *b, size_t b_length,
@@ -535,13 +541,107 @@ int ob_strnncollsp_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
 {
   const unsigned char *end;
   size_t length;
+  size_t offset;
   int res;
 
-  end= a + (length= OB_MIN(a_length, b_length));
-  while (a < end) {
-    if (*a++ != *b++) {
-      return ((int) a[-1] - (int) b[-1]);
+  end = a + (length= OB_MIN(a_length, b_length));
+  // alignment
+  offset = length % 8;
+  switch(offset)
+  {
+    case 1:
+    {
+      if (*a != *b) {
+        return ((int) a[0] - (int) b[0]);
+      }
+      break;
     }
+    case 2:
+    {
+      uint16_t mask = *reinterpret_cast<const uint16_t *>(a) ^ *reinterpret_cast<const uint16_t *>(b);
+      if (mask != 0) {
+        int pos = zero_count(mask) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      break;
+    }
+    case 3:
+    {
+      uint16_t mask = *reinterpret_cast<const uint16_t *>(a) ^ *reinterpret_cast<const uint16_t *>(b);
+      if (mask != 0) {
+        int pos = zero_count(mask) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      if (a[2] != b[2]) {
+        return ((int) a[2] - (int) b[2]);
+      }
+      break;
+    }
+    case 4:
+    {
+      uint32_t mask = *reinterpret_cast<const uint32_t *>(a) ^ *reinterpret_cast<const uint32_t *>(b);
+      if (mask != 0) {
+        int pos = zero_count(mask) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      break;
+    }
+    case 5:
+    {
+      uint32_t mask = *reinterpret_cast<const uint32_t *>(a) ^ *reinterpret_cast<const uint32_t *>(b);
+      if (mask != 0) {
+        int pos = zero_count(mask) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      if (a[4] != b[4]) {
+        return ((int) a[4] - (int) b[4]);
+      }
+      break;
+    }
+    case 6:
+    {
+      uint32_t mask1 = *reinterpret_cast<const uint32_t *>(a) ^ *reinterpret_cast<const uint32_t *>(b);
+      if (mask1 != 0) {
+        int pos = zero_count(mask1) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      uint16_t mask2 = *reinterpret_cast<const uint16_t *>(a + 4) ^ *reinterpret_cast<const uint16_t *>(b + 4);
+      if (mask2 != 0) {
+        int pos = (zero_count(mask2) >> 3) + 4;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      break;
+    }
+    case 7:
+    {
+      uint32_t mask1 = *reinterpret_cast<const uint32_t *>(a) ^ *reinterpret_cast<const uint32_t *>(b);
+      if (mask1 != 0) {
+        int pos = zero_count(mask1) >> 3;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      uint16_t mask2 = *reinterpret_cast<const uint16_t *>(a + 4) ^ *reinterpret_cast<const uint16_t *>(b + 4);
+      if (mask2 != 0) {
+        int pos = (zero_count(mask2) >> 3) + 4;
+        return ((int) a[pos] - (int) b[pos]);
+      }
+      if (a[6] != b[6]) {
+        return ((int) a[6] - (int) b[6]);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  a += offset;
+  b += offset;
+  while (end - a >= 8) {
+    uint64_t mask = *reinterpret_cast<const uint64_t *>(a) ^ *reinterpret_cast<const uint64_t *>(b);
+    if (mask != 0) {
+      int pos = (zero_count(mask) >> 3);
+      return ((int) a[pos] - (int) b[pos]);
+    }
+    a += 8;
+    b += 8;
   }
   res= 0;
   int has_returned = 0;
