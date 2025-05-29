@@ -16,6 +16,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include <gtest/gtest.h>
+#include <iostream>
 #define protected public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define NOT_NULL(ass) ASSERT_NE(nullptr, (ass))
@@ -1963,14 +1964,18 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
     OK(micro_writer->build_micro_block_desc(micro_block_desc));
 
     int64_t estimate_size = 0;
-    if (ObRowStoreType::FLAT_ROW_STORE == j) {
+    if (ObRowStoreType::FLAT_ROW_STORE == j || ObRowStoreType::FLAT_OPT_ROW_STORE == j) {
       estimate_size = micro_block_desc.original_size_ + micro_block_desc.header_->header_size_;
     } else if (ObRowStoreType::CS_ENCODING_ROW_STORE == j) {
       estimate_size = micro_block_desc.original_size_
           + static_cast<ObMicroBlockCSEncoder *>(micro_writer)->all_headers_size_;
-    } else {
+    } else if (ObRowStoreType::ENCODING_ROW_STORE == j || ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE == j) {
       estimate_size = micro_block_desc.original_size_
           + static_cast<ObMicroBlockEncoder *>(micro_writer)->header_size_;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected type", K(ret), K(j));
+      OK(ret);
     }
 
     { // set size upper bound after reuse
