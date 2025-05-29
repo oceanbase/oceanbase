@@ -135,9 +135,12 @@ int ObStaticMergeParam::init_static_info(ObTabletHandle &tablet_handle)
   } else {
     rowkey_read_info_ = static_cast<const ObRowkeyReadInfo *>(&(tablet_handle.get_obj()->get_rowkey_read_info()));
   }
+  const bool use_fixed_percentage = nullptr != schema_ &&
+                                    schema_->mv_mode_.table_referenced_by_fast_lsm_mv_flag_ &&
+                                    (is_mini_merge(get_merge_type()) || is_minor_merge(get_merge_type()));
   if (OB_FAIL(init_multi_version_column_descs())) {
     LOG_WARN("failed to init multi_version_column_descs", KR(ret));
-  } else if (OB_FAIL(pre_warm_param_.init(get_ls_id(), get_tablet_id()))) {
+  } else if (OB_FAIL(pre_warm_param_.init(get_ls_id(), get_tablet_id(), use_fixed_percentage))) {
     LOG_WARN("failed to init pre warm param", KR(ret));
   }
   return ret;

@@ -2508,12 +2508,12 @@ int ObMacroBlockWriter::create_pre_warmer(
     if (GCTX.is_shared_storage_mode()) {
       pre_warmer_ = nullptr; // do nothing
     } else if (data_store_desc_->is_for_index()) {
-      if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObIndexBlockCachePreWarmer, &allocator_))) {
+      if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObIndexBlockCachePreWarmer, &allocator_, pre_warm_param.fixed_percentage_))) {
         int tmp_ret = OB_ALLOCATE_MEMORY_FAILED; // use tmp_ret, allow not pre warm mem block cache
         LOG_WARN("fail to new mem pre warmer", KR(tmp_ret));
       }
     } else { // !is_for_index
-      if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObDataBlockCachePreWarmer, &allocator_))) {
+      if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObDataBlockCachePreWarmer, &allocator_, pre_warm_param.fixed_percentage_))) {
         int tmp_ret = OB_ALLOCATE_MEMORY_FAILED; // use tmp_ret, allow not pre warm mem block cache
         LOG_WARN("fail to new mem pre warmer", KR(tmp_ret));
       }
