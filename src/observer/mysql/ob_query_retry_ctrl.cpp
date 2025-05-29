@@ -624,6 +624,10 @@ public:
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.client_ret_ = OB_TIMEOUT;
+    } else if (OB_EAGAIN == v.err_ && v.is_from_pl_) {
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+      LOG_INFO("OB_EAGAIN from PL, will retry", K(v));
     }
   }
 private:
