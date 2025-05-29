@@ -3332,6 +3332,8 @@ int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
   int64_t base_cg_idx = -1;
   ObStorageSchema *storage_schema = nullptr;
   if (OB_FAIL(ret)) {
+  } else if (is_data_direct_load(direct_load_type_)) {
+    /* skip */
   } else if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
     LOG_WARN("failed to get storage schema", K(ret));
   } else if (OB_ISNULL(storage_schema)) {
