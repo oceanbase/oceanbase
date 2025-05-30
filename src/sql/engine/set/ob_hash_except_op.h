@@ -49,6 +49,7 @@ private:
   bool get_row_from_hash_table_;
   int batch_process_right();
   int batch_process_right_vectorize(const int64_t batch_size);
+  const ObChunkDatumStore::StoredRow **store_rows_ = nullptr;
 };
 
 } // end namespace sql
