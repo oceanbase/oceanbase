@@ -349,6 +349,7 @@ int ObDASHNSWScanIter::inner_release()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
+  extra_in_rowkey_idxs_.reset();
   vec_op_alloc_.reset();
 
   return ret;
