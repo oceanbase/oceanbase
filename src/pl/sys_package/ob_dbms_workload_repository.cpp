@@ -2756,8 +2756,9 @@ const char *tm_columns[] = {"IN_PARSE",
                             "IN_RESOLVE",
                             "IN_REWRITE",
                             "IN_DUPLICATE_CONFLICT_RESOLVE",
-                            "IN_FOREIGN_KEY_CASCADING"};
-int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
+                            "IN_FOREIGN_KEY_CASCADING",
+                            "IN_EXTRACT_QUERY_RANGE"};
+int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
 
 int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
     const AshReportParams &ash_report_params, const int64_t num_samples, ObStringBuffer &buff)

@@ -1369,6 +1369,7 @@ int ObTableScanOp::prepare_scan_range()
 int ObTableScanOp::prepare_batch_scan_range()
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_extract_query_range);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   int64_t batch_size = 0;
   if (OB_SUCC(ret)) {
@@ -1444,6 +1445,7 @@ int ObTableScanOp::build_bnlj_params()
 int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_extract_query_range);
   ObQueryRangeArray key_ranges;
   ObQueryRangeArray ss_key_ranges;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
@@ -1561,6 +1563,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
 int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx, bool need_sort)
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_extract_query_range);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObIAllocator &range_allocator = (table_rescan_allocator_ != nullptr ?
       *table_rescan_allocator_ : ctx_.get_allocator());
