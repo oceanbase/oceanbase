@@ -10067,7 +10067,10 @@ int ObPLResolver::check_composite_cast(const ObPLINS &ns,
           if (src_udt->is_collection_type() && dst_udt->is_collection_type()) {
             const ObCollectionType *src_coll_type = static_cast<const ObCollectionType*>(src_udt);
             const ObCollectionType *dst_coll_type = static_cast<const ObCollectionType*>(dst_udt);
-            if (!(src_coll_type->get_element_type().get_obj_type() == dst_coll_type->get_element_type().get_obj_type()
+            if (src_udt->get_type() != dst_udt->get_type()) {
+              ret = OB_ERR_INVALID_TYPE_FOR_OP;
+              LOG_WARN("collection type is different", K(ret), K(src_udt->get_type()), K(dst_udt->get_type()));
+            } else if (!(src_coll_type->get_element_type().get_obj_type() == dst_coll_type->get_element_type().get_obj_type()
                 && (!src_coll_type->get_element_type().is_obj_type() ? src_coll_type->get_element_type().get_user_type_id() == dst_coll_type->get_element_type().get_user_type_id() : true))) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;
               LOG_WARN("collection to cast has different elements", K(ret), K(src_coll_type->get_element_type()), K(dst_coll_type->get_element_type()));
