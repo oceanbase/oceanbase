@@ -16441,6 +16441,7 @@ def_table_schema(
 # 12548: __all_virtual_external_resource_history
 # 12549: __all_virtual_ccl_rule_history
 # 12550:__all_virtual_tenant_vector_mem_info
+# 12551: __all_virtual_logservice_cluster_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
