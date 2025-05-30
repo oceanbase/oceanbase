@@ -242,7 +242,7 @@ private:
   int check_tenant_status_(
       const uint64_t tenant_id,
       bool &tenant_dropped,
-      bool &schema_not_ready);
+      bool &tenant_not_ready);
 
   // prepare_locality_cache - init ls locality cache for share storage
   void prepare_locality_cache_(
