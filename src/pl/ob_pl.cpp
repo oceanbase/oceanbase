@@ -1178,7 +1178,12 @@ ObPLContext* ObPLContext::get_stack_pl_ctx()
   CK (!is_top_stack_);
   CK (OB_NOT_NULL(session_info_));
   CK (OB_NOT_NULL(ctx = session_info_->get_pl_context()));
-  CK (ctx->is_top_stack());
+  if (OB_SUCC(ret) && ctx->is_top_stack()) {
+    // do nothing
+  } else {
+    ctx = nullptr;
+    LOG_WARN("The stack pl ctx got from session do not has the flag of is_top_stack", K(ret));
+  }
   return ctx;
 }
 
