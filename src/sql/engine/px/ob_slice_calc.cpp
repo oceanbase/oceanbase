@@ -580,6 +580,9 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
     LOG_WARN("get tablet ids failed", K(ret));
   } else {
     for (int64_t i = 0; i < batch_size && OB_SUCC(ret); i++) {
+      if (skip.at(i)) {
+        continue;
+      }
       if (OB_FAIL(get_task_idx_by_tablet_id(tablet_ids_[i], slice_indexes_[i]))) {
         if (OB_HASH_NOT_EXIST == ret) {
           if (tablet_ids_[i] <= 0) {
