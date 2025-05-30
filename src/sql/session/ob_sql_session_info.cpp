@@ -3469,8 +3469,9 @@ int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   client_app_info_.client_info_.assign(&client_info_buf_[0], size);
   ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
-    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(),
-        min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size));
+    int64_t length = min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size);
+    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(), length);
+    di->get_ash_stat().client_id_[length > 0 ? length - 1 : 0] = '\0';
   }
   return ret;
 }
@@ -4998,8 +4999,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 {
   ObBasicSessionInfo::set_ash_stat_value(ash_stat);
   if (!get_module_name().empty()) {
-    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
-                      ? ASH_MODULE_STR_LEN
+    int64_t size = get_module_name().length() >= ASH_MODULE_STR_LEN
+                      ? ASH_MODULE_STR_LEN - 1
                       : get_module_name().length();
     MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
     ash_stat.module_[size] = '\0';
@@ -5007,8 +5008,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 
   // fill action for user session
   if (!get_action_name().empty()) {
-    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
-                      ? ASH_ACTION_STR_LEN
+    int64_t size = get_action_name().length() >= ASH_ACTION_STR_LEN
+                      ? ASH_ACTION_STR_LEN - 1
                       : get_action_name().length();
     MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
     ash_stat.action_[size] = '\0';
@@ -5016,8 +5017,8 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 
   // fill client id for user session
   if (!get_client_identifier().empty()) {
-    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
-                      ? ASH_CLIENT_ID_STR_LEN
+    int64_t size = get_client_identifier().length() >= ASH_CLIENT_ID_STR_LEN
+                      ? ASH_CLIENT_ID_STR_LEN - 1
                       : get_client_identifier().length();
     MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
     ash_stat.client_id_[size] = '\0';
