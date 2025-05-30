@@ -1924,6 +1924,15 @@ into_clause:
       merge_nodes(vars_list, parse_ctx->mem_pool_, T_SP_INTO_LIST, $2);
       if (vars_list == NULL) {
         obpl_mysql_parse_fatal_error(OB_PARSER_ERR_PARSE_SQL, YYLEX_PARAM, "Syntax Error");
+      } else {
+        // The MySQL PL `FETCH INTO @user_var` syntax is not supported. Check if there is a
+        // T_SELECT in the `var_list`, which is transformed from `@user_var` in the `expr` rule.
+        for (int i = 0; i < vars_list->num_child_; ++i) {
+          ParseNode *child = vars_list->children_[i];
+          if (NULL != child && T_SELECT == child->type_) {
+            obpl_mysql_parse_fatal_error(OB_PARSER_ERR_PARSE_SQL, YYLEX_PARAM, "Syntax Error");
+          }
+        }
       }
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_INTO_VARIABLES, 1, vars_list);
     }
