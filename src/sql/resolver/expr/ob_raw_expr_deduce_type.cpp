@@ -935,6 +935,12 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
           || OB_ISNULL(expr.get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr status is invalid", K(expr));
+      } else if (expr.get_param_expr(0)->get_param_count() > 1
+                 && T_OP_ROW == expr.get_param_expr(0)->get_expr_type()
+                 && T_OP_ROW == expr.get_param_expr(0)->get_param_expr(0)->get_expr_type()
+                 && expr.get_param_expr(1)->has_flag(IS_SUB_QUERY)) {
+        ret = OB_ERR_INVALID_COLUMN_NUM;
+        LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, expr.get_param_expr(0)->get_param_count());
       } else if (OB_FAIL(visit_left_param(*expr.get_param_expr(0)))) {
         LOG_WARN("visit left param failed", K(ret));
       } else if (OB_FAIL(visit_right_param(expr))) {
@@ -1811,14 +1817,28 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       }
       case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-        result_type.set_varchar();
-        result_type.set_length(ObAggregateProcessor::get_llc_size());
-        ObCollationType coll_type = CS_TYPE_INVALID;
-        CK(OB_NOT_NULL(my_session_));
-        OC( (my_session_->get_collation_connection)(coll_type) );
-        result_type.set_collation_type(coll_type);
-        result_type.set_collation_level(CS_LEVEL_IMPLICIT);
-        expr.set_result_type(result_type);
+        if (expr.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+          ObRawExpr *child = nullptr;
+          if (expr.get_param_count() != 1 ||
+              OB_ISNULL(child = expr.get_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(child), K(expr.get_param_count()));
+          } else if (!child->get_result_type().is_string_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+              "The input parameter for the function 'APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE' must be of type STRING, current type");
+          }
+        }
+        if (OB_SUCC(ret)) {
+          result_type.set_varchar();
+          result_type.set_length(ObAggregateProcessor::get_llc_size());
+          ObCollationType coll_type = CS_TYPE_INVALID;
+          CK(OB_NOT_NULL(my_session_));
+          OC( (my_session_->get_collation_connection)(coll_type) );
+          result_type.set_collation_type(coll_type);
+          result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+          expr.set_result_type(result_type);
+        }
         break;
       }
       case T_FUN_GROUP_RANK:
