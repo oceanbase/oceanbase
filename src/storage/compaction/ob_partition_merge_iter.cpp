@@ -1400,6 +1400,7 @@ int ObPartitionMinorMacroMergeIter::check_need_open_curr_macro_block(bool &need)
   if (curr_block_desc_.contain_uncommitted_row_) {
     need = true;
     LOG_INFO("need rewrite one dirty macro", K_(curr_block_desc));
+  /*
   } else if ((last_macro_block_recycled_ && !last_mvcc_row_already_output_) ||
              (!curr_block_desc_.contain_uncommitted_row_ &&
               curr_block_desc_.max_merged_trans_version_ <= access_context_.trans_version_range_.base_version_)) {
@@ -1407,6 +1408,7 @@ int ObPartitionMinorMacroMergeIter::check_need_open_curr_macro_block(bool &need)
     //    need to open to recycle left rows of the last rowkey in recycled macro block
     // 2. last_macro_reused and current can be recycled: need to open to recycle micro blocks
     need = true;
+  */
   } else if (OB_FAIL(check_merge_range_cross(curr_block_desc_.range_, need))) {
     LOG_WARN("failed to check range cross", K(ret), K(curr_block_desc_.range_));
   }
