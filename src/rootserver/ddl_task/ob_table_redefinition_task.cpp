@@ -918,10 +918,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     } else {
       LOG_WARN("sync auto increment position failed", K(ret), K(object_id_), K(target_object_id_));
     }
-  } else if (ObDDLType::DDL_DIRECT_LOAD != task_type_ &&
-             ObDDLType::DDL_DIRECT_LOAD_INSERT != task_type_ &&
-             ObDDLType::DDL_MVIEW_COMPLETE_REFRESH != task_type_ &&
-             OB_FAIL(sync_stats_info())) {//direct load no need sync stats info, because the stats have been regather
+  } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
   } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&
              OB_FAIL(alter_table_arg_.mview_refresh_info_.refresh_scn_.convert_for_inner_table_field(snapshot_version_))) {
