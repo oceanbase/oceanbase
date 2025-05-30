@@ -381,12 +381,17 @@ int ObS3Client::list_parts(const Model::ListPartsRequest &request,
   return do_s3_operation_(s3_op_func, request, outcome);
 }
 
+ERRSIM_POINT_DEF(EN_S3_COMPLETE_MULTIPART_UPLOAD_ERROR)
 int ObS3Client::complete_multipart_upload(const Model::CompleteMultipartUploadRequest &request,
                                           Model::CompleteMultipartUploadOutcome &outcome)
 {
   S3OperationFunc<Model::CompleteMultipartUploadRequest, Model::CompleteMultipartUploadOutcome>
       s3_op_func = &S3Client::CompleteMultipartUpload;
-  return do_s3_operation_(s3_op_func, request, outcome);
+  int ret = do_s3_operation_(s3_op_func, request, outcome);
+  if (OB_SUCC(ret) && OB_FAIL(EN_S3_COMPLETE_MULTIPART_UPLOAD_ERROR)) {
+    ret = do_s3_operation_(s3_op_func, request, outcome);
+  }
+  return ret;
 }
 
 int ObS3Client::abort_multipart_upload(const Model::AbortMultipartUploadRequest &request,
@@ -2193,7 +2198,13 @@ int ObStorageS3MultiPartWriter::complete_()
                                                              complete_multipart_upload_outcome))) {
       OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));
     } else if (!complete_multipart_upload_outcome.IsSuccess()) {
-      handle_s3_outcome(complete_multipart_upload_outcome, ret);
+      const int http_code = static_cast<int>(complete_multipart_upload_outcome.GetError().GetResponseCode());
+      if (http_code == S3_ITEM_NOT_EXIST) {
+        ret = OB_IO_ERROR;
+        log_s3_status(complete_multipart_upload_outcome, ret);
+      } else {
+        handle_s3_outcome(complete_multipart_upload_outcome, ret);
+      }
 
       // Due to the following reasons:
       //   1. OBS/GCS is currently accessed through the S3 SDK without any dedicated OBS/GCS prefix or type,
