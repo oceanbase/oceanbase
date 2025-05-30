@@ -1657,7 +1657,7 @@ int ObPL::execute(ObExecContext &ctx,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
             } else if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
-                       || pl.get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE) {
+                      || pl.get_params().at(i).get_meta().get_extend_type() == PL_CURSOR_TYPE) {
               ObObjParam &cursor_param = pl.get_params().at(i);
               const ObPLCursorInfo *cursor = NULL;
               OZ (ObSPIService::spi_copy_ref_cursor(&pl.get_exec_ctx(), &allocator, &cursor_param, &params->at(i)));
