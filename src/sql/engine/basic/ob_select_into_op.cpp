@@ -411,10 +411,25 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
     file_location_ = IntoFileLocation::REMOTE_COS;
   } else if (path.prefix_match_ci(OB_S3_PREFIX)) {
     file_location_ = IntoFileLocation::REMOTE_S3;
+  } else if (path.prefix_match_ci(OB_HDFS_PREFIX)) {
+    file_location_ = IntoFileLocation::REMOTE_HDFS;
   } else {
     file_location_ = IntoFileLocation::SERVER_DISK;
   }
-  if (file_location_ == IntoFileLocation::SERVER_DISK && do_partition_) {
+  int64_t tenant_id = MTL_ID();
+  uint64_t tenant_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else if (tenant_version < DATA_VERSION_4_4_0_0 &&
+             IntoFileLocation::REMOTE_HDFS == file_location_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("select into hdfs is not supported before 4.4.0.0", K(ret),
+             K(tenant_version));
+  }
+
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else if (file_location_ == IntoFileLocation::SERVER_DISK && do_partition_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support partition option on server disk", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition option on server disk");
@@ -424,15 +439,33 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
     ObString temp_url = path.split_on('?');
     temp_url.trim();
     ObString storage_info;
-    if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
-      LOG_WARN("failed to append string", K(ret));
+    if (OB_LIKELY(!temp_url.empty() && temp_url.prefix_match(OB_HDFS_PREFIX)) ||
+        OB_LIKELY(path.prefix_match(OB_HDFS_PREFIX))) {
+      access_info_ = &hdfs_info_;
+    } else {
+      access_info_ = &backup_info_;
+    }
+
+    // If the hdfs is with simple auth, temp url will be empty.
+    if (OB_LIKELY(temp_url.empty())) {
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
+        LOG_WARN("failed to append full path string", K(ret), K(path));
+      }
+    } else {
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
+        LOG_WARN("failed to append string", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      /* do nothing */
     } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
       LOG_WARN("failed to append string", K(ret));
-    } else if (OB_FAIL(access_info_.set(basic_url_.ptr(), storage_info.ptr()))) {
+    } else if (OB_FAIL(access_info_->set(basic_url_.ptr(), storage_info.ptr()))) {
       LOG_WARN("failed to set access info", K(ret), K(path));
-    } else if (basic_url_.empty() || !access_info_.is_valid()) {
+    } else if (basic_url_.empty() || !access_info_->is_valid()) {
       ret = OB_FILE_NOT_EXIST;
-      LOG_WARN("file path not exist", K(ret), K(basic_url_), K(access_info_));
+      LOG_WARN("file path not exist", K(ret), K(basic_url_), KP(access_info_));
     }
   } else { // IntoFileLocation::SERVER_DISK
     if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
@@ -755,9 +788,19 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
   ObSqlString file_name_with_suffix;
   ObString file_extension;
   ObSelectIntoOpInput *input = static_cast<ObSelectIntoOpInput*>(input_);
-  ObString input_file_name = file_location_ != IntoFileLocation::SERVER_DISK
-                             ? path.split_on('?').trim()
-                             : path;
+  ObString input_file_name;
+  if (OB_UNLIKELY(file_location_ != IntoFileLocation::SERVER_DISK)) {
+    // Handle hdfs with simple auth
+    if (OB_LIKELY(file_location_ == IntoFileLocation::REMOTE_HDFS &&
+                  !path.contains(path.find('?')))) {
+      input_file_name = path.trim();
+    } else {
+      input_file_name = path.split_on('?').trim();
+    }
+  } else {
+    input_file_name = path;
+  }
+
   if (OB_ISNULL(input)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("op input is null", K(ret));

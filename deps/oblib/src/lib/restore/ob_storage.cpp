@@ -2381,6 +2381,7 @@ ObStorageWriter::ObStorageWriter()
     oss_writer_(),
     cos_writer_(),
     s3_writer_(),
+    hdfs_writer_(),
     start_ts_(0),
     storage_info_(nullptr)
 {
@@ -2438,6 +2439,10 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     writer_ = &cos_writer_;
   } else if (OB_STORAGE_S3 == type) {
     writer_ = &s3_writer_;
+  } else if (OB_STORAGE_FILE == type) {
+    writer_ = &file_writer_;
+  } else if (OB_STORAGE_HDFS == type) {
+    writer_ = &hdfs_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2516,6 +2521,7 @@ ObStorageAppender::ObStorageAppender()
     oss_appender_(),
     cos_appender_(),
     s3_appender_(),
+    hdfs_appender_(),
     start_ts_(0),
     is_opened_(false),
     storage_info_(),
@@ -2531,6 +2537,7 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
     oss_appender_(),
     cos_appender_(),
     s3_appender_(),
+    hdfs_appender_(),
     start_ts_(0),
     is_opened_(false),
     storage_info_(nullptr),
@@ -2596,6 +2603,10 @@ int ObStorageAppender::open(
     } else if (OB_STORAGE_S3 == type_) {
       appender_ = &s3_appender_;
     }
+  } else if (OB_STORAGE_HDFS == type_) {
+    appender_ = &hdfs_appender_;
+  } else if (OB_STORAGE_FILE == type_) {
+    appender_ = &file_appender_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));

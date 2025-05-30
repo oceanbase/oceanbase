@@ -491,6 +491,7 @@ protected:
   ObStorageOssWriter oss_writer_;
   ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
+  ObStorageHdfsWriter hdfs_writer_;
   ObStorageObDalWriter obdal_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -527,6 +528,7 @@ private:
   ObStorageOssAppendWriter oss_appender_;
   ObStorageCosAppendWriter cos_appender_;
   ObStorageS3AppendWriter s3_appender_;
+  ObStorageHdfsAppendWriter hdfs_appender_;
   ObStorageObDalAppendWriter obdal_appender_;
   int64_t start_ts_;
   bool is_opened_;

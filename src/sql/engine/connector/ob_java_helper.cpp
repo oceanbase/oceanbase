@@ -39,6 +39,8 @@ HdfsOpenFileFunc obHdfsOpenFile = NULL;
 HdfsFileIsOpenForReadFunc obHdfsFileIsOpenForRead = NULL;
 HdfsFileIsOpenForWriteFunc obHdfsFileIsOpenForWrite = NULL;
 HdfsPreadFunc obHdfsPread = NULL;
+HdfsWriteFunc obHdfsWrite = NULL;
+HdfsFlushFunc obHdfsFlush = NULL;
 HdfsNewBuilderFunc obHdfsNewBuilder = NULL;
 HdfsBuilderSetNameNodeFunc obHdfsBuilderSetNameNode = NULL;
 HdfsBuilderSetUserNameFunc obHdfsBuilderSetUserName = NULL;
@@ -428,6 +430,8 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsFileIsOpenForRead", obHdfsFileIsOpenForRead, HdfsFileIsOpenForReadFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsFileIsOpenForWrite", obHdfsFileIsOpenForWrite, HdfsFileIsOpenForWriteFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsPread", obHdfsPread, HdfsPreadFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsWrite", obHdfsWrite, HdfsWriteFunc);
+    LIB_SYMBOL(hdfs_lib_handle_, "hdfsFlush", obHdfsFlush, HdfsFlushFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsNewBuilder", obHdfsNewBuilder, HdfsNewBuilderFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetNameNode", obHdfsBuilderSetNameNode, HdfsBuilderSetNameNodeFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetUserName", obHdfsBuilderSetUserName, HdfsBuilderSetUserNameFunc);
@@ -453,7 +457,8 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
         OB_ISNULL(obHdfsCreateDirectory) || OB_ISNULL(obHdfsListDirectory) ||
         OB_ISNULL(obHdfsCloseFile) || OB_ISNULL(obHdfsOpenFile) ||
         OB_ISNULL(obHdfsFileIsOpenForRead) || OB_ISNULL(obHdfsFileIsOpenForWrite) ||
-        OB_ISNULL(obHdfsPread) || OB_ISNULL(obHdfsNewBuilder) ||
+        OB_ISNULL(obHdfsPread) || OB_ISNULL(obHdfsWrite) || OB_ISNULL(obHdfsFlush) ||
+        OB_ISNULL(obHdfsNewBuilder) ||
         OB_ISNULL(obHdfsBuilderSetNameNode) ||
         OB_ISNULL(obHdfsBuilderSetUserName) ||
         OB_ISNULL(obHdfsBuilderSetForceNewInstance) ||

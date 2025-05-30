@@ -170,6 +170,12 @@ private:
   int64_t position_;
 };
 
+class ObArrowUtil
+{
+public:
+  static int get_location(const IntoFileLocation &file_location, const char *&location);
+};
+
 } // end of sql namespace
 } // end of oceanbase namespace
 

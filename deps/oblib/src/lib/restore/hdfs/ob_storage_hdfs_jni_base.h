@@ -72,6 +72,7 @@ public:
   int parse_namenode_and_path(const ObString &uri_str);
   int get_or_create_fs(const ObString &uri, ObObjectStorageInfo *storage_info);
   int get_or_create_read_file(const ObString &uri);
+  int get_or_create_write_file(const ObString &uri, const bool is_append = false);
 
   const char *get_namenode() const { return namenode_buf_; }
   const char *get_path() const { return path_buf_; }
@@ -86,6 +87,8 @@ public:
   }
 
   hdfsFile &get_hdfs_read_file() { return hdfs_read_file_; }
+  hdfsFile &get_hdfs_write_file() { return hdfs_write_file_; }
+
 
 protected:
   int get_hdfs_file_meta_(const ObString &uri, ObStorageObjectMetaBase &meta);
@@ -95,6 +98,7 @@ private:
   bool is_opened_readable_file_;
   bool is_opened_writable_file_;
   hdfsFile hdfs_read_file_;
+  hdfsFile hdfs_write_file_;
   ObHdfsFsClient *hdfs_client_;
   common::ObArenaAllocator allocator_;
   char *namenode_buf_;
@@ -125,6 +129,51 @@ protected:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageHdfsReader);
+};
+
+class ObStorageHdfsWriter : public ObStorageHdfsBase, public ObIStorageWriter
+{
+public:
+  ObStorageHdfsWriter();
+  virtual ~ObStorageHdfsWriter();
+  virtual void reset() override;
+  virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info) override;
+  virtual int write(const char *buf, const int64_t size);
+  virtual int pwrite(const char *buf, const int64_t buf_size, const int64_t offset) override;
+  virtual int close() override;
+  virtual int64_t get_length() const override { return file_length_; }
+  virtual bool is_opened() const override { return is_opened_; }
+
+protected:
+  bool is_opened_;
+  int64_t file_length_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageHdfsWriter);
+};
+
+class ObStorageHdfsAppendWriter : public ObStorageHdfsBase, public ObIStorageWriter
+{
+public:
+  ObStorageHdfsAppendWriter();
+  virtual ~ObStorageHdfsAppendWriter();
+
+public:
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override;
+  virtual void reset() override;
+  int write(const char *buf, const int64_t size);
+  int pwrite(const char *buf, const int64_t size, const int64_t offset);
+  int close();
+  int64_t get_length() const { return file_length_; }
+  bool is_opened() const { return is_opened_; }
+
+private:
+  bool is_opened_;
+  int64_t file_length_;
+  int64_t offset_;
+  int64_t append_times_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStorageHdfsAppendWriter);
 };
 
 } // common

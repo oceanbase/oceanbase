@@ -56,9 +56,28 @@ void ObOrcOutputStream::write(const void *buf, size_t length)
       LOG_WARN("failed to append file", K(ret), K(length), K(url_.c_str()));
       throw std::runtime_error("failed to append file");
     }
-  } else if (OB_FAIL(storage_appender_->append(static_cast<const char*>(buf), length, write_size))) {
-    LOG_WARN("fail to append data", K(ret), KP(buf), K(length), K(url_.c_str()));
-    throw std::runtime_error("fail to append data");
+  } else {
+    const char *location = nullptr;
+    if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
+      LOG_WARN("failed to get location string", K(ret), K_(file_location));
+    } else if (OB_ISNULL(location)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      int64_t write_size = 0;
+      int64_t begin_ts = ObTimeUtility::current_time();
+      if (OB_FAIL(storage_appender_->append(static_cast<const char *>(buf), length, write_size))) {
+        LOG_WARN("fail to append data", K(ret), KP(buf), K(length), K(url_.c_str()));
+        throw std::runtime_error("fail to append data");
+      } else {
+        pos_ += length;
+        int64_t end_ts = ObTimeUtility::current_time();
+        int64_t cost_time = end_ts - begin_ts;
+        long double speed = (cost_time <= 0) ? 0 : (long double)write_size * 1000.0 * 1000.0 / 1024.0 / 1024.0 / cost_time;
+        long double total_write = (long double)pos_ / 1024.0 / 1024.0;
+        _OB_LOG(TRACE, "write %s stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB",
+                location, cost_time, write_size, speed, total_write);
+      }
+    }
   }
   if (OB_SUCC(ret)) {
     pos_ += length;
@@ -236,18 +255,38 @@ arrow::Status ObParquetOutputStream::Write(const void* data, int64_t nbytes)
 {
   arrow::Status status = arrow::Status::OK();
   int ret = OB_SUCCESS;
-  int64_t write_size = 0;
   if (IntoFileLocation::SERVER_DISK == file_location_) {
     if (OB_FAIL(file_appender_->append(data, nbytes, false))) {
       LOG_WARN("failed to append file", K(ret), K(nbytes), K(url_));
       status = arrow::Status(arrow::StatusCode::IOError, "write file failed");
+    } else {
+      position_ += nbytes;
     }
-  } else if (OB_FAIL(storage_appender_->append(static_cast<const char*>(data), nbytes, write_size))) {
-    LOG_WARN("fail to append data", K(ret), KP(data), K(nbytes), K(url_));
-    status = arrow::Status(arrow::StatusCode::IOError, "write file failed");
-  }
-  if (OB_SUCC(ret)) {
-    position_ += nbytes;
+  } else {
+    const char *location = nullptr;
+    if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
+      LOG_WARN("failed to get location string", K(ret), K_(file_location));
+    } else if (OB_ISNULL(location)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid location string", K(ret));
+    } else {
+      int64_t write_size = 0;
+      int64_t begin_ts = ObTimeUtility::current_time();
+      if (OB_FAIL(storage_appender_->append(static_cast<const char *>(data),
+                                            nbytes, write_size))) {
+        LOG_WARN("fail to append data", K(ret), KP(data), K(nbytes), K(url_));
+        status = arrow::Status(arrow::StatusCode::IOError, "write file failed");
+      } else {
+        position_ += nbytes;
+        int64_t end_ts = ObTimeUtility::current_time();
+        int64_t cost_time = end_ts - begin_ts;
+        long double speed = (cost_time <= 0) ? 0 :
+                        (long double) write_size * 1000.0 * 1000.0 / 1024.0 / 1024.0 / cost_time;
+        long double total_write = (long double) position_ / 1024.0 / 1024.0;
+        _OB_LOG(TRACE, "write %s stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB", location,
+                cost_time, write_size, speed, total_write);
+      }
+    }
   }
   return status;
 }
@@ -280,6 +319,39 @@ bool ObParquetOutputStream::closed() const
 arrow::Result<int64_t> ObParquetOutputStream::Tell() const
 {
   return position_;
+}
+/*------------------------- ObArrowUtil -------------------------*/
+int ObArrowUtil::get_location(const IntoFileLocation &file_location, const char *&location)
+{
+  int ret = OB_SUCCESS;
+  switch (file_location) {
+    case IntoFileLocation::SERVER_DISK: {
+      location = "server";
+      break;
+    }
+    case IntoFileLocation::REMOTE_OSS: {
+      location = "oss";
+      break;
+    }
+    case IntoFileLocation::REMOTE_COS: {
+      location = "cos";
+      break;
+    }
+    case IntoFileLocation::REMOTE_S3: {
+      location = "s3";
+      break;
+    }
+    case IntoFileLocation::REMOTE_HDFS: {
+      location = "hdfs";
+      break;
+    }
+    case IntoFileLocation::REMOTE_UNKNOWN:
+    default: {
+      ret = OB_INVALID_BACKUP_DEST;
+      LOG_WARN("invalid destination", K(ret), K(file_location));
+    }
+  }
+  return ret;
 }
 
 } // end of oceanbase namespace

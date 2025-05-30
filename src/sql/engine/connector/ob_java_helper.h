@@ -103,6 +103,8 @@ typedef hdfsFile (*HdfsOpenFileFunc)(hdfsFS, const char*, int, int, short, tSize
 typedef int (*HdfsFileIsOpenForReadFunc)(hdfsFile);
 typedef int (*HdfsFileIsOpenForWriteFunc)(hdfsFile);
 typedef tSize (*HdfsPreadFunc)(hdfsFS, hdfsFile, tOffset, void*, tSize);
+typedef tSize (*HdfsWriteFunc)(hdfsFS, hdfsFile, void*, tSize);
+typedef tSize (*HdfsFlushFunc)(hdfsFS, hdfsFile);
 typedef struct hdfsBuilder* (*HdfsNewBuilderFunc)(void);
 typedef void (*HdfsBuilderSetNameNodeFunc)(struct hdfsBuilder *, const char *);
 typedef void (*HdfsBuilderSetUserNameFunc)(struct hdfsBuilder *, const char *);
@@ -135,6 +137,8 @@ extern "C" HdfsOpenFileFunc obHdfsOpenFile;
 extern "C" HdfsFileIsOpenForReadFunc obHdfsFileIsOpenForRead;
 extern "C" HdfsFileIsOpenForWriteFunc obHdfsFileIsOpenForWrite;
 extern "C" HdfsPreadFunc obHdfsPread;
+extern "C" HdfsWriteFunc obHdfsWrite;
+extern "C" HdfsFlushFunc obHdfsFlush;
 extern "C" HdfsNewBuilderFunc obHdfsNewBuilder;
 extern "C" HdfsBuilderSetNameNodeFunc obHdfsBuilderSetNameNode;
 extern "C" HdfsBuilderSetUserNameFunc obHdfsBuilderSetUserName;
