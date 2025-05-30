@@ -287,6 +287,8 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 3);
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 4);
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 5);
+
 /* =========== special upgrade processor end   ============= */
 /* =========== upgrade processor end ============= */
 } // end namespace share
