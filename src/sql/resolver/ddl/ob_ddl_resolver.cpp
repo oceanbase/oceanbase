@@ -5647,17 +5647,17 @@ int ObDDLResolver::check_partition_name_duplicate(ParseNode *node, bool is_oracl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null", K(ret));
   } else {
-    hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE> *partition_name_set = nullptr;
+    ObPartitionNameSet *partition_name_set = nullptr;
     void *buf = nullptr;
     int64_t partition_num = node->num_child_;
     ParseNode *partition_expr_list = node;
     ParseNode *element_node = NULL;
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(
-              hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>)))) {
+              ObPartitionNameSet)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", KR(ret));
     } else {
-      partition_name_set = new(buf)hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>();
+      partition_name_set = new(buf)ObPartitionNameSet();
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(partition_name_set)) {
@@ -5685,10 +5685,8 @@ int ObDDLResolver::check_partition_name_duplicate(ParseNode *node, bool is_oracl
           if (OB_HASH_EXIST == partition_name_set->exist_refactored(partition_name_key)) {
             ret = OB_ERR_SAME_NAME_PARTITION;
             LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION, partition_name.length(), partition_name.ptr());
-          } else {
-            if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-              LOG_WARN("add partition name to map failed", K(ret), K(ret));
-            }
+          } else if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+            LOG_WARN("fail to set partition name in hashset", KR(ret));
           }
         }
       }
@@ -11542,7 +11540,7 @@ int ObDDLResolver::check_and_set_partition_names(ObPartitionedStmt *stmt,
                                                  bool is_subpart)
 {
   int ret = OB_SUCCESS;
-  hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE> *partition_name_set = nullptr;
+  ObPartitionNameSet *partition_name_set = nullptr;
   void *buf = nullptr;
   int64_t partition_num = is_subpart ?
       table_schema.get_def_sub_part_num() : table_schema.get_first_part_num();
@@ -11557,11 +11555,11 @@ int ObDDLResolver::check_and_set_partition_names(ObPartitionedStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null partition array", K(ret));
   } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(
-      hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>)))) {
+      ObPartitionNameSet)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    partition_name_set = new(buf)hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>();
+    partition_name_set = new(buf)ObPartitionNameSet();
     if (OB_ISNULL(partition_name_set)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition name hash set is null", KR(ret));
@@ -11587,8 +11585,8 @@ int ObDDLResolver::check_and_set_partition_names(ObPartitionedStmt *stmt,
       if (OB_HASH_EXIST == partition_name_set->exist_refactored(partition_name_key)) {
         ret = OB_ERR_SAME_NAME_PARTITION;
         LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION, partition_name.length(), partition_name.ptr());
-      } else if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-        LOG_WARN("add partition name to map failed", K(ret), K(ret));
+      } else if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+        LOG_WARN("fail to set partition name in hashset", KR(ret));
       }
     }
   }
@@ -11618,8 +11616,8 @@ int ObDDLResolver::check_and_set_partition_names(ObPartitionedStmt *stmt,
           ObPartitionNameHashWrapper partition_name_key(part_name_str);
           if (OB_HASH_EXIST == partition_name_set->exist_refactored(partition_name_key)) {
             // do nothing
-          } else if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-            LOG_WARN("add partition name to map failed", K(ret), K(ret));
+          } else if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+            LOG_WARN("fail to set partition name in hashset", KR(ret));
           } else if (OB_FAIL(partition->set_part_name(part_name_str))) {
             LOG_WARN("failed to set part name", K(ret));
           } else {
@@ -11638,7 +11636,7 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
                                                                ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE> *partition_name_set = nullptr;
+  ObPartitionNameSet *partition_name_set = nullptr;
   void *buf = nullptr;
   int64_t partition_num = table_schema.get_first_part_num();
   ObPartition **partition_array = NULL;
@@ -11654,11 +11652,11 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(
-      hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>)))) {
+      ObPartitionNameSet)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    partition_name_set = new(buf)hash::ObPlacementHashSet<ObPartitionNameHashWrapper, OB_MAX_PARTITION_NUM_ORACLE>();
+    partition_name_set = new(buf)ObPartitionNameSet();
     if (OB_ISNULL(partition_name_set)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition name hash set is null", KR(ret));
@@ -11676,8 +11674,8 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
     if (!partition->is_empty_partition_name()) {
       const ObString &partition_name = partition->get_part_name();
       ObPartitionNameHashWrapper partition_name_key(partition_name);
-      if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-        LOG_WARN("add partition name to map failed", K(ret));
+      if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+        LOG_WARN("fail to set partition name in hashset", KR(ret));
       }
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < partition->get_sub_part_num(); ++j) {
@@ -11696,8 +11694,8 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
         if (OB_HASH_EXIST == partition_name_set->exist_refactored(partition_name_key)) {
           ret = OB_ERR_SAME_NAME_SUBPARTITION;
           LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, partition_name.length(), partition_name.ptr());
-        } else if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-          LOG_WARN("add partition name to map failed", K(ret), K(ret));
+        } else if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+          LOG_WARN("fail to set partition name in hashset", KR(ret));
         }
       }
     }
@@ -11745,8 +11743,8 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
           ObPartitionNameHashWrapper partition_name_key(part_name_str);
           if (OB_HASH_EXIST == partition_name_set->exist_refactored(partition_name_key)) {
             // do nothing
-          } else if (OB_FAIL(partition_name_set->set_refactored(partition_name_key))) {
-            LOG_WARN("add partition name to map failed", K(ret), K(ret));
+          } else if (OB_FAIL(set_partition_name_in_hashset(partition_name_key, *partition_name_set))) {
+            LOG_WARN("fail to set partition name in hashset", KR(ret));
           } else if (OB_FAIL(subpartition->set_part_name(part_name_str))) {
             LOG_WARN("failed to set part name", K(ret));
           } else {
@@ -11756,6 +11754,21 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
         }
         ++max_part_id;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::set_partition_name_in_hashset(const ObPartitionNameHashWrapper &partition_name_key,
+                                                 ObPartitionNameSet &partition_name_set)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(partition_name_set.set_refactored(partition_name_key))) {
+    LOG_WARN("add partition name to map failed", KR(ret));
+    // for better error message
+    if (OB_HASH_FULL == ret) {
+      ret = OB_TOO_MANY_PARTITIONS_ERROR;
+      LOG_WARN("too many partitions", KR(ret), "partition_num", partition_name_set.count());
     }
   }
   return ret;
