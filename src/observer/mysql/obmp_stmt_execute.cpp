@@ -761,9 +761,21 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
               case MYSQL_TYPE_OB_NVARCHAR2:
               case MYSQL_TYPE_OB_NCHAR: {
                 type_name_info.elem_type_.set_collation_type(ncs_type);
+                type_name_info.elem_type_.set_length_semantics(LS_CHAR);
               } break;
               case MYSQL_TYPE_ORA_BLOB: {
                 type_name_info.elem_type_.set_collation_type(CS_TYPE_BINARY);
+              } break;
+              case MYSQL_TYPE_VARCHAR:
+              case MYSQL_TYPE_STRING:
+              case MYSQL_TYPE_VAR_STRING: {
+                type_name_info.elem_type_.set_collation_type(cs_type);
+                ObLengthSemantics ls = ctx_.session_info_->get_actual_nls_length_semantics();
+                if (LS_INVALIED == ls) {
+                  type_name_info.elem_type_.set_length_semantics(lib::is_oracle_mode() ? LS_BYTE : LS_CHAR);
+                } else {
+                  type_name_info.elem_type_.set_length_semantics(ls);
+                }
               } break;
               default: {
                 type_name_info.elem_type_.set_collation_type(cs_type);
