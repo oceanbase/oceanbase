@@ -759,12 +759,23 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
 #endif
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if ((expr->is_query_ref_expr() && static_cast<ObQueryRefRawExpr*>(expr)->is_cursor())
-            || (expr->is_udf_expr() && static_cast<ObUDFRawExpr*>(expr)->get_is_return_sys_cursor())) {
+        } else if (expr->is_query_ref_expr() && static_cast<ObQueryRefRawExpr*>(expr)->is_cursor()) {
           if (OB_FAIL(ob_write_string(alloc, "SYS_REFCURSOR", field.type_name_))) {
             LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
           }
-        } else if (lib::is_oracle_mode() && expr->is_column_ref_expr() &&
+        } else if (expr->is_udf_expr() && static_cast<ObUDFRawExpr*>(expr)->get_is_return_sys_cursor()) {
+          CK (OB_NOT_NULL(context));
+          if (OB_FAIL(ret)) {
+          } else if (PC_TEXT_MODE == mode && NULL == context->secondary_namespace_ && NULL == context->session_info_->get_pl_context()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("refcursor in sql select field not supported", K(ret));
+          } else {
+            if (OB_FAIL(ob_write_string(alloc, "SYS_REFCURSOR", field.type_name_))) {
+              LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
+            }
+          }
+        }
+        else if (lib::is_oracle_mode() && expr->is_column_ref_expr() &&
                    static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
           // xmltype is supported, do nothing
         } else {
