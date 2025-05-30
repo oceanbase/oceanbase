@@ -1504,7 +1504,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
              "cache_node_num", cache_key_node_map_.size());
       LCKeyValueArray to_evict_list;
       std::pop_heap(co_list.begin(), co_list.end(), [](const LCKeyValue &left, const LCKeyValue &right) {
-        return left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
+        return left.node_->get_node_stat()->weight() > right.node_->get_node_stat()->weight();
       });
       for (int64_t i = 0; OB_SUCC(ret) && mem_to_free > 0 && i < N; i++) {
         mem_to_free -= co_list.at(i).node_->get_mem_size();
@@ -2023,9 +2023,7 @@ int ObPlanCache::add_ps_plan(T *plan, ObPlanCacheCtx &pc_ctx)
       pc_ctx.fp_result_.pc_key_.key_id_ = OB_INVALID_ID;
     }
     if (OB_FAIL(add_plan_cache(pc_ctx, plan))) {
-      if (OB_FAIL(deal_add_ps_plan_result(ret, pc_ctx, *plan))) {
-        LOG_WARN("fail to deal result code", K(ret));
-      }
+      SQL_PC_LOG(TRACE, "fail to add plan", K(ret));
     } else {
       (void)inc_mem_used(plan->get_mem_size());
     }
@@ -2036,115 +2034,8 @@ int ObPlanCache::add_ps_plan(T *plan, ObPlanCacheCtx &pc_ctx)
   return ret;
 }
 
-int ObPlanCache::add_exists_cache_obj_by_sql(ObILibCacheCtx &ctx,
-                                             ObILibCacheObject *cache_obj)
-{
-  int ret = OB_SUCCESS;
-  ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-  // cache obj stat is already added, so set need_add_obj_stat_ to false to avoid adding it again
-  pc_ctx.need_add_obj_stat_ = false;
-  uint64_t old_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
-  pc_ctx.fp_result_.pc_key_.key_id_ = OB_INVALID_ID;
-  SQL_PC_LOG(TRACE, "start to add ps plan by sql", K(pc_ctx.fp_result_.pc_key_));
-  if (OB_FAIL(add_plan_cache(pc_ctx, cache_obj))) {
-    if (OB_FAIL(deal_add_ps_plan_result(ret, pc_ctx, *cache_obj))) {
-      LOG_WARN("fail to deal result code", K(ret));
-    }
-  }
-  // reset pc_ctx
-  pc_ctx.fp_result_.pc_key_.name_.reset();
-  pc_ctx.fp_result_.pc_key_.key_id_ = old_stmt_id;
-  return ret;
-}
-
 template int ObPlanCache::add_ps_plan<ObPhysicalPlan>(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx);
 template int ObPlanCache::add_ps_plan<ObPLFunction>(ObPLFunction *plan, ObPlanCacheCtx &pc_ctx);
-
-int ObPlanCache::deal_add_ps_plan_result(int add_plan_ret,
-                                         ObPlanCacheCtx &pc_ctx,
-                                         const ObILibCacheObject &cache_object)
-{
-  int ret = add_plan_ret;
-
-  if (pc_ctx.sql_ctx_.is_batch_params_execute()) {
-    // for batch_dml optimization, only can cover the error OB_SQL_PC_PLAN_DUPLICATE
-    // others error occur during add plan to plan_cache, we must stop batch_dml optimization
-    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
-      ret = OB_SUCCESS;
-      LOG_TRACE("this plan has been added by others, need not add again", K(cache_object));
-    } else if (OB_FAIL(ret)) {
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_WARN("some unexpected error occured, change ret_code to 5787", K(ret));
-    } else {
-      pc_ctx.sql_ctx_.self_add_plan_ = true;
-      LOG_TRACE("Successed to add batch plan to ObPlanCache", K(cache_object));
-    }
-  } else {
-    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
-      ret = OB_SUCCESS;
-      LOG_TRACE("this plan has been added by others, need not add again", K(cache_object));
-    } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
-      if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
-        ObTruncatedString trunc_sql(pc_ctx.raw_sql_);
-        LOG_INFO("can't add plan to plan cache",
-                 K(ret), K(cache_object.get_mem_size()), K(trunc_sql),
-                 K(get_mem_used()));
-      }
-      ret = OB_SUCCESS;
-    } else if (is_not_supported_err(ret)) {
-      ret = OB_SUCCESS;
-      LOG_TRACE("plan cache don't support add this kind of plan now",  K(cache_object));
-    } else if (OB_FAIL(ret)) {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
-        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
-        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
-      }
-    } else {
-      pc_ctx.sql_ctx_.self_add_plan_ = true;
-      LOG_TRACE("Succeed to add plan to ObPlanCache", K(cache_object));
-    }
-  }
-
-  return ret;
-}
-
-int ObPlanCache::add_exists_cache_obj_by_stmt_id(ObILibCacheCtx &ctx,
-                                                 ObILibCacheObject *cache_obj)
-{
-  int ret = OB_SUCCESS;
-  ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-  // cache obj stat is already added, so set need_add_obj_stat_ to false to avoid adding it again
-  pc_ctx.need_add_obj_stat_ = false;
-  if (OB_FAIL(add_plan_cache(ctx, cache_obj))) {
-    if (OB_FAIL(deal_add_ps_plan_result(ret, pc_ctx, *cache_obj))) {
-      LOG_WARN("fail to deal result code", K(ret));
-    }
-  } else {
-    ObPsStmtId new_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
-    if (ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
-      ObPhysicalPlan *plan = dynamic_cast<ObPhysicalPlan *>(cache_obj);
-      if (OB_ISNULL(plan)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_PC_LOG(WARN, "convert cache_obj to ObPhysicalPlan failed", K(ret));
-      } else {
-        SQL_PC_LOG(TRACE, "ps_stmt_id changed", K(plan->stat_.ps_stmt_id_), K(new_stmt_id));
-        plan->stat_.ps_stmt_id_ = new_stmt_id;
-      }
-    } else {
-      ObPLFunction *pl_func = NULL;
-      if (NS_ANON == cache_obj->get_ns()) {
-        if (OB_ISNULL(pl_func = dynamic_cast<ObPLFunction *>(cache_obj))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected pl function", K(ret));
-        } else {
-          PLCacheObjStat &stat = pl_func->get_stat_for_update();
-          stat.pl_schema_id_ = new_stmt_id;
-        }
-      }
-    }
-  }
-  return ret;
-}
 
 // int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
 //                              const ObPsStmtId stmt_id,
