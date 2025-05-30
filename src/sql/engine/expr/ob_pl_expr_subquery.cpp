@@ -140,7 +140,8 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
   ObSQLSessionInfo *session = nullptr;
   ObObj result;
 
-  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
+  ObEvalCtx::TempAllocGuard memory_guard(ctx);
+  ObArenaAllocator &alloc = memory_guard.get_allocator();
   const ObExprPlSubQueryInfo *info = static_cast<ObExprPlSubQueryInfo *>(expr.extra_info_);
   ObObj *objs = nullptr;
   CK(0 == expr.arg_cnt_ ||
