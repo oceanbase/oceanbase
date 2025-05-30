@@ -856,21 +856,18 @@ bool ObStorageOssBase::is_inited()
   return is_inited_;
 }
 
-int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
-                                        const ObString &object_ob_string,
-                                        bool &is_file_exist,
-                                        const char *&remote_md5,
-                                        int64_t &file_length)
+int ObStorageOssBase::get_oss_file_meta(
+    const ObString &bucket_ob_string, const ObString &object_ob_string,
+    ObStorageObjectMetaBase &meta, const char *&remote_md5)
 {
   int ret = OB_SUCCESS;
-  is_file_exist = false;
+  meta.reset();
   remote_md5 = nullptr;
-  file_length = -1;
 
-  if (!is_inited()) {
+  if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "oss client not inited", K(ret));
-  } else if (OB_ISNULL(bucket_ob_string.ptr()) || OB_ISNULL(object_ob_string.ptr())) {
+  } else if (OB_UNLIKELY(bucket_ob_string.empty() || object_ob_string.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(bucket_ob_string), K(object_ob_string));
   } else {
@@ -878,36 +875,53 @@ int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
     aos_string_t object;
     aos_str_set(&bucket, bucket_ob_string.ptr());
     aos_str_set(&object, object_ob_string.ptr());
-    aos_table_t *resp_headers = NULL;
-    aos_status_t *aos_ret = NULL;
-    char *file_length_ptr = NULL;
+    aos_table_t *resp_headers = nullptr;
+    aos_status_t *aos_ret = nullptr;
+    const char *file_length_ptr = nullptr;
 
     ObStorageOSSRetryStrategy strategy;
-    if (OB_ISNULL(aos_ret = execute_until_timeout(
-            strategy, oss_head_object, oss_option_, &bucket, &object, nullptr/*headers*/, &resp_headers))
+    if (OB_ISNULL(aos_ret = execute_until_timeout(strategy,
+            oss_head_object, oss_option_, &bucket, &object, nullptr/*headers*/, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       if (OB_NOT_NULL(aos_ret) && OSS_OBJECT_NOT_EXIST == aos_ret->code) {
-        is_file_exist = false;
+        meta.is_exist_ = false;
       } else {
         convert_io_error(aos_ret, ret);
       }
-      OB_LOG(WARN, "fail to head object", K(bucket_ob_string), K(object_ob_string), K(ret));
+      OB_LOG(WARN, "fail to head object", K(ret), K(bucket_ob_string), K(object_ob_string));
       print_oss_info(resp_headers, aos_ret, ret);
     } else {
-      is_file_exist = true;
+      meta.is_exist_ = true;
       //get md5
       remote_md5 = static_cast<const char *>(apr_table_get(resp_headers, OSS_CONTENT_MD5));
       //get file length
-      if (OB_ISNULL(file_length_ptr = (char*)apr_table_get(resp_headers, OSS_CONTENT_LENGTH))) {
+      if (OB_ISNULL(file_length_ptr =
+          static_cast<const char *>(apr_table_get(resp_headers, OSS_CONTENT_LENGTH)))) {
         ret = OB_OBJECT_STORAGE_IO_ERROR;
         OB_LOG(WARN, "fail to get file length string from response", K(ret));
-      } else if (OB_FAIL(ob_atoll(file_length_ptr, file_length))) {
-        OB_LOG(WARN, "fail to convert string to int64", K(ret), K(file_length_ptr), K(file_length));
-      }
-
-      if (OB_SUCC(ret) && file_length < 0) {
+      } else if (OB_FAIL(ob_atoll(file_length_ptr, meta.length_))) {
+        OB_LOG(WARN, "fail to convert string to int64", K(ret), K(file_length_ptr));
+      } else if (OB_UNLIKELY(meta.length_ < 0)) {
         ret = OB_OBJECT_STORAGE_IO_ERROR;
-        OB_LOG(WARN, "fail to get object length", K(bucket_ob_string), K(object_ob_string), K(file_length), K(ret));
+        OB_LOG(WARN, "fail to get object length", K(ret), K(file_length_ptr),
+            K(bucket_ob_string), K(object_ob_string), K(meta));
+      } else {
+        const char *last_modified_str = nullptr;
+        if (OB_ISNULL(last_modified_str =
+            static_cast<const char *>(apr_table_get(resp_headers, "Last-Modified")))) {
+          ret = OB_OBJECT_STORAGE_IO_ERROR;
+          OB_LOG(WARN, "fail to Last-Modified string from response", K(ret), K(meta));
+        } else if (OB_FAIL(ob_strtotime(last_modified_str, meta.mtime_s_))) {
+          OB_LOG(WARN, "fail to convert string to int64", K(ret), K(last_modified_str));
+        }
+
+        // This field is currently only used by external tables.
+        // To avoid impacting existing functionality,
+        // even if the value is invalid, no error is reported. Instead, `meta.mtime_s_` is set to -1.
+        if (OB_FAIL(ret)) {
+          ret = OB_SUCCESS;
+          meta.mtime_s_ = -1;
+        }
       }
     }
   }
@@ -1589,9 +1603,8 @@ int ObStorageOssReader::open(const ObString &uri,
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  bool is_exist = false;
   const char *remote_md5 = nullptr;
-  int64_t file_length = -1;
+  ObStorageObjectMetaBase meta;
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1605,14 +1618,13 @@ int ObStorageOssReader::open(const ObString &uri,
     OB_LOG(WARN, "bucket name of object name is empty", K(ret));
   } else {
     if (head_meta) {
-      if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_exist,
-          remote_md5, file_length))) {
+      if (OB_FAIL(get_oss_file_meta(bucket_, object_, meta, remote_md5))) {
         OB_LOG(WARN, "fail to get file meta", K(bucket_), K(object_), K(ret));
-      } else if (!is_exist) {
+      } else if (!meta.is_exist_) {
         ret = OB_OBJECT_NOT_EXIST;
         OB_LOG(WARN, "object is not exist", K(bucket_), K(object_), K(ret));
       } else {
-        file_length_ = file_length;
+        file_length_ = meta.length_;
         has_meta_ = true;
       }
     }
@@ -1870,8 +1882,8 @@ int ObStorageOssUtil::head_object_meta(const common::ObString &uri, ObStorageObj
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri));
   } else if (OB_SUCCESS != (ret = get_bucket_object_name(uri, bucket_ob_string, object_ob_string, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(bucket_ob_string), K(object_ob_string), K(ret));
-  } else if (OB_FAIL(oss_base.get_oss_file_meta(bucket_ob_string, object_ob_string, obj_meta.is_exist_,
-             remote_md5, obj_meta.length_))) {
+  } else if (OB_FAIL(oss_base.get_oss_file_meta(
+      bucket_ob_string, object_ob_string, obj_meta, remote_md5))) {
     OB_LOG(WARN, "fail to get file meta info", K(bucket_ob_string), K(object_ob_string), K(ret));
   }
   return ret;
@@ -2395,21 +2407,29 @@ int ObStorageOssUtil::del_dir(const common::ObString &uri)
 
 //datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
 //time unit is second
-int ObStorageOssUtil::ob_strtotime(const char *date_time, int64_t &time)
+int ob_strtotime(const char *date_time, int64_t &time_s)
 {
   int ret = OB_SUCCESS;
-  time = 0;
-  struct tm tm_time;
-  memset(&tm_time, 0, sizeof(struct tm));
+  time_s = -1;
   if (OB_ISNULL(date_time)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "ob_strtotime get invalid argument", K(ret), KP(date_time));
-  } else if (OB_ISNULL(strptime(date_time, "%a, %d %b %Y %H:%M:%S %Z", &tm_time))) {
-    // ignore ret
-    //skip set ret, for compat data formate
-    OB_LOG(WARN, "failed to strptime", K(ret), K(*date_time));
   } else {
-    time = mktime(&tm_time);
+    try {
+      // Parses the date-time string into a current-time-zone timestamp using Aws::Utils::DateTime
+      // to ensure consistency with S3/OBDAL parsing results.
+      time_s = Aws::Utils::DateTime(date_time, Aws::Utils::DateFormat::RFC822).Seconds();
+      if (OB_UNLIKELY(time_s < 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "date time is invalid", K(ret), K(date_time), K(time_s));
+      }
+    } catch (const std::exception &e) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "fail to parse date time", K(ret), K(e.what()), K(date_time));
+    } catch (...) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "fail to parse date time", K(ret), K(date_time));
+    }
   }
   return ret;
 }
@@ -2974,21 +2994,22 @@ int ObStorageOssWriter::write_obj_(const char *obj_name, const char *buf, const 
       }
     }
     if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && enable_worm_) {
+      ObStorageObjectMetaBase meta;
       // validate md5
       int tmp_ret = OB_SUCCESS;
       const char *current_md5 = static_cast<const char *>(apr_table_get(headers, OSS_CONTENT_MD5));
-      if (OB_TMP_FAIL(get_oss_file_meta(bucket_, obj_name, is_exist, remote_md5, remote_length))) {
+      if (OB_TMP_FAIL(get_oss_file_meta(bucket_, obj_name, meta, remote_md5))) {
         OB_LOG(WARN, "fail to get oss file meta", K(ret), K(tmp_ret), K(bucket_), K(obj_name));
-      } else if (OB_UNLIKELY(!is_exist || OB_ISNULL(current_md5) || OB_ISNULL(remote_md5))) {
+      } else if (OB_UNLIKELY(!meta.is_exist_ || OB_ISNULL(current_md5) || OB_ISNULL(remote_md5))) {
         tmp_ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "object does not exist, or current_md5/remote_md5 is null",
-                  K(ret), K(tmp_ret), K(bucket_), K(obj_name), K(is_exist), KP(current_md5), KP(remote_md5));
-      } else if (size == remote_length && 0 == strcmp(current_md5, remote_md5)) {
+            K(ret), K(tmp_ret), K(bucket_), K(obj_name), KP(current_md5), KP(remote_md5), K(meta));
+      } else if (size == meta.length_ && 0 == strcmp(current_md5, remote_md5)) {
         ret = OB_SUCCESS;
       } else {
         ret = OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
         OB_LOG(WARN, "fail to overwrite", KR(ret), K(bucket_), K(obj_name),
-                 K(size), K(remote_length), K(current_md5), K(remote_md5), K(is_exist));
+            K(size), K(meta), K(current_md5), K(remote_md5));
       }
     }
     //print slow info

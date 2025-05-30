@@ -5022,7 +5022,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
     {
       ObSqlString full_file_name;
       ObString sampled_file_name;
-      ObExternalDataAccessDriver data_access_driver_;
+      ObExternalFileAccess data_access_driver_;
 
       if (OB_FAIL(sample_external_file_name(allocator, table_schema, sampled_file_name))) {
         LOG_WARN("failed to sample external file name", K(ret));
@@ -5034,7 +5034,6 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
                                                   sampled_file_name.after('%') : sampled_file_name;
         const char *loc_ptr = tmp_location.ptr();
         const bool has_trailing_slash = (loc_ptr[tmp_location.length() - 1] == '/');
-        int64_t file_size = 0;
 
         if (OB_FAIL(full_file_name.append_fmt("%.*s%s%.*s",
                                             static_cast<int>(tmp_location.length()),
@@ -5042,11 +5041,6 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
                                             has_trailing_slash ? "" : "/",
                                             file_name.length(), file_name.ptr()))) {
           LOG_WARN("failed to append file path", K(ret), K(tmp_location), K(file_name));
-        } else if (OB_FAIL(data_access_driver_.init(table_schema.get_external_file_location(),
-                              table_schema.get_external_file_location_access_info()))) {
-          LOG_WARN("failed to init data access driver", K(ret));
-        } else if (OB_FAIL(data_access_driver_.get_file_size(full_file_name.string(), file_size))) {
-          LOG_WARN("failed to get file size", K(ret));
         }
       }
 
@@ -5059,12 +5053,13 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
           arrow_alloc_.init(MTL_ID());
 
           parquet::ReaderProperties read_props_;
-          ObFilePrefetchBuffer prefetch_buffer(data_access_driver_);
-          std::shared_ptr<ObArrowFile> cur_file = std::make_shared<ObArrowFile>(data_access_driver_,
-                                                                                full_file_name.ptr(),
-                                                                                &arrow_alloc_,
-                                                                                prefetch_buffer);
-          if (OB_FAIL(cur_file->open())) {
+          std::shared_ptr<ObArrowFile> cur_file =
+            std::make_shared<ObArrowFile>(data_access_driver_, full_file_name.ptr(), &arrow_alloc_);
+          ObExternalFileUrlInfo file_info(table_schema.get_external_file_location(),
+                                          table_schema.get_external_file_location_access_info(),
+                                          full_file_name.string());
+          ObExternalFileCacheOptions cache_options;
+          if (OB_FAIL(cur_file->open(file_info, cache_options))) {
             LOG_WARN("failed to open file", K(ret));
           } else {
             file_reader_ = parquet::ParquetFileReader::Open(cur_file, read_props_);
@@ -5078,7 +5073,6 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
             }
           }
 
-          prefetch_buffer.destroy();
 
         } catch(const std::exception& e) {
           if (OB_SUCC(ret)) {
@@ -5099,7 +5093,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
     case ObExternalFileFormat::FormatType::ORC_FORMAT:
     {
       ObSqlString full_file_name;
-      ObExternalDataAccessDriver data_access_driver_;
+      ObExternalFileAccess data_access_driver_;
       ObString sampled_file_name;
       int64_t file_size = 0;
 
@@ -5120,18 +5114,19 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
                                             has_trailing_slash ? "" : "/",
                                             file_name.length(), file_name.ptr()))) {
           LOG_WARN("failed to append file path", K(ret), K(tmp_location), K(file_name));
-        } else if (OB_FAIL(data_access_driver_.init(table_schema.get_external_file_location(),
-                              table_schema.get_external_file_location_access_info()))) {
-          LOG_WARN("failed to init data access driver", K(ret));
-        } else if (OB_FAIL(data_access_driver_.get_file_size(full_file_name.string(), file_size))) {
-          LOG_WARN("failed to get file size", K(ret));
         }
       }
 
       if (OB_SUCC(ret)) {
         try {
-          if (OB_FAIL(data_access_driver_.open(full_file_name.ptr()))) {
+          ObExternalFileUrlInfo file_info(table_schema.get_external_file_location(),
+                                          table_schema.get_external_file_location_access_info(),
+                                          full_file_name.string());
+          ObExternalFileCacheOptions cache_options;
+          if (OB_FAIL(data_access_driver_.open(file_info, cache_options))) {
             LOG_WARN("failed to open file", K(ret));
+          } else if (OB_FAIL(data_access_driver_.get_file_size(file_size))) {
+            LOG_WARN("failed to get file size", K(ret));
           }
           if (OB_SUCC(ret)) {
             std::unique_ptr<ObOrcFileAccess> inStream(new ObOrcFileAccess(data_access_driver_,

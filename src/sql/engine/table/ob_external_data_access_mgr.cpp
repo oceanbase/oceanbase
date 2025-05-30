@@ -19,70 +19,187 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "ob_external_table_access_service.h"
-// #include "ob_external_data_accesser.h"
+// #include "ob_pcached_external_file_service.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+/// @brief deep copy url
+int ObExternalAccessFileInfo::copy_url(ObString &dest, const ObString &src, common::ObIAllocator *allocator) {
+  using obstr_size_t = common::ObString::obstr_size_t;
+  int ret = OB_SUCCESS;
+  char *url_buf = nullptr;
+  obstr_size_t url_size = src.length();
+  obstr_size_t actual_write = 0;
+  if (OB_UNLIKELY(!dest.empty() || src.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(dest), K(src));
+  } else if (OB_ISNULL(url_buf = reinterpret_cast<char*>(allocator->alloc(url_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory for url", K(ret), K(url_size));
+  } else if (FALSE_IT(dest.assign_buffer(url_buf, url_size))) {
+  } else if (FALSE_IT(actual_write = dest.write(src.ptr(), url_size))) {
+  } else if (OB_UNLIKELY(url_size != actual_write)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to copy url", K(ret), K(src), K(url_size), K(actual_write));
+  }
+  return ret;
+}
 /***************** ObExternalAccessFileInfo ****************/
+ObExternalAccessFileInfo::~ObExternalAccessFileInfo() { reset_(); }
 
 bool ObExternalAccessFileInfo::is_valid() const
 {
   return modify_time_ >= 0 &&
-         access_info_.is_valid() &&
+         allocator_ != nullptr &&
+         !url_.empty() &&
+         access_info_ != nullptr &&
+         access_info_->is_valid() &&
          device_handle_ != nullptr;
 }
 
-void ObExternalAccessFileInfo::reset()
+void ObExternalAccessFileInfo::reset_()
 {
+  OB_ASSERT(OB_ISNULL(url_.ptr()) || OB_NOT_NULL(allocator_));
+  OB_ASSERT(OB_ISNULL(access_info_) || OB_NOT_NULL(allocator_));
+
+  if (OB_NOT_NULL(allocator_)) {
+    if (OB_NOT_NULL(url_.ptr())) {
+      allocator_->free(url_.ptr());
+    }
+
+    if (OB_ISNULL(access_info_)) {
+    } else if (FALSE_IT(access_info_->~ObObjectStorageInfo())) {
+    } else {
+      allocator_->free(access_info_);
+      access_info_ = nullptr;
+    }
+  }
+
   url_.reset();
   modify_time_ = -1;
-  access_info_.reset();
   if (OB_NOT_NULL(device_handle_)) {
     ObDeviceManager::get_instance().release_device(device_handle_);
   }
   device_handle_ = nullptr;
+  allocator_ = nullptr;
 }
 
 int ObExternalAccessFileInfo::assign(const ObExternalAccessFileInfo &other)
 {
   int ret = OB_SUCCESS;
-  if (other.is_valid()) {
-    reset();
-    url_ = other.url_;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid other_file_info", K(ret), K(other));
+  } else if (this == &other) {
+    // nothing to do
+  } else if (OB_UNLIKELY(!other.is_copyable_())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("other_file_info is not copyable", K(ret), K(other));
+  } else {
+    reset_();
     modify_time_ = other.modify_time_;
     device_handle_ = other.device_handle_;
-    if (OB_FAIL(access_info_.assign(other.access_info_))) {
-      LOG_WARN("failed to assgin access_info", K(ret), K(other));
+
+    if (OB_FAIL(set_url_and_access_info_(other.url_, other.access_info_, other.allocator_))) {
+      LOG_WARN("fail to set url and access_info", K(ret), K(other));
     }
-  } else {
+  }
+  return ret;
+}
+
+int ObExternalAccessFileInfo::set_url_and_access_info_(
+  const ObString &url,
+  const ObObjectStorageInfo *access_info,
+  common::ObIAllocator *allocator) {
+  int ret = OB_SUCCESS;
+  if (!url_.empty() || allocator_ != nullptr || access_info_ != nullptr) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid other_file_info", K(other));
+    LOG_WARN("file info is already setted", K(ret), K(url_), KP(allocator_), KP(access_info_));
+  } else if (OB_ISNULL(access_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null access_info", K(ret));
+  } else if (OB_UNLIKELY(!access_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("access info is invalid", K(ret), KPC(access_info));
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null allocator", K(ret));
+  } else if (FALSE_IT(allocator_ = allocator)) {
+  } else if (!url.empty() &&
+             OB_FAIL(copy_url(url_, url, allocator_))) {
+    LOG_WARN("fail to copy url", K(ret), K(url));
+  } else if (OB_UNLIKELY(url.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty url", K(ret), K(url));
+  } else {
+    // clone access info
+    void *alloc = nullptr;
+    if (access_info->is_hdfs_storage()) {
+      if (OB_ISNULL(alloc = allocator_->alloc(sizeof(ObHDFSStorageInfo)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for hdfs access info",
+          K(ret), K(sizeof(ObHDFSStorageInfo)));
+      } else {
+        access_info_ = new(alloc) ObHDFSStorageInfo;
+      }
+    } else {
+      if (OB_ISNULL(alloc = allocator_->alloc(sizeof(ObBackupStorageInfo)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for backup access info",
+          K(ret), K(sizeof(ObBackupStorageInfo)));
+      } else {
+        access_info_ = new(alloc) ObBackupStorageInfo;
+      }
+    }
+
+    OB_ASSERT(OB_SUCCESS != ret || nullptr != access_info_);
+    if (OB_SUCC(ret) && OB_FAIL(access_info_->assign(*access_info))) {
+      LOG_WARN("fail to assign access info", K(ret));
+      access_info_->~ObObjectStorageInfo();
+      allocator_->free(access_info_);
+      access_info_ = nullptr;
+    }
   }
   return ret;
 }
 
 
 /***************** FileMapKey ****************/
-ObExternalDataAccessMgr::FileMapKey::FileMapKey():
-  url_(), modify_time_(-1)
-  {}
+ObExternalDataAccessMgr::FileMapKey::FileMapKey()
+ : url_(),
+   modify_time_(-1),
+   allocator_(nullptr)
+{
+}
 
-ObExternalDataAccessMgr::FileMapKey::FileMapKey(const ObString url, const int64_t modify_time):
-  url_(url), modify_time_(modify_time)
-  {}
+ObExternalDataAccessMgr::FileMapKey::~FileMapKey() {
+  reset();
+}
+
+ObExternalDataAccessMgr::FileMapKey::FileMapKey(
+  const int64_t modify_time,
+  common::ObIAllocator *allocator)
+  : url_(),
+    modify_time_(modify_time),
+    allocator_(allocator)
+{
+}
 
 bool ObExternalDataAccessMgr::FileMapKey::operator== (const FileMapKey &other) const {
   return (other.url_ == url_) && (other.modify_time_ == modify_time_);
 }
 
+uint64_t ObExternalDataAccessMgr::FileMapKey::hash(const ObString &url, const int64_t modify_time){
+  uint64_t hash_val = url.hash();
+  hash_val = common::murmurhash(&modify_time, sizeof(modify_time_), hash_val);
+  return hash_val;
+}
+
 uint64_t ObExternalDataAccessMgr::FileMapKey::hash() const
 {
-  uint64_t hash_val = 0;
-  hash_val = common::murmurhash(&url_, sizeof(url_), hash_val);
-  hash_val = common::murmurhash(&modify_time_, sizeof(modify_time_), hash_val);
-  return hash_val;
+  return hash(url_, modify_time_);
 }
 
 int ObExternalDataAccessMgr::FileMapKey::hash(uint64_t &hash_val) const
@@ -91,9 +208,66 @@ int ObExternalDataAccessMgr::FileMapKey::hash(uint64_t &hash_val) const
   return OB_SUCCESS;
 }
 
+bool ObExternalDataAccessMgr::FileMapKey::is_copyable_() const {
+  return allocator_ != nullptr;
+}
+
+int ObExternalDataAccessMgr::FileMapKey::init(const ObString &url) {
+  int ret = OB_SUCCESS;
+  if (!url_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file map key already initialized", K(ret), K(url_));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (!url.empty() &&
+             OB_FAIL(ObExternalAccessFileInfo::copy_url(url_, url, allocator_))) {
+    LOG_WARN("fail to copy url", K(ret), K(url));
+  } else if (OB_UNLIKELY(url.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty url", K(ret), K(url));
+  }
+  return ret;
+}
+
+int ObExternalDataAccessMgr::FileMapKey::assign(const FileMapKey &other) {
+  int ret = OB_SUCCESS;
+  if (!other.is_copyable_()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("other file map key is not copyable", K(ret), K(other));
+  } else if (this == &other) {
+    // nothing to do
+  } else {
+    reset();
+    modify_time_ = other.modify_time_;
+    allocator_ = other.allocator_;
+    if (!other.url_.empty() &&
+        OB_FAIL(ObExternalAccessFileInfo::copy_url(url_, other.url_, allocator_))) {
+      LOG_WARN("fail to copy url", K(ret), K(other.url_));
+    } else if (OB_UNLIKELY(other.url_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid empty url", K(ret), K(other.url_));
+    }
+  }
+  return ret;
+}
+
+void ObExternalDataAccessMgr::FileMapKey::reset() {
+  OB_ASSERT(OB_ISNULL(url_.ptr()) || OB_NOT_NULL(allocator_));
+  if (OB_ISNULL(allocator_)) {
+  } else if (OB_ISNULL(url_.ptr())) {
+  } else {
+    allocator_->free(url_.ptr());
+  }
+  url_.reset();
+  allocator_ = nullptr;
+  modify_time_ = -1;
+}
+
 /***************** ObExternalDataAccessMgr ****************/
 
 ObExternalDataAccessMgr::ObExternalDataAccessMgr() :
+    bucket_lock_(),
     kv_cache_(ObExternalDataPageCache::get_instance()),
     is_inited_(false)
 {
@@ -115,10 +289,12 @@ int ObExternalDataAccessMgr::init()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
 
-  const int64_t bucket_num = 524287;
+  const int bucket_num = BUCKET_NUM;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
+    LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(fd_map_.create(bucket_num, "ExDAMFDMap", "ExDAMFDMap", MTL_ID()))) {
     LOG_WARN("fail to initialize ExDAMfd map", K(ret), K(bucket_num));
   } else if (OB_FAIL(file_map_.create(bucket_num, "ExDAMFileMap", "ExDAMFileMap", MTL_ID()))) {
@@ -164,7 +340,7 @@ void ObExternalDataAccessMgr::destroy()
 }
 
 int ObExternalDataAccessMgr::open_and_reg_file(
-    const ObString url,
+    const ObString &url,
     const ObObjectStorageInfo *info,
     const int64_t modify_time,
     ObIOFd &fd)
@@ -172,19 +348,28 @@ int ObExternalDataAccessMgr::open_and_reg_file(
   static constexpr uint64_t OB_STORAGE_ID_EXTERNAL = 2001; // same as value in ob_external_table_access_service.cpp
   int ret = OB_SUCCESS;
   fd.reset();
-  FileMapKey key(url, modify_time);
+  FileMapKey key(modify_time, &inner_file_info_alloc_);
   InnerAccessFileInfo *inner_file_info = nullptr;
-  if (OB_ISNULL(info) || modify_time < 0) {
+  if (OB_FAIL(key.init(url))) {
+    LOG_WARN("fail to init file map key", K(ret), K(modify_time), K(url));
+  } else if (OB_UNLIKELY(modify_time < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), KPC(info));
+    LOG_WARN("invalid modify time", K(ret), K(modify_time));
+  } else if (OB_ISNULL(info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null access info", K(ret), KP(info));
+  } else if (OB_UNLIKELY(!info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("access info is invalid", K(ret), KPC(info));
   } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(fd), K(lbt()));
   }
 
-  { // get first
-    obsys::ObRLockGuard rg(rwlock_);
-    if (OB_FAIL(ret)) {
+  if (OB_SUCC(ret)) { // get first
+    ObBucketHashRLockGuard lock(bucket_lock_, key.hash());
+    if (OB_FAIL(lock.get_ret())) {
+      LOG_WARN("failed to hold bucket lock", K(ret), K(key.hash()));
     } else if (OB_FAIL(get_file_info_by_file_key_(key, fd, inner_file_info))) {
       if (OB_HASH_NOT_EXIST == ret) {
         // do nothing
@@ -197,9 +382,11 @@ int ObExternalDataAccessMgr::open_and_reg_file(
   }
 
   if (OB_HASH_NOT_EXIST == ret) {
-    obsys::ObWLockGuard wg(rwlock_);
+    ObBucketHashWLockGuard lock(bucket_lock_, key.hash());
     // double check
-    if (OB_FAIL(get_file_info_by_file_key_(key, fd, inner_file_info))) {
+    if (OB_FAIL(lock.get_ret())) {
+      LOG_WARN("failed to hold bucket lock", K(ret), K(key.hash()));
+    } else if (OB_FAIL(get_file_info_by_file_key_(key, fd, inner_file_info))) {
       if (OB_HASH_NOT_EXIST == ret) {
         // do nothing
       } else {
@@ -218,14 +405,13 @@ int ObExternalDataAccessMgr::open_and_reg_file(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc buffer", K(ret), KP(buf));
     } else if (FALSE_IT(inner_file_info = new (buf) InnerAccessFileInfo())) {
-    } else if (FALSE_IT(inner_file_info->info_.url_ = url)) {
-    } else if (FALSE_IT(inner_file_info->info_.modify_time_ = modify_time)) {
-    } else if (OB_FAIL(inner_file_info->info_.access_info_.assign(*info))) {
-      LOG_WARN("failed to assgin access_info", K(ret), K(key), KPC(info));
-    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(inner_file_info->info_.device_handle_,  // out
+    } else if (OB_FAIL(inner_file_info->info_.set_url_and_access_info_(url, info, &inner_file_info_alloc_))) {
+      LOG_WARN("fail to set url and access info", K(ret), K(key), K(url), KPC(info));
+    } else if (FALSE_IT(inner_file_info->info_.set_modify_time(modify_time))) {
+    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(inner_file_info->info_.get_device_handle_(),  // out
                                                                 fd,  // out
-                                                                &inner_file_info->info_.access_info_, // input
-                                                                inner_file_info->info_.url_, // input
+                                                                inner_file_info->info_.get_access_info(), // input
+                                                                inner_file_info->info_.get_url(), // input
                                                                 OB_STORAGE_ACCESS_READER,
                                                                 ObStorageIdMod(OB_STORAGE_ID_EXTERNAL,
                                                                               ObStorageUsedMod::STORAGE_USED_EXTERNAL)))) {
@@ -245,8 +431,9 @@ int ObExternalDataAccessMgr::open_and_reg_file(
       }
     }
 
-    if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
-      inner_file_info_alloc_.free(buf);
+    if (OB_FAIL(ret) && OB_NOT_NULL(inner_file_info)) {
+      inner_file_info->~InnerAccessFileInfo();
+      inner_file_info_alloc_.free(inner_file_info);
       inner_file_info = nullptr;
       buf = nullptr;
     }
@@ -259,7 +446,6 @@ int ObExternalDataAccessMgr::open_and_reg_file(
 int ObExternalDataAccessMgr::close_file(ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard wg(rwlock_);
   InnerAccessFileInfo *inner_file_info = nullptr;
   if (!fd.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -269,20 +455,45 @@ int ObExternalDataAccessMgr::close_file(ObIOFd &fd)
     LOG_WARN("not init", K(ret), K(fd), K(lbt()));
   } else if (OB_FAIL(file_map_.get_refactored(fd, inner_file_info))) {
     LOG_WARN("failed to get file from file_map", K(ret), KPC(inner_file_info));
-  } else if (0 == inner_file_info->dec_ref()) {
-    if (OB_FAIL(force_delete_from_file_map_(fd))) {
-      LOG_WARN("failed to erase file info", K(ret), K(fd), KPC(inner_file_info));
-    } else if (OB_FAIL(force_delete_from_fd_map_(FileMapKey(inner_file_info->info_.url_, inner_file_info->info_.modify_time_)))) {
-      LOG_WARN("failed to erase fd", K(ret), K(fd), KPC(inner_file_info));
-    } else if (OB_FAIL(ObBackupIoAdapter::close_device_and_fd(inner_file_info->info_.device_handle_, fd))) {
-      LOG_WARN("fail to close device and fd", KR(ret), KPC(inner_file_info));
+  } else {
+    int64_t ref_cnt = INT_MAX64;
+    {
+      // avoid unnecessary copy of url
+      const uint64_t bucket_hash = FileMapKey::hash(inner_file_info->info_.get_url(),
+                                              inner_file_info->info_.get_modify_time());
+      ObBucketHashWLockGuard lock(bucket_lock_, bucket_hash);
+      if (OB_FAIL(lock.get_ret())) {
+        LOG_WARN("failed to hold bucket lock", K(ret), K(bucket_hash));
+      } else if (FALSE_IT(ref_cnt = inner_file_info->dec_ref())) {
+      } else if (0 == ref_cnt) {
+        FileMapKey del_key(inner_file_info->info_.get_modify_time(), &inner_file_info_alloc_);
+        if (OB_FAIL(force_delete_from_file_map_(fd))) {
+          LOG_WARN("failed to erase file info", K(ret), K(fd), KPC(inner_file_info));
+        } else if (OB_FAIL(del_key.init(inner_file_info->info_.get_url()))) {
+            LOG_WARN("failed to init del file map key", K(ret), KPC(inner_file_info));
+        } else if (OB_FAIL(force_delete_from_fd_map_(del_key))){
+            LOG_WARN("failed to erase fd", K(ret), K(fd), KPC(inner_file_info));
+        }
+      }
     }
 
-    fd.reset();
-    inner_file_info_alloc_.free(inner_file_info);
-  } else if (0 > inner_file_info->dec_ref()) {
-    LOG_ERROR("invalid ref_cnt", K(ret), KPC(inner_file_info));
-    ob_abort();
+    if (0 == ref_cnt) {
+      // close fd by device handle without lock held.
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(ObBackupIoAdapter::close_device_and_fd(inner_file_info->info_.get_device_handle_(), fd))) {
+        LOG_WARN("fail to close device and fd", KR(ret), KPC(inner_file_info));
+      }
+      inner_file_info->~InnerAccessFileInfo();
+      inner_file_info_alloc_.free(inner_file_info);
+    }
+
+    fd.reset(); // reset fd whatever ref cnt is 0.
+
+    if (0 > ref_cnt) {
+      LOG_ERROR("invalid ref_cnt", K(ret), KPC(inner_file_info));
+      ob_abort();
+    }
   }
   return ret;
 }
@@ -366,7 +577,7 @@ int ObExternalDataAccessMgr::get_modify_time_by_fd_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inner_file_info is nullptr", K(ret), K(fd));
     } else {
-      modify_time = inner_file_info->info_.modify_time_;
+      modify_time = inner_file_info->info_.get_modify_time();
     }
   }
   return ret;
@@ -384,15 +595,14 @@ int ObExternalDataAccessMgr::get_file_size_by_fd(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(fd), K(lbt()));
   } else {
-    obsys::ObRLockGuard rg(rwlock_);
     InnerAccessFileInfo *inner_file_info = nullptr;
     if (OB_FAIL(file_map_.get_refactored(fd, inner_file_info))) {
       LOG_WARN("failed to get file from file_map", K(ret), K(fd), KPC(inner_file_info));
     } else if (OB_ISNULL(inner_file_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inner_file_info is nullptr", K(ret), K(fd));
-    } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(inner_file_info->info_.url_,
-                                                          &inner_file_info->info_.access_info_,
+    } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(inner_file_info->info_.get_url(),
+                                                          inner_file_info->info_.get_access_info(),
                                                           file_size))) {
       STORAGE_LOG(WARN, "fail to get file length", KR(ret), KPC(inner_file_info));
     }
@@ -416,8 +626,49 @@ int ObExternalDataAccessMgr::record_one_and_reset_seg_(
 }
 
 
+int ObExternalDataAccessMgr::inner_cache_hit_process_(
+    const int64_t cur_pos,
+    const int64_t cur_rd_offset,
+    const int64_t cur_buf_size,
+    const int64_t cache_page_size,
+    const ObExternalDataPageCacheValueHandle &v_hdl,
+    char* buffer,
+    ObExternalFileReadHandle &exReadhandle,
+    ObExtCacheMissSegment &cur_seg,
+    ObIArray<ObExtCacheMissSegment> &seg_arr)
+{
+  int ret = OB_SUCCESS;
+
+  MEMCPY(buffer + cur_pos, // dest
+          v_hdl.value_->get_buffer() + ( cur_rd_offset % cache_page_size ), // src
+          cur_buf_size); // size
+  exReadhandle.cache_hit_size_ += cur_buf_size;
+  if (OB_FAIL(record_one_and_reset_seg_(cur_seg, seg_arr))) {
+    LOG_WARN("failed to record seg", K(ret), K(cur_seg), K(seg_arr));
+  }
+  return ret;
+}
+int ObExternalDataAccessMgr::inner_cache_miss_process_(
+    const int64_t cur_pos,
+    const int64_t cur_rd_offset,
+    const int64_t cur_buf_size,
+    char* buffer,
+    ObExtCacheMissSegment &cur_seg,
+    ObIArray<ObExtCacheMissSegment> &seg_arr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cur_seg.push_piece(buffer + cur_pos, cur_rd_offset, cur_buf_size))) {
+    LOG_WARN("failed to push_piece", K(ret), KP(buffer + cur_pos), K(cur_rd_offset), K(cur_buf_size));
+  } else if (cur_seg.reach_2MB_boundary() && OB_FAIL(record_one_and_reset_seg_(cur_seg, seg_arr))) {
+    LOG_WARN("failed to record seg", K(ret), K(cur_seg), K(seg_arr));
+  }
+  return ret;
+}
+
 int ObExternalDataAccessMgr::fill_cache_hit_buf_and_get_cache_miss_segments_(
     const ObIOFd &fd,
+    const ObString &url,
+    const int64_t modify_time,
     const int64_t rd_offset,
     const int64_t rd_len,
     const bool enable_page_cache,
@@ -438,15 +689,7 @@ int ObExternalDataAccessMgr::fill_cache_hit_buf_and_get_cache_miss_segments_(
   }
 
   // get info of CacheKey involved
-  int64_t modify_time = -1;
   uint64_t tenant_id = MTL_ID();
-  if (OB_FAIL(ret)) {
-  } else {
-    obsys::ObRLockGuard rg(rwlock_);
-    if (OB_FAIL(get_modify_time_by_fd_(fd, modify_time))) {
-      LOG_WARN("failed to get modify_time", K(ret), K(fd), K(modify_time));
-    }
-  }
 
   // get data from page_cache, and record cache_miss_segment
   ObExtCacheMissSegment cur_seg;
@@ -456,8 +699,13 @@ int ObExternalDataAccessMgr::fill_cache_hit_buf_and_get_cache_miss_segments_(
   int64_t cur_page_offset = (rd_offset / page_size) * page_size;
   // cur_rd_offset to external file
   int64_t cur_rd_offset = rd_offset;
+  int64_t capacity = ((rd_offset + rd_len - cur_page_offset) / page_size) + 1;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(seg_arr.reserve(capacity))) {
+    LOG_WARN("failed to reserve", K(ret));
+  }
   while (OB_SUCC(ret) && cur_page_offset < rd_offset + rd_len) {
-    ObExternalDataPageCacheKey cur_key(fd, modify_time, cur_page_offset, tenant_id);
+    ObExternalDataPageCacheKey cur_key(url.ptr(), url.length(), modify_time, cur_page_offset, tenant_id);
     // cur_pos to buffer
     const int64_t cur_pos = cur_rd_offset - rd_offset;
     // size of buffer in this page,
@@ -469,25 +717,28 @@ int ObExternalDataAccessMgr::fill_cache_hit_buf_and_get_cache_miss_segments_(
     const int64_t cur_buf_size = min(min(cur_rd_offset % page_size != 0 ? page_size - (cur_rd_offset % page_size) : page_size, // header
                                      rd_len - (cur_rd_offset - rd_offset)), // tailer
                                      rd_len); // mid
-
-    if (enable_page_cache && OB_SUCC(kv_cache_.get_page(cur_key, handle)) && cur_buf_size <= handle.value_->get_valid_data_size()) {
-      // cache hit;
-      MEMCPY(buffer + cur_pos, // dest
-             handle.value_->get_buffer() + ( cur_rd_offset % page_size ), // src
-             cur_buf_size); // size
-      exReadhandle.cache_hit_size_ += cur_buf_size;
-      if (OB_FAIL(record_one_and_reset_seg_(cur_seg, seg_arr))) {
-        LOG_WARN("failed to record seg", K(ret), K(cur_seg), K(seg_arr));
+    if (!enable_page_cache) {
+      // disable page_cache
+      if (OB_FAIL(inner_cache_miss_process_(
+          cur_pos, cur_rd_offset, cur_buf_size, buffer, cur_seg, seg_arr))) {
+        LOG_WARN("failed to process cache_miss option", K(ret), K(cur_pos), K(cur_rd_offset), K(rd_offset), K(rd_len), K(cur_buf_size), K(cur_seg), K(seg_arr));
       }
-    } else if (enable_page_cache && ret != OB_ENTRY_NOT_EXIST) {
+    } else if (OB_SUCC(kv_cache_.get_page(cur_key, handle)) && cur_buf_size <= handle.value_->get_valid_data_size()) {
+      // cache hit;
+      if (OB_FAIL(inner_cache_hit_process_(
+          cur_pos, cur_rd_offset, cur_buf_size, page_size, handle, buffer, exReadhandle, cur_seg, seg_arr))) {
+        LOG_WARN("failed to process cache_miss option", K(ret), K(cur_pos), K(cur_rd_offset), K(rd_offset), K(rd_len), K(cur_buf_size), K(cur_seg), K(seg_arr));
+      }
+    } else if (ret != OB_ENTRY_NOT_EXIST) {
+      // error
       LOG_WARN("fail to get page", KR(ret), K(fd), K(cur_key));
-    } else { // (!enable_page_cache || ret == OB_ENTRY_NOT_EXIST)
+    } else {
+      // (enable_page_cache && ret == OB_ENTRY_NOT_EXIST)
       // cache miss;
       ret = OB_SUCCESS;
-      if (OB_FAIL(cur_seg.push_piece(buffer + cur_pos, cur_rd_offset, cur_buf_size))) {
-        LOG_WARN("failed to push_piece", K(ret), KP(buffer + cur_pos), K(cur_rd_offset), K(cur_buf_size), K(rd_offset), K(rd_len));
-      } else if (cur_seg.reach_2MB_boundary() && OB_FAIL(record_one_and_reset_seg_(cur_seg, seg_arr))) {
-        LOG_WARN("failed to record seg", K(ret), K(cur_seg), K(seg_arr));
+      if (OB_FAIL(inner_cache_miss_process_(
+          cur_pos, cur_rd_offset, cur_buf_size, buffer, cur_seg, seg_arr))) {
+        LOG_WARN("failed to process cache_miss option", K(ret), K(cur_pos), K(cur_rd_offset), K(rd_offset), K(rd_len), K(cur_buf_size), K(cur_seg), K(seg_arr));
       }
     }
     if (OB_SUCC(ret)) {
@@ -501,12 +752,13 @@ int ObExternalDataAccessMgr::fill_cache_hit_buf_and_get_cache_miss_segments_(
     LOG_WARN("failed to record seg", K(ret), K(cur_seg), K(seg_arr));
   }
 
-  FLOG_INFO("FEIDU DEBUG:IO IO SEG", K(ret), K(rd_offset), K(rd_len), K(seg_arr));
+  LOG_TRACE("IO IO SEG", K(ret), K(rd_offset), K(rd_len), K(seg_arr));
   return ret;
 }
 
 int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
     const ObIOFd &fd,
+    const ObString &url,
     const int64_t modify_time,
     const ObIArray<ObExtCacheMissSegment> &seg_arr,
     const ObExternalReadInfo &src_rd_info,
@@ -517,11 +769,12 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
   char *buffer_head = static_cast<char *>(src_rd_info.buffer_);
   const int64_t page_size = ObExternalDataPageCache::PAGE_SIZE;
   uint64_t tenant_id = MTL_ID();
-  ObExternalDataPageCache::ObExCachedReadPageIOCallback *callback = nullptr;
+  ObExCachedReadPageIOCallback *callback = nullptr;
   void *callback_buf = nullptr;
   void *page_cache_buf_ = nullptr;
-
-  if (!enable_page_cache) {
+  if (OB_FAIL(rd_info_arr.reserve(seg_arr.count()))) {
+    LOG_WARN("failed to reserve", K(ret));
+  } else if (!enable_page_cache) {
     for (int64_t i = 0; OB_SUCC(ret) && i < seg_arr.count(); i++) {
       const ObExtCacheMissSegment cur_seg = seg_arr.at(i);
       ObExternalReadInfo cur_rd_info(
@@ -539,6 +792,7 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
       const ObExtCacheMissSegment cur_seg = seg_arr.at(i);
       page_cache_buf_ = nullptr;
       callback_buf = nullptr;
+      callback = nullptr;
 
       // init cur_read_info basic_info
       const int64_t cur_buf_pos = cur_seg.get_rd_offset() - src_rd_info.offset_; // buffer_head + cur_buf_pos
@@ -552,30 +806,48 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
       } else {
         ObExternalReadInfo cur_rd_info(cur_cache_key_offset, page_cache_buf_, cur_cache_buf_len, src_rd_info.io_timeout_ms_, src_rd_info.io_desc_);
         // TODO mem of callback_buf should be free by @shifangdan.sfd's callback
-        if (OB_ISNULL(callback_buf = callback_alloc_.alloc(sizeof(ObExternalDataPageCache::ObExCachedReadPageIOCallback)))) {
+        if (OB_ISNULL(callback_buf = callback_alloc_.alloc(sizeof(ObExCachedReadPageIOCallback)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloca mem", K(ret), K(sizeof(ObExternalDataPageCache::ObExCachedReadPageIOCallback)), KP(callback_buf));
+          LOG_WARN("failed to alloca mem", K(ret), K(sizeof(ObExCachedReadPageIOCallback)), KP(callback_buf));
         } else {
-          ObExternalDataPageCacheKey key(fd, modify_time, cur_cache_key_offset, tenant_id);
-          callback = new (callback_buf) ObExternalDataPageCache::ObExCachedReadPageIOCallback(key, buffer_head + cur_buf_pos, cur_seg.get_rd_offset() % page_size,
-          cur_seg.get_rd_len(), &kv_cache_);
-          if (OB_FAIL(callback->set_allocator(&callback_alloc_))) {
-            LOG_WARN("failed to set allocator", K(ret), KPC(callback), K(&callback_alloc_));
-          }
-
-          if (OB_SUCC(ret)) {
-            cur_rd_info.io_callback_ = callback;
-          }
+          ObExternalDataPageCacheKey key(url.ptr(), url.length(), modify_time, cur_cache_key_offset, tenant_id);
+          callback = new (callback_buf) ObExCachedReadPageIOCallback(
+                key, buffer_head + cur_buf_pos, page_cache_buf_, cur_seg.get_rd_offset() % page_size,
+                cur_seg.get_rd_len(), &kv_cache_, &callback_alloc_);
+          cur_rd_info.io_callback_ = callback;
         }
 
         if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(callback)) {
+            callback->~ObExCachedReadPageIOCallback();
+            // in callback deconstruct, page_cache_buf_ will be free;
+            page_cache_buf_ = nullptr;
+          }
+          if (OB_NOT_NULL(page_cache_buf_)) {
+            callback_alloc_.free(page_cache_buf_);
+          }
+          if (OB_NOT_NULL(callback_buf)) {
+            callback_alloc_.free(callback_buf);
+          }
+          cur_rd_info.io_callback_ = nullptr;
+          cur_rd_info.buffer_ = nullptr;
         } else if (OB_FAIL(rd_info_arr.push_back(cur_rd_info))) {
           LOG_WARN("failed to push back cur_rd_info", K(ret), K(i), K(cur_seg), K(rd_info_arr), K(cur_rd_info));
         }
       }
     }
   }
-  FLOG_INFO("FEIDU DEBUG:IO info_arr", K(ret), K(rd_info_arr));
+
+  if (OB_FAIL(ret)) {
+    for (int64_t j = 0; j < rd_info_arr.count(); ++j) {
+      if (OB_NOT_NULL(rd_info_arr.at(j).io_callback_) &&
+          OB_NOT_NULL(rd_info_arr.at(j).io_callback_->get_allocator())) {
+        ObIAllocator *alloc_ = rd_info_arr.at(j).io_callback_->get_allocator();
+        static_cast<ObExCachedReadPageIOCallback*>(rd_info_arr.at(j).io_callback_)->ObExCachedReadPageIOCallback::~ObExCachedReadPageIOCallback();
+        alloc_->free(rd_info_arr.at(j).io_callback_);
+      }
+    }
+  }
   return ret;
 }
 
@@ -599,54 +871,64 @@ int ObExternalDataAccessMgr::async_read(
     LOG_WARN("not init", K(ret), K(fd), K(lbt()));
   } else {
     int64_t read_size = -1;
-    obsys::ObRLockGuard rg(rwlock_);
     InnerAccessFileInfo *inner_file_info = nullptr;
+
     if (OB_FAIL(file_map_.get_refactored(fd, inner_file_info))) {
       LOG_WARN("failed to get file from file_map", K(ret), K(fd), KPC(inner_file_info));
     } else if (OB_ISNULL(inner_file_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inner_file_info is nullptr", K(ret), K(fd));
-    } else if (OB_FAIL(fill_cache_hit_buf_and_get_cache_miss_segments_(fd, info.offset_, info.size_, enable_page_cache, static_cast<char*>(info.buffer_), handle, seg_arr))) {
+    } else if (OB_FAIL(fill_cache_hit_buf_and_get_cache_miss_segments_(
+          fd, inner_file_info->info_.get_url(), inner_file_info->info_.get_modify_time(),
+          info.offset_, info.size_, enable_page_cache, static_cast<char*>(info.buffer_),
+          handle, seg_arr))) {
       LOG_WARN("failed to do preprocess", K(ret));
-    } else if (OB_FAIL(get_rd_info_arr_by_cache_miss_seg_arr_(fd, inner_file_info->info_.modify_time_, seg_arr, info, enable_page_cache, rd_info_arr))) {
+    } else if (OB_FAIL(get_rd_info_arr_by_cache_miss_seg_arr_(
+          fd, inner_file_info->info_.get_url(), inner_file_info->info_.get_modify_time(),
+          seg_arr, info, enable_page_cache, rd_info_arr))) {
       LOG_WARN("failed to do preprocess", K(ret));
     } else if (seg_arr.count() != rd_info_arr.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("count should be equal", K(ret), K(seg_arr), K(rd_info_arr));
     } else {
-      ObIOFd tmp_fd = fd;
       ObStorageObjectHandle read_object_handle;
       for (int64_t i = 0; OB_SUCC(ret) && i < rd_info_arr.count(); i++) {
         ObExternalReadInfo &cur_info = rd_info_arr.at(i);
         read_object_handle.reset();
-        CONSUMER_GROUP_FUNC_GUARD(share::PRIO_IMPORT);
-        if (OB_FAIL(ObBackupIoAdapter::async_pread(
-              *inner_file_info->info_.device_handle_,
+        ObIOFd tmp_fd = fd;
+        if (OB_FAIL(inner_async_read_tmp_(
               tmp_fd,
-              static_cast<char *>(cur_info.buffer_),
-              cur_info.offset_,
-              cur_info.size_,
-              read_object_handle.get_io_handle()))) {
+              *inner_file_info,
+              cur_info,
+              read_object_handle))) {
           LOG_WARN("fail to async pread", KR(ret), KPC(inner_file_info), K(info), K(info));
+          for (int64_t j = i; j < rd_info_arr.count(); ++j) {
+            if (OB_NOT_NULL(rd_info_arr.at(j).io_callback_) &&
+                OB_NOT_NULL(rd_info_arr.at(j).io_callback_->get_allocator())) {
+              ObIAllocator *alloc_ = rd_info_arr.at(j).io_callback_->get_allocator();
+              static_cast<ObExCachedReadPageIOCallback*>(rd_info_arr.at(j).io_callback_)->ObExCachedReadPageIOCallback::~ObExCachedReadPageIOCallback();
+              alloc_->free(rd_info_arr.at(j).io_callback_);
+            }
+          }
         } else if (OB_FAIL(handle.add_object_handle(read_object_handle, seg_arr.at(i).get_rd_len()))) {
           LOG_WARN("failed to add new object_handle", K(ret), KPC(inner_file_info), K(info), K(handle), K(read_object_handle));
         }
       }
 
-      // should be delete when call callback by accesser
-      if (OB_FAIL(ret)) {
-      } else if (!enable_page_cache) {
-        // do nothing
-      } else if (OB_FAIL(handle.wait())) {
-        LOG_WARN("failed to wait", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < rd_info_arr.count(); i++) {
-          ObExternalReadInfo &cur_info = rd_info_arr.at(i);
-          if (OB_FAIL(cur_info.io_callback_->inner_process(static_cast<char*>(cur_info.buffer_), handle.object_handles_.at(i).get_data_size()))) {
-            LOG_WARN("failed to call callback", K(ret), K(i), K(cur_info));
-          }
-        }
-      }
+      // // should be delete when call callback by accesser
+      // if (OB_FAIL(ret)) {
+      // } else if (!enable_page_cache) {
+      //   // do nothing
+      // } else if (OB_FAIL(handle.wait())) {
+      //   LOG_WARN("failed to wait", K(ret));
+      // } else {
+      //   for (int64_t i = 0; OB_SUCC(ret) && i < rd_info_arr.count(); i++) {
+      //     ObExternalReadInfo &cur_info = rd_info_arr.at(i);
+      //     if (OB_FAIL(cur_info.io_callback_->inner_process(static_cast<char*>(cur_info.buffer_), handle.object_handles_.at(i).get_data_size()))) {
+      //       LOG_WARN("failed to call callback", K(ret), K(i), K(cur_info));
+      //     }
+      //   }
+      // }
     }
 
 
@@ -670,51 +952,49 @@ int ObExternalDataAccessMgr::async_read(
   }
   return ret;
 }
-int ObExternalDataAccessMgr::pread(
-    const ObIOFd &fd,
-    const ObExternalReadInfo &info,
-    const bool enable_page_cache,
-    int64_t &read_size)
+
+int ObExternalDataAccessMgr::inner_async_read_tmp_(
+    ObIOFd &fd,
+    InnerAccessFileInfo &inner_file_info,
+    const ObExternalReadInfo &external_read_info,
+    blocksstable::ObStorageObjectHandle &io_handle)
 {
   int ret = OB_SUCCESS;
-  InnerAccessFileInfo *inner_file_info = nullptr;
-  obsys::ObRLockGuard rg(rwlock_);
 
-  ObExternalFileReadHandle read_handle;
-  if (!fd.is_valid() || !info.is_valid()) {
+  if (OB_UNLIKELY(!fd.is_valid()) ||
+      OB_UNLIKELY(!inner_file_info.is_valid()) ||
+      OB_UNLIKELY(!external_read_info.is_valid()) ||
+      OB_UNLIKELY(external_read_info.size_ > OB_STORAGE_OBJECT_MGR.get_macro_block_size())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(fd), K(info));
-  } else if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), K(fd), K(lbt()));
-  } else if (OB_FAIL(async_read(fd, info, enable_page_cache, read_handle))) {
-    LOG_WARN("failed to async_read", K(ret), K(fd), K(info), K(read_handle));
-  } else if (OB_FAIL(read_handle.wait())) {
-    LOG_WARN("wait failed", K(ret), K(fd), K(info));
-  } else if (OB_FAIL(read_handle.get_user_buf_read_data_size(read_size))) {
-    LOG_WARN("failed to get read_size", K(ret), K(read_size), K(info), K(read_handle));
+    LOG_WARN("invalid argument", KR(ret), K(fd), K(inner_file_info), K(external_read_info));
+  } else {
+    ObExternalAccessFileInfo &external_file_info = inner_file_info.info_;
+    const ObString &url = external_file_info.get_url();
+    const int64_t modify_time = external_file_info.get_modify_time();
+    const ObObjectStorageInfo *access_info = external_file_info.get_access_info();
+    ObIOInfo io_info;
+    ObIODevice *io_device = external_file_info.get_device_handle_();
+    if (OB_FAIL(ObBackupIoAdapter::basic_init_read_info(
+        *io_device, fd,
+        static_cast<char *>(external_read_info.buffer_),
+        external_read_info.offset_,
+        external_read_info.size_,
+        OB_INVALID_ID/*sys_module_id*/,
+        io_info))) {
+      LOG_WARN("fail to init read info", KR(ret),
+          KPC(io_device), K(fd), K(external_file_info), K(external_read_info), K(io_handle));
+    } else {
+        io_info.callback_ = external_read_info.io_callback_;
+        if (external_read_info.io_timeout_ms_ > 0) {
+          io_info.timeout_us_ = external_read_info.io_timeout_ms_ * 1000L;
+        }
+        if (OB_FAIL(ObBackupIoAdapter::async_pread_with_io_info(
+            io_info, io_handle.get_io_handle()))) {
+          LOG_WARN("fail to async pread", KR(ret),
+              KPC(io_device), K(fd), K(external_file_info), K(external_read_info), K(io_handle));
+        }
+    }
   }
-  FLOG_INFO("FEIDU DEBUG: Read size and Real_read_size", K(ret), K(info), K(read_size), K(read_handle));
-
-
-  // } else if (OB_FAIL(file_map_.get_refactored(fd, inner_file_info))) {
-  //   LOG_WARN("failed to get file from file_map", K(ret), K(fd), KPC(inner_file_info));
-  // } else if (OB_ISNULL(inner_file_info)) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("inner_file_info is nullptr", K(ret), K(fd));
-  // } else {
-  //   ObIOHandle io_handle;
-  //   CONSUMER_GROUP_FUNC_GUARD(share::PRIO_IMPORT);
-  //   if (OB_FAIL(ObBackupIoAdapter::async_pread(*inner_file_info->info_.device_handle_, tmp_fd,
-  //       static_cast<char *>(info.buffer_), info.offset_, info.size_, io_handle))) {
-  //     LOG_WARN("fail to async pread", KR(ret), KPC(inner_file_info), K(info), K(info));
-  //   } else if (OB_FAIL(io_handle.wait())) {
-  //     LOG_WARN("fail to wait pread result", KR(ret), KPC(inner_file_info), K(info), K(info));
-  //   } else {
-  //     read_size = io_handle.get_data_size();
-  //   }
-  // }
-
   return ret;
 }
 

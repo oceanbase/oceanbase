@@ -83,13 +83,19 @@ public:
   ObStorageObjectMetaBase() : type_(ObStorageObjectMetaType::OB_OBJ_INVALID) { reset(); }
   ~ObStorageObjectMetaBase() { reset(); }
 
-  void reset() { is_exist_ = false; length_ = -1; }
+  void reset()
+  {
+    is_exist_ = false;
+    length_ = -1;
+    mtime_s_ = -1;
+  }
 
-  TO_STRING_KV(K_(is_exist), K_(length));
+  TO_STRING_KV(K_(is_exist), K_(length), K(type_), K(mtime_s_));
 
   bool is_exist_;
   int64_t length_;
   ObStorageObjectMetaType type_;
+  int64_t mtime_s_; // time of last modification, aligned with ObIODFileStat
 };
 
 // Each fragment meta corresponds to a normal object in a 'dir'.
@@ -165,7 +171,7 @@ public:
 
   static bool fragment_meta_cmp_func(const ObAppendableFragmentMeta &left, const ObAppendableFragmentMeta &right);
 
-  TO_STRING_KV(K_(is_exist), K_(length), K_(type), K_(fragment_metas));
+  INHERIT_TO_STRING_KV("ObStorageObjectMetaBase", ObStorageObjectMetaBase, K(fragment_metas_));
 
   ObSEArray<ObAppendableFragmentMeta, 10> fragment_metas_;
 };

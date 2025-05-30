@@ -195,10 +195,19 @@ struct ObStorageIdMod
     return storage_id_mod;
   }
 
+  static const ObStorageIdMod get_default_external_id_mod()
+  {
+    static const ObStorageIdMod storage_id_mod(
+        OB_STORAGE_ID_EXTERNAL, ObStorageUsedMod::STORAGE_USED_EXTERNAL);
+    return storage_id_mod;
+  }
+
   TO_STRING_KV(K_(storage_id), K_(storage_used_mod));
 
   uint64_t storage_id_;
   ObStorageUsedMod storage_used_mod_;
+public:
+  static const uint64_t OB_STORAGE_ID_EXTERNAL = 2001;
 };
 
 }

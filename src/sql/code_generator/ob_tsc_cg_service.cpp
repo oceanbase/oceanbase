@@ -268,10 +268,42 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
                             tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
   OZ (cg_.generate_rt_exprs(op.get_ext_column_convert_exprs(),
                             tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_column_convert_exprs_));
+  OZ (tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.prepare_allocate(op.get_ext_file_column_exprs().count()));
+  OZ (tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.prepare_allocate(op.get_ext_file_column_exprs().count()));
   if (OB_SUCC(ret)) {
-    for (int i = 0; i < op.get_ext_file_column_exprs().count(); i++) {
-      tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_
-          = op.get_ext_file_column_exprs().at(i)->get_column_idx();
+    common::ObArray<ObRawExpr *> tmp_expr_array;
+    for (int i = 0; OB_SUCC(ret) && i < op.get_ext_file_column_exprs().count(); i++) {
+      ObRawExpr *dep_expr = op.get_ext_file_column_exprs().at(i);
+      tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_ = dep_expr->get_column_idx();
+      int64_t found_cnt = 0;
+      int64_t idx = -1;
+      for (int j = 0; OB_SUCC(ret) && j < op.get_access_exprs().count(); ++j) {
+        ObColumnRefRawExpr *col_expr = NULL;
+        if (op.get_access_exprs().at(j)->is_column_ref_expr()
+            && (col_expr = static_cast<ObColumnRefRawExpr*>(
+                  op.get_access_exprs().at(j)))->is_stored_generated_column()) {
+          ObRawExpr *root_expr = col_expr->get_dependant_expr();
+          bool found = false;
+          if (OB_FAIL(ObRawExprUtils::find_expr(root_expr, dep_expr, found))) {
+            LOG_WARN("failed to find expr", K(ret));
+          } else if (found) {
+            ++found_cnt;
+            idx = j;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (1 == found_cnt) {
+          ObExpr *rt_expr = nullptr;
+          OZ (cg_.generate_rt_expr(*op.get_access_exprs().at(idx), rt_expr));
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(i) = rt_expr;
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(i)
+            = static_cast<ObColumnRefRawExpr *> (op.get_access_exprs().at(idx))->get_column_id();
+        } else {
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(i) = nullptr;
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(i) = OB_INVALID_ID;
+        }
+      }
     }
   }
 
@@ -805,6 +837,8 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
                                        op.use_column_store(),
                                        lookup_ctdef->pd_expr_spec_))) {
     LOG_WARN("generate pd storage flag for lookup ctdef failed", K(ret));
+  } else if (OB_FAIL(generate_ext_tbl_filter_pd_level(op, scan_ctdef, scan_ctdef.pd_expr_spec_))) {
+    LOG_WARN("generate filter pd level for external table failed", K(ret));
   }
   if (OB_SUCC(ret) && !scan_pushdown_filters.empty()) {
     bool pd_filter = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_filter_pushdown();
@@ -909,6 +943,63 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
     pd_spec.pd_storage_flag_.set_filter_pushdown(pd_filter);
     pd_spec.pd_storage_flag_.set_enable_skip_index(enable_skip_index);
     LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan), K(pd_filter), K(enable_skip_index));
+  }
+  return ret;
+}
+
+int ObTscCgService::generate_ext_tbl_filter_pd_level(const ObLogTableScan &op,
+                                                     const ObDASScanCtDef &scan_ctdef,
+                                                     ObPushdownExprSpec &pd_spec)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+  const ObLogPlan *log_plan = op.get_plan();
+  bool need_pd_level = false;
+  if (OB_NOT_NULL(log_plan) && log_op_def::LOG_TABLE_SCAN == op.get_type() &&
+      op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+    if (OB_FAIL(ObSQLUtils::get_external_table_type(scan_ctdef.external_file_format_str_.str_,
+                                                    format_type))) {
+      LOG_WARN("fail to get external table format", K(ret));
+    } else if (ObExternalFileFormat::PARQUET_FORMAT == format_type ||
+               ObExternalFileFormat::ORC_FORMAT == format_type) {
+      need_pd_level = true;
+    }
+  }
+  if (OB_SUCC(ret) && need_pd_level) {
+    int64_t pd_level = 0; // disable
+    const int64_t tenant_id =
+      log_plan->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      if (ObExternalFileFormat::PARQUET_FORMAT == format_type) {
+        pd_level = tenant_config->_parquet_filter_pushdown_level;
+      } else if (ObExternalFileFormat::ORC_FORMAT == format_type) {
+        pd_level = tenant_config->_orc_filter_pushdown_level;
+      }
+    }
+    if (OB_ISNULL(log_plan->get_stmt()) || OB_ISNULL(log_plan->get_stmt()->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stmt or query ctx is null", K(ret));
+    } else {
+      const ObOptParamHint *opt_params =
+        &(log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_);
+      ObObj pd_level_val;
+      ObOptParamHint::OptParamType param_type = ObOptParamHint::OptParamType::INVALID_OPT_PARAM_TYPE;
+      if (ObExternalFileFormat::PARQUET_FORMAT == format_type) {
+        param_type = ObOptParamHint::OptParamType::PARQUET_FILTER_PUSHDOWN_LEVEL;
+      } else if (ObExternalFileFormat::ORC_FORMAT == format_type) {
+        param_type = ObOptParamHint::OptParamType::ORC_FILTER_PUSHDOWN_LEVEL;
+      }
+      if (ObOptParamHint::OptParamType::INVALID_OPT_PARAM_TYPE == param_type) {
+      } else if (OB_FAIL(opt_params->get_opt_param(param_type, pd_level_val))) {
+        LOG_WARN("fail to get pushdown filter level opt param from hint", K(ret));
+      } else if (pd_level_val.is_int()) { // valid
+        pd_level = pd_level_val.get_int();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      pd_spec.ext_tbl_filter_pd_level_ = pd_level;
+    }
   }
   return ret;
 }

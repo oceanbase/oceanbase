@@ -356,11 +356,20 @@ int ObSelectIntoOp::init_orc_env()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("compress block is too low or too high", K(external_properties_.orc_format_.compression_block_size_));
   } else {
-    options_.setStripeSize(external_properties_.orc_format_.stripe_size_)
-            .setRowIndexStride(external_properties_.orc_format_.row_index_stride_)
-            .setCompressionBlockSize(external_properties_.orc_format_.compression_block_size_)
-            .setCompression(static_cast<orc::CompressionKind>(external_properties_.orc_format_.compress_type_index_))
-            .setMemoryPool(&orc_alloc_);
+    try {
+      options_.setStripeSize(external_properties_.orc_format_.stripe_size_)
+        .setRowIndexStride(external_properties_.orc_format_.row_index_stride_)
+        .setCompressionBlockSize(external_properties_.orc_format_.compression_block_size_)
+        .setCompression(
+          static_cast<orc::CompressionKind>(external_properties_.orc_format_.compress_type_index_))
+        .setMemoryPool(&orc_alloc_);
+    } catch (const std::exception &e) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());
+    } catch (...) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    }
   }
   return ret;
 }
@@ -4393,6 +4402,10 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
         parquet_data_writer->set_batch_written(false);
         parquet_data_writer->increase_row_batch_offset();
         if (OB_FAIL(ret)) {
+          // discard unwritten data if an error occurs
+          parquet_data_writer->set_batch_written(true);
+          parquet_data_writer->reset_row_batch_offset();
+          parquet_data_writer->reset_value_offsets();
         } else if (parquet_data_writer->reach_batch_end()) {
           if (OB_FAIL(parquet_data_writer->write_file())) {
             LOG_WARN("failed to write parquet row batch", K(ret));
@@ -4531,6 +4544,9 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
         orc_data_writer->set_batch_written(false);
         orc_data_writer->increase_row_batch_offset();
         if (OB_FAIL(ret)) {
+          // discard unwritten data if an error occurs
+          orc_data_writer->set_batch_written(true);
+          orc_data_writer->reset_row_batch_offset();
         } else if (orc_data_writer->reach_batch_end()) {
           if (OB_FAIL(orc_data_writer->write_file())) {
             LOG_WARN("failed to write parquet row batch", K(ret));

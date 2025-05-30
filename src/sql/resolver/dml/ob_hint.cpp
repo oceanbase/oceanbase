@@ -1025,6 +1025,12 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("range"));
       break;
     }
+    case PARQUET_FILTER_PUSHDOWN_LEVEL:
+    case ORC_FILTER_PUSHDOWN_LEVEL: {
+      is_valid = val.is_int() && val.get_int() >= 0 && val.get_int() <= 4;
+      break;
+    }
+
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

@@ -46,6 +46,8 @@ public:
                                const bool is_global_index_lookup,
                                const bool use_column_store,
                                ObPushdownExprSpec &pd_spec);
+  int generate_ext_tbl_filter_pd_level(const ObLogTableScan &op, const ObDASScanCtDef &scan_ctdef,
+                                       ObPushdownExprSpec &pd_spec);
   int generate_table_loc_meta(uint64_t table_loc_id,
                               const ObDMLStmt &stmt,
                               const share::schema::ObTableSchema &table_schema,

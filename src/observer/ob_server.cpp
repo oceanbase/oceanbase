@@ -34,6 +34,7 @@
 #include "storage/ob_file_system_router.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
+#include "sql/engine/table/ob_external_data_page_cache.h"
 #include "share/ob_device_manager.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
@@ -3154,6 +3155,8 @@ int ObServer::init_storage()
       LOG_WARN("fail to init disk usage report task", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::DiskUseReport))) {
       LOG_WARN("fail to initialize disk usage report timer", KR(ret));
+    } else if (OB_FAIL(sql::ObExternalDataPageCache::get_instance().init("ObExtPageCache", 1))) {
+      LOG_ERROR("init external_table pageCache failed", KR(ret));
     }
   }
 

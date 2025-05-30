@@ -40,6 +40,21 @@ struct ObMinMaxFilterParam {
                    : null_count_(null_count), min_datum_(min_datum),
                      max_datum_(max_datum), is_min_prefix_(false),
                      is_max_prefix_(false) {}
+
+  OB_INLINE void set_uncertain()
+  {
+    // reset datum ptr to local buffer and set datum as null (uncertain)
+    null_count_.reuse();
+    min_datum_.reuse();
+    max_datum_.reuse();
+    null_count_.set_null();
+    min_datum_.set_null();
+    max_datum_.set_null();
+  }
+  OB_INLINE bool is_uncertain() const
+  {
+    return null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
+  }
   blocksstable::ObStorageDatum null_count_;
   blocksstable::ObStorageDatum min_datum_;
   blocksstable::ObStorageDatum max_datum_;
@@ -74,7 +89,6 @@ public:
                                   common::ObIAllocator &allocator,
                                   const bool use_vectorize);
   int falsifiable_pushdown_filter(const uint32_t col_idx,
-                                  const ObObjMeta &obj_meta,
                                   const ObSkipIndexType index_type,
                                   const int64_t row_count,
                                   ObMinMaxFilterParam &param,
@@ -85,7 +99,6 @@ public:
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
-                        const ObObjMeta &obj_meta,
                         const ObMinMaxFilterParam &param,
                         sql::ObWhiteFilterExecutor &filter,
                         common::ObIAllocator &allocator);
@@ -160,7 +173,6 @@ private:
 
   int black_filter_on_min_max(const uint32_t col_idx,
                               const uint64_t row_count,
-                              const ObObjMeta &obj_meta,
                               ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
                               common::ObIAllocator &allocator,

@@ -104,7 +104,6 @@ void read_whole_file() {
   PARQUET_ASSIGN_OR_THROW(infile,
                           arrow::io::ReadableFile::Open("parquet-arrow-example.parquet",
                                                         arrow::default_memory_pool()));
-
   std::unique_ptr<parquet::arrow::FileReader> reader;
   PARQUET_THROW_NOT_OK(
       parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
@@ -167,7 +166,6 @@ void read_single_column_chunk() {
   PARQUET_THROW_NOT_OK(arrow::PrettyPrint(*array, 4, &std::cout));
   std::cout << std::endl;
 }
-
 class ObParquetAllocator : public ::arrow::MemoryPool
 {
 public:

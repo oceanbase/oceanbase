@@ -442,6 +442,22 @@ public:
     return ret;
   };
 
+  static int string_to_templob_result(const ObObjType type, const bool has_lob_header,
+                                      ObIAllocator &allocator, const ObString &str,
+                                      ObDatum &res)
+  {
+    int ret = OB_SUCCESS;
+    ObTextStringDatumResult tmp_lob_res(type, has_lob_header, &res);
+    if (OB_FAIL(tmp_lob_res.init(str.length(), &allocator))) {
+      COMMON_LOG(WARN, "Lob: init lob result failed");
+    } else if (OB_FAIL(tmp_lob_res.append(str.ptr(), str.length()))) {
+      COMMON_LOG(WARN, "Lob: append lob result failed");
+    } else {
+      tmp_lob_res.set_result();
+    }
+    return ret;
+  };
+
   static int str_to_lob_storage_obj(ObIAllocator &allocator, const ObString& input, common::ObObj& output)
   {
     INIT_SUCC(ret);

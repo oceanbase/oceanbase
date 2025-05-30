@@ -24,11 +24,26 @@
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/basic/ob_select_into_basic.h"
 #include "sql/engine/table/ob_file_prefetch_buffer.h"
+#include "sql/engine/table/ob_file_prebuffer.h"
+#include "sql/engine/table/ob_external_file_access.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+class ObErrorCodeException : public std::runtime_error {
+public:
+  explicit ObErrorCodeException(const int error_code) :
+    runtime_error("ObErrorCodeException"), error_code_(error_code) {}
+  ~ObErrorCodeException() noexcept override {}
+  ObErrorCodeException(const ObErrorCodeException& exception) : runtime_error(exception),
+    error_code_(exception.error_code_) {}
+  int get_error_code() const { return error_code_; }
+private:
+  ObErrorCodeException& operator=(const ObErrorCodeException&);
+  int error_code_;
+};
 
 class ObOrcMemPool : public orc::MemoryPool {
 public:
@@ -102,18 +117,15 @@ private:
 
 class ObArrowFile : public arrow::io::RandomAccessFile {
 public:
-  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char *file_name,
-              arrow::MemoryPool *pool, ObFilePrefetchBuffer &file_prefetch_buffer) :
-    file_reader_(file_reader),
-    file_name_(file_name), pool_(pool), file_prefetch_buffer_(file_prefetch_buffer)
-  {
-    file_prefetch_buffer_.clear();
-  }
+  ObArrowFile(ObExternalFileAccess &file_reader, const char *file_name, arrow::MemoryPool *pool) :
+    file_reader_(file_reader), file_name_(file_name), pool_(pool), position_(0),
+    timeout_ts_(INT64_MAX), file_prebuffer_(nullptr)
+  {}
   ~ObArrowFile() override {
     file_reader_.close();
   }
 
-  int open();
+  int open(const ObExternalFileUrlInfo &info, const ObExternalFileCacheOptions &cache_options);
 
   virtual arrow::Status Close() override;
 
@@ -127,12 +139,17 @@ public:
   virtual arrow::Status Seek(int64_t position) override;
   virtual arrow::Result<int64_t> Tell() const override;
   virtual arrow::Result<int64_t> GetSize() override;
+  void set_file_prebuffer(ObFilePreBuffer *file_prebuffer);
+  void set_timeout_timestamp(const int64_t timeout_ts);
+  int read_from_cache(int64_t position, int64_t nbytes, void* out, bool &is_hit);
+
 private:
-  ObExternalDataAccessDriver &file_reader_;
+  ObExternalFileAccess &file_reader_;
   const char* file_name_;
   arrow::MemoryPool *pool_;
   int64_t position_;
-  ObFilePrefetchBuffer &file_prefetch_buffer_;
+  int64_t timeout_ts_;
+  ObFilePreBuffer *file_prebuffer_;
 };
 
 class ObParquetOutputStream : public arrow::io::OutputStream

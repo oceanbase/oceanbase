@@ -2709,6 +2709,39 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_external_table_prefetch, OB_TENANT_PARAMETER, "True",
+         "enable external table prebuffer",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_external_table_memory_cache, OB_TENANT_PARAMETER, "True",
+         "enable external table memory cache",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_external_table_disk_cache, OB_TENANT_PARAMETER, "True",
+         "enable external table disk cache",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(external_table_io_hole_size, OB_TENANT_PARAMETER, "1M", "[0B,)",
+        "deternimistic the maximum distance in bytes between two consecutive ranges;"
+        " beyond this value, ranges are not combined",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(external_table_io_range_size, OB_TENANT_PARAMETER, "8M", "[0B,)",
+        "deternimistic the maximum size in bytes of a combined range;"
+        " if combining two consecutive ranges would produce a range of a size greater"
+        " than this, they are not combined",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_orc_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
+        "This parameter controls the filter pushdown level for ORC external tables, "
+        "where 0 disables filter pushdown, 1 pushes filters down to the file level, "
+        "2 pushes filters down to the stripe level, 3 pushes filters down to the row index level "
+        "and 4 pushes filters down to the encoding level. The default value is 4.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
+DEF_INT(_parquet_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
+        "This parameter is used to control the predicate push level of the PARQUET external table. "
+        "The optional value is 0, which means disabling filter condition pushdown, "
+        "1, which means pushdown to file level, 2, which means pushdown to RowGroup level, "
+        "3, which means pushdown to Page level and 4, which means pushdown to Encoding level. "
+        "The default value is 4.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 
 DEF_INT(async_ps_cursor_max_count, OB_CLUSTER_PARAMETER, "0", "[0, 1024]",
         "the max count of async ps cursor. The default value is 0. Range: [0, 1024] in integer",

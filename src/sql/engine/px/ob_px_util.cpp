@@ -305,7 +305,6 @@ int ObPXServerAddrUtil::get_external_table_loc(
       ObSEArray<const ObTableScanSpec *, 2> scan_ops;
       const ObTableScanSpec *scan_op = nullptr;
       const ObOpSpec *root_op = NULL;
-      int64_t expected_location_cnt = 0;
       dfo.get_root(root_op);
       if (OB_ISNULL(root_op)) {
         ret = OB_ERR_UNEXPECTED;
@@ -318,20 +317,24 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
                                                             is_odps_external_table))) {
         LOG_WARN("failed to check is odps external table or not", K(ret));
-      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(),
-                                      ((!ext_file_urls.empty() && is_odps_external_table) ?
-                                        all_locations.count() : dfo.get_external_table_files().count())))) {
-
-      } else if (1 == expected_location_cnt) {
-        if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
-          LOG_WARN("fail to push push back", K(ret));
+      } else if (is_odps_external_table) {
+        int64_t expected_location_cnt = std::min(dfo.get_dop(), all_locations.count());
+        if (1 == expected_location_cnt) {
+          if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
+            LOG_WARN("fail to push push back", K(ret));
+          }
+        } else if (expected_location_cnt >= all_locations.count() ?
+                     OB_FAIL(target_locations.assign(all_locations)) :
+                     OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(
+                       all_locations, expected_location_cnt, target_locations))) {
+          LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations),
+                   K(expected_location_cnt));
         }
-      } else if (expected_location_cnt >= all_locations.count() ?
-                   OB_FAIL(target_locations.assign(all_locations))
-                 : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
-                                                                          expected_location_cnt,
-                                                                          target_locations))) {
-        LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+      } else {
+        if (OB_FAIL(ObExternalTableUtils::select_external_table_loc_by_load_balancer(
+              ext_file_urls, all_locations, target_locations))) {
+          LOG_WARN("failed to select external table location", K(ret));
+        }
       }
     }
     LOG_TRACE("calc external table location", K(target_locations));
@@ -400,7 +403,8 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     } else {
       ObArray<int64_t> file_assigned_sqc_ids;
-      OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
+      OZ(ObExternalTableUtils::assigned_files_to_sqcs_by_load_balancer(files, sqcs,
+                                                                       file_assigned_sqc_ids));
       if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));

@@ -84,6 +84,9 @@ private:
 struct ObExternalFileCacheOptions
 {
   ObExternalFileCacheOptions():enable_page_cache_(false), enable_disk_cache_(false) {}
+  ObExternalFileCacheOptions(const bool enable_page_cache, const bool enable_disk_cache) :
+    enable_page_cache_(enable_page_cache), enable_disk_cache_(enable_disk_cache)
+  {}
   ~ObExternalFileCacheOptions() { reset(); }
   void set_enable_page_cache() { enable_page_cache_ = true; }
   void set_enable_disk_cache() { enable_disk_cache_ = true; }
@@ -92,12 +95,11 @@ struct ObExternalFileCacheOptions
   void reset() { enable_disk_cache_ = false; enable_page_cache_ = false;  }
   TO_STRING_KV(K_(enable_page_cache), K_(enable_disk_cache));
 private:
-  // If bypass_page_cache_ == True :
-  //    enable get data from PageCache
-  //    disable put data (read from disk) into cache
+  // If enable_page_cache_ == False :
+  //    disable put to and get from page cache
   bool enable_page_cache_;
-  // If bypass_disk_cache_ == True :
-  //    get data from OSS directly
+  // If enable_disk_cache_ == False :
+  //   disable put to and get from disk cache
   bool enable_disk_cache_;
 };
 
@@ -112,13 +114,13 @@ public:
   int wait();
   void reset();
   bool is_valid() const;
+  int get_user_buf_read_data_size(int64_t &read_size) const;
   TO_STRING_KV(K(object_handles_.count()), K_(object_handles), K_(expect_read_size), K_(cache_hit_size));
 private:
   int add_object_handle(
     const blocksstable::ObStorageObjectHandle &object_handle,
     const int64_t user_rd_length);
   int get_cache_read_data_size(int64_t &read_size) const;
-  int get_user_buf_read_data_size(int64_t &read_size) const;
 protected:
   ObSEArray<blocksstable::ObStorageObjectHandle, 1> object_handles_;
   ObSEArray<int64_t, 1> expect_read_size_;

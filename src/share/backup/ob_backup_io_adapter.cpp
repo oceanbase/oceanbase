@@ -272,6 +272,27 @@ int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, c
   return ret;
 }
 
+int ObBackupIoAdapter::get_file_modify_time(const common::ObString &uri,
+    const common::ObObjectStorageInfo *storage_info, int64_t &modify_time_s)
+{
+  int ret = OB_SUCCESS;
+  ObIODFileStat statbuf;
+  modify_time_s = -1;
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->stat(device_guard.uri_cstr_, statbuf))) {
+    OB_LOG(WARN, "fail to get file stat!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
+  } else {
+    modify_time_s = statbuf.mtime_s_;
+    if (OB_UNLIKELY(modify_time_s <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "modify time is invalid", KR(ret), K(uri), KPC(storage_info), K(modify_time_s));
+    }
+  }
+  return ret;
+}
+
 // if the uri's object does not exist, del_file will return OB_SUCCESS
 int ObBackupIoAdapter::del_file(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info)
 {
@@ -464,7 +485,7 @@ int ObBackupIoAdapter::pwrite(
 
 int ObBackupIoAdapter::seal_file(
   const common::ObString &uri,
-  const share::ObBackupStorageInfo *storage_info,
+  const common::ObObjectStorageInfo *storage_info,
   const common::ObStorageIdMod &storage_id_mod)
 {
   int ret = OB_SUCCESS;
@@ -1420,6 +1441,50 @@ int ObBackupIoAdapter::async_io_manager_read(
   io_info.flag_.set_read();
   if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle))) {
     OB_LOG(WARN, "fail to aio read", KR(ret), K(io_info));
+  }
+  return ret;
+}
+
+int ObBackupIoAdapter::basic_init_read_info(
+    common::ObIODevice &device_handle,
+    common::ObIOFd &fd,
+    char *buf,
+    const int64_t offset,
+    const int64_t size,
+    const uint64_t sys_module_id,
+    common::ObIOInfo &io_info)
+{
+  int ret = OB_SUCCESS;
+  io_info.tenant_id_ = get_tenant_id();
+  io_info.buf_ = buf;
+  io_info.user_data_buf_ = buf;
+  io_info.offset_ = offset;
+  io_info.size_ = size;
+  fd.device_handle_ = &device_handle;
+  io_info.fd_ = fd;
+  const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
+  io_info.timeout_us_ = real_timeout_ms * 1000L;
+  io_info.flag_.set_sync();
+  io_info.flag_.set_sys_module_id(sys_module_id);
+  io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
+  io_info.flag_.set_read();
+  return ret;
+}
+
+int ObBackupIoAdapter::async_pread_with_io_info(
+    const common::ObIOInfo &io_info,
+    common::ObIOHandle &io_handle)
+{
+  int ret = OB_SUCCESS;
+  int flag = -1;
+  ObFdSimulator::get_fd_flag(io_info.fd_, flag);
+  if ((ObStorageAccessType::OB_STORAGE_ACCESS_READER != flag)
+      && ObStorageAccessType::OB_STORAGE_ACCESS_NOHEAD_READER != flag
+      && (ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER != flag)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid storage access type", KR(ret), K(flag), K(io_info));
+  } else if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle))) {
+    OB_LOG(WARN, "fail to aio read", KR(ret), K(flag), K(io_info));
   }
   return ret;
 }

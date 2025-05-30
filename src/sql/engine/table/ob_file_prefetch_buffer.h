@@ -16,15 +16,16 @@
 #include "share/ob_i_tablet_scan.h"
 #include "lib/file/ob_file.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/table/ob_external_file_access.h"
 
 namespace oceanbase {
 namespace sql {
 class ObFilePrefetchBuffer
 {
 public:
-  ObFilePrefetchBuffer(ObExternalDataAccessDriver &file_reader) :
-    offset_(0), length_(0), buffer_size_(0), buffer_(nullptr), file_reader_(file_reader),
-    alloc_(common::ObMemAttr(MTL_ID(), "PrefetchBuffer"))
+  ObFilePrefetchBuffer(ObExternalFileAccess &file_reader) :
+    offset_(0), length_(0), buffer_size_(0), buffer_(nullptr), ts_timeout_us_(INT64_MAX),
+    file_reader_(file_reader), alloc_(common::ObMemAttr(MTL_ID(), "PrefetchBuffer"))
   {}
   ~ObFilePrefetchBuffer()
   {
@@ -36,13 +37,15 @@ public:
   bool in_prebuffer_range(const int64_t position, const int64_t nbytes);
   // NOTE: before calling, make sure it is within the buffer range.
   void fetch(const int64_t position, const int64_t nbytes, void *out);
+  void set_timeout_timestamp(const int64_t ts_timeout_us);
 
 private:
   int64_t offset_;
   int64_t length_;
   int64_t buffer_size_;
   void *buffer_;
-  ObExternalDataAccessDriver &file_reader_;
+  int64_t ts_timeout_us_;
+  ObExternalFileAccess &file_reader_;
   common::ObMalloc alloc_;
 };
 }

@@ -395,11 +395,14 @@ ObVTableScanParam() :
       ext_column_convert_exprs_(NULL),
       partition_infos_(NULL),
       external_object_ctx_(NULL),
+      ext_mapping_column_exprs_(NULL),
+      ext_mapping_column_ids_(NULL),
       schema_guard_(NULL),
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(NULL),
       auto_split_params_(NULL),
-      is_tablet_spliting_(false)
+      is_tablet_spliting_(false),
+      ext_tbl_filter_pd_level_(0)
   { }
 
   virtual ~ObVTableScanParam()
@@ -481,6 +484,8 @@ ObVTableScanParam() :
   ObString external_file_access_info_;
   const share::ObExternalTablePartInfoArray *partition_infos_;
   const share::ObExternalObjectCtx *external_object_ctx_;
+  const sql::ExprFixedArray *ext_mapping_column_exprs_;
+  const common::ObFixedArray<uint64_t, ObIAllocator> *ext_mapping_column_ids_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()
@@ -525,6 +530,7 @@ public:
   const sql::ObExpr *auto_split_filter_;
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
+  int64_t ext_tbl_filter_pd_level_;
 };
 
 class ObITabletScan

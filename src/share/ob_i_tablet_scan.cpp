@@ -65,7 +65,8 @@ DEF_TO_STRING(ObVTableScanParam)
        K_(external_file_location),
        K_(auto_split_filter),
        K_(auto_split_params),
-       K_(is_tablet_spliting));
+       K_(is_tablet_spliting),
+       K_(ext_tbl_filter_pd_level));
   J_OBJ_END();
   return pos;
 }

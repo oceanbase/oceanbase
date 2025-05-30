@@ -230,7 +230,6 @@ public:
   ////////////////////// READY //// TO //// DROP ///// BELOW ////////////////////////////////
   int is_exist(const common::ObString &uri, bool &exist);
   int is_directory(const common::ObString &uri, const bool is_adaptive, bool &is_directory);
-  int get_file_length(const common::ObString &uri, int64_t &file_length);
   int del_file(const common::ObString &uri);
   int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   int list_directories(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
@@ -248,6 +247,7 @@ public:
   // 'SIMULATE_APPEND' object, please set @is_adaptive as TRUE.
   int is_exist(const common::ObString &uri, const bool is_adaptive, bool &exist);
   int get_file_length(const common::ObString &uri, const bool is_adaptive, int64_t &file_length);
+  int get_file_stat(const common::ObString &uri, const bool is_adaptive, ObIODFileStat &statbuf);
   int list_appendable_file_fragments(const common::ObString &uri, ObStorageObjectMeta &obj_meta);
 
   int del_file(const common::ObString &uri, const bool is_adaptive);

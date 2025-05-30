@@ -155,8 +155,9 @@ public:
   int init(const common::ObString &storage_info);
   int init_oss_options(aos_pool_t *&aos_pool, oss_request_options_t *&oss_option);
   virtual bool is_inited();
-  int get_oss_file_meta(const common::ObString &bucket, const common::ObString &object,
-                        bool &is_file_exist, const char *&remote_md5, int64_t &file_length);
+  int get_oss_file_meta(
+      const common::ObString &bucket, const common::ObString &object,
+      ObStorageObjectMetaBase &meta, const char *&remote_md5);
   void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret, const int ob_errcode);
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
@@ -281,6 +282,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssReader);
 };
 
+int ob_strtotime(const char *date_time, int64_t &time_s);
+
 class ObStorageOssUtil: public ObIStorageUtil
 {
 public:
@@ -308,7 +311,6 @@ public:
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
   virtual int del_unmerged_parts(const ObString &uri) override;
 private:
-  int ob_strtotime(const char *date_time, int64_t &time);
   int tagging_object_(
       const common::ObString &uri,
       ObStorageOssBase &oss_base,

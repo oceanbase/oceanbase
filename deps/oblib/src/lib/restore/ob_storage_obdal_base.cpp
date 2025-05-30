@@ -456,6 +456,15 @@ int ObStorageObDalBase::get_file_meta(ObDalObjectMeta &meta)
     OB_LOG(WARN, "fail get content length", K(ret), K(bucket_), K(object_));
   } else {
     meta.is_exist_ = true;
+
+    if (OB_FAIL(ObDalAccessor::obdal_metadata_last_modified(query_meta, meta.mtime_s_))) {
+      OB_LOG(WARN, "fail get last modified", K(ret), K(bucket_), K(object_));
+      // This field is currently only used by external tables.
+      // To avoid impacting existing functionality,
+      // even if the value is invalid, no error is reported. Instead, `meta.mtime_s_` is set to -1.
+      ret = OB_SUCCESS;
+      meta.mtime_s_ = -1;
+    }
   }
 
   if (OB_NOT_NULL(query_meta)) {
@@ -734,6 +743,7 @@ int ObStorageObDalUtil::head_object_meta(const common::ObString &uri, ObStorageO
     obj_meta.is_exist_ = meta.is_exist_;
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
+      obj_meta.mtime_s_ = meta.mtime_s_;
     }
   }
   return ret;

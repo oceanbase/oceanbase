@@ -10346,5 +10346,20 @@ int ObRawExprUtils::build_unpivot_expr(ObRawExprFactory &expr_factory,
   }
   return ret;
 }
+
+int ObRawExprUtils::find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root)) {
+  } else if (root == expected) {
+    found = true;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && !found && i < root->get_param_count(); i++) {
+      ret = SMART_CALL(find_expr(root->get_param_expr(i), expected, found));
+    }
+  }
+  return ret;
+}
+
 }
 }

@@ -851,6 +851,38 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, const bool is_ad
   return ret;
 }
 
+int ObStorageUtil::get_file_stat(
+    const common::ObString &uri, const bool is_adaptive, ObIODFileStat &statbuf)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObStorageObjectMeta obj_meta;
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
+    ret = OB_INVALID_BACKUP_DEST;
+    STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
+        K(ret), K(uri), K(device_type_));
+  } else if (OB_FAIL(detect_storage_obj_meta(uri, is_adaptive, true/*need_fragment_meta*/, obj_meta))) {
+    OB_LOG(WARN, "fail to detect storage obj type", K(ret), K(uri), K(is_adaptive));
+  } else if (!obj_meta.is_exist_) {
+    ret = OB_OBJECT_NOT_EXIST;
+    OB_LOG(INFO, "cannot get file stat for not exist file", K(ret), K(uri));
+  } else if (OB_UNLIKELY(obj_meta.length_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "this file length is invalid", K(ret), K(uri), K(obj_meta));
+  } else {
+    statbuf.size_ = obj_meta.length_;
+    statbuf.mtime_s_ = obj_meta.mtime_s_;
+  }
+
+  return ret;
+}
+
 int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
 {
   int ret = OB_SUCCESS;
@@ -1340,51 +1372,6 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
         K(ret), K(uri), K_(device_type));
   } else if (OB_FAIL(util_->is_exist(uri, exist))) {
     STORAGE_LOG(WARN, "failed to check is exist", K(ret), K(uri));
-  }
-
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
-  }
-  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
-  return ret;
-}
-
-int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_length)
-{
-  int ret = OB_SUCCESS;
-  const int64_t start_ts = ObTimeUtility::current_time();
-  file_length = -1;
-  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
-
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
-#endif
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(!is_init())) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "util is not inited", K(ret), K(uri));
-  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
-    ret = OB_BACKUP_IO_PROHIBITED;
-    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
-  } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
-    ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
-        K(ret), K(uri), K_(device_type));
-  } else if (OB_FAIL(util_->get_file_length(uri, file_length))) {
-    if (OB_OBJECT_NOT_EXIST == ret) {
-      STORAGE_LOG(INFO, "cannot get file length for not exist file", K(ret), K(uri));
-    } else {
-      STORAGE_LOG(WARN, "failed to get_file_length", K(ret), K(uri));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (file_length == 0) {
-      STORAGE_LOG(INFO, "this file is empty", K(ret), K(uri), K(file_length));
-    } else if (file_length < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "this file length is invalid", K(ret), K(uri), K(file_length));
-    }
   }
 
   if (OB_FAIL(ret)) {

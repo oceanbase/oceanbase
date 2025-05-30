@@ -886,6 +886,7 @@ public:
                                    ObIArray<ObRawExpr *> &param_exprs);
   template <typename T>
   static bool find_expr(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
+  static int find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found);
   template <typename T>
   static int64_t get_expr_idx(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
   static int create_equal_expr(ObRawExprFactory &expr_factory,

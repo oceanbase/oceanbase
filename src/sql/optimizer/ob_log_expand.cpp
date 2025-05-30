@@ -259,20 +259,6 @@ int ObLogExpand::dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory,
   return ret;
 }
 
-int ObLogExpand::find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-  } else if (root == expected) {
-    found = true;
-  } else {
-    for (int i = 0; OB_SUCC(ret) && !found && i < root->get_param_count(); i++) {
-      ret = SMART_CALL(find_expr(root->get_param_expr(i), expected, found));
-    }
-  }
-  return ret;
-}
-
 int ObLogExpand::find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *expected, bool &found)
 {
   int ret = OB_SUCCESS;
@@ -284,7 +270,7 @@ int ObLogExpand::find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const Ob
       // do not replace seperator expr with duplicated expr
       // do nothing
     } else {
-      ret = find_expr(real_param_exprs.at(i), expected, found);
+      ret = ObRawExprUtils::find_expr(real_param_exprs.at(i), expected, found);
     }
   }
   // listagg(c1, c3) within group (order by c3) from t1 group by rollup(c3);
@@ -292,7 +278,7 @@ int ObLogExpand::find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const Ob
   // for result compatibility, we replace order item with dup(c3), i.e.
   //  listagg(c1, c3) within group (order by dup(c3)) from t1 group by rollup(c3);
   for (int i = 0; OB_SUCC(ret) && !found && i < aggr_item->get_order_items().count(); i++) {
-    ret = find_expr(aggr_item->get_order_items().at(i).expr_, expected, found);
+    ret = ObRawExprUtils::find_expr(aggr_item->get_order_items().at(i).expr_, expected, found);
   }
   return ret;
 }
@@ -353,7 +339,7 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
         ObRawExpr *rollup_expr = rollup_exprs.at(i);
         ObRawExpr *new_const_expr = nullptr;
         for (int j = 0; !found && OB_SUCC(ret) && j < gby_exprs.count(); j++) {
-          if (OB_FAIL(find_expr(gby_exprs.at(j), rollup_expr, found))) {
+          if (OB_FAIL(ObRawExprUtils::find_expr(gby_exprs.at(j), rollup_expr, found))) {
             LOG_WARN("find expr failed", K(ret));
           }
         }

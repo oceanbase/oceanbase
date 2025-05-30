@@ -27,31 +27,51 @@ namespace oceanbase
 
 namespace sql {
 
-class ObExternalAccessFileInfo
+class ObExternalAccessFileInfo final
 {
+  /// only initialized in @c ObExternalDataAccessMgr
   friend class ObExternalDataAccessMgr;
 public:
   ObExternalAccessFileInfo():
-    url_(), modify_time_(-1), access_info_(), device_handle_(nullptr)
+    url_(), modify_time_(-1), access_info_(nullptr), device_handle_(nullptr), allocator_(nullptr)
     {}
+
+  ~ObExternalAccessFileInfo();
   bool is_valid() const;
   int assign(const ObExternalAccessFileInfo &other);
   const ObString &get_url() const { return url_; }
-  int64_t get_modify_time() const { return modify_time_; }
-  const ObObjectStorageInfo *get_access_info() const { return &access_info_; }
+  const ObObjectStorageInfo *get_access_info() const { return access_info_; }
+  ObObjectStorageInfo *get_access_info() { return access_info_; }
 
-  TO_STRING_KV(K_(url), K_(modify_time), K_(access_info), KP_(device_handle));
+  TO_STRING_KV(K_(url), K_(modify_time), KP_(access_info), KP_(device_handle));
 
   // delete reason: copy_constructor and assignment_operator should be delete in the future
   ObExternalAccessFileInfo(const ObExternalAccessFileInfo& other) = delete;
   const ObExternalAccessFileInfo& operator= (const ObExternalAccessFileInfo&) = delete;
+
+  int64_t get_modify_time() const { return modify_time_; }
+
+  void set_modify_time(const int64_t modify_time) { modify_time_ = modify_time; }
+
+  const ObIODevice *get_device_handle() const { return device_handle_; }
+
 private:
-  void reset();
+  static int copy_url(ObString &dest, const ObString &src, common::ObIAllocator *allocator);
+  ObIODevice *&get_device_handle_() { return device_handle_; }
+  int set_url_and_access_info_(
+    const ObString &url,
+    const ObObjectStorageInfo *access_info,
+    common::ObIAllocator *allocator);
+  void reset_();
+  bool is_copyable_() const { return nullptr != allocator_; }
+
 private:
   ObString url_;
   int64_t modify_time_;
-  ObObjectStorageInfo access_info_;
+  ObObjectStorageInfo *access_info_;
   ObIODevice *device_handle_;
+  /// if @c allocator_ is not null, means @c this owns @c url_
+  common::ObIAllocator *allocator_;
 };
 
 class ObExternalDataAccessMgr final
@@ -67,7 +87,7 @@ public: // for MTL
   void destroy();
 public: // for user
   int open_and_reg_file(
-      const ObString url,
+      const ObString &url,
       const ObObjectStorageInfo *info,
       const int64_t modify_time,
       ObIOFd &fd);
@@ -80,23 +100,33 @@ public: // for user
       const ObExternalReadInfo &info,
       const bool enable_page_cache,
       ObExternalFileReadHandle &handle);
-  int pread(
-      const ObIOFd &fd,
-      const ObExternalReadInfo &info,
-      const bool enable_page_cache,
-      int64_t &read_size);
 private: // inner struct
   struct FileMapKey {
     FileMapKey();
-    ~FileMapKey() = default;
-    FileMapKey(const ObString url, const int64_t modify_time);
+    ~FileMapKey();
+    FileMapKey(const int64_t modify_time, common::ObIAllocator *allocator);
     uint64_t hash() const;
     int hash(uint64_t &hash_val) const;
     TO_STRING_KV(K_(url), K_(modify_time));
     bool operator == (const FileMapKey &other) const;
+    int init(const ObString &url);
+    int assign(const FileMapKey &other);
+    void reset();
+
+    // disable copy
+    FileMapKey(const FileMapKey &) = delete;
+    void operator=(const FileMapKey &) = delete;
+
+    static uint64_t hash(const ObString &url, const int64_t modify_time);
+
+    private:
+      bool is_copyable_() const;
+
     private:
       ObString url_;
       int64_t modify_time_;
+      /// if @c allocator_ is not null, means @c this owns @c url_
+      common::ObIAllocator *allocator_;
   };
   struct InnerAccessFileInfo {
     InnerAccessFileInfo():
@@ -112,6 +142,8 @@ private: // inner struct
     private:
       int64_t ref_cnt_;
   };
+private:
+  static const int BUCKET_NUM = 1283;
 private: // function
   int force_delete_from_fd_map_(
       const FileMapKey &key);
@@ -126,6 +158,8 @@ private: // function
       int64_t &modify_time);
   int fill_cache_hit_buf_and_get_cache_miss_segments_(
       const ObIOFd &fd,
+      const ObString &url,
+      const int64_t modify_time,
       const int64_t rd_offset,
       const int64_t rd_len,
       const bool enable_page_cache,
@@ -137,17 +171,41 @@ private: // function
       ObIArray<ObExtCacheMissSegment> &seg_ar) const;
   int get_rd_info_arr_by_cache_miss_seg_arr_(
       const ObIOFd &fd,
+      const ObString &url,
       const int64_t modify_time,
       const ObIArray<ObExtCacheMissSegment> &seg_arr,
       const ObExternalReadInfo &src_rd_info,
       const bool enable_page_cache,
       ObIArray<ObExternalReadInfo> &rd_info_arr);
+  int inner_cache_hit_process_(
+    const int64_t cur_pos,
+    const int64_t cur_rd_offset,
+    const int64_t cur_buf_size,
+    const int64_t cache_page_size,
+    const ObExternalDataPageCacheValueHandle &v_hdl,
+    char* buffer,
+    ObExternalFileReadHandle &exReadhandle,
+    ObExtCacheMissSegment &cur_seg,
+    ObIArray<ObExtCacheMissSegment> &seg_arr);
+  int inner_cache_miss_process_(
+    const int64_t cur_pos,
+    const int64_t cur_rd_offset,
+    const int64_t cur_buf_size,
+    char* buffer,
+    ObExtCacheMissSegment &cur_seg,
+    ObIArray<ObExtCacheMissSegment> &seg_arr);
+  int inner_async_read_tmp_(
+    ObIOFd &fd,
+    InnerAccessFileInfo &inner_file_info,
+    const ObExternalReadInfo &external_read_info,
+    blocksstable::ObStorageObjectHandle &io_handle);
 
 private: // inner feild
+  // TODO: one map is enough
   common::hash::ObHashMap<FileMapKey, ObIOFd> fd_map_;
   common::hash::ObHashMap<ObIOFd, InnerAccessFileInfo*> file_map_;
   // lock both fd_map_ and file_map_
-  obsys::ObRWLock rwlock_;
+  common::ObBucketLock bucket_lock_;
   ObFIFOAllocator inner_file_info_alloc_;
   ObFIFOAllocator callback_alloc_;
   ObExternalDataPageCache &kv_cache_;

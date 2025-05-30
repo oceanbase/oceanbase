@@ -107,6 +107,14 @@ class ObExternalTableUtils {
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
     int64_t sqc_count);
+  static int assigned_files_to_sqcs_by_load_balancer(
+    const common::ObIArray<ObExternalFileInfo> &files,
+    const ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<int64_t> &assigned_idx);
+  static int select_external_table_loc_by_load_balancer(
+    const common::ObIArray<ObExternalFileInfo> &files,
+    const ObIArray<ObAddr> &all_locations,
+    ObIArray<ObAddr> &target_locations);
 
   static int assign_odps_file_to_sqcs(
     ObDfo &dfo,

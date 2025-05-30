@@ -250,6 +250,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_hp_infrastructure_manager.ipp
   engine/basic/ob_hp_infras_vec_mgr.cpp
   engine/basic/ob_truncate_filter_struct.cpp
+  engine/basic/ob_consistent_hashing_load_balancer.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -1060,12 +1061,14 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_external_data_access_mgr.cpp
   engine/table/ob_external_data_page_cache.cpp
   engine/table/ob_external_table_access_service.cpp
+  engine/table/ob_external_table_pushdown_filter.cpp
   engine/table/ob_csv_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
   engine/table/ob_odps_table_row_iter.cpp
   engine/table/ob_file_prefetch_buffer.cpp
   engine/table/ob_odps_jni_table_row_iter.cpp
+  engine/table/ob_file_prebuffer.cpp
 )
 
 ob_set_subtarget(ob_sql executor

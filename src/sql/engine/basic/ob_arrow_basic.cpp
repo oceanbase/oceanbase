@@ -141,9 +141,9 @@ int64_t ObArrowMemPool::bytes_allocated() const {
 }
 
 /* ObArrowFile */
-int ObArrowFile::open()
+int ObArrowFile::open(const ObExternalFileUrlInfo &info, const ObExternalFileCacheOptions &cache_options)
 {
-  return file_reader_.open(file_name_);
+  return file_reader_.open(info, cache_options);
 }
 
 arrow::Status ObArrowFile::Seek(int64_t position) {
@@ -154,16 +154,19 @@ arrow::Status ObArrowFile::Seek(int64_t position) {
 arrow::Result<int64_t> ObArrowFile::Read(int64_t nbytes, void *out)
 {
   int ret = OB_SUCCESS;
+  bool is_hit_cache = false;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-  if (file_prefetch_buffer_.in_prebuffer_range(position_, nbytes)) {
-    file_prefetch_buffer_.fetch(position_, nbytes, out);
+  const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+  ObExternalReadInfo read_info(position_, out, nbytes, io_timeout_ms);
+  if (OB_FAIL(read_from_cache(position_, nbytes, out, is_hit_cache))) {
+    LOG_WARN("failed to read from cache", K(ret));
+  } else if (is_hit_cache) {
     position_ += nbytes;
     ret_code = nbytes;
-  } else if (OB_FAIL(file_reader_.pread(out, nbytes, position_, read_size))) {
+  } else if (OB_FAIL(file_reader_.pread(read_info, read_size))) {
     LOG_WARN("fail to read file", K(ret), K(nbytes));
-    ret_code =
-      arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read file failed"));
+    throw ObErrorCodeException(ret);
   } else {
     position_ += read_size;
     ret_code = read_size;
@@ -187,16 +190,19 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> ObArrowFile::Read(int64_t nbytes)
 arrow::Result<int64_t> ObArrowFile::ReadAt(int64_t position, int64_t nbytes, void* out)
 {
   int ret = OB_SUCCESS;
+  bool is_hit_cache = false;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-  if (file_prefetch_buffer_.in_prebuffer_range(position, nbytes)) {
-    file_prefetch_buffer_.fetch(position, nbytes, out);
-    position_ = position + nbytes;
+  const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+  ObExternalReadInfo read_info(position, out, nbytes, io_timeout_ms);
+  if (OB_FAIL(read_from_cache(position, nbytes, out, is_hit_cache))) {
+    LOG_WARN("failed to read from cache", K(ret));
+  } else if (is_hit_cache) {
+    position_ += nbytes;
     ret_code = nbytes;
-  } else if (OB_FAIL(file_reader_.pread(out, nbytes, position, read_size))) {
+  } else if (OB_FAIL(file_reader_.pread(read_info, read_size))) {
     LOG_WARN("fail to read file", K(ret), K(position), K(nbytes));
-    ret_code =
-      arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read at file failed"));
+    throw ObErrorCodeException(ret);
   } else {
     position_ = position + read_size;
     ret_code = read_size;
@@ -229,7 +235,7 @@ arrow::Result<int64_t> ObArrowFile::GetSize()
   int ret = OB_SUCCESS;
   arrow::Result<int64_t> ret_code;
   int64_t file_size = 0;
-  if (OB_FAIL(file_reader_.get_file_size(file_name_, file_size))) {
+  if (OB_FAIL(file_reader_.get_file_size(file_size))) {
     LOG_WARN("fail to get file size", K(ret), K(file_name_));
     ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "get file size"));
   } else {
@@ -248,6 +254,37 @@ bool ObArrowFile::closed() const
 {
   return !file_reader_.is_opened();
 }
+
+void ObArrowFile::set_file_prebuffer(ObFilePreBuffer *file_prebuffer)
+{
+  if (nullptr != file_prebuffer) {
+    file_prebuffer->reset();
+  }
+  file_prebuffer_ = file_prebuffer;
+}
+
+int ObArrowFile::read_from_cache(int64_t position, int64_t nbytes, void* out, bool &is_hit)
+{
+  int ret = OB_SUCCESS;
+  is_hit = false;
+  if (nullptr == file_prebuffer_) {
+  } else if (OB_FAIL(file_prebuffer_->read(position, nbytes, out))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to read from prebuffer", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_hit = true;
+  }
+  return ret;
+}
+
+void ObArrowFile::set_timeout_timestamp(const int64_t timeout_ts)
+{
+  timeout_ts_ = timeout_ts;
+}
+
 
 /*ObParquetOutputStream*/
 

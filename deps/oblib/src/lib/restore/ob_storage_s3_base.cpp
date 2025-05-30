@@ -1255,6 +1255,8 @@ int ObStorageS3Base::get_s3_file_meta_(S3ObjectMeta &meta)
     } else {
       meta.is_exist_ = true;
       meta.length_ = outcome.GetResult().GetContentLength();
+      const Aws::Utils::DateTime &last_modified_date_time = outcome.GetResult().GetLastModified();
+      meta.mtime_s_ = last_modified_date_time.Seconds();
     }
   }
   return ret;
@@ -1631,6 +1633,7 @@ int ObStorageS3Util::head_object_meta(const ObString &uri, ObStorageObjectMetaBa
     obj_meta.is_exist_ = meta.is_exist_;
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
+      obj_meta.mtime_s_ = meta.mtime_s_;
     }
   }
   return ret;

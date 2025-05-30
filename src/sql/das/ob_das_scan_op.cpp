@@ -299,6 +299,8 @@ int ObDASScanOp::init_scan_param()
   scan_param_.force_refresh_lc_ = scan_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(scan_ctdef_->pd_expr_spec_.access_exprs_);
   scan_param_.ext_file_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_);
+  scan_param_.ext_mapping_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_exprs_);
+  scan_param_.ext_mapping_column_ids_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_ids_);
   scan_param_.ext_column_convert_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
   scan_param_.calc_exprs_ = &(scan_ctdef_->pd_expr_spec_.calc_exprs_);
   scan_param_.aggregate_exprs_ = &(scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_);
@@ -370,6 +372,7 @@ int ObDASScanOp::init_scan_param()
       }
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
       scan_param_.external_file_format_.csv_format_.ignore_extra_fields_ = true;
+      scan_param_.ext_tbl_filter_pd_level_ = scan_ctdef_->pd_expr_spec_.ext_tbl_filter_pd_level_;
     }
   }
   LOG_DEBUG("init scan param", K(ret), K(scan_param_));

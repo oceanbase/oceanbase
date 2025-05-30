@@ -144,7 +144,9 @@ int ObExternalFileAccess::open(
     const ObExternalFileCacheOptions &cache_options)
 {
   int ret = OB_SUCCESS;
-  ObObjectStorageInfo access_info;
+  ObObjectStorageInfo *access_info = nullptr;
+  ObHDFSStorageInfo hdfs_storage_info;
+  ObBackupStorageInfo backup_storage_info;
   int64_t modify_time = -1;
   if (is_opened()) {
     ret = OB_INIT_TWICE;
@@ -152,6 +154,7 @@ int ObExternalFileAccess::open(
   } else if (OB_FAIL(get_storage_type_from_path(info.location_, storage_type_))) {
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
+    // see ObExternalDataAccessDriver::init
     ObArenaAllocator temp_allocator;
     ObString access_info_cstr;
     if (storage_type_ == OB_STORAGE_FILE) {
@@ -160,11 +163,20 @@ int ObExternalFileAccess::open(
       LOG_WARN("failed to write string into access_info_cstr", K(ret), K(info));
     }
 
+    if (storage_type_ == OB_STORAGE_HDFS) {
+      access_info = &hdfs_storage_info;
+    } else {
+      access_info = &backup_storage_info;
+    }
+
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(access_info.set(storage_type_, access_info_cstr.ptr()))) {
-      LOG_WARN("failed to set access_info", K(ret), K(storage_type_), K(access_info_cstr));
-    } else if (OB_FAIL(ObBackupIoAdapter::get_file_modify_time(info.url_, &access_info, modify_time))) {
-      LOG_WARN("failed to get modify_time");
+    } else if (OB_ISNULL(access_info)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("failed to get access info", K(ret), K(storage_type_));
+    } else if (OB_FAIL(access_info->set(storage_type_, access_info_cstr.ptr()))) {
+      LOG_WARN("failed to set access_info", K(ret), K(storage_type_));
+    } else if (OB_FAIL(ObBackupIoAdapter::get_file_modify_time(info.url_, access_info, modify_time))) {
+      LOG_WARN("failed to get modify_time", K(ret));
     }
   }
 
@@ -173,8 +185,8 @@ int ObExternalFileAccess::open(
   } else if (OB_ISNULL(exdam = MTL(ObExternalDataAccessMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObExternalDataAccessMgr", K(ret), KP(exdam), K(MTL_ID()));
-  } else if (OB_FAIL(exdam->open_and_reg_file(info.url_, &access_info, modify_time, fd_))) {
-    LOG_WARN("faile to register file to DAM", K(ret), K(info), K(access_info), K(modify_time), K(fd_));
+  } else if (OB_FAIL(exdam->open_and_reg_file(info.url_, access_info, modify_time, fd_))) {
+    LOG_WARN("failed to register file to DAM", K(ret), K(info), K(access_info), K(modify_time), K(fd_));
   } else {
     cache_options_ = cache_options;
   }
@@ -205,7 +217,7 @@ int ObExternalFileAccess::inner_process_read_info_(
 {
   int ret = OB_SUCCESS;
   out_info = input_info;
-  // TODO process io_desc_
+  // TODO process io_desc_, TODO @shifangdan.sfd
   out_info.io_desc_.set_mode(ObIOMode::READ);
   out_info.io_desc_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
   // if (cache_options_.enable_disk_cache()) {
@@ -249,6 +261,7 @@ int ObExternalFileAccess::pread(
   int ret = OB_SUCCESS;
   ObExternalReadInfo new_info = info;
   ObExternalDataAccessMgr *exdam = nullptr;
+  ObExternalFileReadHandle read_handle;
   if (!is_opened()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no opened file", K(ret), K(fd_), K(lbt()));
@@ -260,9 +273,15 @@ int ObExternalFileAccess::pread(
   } else if (OB_ISNULL(exdam = MTL(ObExternalDataAccessMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObExternalDataAccessMgr", K(ret), K(lbt()));
-  } else if (OB_FAIL(exdam->pread(fd_, new_info, cache_options_.enable_page_cache(), read_size))) {
-    STORAGE_LOG(WARN, "fail to get file length", KR(ret), K(fd_), K(info));
+  } else if (OB_FAIL(exdam->async_read(fd_, new_info, cache_options_.enable_page_cache(), read_handle))) {
+    LOG_WARN("failed to async_read", K(ret), K(fd_), K(info), K(read_handle));
+  } else if (OB_FAIL(read_handle.wait())) {
+    LOG_WARN("wait failed", K(ret), K(fd_), K(info));
+  } else if (OB_FAIL(read_handle.get_user_buf_read_data_size(read_size))) {
+    LOG_WARN("failed to get read_size", K(ret), K(read_size), K(info), K(read_handle));
   }
+  STORAGE_LOG(TRACE, "Read size and Real_read_size", K(ret), K(info), K(read_size), K(read_handle),
+              K(cache_options_));
   return ret;
 }
 

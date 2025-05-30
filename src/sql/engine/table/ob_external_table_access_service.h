@@ -22,7 +22,7 @@
 #include "common/storage/ob_io_device.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/ob_sql_context.h"
-#include "storage/blocksstable/index_block/ob_skip_index_filter_executor.h"
+#include "sql/engine/table/ob_file_prebuffer.h"
 
 namespace oceanbase
 {
@@ -159,12 +159,62 @@ public:
   int64_t batch_first_row_line_num_;
 };
 
+struct ObExternalTableAccessOptions
+{
+  ObExternalTableAccessOptions() :
+    enable_prebuffer_(false), enable_page_cache_(false), enable_disk_cache_(false), cache_options_()
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      enable_prebuffer_ = tenant_config->_enable_external_table_prefetch;
+      enable_page_cache_ = tenant_config->_enable_external_table_memory_cache;
+      enable_disk_cache_ = tenant_config->_enable_external_table_disk_cache;
+    }
+  }
+  ObExternalTableAccessOptions(const bool enable_page_cache, const bool enable_disk_cache,
+                               const ObFilePreBuffer::CacheOptions &options) :
+    enable_prebuffer_(false),
+    enable_page_cache_(enable_page_cache), enable_disk_cache_(enable_disk_cache),
+    cache_options_(options)
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      enable_prebuffer_ = tenant_config->_enable_external_table_prefetch;
+    }
+  }
+  static ObExternalTableAccessOptions defaults()
+  {
+    ObExternalTableAccessOptions options;
+    options.cache_options_ = ObFilePreBuffer::CacheOptions::defaults();
+    return options;
+  }
+  static ObExternalTableAccessOptions lazy_defaults()
+  {
+    ObExternalTableAccessOptions options;
+    options.cache_options_ = ObFilePreBuffer::CacheOptions::lazy_defaults();
+    return options;
+  }
+  static ObExternalTableAccessOptions disable_cache_defaults()
+  {
+    return ObExternalTableAccessOptions(/*enable_page_cache=*/false,
+                                        /*enable_disk_cache=*/false,
+                                        ObFilePreBuffer::CacheOptions::defaults());
+  }
+  TO_STRING_KV(K_(enable_prebuffer),
+               K_(enable_page_cache),
+               K_(enable_disk_cache),
+               K_(cache_options));
+
+  bool enable_prebuffer_;
+  bool enable_page_cache_;
+  bool enable_disk_cache_;
+  ObFilePreBuffer::CacheOptions cache_options_;
+};
+
 class ObExternalTableRowIterator : public common::ObNewRowIterator {
 public:
   ObExternalTableRowIterator() :
-    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL),
-    skip_filter_executor_()
-  {}
+    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL) {}
   virtual int init(const storage::ObTableScanParam *scan_param);
 protected:
   int init_exprs(const storage::ObTableScanParam *scan_param);
@@ -187,7 +237,6 @@ protected:
   ObExpr *file_id_expr_;
   ObExpr *file_name_expr_;
   common::ObString ip_port_;
-  blocksstable::ObSkipIndexFilterExecutor skip_filter_executor_;
 };
 
 class ObExternalTableAccessService : public common::ObITabletScan
