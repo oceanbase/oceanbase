@@ -1612,6 +1612,19 @@ int ObTenant::timeup()
   return OB_SUCCESS;
 }
 
+int ObTenant::get_default_group_throttled_time(int64_t &default_group_throttled_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_default_group_throttled_time_us = -1;
+  if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(id_, current_default_group_throttled_time_us, OBCG_DEFAULT_GROUP_ID))) {
+    LOG_WARN("get throttled time failed", K(ret), K(id_));
+  } else if (current_default_group_throttled_time_us > 0) {
+    default_group_throttled_time = current_default_group_throttled_time_us - default_group_throttled_time_us_;
+    default_group_throttled_time_us_ = current_default_group_throttled_time_us;
+  }
+  return ret;
+}
+
 void ObTenant::print_throttled_time()
 {
   class ThrottledTimeLog
@@ -1627,6 +1640,14 @@ void ObTenant::print_throttled_time()
       int tmp_ret = OB_SUCCESS;
       int64_t tenant_throttled_time = 0;
       int64_t group_throttled_time = 0;
+
+      if (OB_TMP_FAIL(tenant_->get_default_group_throttled_time(group_throttled_time))) {
+        LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret));
+      } else {
+        tenant_throttled_time += group_throttled_time;
+        databuff_printf(buf, len, pos, "group_id: 0, group: OBCG_DEFAULT, throttled_time: %ld;", group_throttled_time);
+      }
+
       ObResourceGroupNode *iter = NULL;
       ObResourceGroup *group = nullptr;
       ObCgSet &set = ObCgSet::instance();

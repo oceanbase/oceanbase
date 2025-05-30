@@ -451,6 +451,7 @@ public:
   void update_queue_size();
 
   int timeup();
+  int get_default_group_throttled_time(int64_t &default_group_throttled_time);
   void print_throttled_time();
   void regist_threads_to_cgroup();
 
@@ -625,6 +626,7 @@ public:
   lib::ObQueryRateLimiter sql_limiter_;
   // idle time between two checkpoints
   int64_t worker_us_;
+  int64_t default_group_throttled_time_us_;
   int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 
