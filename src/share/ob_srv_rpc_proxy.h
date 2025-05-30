@@ -19,6 +19,7 @@
 #include "share/ob_common_id.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+#include "share/ob_lonely_table_clean_rpc_struct.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
 #include "share/ob_heartbeat_struct.h"
 #include "share/resource_limit_calculator/ob_resource_commmon.h"

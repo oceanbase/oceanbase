@@ -1017,6 +1017,7 @@ int ObCreateViewHelper::drop_table_()
                                                                         nullptr /* ddl_stmt_str */,
                                                                         false /* is_truncate */,
                                                                         false /* is_drop_db */,
+                                                                        false /* is_force_drop_lonely_lob_aux_table */,
                                                                         nullptr /* schema_guard */,
                                                                         nullptr /* drop_table_set */))) {
     LOG_WARN("fail to drop table", KR(ret), K_(tenant_id), K(*orig_table_schema_));

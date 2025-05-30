@@ -231,3 +231,4 @@
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 fetch_arb_member, OB_FETCH_ARB_MEMBER, (ObFetchArbMemberArg), ObMember);
 #endif
+  RPC_S(PR5 force_drop_lonely_lob_aux_table, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));

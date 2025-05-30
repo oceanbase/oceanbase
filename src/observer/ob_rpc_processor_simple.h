@@ -285,6 +285,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAR_FETCHED_LOG_CACHE, ObClearFetchedLogCacheP);
 #ifdef OB_BUILD_ARBITRATION
 OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ARB_MEMBER, ObFetchArbMemberP);
 #endif
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObAdminForceDropLonelyLobAuxTableP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

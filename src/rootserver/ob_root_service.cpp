@@ -4064,6 +4064,22 @@ int ObRootService::drop_lob(const ObDropLobArg &arg)
   return ddl_service_.drop_lob(arg);
 }
 
+int ObRootService::force_drop_lonely_lob_aux_table(const ObForceDropLonelyLobAuxTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ddl_service_.force_drop_lonely_lob_aux_table(arg)))  {
+    LOG_WARN("drop fail", KR(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "force drop lonely lob table",
+                        "tenant_id", arg.get_tenant_id(),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "data_table_id", arg.get_data_table_id(),
+                        "lob_meta_table_id", arg.get_aux_lob_meta_table_id(),
+                        "lob_piece_table_id", arg.get_aux_lob_piece_table_id());
+  return ret;
+}
+
 int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;

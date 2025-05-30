@@ -3291,5 +3291,20 @@ int ObClearFetchedLogCacheP::process()
   return ret;
 }
 
+int ObAdminForceDropLonelyLobAuxTableP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else if (OB_ISNULL(gctx_.rs_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), K(arg_));
+  } else {
+    ret = gctx_.rs_rpc_proxy_->force_drop_lonely_lob_aux_table(arg_);
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -509,6 +509,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
   int drop_lob(const obrpc::ObDropLobArg &arg);
+  int force_drop_lonely_lob_aux_table(const obrpc::ObForceDropLonelyLobAuxTableArg &drop_table_arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);

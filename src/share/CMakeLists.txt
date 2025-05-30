@@ -27,6 +27,7 @@ ob_set_subtarget(ob_share ALONE
   schema/ob_schema_service_sql_impl.cpp
   parameter/ob_parameter_attr.cpp
   ob_mview_args.cpp
+  ob_lonely_table_clean_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

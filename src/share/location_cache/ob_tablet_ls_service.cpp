@@ -83,7 +83,7 @@ int ObTabletLSService::get(
         KR(ret),
         K(tenant_id),
         K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     is_cache_hit = true;
     ls_id = SYS_LS;
   } else {
@@ -128,7 +128,7 @@ int ObTabletLSService::nonblock_get(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for get",
         KR(ret), K(tenant_id), K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     ls_id = SYS_LS;
   } else if (OB_FAIL(get_from_cache_(tenant_id, tablet_id, tablet_cache))) {
     if (OB_CACHE_NOT_HIT != ret) {
@@ -159,7 +159,7 @@ int ObTabletLSService::nonblock_renew(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid log stream key",
         KR(ret), K(tenant_id), K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     // do nothing
   } else {
     const int64_t now = ObTimeUtility::current_time();
@@ -227,7 +227,7 @@ int ObTabletLSService::batch_process_tasks(
         if (OB_UNLIKELY(tenant_id != task.get_tenant_id())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid task", KR(ret), K(tenant_id), K(task));
-        } else if (belong_to_sys_ls_(task.get_tenant_id(), task.get_tablet_id())) {
+        } else if (task.get_tablet_id().belong_to_sys_ls(task.get_tenant_id())) {
           // skip
         } else if (OB_FAIL(tablet_list.push_back(task.get_tablet_id()))) {
           LOG_WARN("push back failed", KR(ret), K(idx), K(task));
@@ -315,7 +315,7 @@ int ObTabletLSService::get_from_cache_(
   } else if(OB_UNLIKELY(!cache_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     const int64_t now = ObTimeUtility::current_time();
     if (OB_FAIL(tablet_cache.init(tenant_id,
         tablet_id,
@@ -359,7 +359,7 @@ int ObTabletLSService::renew_cache_(
   } else if (!is_valid_key_(tenant_id, tablet_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     const int64_t now = ObTimeUtility::current_time();
     if (OB_FAIL(tablet_cache.init(tenant_id,
         tablet_id,
@@ -460,7 +460,7 @@ int ObTabletLSService::batch_renew_tablet_ls_cache(
     ObTimeoutCtx ctx;
     // mock cache for sys tablet and filter out user tablet
     FOREACH_X(tablet_id, tablet_list, OB_SUCC(ret)) {
-      if (belong_to_sys_ls_(tenant_id, *tablet_id)) {
+      if (tablet_id->belong_to_sys_ls(tenant_id)) {
         ObTabletLSCache cache;
         if (OB_FAIL(cache.init(tenant_id, *tablet_id, SYS_LS, now,  0 /*transfer_seq*/))) {
           LOG_WARN("init cache failed", KR(ret), K(tenant_id), K(*tablet_id), K(now));
@@ -542,7 +542,7 @@ int ObTabletLSService::erase_cache_(const uint64_t tenant_id, const ObTabletID &
   } else if (OB_UNLIKELY(!is_valid_key_(tenant_id, tablet_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for tablet get", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (belong_to_sys_ls_(tenant_id, tablet_id)) {
+  } else if (tablet_id.belong_to_sys_ls(tenant_id)) {
     // skip
   } else {
     ObTabletLSKey cache_key(tenant_id, tablet_id);
@@ -558,13 +558,6 @@ int ObTabletLSService::erase_cache_(const uint64_t tenant_id, const ObTabletID &
     }
   }
   return ret;
-}
-
-bool ObTabletLSService::belong_to_sys_ls_(
-    const uint64_t tenant_id,
-    const ObTabletID &tablet_id) const
-{
-  return is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id) || tablet_id.is_sys_tablet();
 }
 
 class ObTabletLSService::IsDroppedTenantCacheFunctor

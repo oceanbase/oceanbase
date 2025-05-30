@@ -120,7 +120,6 @@ private:
   int set_timeout_ctx_(common::ObTimeoutCtx &ctx);
   bool is_valid_key_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
-  bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
 
 private:
   class IsDroppedTenantCacheFunctor; // use to clear expired cache of dropped tenant

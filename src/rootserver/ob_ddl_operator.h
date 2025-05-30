@@ -444,7 +444,8 @@ public:
                          const bool is_truncate_table = false,
                          share::schema::DropTableIdHashSet *drop_table_set = NULL,
                          const bool is_drop_db = false,
-                         const bool delete_priv = true);
+                         const bool delete_priv = true,
+                         const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_for_not_dropped_schema(
       const share::schema::ObTableSchema &table_schema,
       common::ObMySQLTransaction &trans,
@@ -452,7 +453,8 @@ public:
       const bool is_truncate_table = false,
       share::schema::DropTableIdHashSet *drop_table_set = NULL,
       const bool is_drop_db = false,
-      const bool delete_priv = true);
+      const bool delete_priv = true,
+      const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_to_recyclebin(const share::schema::ObTableSchema &table_schema,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        common::ObMySQLTransaction &trans,
