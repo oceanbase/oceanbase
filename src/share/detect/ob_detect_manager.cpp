@@ -473,7 +473,7 @@ void ObDetectManager::ObDetectCallbackAddCall::operator()(hash::HashMapPair<ObDe
   is_empty_ = dlist.is_empty();
   if (!is_empty_) {
     // before add, unlink callback from the original linked list
-    callback_->unlink();
+    callback_->reset();
     dlist.add_last(callback_);
     (void)dm_->dm_multi_list_.add_list_node_tail(id, &callback_->d_node_);
   }
