@@ -1449,12 +1449,12 @@ int ObIOSender::update_group_queue(const uint64_t tenant_id, const int64_t group
         } else if (FALSE_IT(tmp_phyqueue = new (buf) ObPhyQueue())) {
         } else if (OB_FAIL(tmp_phyqueue->init(i))) {
           LOG_WARN("init io phy_queue failed", K(ret), K(i), K(*tmp_phyqueue));
-        } else if (OB_FAIL(io_group_queues->group_phy_queues_.push_back(tmp_phyqueue))) {
-          LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_phyqueue));
         } else if (OB_FAIL(enqueue_phy_queue(*tmp_phyqueue))) {
           LOG_WARN("new queue into heap failed", K(ret));
+        } else if (OB_FAIL(io_group_queues->group_phy_queues_.push_back(tmp_phyqueue))) {
+          LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_phyqueue));
         } else {
-          LOG_INFO("add phy queue success", K(tenant_id), K(cur_num), K(group_num));
+          LOG_INFO("add phy queue success", K(tenant_id), K(i), K(tmp_phyqueue), K(cur_num), K(group_num));
         }
         if (OB_FAIL(ret) && nullptr != tmp_phyqueue) {
           tmp_phyqueue->~ObPhyQueue();
