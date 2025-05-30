@@ -74,6 +74,7 @@ public:
     connect_in_bytes_ = 0;
     ret_ = common::OB_SUCCESS;
     scramble_buf_[SCRAMBLE_BUF_SIZE] = '\0';
+    scramble_result_buf_[SCRAMBLE_BUF_SIZE] = '\0';
     proxy_version_ = 0;
     group_id_ = 0;
     client_cs_type_ = 0;
@@ -237,7 +238,12 @@ public:
   obmysql::ObMysqlPktContext mysql_pkt_context_;
   obmysql::ObCompressedPktContext compressed_pkt_context_;
   obmysql::ObProto20PktContext proto20_pkt_context_;
+  // scramble_buf用于存储server创建的scramble，即server_scramble_
+  // 只有在握手时server自己创建，以后在当前连接中都不会再修改
   char scramble_buf_[SCRAMBLE_BUF_SIZE + 1];
+  // scramble_result_buf_用于存储server_sramble_与proxy_scramble 异或的结果，
+  // scramble_result作为真正需要填到login_info进行鉴权的内容
+  char scramble_result_buf_[SCRAMBLE_BUF_SIZE + 1];
   uint64_t proxy_version_;
   int32_t group_id_;
   int32_t client_cs_type_;

@@ -522,8 +522,8 @@ inline void reset_inner_proxyro_scramble(
     oceanbase::share::schema::ObUserLoginInfo &login_info)
 {
   const ObString PROXYRO_OLD_SCRAMBLE("aaaaaaaabbbbbbbbbbbb");
-  MEMCPY(conn.scramble_buf_, PROXYRO_OLD_SCRAMBLE.ptr(), PROXYRO_OLD_SCRAMBLE.length());
-  login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
+  MEMCPY(conn.scramble_result_buf_, PROXYRO_OLD_SCRAMBLE.ptr(), PROXYRO_OLD_SCRAMBLE.length());
+  login_info.scramble_str_.assign_ptr(conn.scramble_result_buf_, sizeof(conn.scramble_result_buf_));
 }
 
 const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
@@ -669,11 +669,14 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             login_info.db_ = db_name;
           }
         }
-        LOG_TRACE("some important information required for login verification, print it before doing login", K(ret), K(ObString(sizeof(conn->scramble_buf_), conn->scramble_buf_)), K(conn->is_proxy_), K(conn->client_type_), K(hsr_.get_auth_plugin_name()), K(hsr_.get_auth_response()));
+        LOG_TRACE("some important information required for login verification, print it before doing login", K(ret),
+          K(ObString(sizeof(conn->scramble_buf_), conn->scramble_buf_)),
+          K(ObString(sizeof(conn->scramble_result_buf_), conn->scramble_result_buf_)), K(conn->is_proxy_),
+          K(conn->client_type_), K(hsr_.get_auth_plugin_name()), K(hsr_.get_auth_response()));
         if (OB_FAIL(ret)) {
           // Do nothing
         } else {
-          login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
+          login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
           login_info.passwd_ = hsr_.get_auth_response();// Assume client is use mysql_native_password
           bool is_empty_passwd = false;
           if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
@@ -692,7 +695,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             OMPKAuthSwitch auth_switch;
             auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
             // "AuthSwitchRequest" carry 20 bit random salt value(MySQL call it scramble) to client which has sent in "Initial Handshake Packet"
-            auth_switch.set_scramble(ObString(sizeof(conn->scramble_buf_), conn->scramble_buf_));
+            auth_switch.set_scramble(ObString(sizeof(conn->scramble_result_buf_), conn->scramble_result_buf_));
             /*-------------------START-----------------If error occur, disconnect-------------------START-----------------*/
             if (OB_FAIL(packet_sender_.response_packet(auth_switch, &session))) {
               RPC_LOG(WARN, "failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
@@ -755,7 +758,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                 } else {
                   // packet_sender_.release_packet will recycle mem of auth_data, need using mem allocated by asr_mem_pool_ to save it
                   MEMCPY(auth_buf, auth_data, auth_data_len);
-                  login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
+                  login_info.scramble_str_.assign_ptr(conn->scramble_result_buf_, sizeof(conn->scramble_result_buf_));
                   login_info.passwd_.assign_ptr(static_cast<const char*>(auth_buf), auth_data_len);
                 }
                 packet_sender_.release_packet(asr_pkt);
@@ -1912,6 +1915,11 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT = 0;
     }
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0) {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER_CONN_ATTRS = 1;
+    } else {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER_CONN_ATTRS = 0;
+    }
     server_proxy_cap_flag.cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS = 1;
     conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);  // if old java client, set it 0
 
@@ -2103,6 +2111,12 @@ int ObMPConnect::check_client_property(ObSMConnection &conn)
     // do nothing
   }
 
+  if (!conn.is_proxy_) {
+    // copy scramble_buf_ to scramble_result_buf_ when is not proxy
+    // becsuse now is use scramble_result_buf_ in login_info
+    MEMCPY(conn.scramble_result_buf_, conn.scramble_buf_, ObSMConnection::SCRAMBLE_BUF_SIZE);
+  }
+
   if (client_ip.empty()) {
     get_peer().ip_to_string(client_ip_buf_, common::MAX_IP_ADDR_LENGTH);
     const char *peer_ip = client_ip_buf_;
@@ -2141,11 +2155,11 @@ int ObMPConnect::extract_real_scramble(const ObString &proxy_scramble)
           real_scramble_buf))) {
         LOG_WARN("failed to calc xor real_scramble_buf", K(ret));
       } else {
-        MEMCPY(conn.scramble_buf_, real_scramble_buf, ObSMConnection::SCRAMBLE_BUF_SIZE);
+        MEMCPY(conn.scramble_result_buf_, real_scramble_buf, ObSMConnection::SCRAMBLE_BUF_SIZE);
       }
     } else {
       const ObString old_scramble("aaaaaaaabbbbbbbbbbbb");
-      MEMCPY(conn.scramble_buf_, old_scramble.ptr(), old_scramble.length());
+      MEMCPY(conn.scramble_result_buf_, old_scramble.ptr(), old_scramble.length());
     }
   }
   return ret;

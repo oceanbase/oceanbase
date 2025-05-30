@@ -151,6 +151,11 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     comp_context_.seq_ = comp_seq;
     comp_context_.sessid_ = sessid_;
     comp_context_.conn_ = conn;
+    // init compress seq
+    bool is_compress_proto = (OB_MYSQL_COMPRESS_CS_TYPE == conn->get_cs_protocol_type());
+    if (is_compress_proto) {
+      comp_context_.seq_ = conn->compressed_pkt_context_.last_pkt_seq_ + 1;
+    }
 
     // init proto20 context
     bool is_proto20_supported = (OB_2_0_CS_TYPE == conn->get_cs_protocol_type());
@@ -713,6 +718,13 @@ int ObMPPacketSender::send_ok_packet_without_lock(ObSQLSessionInfo &session,
           } else if (ok_param.is_on_connect_
                      && OB_FAIL(ObMPUtils::add_min_cluster_version(okp, session))) {
             LOG_WARN("fail to add all session system variables", K(ret));
+          } else if (ok_param.is_on_change_user_) {
+            if (OB_FAIL(ObMPUtils::add_changed_session_info(okp, session))) {
+              SERVER_LOG(WARN, "fail to add changed session info", K(ret));
+            } else if (ok_param.reroute_info_ != NULL
+                       && OB_FAIL(ObMPUtils::add_client_reroute_info(okp, session, *ok_param.reroute_info_))) {
+              LOG_WARN("failed to add reroute info", K(ret));
+            }
           }
         }
       } else {
