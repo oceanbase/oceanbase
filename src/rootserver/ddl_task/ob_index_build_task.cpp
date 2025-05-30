@@ -223,15 +223,20 @@ int ObIndexSSTableBuildTask::process()
 void ObIndexSSTableBuildTask::add_event_info(const int ret, const ObString &ddl_event_stmt)
 {
   char table_id_buffer[256];
+  char trace_id[100] = {0};
+  char trace_id_kv_pair[256];
+  int64_t n = ObCurTraceId::get_trace_id()->to_string(trace_id, sizeof(trace_id));
   snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, dest_table_id:%ld",
             data_table_id_, dest_table_id_);
+  snprintf(trace_id_kv_pair, sizeof(trace_id_kv_pair), "inner_sql_trace_id: %s", trace_id);
   ROOTSERVICE_EVENT_ADD("ddl scheduler", ddl_event_stmt.ptr(),
     "tenant_id", tenant_id_,
     "ret", ret,
     K_(trace_id),
     K_(task_id),
     "table_id", table_id_buffer,
-    "sql_exec_addr", inner_sql_exec_addr_);
+    "sql_exec_addr", inner_sql_exec_addr_,
+    *ObCurTraceId::get_trace_id());
 }
 
 ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_size) const
