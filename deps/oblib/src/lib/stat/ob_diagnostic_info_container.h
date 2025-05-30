@@ -115,6 +115,7 @@ public:
   {
     return runnings_.for_each(fn);
   }
+  int for_each_and_delay_release_ref(std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn);
   bool is_inited() const
   {
     return is_inited_;
