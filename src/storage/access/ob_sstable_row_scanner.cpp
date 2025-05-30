@@ -740,10 +740,7 @@ int ObSSTableRowScanner<PrefetcheType>::try_skip_deleted_row(ObCSRowId &co_curre
   int ret = OB_SUCCESS;
   ObCOPrefetcher* co_prefetcher = reinterpret_cast<ObCOPrefetcher*>(&prefetcher_);
   const ObDatumRow *deleted_row = nullptr;
-  if (OB_UNLIKELY(nullptr == co_prefetcher)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected nullptr with co prefetcher", K(ret), K_(prefetcher));
-  } else if (OB_FAIL(inner_get_next_row_with_row_id(deleted_row, co_current))) {
+  if (OB_FAIL(inner_get_next_row_with_row_id(deleted_row, co_current))) {
     if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected pushdown status changed while skipping deleted row", K(ret), K(co_current));

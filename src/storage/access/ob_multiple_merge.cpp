@@ -341,7 +341,9 @@ int ObMultipleMerge::save_curr_rowkey()
                                              di_base_curr_rowkey_,
                                              di_base_border_rowkey,
                                              *access_ctx_->allocator_))) {
-      LOG_WARN("Failed to get di base rowkey", K(ret), KPC(iter));
+      if (OB_ERR_UNSUPPORTED_TYPE != ret) {
+        LOG_WARN("Failed to get di base rowkey", K(ret), KPC(iter));
+      }
     }
   } else {
     di_base_curr_rowkey_.reset();

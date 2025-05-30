@@ -1287,7 +1287,7 @@ int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
       OB_ISNULL(access_ctx_) || OB_ISNULL(table_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init params is null", KP_(project_iter), KP_(iter_param), KP_(access_ctx), KP_(table), KPC(this));
-  } else if (row_scanner_->is_end_of_scan() && END == state_) {
+  } else if (row_scanner_->is_end_of_scan() && OB_INVALID_CS_ROW_ID == current_) {
     // iter_end, range_idx_ maybe -1 for empty range
     curr_scan_index = MAX(range_idx_, 0);
     if (access_ctx_->query_flag_.is_reverse_scan()) {
