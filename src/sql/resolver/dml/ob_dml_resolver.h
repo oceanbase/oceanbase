@@ -1080,6 +1080,7 @@ private:
   int resolve_match_against_exprs(ObRawExpr *&expr,
                                   ObIArray<ObMatchFunRawExpr*> &match_exprs,
                                   const ObStmtScope scope);
+  int resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *&expr, ObMatchFunRawExpr *&cur_match_expr, const ObStmtScope scope);
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);

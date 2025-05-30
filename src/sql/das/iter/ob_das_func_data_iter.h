@@ -78,6 +78,12 @@ public:
     }
     return ret;
   }
+
+  int64_t get_doc_id_count() const
+  {
+    return doc_ids_.count();
+  }
+
   void set_tablet_id(const ObTabletID &tablet_id) { main_lookup_tablet_id_ = tablet_id; }
   void set_ls_id(const share::ObLSID &ls_id) { main_lookup_ls_id_ = ls_id; }
   bool has_main_lookup_iter() const { return nullptr != main_lookup_iter_; }

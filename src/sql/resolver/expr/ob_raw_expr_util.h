@@ -605,6 +605,10 @@ public:
                                 ObRawExpr *second_expr,
                                 ObRawExpr *third_expr,
                                 ObSysFunRawExpr *&out_expr);
+  static int create_concat_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObIArray<ObRawExpr *> &exprs,
+                                       ObOpRawExpr *&out_expr);
   static int create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
                                         ObSQLSessionInfo *session_info,
                                         ObRawExpr *first_expr,

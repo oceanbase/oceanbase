@@ -19828,7 +19828,6 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
   ObExprEqualCheckContext equal_ctx;
   equal_ctx.override_const_compare_ = true;
   const ParamStore *param_store = params_.param_list_;
-  ObRawExprReplacer replacer;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_) || OB_ISNULL(param_store)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr));
@@ -19869,6 +19868,9 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("failed to get fulltext search expr on table", K(ret), K(table_id));
       } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
         LOG_WARN("failed to resolve match index", K(ret));
+      } else if (cur_match_expr->get_mode_flag() == ObMatchAgainstMode::MATCH_PHRASE_MODE &&
+                 OB_FAIL(resolve_match_against_expr_with_match_phrase_mode(expr, cur_match_expr, scope))) {
+        LOG_WARN("failed to resolve match index with match phrase mode", K(ret));
       } else {
         bool shared = false;
         for (int64_t idx = 0; OB_SUCC(ret) && !shared && idx < match_exprs_on_table.count(); ++idx) {
@@ -19896,7 +19898,7 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
           }
         }
       }
-
+      ObRawExprReplacer replacer;
       if (OB_FAIL(ret)) {
       } else if (nullptr == match_expr_on_table) {
         // same expr not found in stmt
@@ -19919,6 +19921,160 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("failed to append param info", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *&expr, ObMatchFunRawExpr *&cur_match_expr, const ObStmtScope scope)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(cur_match_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(expr), K(cur_match_expr));
+  }
+  cur_match_expr->set_mode_flag(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE);
+
+  ObRawExpr *result_op = nullptr;
+  ObRawExpr *and_op = nullptr;
+  ObRawExpr *new_match_expr = nullptr;
+  ObRawExpr *like_expr = nullptr;
+  ObRawExpr *need_replace_expr = nullptr;
+  ObSEArray<ObRawExpr*, 1> and_param_exprs;
+  ObSEArray<ObRawExpr*, 1> or_like_param_exprs;
+  bool result_is_bool = true;
+  ObRawExpr *search_key_expr = cur_match_expr->get_search_key();
+  ObRawExpr *match_parent_expr = nullptr;
+
+  ObOpRawExpr *concat_text_expr = nullptr;
+  ObConstRawExpr *const_str_expr = nullptr;
+  ObConstRawExpr *like_es_expr = NULL;
+  ObSEArray<ObRawExpr*, 1> substr_param_exprs;
+  const char *ptr_value = "%";
+  ObString const_str_value(1, ptr_value);
+  const char *es_ptr_value = "\\";
+  ObString like_escape(1, es_ptr_value);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                                                      ObVarcharType,
+                                                      const_str_value,
+                                                      search_key_expr->get_result_type().get_collation_type(),
+                                                      const_str_expr))) {
+    LOG_WARN("fail to build type expr", K(ret));
+  } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else if (OB_FAIL(substr_param_exprs.push_back(search_key_expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::create_concat_expr(*params_.expr_factory_,
+                                                        params_.session_info_,
+                                                        substr_param_exprs,
+                                                        concat_text_expr))) {
+    LOG_WARN("fail to build type expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                                                              ObVarcharType,
+                                                              like_escape,
+                                                              search_key_expr->get_result_type().get_collation_type(),
+                                                              like_es_expr))) {
+    LOG_WARN("fail to create string raw expr", K(ret), K(like_escape));
+  } else {
+    ObIArray<ObRawExpr*> &column_list = cur_match_expr->get_match_columns();
+    for (int64_t j = 0; OB_SUCC(ret) && j < column_list.count(); ++j) {
+      ObColumnRefRawExpr *col_ref = nullptr;
+      ObOpRawExpr *like_op = nullptr;
+      if (OB_UNLIKELY(OB_ISNULL(column_list.at(j)) || !column_list.at(j)->is_column_ref_expr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
+      } else if (FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr*>(column_list.at(j)))) {
+      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
+                                                         params_.session_info_,
+                                                         col_ref,
+                                                         concat_text_expr,
+                                                         like_es_expr,
+                                                         like_op))) {
+        LOG_WARN("build like expr failed", K(ret));
+      } else if (OB_FAIL(or_like_param_exprs.push_back(like_op))) {
+        LOG_WARN("fail to push back expr", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (or_like_param_exprs.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get or_like_param_exprs", K(ret));
+  } else if (or_like_param_exprs.count() == 1) {
+    like_expr = or_like_param_exprs.at(0);
+  } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*params_.expr_factory_, or_like_param_exprs, like_expr))){
+    LOG_WARN("build or expr failed", K(ret));
+  } else if (OB_FAIL(like_expr->formalize(params_.session_info_))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if ((scope == T_WHERE_SCOPE || scope == T_HAVING_SCOPE) && cur_match_expr == expr) {
+    // where/having + one match against
+    ObOpRawExpr *bool_expr = nullptr;
+    if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_BOOL, bool_expr))) {
+      LOG_WARN("build const bool expr failed", K(ret));
+    } else if (OB_ISNULL(bool_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("bool expr is null", K(ret));
+    } else if (OB_FAIL(bool_expr->init_param_exprs(1))) {
+      LOG_WARN("init param exprs failed", K(ret));
+    } else if (OB_FAIL(bool_expr->add_param_expr(cur_match_expr))) {
+      LOG_WARN("add match againstl param expr to bool expr failed", K(ret));
+    } else if (OB_FAIL(bool_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+      LOG_WARN("add flag to bool expr failed", K(ret));
+    } else if (OB_FAIL(bool_expr->formalize(params_.session_info_))) {
+      LOG_WARN("fail to formalize expr", K(ret));
+    } else {
+      new_match_expr = bool_expr;
+      need_replace_expr = cur_match_expr;
+    }
+  } else if (OB_FAIL(ObTransformUtils::find_parent_expr(expr, cur_match_expr, match_parent_expr))) {
+    LOG_WARN("failed to find parent expr", K(ret));
+  } else if (nullptr == match_parent_expr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to find parent expr", K(ret));
+  } else if (match_parent_expr->is_bool_expr() || match_parent_expr->get_expr_type() == T_OP_BOOL) {
+    // when case 'not match against()', the expr tree: not expr -> op_bool expr -> match expr
+    new_match_expr = match_parent_expr;
+    need_replace_expr = match_parent_expr;
+  } else {
+    // case when
+    result_is_bool = false;
+    ObConstRawExpr *const_double_expr = nullptr;
+    constexpr double out_put = 0;
+    if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*params_.expr_factory_, ObDoubleType, out_put, const_double_expr))) {
+      LOG_WARN("create approx average token count failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*params_.expr_factory_, like_expr, cur_match_expr, const_double_expr, new_match_expr))) {
+      LOG_WARN("build case when expr failed", K(ret));
+    } else if (OB_FAIL(new_match_expr->formalize(params_.session_info_))) {
+      LOG_WARN("fail to formalize expr", K(ret));
+    } else {
+      need_replace_expr = cur_match_expr;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!result_is_bool) {
+    result_op = new_match_expr;
+  } else if (OB_FAIL(and_param_exprs.push_back(new_match_expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else if (OB_FAIL(and_param_exprs.push_back(like_expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*params_.expr_factory_, and_param_exprs, and_op))) {
+    LOG_WARN("build and expr failed", K(ret));
+  } else if (OB_FAIL(and_op->formalize(params_.session_info_))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else if (FALSE_IT(result_op = and_op)) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  }
+  ObRawExprReplacer replacer;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(replacer.add_replace_expr(need_replace_expr, result_op))) {
+    LOG_WARN("failed to add replace expr", K(ret));
+  } else if (OB_FAIL(replacer.replace(expr))) {
+    LOG_WARN("failed to replace expr", K(ret));
   }
   return ret;
 }

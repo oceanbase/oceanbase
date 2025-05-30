@@ -280,7 +280,7 @@ int ObDASFuncDataIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(main_lookup_iter_ && default_size < main_lookup_count + read_count_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, main lookup count is not equal to capacity", K(ret), K(default_size), K(main_lookup_count));
+    LOG_WARN("unexpected error, main lookup count is not equal to capacity", K(ret), K(default_size), K(main_lookup_count), K_(read_count));
   }
 
   int tmp_count = 0;

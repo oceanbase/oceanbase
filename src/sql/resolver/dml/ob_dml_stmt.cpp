@@ -2155,7 +2155,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
     } else if (expr.is_match_against_expr() &&
               !ObRawExprUtils::find_expr(get_match_exprs(), &expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fulltext search expr does not exist in the stmt", K(ret), K(expr));
+      LOG_WARN("fulltext search expr does not exist in the stmt", K(ret), K(get_match_exprs()), K(expr));
     } else if (is_select_stmt() &&
                OB_FAIL(static_cast<ObSelectStmt *>(this)->check_aggr_and_winfunc(expr))) {
       // SQL DEFENSIVE CODE

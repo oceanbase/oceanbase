@@ -4636,6 +4636,32 @@ int ObRawExprUtils::create_substr_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::create_concat_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObIArray<ObRawExpr *> &exprs,
+                                       ObOpRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_OP_CNN, out_expr))) {
+    LOG_WARN("create expr failed", K(ret));
+  } else if (OB_ISNULL(out_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("out_expr is null");
+  } else if (OB_FAIL(out_expr->init_param_exprs(exprs.count()))) {
+    LOG_WARN("init param exprs failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+      if (OB_FAIL(out_expr->add_param_expr(exprs.at(i)))) {
+        LOG_WARN("add param expr failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
+    LOG_WARN("formalize to_type expr failed", K(ret));
+  }
+  return ret;
+}
+
 int ObRawExprUtils::create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
                                               ObSQLSessionInfo *session_info,
                                               ObRawExpr *first_expr,

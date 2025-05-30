@@ -7519,7 +7519,10 @@ int ObMatchFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
         } else if (WITH_QUERY_EXPANSION == get_mode_flag() &&
                    OB_FAIL(BUF_PRINTF(" WITH QUERY EXPANSION"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+        } else if (MATCH_PHRASE_MODE == get_mode_flag() &&
+                   OB_FAIL(BUF_PRINTF(" MATCH PHRASE_MODE"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        }else if (OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
         } else if (EXPLAIN_EXTENDED == type) {
           if (OB_FAIL(BUF_PRINTF("("))) {

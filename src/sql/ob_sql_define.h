@@ -140,7 +140,8 @@ enum ObMatchAgainstMode {
   NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION = 1,
   BOOLEAN_MODE = 2,
   WITH_QUERY_EXPANSION = 3,
-  MAX_MATCH_AGAINST_MODE = 4,
+  MATCH_PHRASE_MODE = 4,
+  MAX_MATCH_AGAINST_MODE = 5,
 };
 
 #define IS_HASH_SLAVE_MAPPING(type)                                                                \
@@ -695,6 +696,7 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
     "NATURAL LANGUAGE MODE WITH QUERY EXPANSION",
     "BOOLEAN MODE",
     "WITH QUERY EXPANSION",
+    "MATCH_PHRASE_MODE",
     "UNKNOWN MATCH MODE"
   };
 

@@ -4355,6 +4355,10 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
             DATA_PRINTF(" WITH QUERY EXPANSION)");
             break;
           }
+          case MATCH_PHRASE_MODE: {
+            DATA_PRINTF(" IN MATCH PHRASE MODE)");
+            break;
+          }
           default: {
             DATA_PRINTF(")");
           }

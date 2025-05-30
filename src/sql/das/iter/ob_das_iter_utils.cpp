@@ -1719,7 +1719,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     const ObDASIRAuxLookupCtDef *aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef *>(rowkey_scan_ctdef);
     rowkey_scan_ouput_exprs = &aux_lookup_ctdef->get_lookup_scan_ctdef()->result_output_;
     ObDASIRAuxLookupRtDef *aux_lookup_rtdef = static_cast<ObDASIRAuxLookupRtDef *>(rowkey_scan_rtdef);
-    ObDASLocalLookupIter *doc_id_lookup_iter = nullptr;
+    ObDASCacheLookupIter *doc_id_lookup_iter = nullptr;
     ObDASIter *text_retrieval_result = nullptr;
     const ObDASSortCtDef *sort_ctdef = nullptr;
     ObDASSortRtDef *sort_rtdef = nullptr;
@@ -1774,11 +1774,10 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
         ObDASCacheLookupIterParam doc_id_lookup_param;
         doc_id_lookup_param.max_size_ = aux_lookup_rtdef->eval_ctx_->is_vectorized()
            ? aux_lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
-        doc_id_lookup_param.max_size_ = 1; // TODO: zyx439997 "A temporary solution, to be resolved after FTS4 is merged."
         doc_id_lookup_param.eval_ctx_ = aux_lookup_rtdef->eval_ctx_;
         doc_id_lookup_param.exec_ctx_ = &aux_lookup_rtdef->eval_ctx_->exec_ctx_;
         doc_id_lookup_param.output_ = &aux_lookup_ctdef->result_output_;
-        doc_id_lookup_param.default_batch_row_count_ = doc_id_lookup_param.max_size_;
+        doc_id_lookup_param.default_batch_row_count_ = ObDASLookupIterParam::LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT;
         doc_id_lookup_param.index_ctdef_ = aux_lookup_ctdef->get_doc_id_scan_ctdef();
         doc_id_lookup_param.index_rtdef_ = aux_lookup_rtdef->get_doc_id_scan_rtdef();
         doc_id_lookup_param.lookup_ctdef_ = aux_lookup_ctdef->get_lookup_scan_ctdef();
@@ -1938,11 +1937,10 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     ObDASCacheLookupIterParam root_lookup_param;
     root_lookup_param.max_size_ = idx_proj_lookup_rtdef->eval_ctx_->is_vectorized()
         ? idx_proj_lookup_rtdef->get_rowkey_scan_rtdef()->eval_ctx_->max_batch_size_ : 1;
-    root_lookup_param.max_size_ = 1; // TODO: zyx439997 "A temporary solution, to be resolved after FTS4 is merged."
     root_lookup_param.eval_ctx_ = idx_proj_lookup_rtdef->eval_ctx_;
     root_lookup_param.exec_ctx_ = &idx_proj_lookup_rtdef->eval_ctx_->exec_ctx_;
     root_lookup_param.output_ = &idx_proj_lookup_ctdef->result_output_;
-    root_lookup_param.default_batch_row_count_ = root_lookup_param.max_size_;
+    root_lookup_param.default_batch_row_count_ = ObDASLookupIterParam::LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT;
     root_lookup_param.index_ctdef_ = idx_proj_lookup_ctdef->get_rowkey_scan_ctdef();
     root_lookup_param.index_rtdef_ = idx_proj_lookup_rtdef->get_rowkey_scan_rtdef();
     root_lookup_param.lookup_ctdef_ = static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_doc_id_lookup_scan_ctdef());
@@ -2097,6 +2095,7 @@ int ObDASIterUtils::create_functional_lookup_sub_tree(ObTableScanParam &scan_par
     if (OB_FAIL(create_das_iter(alloc, rowkey_docid_param, rowkey_docid_iter))) {
       LOG_WARN("failed to create data table lookup scan iter", K(ret));
     } else {
+      // TODO:@zyx439997 try to cache the func_lookup iter by cache look up iter
       ObDASFuncLookupIterParam func_lookup_param;
       func_lookup_param.max_size_ = func_lookup_rtdef->eval_ctx_->is_vectorized() ? func_lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
       func_lookup_param.eval_ctx_ = func_lookup_rtdef->eval_ctx_;

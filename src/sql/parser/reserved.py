@@ -1101,6 +1101,7 @@ class SqlKeywords:
          PARTITIONS
          PASSWORD
          PHASE
+         PHRASE
          PLUGIN
          PLUGINS
          PLUGIN_DIR

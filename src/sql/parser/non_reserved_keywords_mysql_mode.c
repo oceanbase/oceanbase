@@ -703,6 +703,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"performance", PERFORMANCE},
   {"row_group_size", ROW_GROUP_SIZE},
   {"phase", PHASE},
+  {"phrase", PHRASE},
   {"physical", PHYSICAL},
   {"plan", PLAN},
   {"planregress", PLANREGRESS},
