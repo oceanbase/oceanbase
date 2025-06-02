@@ -554,7 +554,7 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   }
   // vector index async task
   int tmp_ret = OB_SUCCESS;
-  if (is_stopped()) { // skip
+  if (is_stopped() || !is_leader_) { // skip
   } else if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(tmp_ret));
   } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
@@ -1069,7 +1069,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
 
     // start exec index async task
     int tmp_ret = OB_SUCCESS;
-    if (is_stopped()) { // skip
+    if (is_stopped() || !is_leader_) { // skip
     } else if (OB_TMP_FAIL(async_task_exec_.start_task())) {
       LOG_WARN("fail to start index async task", K(tmp_ret));
     }
@@ -1107,7 +1107,7 @@ void ObPluginVectorIndexLoadScheduler::run_task()
     // reserved, do nothing
     int tmp_ret = OB_SUCCESS;
     LOG_INFO("switch leader", K(tenant_id_), K(ls_->get_ls_id()), K(is_leader_), K(is_stopped_));
-    if (!check_can_do_work() || is_stopped()) { // skip
+    if (!check_can_do_work() || is_stopped() || !is_leader_) { // skip
     } else if (OB_TMP_FAIL(async_task_exec_.resume_task())) {
       LOG_WARN("fail to resume async task", K(tmp_ret));
     }
