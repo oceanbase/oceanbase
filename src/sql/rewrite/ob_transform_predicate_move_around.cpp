@@ -2304,6 +2304,86 @@ int ObTransformPredicateMoveAround::pushdown_into_qualify_filter(ObIArray<ObRawE
   return ret;
 }
 
+int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
+  ObRawExpr *having_expr, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  ObQueryCtx *query_ctx = NULL;
+  ObSEArray<ObRawExpr *, 4> generalized_columns;
+  if(OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
+    LOG_WARN("failed to get query context");
+  } else if(query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP3)) {
+    if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
+               true, true, is_valid))) {
+      LOG_WARN("failed to check if can pass through group by", K(ret));
+    } else if (!is_valid) {
+      // do nothing
+      OPT_TRACE(having_expr, "can not pushdown through group by");
+    } else if (OB_FAIL(check_pushdown_through_rollup_validity(having_expr, stmt.get_rollup_exprs(), is_valid))){
+      LOG_WARN("failed to check if can pass through rollup", K(ret));
+    } else if (!is_valid){
+      // do nothing
+      OPT_TRACE(having_expr, "can not pushdown through rollup");
+    }
+  } else {
+    if (OB_FAIL(extract_generalized_column(having_expr, generalized_columns))) {
+      LOG_WARN("failed to extract generalized columns", K(ret));
+    } else if (!ObOptimizerUtil::subset_exprs(
+                 generalized_columns, stmt.get_group_exprs())) {
+      // do nothing
+      OPT_TRACE(having_expr, "has none group by expr, can not pushdown");
+    } else if (ObOptimizerUtil::overlap_exprs(
+                 generalized_columns, stmt.get_rollup_exprs())) {
+      //do nothing
+      OPT_TRACE(having_expr, "has rollup expr in mysql mode, can not pushdown");
+    } else {
+      // pass groupby and rollup check, is valid.
+      is_valid = true;
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObTransformPredicateMoveAround::check_pushdown_through_rollup_validity
+ * Check having expr to see if it can push down through rollup exprs.
+ * @return
+ */
+int ObTransformPredicateMoveAround::check_pushdown_through_rollup_validity(ObRawExpr *having_expr,
+    const ObIArray<ObRawExpr *> &rollup_exprs, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  bool is_const_inherit = true;
+  ObArray<ObRawExpr *> queue;
+  if (OB_ISNULL(having_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null having expr", K(ret));
+  } else if (OB_FAIL(queue.push_back(having_expr))) {
+    LOG_WARN("failed to push back having expr", K(ret));
+  } else {
+    is_valid = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < queue.count(); ++i) {
+    ObRawExpr *expr = queue.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current expr is NULL");
+    } else if (ObOptimizerUtil::find_item(rollup_exprs, expr)) {
+      is_valid = false;
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < expr->get_param_count(); ++j) {
+        ObRawExpr *param_expr = expr->get_param_expr(j);
+        if (OB_FAIL(queue.push_back(param_expr))) {
+          LOG_WARN("failed to push back child expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * @brief ObTransformPredicateMoveAround::check_pushdown_validity
  * 检查一个谓词能否压过 group by
@@ -2313,6 +2393,7 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
     ObSelectStmt &stmt, ObIArray<ObRawExpr *> &output_predicates)
 {
   int ret = OB_SUCCESS;
+  bool is_valid = false;
   ObSEArray<ObRawExpr *, 4> new_having_exprs;
   output_predicates.reuse();
   OPT_TRACE("try to pushdown having conditions into where");
@@ -2343,16 +2424,10 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
           OPT_TRACE(pred, "deduce a new pred:", new_pred);
         }
       }
-    } else if (OB_FAIL(extract_generalized_column(pred, generalized_columns))) {
-      LOG_WARN("failed to extract generalized columns", K(ret));
-    } else if (!ObOptimizerUtil::subset_exprs(
-                 generalized_columns, stmt.get_group_exprs())) {
-      // do nothing
-      OPT_TRACE(pred, "has none group by expr, can not pushdown");
-    } else if (ObOptimizerUtil::overlap_exprs(
-                 generalized_columns, stmt.get_rollup_exprs())) {
-      //do nothing
-      OPT_TRACE(pred, "has rollup expr in mysql mode, can not pushdown");
+    } else if (OB_FAIL(check_pushdown_through_groupby_validity(stmt, pred, is_valid))) {
+      LOG_WARN("failed to check if can pass through group by", K(ret));
+    } else if (!is_valid) {
+      OPT_TRACE(pred, "can not pushdown through groupby");
     } else if (pred->has_flag(CNT_SUB_QUERY) &&
                OB_FAIL(ObOptimizerUtil::check_subquery_has_ref_assign_user_var(
                           pred, has_ref_assign_user_var))) {

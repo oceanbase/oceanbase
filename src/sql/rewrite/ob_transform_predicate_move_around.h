@@ -291,6 +291,14 @@ private:
   int pushdown_through_groupby(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &output_predicates);
 
+  int check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
+                                          ObRawExpr *having_expr,
+                                          bool &is_valid);
+
+  int check_pushdown_through_rollup_validity(ObRawExpr *having_expr,
+                               const ObIArray<ObRawExpr *> &rollup_exprs,
+                               bool &is_valid);
+
   int deduce_param_cond_from_aggr_cond(ObItemType expr_type,
                                        ObRawExpr *first,
                                        ObRawExpr *second,
