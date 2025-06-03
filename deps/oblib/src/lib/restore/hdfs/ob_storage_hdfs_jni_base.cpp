@@ -204,10 +204,8 @@ int ObStorageHdfsBase::get_hdfs_file_meta(const ObString &uri, ObStorageObjectMe
     hdfsFS hdfs_fs = hdfs_client_->get_hdfs_fs();
     hdfsFileInfo *file_info = obHdfsGetPathInfo(hdfs_fs, path_buf_);
     if (OB_ISNULL(file_info)) {
-      meta.is_exist_ = false;
-      meta.length_ = 0;
-      meta.type_ = ObStorageObjectMetaType::OB_OBJ_INVALID;
-      OB_LOG(TRACE, "file info does not exist", K(ret), K(uri), K_(path_buf));
+      ret = OB_HDFS_PATH_NOT_FOUND;
+      OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K_(path_buf));
     } else {
       meta.is_exist_ = true;
       if (file_info->mKind == kObjectKindDirectory) {
