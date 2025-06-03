@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_redef_table.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "storage/tablelock/ob_table_lock_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -87,6 +88,24 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     DISABLE_SQL_MEMLEAK_GUARD;
     execute_ctx_ = execute_ctx;
     allocator_ = execute_ctx->get_allocator();
+
+    int64_t db_id = -1;
+    ObString query_sql;
+    if (execute_ctx_ != nullptr) {
+      ObSQLSessionInfo *session = execute_ctx_->get_session_info();
+      if (session != nullptr) {
+        db_id = session->get_database_id();
+        query_sql = session->get_current_query_string();
+      }
+    }
+
+    SERVER_EVENT_ADD("direct_load", "start",
+                     "tenant_id", MTL_ID(),
+                     "trace_id", *ObCurTraceId::get_trace_id(),
+                     K(db_id),
+                     K(query_sql),
+                     K(param));
+
     if (OB_FAIL(param.normalize())) {
       LOG_WARN("fail to normalize param", KR(ret));
     }
@@ -236,6 +255,11 @@ int ObTableLoadInstance::end_stmt(const bool commit)
   }
   stmt_ctx_.is_started_ = false;
   LOG_INFO("end stmt succeed", KR(ret));
+
+  SERVER_EVENT_ADD("direct_load", "end",
+                 "tenant_id", MTL_ID(),
+                 "trace_id", *ObCurTraceId::get_trace_id(),
+                 "ret_code", ret);
   return ret;
 }
 

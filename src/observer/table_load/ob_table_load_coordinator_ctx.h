@@ -132,7 +132,7 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
-  void add_to_all_server_event();
+  void add_to_all_server_event(int ret_code);
   int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids);
   int init_empty_insert_tablet_ctx_manager();
 public:
