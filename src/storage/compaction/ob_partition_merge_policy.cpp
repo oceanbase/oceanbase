@@ -654,17 +654,15 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
       LOG_WARN("refine and get minor merge result fail", K(ret));
     }
   }
-
+  int64_t diagnose_table_cnt = DIAGNOSE_TABLE_CNT_IN_STORAGE;
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_CAN_NOT_SCHEDULE_MINOR) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(INFO, "ERRSIM EN_CAN_NOT_SCHEDULE_MINOR", K(ret));
+      diagnose_table_cnt = 2;
     }
   }
-  const int64_t diagnose_table_cnt = 2;
-#else
-  const int64_t diagnose_table_cnt = DIAGNOSE_TABLE_CNT_IN_STORAGE;
 #endif
   if (OB_SUCC(ret)) {
     DEL_SUSPECT_INFO(MINOR_MERGE,

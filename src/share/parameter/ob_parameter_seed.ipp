@@ -1091,11 +1091,11 @@ DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_adaptive_compaction, OB_TENANT_PARAMETER, "True",
          "specifies whether allow adaptive compaction schedule and information collection",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(compaction_dag_cnt_limit, OB_TENANT_PARAMETER, "15000", "[10000,200000]",
-        "the compaction dag count limit. Range: [10000,200000] in integer. default value is 15000",
+DEF_INT(compaction_dag_cnt_limit, OB_TENANT_PARAMETER, "50000", "[10000,500000]",
+        "the compaction dag count limit. Range: [10000,500000] in integer. default value is 50000",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(compaction_schedule_tablet_batch_cnt, OB_TENANT_PARAMETER, "50000", "[10000,200000]",
-        "the batch size when scheduling tablet to execute compaction task. Range: [10000,200000] in integer. default value is 50000",
+DEF_INT(compaction_schedule_tablet_batch_cnt, OB_TENANT_PARAMETER, "50000", "[10000,500000]",
+        "the batch size when scheduling tablet to execute compaction task. Range: [10000,500000] in integer. default value is 50000",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(compaction_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of low priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
