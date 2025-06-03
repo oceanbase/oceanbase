@@ -2249,7 +2249,37 @@ int ObLSTabletService::create_memtable(
     } else {
       time_guard.click("get tablet");
       ObTablet &old_tablet = *(old_tablet_handle.get_obj());
-      if (OB_FAIL(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
+      bool is_committed;
+      ObTabletCreateDeleteMdsUserData user_data;
+
+      // forbid create new memtable when transfer
+      //
+      // The transfer process in 4_2_1 proceeds as follows: 1. kill or wait for
+      // the transaction to end -> 2. submit the transfer_start log to set the
+      // tablet_status -> 3. set the freeze_flag on the active memtable -> 4.
+      // Freeze and dump the memtable.
+      //
+      // If an execution begins before the transaction is killed (with the
+      // tx_ctx created during execution), it may pass step 1 while create a new
+      // memtable in step 4, which violates the design of the transfer process.
+      //
+      // To address this, we added a double check for the tablet_status when
+      // creating a memtable. As a result: Memtables created before step 2 will
+      // definitely be set with freeze_flag. And memtables created after step 2
+      // will be blocked by the double check.
+      if (for_replay) {
+      } else if (OB_FAIL(old_tablet.ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+        LOG_WARN("fail to get latest tablet status", K(ret));
+      } else if (!is_committed || (user_data.tablet_status_ != ObTabletStatus::NORMAL
+                                   && user_data.tablet_status_ != ObTabletStatus::TRANSFER_IN)) {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(10 * 1_ms)) {
+          LOG_WARN("tablet status not allow create new memtable", K(ret), K(is_committed), K(user_data));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
           LOG_WARN("fail to create memtable", K(ret), K(new_tablet_handle), K(schema_version), K(tablet_id));
         }
