@@ -109,7 +109,6 @@ int create_index(obvectorlib::VectorIndexPtr& index_handler, int index_type,
 #endif
 }
 
-// TODO(liyao)
 int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size, char* extra_info /*= nullptr*/)
 {
   INIT_SUCC(ret);

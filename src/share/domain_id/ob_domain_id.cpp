@@ -46,7 +46,7 @@ bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(const void *table_schem
     bret = table->is_rowkey_doc_id() ||
            table->is_vec_rowkey_vid_type() ||
            table->is_vec_ivfflat_rowkey_cid_index() ||
-          // TODO(liyao): use the expression calculation currently.
+          // TODO(mengyi): use the expression calculation currently.
           //              use the merge_iter after the split post build step.
           //  table->is_vec_ivfflat_centroid_index() ||
            table->is_vec_ivfflat_cid_vector_index() ||
