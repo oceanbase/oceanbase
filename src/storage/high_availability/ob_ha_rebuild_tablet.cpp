@@ -365,12 +365,13 @@ int ObRebuildTabletDagNet::fill_comment(char *buf, const int64_t buf_len) const
   int ret = OB_SUCCESS;
   const int64_t MAX_TRACE_ID_LENGTH = 64;
   char task_id_str[MAX_TRACE_ID_LENGTH] = { 0 };
+  int64_t pos = 0;
   UNUSED(buf);
   UNUSED(buf_len);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild tablet dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+  } else if (OB_FAIL(databuff_print_obj(task_id_str, MAX_TRACE_ID_LENGTH, pos, ctx_->task_id_))) {
     LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
   } else {
   }
