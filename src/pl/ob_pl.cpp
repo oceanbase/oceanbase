@@ -3596,8 +3596,19 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
 int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type)
 {
   int ret = OB_SUCCESS;
-  if (actual_param.is_null() || actual_param.is_pl_mock_default_param()) {
+  bool enable_defend = true;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    enable_defend = tenant_config->_enable_routine_call_param_defend;
+  }
+
+  if (!enable_defend) {
+    LOG_TRACE("defend_stored_routine_change is disabled, skip check",
+              K(enable_defend), K(actual_param), K(formal_param_type));
+  } else if (actual_param.is_null() || actual_param.is_pl_mock_default_param()) {
     // no actual param type info(eg: out params), skip check
+    LOG_TRACE("actual param is null or mock default param, skip check",
+              K(actual_param), K(formal_param_type));
   } else if (!actual_param.is_ext()) {
     if (!formal_param_type.is_obj_type()) {
       ret = OB_INVALID_ARGUMENT;
@@ -3608,7 +3619,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
               || PL_REF_CURSOR_TYPE == actual_param.get_meta().get_extend_type() /* also refcursor */
               || PL_CURSOR_TYPE == actual_param.get_meta().get_extend_type()     /* cursor */)
              && formal_param_type.is_cursor_type()) {
-    // skip check
+    LOG_TRACE("skip check for ref cursor type", K(actual_param), K(formal_param_type));
   } else {  // user defined type
     uint64_t actual_udt_id = OB_INVALID_ID;
     uint64_t formal_udt_id = OB_INVALID_ID;
@@ -3656,34 +3667,20 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       const ObUserDefinedType *actual_type = nullptr;
       const ObUserDefinedType *formal_type = nullptr;
       bool is_compatible = true;
+      ObPLContext *pl_ctx = nullptr;
 
-      OZ (get_exec_ctx().get_user_type(actual_udt_id, actual_type));
-      if (OB_FAIL(ret) || OB_ISNULL(actual_type)) {
-        // The type of the actual argument may not exist in the current function's lexical scope, an error needs to be
-        // reported to the upper level to search in the caller's lexical scope. Consider case below:
-        // ```
-        //   declare
-        //     cursor cur is select * from some_table;
-        //   begin
-        //     for v in cur loop
-        //       some_proc(v);
-        //     end loop;
-        //   end;
-        // ```
-        // The type of actual param V passed to SOME_PROC can not be found in SOME_PROC's scope, it is recorded in the caller
-        // anonymous block's scope.
-        LOG_TRACE("the type of actual param is not found in the current procedure's lexical scope, "
-                  "should search caller's scope", K(ret), K(actual_udt_id), K(formal_udt_id));
-        ret = OB_SUCCESS;
-        ObPLContext *pl_ctx = nullptr;
+      // fetch actual param type from caller or callee
+      CK (OB_NOT_NULL(ctx_.exec_ctx_));
+      CK (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()));
+      CK (OB_NOT_NULL(pl_ctx = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
+      if (pl_ctx->get_exec_stack().count() >= 2) {
+        // from caller
         ObPLExecState *caller = nullptr;
-        CK (OB_NOT_NULL(ctx_.exec_ctx_));
-        CK (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()));
-        CK (OB_NOT_NULL(pl_ctx = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
-        CK (pl_ctx->get_exec_stack().count() >= 2);
         CK (OB_NOT_NULL(caller = pl_ctx->get_exec_stack().at(pl_ctx->get_exec_stack().count() - 2)));
-        // fetch actual param type from caller
         OZ (caller->get_exec_ctx().get_user_type(actual_udt_id, actual_type));
+      } else {
+        // top call, from callee
+        OZ (get_exec_ctx().get_user_type(actual_udt_id, actual_type));
       }
       // fetch formal param type from callee
       OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));

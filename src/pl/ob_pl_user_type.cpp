@@ -1433,12 +1433,15 @@ int ObRecordType::is_compatble(const ObRecordType &other, bool &is_comp) const
   is_comp = true;
   if (get_record_member_count() != other.get_record_member_count()) {
     is_comp = false;
+    LOG_TRACE("record type is not compatible",
+              K(get_record_member_count()), K(other.get_record_member_count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_comp && i < get_record_member_count(); ++i) {
       const ObPLDataType *left = get_record_member_type(i);
       const ObPLDataType *right = other.get_record_member_type(i);
       CK (OB_NOT_NULL(left));
       CK (OB_NOT_NULL(right));
+      LOG_TRACE("check record member type", K(i), KPC(left), KPC(right));
       if (OB_SUCC(ret)) {
         if (left->is_obj_type() && right->is_obj_type()) {
           CK (OB_NOT_NULL(left->get_data_type()));
@@ -1447,6 +1450,8 @@ int ObRecordType::is_compatble(const ObRecordType &other, bool &is_comp) const
                                       left->get_data_type()->get_collation_type(),
                                       right->get_data_type()->get_obj_type(),
                                       right->get_data_type()->get_collation_type()));
+          LOG_TRACE("check obj type cast support",
+                    K(i), K(is_comp), KPC(left->get_data_type()), KPC(right->get_data_type()));
         } else if ((!left->is_obj_type() ||
                     (left->get_data_type() != NULL && left->get_data_type()->get_meta_type().is_ext()))
                       &&
@@ -1458,6 +1463,7 @@ int ObRecordType::is_compatble(const ObRecordType &other, bool &is_comp) const
                                                                     : right->get_data_type()->get_udt_id();
           if (left_udt_id != right_udt_id) {
             is_comp = false;
+            LOG_TRACE("record type is not compatible", K(i), K(left_udt_id), K(right_udt_id));
           }
         } else {
           is_comp = false;

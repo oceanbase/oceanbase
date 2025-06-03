@@ -2753,3 +2753,6 @@ DEF_INT(_parquet_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
 DEF_INT(async_ps_cursor_max_count, OB_CLUSTER_PARAMETER, "0", "[0, 1024]",
         "the max count of async ps cursor. The default value is 0. Range: [0, 1024] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
+         "Enable or disable routine call parameter defend.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
