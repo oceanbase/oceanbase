@@ -1551,13 +1551,14 @@ bool ObDDLRedefinitionTask::check_need_sync_stats_history() {
 bool ObDDLRedefinitionTask::check_need_sync_stats() {
   // bugfix:
   // shouldn't sync stats if the ddl task is from load data's direct_load
-  return !(has_synced_stats_info_ || task_type_ == DDL_DIRECT_LOAD);
+  return ObDDLType::DDL_DIRECT_LOAD != task_type_
+      && ObDDLType::DDL_DIRECT_LOAD_INSERT != task_type_;
 }
 
 int ObDDLRedefinitionTask::sync_stats_info()
 {
   int ret = OB_SUCCESS;
-  if (check_need_sync_stats()) {
+  if (!has_synced_stats_info_) {
     ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
     ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
     ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
@@ -1609,9 +1610,10 @@ int ObDDLRedefinitionTask::sync_stats_info()
         if (OB_SUCC(ret)) {
           ret = tmp_ret;
         }
-      } else {
-        has_synced_stats_info_ = (ret == OB_SUCCESS);
       }
+    }
+    if (OB_SUCC(ret)) {
+      has_synced_stats_info_ = (ret == OB_SUCCESS);
     }
     const int64_t end_time = ObTimeUtility::current_time();
     LOG_INFO("sync table stat finished", "cost_time", end_time - start_time);
@@ -1633,20 +1635,24 @@ int ObDDLRedefinitionTask::sync_stats_info_in_same_tenant(common::ObMySQLTransac
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
-  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, new_table_schema, need_sync_history))) {
-    LOG_WARN("fail to sync table level stats", K(ret));
-  } else if (DDL_ALTER_PARTITION_BY != task_type_
-              && OB_FAIL(sync_partition_level_stats_info(trans,
-                                                        data_table_schema,
-                                                        new_table_schema,
-                                                        need_sync_history))) {
-    LOG_WARN("fail to sync partition level stats", K(ret));
-  } else if (OB_FAIL(sync_column_level_stats_info(trans,
-                                                  data_table_schema,
-                                                  new_table_schema,
-                                                  *src_tenant_schema_guard,
-                                                  need_sync_history))) {
-    LOG_WARN("fail to sync column level stats", K(ret));
+  } else if (OB_FAIL(sync_table_prefs(trans))) {
+    LOG_WARN("fail to sync table prefs", K(ret));
+  } else if (check_need_sync_stats()) {
+    if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, new_table_schema, need_sync_history))) {
+      LOG_WARN("fail to sync table level stats", K(ret));
+    } else if (DDL_ALTER_PARTITION_BY != task_type_
+                && OB_FAIL(sync_partition_level_stats_info(trans,
+                                                          data_table_schema,
+                                                          new_table_schema,
+                                                          need_sync_history))) {
+      LOG_WARN("fail to sync partition level stats", K(ret));
+    } else if (OB_FAIL(sync_column_level_stats_info(trans,
+                                                    data_table_schema,
+                                                    new_table_schema,
+                                                    *src_tenant_schema_guard,
+                                                    need_sync_history))) {
+      LOG_WARN("fail to sync column level stats", K(ret));
+    }
   }
 
   return ret;
@@ -1665,6 +1671,8 @@ int ObDDLRedefinitionTask::sync_stats_info_accross_tenant(common::ObMySQLTransac
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (!check_need_sync_stats()) {
+    // do nothing
   } else if (OB_FAIL(get_src_part_stats(data_table_schema, src_part_stats))) {
     LOG_WARN("fail to get src part stats", K(ret));
   } else if (OB_FAIL(get_src_column_stats(data_table_schema, allocator, src_column_stats))) {
@@ -2336,6 +2344,24 @@ int ObDDLRedefinitionTask::generate_sync_column_partition_level_stats_sql(const 
           static_cast<int>(in_partitions_sql.length()), in_partitions_sql.ptr(), old_col_id))) {
       LOG_WARN("fail to append sql string", K(ret), K(object_id_), K(dst_tenant_id_), K(exec_tenant_id), K(old_col_id));
     }
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::sync_table_prefs(common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  int64_t affected_rows = 0;
+  if (OB_FAIL(sql_string.assign_fmt("INSERT IGNORE INTO %s(tenant_id,table_id,pname,valnum,valchar,chgtime,spare1)"
+          " SELECT 0, %ld, pname, valnum, valchar, chgtime, spare1 FROM %s WHERE TABLE_ID = %ld",
+      OB_ALL_OPTSTAT_USER_PREFS_TNAME, target_object_id_, OB_ALL_OPTSTAT_USER_PREFS_TNAME, object_id_))) {
+    LOG_WARN("fail to assign sql string", K(ret));
+  } else if (OB_FAIL(trans.write(dst_tenant_id_, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("fail to insert __all_optstat_user_prefs", K(ret), K(sql_string));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
   }
   return ret;
 }

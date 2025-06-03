@@ -245,6 +245,7 @@ protected:
 
   bool check_need_sync_stats_history();
   bool check_need_sync_stats();
+  int sync_table_prefs(common::ObMySQLTransaction &trans);
   int sync_tablet_autoinc_seq();
   int check_need_rebuild_constraint(const ObTableSchema &table_schema,
                                     ObIArray<uint64_t> &constraint_ids,
