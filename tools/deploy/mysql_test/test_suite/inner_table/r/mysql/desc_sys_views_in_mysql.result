@@ -936,6 +936,8 @@ SEQ_NUM	bigint(20)	NO		NULL
 NETWORK_WAIT_TIME	bigint(20) unsigned	YES		NULL	
 PLSQL_COMPILE_TIME	bigint(20)	NO		NULL	
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	YES		NULL	
+USER_CLIENT_PORT	bigint(20)	NO		NULL	
+TRANS_STATUS	varchar(256)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_AUDIT|%') then 2
@@ -1336,6 +1338,8 @@ SEQ_NUM	bigint(20)	NO
 NETWORK_WAIT_TIME	bigint(20) unsigned	NO			
 PLSQL_COMPILE_TIME	bigint(20)	NO			
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	NO			
+USER_CLIENT_PORT	bigint(20)	NO			
+TRANS_STATUS	varchar(256)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_AUDIT|%') then 2

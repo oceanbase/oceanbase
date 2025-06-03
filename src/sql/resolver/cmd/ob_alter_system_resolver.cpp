@@ -4363,6 +4363,44 @@ int ObSwitchRSRoleResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObLoadTimeZoneInfoResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObLoadTimeZoneInfoStmt *load_time_zone_info_stmt = NULL;
+  ObString file_path;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(schema_checker_), K(session_info_));
+  } else if (OB_UNLIKELY(T_LOAD_TIME_ZONE_INFO != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_LOAD_TIME_ZONE_INFO", "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_) ||
+             OB_UNLIKELY(1 != parse_tree.num_child_) ||
+             OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+  } else if (ObSchemaChecker::is_ora_priv_check()
+            && OB_FAIL((schema_checker_->check_ora_ddl_priv(
+                        session_info_->get_effective_tenant_id(),
+                        session_info_->get_priv_user_id(),
+                        ObString(""),
+                        stmt::T_LOAD_TIME_ZONE_INFO,
+                        session_info_->get_enable_role_array())))) {
+    LOG_WARN("check priv failed", K(ret), K(session_info_->get_effective_tenant_id()),
+             K(session_info_->get_user_id()));
+  } else if (OB_ISNULL(load_time_zone_info_stmt = create_stmt<ObLoadTimeZoneInfoStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create ObLoadTimeZoneInfoStmt failed", K(ret));
+  } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], file_path))) {
+    LOG_WARN("resolve path failed", K(ret));
+  } else {
+    load_time_zone_info_stmt->set_path(file_path);
+    load_time_zone_info_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
+    stmt_ = load_time_zone_info_stmt;
+  }
+  return ret;
+}
+
 //
 //                           /- T_INT(priority)
 //                          /|

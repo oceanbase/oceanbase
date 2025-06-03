@@ -405,7 +405,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       is_arraybinding_(false),
       exist_local_plan_(false),
       compare_plan_(nullptr),
-      flag_(0)
+      flag_(0),
+      parameterized_ps_sql_()
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -483,7 +484,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_batch_insert_opt_),
     K(is_arraybinding_),
     K(exist_local_plan_),
-    K(flag_)
+    K(flag_),
+    K(parameterized_ps_sql_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -565,6 +567,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     };
     uint16_t flag_;
   };
+  common::ObString parameterized_ps_sql_;
 };
 
 struct ObPlanCacheStat

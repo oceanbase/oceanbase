@@ -2422,6 +2422,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_CATALOG);
         break;
       }
+      case stmt::T_LOAD_TIME_ZONE_INFO: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt type ddl priv undefined", K(stmt_type));

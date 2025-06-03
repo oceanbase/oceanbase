@@ -675,6 +675,24 @@ private:
   obrpc::ObUpgradeJobArg rpc_arg_;
 };
 
+class ObLoadTimeZoneInfoStmt : public ObSystemCmdStmt
+{
+public:
+  ObLoadTimeZoneInfoStmt() : ObSystemCmdStmt(stmt::T_LOAD_TIME_ZONE_INFO),
+                                tenant_id_(OB_INVALID_TENANT_ID), path_()
+  { }
+  virtual ~ObLoadTimeZoneInfoStmt() {}
+  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() { return tenant_id_; }
+  ObString get_path() const { return path_; }
+  void set_path(ObString path) { path_ = path; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id));
+
+private:
+  uint64_t tenant_id_;
+  ObString path_;
+};
+
 class ObCancelTaskStmt : public ObSystemCmdStmt
 {
 public:

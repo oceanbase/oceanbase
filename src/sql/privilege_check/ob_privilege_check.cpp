@@ -2809,7 +2809,7 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_TABLE_TTL != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_SYSTEM_RESET_PARAMETER != basic_stmt->get_stmt_type() &&
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
-             stmt::T_MODULE_DATA != basic_stmt->get_stmt_type() &&
+             stmt::T_LOAD_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
              stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type()) {

@@ -2166,6 +2166,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_immediate_check("False");
   ObString config_name_system_trig_enabled("_system_trig_enabled");
   ObString config_value_system_trig_enabled("false");
+  ObString config_name_enable_ps_paramterize("enable_ps_parameterize");
+  ObString config_value_enable_ps_paramterize("false");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -2181,6 +2183,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_immediate_check_unique), K(config_value_immediate_check));
       } else if (OB_FAIL(parallel_table_config.add_config(config_name_system_trig_enabled, config_value_system_trig_enabled))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_system_trig_enabled), K(config_value_system_trig_enabled));
+      } else if (OB_FAIL(parallel_table_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
       }
     }
   }
