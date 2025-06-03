@@ -1752,7 +1752,7 @@ DEF_BOOL(default_enable_extended_rowid, OB_TENANT_PARAMETER, "false",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "true",
 "specifies whether SQL serial network is turned on. Turned on to support mysql_send_long_data"
-"The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
+"The default value is True. Value: TRUE: turned on FALSE: turned off",
 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_BOOL(_enable_parallel_das_dml, OB_TENANT_PARAMETER, "False",
          "By default, the das service is allowed to use multiple threads to submit das tasks",

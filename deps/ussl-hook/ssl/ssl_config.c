@@ -480,6 +480,10 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   if (0 != ret) {
     SSL_CTX_free(ctx);

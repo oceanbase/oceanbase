@@ -418,6 +418,10 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   return ctx;
 }
