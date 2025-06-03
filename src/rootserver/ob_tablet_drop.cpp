@@ -103,35 +103,53 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_ls_from_table(table_schema, ls_ids))) {
+    } else if (OB_FAIL(get_ls_from_table(table_schema, true/*is_include_hidden*/, ls_ids))) {
       LOG_WARN("fail to get ls from table", KR(ret));
     } else {
       int64_t ls_idx = 0;
       ObPartitionLevel part_level = table_schema.get_part_level();
       if (PARTITION_LEVEL_ZERO == part_level) {
         if (OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++),
-                    OB_INVALID_INDEX, OB_INVALID_INDEX))) {
+                    OB_INVALID_INDEX, OB_INVALID_INDEX, false/*is_hidden*/))) {
           LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
         }
       } else {
         ObPartition **part_array = table_schema.get_part_array();
         int64_t part_num = table_schema.get_partition_num();
+        ObPartition **hidden_part_array = table_schema.get_hidden_part_array();
+        int64_t hidden_part_num = table_schema.get_hidden_partition_num();
+        int64_t total_part_num = part_num + hidden_part_num;
         if (OB_ISNULL(part_array)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part array is null", K(table_schema), KR(ret));
         } else {
-          for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
-            if (OB_ISNULL(part_array[i])) {
+          for (int64_t i = 0; i < total_part_num && OB_SUCC(ret); ++i) {
+            ObPartition *part = NULL;
+            bool is_hidden = false;
+            if (i < part_num) {
+              part = part_array[i];
+            } else if (OB_ISNULL(hidden_part_array) || i - part_num >= hidden_part_num) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("NULL ptr", K(i), K(table_schema), KR(ret));
+            } else {
+              is_hidden = true;
+              part = hidden_part_array[i - part_num];
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(part)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("NULL ptr", K(i), K(table_schema), KR(ret));
             } else if (PARTITION_LEVEL_ONE == part_level) {
-              if (OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++), i,
-                          OB_INVALID_INDEX))) {
+              if (is_hidden && OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++), i - part_num,
+                          OB_INVALID_INDEX, is_hidden))) {
+                LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+              } else if (!is_hidden && OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++), i,
+                          OB_INVALID_INDEX, is_hidden))) {
                 LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
               }
             } else if (PARTITION_LEVEL_TWO == part_level) {
-              ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
-              int64_t sub_part_num = part_array[i]->get_subpartition_num();
+              ObSubPartition **subpart_array = part->get_subpart_array();
+              int64_t sub_part_num = part->get_subpartition_num();
               if (OB_ISNULL(subpart_array)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("part array is null", K(table_schema), KR(ret));
@@ -141,7 +159,7 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
                     ret = OB_ERR_UNEXPECTED;
                     LOG_WARN("NULL ptr", K(j), K(table_schema), KR(ret));
                   } else {
-                    if (OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++), i, j))) {
+                    if (OB_FAIL(drop_tablet_(schemas, ls_ids.at(ls_idx++), i, j, false/*is_hidden*/))) {
                       LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
                     }
                   }
@@ -160,11 +178,17 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
 }
 
 int ObTabletDrop::get_ls_from_table(const share::schema::ObTableSchema &table_schema,
+                                    const bool is_include_hidden,
                                     common::ObIArray<share::ObLSID> &assign_ls_id_array)
 {
   int ret = OB_SUCCESS;
-  int64_t all_part_num = 0;
-  if (-1 == (all_part_num = table_schema.get_all_part_num())) {
+  int64_t all_part_num = table_schema.get_all_part_num();
+  if (is_include_hidden
+   && 0 < table_schema.get_hidden_partition_num()
+   && PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
+    all_part_num += table_schema.get_hidden_partition_num();
+  }
+  if (-1 == all_part_num) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tablet num", K(table_schema), KR(ret));
   } else if (OB_FAIL(assign_ls_id_array.reserve(all_part_num))) {
@@ -179,6 +203,11 @@ int ObTabletDrop::get_ls_from_table(const share::schema::ObTableSchema &table_sc
     ObArray<ObTabletID> tablet_ids;
     if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
       LOG_WARN("fail to get tablet ids", KR(ret), K(table_schema));
+    } else if (is_include_hidden
+            && 0 < table_schema.get_hidden_partition_num()
+            && PARTITION_LEVEL_ONE == table_schema.get_part_level()
+            && OB_FAIL(table_schema.get_first_level_hidden_tablet_ids(tablet_ids))) {
+      LOG_WARN("fail to get hidden tablet ids", KR(ret), K(table_schema));
     } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_get_ls(trans_, tenant_id_, tablet_ids, assign_ls_id_array))) {
       LOG_WARN("fail to batch_get_ls", KR(ret), K(tenant_id_), K(table_schema));
     }
@@ -197,7 +226,8 @@ int ObTabletDrop::drop_tablet_(
     const common::ObIArray<const share::schema::ObTableSchema *> &table_schema_ptr_array,
     const share::ObLSID &ls_id,
     const int64_t part_idx,
-    const int64_t subpart_idx)
+    const int64_t subpart_idx,
+    const bool is_hidden)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<ObTabletID> *tablet_id_array = NULL;
@@ -241,12 +271,19 @@ int ObTabletDrop::drop_tablet_(
       if (OB_ISNULL(table_schema_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(r), K(table_schema_ptr_array), KR(ret));
+      } else if (is_hidden &&
+               (PARTITION_LEVEL_ONE != table_schema_ptr->get_part_level()
+             || table_schema_ptr->get_hidden_partition_num() <= part_idx
+             || 0 > part_idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hidden tablet only support partition-levle-one", K(table_schema_ptr), KR(ret), K(part_idx));
       } else if (PARTITION_LEVEL_ZERO == table_schema_ptr->get_part_level()) {
         ObTabletID tablet_id = table_schema_ptr->get_tablet_id();
         if (OB_FAIL(tablet_id_array->push_back(tablet_id))) {
           LOG_WARN("failed to assign table schema point", KR(ret), KPC(table_schema_ptr));
         }
-      } else if (OB_FAIL(table_schema_ptr->get_part_by_idx(part_idx, subpart_idx, part))) {
+      } else if(is_hidden && OB_FALSE_IT(part = table_schema_ptr->get_hidden_part_array()[part_idx])) {
+      } else if (!is_hidden && OB_FAIL(table_schema_ptr->get_part_by_idx(part_idx, subpart_idx, part))) {
         LOG_WARN("fail to get index part", KR(ret), KPC(table_schema_ptr), K(part_idx), K(subpart_idx));
       } else if (OB_ISNULL(part)) {
         ret = OB_INVALID_ARGUMENT;
@@ -300,7 +337,7 @@ int ObTabletDrop::execute()
         LOG_WARN("tablet_ids count less than 1", KR(ret));
       } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::drop_tablet_to_table_history(
                          trans_, tenant_id_, schema_version_, *tablet_ids))) {
-        LOG_WARN("fail to create tablet to table history", KR(ret), K_(tenant_id), K(schema_version_));
+        LOG_WARN("fail to create tablet to table history", KR(ret), K_(tenant_id), K(schema_version_),KPC(tablet_ids));
       } else if (OB_FAIL(arg.init(*(tablet_ids), iter->first))) {
         LOG_WARN("failed to find leader", KR(ret), K(iter->first), KPC(tablet_ids));
       } else {

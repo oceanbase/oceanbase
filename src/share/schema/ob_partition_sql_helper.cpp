@@ -115,7 +115,8 @@ int ObPartDMLGenerator::gen_interval_part_name(int64_t part_id, ObString &part_n
 }
 
 int ObPartSqlHelper::iterate_all_part(
-    const bool only_history)
+    const bool only_history,
+    const bool include_hidden)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_)) {
@@ -131,15 +132,29 @@ int ObPartSqlHelper::iterate_all_part(
     const ObPartitionOption &part_expr = table_->get_part_option();
     int64_t part_num = part_expr.get_part_num();
     ObPartition **part_array = table_->get_part_array();
+    ObPartition **hidden_part_array = table_->get_hidden_part_array();
+    int64_t hidden_part_num = include_hidden ? table_->get_hidden_partition_num() : 0;
+    int64_t total_part_num = part_num + hidden_part_num;
     int64_t count = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part array is null", K(ret), KP(part_array));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_part_num; i++) {
       dml.reset();
       ObPartition *part = NULL;
-      if (OB_ISNULL(part_array) || OB_ISNULL(part_array[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(ret), KP(part_array), K(i));
-      } else {
+      if (i < part_num) {
         part = part_array[i];
+      } else if (OB_ISNULL(hidden_part_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hidden part array is null", K(ret), KP(hidden_part_array));
+      } else {
+        part = hidden_part_array[i - part_num];
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("part is null", K(ret), K(i), K(part_num), K(hidden_part_num));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(add_part_dml_column(exec_tenant_id, table_, *part, dml))) {
@@ -469,12 +484,13 @@ int ObAddPartInfoHelper::add_partition_info()
 {
   int ret = OB_SUCCESS;
   const bool is_only_history = false;
+  const bool is_include_hidden = true;
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret));
   } else if (OB_FAIL(iterate_part_info(is_only_history))) {
     LOG_WARN("iterate part info failed", K(ret));
-  } else if (OB_FAIL(iterate_all_part(is_only_history))) {
+  } else if (OB_FAIL(iterate_all_part(is_only_history, is_include_hidden))) {
     LOG_WARN("add all part failed", K(ret));
   } else if (OB_FAIL(iterate_all_sub_part(is_only_history))) {
     LOG_WARN("add all subpart failed", K(ret));
@@ -807,12 +823,13 @@ int ObDropPartInfoHelper::delete_partition_info()
 {
   int ret = OB_SUCCESS;
   const bool is_only_history = true;
+  const bool is_include_hidden = true;
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table is null", K(ret));
   } else if (OB_FAIL(iterate_part_info(is_only_history))) {
     LOG_WARN("drop part info failed", K(ret));
-  } else if (OB_FAIL(iterate_all_part(is_only_history))) {
+  } else if (OB_FAIL(iterate_all_part(is_only_history, is_include_hidden))) {
     LOG_WARN("drop all part failed", K(ret));
   } else if (OB_FAIL(iterate_all_sub_part(is_only_history))) {
     LOG_WARN("drop all sub part failed", K(ret));

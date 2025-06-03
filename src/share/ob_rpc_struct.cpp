@@ -10148,6 +10148,7 @@ int ObPartitionSplitArg::assign(const ObPartitionSplitArg &other)
   int ret = OB_SUCCESS;
   src_tablet_id_ = other.src_tablet_id_;
   task_type_ = other.task_type_;
+  src_ls_id_ = other.src_ls_id_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("assign ddl arg failed", K(ret));
   } else if (OB_FAIL(dest_tablet_ids_.assign(other.dest_tablet_ids_))) {
@@ -10183,7 +10184,8 @@ OB_SERIALIZE_MEMBER((ObPartitionSplitArg, ObDDLArg),
                     lob_schema_versions_,
                     src_lob_tablet_ids_,
                     dest_lob_tablet_ids_,
-                    task_type_);
+                    task_type_,
+                    src_ls_id_);
 
 int ObCleanSplittedTabletArg::assign(const ObCleanSplittedTabletArg &other)
 {

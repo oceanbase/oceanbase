@@ -628,6 +628,7 @@ int create_partition_split_task(
     const int64_t parent_task_id,
     const int64_t task_id,
     const obrpc::ObPartitionSplitArg *partition_split_arg,
+    const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record);
 
