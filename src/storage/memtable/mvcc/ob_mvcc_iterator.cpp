@@ -92,20 +92,6 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   return ret;
 }
 
-void ObMvccValueIterator::lock_for_read_end(const int64_t lock_start_time, int64_t ret) const
-{
-  // TODO: Add ELR check back
-  if (GCONF.enable_sql_audit && OB_INVALID_TIMESTAMP != lock_start_time) {
-    const int64_t lock_use_time = ObClockGenerator::getClock() - lock_start_time;
-    EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
-    if (OB_FAIL(ret)) {
-      EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);
-    } else {
-      EVENT_INC(MEMSTORE_READ_LOCK_SUCC_COUNT);
-    }
-  }
-}
-
 int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
                                               ObMvccTransNode *&iter)
 {
