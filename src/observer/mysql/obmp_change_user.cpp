@@ -668,7 +668,7 @@ int ObMPChangeUser::update_conn_attrs(ObSMConnection *conn, ObSQLSessionInfo *se
     } else if (kv.key_ == global_vars_version_key) {
       // not used, and proxy will send it for now
     } else {
-      LOG_WARN("UnKnown conn_attr or not used attr", K(kv));
+      LOG_TRACE("UnKnown conn_attr or not used attr", K(kv));
     }
   }
 

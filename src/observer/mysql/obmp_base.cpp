@@ -750,6 +750,8 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
         LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
       } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
         LOG_WARN("fail to update charset sys vars", K(ret));
+      } else if (OB_FAIL(session->update_max_packet_size())) {
+        LOG_WARN("fail to update_max_packet_size", K(ret));
       } else {
         session->set_database_id(db_id);
         session->reset_user_var();
