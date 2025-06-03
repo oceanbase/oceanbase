@@ -5355,7 +5355,8 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
               }
             }
           }
-          if (FAILEDx(ObDomainIdUtils::check_column_need_domain_id_merge(*table_schema, cur_type, col_item->expr_, index_type, res))) {
+          if (FAILEDx(ObDomainIdUtils::check_column_need_domain_id_merge(
+              *table_schema, cur_type, col_item->expr_, index_type, *schema_guard, res))) {
             LOG_WARN("fail to check column need domain id merge", K(ret), K(cur_type), KPC(col_item));
           } else if (res) {
             uint64_t domain_table_id = common::OB_INVALID_ID;
