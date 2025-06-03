@@ -67,7 +67,8 @@ void ObAshRefreshTask::runTimerTask()
 {
   if (0 == prev_write_pos_) {
   } else if (GCONF._ob_ash_disk_write_enable) {
-    int64_t task_timeout_ts = ObTimeUtility::current_time() + ASH_REFRESH_INTERVAL * 1000L * 1000L - ESTIMATE_PS_RESERVE_TIME;
+    int64_t task_timeout_ts = ObTimeUtility::current_time() + ASH_REFRESH_INTERVAL - ESTIMATE_PS_RESERVE_TIME;
+    THIS_WORKER.set_timeout_ts(task_timeout_ts);
     int ret = OB_SUCCESS;
     common::ObTimeGuard time_guard(__func__, ASH_REFESH_TIME);
     common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
@@ -139,8 +140,15 @@ void ObAshRefreshTask::runTimerTask()
       if (static_cast<ObWrSnapshotFlag>(snapshot_flag) == ObWrSnapshotFlag::LAST_SCHEDULED_SNAPSHOT) {
         last_scheduled_snapshot_time_ = last_snapshot_end_time;
       }
+      bool need_do_ash_take_ahead = require_snapshot_ahead();
+      LOG_INFO("start do ash refresh task", K(prev_write_pos_), K(prev_sched_time_),
+                                      K(ObActiveSessHistList::get_instance().write_pos()),
+                                      K(ObActiveSessHistList::get_instance().free_slots_num()),
+                                      K(last_scheduled_snapshot_time_),
+                                      K(last_snapshot_end_time),
+                                      K(need_do_ash_take_ahead));
       // send rpc
-      if (require_snapshot_ahead()) {
+      if (need_do_ash_take_ahead) {
         int64_t timeout = task_timeout_ts - ObTimeUtility::current_time();
         ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
         ObArray<uint64_t> all_tenants;
