@@ -202,8 +202,7 @@ int ObCsvFileWriter::flush_to_storage(const char *data, int64_t data_len)
         _OB_LOG(TRACE, "write local stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB",
                 cost_time, data_len, speed, total_write);
       }
-    } else if (file_location_ == IntoFileLocation::REMOTE_OSS ||
-               file_location_ == IntoFileLocation::REMOTE_HDFS) {
+    } else {
       int64_t write_size = 0;
       const char *location = nullptr;
       if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
