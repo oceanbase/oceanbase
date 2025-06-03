@@ -349,7 +349,7 @@ public:
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
   inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
-
+  inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
   DECLARE_TO_STRING;
 
   static int convert_column_schema_to_param(const ObColumnSchemaV2 &column_schema,
@@ -437,6 +437,7 @@ private:
   bool is_mlog_table_;
   bool is_enable_semistruct_encoding_;
   bool is_safe_filter_with_di_;
+  int8_t access_virtual_col_cnt_;
 };
 } //namespace schema
 } //namespace share

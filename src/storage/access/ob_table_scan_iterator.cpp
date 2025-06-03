@@ -154,8 +154,9 @@ bool ObTableScanIterator::can_use_global_iter_pool(const ObQRIterType iter_type)
              scan_param_->is_mview_query()) {
   } else {
     const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
-    const int64_t col_cnt = MAX(scan_param_->table_param_->get_read_info().get_schema_column_count(),
-                                get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count());
+    int64_t col_cnt = MAX(scan_param_->table_param_->get_read_info().get_schema_column_count(),
+                          get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count());
+    col_cnt += scan_param_->table_param_->get_access_virtual_col_cnt();
     ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
     if (OB_NOT_NULL(iter_pool)) {
        use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, iter_type);

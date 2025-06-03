@@ -633,7 +633,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_normal_cgs_at_the_end_(false),
     is_mlog_table_(false),
     is_enable_semistruct_encoding_(false),
-    is_safe_filter_with_di_(true)
+    is_safe_filter_with_di_(true),
+    access_virtual_col_cnt_(0)
 {
   reset();
 }
@@ -670,6 +671,7 @@ void ObTableParam::reset()
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
   is_safe_filter_with_di_ = true;
+  access_virtual_col_cnt_ = 0;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -727,7 +729,8 @@ OB_DEF_SERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                is_safe_filter_with_di_);
+                is_safe_filter_with_di_,
+                access_virtual_col_cnt_);
   }
   return ret;
 }
@@ -841,7 +844,8 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                is_safe_filter_with_di_);
+                is_safe_filter_with_di_,
+                access_virtual_col_cnt_);
   }
   return ret;
 }
@@ -907,7 +911,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_mlog_table_,
                 is_enable_semistruct_encoding_,
-                is_safe_filter_with_di_);
+                is_safe_filter_with_di_,
+                access_virtual_col_cnt_);
   }
   return len;
 }
@@ -1141,6 +1146,10 @@ int ObTableParam::construct_columns_and_projector(
         column->set_meta_type(meta_type);
         col_index = -1;
         mem_col_index = -1;
+        if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID != column_id &&
+            common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID != column_id) {
+          access_virtual_col_cnt_++;
+        }
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
@@ -1701,7 +1710,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_normal_cgs_at_the_end),
        K_(is_mlog_table),
        K_(is_enable_semistruct_encoding),
-       K_(is_safe_filter_with_di));
+       K_(is_safe_filter_with_di),
+       K_(access_virtual_col_cnt));
   J_OBJ_END();
 
   return pos;
