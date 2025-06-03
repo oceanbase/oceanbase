@@ -378,7 +378,11 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
       } else {
         T *conn = NULL;
         while (local_array.count() < local_array_size && OB_SUCCESS == conn_array->pop_back(conn)) {
-          if (OB_SUCCESS != local_array.push_back(conn)) {
+          if (OB_SUCCESS != lru_list_erase(conn, sessid)){  // delete respective node from lru list.
+            ObLruConnectionAllocator<T>::free(conn);
+            _OB_LOG(ERROR, "lru_list failed to erase, sessid=%u, ret=%d", sessid, ret);
+          } else if (OB_SUCCESS != local_array.push_back(conn)) {
+            ObLruConnectionAllocator<T>::free(conn);
             _OB_LOG(ERROR, "push back failed, ret=%d", ret);
           }
         }
@@ -466,9 +470,6 @@ int ObLruConnectionAllocator<T>::get_cached(T *&conn, uint32_t sessid)
       if (NULL == conn) {
         ret = OB_ERR_UNEXPECTED;
         _OB_LOG(WARN, "connection ptr is NULL, sessid=%u, ret=%d", sessid, ret);
-      } else if (OB_FAIL(lru_list_erase(conn, sessid))){  // delete respective node from lru list.
-        ObLruConnectionAllocator<T>::free(conn);
-        _OB_LOG(WARN, "lru_list failed to erase, sessid=%u, ret=%d", sessid, ret);
       }
     } else if (OB_FAIL(lru_list_pop_front(conn, other_sessid))) {
       // do nothing
