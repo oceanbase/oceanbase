@@ -126,11 +126,13 @@ public:
   int print_mv_operators(ObIAllocator &str_alloc, ObIArray<ObString> &operators);
 protected:
   enum MlogExtColFlag {
+    MLOG_EXT_COL_ROWKEY_ONLY  = 0x0,       // placeholer of rowkey only
     MLOG_EXT_COL_OLD_NEW      = 0x1,
     MLOG_EXT_COL_SEQ          = 0x1 << 1,
     MLOG_EXT_COL_DML_FACTOR   = 0x1 << 2,
     MLOG_EXT_COL_WIN_MIN_SEQ  = 0x1 << 3,
     MLOG_EXT_COL_WIN_MAX_SEQ  = 0x1 << 4,
+    MLOG_EXT_COL_ALL_NORMAL_COL  = 0x1 << 5,  // placeholer of all normal col
   };
 
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) = 0;

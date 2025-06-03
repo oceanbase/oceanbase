@@ -89,6 +89,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFSQ8_INDEX = 22,
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
+  DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,

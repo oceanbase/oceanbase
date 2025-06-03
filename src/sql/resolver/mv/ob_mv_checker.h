@@ -31,6 +31,8 @@ enum ObMVRefreshableType
     OB_MV_FAST_REFRESH_SIMPLE_MJV, // fast refresh for inner join MJV
     OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV, // fast refresh for inner join MAV
     OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV, // fast refresh for major compaction mv
+    OB_MV_FAST_REFRESH_OUTER_JOIN_MJV,    // placeholer of outer join
+    OB_MV_FAST_REFRESH_UNION_ALL,         // placeholer of union all
   };
 inline bool IS_VALID_FAST_REFRESH_TYPE(ObMVRefreshableType type)
 {
