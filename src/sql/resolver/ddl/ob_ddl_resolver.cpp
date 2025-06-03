@@ -8003,9 +8003,16 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     if (column_num != 1) { // spatial only can be built in one column
       ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
       LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-    } else if (column_schema.is_generated_column()) {
+    } else if (column_schema.is_virtual_generated_column()) {
       ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, column_schema.get_column_name());
+    } else if (column_schema.is_stored_generated_column() &&
+        (tenant_data_version < MOCK_DATA_VERSION_4_2_5_1 ||
+         (tenant_data_version >= DATA_VERSION_4_3_0_0 && tenant_data_version < MOCK_DATA_VERSION_4_3_5_3))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant version is less than 4.25bp1 or 4.35bp3, spatial index on stored generated column isnot supported", K(ret),
+        K(is_geo_column), K(is_spatial_index));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.25bp1 or 4.35bp3, spatial index on stored generated column");
     } else if (is_explicit_order) {
       ret = OB_ERR_INDEX_ORDER_WRONG_USAGE;
       LOG_USER_ERROR(OB_ERR_INDEX_ORDER_WRONG_USAGE);
