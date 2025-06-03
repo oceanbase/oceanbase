@@ -7963,25 +7963,73 @@ int ObDDLService::refill_columns_id_for_check_constraint(
 int ObDDLService::refill_column_id_array_for_constraint(
     const ObAlterTableArg::AlterConstraintType op_type,
     const ObTableSchema &new_table_schema,
+    ObSchemaGetterGuard &schema_guard,
     AlterTableSchema &alter_table_schema)
 {
   int ret = OB_SUCCESS;
   if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == op_type) {
-    ObTableSchema::constraint_iterator cst_iter = alter_table_schema.constraint_begin_for_non_const_iter();
-    for (; OB_SUCC(ret) && cst_iter != alter_table_schema.constraint_end_for_non_const_iter(); cst_iter++) {
-      if (OB_ISNULL(*cst_iter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected", K(ret));
-      } else if (CONSTRAINT_TYPE_NOT_NULL == (*cst_iter)->get_constraint_type()) {
-        ObString cst_col_name;
-        const ObColumnSchemaV2 *column = nullptr;
-        if (OB_FAIL((*cst_iter)->get_not_null_column_name(cst_col_name))) {
-          LOG_WARN("get not null cst column name failed", K(ret), KPC(*cst_iter));
-        } else if (OB_ISNULL(column = new_table_schema.get_column_schema(cst_col_name))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("no column in new table schema", K(ret), K(cst_col_name));
-        } else if (OB_FAIL((*cst_iter)->assign_not_null_cst_column_id(column->get_column_id()))) {
-          LOG_WARN("failed to assign not null cst column id", K(ret), KPC(column));
+    ObArenaAllocator allocator;
+    ObRawExprFactory expr_factory(allocator);
+    const uint64_t tenant_id = new_table_schema.get_tenant_id();
+    const ObTenantSchema *tenant_schema = nullptr;
+    SMART_VAR(ObSQLSessionInfo, default_session) {
+      if (OB_FAIL(default_session.init(0, 0, &allocator))) {
+        LOG_WARN("init empty session failed", K(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("get tenant_schema failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+        LOG_WARN("init tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(default_session.load_all_sys_vars(schema_guard))) {
+        LOG_WARN("session load system variable failed", K(ret));
+      } else if (OB_FAIL(default_session.load_default_configs_in_pc())) {
+        LOG_WARN("session load default configs failed", K(ret));
+      } else {
+        ObTableSchema::constraint_iterator cst_iter = alter_table_schema.constraint_begin_for_non_const_iter();
+        for (; OB_SUCC(ret) && cst_iter != alter_table_schema.constraint_end_for_non_const_iter(); cst_iter++) {
+          const ObColumnSchemaV2 *column = nullptr;
+          if (OB_ISNULL(*cst_iter)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("error unexpected", K(ret));
+          } else if (CONSTRAINT_TYPE_NOT_NULL == (*cst_iter)->get_constraint_type()) {
+            ObString cst_col_name;
+            if (OB_FAIL((*cst_iter)->get_not_null_column_name(cst_col_name))) {
+              LOG_WARN("get not null cst column name failed", K(ret), KPC(*cst_iter));
+            } else if (OB_ISNULL(column = new_table_schema.get_column_schema(cst_col_name))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("no column in new table schema", K(ret), K(cst_col_name));
+            } else if (OB_FAIL((*cst_iter)->assign_not_null_cst_column_id(column->get_column_id()))) {
+              LOG_WARN("failed to assign not null cst column id", K(ret), KPC(column));
+            }
+          } else if (CONSTRAINT_TYPE_CHECK == (*cst_iter)->get_constraint_type()) {
+            const ObString &check_expr = (*cst_iter)->get_check_expr_str();
+            ObArray<ObQualifiedName> columns;
+            ObSEArray<uint64_t, 1> column_id_array;
+            ObRawExpr *expr = nullptr;
+            const ParseNode *node = nullptr;
+            if (check_expr.empty()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("check expr is empty", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(check_expr, expr_factory.get_allocator(), node))) {
+              LOG_WARN("parse expr node from string failed", K(ret));
+            } else if (OB_ISNULL(node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node is null", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_check_constraint_expr(expr_factory, default_session, *node, expr, columns))) {
+              LOG_WARN("build generated column expr failed", K(ret), K(check_expr));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+                const ObString &col_name = columns.at(i).col_name_;
+                if (OB_ISNULL(column = new_table_schema.get_column_schema(col_name))) {
+                  ret = OB_ERR_BAD_FIELD_ERROR;
+                  LOG_WARN("unknown column", KR(ret), K(col_name), K(check_expr));
+                } else if (OB_FAIL(column_id_array.push_back(column->get_column_id()))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else if (OB_FAIL((*cst_iter)->assign_column_ids(column_id_array))) {
+                  LOG_WARN("failed to assign column ids", K(ret));
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -12965,7 +13013,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           HEAP_VAR(AlterTableSchema, tmp_alter_table_schema) {
             if (OB_FAIL(tmp_alter_table_schema.assign(alter_table_schema))) {
               LOG_WARN("failed to assign", K(ret));
-            } else if (OB_FAIL(refill_column_id_array_for_constraint(alter_table_arg.alter_constraint_type_, new_table_schema, tmp_alter_table_schema))) {
+            } else if (OB_FAIL(refill_column_id_array_for_constraint(alter_table_arg.alter_constraint_type_, new_table_schema, schema_guard, tmp_alter_table_schema))) {
               LOG_WARN("failed to refill columns id", K(ret));
             } else if (OB_FAIL(alter_table_constraints(
                 alter_table_arg.alter_constraint_type_,
