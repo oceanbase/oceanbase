@@ -17560,13 +17560,13 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else if (OB_ISNULL(src_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("orig table schema is nullptr", K(ret), K(session_id), K(arg));
-      } else if (OB_FAIL(src_table_schema->check_has_fts_index(*src_tenant_schema_guard, has_fts_index))) {
+      } else if (OB_FAIL(src_table_schema->check_has_fts_index_aux(*src_tenant_schema_guard, has_fts_index))) {
         LOG_WARN("failed to check if data table has fulltext index", K(ret));
       } else if (has_fts_index) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("failed to import table when table has fulltext index", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "import table with fulltext index");
-      } else if (OB_FAIL(src_table_schema->check_has_multivalue_index(*src_tenant_schema_guard, has_mv_index))) {
+      } else if (OB_FAIL(src_table_schema->check_has_multivalue_index_aux(*src_tenant_schema_guard, has_mv_index))) {
         LOG_WARN("failed to check if data table has multivalue index", K(ret));
       } else if (has_mv_index) {
         ret = OB_NOT_SUPPORTED;
@@ -17969,8 +17969,8 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
       LOG_WARN("interval part of composited-partitioned table not support", K(ret), K(orig_table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part of composited-partitioned table");
     }
-  } else if (OB_FAIL(orig_table_schema.check_has_local_index(schema_guard, has_local_index))) {
-    LOG_WARN("fail to check_has_local_index", K(ret), K(has_local_index));
+  } else if (OB_FAIL(orig_table_schema.check_has_index_local_storage(schema_guard, has_local_index))) {
+    LOG_WARN("fail to check_has_index_local_storage", K(ret), K(has_local_index));
   } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_part_type
              && obrpc::ObAlterTableArg::REPARTITION_TABLE == alter_part_type
              && obrpc::ObAlterTableArg::PARTITIONED_PARTITION == alter_part_type) {

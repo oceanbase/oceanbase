@@ -16230,11 +16230,11 @@ int ObTransformUtils::check_table_with_fts_or_multivalue_recursively(TableItem *
                                                  table->ref_id_,
                                                  table_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
-    } else if (OB_FAIL(table_schema->check_has_fts_index(*schema_checker->get_schema_guard(),
+    } else if (OB_FAIL(table_schema->check_has_fts_index_aux(*schema_checker->get_schema_guard(),
                                                          has_fts_or_multivalue_index))) {
       LOG_WARN("failed to check has fts index", K(ret));
     } else if (has_fts_or_multivalue_index) {
-    } else if (OB_FAIL(table_schema->check_has_multivalue_index(*schema_checker->get_schema_guard(),
+    } else if (OB_FAIL(table_schema->check_has_multivalue_index_aux(*schema_checker->get_schema_guard(),
                                                                 has_fts_or_multivalue_index))) {
       LOG_WARN("failed to check has multivalue.", K(ret));
     }

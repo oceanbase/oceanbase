@@ -9642,104 +9642,38 @@ int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
   return ret;
 }
 
-int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_local_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-        simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema",
-               K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_index_local_storage()) {
-      has_local_index = true;
-      break;
-    }
-  }
-  return ret;
+
+#define DEFINE_CHECK_HAS_INDEX_FUNC(index_type)                                                                        \
+int ObTableSchema::check_has_##index_type(ObSchemaGetterGuard &schema_guard, bool &found) const                       \
+{                                                                                                                     \
+  int ret = OB_SUCCESS;                                                                                               \
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;                                                               \
+  const ObSimpleTableSchemaV2 *index_schema = NULL;                                                                   \
+  const uint64_t tenant_id = get_tenant_id();                                                                         \
+  found = false;                                                                                                      \
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {                                                          \
+    LOG_WARN("get simple_index_infos failed", K(ret));                                                                \
+  }                                                                                                                   \
+  for (int64_t i = 0; !found && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {                                \
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) { \
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));            \
+    } else if (OB_ISNULL(index_schema)) {                                                                             \
+      ret = OB_ERR_UNEXPECTED;                                                                                        \
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));                    \
+    } else if (index_schema->is_##index_type()) {                                                                     \
+      found = true;                                                                                                   \
+    }                                                                                                                 \
+  }                                                                                                                   \
+  return ret;                                                                                                         \
 }
 
-int ObTableSchema::check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_fts_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_fts_index_aux() || index_schema->is_fts_doc_word_aux()) {
-      has_fts_index = true;
-      break;
-    }
-  }
-  return ret;
-}
+DEFINE_CHECK_HAS_INDEX_FUNC(index_local_storage);
+DEFINE_CHECK_HAS_INDEX_FUNC(fts_index_aux);
+DEFINE_CHECK_HAS_INDEX_FUNC(vec_domain_index);
+DEFINE_CHECK_HAS_INDEX_FUNC(spatial_index);
+DEFINE_CHECK_HAS_INDEX_FUNC(multivalue_index_aux);
 
-int ObTableSchema::check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_multivalue_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_multivalue_index_aux()) {
-      has_multivalue_index = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-// it will be useless after the commit of domain_merge_iter
-int ObTableSchema::check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_vector_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_vec_hnsw_index()) {
-      has_vector_index = true;
-      break;
-    }
-  }
-  return ret;
-}
+#undef DEFINE_CHECK_HAS_INDEX_FUNC
 
 int ObTableSchema::get_part_key_column_type(const int64_t index, ObObjType &type) const
 {
