@@ -88,8 +88,12 @@ int ObInnerSQLResult::init(bool has_tenant_resource)
       remote_result_set_ = new (buf_) ObRemoteResultSet(mem_context_->get_arena_allocator());
       remote_result_set_->reset_and_init_remote_resp_handler();
     } else {
-      result_set_ = new (buf_) ObResultSet(session_, mem_context_->get_arena_allocator());
-      result_set_->set_is_inner_result_set(true);
+      // The constructor of some members depends on MTL_ID, such as `temp_ctx_`(ObTMArray)
+      // of `exec_ctx_, so here need to switch to the corresponding tenant to new object.
+      MTL_SWITCH(session_.get_effective_tenant_id()) {
+        result_set_ = new (buf_) ObResultSet(session_, mem_context_->get_arena_allocator());
+        result_set_->set_is_inner_result_set(true);
+      }
     }
     is_inited_ = true;
   }
