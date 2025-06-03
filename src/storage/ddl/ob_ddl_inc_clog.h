@@ -45,7 +45,7 @@ public:
   }
   bool is_valid() const
   {
-    return tablet_id_.is_valid() && is_incremental_direct_load(direct_load_type_);
+    return tablet_id_.is_valid();
   }
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
   const ObTabletID &get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
