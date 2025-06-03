@@ -308,6 +308,7 @@ int ObWrCollector::collect_ash()
   int64_t tmp_real_str_len = 0;
   int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
   int64_t collected_ash_row_count = 0;
+  int64_t collected_ash_min_sample_time = INT64_MAX;
   uint64_t data_version = 0;
   ObSEArray<ObAddr, 8> part_locations;
   char svr_ip[common::OB_IP_STR_BUFF];
@@ -392,6 +393,9 @@ int ObWrCollector::collect_ash()
               EXTRACT_INT_FIELD_MYSQL(*result, "sample_id", ash.sample_id_, int64_t);
               EXTRACT_INT_FIELD_MYSQL(*result, "session_id", ash.session_id_, int64_t);
               EXTRACT_INT_FIELD_MYSQL(*result, "sample_time", ash.sample_time_, int64_t);
+              if (ash.sample_time_ < collected_ash_min_sample_time) {
+                collected_ash_min_sample_time = ash.sample_time_;
+              }
               EXTRACT_INT_FIELD_MYSQL(*result, "user_id", ash.user_id_, int64_t);
               EXTRACT_BOOL_FIELD_MYSQL(*result, "session_type", ash.session_type_);
               EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
@@ -632,6 +636,11 @@ int ObWrCollector::collect_ash()
   if (OB_LIKELY(collected_ash_row_count != 0)) {
     EVENT_ADD(WR_COLLECTED_ASH_ROW_COUNT, collected_ash_row_count);
   }
+  LOG_INFO("WR collected ash finished", K(ret), K(collected_ash_row_count),
+                                        K(snapshot_begin_time_),
+                                        K(snapshot_end_time_),
+                                        K(collected_ash_min_sample_time));
+
   return ret;
 }
 
@@ -931,7 +940,7 @@ int ObWrCollector::collect_sqlstat()
                   "    or userio_wait_delta_rank <= %ld       "
                   "    or physical_read_requests_delta_rank <= %ld       "
                   "    or executions_delta_rank <= %ld  ) "
-                  "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port, plan_type, module, action, parsing_db_id, parsing_db_name, parsing_user_id",
+                  "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port",
                   query_timeout, tenant_id, tenant_id, topnsql, topnsql, topnsql, topnsql, topnsql ))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
       } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
