@@ -2014,7 +2014,8 @@ int ObLS::finish_storage_meta_replay()
   } else if (ls_meta_.get_persistent_state().can_update_ls_meta() &&
              OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
-  } else if (OB_FAIL(member_table_.init_tablet_for_compat())) {
+  } else if (ls_meta_.get_persistent_state().is_normal_state()
+      && OB_FAIL(member_table_.init_tablet_for_compat())) {
     LOG_WARN("failed to init tablet for compact", K(ret));
   } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
     LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
