@@ -2652,7 +2652,12 @@ int ObRpcSyncHotMicroKeyP::process()
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid arguments", KR(ret), K_(arg));
       } else if (OB_FAIL(ls_service->get_ls(ObLSID(ls_id), ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        LOG_WARN("get ls failed", KR(ret), K(arg_));
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // ignore ret
+          LOG_INFO("ls is not exist, maybe migrated to other server", K(ls_id));
+        } else {
+          LOG_WARN("get ls failed", KR(ret), K(arg_));
+        }
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", KR(ret), K(tenant_id), K(ls_id));
