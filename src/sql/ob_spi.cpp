@@ -2296,6 +2296,10 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
+      } else if (columns->at(i).type_.is_ext() && columns->at(i).type_.get_meta().get_extend_type() == pl::PL_REF_CURSOR_TYPE) {
+        OX (pl_type.reset());
+        OX (pl_type.set_type(pl::PL_REF_CURSOR_TYPE));
+        OX (pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR));
       } else if (columns->at(i).type_.is_user_defined_sql_type()) {
         if (columns->at(i).type_.is_xml_sql_type()) {
           // dynamic cast from sql type to pl type in store_result
@@ -8232,7 +8236,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
               ObIAllocator *tmp_alloc = alloc;
               if (PL_CURSOR_TYPE == calc_array->at(i).get_meta().get_extend_type() ||
                   PL_REF_CURSOR_TYPE == calc_array->at(i).get_meta().get_extend_type()) {
-                tmp_alloc = &ctx->exec_ctx_->get_allocator();
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexcpected cursor type in obj access expression", K(ret), K(calc_array->at(i).get_meta().get_extend_type()));
               }
               OZ (pl::ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(i), tmp));
             } else {

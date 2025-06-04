@@ -2712,6 +2712,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_PLSQL_UNIT, -9807, -1, "HY000", "input to DBM
 DEFINE_ERROR(OB_ERR_MVIEW_INVALID_TABLE_TYPE, -9808, -1, "HY000", "Table type is not valid, the definition of materialized view can only reference user tables or other materialized views");
 DEFINE_ERROR(OB_ERR_MVIEW_BASE_TABLE_ALTERED, -9809, -1, "HY000", "Base tables are altered during the creation or complete refresh of materialized views, please try again when base tables have no ongoing DDL operations");
 DEFINE_ERROR(OB_ERR_MVIEW_MISSING_DEPENDENCE, -9810, -1, "HY000", "Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover.");
+DEFINE_PLS_ERROR(OB_ERR_INVALID_NESTED_CURSOR, -9811, -1, "HY000", "Cursor Variable in record, object, or collection is not supported by this release", 989, "Cursor Variable in record, object, or collection is not supported by this release");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

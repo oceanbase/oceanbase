@@ -4938,8 +4938,14 @@ int ObPLResolver::resolve_cursor_for_loop(
       } else if (OB_ISNULL(user_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user type is null", K(ret));
+      } else if (!user_type->is_record_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("user type is not record type", K(ret));
       } else {
-        if (OB_SUCC(ret)) {
+        const ObRecordType *cursor_return_type = static_cast<const ObRecordType*>(user_type);
+        if (OB_FAIL(cursor_return_type->check_record_cursor_member())) {
+          LOG_WARN("Cursor Variable in record, object, or collection is not supported", K(ret));
+        } else {
           stmt->set_user_type(user_type);
           stmt->set_index_index(func.get_symbol_table().get_count() - 1);
         }

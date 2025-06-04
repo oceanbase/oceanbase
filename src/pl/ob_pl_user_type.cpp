@@ -1427,6 +1427,18 @@ const ObRecordMember *ObRecordType::get_record_member(int64_t index) const
   return record_member;
 }
 
+int ObRecordType::check_record_cursor_member() const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_record_member_count(); ++i) {
+    if (get_record_member_type(i)->is_cursor_type()) {
+      ret = OB_ERR_INVALID_NESTED_CURSOR;
+      LOG_WARN("Cursor Variable in record, object, or collection is not supported by this release ", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRecordType::is_compatble(const ObRecordType &other, bool &is_comp) const
 {
   int ret = OB_SUCCESS;
