@@ -587,17 +587,27 @@ int ObPXServerAddrUtil::find_dml_ops(common::ObIArray<const ObTableModifySpec *>
 {
   return find_dml_ops_inner(insert_ops, op);
 }
+
+bool ObPXServerAddrUtil::check_build_dfo_with_dml(const ObOpSpec &op)
+{
+  bool b_ret = false;
+  if (static_cast<const ObTableModifySpec &>(op).use_dist_das() && PHY_MERGE != op.get_type()
+      && PHY_INSERT_ON_DUP != op.get_type()) {
+    // px no need schedule das except merge
+  } else if (PHY_LOCK == op.get_type()) {
+    // no need lock op
+  } else {
+    b_ret = true;
+  }
+  return b_ret;
+}
+
 int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op)
 {
   int ret = OB_SUCCESS;
   if (IS_DML(op.get_type())) {
-    if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
-        PHY_MERGE != op.get_type() &&
-        PHY_INSERT_ON_DUP != op.get_type()) {
-      // px no need schedule das except merge
-    } else if (PHY_LOCK == op.get_type()) {
-      // no need lock op
+    if (!check_build_dfo_with_dml(op)) {
     } else if (OB_FAIL(insert_ops.push_back(static_cast<const ObTableModifySpec *>(&op)))) {
       LOG_WARN("fail to push back table insert op", K(ret));
     }

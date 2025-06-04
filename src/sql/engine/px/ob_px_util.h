@@ -245,6 +245,7 @@ public:
                                     int64_t &server_cnt);
 
   static int check_slave_mapping_location_constraint(ObDfo &child, ObDfo &parent);
+  static bool check_build_dfo_with_dml(const ObOpSpec &op);
 
 private:
   static int find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,

@@ -308,11 +308,12 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
                 coord_info_.pruning_table_location_, ctx, *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
         }
-        LOG_TRACE("alloc_by_data_distribution", K(parent));
+        LOG_TRACE("alloc_by_data_distribution", K(*parent));
       } else if (has_reference_child) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(*parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
+        LOG_TRACE("alloc_by_reference_child_distribution", K(*parent));
       } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
                      coord_info_.pruning_table_location_, ctx, *parent))) {
         LOG_WARN("fail to alloc data distribution", K(ret));
