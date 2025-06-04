@@ -617,7 +617,20 @@ call_sp_stmt:
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
     }
-  | CALL sp_proc_stmt
+  | CALL sp_call_name opt_sp_cparam_list IDENT '=' STRING
+    {
+      if (!nodename_equal($4, "TENANT", 6)) {
+        obpl_mysql_yyerror(&@4, parse_ctx, "Syntax Error\n");
+        YYERROR;
+      }
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_SYS_DISPATCH_CALL, 3, $2, $3, $6);
+      check_ptr($$);
+      const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;
+      int32_t str_len = @3.last_column - @1.first_column + 1;
+      $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($$->str_value_);
+    }
+  | '^' sp_proc_stmt
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
@@ -625,7 +638,7 @@ call_sp_stmt:
       }
       $$ = $2;
     }
-  | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
+  | '^' PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
@@ -633,7 +646,7 @@ call_sp_stmt:
       }
       $$ = $9;
     }
-  | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' procedure_body
+  | '^' PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' procedure_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
@@ -641,7 +654,7 @@ call_sp_stmt:
       }
       $$ = $8;
     }
-  | CALL FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
+  | '^' FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
@@ -649,7 +662,7 @@ call_sp_stmt:
       }
       $$ = $11;
     }
-  | CALL FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
+  | '^' FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");

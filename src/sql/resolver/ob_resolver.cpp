@@ -151,6 +151,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
+#include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -1365,6 +1367,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
 #endif
+      case T_SP_SYS_DISPATCH_CALL: {
+        REGISTER_STMT_RESOLVER(SysDispatchCall);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
