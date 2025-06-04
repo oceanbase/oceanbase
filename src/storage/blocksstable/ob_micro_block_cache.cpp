@@ -912,7 +912,7 @@ int ObIMicroBlockCache::prefetch(
     const bool use_cache,
     ObStorageObjectHandle &macro_handle,
     ObIAllocator *allocator,
-    const bool is_major_macro_preread)
+    const bool is_preread)
 {
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_header = idx_row.row_header_;
@@ -932,7 +932,7 @@ int ObIMicroBlockCache::prefetch(
       callback = new (buf) ObAsyncSingleMicroBlockIOCallback;
       callback->allocator_ = allocator;
       callback->use_block_cache_ = use_cache;
-            if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback, is_major_macro_preread))) {
+      if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback, is_preread))) {
         LOG_WARN("Fail to prefetch data micro block", K(ret));
       }
     }
@@ -946,7 +946,7 @@ int ObIMicroBlockCache::prefetch(
     const ObMicroIndexInfo& idx_row,
     ObStorageObjectHandle &macro_handle,
     ObIMicroBlockIOCallback &callback,
-    const bool is_major_macro_preread)
+    const bool is_preread)
 {
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_row_header = idx_row.row_header_;
@@ -976,9 +976,9 @@ int ObIMicroBlockCache::prefetch(
     read_info.mtl_tenant_id_ = MTL_ID();
     read_info.set_logic_micro_id(idx_row.get_logic_micro_id());
     read_info.set_micro_crc(idx_row.get_data_checksum());
-    if (is_major_macro_preread) {
+    if (is_preread) {
       read_info.set_bypass_micro_cache(true);
-      read_info.set_is_major_macro_preread(true);
+      read_info.io_desc_.set_preread();
     }
 
     if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
@@ -1029,7 +1029,7 @@ int ObIMicroBlockCache::prefetch(
   read_info.mtl_tenant_id_ = MTL_ID();
   read_info.set_bypass_micro_cache(true);
   // only prefetch_multi_block need preread major macro
-  read_info.set_is_major_macro_preread(true);
+  read_info.io_desc_.set_preread();
 
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));

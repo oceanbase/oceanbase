@@ -8,9 +8,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   },
@@ -23,9 +28,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   },
@@ -38,9 +48,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   },
@@ -53,9 +68,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   },
@@ -68,9 +88,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   },
@@ -83,9 +108,14 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        }
       ]
     }
   }

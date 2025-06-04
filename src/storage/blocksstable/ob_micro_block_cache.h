@@ -411,7 +411,7 @@ public:
       const bool use_cache,
       ObStorageObjectHandle &macro_handle,
       ObIAllocator *allocator,
-      const bool is_major_macro_preread = false);
+      const bool is_preread = false);
   virtual int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
@@ -452,7 +452,7 @@ protected:
       const ObMicroIndexInfo& idx_row,
       ObStorageObjectHandle &macro_handle,
       ObIMicroBlockIOCallback &callback,
-      const bool is_major_macro_preread = false);
+      const bool is_preread = false);
   int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,

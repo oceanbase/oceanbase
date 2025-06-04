@@ -63,7 +63,8 @@ public:
     ties_array_pos_(0), ties_array_(), sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
     sort_exprs_getter_(allocator_),
     store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
-    topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0), compress_type_(NONE_COMPRESSOR)
+    topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0),
+    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0)
   {}
   virtual ~ObSortVecOpImpl()
   {
@@ -495,6 +496,7 @@ protected:
   uint32_t fixed_sort_key_len_;
   ObCompressorType compress_type_;
   ObPushDownTopNFilter pd_topn_filter_;
+  int64_t tempstore_read_alignment_size_;
 };
 
 } // end namespace sql

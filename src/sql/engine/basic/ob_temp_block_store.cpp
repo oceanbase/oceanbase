@@ -60,8 +60,9 @@ int ObTempBlockStore::init(int64_t mem_limit,
                            int64_t mem_ctx_id,
                            const char *label,
                            common::ObCompressorType compress_type,
-                           const bool enable_trunc,
-                           const bool sequential_read)
+                           const bool enable_trunc /*false*/,
+                           const bool sequential_read /*false*/,
+                           const int64_t tempstore_read_alignment_size /*0*/)
 {
   int ret = OB_SUCCESS;
   mem_limit_ = mem_limit;
@@ -73,6 +74,7 @@ int ObTempBlockStore::init(int64_t mem_limit,
   MEMCPY(label_, label, label_len);
   label_[label_len] = '\0';
   io_.fd_ = -1;
+  tempstore_read_alignment_size_ = tempstore_read_alignment_size;
   inner_reader_.init(this);
   inited_ = true;
   compressor_.init(compress_type);
@@ -353,10 +355,11 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
     } else {
       blk = NULL;
       bool blk_on_disk = true;
-      if (OB_FAIL(inner_get_block(reader, block_id, blk, blk_on_disk))) {
+      int64_t comp_size = 0;
+      if (OB_FAIL(inner_get_block(reader, block_id, blk, blk_on_disk, comp_size))) {
         LOG_WARN("fail to get next block", K(ret));
       } else if (blk_on_disk) {
-        if (need_compress() && OB_FAIL(decompr_block(reader, blk))) {
+        if (need_compress() && OB_FAIL(decompr_block(comp_size, reader, blk))) {
           LOG_WARN("fail to decompress block", K(ret), K(last_block_on_disk_));
         } else {
           Block *tmp_blk = const_cast<Block *>(blk);
@@ -365,7 +368,7 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
           }
         }
       }
-      if (OB_SUCC(ret) && reader.is_async() && OB_NOT_NULL(blk)) {
+      if (OB_SUCC(ret) && reader.is_async() && OB_NOT_NULL(blk) && !is_segment_read()) {
         // 1. prefetch next block, if do not need prefetch, the aio_blk is null;
         // 2. should prefetch after decompress, since we need the info in read_io_handler_
         int64_t next_block_id = block_id + blk->cnt_;
@@ -373,7 +376,8 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
           // if still have next block, prefetch next block
           reader.aio_buf_idx_ = (reader.aio_buf_idx_ + 1) % BlockReader::AIO_BUF_CNT;
           last_block_on_disk_ = true;
-          if (OB_FAIL(load_block(reader, next_block_id, reader.aio_blk_, last_block_on_disk_))) {
+          if (OB_FAIL(load_block(reader, next_block_id, reader.get_aio_buf(), reader.aio_blk_,
+                                 last_block_on_disk_))) {
             LOG_WARN("fail to prefetch next block", K(ret));
           }
         }
@@ -407,7 +411,7 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
  *  4. set buf.data_, point to decompressed_buf_
  */
 
-int ObTempBlockStore::decompr_block(BlockReader &reader, const Block *&blk)
+int ObTempBlockStore::decompr_block(int64_t &comp_size, BlockReader &reader, const Block *&blk)
 {
   int ret = OB_SUCCESS;
   // need decompress here, the compressed data is in reader.buf_
@@ -418,7 +422,10 @@ int ObTempBlockStore::decompr_block(BlockReader &reader, const Block *&blk)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected value read_io_handle_", K(ret), K(reader.read_io_handle_));
   } else {
-    int64_t comp_size = reader.read_io_handle_->get_done_size() - sizeof(Block);
+    if (!is_segment_read()) {
+      comp_size = reader.read_io_handle_->get_done_size();
+    }
+    comp_size -= sizeof(Block);
     int64_t decomp_size = blk->raw_size_ - sizeof(Block);
     int64_t actual_uncomp_size = 0;
     if (OB_FAIL(ensure_reader_buffer(reader, reader.decompr_buf_, blk->raw_size_))) {
@@ -454,12 +461,16 @@ int ObTempBlockStore::decompr_block(BlockReader &reader, const Block *&blk)
 
 // get block async or sync
 int ObTempBlockStore::inner_get_block(BlockReader &reader, const int64_t block_id,
-                                      const Block *&blk, bool &blk_on_disk)
+                                      const Block *&blk, bool &blk_on_disk, int64_t &comp_size)
 {
   int ret = OB_SUCCESS;
   blk = nullptr;
   blk_on_disk = true;
-  if (reader.is_async()) {
+  if (is_segment_read()) {
+    if (OB_FAIL(segment_read_block(reader, block_id, blk, blk_on_disk, comp_size))) {
+      LOG_WARN("fail to segment read block", K(ret));
+    }
+  } else if (reader.is_async()) {
     int aio_buf_idx = reader.aio_buf_idx_ % BlockReader::AIO_BUF_CNT;
     bool need_sync_read = false;
     if (OB_NOT_NULL(reader.aio_blk_)) {
@@ -496,7 +507,8 @@ int ObTempBlockStore::inner_get_block(BlockReader &reader, const int64_t block_i
 
     if (OB_SUCC(ret) && need_sync_read) {
       // fail to prefetch, read using block_id
-      if (OB_FAIL(load_block(reader, block_id, reader.aio_blk_, blk_on_disk))) {
+      if (OB_FAIL(load_block(reader, block_id, reader.get_aio_buf(),
+                              reader.aio_blk_, blk_on_disk))) {
         LOG_WARN("fail to load block", K(ret));
       } else if (OB_NOT_NULL(reader.aio_blk_)) {
         // the blk is in memory, do not need wait.
@@ -517,10 +529,8 @@ int ObTempBlockStore::inner_get_block(BlockReader &reader, const int64_t block_i
     if (OB_SUCC(ret)) {
       blk_on_disk = (need_sync_read && blk_on_disk) || (!need_sync_read && last_block_on_disk_);
     }
-  } else {
-    if(OB_FAIL(load_block(reader, block_id, blk, blk_on_disk))) {
-      LOG_WARN("fail to load block", K(ret));
-    }
+  } else if (OB_FAIL(load_block(reader, block_id, reader.buf_, blk, blk_on_disk))) {
+    LOG_WARN("fail to load block", K(ret));
   }
   return ret;
 }
@@ -543,7 +553,7 @@ int ObTempBlockStore::alloc_block(Block *&blk, const int64_t min_size, const boo
   int ret = OB_SUCCESS;
   int64_t size = min_size;
   if (!strict_mem_size) {
-    size = std::max(static_cast<int64_t>(BLOCK_SIZE), min_size);
+    size = std::max(static_cast<int64_t>(BLOCK_CAPACITY), min_size);
     size += sizeof(LinkNode);
     size = next_pow2(size);
     size -= sizeof(LinkNode);
@@ -824,53 +834,194 @@ void ObTempBlockStore::free_blk_mem(void *mem, const int64_t size /* = 0 */)
   }
 }
 
+int ObTempBlockStore::segment_read_block(BlockReader &reader, const int64_t block_id,
+                                         const Block *&blk, bool &blk_on_disk, int64_t &comp_size)
+{
+  int ret = OB_SUCCESS;
+  bool need_prefetch = false;
+  bool need_load_segment = true;
+  BlockIndex *bi;
+  if (OB_FAIL(find_block_idx(reader, block_id, bi))) {
+    LOG_WARN("find block index failed", K(ret), K(block_id));
+  } else if (!bi->on_disk_) {
+    blk = bi->blk_;
+    blk_on_disk = false;
+    comp_size = bi->length_;
+  } else {
+    comp_size = bi->length_;
+    if (OB_NOT_NULL(reader.get_aio_buf().data())
+        && reader.get_aio_buf().in_aligned_buff(bi->offset_)) {
+      need_load_segment = false;
+    } else if (OB_NOT_NULL(reader.get_prefetch_aio_buf().data())
+               && reader.get_prefetch_aio_buf().in_aligned_buff(bi->offset_)) {
+      if (OB_FAIL(reader.aio_wait())) {
+        LOG_WARN("fail to wait read", K(ret));
+      }
+      reader.aio_buf_idx_ = (reader.aio_buf_idx_ + 1) % BlockReader::AIO_BUF_CNT;
+      need_prefetch = true;
+      need_load_segment = false;
+    }
+    if (need_load_segment) {
+      int64_t offset = alignment_offset(bi->offset_);
+      int64_t length = alignment_length(bi->length_);
+      LOG_DEBUG("need load segment", K(block_id), K(offset), K(length));
+      if (OB_FAIL(ret)) {
+      } else if (OB_NOT_NULL(reader.read_io_handle_) && OB_FAIL(reader.aio_wait())) {
+        LOG_WARN("fail to wait read", K(ret));
+      } else if (OB_FAIL(load_buffer(reader, reader.get_aio_buf(), offset, length, false))) {
+        LOG_WARN("fail to load block", K(ret), K(length));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(load_block_from_seg_buffer(reader, blk, need_prefetch, bi))) {
+      LOG_WARN("fail to load block from batch", K(ret));
+    } else if (need_prefetch
+               && OB_FAIL(load_buffer(reader, reader.get_prefetch_aio_buf(), reader.get_aio_buf().end(),
+                                      tempstore_read_alignment_size_, true))) {
+      LOG_WARN("fail to load block", K(ret));
+    }
+  }
+  return ret;
+}
+
+/* blk is too long and exceeds the prefetch block length, then the block will be divided into three
+ * sections: first section in cur_buf, second section in pref_buf and last section in cur_buf which
+ * is used as new next buf.
+ *
+ *    |  cur_buf  |    | pref_buf |    | cur_buf used as next buf |
+ *    +-----------     -----------     ----------------------------
+ *    |      |////|    |//////////|    |////////////////|         |
+ *    +-----------     -----------     ----------------------------
+ *           |len1|                    |   remain_len   |
+ */
+int ObTempBlockStore::load_block_cross_multi_buffer(BlockReader &reader, const int64_t len1,
+                                                    const int64_t offset1, BlockIndex *&bi)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("blk is too long", K(*bi), K(reader.get_aio_buf()), K(reader.get_prefetch_aio_buf()));
+
+  int64_t remain_len = bi->offset_ + bi->length_ - reader.get_prefetch_aio_buf().end();
+  int64_t align_length = alignment_length(remain_len);
+
+  memcpy(reader.buf_.data(), reader.get_aio_buf().data() + offset1, len1);
+  memcpy(reader.buf_.data() + len1, reader.get_prefetch_aio_buf().data(),
+          reader.get_prefetch_aio_buf().capacity());
+  if (OB_FAIL(load_buffer(reader, reader.get_aio_buf(), reader.get_prefetch_aio_buf().end(),
+                          align_length, false))) {
+    LOG_WARN("load blocks failed", K(ret));
+  } else {
+    memcpy(reader.buf_.data() + len1 + reader.get_prefetch_aio_buf().capacity(),
+           reader.get_aio_buf().data(), remain_len);
+  }
+  return ret;
+}
+
+/* blk exceeds the current block length then the block will be divided into two
+ * sections: first section in cur_buf and second section in pref_buf.
+ *
+ *    |  cur_buf  |     |         pref_buf         |
+ *    +-----------      ----------------------------
+ *    |      |////|     |////////////////|         |
+ *    +-----------      ----------------------------
+ *           |len1|     |   remain_len   |
+ */
+int ObTempBlockStore::load_block_cross_buffer(BlockReader &reader, BlockIndex *&bi)
+{
+  int ret = OB_SUCCESS;
+  int64_t len1 = reader.get_aio_buf().end() - bi->offset_;
+  int64_t offset1 = bi->offset_ - reader.get_aio_buf().offset();
+  int64_t remain_len = bi->offset_ + bi->length_ - reader.get_aio_buf().end();
+  int64_t seg_length = alignment_length(remain_len);
+
+  if (OB_UNLIKELY(OB_ISNULL(reader.get_prefetch_aio_buf().data()))
+      || reader.get_aio_buf().end() != reader.get_prefetch_aio_buf().offset()) {
+    if (OB_FAIL(load_buffer(reader, reader.get_prefetch_aio_buf(), reader.get_aio_buf().end(),
+                            seg_length, false))) {
+      LOG_WARN("load segment buffer failed", K(ret));
+    }
+  } else if (OB_FAIL(reader.aio_wait())) {
+    LOG_WARN("aio wait failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (bi->offset_ + bi->length_ > reader.get_prefetch_aio_buf().end()) {
+    if (OB_FAIL(load_block_cross_multi_buffer(reader, len1, offset1, bi))) {
+      LOG_WARN("load block cross multi buffer failed", K(ret));
+    }
+  } else {
+    memcpy(reader.buf_.data(), reader.get_aio_buf().data() + offset1, len1);
+    memcpy(reader.buf_.data() + len1, reader.get_prefetch_aio_buf().data(), remain_len);
+    reader.aio_buf_idx_ = (reader.aio_buf_idx_ + 1) % BlockReader::AIO_BUF_CNT;
+  }
+  return ret;
+}
+
+int ObTempBlockStore::load_block_from_seg_buffer(BlockReader &reader, const Block *&blk,
+                                                 bool &need_prefetch, BlockIndex *&bi)
+{
+  int ret = OB_SUCCESS;
+  blk = nullptr;
+  int64_t cur_off = reader.get_aio_buf().offset();
+  if (OB_UNLIKELY(OB_ISNULL(reader.get_aio_buf().data()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf should not be null", K(ret));
+  } else if (OB_FAIL(ensure_reader_buffer(reader, reader.buf_, bi->length_))) {
+    LOG_WARN("ensure reader buffer failed", K(ret));
+  } else if (bi->offset_ + bi->length_ > reader.get_aio_buf().end()) {
+    need_prefetch = true;
+    if (OB_FAIL(load_block_cross_buffer(reader, bi))) {
+      LOG_WARN("load block cross buffer failed", K(ret));
+    }
+  } else {
+    memcpy(reader.buf_.data(), reader.get_aio_buf().data() + bi->offset_ - cur_off, bi->length_);
+  }
+  blk = reinterpret_cast<const Block *>(reader.buf_.data());
+  return ret;
+}
+
+int ObTempBlockStore::load_buffer(BlockReader &reader, ShrinkBuffer &buf, int64_t offset,
+                                  int64_t length, const bool is_async)
+{
+  int ret = OB_SUCCESS;
+  if (is_segment_read()) {
+    length = MIN(length, file_size_ - offset);
+    io_.io_desc_.set_no_preread();
+  }
+  tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
+  if (length <= 0) {
+  } else if (OB_FAIL(ensure_reader_buffer(reader, buf, length))) {
+    LOG_WARN("ensure reader buffer failed", K(ret), K(length));
+  } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
+    LOG_WARN("get read io handler failed", K(ret));
+  } else if (OB_FAIL(read_file(buf.data(), length, offset, *read_io_handler_ptr, is_async,
+                               sequential_read_))) {
+    LOG_WARN("read block from file failed", K(ret));
+  } else if (is_segment_read()) {
+    buf.set_offset_length(offset, length);
+  }
+  return ret;
+}
+
 int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
-                                 const Block *&blk, bool &on_disk)
+                                ShrinkBuffer &buf, const Block *&blk, bool &on_disk)
 {
   int ret = OB_SUCCESS;
   BlockIndex *bi;
   blk = nullptr;
   on_disk = true;
-  if (OB_UNLIKELY(block_id < 0) || OB_UNLIKELY(block_id >= saved_block_id_cnt_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row should be saved", K(ret), K(block_id), K_(saved_block_id_cnt));
-  } else if (OB_FAIL(find_block_idx(reader, block_id, bi))) {
+  if (OB_FAIL(find_block_idx(reader, block_id, bi))) {
     LOG_WARN("find block index failed", K(ret), K(block_id));
+  } else if (!bi->on_disk_) {
+    blk = bi->blk_;
+    on_disk = false;
+  } else if (load_buffer(reader, buf, bi->offset_, bi->length_, reader.is_async())) {
+    LOG_WARN("load buffer failed", K(ret), K(bi));
   } else {
-    if (!bi->on_disk_) {
-      blk = bi->blk_;
-      on_disk = false;
+    if (reader.is_async()) {
+      cur_file_offset_ = bi->offset_ > 0 ? bi->offset_ - 1 : 0;
     } else {
-      tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
-      if (reader.is_async()) {
-        int aio_buf_idx = reader.aio_buf_idx_ % BlockReader::AIO_BUF_CNT;
-        if (OB_FAIL(ensure_reader_buffer(reader, reader.aio_buf_[aio_buf_idx],
-                                         bi->length_))) {
-          LOG_WARN("ensure reader buffer failed", K(ret));
-        } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
-          LOG_WARN("get read io handler failed", K(ret));
-        } else if (OB_FAIL(read_file(reader.aio_buf_[aio_buf_idx].data(), bi->length_, bi->offset_,
-                            *read_io_handler_ptr, reader.is_async(), sequential_read_))) {
-          LOG_WARN("read block from file failed", K(ret), K(bi));
-        }
-      } else {
-        if (OB_FAIL(ensure_reader_buffer(reader, reader.buf_, bi->length_))) {
-          LOG_WARN("ensure reader buffer failed", K(ret));
-        } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
-          LOG_WARN("get read io handler failed", K(ret));
-        } else if (OB_FAIL(read_file(reader.buf_.data(), bi->length_, bi->offset_,
-                            *read_io_handler_ptr, reader.is_async(), sequential_read_))) {
-          LOG_WARN("read block from file failed", K(ret), K(bi));
-        }
-      }
-    }
-    if (OB_SUCC(ret) && bi->on_disk_) {
-      if (reader.is_async()) {
-        cur_file_offset_ = bi->offset_ > 0 ? bi->offset_ - 1 : 0;
-      } else {
-        blk = reinterpret_cast<const Block *>(reader.buf_.data());
-        cur_file_offset_ = bi->offset_ + bi->length_;
-      }
+      blk = reinterpret_cast<const Block *>(buf.data());
+      cur_file_offset_ = bi->offset_ + bi->length_;
     }
   }
   return ret;
@@ -928,8 +1079,11 @@ int ObTempBlockStore::find_block_idx(BlockReader &reader, const int64_t block_id
         if (!bi->is_idx_block_) {
           found = true;
         } else {
-          if (OB_FAIL(load_idx_block(reader, ib, *bi))) {
-            LOG_WARN("load index block failed", K(ret), K(bi));
+          if (is_segment_read() && OB_NOT_NULL(reader.read_io_handle_)
+              && OB_FAIL(reader.aio_wait())) {
+            LOG_WARN("aio wait failed", K(ret));
+          } else if (OB_FAIL(load_idx_block(reader, ib, *bi))) {
+            LOG_WARN("load index block failed", K(ret), K(*bi));
           }
         }
       }
@@ -1411,6 +1565,9 @@ int ObTempBlockStore::BlockReader::init(ObTempBlockStore *store, const bool asyn
   } else {
     store_ = store;
     is_async_ = async;
+    if (store->is_segment_read()) {
+      is_async_ = false;
+    }
   }
   return ret;
 }

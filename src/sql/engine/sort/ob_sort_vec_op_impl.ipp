@@ -186,7 +186,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   ObMemAttr mem_attr(tenant_id_, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA);
   if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, mem_limit, enable_dump,
                              extra_size /* row_extra_size */, compress_type, reorder_fixed_expr,
-                             enable_trunc))) {
+                             enable_trunc, tempstore_read_alignment_size_))) {
     SQL_ENG_LOG(WARN, "init row store failed", K(ret));
   } else {
     row_store.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -287,6 +287,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = ctx.is_fetch_with_ties_;
     compress_type_ = ctx.compress_type_;
+    tempstore_read_alignment_size_ = ObTempBlockStore::get_read_alignment_size_config(tenant_id_);
     page_allocator_.set_allocator(&mem_context_->get_malloc_allocator());
     int64_t batch_size = eval_ctx_->max_batch_size_;
     if (OB_FAIL(merge_sk_addon_exprs(sk_exprs_, addon_exprs_))) {
@@ -1860,18 +1861,20 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
       ems_heap_->reset();
     }
     if (OB_SUCC(ret)) {
-      merge_ways = get_memory_limit() / ObTempBlockStore::BLOCK_SIZE;
+      int64_t tempstore_block_size =
+        max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_CAPACITY);
+      merge_ways = get_memory_limit() / tempstore_block_size;
       merge_ways = std::max(2L, merge_ways);
       if (merge_ways < max_ways) {
         bool dumped = false;
-        int64_t need_size = max_ways * ObTempBlockStore::BLOCK_SIZE;
+        int64_t need_size = max_ways * tempstore_block_size;
         if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
               &mem_context_->get_malloc_allocator(),
               [&](int64_t max_memory_size) { return max_memory_size < need_size; }, dumped,
               mem_context_->used()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        merge_ways = std::max(merge_ways, get_memory_limit() / ObTempBlockStore::BLOCK_SIZE);
+        merge_ways = std::max(merge_ways, get_memory_limit() / tempstore_block_size);
       }
       merge_ways = std::min(merge_ways, max_ways);
       LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(sort_chunks_.get_size()),

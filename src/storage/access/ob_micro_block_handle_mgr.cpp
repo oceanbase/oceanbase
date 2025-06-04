@@ -527,12 +527,12 @@ int ObMicroBlockHandleMgr::prefetch_multi_data_block(
     LOG_WARN("Unexpected io params", K(ret), K(multi_io_params));
   } else {
     const MacroBlockId &macro_id = micro_data_infos[multi_io_params.prefetch_idx_[0] % max_micro_handle_cnt].get_macro_id();
-    const bool is_major_macro_preread = GCTX.is_shared_storage_mode();
+    const bool is_preread = GCTX.is_shared_storage_mode();
     if (1 == multi_io_params.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < multi_io_params.count(); i++) {
         const ObMicroIndexInfo &index_info = micro_data_infos[multi_io_params.prefetch_idx_[i] % max_micro_handle_cnt];
         if (OB_FAIL(data_block_cache_->prefetch(tenant_id, macro_id, index_info, true,
-                                                macro_handle, &block_io_allocator_, is_major_macro_preread))) {
+                                                macro_handle, &block_io_allocator_, is_preread))) {
           LOG_WARN("Fail to prefetch micro block", K(ret), K(index_info), K(macro_handle));
         } else {
           ObMicroBlockDataHandle &micro_handle = micro_data_handles[multi_io_params.prefetch_idx_[i] % max_micro_handle_cnt];

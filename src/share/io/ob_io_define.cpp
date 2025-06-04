@@ -215,6 +215,7 @@ ObIOFlag::ObIOFlag()
       is_write_through_(false),
       is_sealed_(true),
       need_close_dev_and_fd_(false),
+      is_preread_(false),
       reserved_(0),
       group_id_(USER_RESOURCE_OTHER_GROUP_ID),
       sys_module_id_(OB_INVALID_ID)
@@ -238,6 +239,7 @@ void ObIOFlag::reset()
   is_write_through_ = false;
   is_sealed_ = true;
   need_close_dev_and_fd_ = false;
+  is_preread_ = false;
   reserved_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   sys_module_id_ = OB_INVALID_ID;
@@ -424,6 +426,21 @@ void ObIOFlag::set_no_need_close_dev_and_fd()
 bool ObIOFlag::is_need_close_dev_and_fd() const
 {
   return need_close_dev_and_fd_;
+}
+
+void ObIOFlag::set_preread()
+{
+  is_preread_ = true;
+}
+
+void ObIOFlag::set_no_preread()
+{
+  is_preread_ = false;
+}
+
+bool ObIOFlag::is_preread() const
+{
+  return is_preread_;
 }
 
 

@@ -40,6 +40,8 @@ if(OB_BUILD_CLOSE_MODULES)
   #mit_shared_storage_unittest(test_calibrate_disk_space) TODO(binifei.bnf): open this case later
   mit_shared_storage_unittest(test_segment_file_manager)
   mit_shared_storage_unittest(test_flush_unsealed_tmp_file)
+  mit_shared_storage_unittest(test_ss_tmp_file_preread_flag)
+  mit_shared_storage_unittest(test_auto_expand_disk)
   mit_shared_storage_unittest(test_ss_micro_cache_util)
   mit_shared_storage_unittest(test_ss_ckpt_phy_block)
   mit_shared_storage_unittest(test_ss_micro_cache_basic_op)

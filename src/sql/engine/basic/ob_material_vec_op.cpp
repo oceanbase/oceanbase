@@ -36,6 +36,7 @@ int ObMaterialVecOp::inner_open()
     LOG_WARN("failed to get px size", K(ret));
   } else {
     int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    int64_t tempstore_read_alignment_size = ObTempBlockStore::get_read_alignment_size_config(tenant_id);
     lib::ContextParam param;
     param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
       .set_properties(lib::USE_TL_PAGE_OPTIONAL);
@@ -51,7 +52,8 @@ int ObMaterialVecOp::inner_open()
                                    0 /*mem_limit*/,
                                    true /*enable_dump*/,
                                    true /*reuse_vector_array*/,
-                                   MY_SPEC.compress_type_))) {
+                                   MY_SPEC.compress_type_,
+                                   tempstore_read_alignment_size))) {
       LOG_WARN("init row store failed");
     } else {
       const int64_t size = OB_INVALID_ID == row_count ? 0 : row_count * MY_SPEC.width_;
