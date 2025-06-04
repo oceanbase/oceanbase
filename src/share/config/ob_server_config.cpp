@@ -38,6 +38,10 @@ int64_t get_tenant_stack_size(const uint64_t tenant_id)
       stack_size = tenant_config->_tenant_stack_size;
     }
   }
+  // stack_size_upper_limit = (memory_limit / 1G) * 512K
+  // stack_size_lower_limit = OB_DEFAULT_STACK_SIZE
+  stack_size = MIN(stack_size, get_tenant_memory_limit(tenant_id) / (2L << 10));
+  stack_size = MAX(stack_size, OB_DEFAULT_STACK_SIZE);
   return stack_size;
 }
 
