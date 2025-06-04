@@ -919,36 +919,6 @@ int ObSelectResolver::check_order_by()
   return ret;
 }
 
-int ObSelectResolver::check_field_list()
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = get_select_stmt();
-  if (! is_oracle_mode()) {
-  } else if (OB_ISNULL(select_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("select stmt is null", K(ret));
-  } else if (select_stmt->has_distinct()) {
-    common::ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); i++) {
-      ObRawExpr *expr = NULL;
-      if (OB_ISNULL(expr = select_items.at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select expr is null", K(ret));
-      } else if (ObLongTextType == expr->get_data_type() || ObLobType == expr->get_data_type()) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("select distinct lob not allowed", K(ret));
-      } else if (lib::is_oracle_mode() && ObJsonType == expr->get_data_type()) {
-        ret = OB_ERR_INVALID_CMP_OP;
-        LOG_WARN("select distinct json not allowed", K(ret));
-      } else if (lib::is_oracle_mode() && ObGeometryType == expr->get_data_type()) {
-        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
-        LOG_WARN("select distinct geometry not allowed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObSelectResolver::search_connect_group_by_clause(const ParseNode &parent,
                                    const ParseNode *&start_with,
                                    const ParseNode *&connect_by,
@@ -1406,7 +1376,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   }
 
   //统一为本层的表达式进行only full group by验证，避免检查的逻辑过于分散
-  OZ( check_field_list() );
   OZ( check_group_by() );
   OZ( check_order_by() );
   OZ( check_pseudo_columns() );

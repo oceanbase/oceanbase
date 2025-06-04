@@ -252,7 +252,6 @@ protected:
   virtual int check_in_sysview(bool &in_sysview) const override;
   int check_group_by();
   int check_order_by();
-  int check_field_list();
   int check_pseudo_columns();
   int check_grouping_columns();
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
