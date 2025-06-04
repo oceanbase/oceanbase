@@ -40,14 +40,13 @@ class ObPartitionSplitQuery final
 {
 public:
   ObPartitionSplitQuery() :
-    tablet_handle_(),
     split_info_()
   {}
   ~ObPartitionSplitQuery() {
-    tablet_handle_.reset();
     split_info_.reset();
   }
 public:
+  // FIXME:remove it
   int get_tablet_handle(
       const ObTabletID &tablet_id,
       const ObLSID &ls_id,
@@ -62,19 +61,20 @@ public:
       bool &is_empty_range);
 
   int get_tablet_split_ranges(
+      const ObTablet &tablet,
       const common::ObIArray<common::ObStoreRange> &ori_ranges,
       common::ObIArray<common::ObStoreRange> &new_ranges,
       ObIAllocator &allocator);
 
   int get_split_datum_range(
+      const ObTablet &tablet,
       const blocksstable::ObStorageDatumUtils *datum_utils,
       ObIAllocator &allocator,
       blocksstable::ObDatumRange &datum_range,
       bool &is_empty_range);
 
   int get_tablet_split_info(
-      const ObTabletID &tablet_id,
-      const ObLSID &ls_id,
+      const ObTablet &tablet,
       ObIAllocator &allocator);
 
   int split_multi_ranges_if_need(
@@ -85,35 +85,34 @@ public:
       bool &is_splited_range);
 
   int fill_auto_split_params(
-      ObTablet &tablet,
+      const ObTablet &tablet,
       const bool is_split_dst,
       sql::ObPushdownOperator *op,
       const uint64_t filter_type,
       sql::ExprFixedArray *filter_params,
       ObIAllocator &allocator);
 
-  int fill_range_filter_param(
-      storage::ObTabletSplitTscInfo &split_info,
-      sql::ObEvalCtx &eval_ctx,
-      sql::ExprFixedArray *filter_params);
-
   int check_rowkey_is_included(
+      const ObTablet &tablet,
       const blocksstable::ObDatumRowkey &target_rowkey,
       const blocksstable::ObStorageDatumUtils *datum_utils,
       bool &is_included);
 
-  int set_tablet_handle(const storage::ObTabletHandle &tablet_handle);
+private:
+  int fill_range_filter_param(
+      const storage::ObTabletSplitTscInfo &split_info,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ExprFixedArray *filter_params);
+
   int set_split_info(const storage::ObTabletSplitTscInfo &split_info);
 
-private:
   int copy_split_key(
       const blocksstable::ObDatumRowkey &split_key,
-      const blocksstable::ObDatumRowkey &src_key,
+      const int64_t src_datum_cnt,
       blocksstable::ObDatumRowkey &new_key,
       ObIAllocator &allocator);
 
 private:
-  ObTabletHandle tablet_handle_;
   ObTabletSplitTscInfo split_info_;
 };
 

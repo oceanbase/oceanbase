@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/ob_i_table.h"
+#include "storage/ddl/ob_direct_insert_define.h"
 namespace oceanbase
 {
 namespace storage
@@ -152,54 +153,6 @@ private:
   int ret_;
   bool can_freeze_;
 };
-
-
-enum ObDirectLoadType {
-  DIRECT_LOAD_INVALID = 0,
-  DIRECT_LOAD_DDL = 1,
-  DIRECT_LOAD_LOAD_DATA = 2,
-  DIRECT_LOAD_INCREMENTAL = 3,
-  DIRECT_LOAD_DDL_V2 = 4,
-  DIRECT_LOAD_LOAD_DATA_V2 = 5,
-  SN_IDEM_DIRECT_LOAD_DDL = 6,
-  SN_IDEM_DIRECT_LOAD_DATA = 7,
-  DIRECT_LOAD_MAX
-};
-
-static inline bool is_valid_direct_load(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_INVALID < type && ObDirectLoadType::DIRECT_LOAD_MAX > type;
-}
-
-static inline bool is_ddl_direct_load(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_DDL == type || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type;
-}
-
-static inline bool is_full_direct_load(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_DDL == type
-      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA == type
-      || ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type
-      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
-}
-
-static inline bool is_data_direct_load(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_LOAD_DATA == type
-      || ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type
-      || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
-}
-
-static inline bool is_incremental_direct_load(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type;
-}
-
-static inline bool is_shared_storage_dempotent_mode(const ObDirectLoadType &type)
-{
-  return ObDirectLoadType::DIRECT_LOAD_DDL_V2 == type || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
-}
 
 struct ObDDLMacroBlockRedoInfo final
 {

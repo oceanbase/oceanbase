@@ -72,9 +72,12 @@ int ObExprVecIVFPQCenterVector::cg_expr(
   int ret = OB_SUCCESS;
   UNUSED(raw_expr);
   UNUSED(expr_cg_ctx);
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 1) || OB_UNLIKELY(rt_expr.arg_cnt_ != 4) || OB_ISNULL(rt_expr.args_)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 1) && OB_UNLIKELY(rt_expr.arg_cnt_ != 4)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(rt_expr.arg_cnt_), KP(rt_expr.args_), K(rt_expr.type_));
+  } else if (OB_ISNULL(rt_expr.args_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments, null args", K(rt_expr.arg_cnt_), KP(rt_expr.args_), K(rt_expr.type_));
   } else {
     rt_expr.eval_func_ = generate_pq_center_vector;
   }
@@ -106,11 +109,14 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
       LOG_WARN("failed to eval ivf centers", K(ret), K(expr), K(eval_ctx));
     } else if (contain_null) {
       // do nothing
+      expr_datum.set_null();
     } else {
       ObVectorNormalizeInfo norm_info;
       float *residual_vec = nullptr;
       int64_t center_idx = 0;
-      if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
+      if (centers.count() == 0) {
+        residual_vec = reinterpret_cast<float*>(arr->get_data());
+      } else if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
           tmp_allocator,
           arr->size(),
           centers,
@@ -118,6 +124,8 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
           VIDA_L2 == dis_algo ? nullptr: &norm_info,
           residual_vec))) {
         LOG_WARN("failed to get nearest center", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         ObString data_str(arr->size() * sizeof(float), reinterpret_cast<char*>(residual_vec));
         ObString res_str;

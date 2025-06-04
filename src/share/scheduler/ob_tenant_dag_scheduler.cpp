@@ -24,6 +24,7 @@
 #include "storage/compaction/ob_tablet_refresh_dag.h"
 #include "storage/compaction/ob_verify_ckm_dag.h"
 #include "storage/compaction/ob_update_skip_major_tablet_dag.h"
+#include "storage/incremental/ob_inc_sstable_upload_task.h"
 #endif
 
 
@@ -45,7 +46,7 @@ namespace lib
 namespace share
 {
 ERRSIM_POINT_DEF(EN_SKIP_LOOP_BLOCKING_DAG);
-
+ERRSIM_POINT_DEF(EN_FINISH_DAG_FAILURE);
 #define DEFINE_TASK_ADD_KV(n)                                                               \
   template <LOG_TYPENAME_TN##n>                                                                  \
   int ADD_TASK_INFO_PARAM(char *buf, const int64_t buf_size, LOG_PARAMETER_KV##n)                  \
@@ -753,7 +754,7 @@ int ObIDag::finish_task(ObITask &task)
     ObMutexGuard guard(lock_);
     if (OB_ISNULL(task_list_.remove(&task))) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "failed to remove finished task from task_list", K(ret));
+      COMMON_LOG(ERROR, "failed to remove finished task from task_list", K(ret));
     } else {
       dec_running_task_cnt();
     }
@@ -1775,6 +1776,13 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   } else if (dag->is_dag_net_canceled()) {
     flag = true;
     (void) dag->simply_set_stop();
+  } else {
+    bool is_cancel = false;
+    if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_->get_dag()->get_dag_id(), is_cancel))) {
+      LOG_WARN("fail to use SYS_TASK_STATUS_MGR to decide if cancel task", K(ret), K(task_->get_dag()->get_dag_id()));
+    } else if (is_cancel) {
+      flag = true;
+    }
   }
   return flag;
 }
@@ -1786,7 +1794,11 @@ void ObTenantDagWorker::set_task(ObITask *task)
 
   ObIDag *dag = nullptr;
   if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
-    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type());
+    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type())
+#ifdef OB_BUILD_SHARED_STORAGE
+      || (dag->get_type() == ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD)
+#endif
+      ;
   }
 }
 
@@ -1815,6 +1827,7 @@ void ObTenantDagWorker::run1()
       }
 
       if (OB_SUCC(ret)) {
+        ObDIActionGuard di_action_guard("DAG", dag->get_dag_module_str(dag->get_type()), dag->get_dag_type_str(dag->get_type()));
         CONSUMER_GROUP_ID_GUARD(dag->get_consumer_group_id());
         ObDagId dag_id = dag->get_dag_id();
         if (task_->get_sub_task_id() > 0) {
@@ -1845,23 +1858,15 @@ void ObTenantDagWorker::run1()
         }
       }
 
-      {
-        const int64_t curr_time = ObTimeUtility::fast_current_time();
-        const int64_t elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
-      }
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
+      reset_compaction_thread_locals();
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*cur_task, *this, ret/*task error_code*/))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
-      reset_compaction_thread_locals();
     } else {
       ObThreadCondGuard guard(cond_);
       while (NULL == task_ && DWS_FREE == status_ && !has_set_stop()) {
@@ -1880,11 +1885,6 @@ int ObTenantDagWorker::yield()
   if (!((++counter) & CHECK_INTERVAL)) {
     int64_t curr_time = ObTimeUtility::fast_current_time();
     if (last_check_time_ + check_period_ <= curr_time) {
-      int64_t elapsed_time = curr_time - last_check_time_;
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
       last_check_time_ = curr_time;
       ObThreadCondGuard guard(cond_);
       if (get_force_cancel_flag()) {
@@ -1899,9 +1899,6 @@ int ObTenantDagWorker::yield()
         ObCurTraceId::set(task_->get_dag()->get_dag_id());
         COMMON_LOG(INFO, "worker continues to run", K(*task_));
         curr_time = ObTimeUtility::fast_current_time();
-        elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
         last_check_time_ = curr_time;
         if (DWS_RUNNABLE == status_) {
           status_ = DWS_RUNNING;
@@ -1912,6 +1909,11 @@ int ObTenantDagWorker::yield()
         }
       }
     }
+#ifdef ERRSIM
+    if (ret == OB_CANCELED) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "cancel_merge", "dag_id", task_->get_dag()->get_dag_id(), "add_time", curr_time);
+    }
+#endif
   }
 
   return ret;
@@ -2435,43 +2437,10 @@ int ObDagPrioScheduler::rank_compaction_dags_()
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (need_adaptive_schedule) {
-    try_update_adaptive_task_limit_(batch_size);
-  } else {
+  if (OB_SUCC(ret)) {
     adaptive_task_limit_ = limits_;
   }
-
   return ret;
-}
-
-// should be called under prio_lock_
-void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_size)
-{
-  int tmp_ret = OB_SUCCESS;
-  double min_cpu = 0.0;
-  double max_cpu = 0.0;
-  const int64_t adaptive_worker_limit = limits_ * 2;
-
-  if (!is_compaction_dag_prio()) {
-    // do nothing
-  } else if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
-    adaptive_task_limit_ = limits_; // dag count is OK, reset to the default value
-  } else if (adaptive_task_limit_ >= adaptive_worker_limit) {
-    // adaptive limit reached the limit, cannot inc
-  } else if (OB_TMP_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu, max_cpu))) {
-    COMMON_LOG_RET(WARN, tmp_ret, "failed to get tenant cpu count");
-  } else if (std::round(max_cpu) * ADAPTIVE_PERCENT <= adaptive_task_limit_) {
-    // reaches the 40% cpu, no need to expand
-  } else {
-    // we assume all compaction tasks are serial
-    const int64_t estimate_mem_per_thread = compaction::ObCompactionEstimator::MAX_MEM_PER_THREAD;
-    const int64_t mem_allow_max_thread = lib::get_tenant_memory_remain(MTL_ID()) * ADAPTIVE_PERCENT / estimate_mem_per_thread;
-    if (mem_allow_max_thread >= adaptive_task_limit_ * 5) {
-      ++adaptive_task_limit_;
-      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_), K(adaptive_worker_limit), K(max_cpu));
-    }
-  }
 }
 
 // under prio_lock_
@@ -3093,6 +3062,9 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
       } else if (GCTX.is_shared_storage_mode()
               && ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == cur->get_type()) {
         cancel_flag = ls_id == static_cast<compaction::ObUpdateSkipMajorTabletDag *>(cur)->get_param().ls_id_;
+      } else if (GCTX.is_shared_storage_mode()
+                 && ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD == cur->get_type()) {
+        cancel_flag = ls_id == static_cast<storage::ObIncSSTableUploadDag *>(cur)->get_param().ls_id_;
 #endif
       } else {
         cancel_flag = (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());
@@ -3366,12 +3338,18 @@ int ObDagPrioScheduler::deal_with_finish_task(
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
       }
     }
-
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && OB_UNLIKELY(EN_FINISH_DAG_FAILURE)) {
+      ret = EN_FINISH_DAG_FAILURE;
+      FLOG_INFO("ERRSIM EN_FINISH_DAG_FAILURE", KR(ret));
+    }
+#endif
     bool finish_task_flag = true;
     if (OB_FAIL(ret)) {
-      dag->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
-      dag->set_dag_ret(ret);
-      finish_task_flag = false;
+      if (ObIDag::DAG_STATUS_NODE_FAILED != dag->get_dag_status()) {
+        dag->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
+        dag->set_dag_ret(ret);
+      }
       COMMON_LOG(WARN, "failed to deal with finish task in retry process", K(ret), KPC(dag));
       ret = OB_SUCCESS;
     } else if (retry_flag) {
@@ -3831,7 +3809,7 @@ int64_t ObDagNetScheduler::get_dag_net_count(const ObDagNetType::ObDagNetTypeEnu
   return count;
 }
 
-bool ObDagNetScheduler::is_dag_map_full()
+bool ObDagNetScheduler::is_dag_map_full_()
 {
   bool bret = false;
   if (OB_UNLIKELY(OB_ISNULL(scheduler_))) {
@@ -3840,7 +3818,6 @@ bool ObDagNetScheduler::is_dag_map_full()
     if (((double)scheduler_->get_cur_dag_cnt() / DEFAULT_MAX_DAG_MAP_CNT) >= ((double)STOP_ADD_DAG_PERCENT / 100)) {
       bret = true;
       if (REACH_THREAD_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL))  {
-        ObMutexGuard guard(dag_net_map_lock_);
         COMMON_LOG(INFO, "dag map is almost full, stop loop blocking dag_net_map",
             "dag_map_size", scheduler_->get_cur_dag_cnt(), "dag_net_map_size", dag_net_map_.size(),
             "blocking_dag_net_list_size", dag_net_list_[BLOCKING_DAG_NET_LIST].get_size(),
@@ -3936,7 +3913,7 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
     ObIDagNet *cur = head->get_next();
     ObIDagNet *tmp = nullptr;
     int64_t rest_cnt = DEFAULT_MAX_RUNNING_DAG_NET_CNT - (dag_net_map_.size() - dag_net_list_[BLOCKING_DAG_NET_LIST].get_size());
-    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full()) {
+    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full_()) {
       LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
       tmp = cur;
       cur = cur->get_next();
@@ -4153,6 +4130,14 @@ void ObTenantDagScheduler::reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_HA_LOW, tenant_config->ha_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_DDL, tenant_config->ddl_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_TTL, tenant_config->ttl_thread_score);
+#ifdef OB_BUILD_SHARED_STORAGE
+    // use compaction_high_thread_score as default upload thread count
+    if (0 == tenant_config->inc_sstable_upload_thread_score) {
+      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->compaction_high_thread_score);
+    } else {
+      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->inc_sstable_upload_thread_score);
+    }
+#endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
   }
 }

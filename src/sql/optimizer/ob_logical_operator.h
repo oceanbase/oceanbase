@@ -433,20 +433,15 @@ public:
 
 struct ObExchangeInfo
 {
+  // TODO: remove this struct, use ObRawExpr* directly
   struct HashExpr
   {
     HashExpr() : expr_(NULL) {}
-    HashExpr(ObRawExpr *expr, const ObObjMeta &cmp_type) : expr_(expr), cmp_type_(cmp_type) {}
+    HashExpr(ObRawExpr *expr) : expr_(expr) {}
 
-    TO_STRING_KV(K_(expr), K_(cmp_type));
+    TO_STRING_KV(K_(expr));
 
     ObRawExpr *expr_;
-
-    // Compare type of %expr_ when compare with other values.
-    // Objects should convert to %cmp_type_ before calculate hash value.
-    //
-    // Only type_ and cs_type_ of %cmp_type_ are used right now.
-    ObObjMeta cmp_type_;
   };
   ObExchangeInfo()
   : is_remote_(false),
@@ -498,7 +493,7 @@ struct ObExchangeInfo
   int init_calc_part_id_expr(ObOptimizerContext &opt_ctx);
   void set_calc_part_id_expr(ObRawExpr *expr) { calc_part_id_expr_ = expr; }
   int append_hash_dist_expr(const common::ObIArray<ObRawExpr *> &exprs);
-  int assign(ObExchangeInfo &other);
+  int assign(const ObExchangeInfo &other);
 
   bool is_remote_;
   bool is_task_order_;
@@ -962,6 +957,12 @@ public:
     return OB_LIKELY(index >= 0 && index < child_.count()) ? child_.at(index) : NULL;
   }
 
+  inline const ObLogicalOperator *get_op_below_exchange() const
+  {
+    const ObLogicalOperator *op = log_op_def::LOG_EXCHANGE == get_type() ? get_child(0) : this;
+    return (OB_NOT_NULL(op) && log_op_def::LOG_EXCHANGE == op->get_type()) ? op->get_child(0) : op;
+  }
+
   inline ObIArray<ObLogicalOperator*> &get_child_list()
   {
     return child_;
@@ -1233,8 +1234,6 @@ public:
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs);
   int build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_exprs);
-  int build_and_put_into_outfile_expr(const ObSelectIntoItem *into_item,
-                                      ObIArray<ObRawExpr*> &output_exprs);
   int put_into_outfile_expr(ObRawExpr *into_expr);
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs,
@@ -1730,6 +1729,12 @@ public:
                                     bool nested) const;
   int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
                              bool &contain_dist_das) const;
+
+  inline bool can_re_parallel() { return !is_distributed() && !is_match_all() && 1 < get_available_parallel() && !get_is_at_most_one_row(); }
+  int check_op_orderding_used_by_parent(bool &used);
+
+  inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
+  inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1767,7 +1772,6 @@ protected:
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 
-  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
@@ -1982,6 +1986,7 @@ protected:
   int64_t max_px_group_branch_;
   bool need_re_est_child_cost_;
   DistAlgo dist_method_;
+  bool is_order_by_plan_top_;
 };
 
 template <typename Allocator>

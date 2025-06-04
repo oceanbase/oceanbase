@@ -587,6 +587,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   // 2. get domain_table row count (if need )
   // 3. get index_id_table row count (if need)
   ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "RebuildVecIdx"));
+  ObString idx_parameters;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
     LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),K(refresh_ctx_->base_tb_id_));
@@ -608,8 +609,10 @@ int ObVectorIndexRefresher::do_rebuild() {
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index()) {
     bool is_valid = true;
-    if (!refresh_ctx_->idx_parameters_.empty()
-        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(domain_table_schema->get_index_params(), refresh_ctx_->idx_parameters_, &allocator))) {
+    if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
+      LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
+    } else if (!idx_parameters.empty()
+        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
       LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
@@ -673,19 +676,19 @@ int ObVectorIndexRefresher::do_rebuild() {
     ObTimeoutCtx timeout_ctx;
     ObAddr rs_addr;
     obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
-    ObRebuildIndexArg rebuild_index_arg;
+    SMART_VAR(ObRebuildIndexArg, rebuild_index_arg) {
     obrpc::ObAlterTableRes rebuild_index_res;
     const bool is_support_cancel = true;
     rebuild_index_arg.tenant_id_ = tenant_id;
     rebuild_index_arg.exec_tenant_id_ = tenant_id;
-    rebuild_index_arg.session_id_ = session_info->get_sessid();
+    rebuild_index_arg.session_id_ = session_info->get_server_sid();
     rebuild_index_arg.database_name_ = db_schema->get_database_name_str();
     rebuild_index_arg.table_name_ = base_table_schema->get_table_name_str();
     rebuild_index_arg.index_name_ = domain_table_schema->get_table_name_str();
     rebuild_index_arg.index_table_id_ = domain_table_schema->get_table_id();
     rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
-    rebuild_index_arg.vidx_refresh_info_.index_params_ = refresh_ctx_->idx_parameters_;
+    rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
     if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));
@@ -711,6 +714,7 @@ int ObVectorIndexRefresher::do_rebuild() {
         LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
       }
     }
+  }
   }
   return ret;
 }

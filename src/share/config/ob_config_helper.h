@@ -324,6 +324,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStorageCachePolicyChecker);
 };
 
+class ObConfigEnableManualSCPChecker : public ObConfigChecker
+{
+public:
+  ObConfigEnableManualSCPChecker() {}
+  virtual ~ObConfigEnableManualSCPChecker() {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEnableManualSCPChecker);
+};
+
+class ObConfigSuspendStorageCacheTaskChecker : public ObConfigChecker
+{
+public:
+  ObConfigSuspendStorageCacheTaskChecker() {}
+  virtual ~ObConfigSuspendStorageCacheTaskChecker() {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSuspendStorageCacheTaskChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {
@@ -906,9 +928,9 @@ public:
   virtual ~ObKvFeatureModeParser() {}
   virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
 public:
-  static const int8_t MODE_DEFAULT = 0b00;
-  static const int8_t MODE_ON = 0b01;
-  static const int8_t MODE_OFF = 0b10;
+  static const int16_t MODE_DEFAULT = 0b00;
+  static const int16_t MODE_ON = 0b01;
+  static const int16_t MODE_OFF = 0b10;
   DISALLOW_COPY_AND_ASSIGN(ObKvFeatureModeParser);
 };
 
@@ -1121,6 +1143,16 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAutoSplitTabletSizeChecker);
+};
+
+class ObConfigGlobalIndexAutoSplitPolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigGlobalIndexAutoSplitPolicyChecker() {}
+  virtual ~ObConfigGlobalIndexAutoSplitPolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigGlobalIndexAutoSplitPolicyChecker);
 };
 
 

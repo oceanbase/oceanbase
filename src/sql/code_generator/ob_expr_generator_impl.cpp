@@ -53,7 +53,7 @@ ObExprGeneratorImpl::ObExprGeneratorImpl(
     int16_t cur_regexp_op_count,
     int16_t cur_like_op_count,
     uint32_t *next_expr_id,
-    ObColumnIndexProvider &idx_provider)
+    RowDesc &idx_provider)
     : sql_expr_(NULL),
       cur_regexp_op_count_(cur_regexp_op_count),
       cur_like_op_count_(cur_like_op_count),
@@ -70,7 +70,7 @@ ObExprGeneratorImpl::ObExprGeneratorImpl(
     int16_t cur_regexp_op_count,
     int16_t cur_like_op_count,
     uint32_t *next_expr_id,
-    ObColumnIndexProvider &idx_provider)
+    RowDesc &idx_provider)
     : sql_expr_(NULL),
       cur_regexp_op_count_(cur_regexp_op_count),
       cur_like_op_count_(cur_like_op_count),
@@ -454,7 +454,6 @@ int ObExprGeneratorImpl::visit(ObPlQueryRefRawExpr &expr)
       OX (pl_subquery->set_stmt_type(expr.get_stmt_type()));
       OZ (pl_subquery->deep_copy_route_sql(expr.get_route_sql()));
       OX (pl_subquery->set_result_type(expr.get_subquery_result_type()));
-      OZ (pl_subquery->set_type_info(expr.get_enum_set_values()));
       if (OB_SUCC(ret) && expr.is_ignore_fail()) {
         pl_subquery->set_ignore_fail();
       }
@@ -546,9 +545,7 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
     op->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION);
     op->set_result_type(expr.get_result_type());
     // calc part id expr may got T_OP_ROW child, it's meaningless to set its input type.
-    if (OB_LIKELY(!expr.is_calc_part_expr()) && OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-      LOG_WARN("fail copy input types", K(ret));
-    } else if (OB_FAIL(item.assign(op))) {
+    if (OB_FAIL(item.assign(op))) {
       LOG_WARN("failed to assign", K(ret));
     } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
@@ -1148,35 +1145,8 @@ int ObExprGeneratorImpl::set_need_cast(ObNonTerminalRawExpr &expr, bool &need_ca
 int ObExprGeneratorImpl::visit_relational_expr(ObNonTerminalRawExpr &expr, ObRelationalExprOperator *relational_op)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(relational_op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("relational expr op is null", K(ret));
-  } else if (expr.get_param_count() == 2) {
-    int64_t param_count = expr.get_param_count();
-    int64_t input_types_count = expr.get_input_types().count();
-    if (OB_UNLIKELY(param_count != input_types_count)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param count should be equal to input_types_count", K(param_count),
-               K(input_types_count), K(ret));
-    } else {
-      /*
-       * loop of size 2. Seems reasonable  to unroll it to get a better perf.
-       *
-       * But, well, do not bother yourself. It is up to gcc.
-       */
-      for (int i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-        if (OB_ISNULL(expr.get_param_expr(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("relational expr param is null", K(ret), K(i));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObObjType left_operand_type = expr.get_input_types().at(0).get_calc_type();
-        ObObjType right_operand_type = expr.get_input_types().at(1).get_calc_type();
-        ret = relational_op->set_cmp_func(left_operand_type, right_operand_type);
-      }
-    }
-  }
+  // ObExprGeneratorImpl is still depeneded by PL,
+  // just remove the unused result type and cmp func related code
   return ret;
 }
 
@@ -1610,9 +1580,7 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
       }
       if (OB_SUCC(ret)) {
         op->set_result_type(expr.get_result_type());
-        if (OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-          LOG_WARN("fail copy input types", K(ret));
-        } else if (OB_FAIL(item.assign(op))) {
+        if (OB_FAIL(item.assign(op))) {
           LOG_WARN("failed to assign", K(ret));
         } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
@@ -1661,9 +1629,7 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr &expr)
         ObExprArgCase *argcase_op = static_cast<ObExprArgCase*>(op);
         ret = visit_argcase_expr(expr, argcase_op);
       }
-      if (OB_SUCC(ret) && OB_FAIL(op->set_input_types(expr.get_input_types()))) {
-        LOG_WARN("fail copy input types", K(ret));
-      } else if (OB_FAIL(item.assign(op))) {
+      if (OB_FAIL(item.assign(op))) {
         LOG_WARN("failed to assign", K(ret));
       } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
         LOG_WARN("failed to add expr item", K(ret));
@@ -1731,7 +1697,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
       } else {
         ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr.get_pl_agg_udf_expr());
         aggr_expr->set_pl_agg_udf_type_id(udf_expr->get_type_id());
-        aggr_expr->set_result_type(const_cast<ObExprResType &>(expr.get_result_type()));
+        aggr_expr->set_result_type(expr.get_result_type());
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < real_param_exprs.count(); i++) {
@@ -1744,7 +1710,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
           LOG_WARN("add cs type fail", K(ret));
         } else if (aggr_expr->is_gen_infix_expr() && T_FUN_PL_AGG_UDF == expr.get_expr_type() &&
                    OB_FAIL(aggr_expr->add_pl_agg_udf_param_type(
-                         const_cast<ObExprResType &>(real_param_exprs.at(i)->get_result_type())))) {
+                                          real_param_exprs.at(i)->get_result_type()))) {
           LOG_WARN("add cs type fail", K(ret));
         }
       }

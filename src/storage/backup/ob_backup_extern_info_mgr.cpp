@@ -351,6 +351,18 @@ int64_t ObTabletInfoTrailer::get_serialize_size_() const
   return sizeof(file_id_) + sizeof(tablet_cnt_) + sizeof(offset_) + sizeof(length_);
 }
 
+ObExternTabletMetaWriter::~ObExternTabletMetaWriter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
+    LOG_ERROR("device handle and fd is not closed!", KPC_(dev_handle), K_(io_fd));
+    ObBackupIoAdapter util;
+    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+      LOG_WARN("fail to close device and fd", K(ret), KPC_(dev_handle), K_(io_fd));
+    }
+  }
+}
+
 int ObExternTabletMetaWriter::init(
     const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
     const int64_t turn_id, const int64_t retry_id, const int64_t dest_id,
@@ -479,6 +491,24 @@ int ObExternTabletMetaWriter::close()
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }
   }
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
+  }
+  return ret;
+}
+
+int ObExternTabletMetaWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && OB_FAIL(dev_handle_->abort(io_fd_))) {
+    LOG_WARN("fail to abort multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+  }
+  ObBackupIoAdapter util;
   if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
     ret = COVER_SUCC(tmp_ret);
     LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));

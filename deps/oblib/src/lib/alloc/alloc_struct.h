@@ -61,6 +61,7 @@ static ssize_t get_page_size()
 
 class BlockSet;
 class ObjectSet;
+class ObjectSetV2;
 
 enum ObAllocPrio
 {
@@ -137,7 +138,8 @@ struct ObMemAttr
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
-  uint64_t sub_ctx_id_;
+  int32_t sub_ctx_id_;
+  int32_t numa_id_;
   ObAllocPrio prio_;
   explicit ObMemAttr(
     uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
@@ -148,26 +150,31 @@ struct ObMemAttr
         label_(label),
         ctx_id_(ctx_id),
         sub_ctx_id_(ObSubCtxIds::MAX_SUB_CTX_ID),
+        numa_id_(0),
         prio_(prio),
         use_500_(false),
         expect_500_(true),
         ignore_version_(ObMemVersionNode::tl_ignore_node),
-        alloc_extra_info_(false)
+        use_malloc_v2_(false),
+        enable_malloc_hang_(false),
+        extra_size_(0)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
   bool expect_500() const { return expect_500_; }
   bool ignore_version() const { return ignore_version_; }
 public:
-  union {
+  union { //FARM COMPAT WHITELIST
     char padding__[4];
     struct {
       struct {
         uint8_t use_500_ : 1;
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
-        uint8_t alloc_extra_info_ : 1;
+        uint8_t use_malloc_v2_ : 1;
+        uint8_t enable_malloc_hang_ : 1;
       };
+      uint16_t extra_size_;
     };
   };
 };
@@ -256,8 +263,9 @@ struct AChunk {
 #ifdef ENABLE_SANITY
   void *ref_;
 #endif
+  int32_t numa_id_;
+  int32_t using_cnt_;
   BlockSet *block_set_;
-  uint64_t using_cnt_;
   uint64_t washed_blks_;
   uint64_t washed_size_;
   uint64_t alloc_bytes_;
@@ -323,7 +331,10 @@ struct ABlock {
 
   uint64_t alloc_bytes_;
   uint32_t ablock_size_;
-  void *obj_set_;
+  union {
+    ObjectSet *obj_set_;
+    ObjectSetV2 *obj_set_v2_;
+  };
   union {
     struct {
       int32_t sc_idx_;
@@ -381,6 +392,7 @@ struct AObject {
         uint8_t ignore_version_ : 1;
 
       };
+      ABlock *block_;
     };
   };
 
@@ -444,8 +456,9 @@ AChunk::AChunk() :
 #ifdef ENABLE_SANITY
     ref_(nullptr),
 #endif
-    block_set_(nullptr),
+    numa_id_(0),
     using_cnt_(0),
+    block_set_(nullptr),
     washed_blks_(0), washed_size_(0), alloc_bytes_(0),
     prev_(this), next_(this),
     prev2_(this), next2_(this)
@@ -617,7 +630,8 @@ char *ABlock::data() const
 AObject::AObject()
     : MAGIC_CODE_(FREE_AOBJECT_MAGIC_CODE),
       nobjs_(0), nobjs_prev_(0), obj_offset_(0),
-      alloc_bytes_(0), on_leak_check_(false), on_malloc_sample_(false)
+      alloc_bytes_(0), on_leak_check_(false), on_malloc_sample_(false),
+      block_(NULL)
 {
 }
 
@@ -695,15 +709,23 @@ private:
 class ObMallocHookAttrGuard
 {
 public:
-  ObMallocHookAttrGuard(const ObMemAttr& attr);
+  ObMallocHookAttrGuard(const ObMemAttr& attr, const bool use_500 = true);
   ~ObMallocHookAttrGuard();
-  static ObMemAttr get_tl_mem_attr()
+  static ObMemAttr &get_tl_mem_attr()
   {
+    static thread_local ObMemAttr tl_mem_attr(OB_SERVER_TENANT_ID,
+                                              "glibc_malloc",
+                                              ObCtxIds::GLIBC);
     return tl_mem_attr;
   }
+  static bool &get_tl_use_500()
+  {
+    static __thread bool tl_use_500 = true;
+    return tl_use_500;
+  }
 private:
-  static thread_local ObMemAttr tl_mem_attr;
   ObMemAttr old_attr_;
+  bool old_use_500_;
 };
 
 class ObLightBacktraceGuard

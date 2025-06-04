@@ -242,6 +242,11 @@ int ObMPBase::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_param, ob
   return packet_sender_.send_ok_packet(session, ok_param, pkt);
 }
 
+int ObMPBase::send_ok_packet_without_lock(ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt)
+{
+  return packet_sender_.send_ok_packet_without_lock(session, ok_param, pkt);
+}
+
 int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param)
 {
   return packet_sender_.send_eof_packet(session, result, ok_param);
@@ -390,6 +395,7 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   ob_setup_tsi_warning_buffer(NULL);
   session.reset_plsql_exec_time();
   session.reset_plsql_compile_time();
+  ObQueryRetryAshGuard::reset_info();
   return ret;
 }
 
@@ -641,21 +647,21 @@ int ObMPBase::process_kill_client_session(sql::ObSQLSessionInfo &session, bool i
   } else if (OB_UNLIKELY(session.is_mark_killed())) {
     ret = OB_ERR_KILL_CLIENT_SESSION;
     LOG_WARN("client session need be killed", K(session.get_session_state()),
-            K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-            K(session.get_client_sessid()), K(ret));
+            K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+            K(session.get_client_sid()), K(ret));
   } else if (is_connect) {
     if (OB_UNLIKELY(OB_HASH_NOT_EXIST != (gctx_.session_mgr_->get_kill_client_sess_map().
-              get_refactored(session.get_client_sessid(), create_time)))) {
+              get_refactored(session.get_client_sid(), create_time)))) {
       if (session.get_client_create_time() == create_time) {
         ret = OB_ERR_KILL_CLIENT_SESSION;
         LOG_WARN("client session need be killed", K(session.get_session_state()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()), K(ret),K(create_time));
+                K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+                K(session.get_client_sid()), K(ret),K(create_time));
       } else {
         LOG_DEBUG("client session is created later", K(create_time),
                 K(session.get_client_create_time()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()));
+                K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(),
+                K(session.get_client_sid()));
       }
     }
   } else {
@@ -744,6 +750,8 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
         LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
       } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
         LOG_WARN("fail to update charset sys vars", K(ret));
+      } else if (OB_FAIL(session->update_max_packet_size())) {
+        LOG_WARN("fail to update_max_packet_size", K(ret));
       } else {
         session->set_database_id(db_id);
         session->reset_user_var();

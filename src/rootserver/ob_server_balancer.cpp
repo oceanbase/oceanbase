@@ -320,9 +320,12 @@ int ObServerBalancer::distribute_for_standalone_sys_unit()
   } else if (!enable_sys_unit_standalone) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("sys unit standalone deployment is disabled", K(ret));
-  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+  } else if (OB_FAIL(GCTX.root_service_->get_unit_mgr().get_tenant_unit_servers(
           OB_SYS_TENANT_ID, empty_zone, sys_unit_server_array))) {
-    LOG_WARN("fail to get tenant unit server array", K(ret));
+    LOG_WARN("fail to get tenant unit server array", KR(ret));
   } else {
     ObHashMap<uint64_t, share::ObResourcePool *>::const_iterator iter = unit_mgr_->get_id_pool_map().begin();
     ObHashMap<uint64_t, share::ObResourcePool *>::const_iterator end = unit_mgr_->get_id_pool_map().end();
@@ -1218,9 +1221,9 @@ int ObServerBalancer::generate_available_servers(
     } else if (OB_UNLIKELY(zone.is_empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(zone));
-    } else if (OB_ISNULL(zone_mgr_) || OB_ISNULL(unit_mgr_)) {
+    } else if (OB_ISNULL(zone_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("zone_mgr_ or unit_mgr_ is null", K(ret), KP(unit_mgr_), KP(zone_mgr_));
+      LOG_WARN("zone_mgr_ is null", K(ret), KP(zone_mgr_));
     } else if (OB_FAIL(zone_mgr_->get_zone(zone, zone_info))) {
       LOG_WARN("fail to get zone info", K(ret), K(zone));
     } else if (ObZoneStatus::ACTIVE != zone_info.status_) {
@@ -1228,9 +1231,12 @@ int ObServerBalancer::generate_available_servers(
       LOG_WARN("zone is not in active", K(ret), K(zone_info));
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
-    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
+    } else if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+    } else if (OB_FAIL(GCTX.root_service_->get_unit_mgr().get_tenant_unit_servers(
             OB_SYS_TENANT_ID, zone, sys_unit_server_array))) {
-      LOG_WARN("fail to get tenant unit server array", K(ret));
+      LOG_WARN("fail to get tenant unit server array", KR(ret), K(zone));
     } else {
       available_servers.reset();
       for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {

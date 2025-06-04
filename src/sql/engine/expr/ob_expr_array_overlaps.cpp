@@ -55,6 +55,8 @@ int ObExprArrayOverlaps::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+  ObCollectionTypeBase *coll_type1 = NULL;
+  ObCollectionTypeBase *coll_type2 = NULL;
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
@@ -64,6 +66,16 @@ int ObExprArrayOverlaps::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
   } else if (type1.is_null() || type2.is_null()) {
     // do nothing
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type1))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type1->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type1->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type1->type_id_));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type2.get_subschema_id(), coll_type2))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type2.get_subschema_id()));
+  } else if (coll_type2->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type2->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type2->type_id_));
   } else if (type1.get_subschema_id() == type2.get_subschema_id()) {
     // do nothing
   } else {
@@ -189,26 +201,20 @@ int ObExprArrayOverlaps::eval_array_relation_vector(const ObExpr &expr, ObEvalCt
         continue;
       } else if (left_vec->is_null(idx) || right_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (left_format == VEC_UNIFORM || left_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString left = left_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, left_meta_id, left, l_arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], left_meta_id, idx, l_arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         // do nothing, set result at last
-      } else if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString right = right_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, r_arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[1], right_meta_id, idx, r_arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       bool bret = false;
       if (OB_FAIL(ret)) {

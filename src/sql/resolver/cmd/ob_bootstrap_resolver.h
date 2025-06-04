@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObBootstrapStmt;
+
 class ObBootstrapResolver : public ObSystemCmdResolver
 {
 public:
@@ -27,6 +29,14 @@ public:
 
   virtual int resolve(const ParseNode &parse_tree);
 private:
+  int do_resolve_bootstrap_info_(const ParseNode &parse_tree, ObBootstrapStmt* bootstrap_stmt);
+  int do_resolve_logservice_access_point_(
+    const ParseNode &parse_tree,
+    ObBootstrapStmt* bootstrap_stmt);
+  int do_resolve_shared_storage_info_(
+    const ParseNode &parse_tree,
+    ObBootstrapStmt* bootstrap_stmt);
+
   DISALLOW_COPY_AND_ASSIGN(ObBootstrapResolver);
 };
 }// namespace sql

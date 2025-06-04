@@ -91,6 +91,7 @@ public:
   // after submit_log, until the callback on_success or on_failure
   virtual int on_success() override;
   virtual int on_failure() override;
+  const char *get_cb_name() const override { return "LockTableSplitLogCb"; }
   TO_STRING_KV(K(is_inited_),
                K(memtable_),
                K(ls_id_),
@@ -220,7 +221,7 @@ public:
   bool is_active_memtable() override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
-  virtual share::SCN get_rec_scn();
+  virtual share::SCN get_rec_scn() override;
   virtual int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;
@@ -286,6 +287,15 @@ public:
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
 
   void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
+  int add_priority_task(const ObLockParam &param,
+                        ObStoreCtx &ctx,
+                        ObTableLockOp &lock_op);
+  int prepare_priority_task(const ObTableLockPrioArg &arg,
+                            const ObTableLockOp &lock_op);
+  int remove_priority_task(const ObTableLockPrioArg &arg,
+                           const ObTableLockOp &op_info);
+  int switch_to_leader();
+  int switch_to_follower();
 
   void enable_check_tablet_status(const bool need_check);
 

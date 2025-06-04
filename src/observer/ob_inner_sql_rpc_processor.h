@@ -66,6 +66,11 @@ private:
   int set_session_param_to_conn(
       sqlclient::ObISQLConnection *conn,
       const ObInnerSQLTransmitArg &transmit_arg);
+  int process_inner_tablet_write(
+      sqlclient::ObISQLConnection *con,
+      const ObInnerSQLTransmitArg &arg,
+      ObInnerSQLTransmitResult &transmit_result);
+
   const observer::ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
 };

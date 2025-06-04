@@ -18,6 +18,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 #include "share/schema/ob_part_mgr_util.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
@@ -163,6 +164,7 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
     uint64_t database_id = session_info_->get_database_id();
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    ObString catalog_name;
     ObString database_name;
     ObString table_name;
     const ObTableSchema *tschema = nullptr;
@@ -172,8 +174,12 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
     } else if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[ENUM_TABLE_NAME],
                                                    table_name,
-                                                   database_name))) {
-      SQL_RESV_LOG(WARN, "failed to resolve table name", K(table_name), K(database_name), K(ret));
+                                                   database_name,
+                                                   catalog_name))) {
+      SQL_RESV_LOG(WARN, "failed to resolve table name", K(table_name), K(database_name), K(catalog_name), K(ret));
+    } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data into external catalog is");
     } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
                                                            database_name,
                                                            table_name,
@@ -387,6 +393,33 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     if (OB_NOT_NULL(child_node)) {
       if (OB_FAIL(resolve_partitions(*child_node, *load_stmt))) {
         LOG_WARN("fail to resolve partition");
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    /*14. on_error */
+    const ParseNode *child_node = node->children_[ENUM_OPT_ON_ERROR];
+    if (OB_NOT_NULL(child_node)) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("load data on error is not supported", K(ret));
+      } else if (T_LOG_ERROR_LIMIT == child_node->type_) {
+        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+        if (OB_UNLIKELY(child_node->num_child_ != 1)
+                  || OB_ISNULL(child_node->children_[0])
+                  || T_INT != child_node->children_[0]->type_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid grand child node", K(ret), K(child_node->num_child_));
+        } else {
+          load_stmt->get_load_arguments().diagnosis_limit_num_ = child_node->children_[0]->value_;
+        }
+      } else if (T_LOG_ERROR_UNLIMITED == child_node->type_) {
+        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+        load_stmt->get_load_arguments().diagnosis_limit_num_ = -1;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid from spec node", K(ret), K(child_node->type_));
       }
     }
   }
@@ -694,7 +727,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
                 LOG_WARN("file not exist", K(ret), K(i), K(match_array[i]));
               } else if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
                 LOG_WARN("failed to get secure file priv", K(ret));
-              } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
+              } else if (!session_info_->is_inner() && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
                 LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv), K(actual_path));
               } else if (OB_FAIL(load_args.file_iter_.add_files(&match_array[i]))) {
                 LOG_WARN("fail to add files", K(ret));
@@ -1115,7 +1148,8 @@ int ObLoadDataResolver::build_column_ref_expr(ObQualifiedName &q_name, ObRawExpr
   } else if (OB_ISNULL(col_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column schema is null");
-  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_, *col_schema, col_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_, *col_schema,
+                                                       params_.session_info_, col_expr))) {
     LOG_WARN("build column expr failed", K(ret));
   } else {
     col_expr->set_column_attr(tb_name, q_name.col_name_);
@@ -1125,8 +1159,8 @@ int ObLoadDataResolver::build_column_ref_expr(ObQualifiedName &q_name, ObRawExpr
     column_expr = col_expr;
 
     ColumnItem column_item;
-    column_item.set_default_value(col_schema->get_cur_default_value());
     column_item.expr_ = col_expr;
+    column_item.set_default_value(col_schema->get_cur_default_value());
     column_item.table_id_ = col_expr->get_table_id();
     column_item.column_id_ = col_expr->get_column_id();
     column_item.column_name_ = col_expr->get_column_name();
@@ -1410,6 +1444,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
                                               uint64_t& table_id)
 {
   int ret = OB_SUCCESS;
+  uint64_t catalog_id = OB_INTERNAL_CATALOG_ID; // not support in catalog now, using fixed value instead
   uint64_t database_id = OB_INVALID_ID;
   bool is_table_exist = false;
   bool is_index_table = false;
@@ -1422,6 +1457,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
   } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
     LOG_WARN("get database id failed", K(ret));
   } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
+                                                         catalog_id,
                                                          database_id,
                                                          table_name,
                                                          is_index_table,

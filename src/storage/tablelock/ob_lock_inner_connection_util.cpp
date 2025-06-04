@@ -316,23 +316,23 @@ int ObInnerConnectionLockUtil::lock_table(
     const uint64_t table_id,
     const ObTableLockMode lock_mode,
     const int64_t timeout_us,
-    observer::ObInnerSQLConnection *conn)
+    observer::ObInnerSQLConnection *conn,
+    const ObTableLockOwnerID owner_id,
+    const ObTableLockPriority lock_priority)
 {
   int ret = OB_SUCCESS;
-  ObTabletID no_used;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ObLockTableRequest lock_arg;
-    lock_arg.owner_id_.set_default();
-    lock_arg.lock_mode_ = lock_mode;
-    lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-    lock_arg.timeout_us_ = timeout_us;
-    lock_arg.table_id_ = table_id;
+  ObLockTableRequest lock_arg;
+  lock_arg.owner_id_ = owner_id;
+  lock_arg.lock_mode_ = lock_mode;
+  lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
+  lock_arg.timeout_us_ = timeout_us;
+  lock_arg.table_id_ = table_id;
+  lock_arg.lock_priority_ = lock_priority;
 
-    ret = request_lock_(tenant_id, lock_arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE, conn);
-  } else {
-    ret = request_lock_(tenant_id, table_id, no_used, lock_mode, timeout_us,
-                        ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE, conn);
-  }
+  ret = request_lock_(tenant_id,
+                      lock_arg,
+                      ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE,
+                      conn);
   return ret;
 }
 
@@ -570,7 +570,7 @@ int ObInnerConnectionLockUtil::replace_lock(
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
@@ -626,7 +626,7 @@ int ObInnerConnectionLockUtil::replace_lock(const uint64_t tenant_id,
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
@@ -758,6 +758,8 @@ int ObInnerConnectionLockUtil::create_inner_conn(sql::ObSQLSessionInfo *session_
   if (OB_ISNULL(session_info) || OB_ISNULL(sql_proxy)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session or sql_proxy is NULL", KP(session_info), KP(sql_proxy));
+  } else if (OB_NOT_NULL(inner_conn = static_cast<observer::ObInnerSQLConnection *>(session_info->get_inner_conn()))) {
+    LOG_INFO("session has had inner connection, no need to create again", KPC(session_info));
   } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection pool is NULL", K(ret));
@@ -920,7 +922,7 @@ int ObInnerConnectionLockUtil::request_lock_(
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
@@ -993,7 +995,7 @@ int ObInnerConnectionLockUtil::request_lock_(
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;

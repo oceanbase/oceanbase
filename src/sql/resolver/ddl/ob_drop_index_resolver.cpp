@@ -48,6 +48,17 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("invalid parse tree type or invalid children number", K(parse_tree.type_),
              K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info should not be null", K(ret));
+    } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index in catalog is");
+    }
+  }
+
   if (OB_SUCC(ret)) {
     ObDropIndexStmt *drop_index_stmt = NULL;
     if (OB_UNLIKELY(NULL == (drop_index_stmt = create_stmt<ObDropIndexStmt>()))) {

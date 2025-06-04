@@ -39,6 +39,7 @@ int ObTableMultiBatchService::execute(ObTableMultiBatchCtx &ctx,
       const ObIArray<ObTableOperation> &ops = batch_ops.at(i).get_table_operations();
       ObIArray<ObTableOperationResult> &results = batch_results.at(i);
       ctx.tablet_ids_.reset();
+      ctx.tb_ctx_.set_tablet_id(request.get_tablet_ids().at(i));
       if (OB_FAIL(ctx.tablet_ids_.push_back(request.get_tablet_ids().at(i)))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(ctx));
       } else if (results.empty() && OB_FAIL(ObTableBatchService::prepare_results(ops,

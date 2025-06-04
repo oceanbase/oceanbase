@@ -23,9 +23,9 @@ using namespace oceanbase::sql;
 ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
       default_entity_factory_("TableBatchEntFac", MTL_ID()),
-      allocator_("TbBatExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       batch_ctx_(allocator_, audit_ctx_)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbBatExeP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 int ObTableBatchExecuteP::deserialize()

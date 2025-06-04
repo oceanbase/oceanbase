@@ -26,7 +26,7 @@ namespace common
 class ObDataBlockCachePreWarmer : public share::ObIPreWarmer
 {
 public:
-  ObDataBlockCachePreWarmer();
+  ObDataBlockCachePreWarmer(const int64_t fixed_percentage = 0);
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
   virtual void reuse() override;
@@ -36,7 +36,7 @@ public:
                       const int64_t level = 0) override;
   virtual int add(const blocksstable::ObMicroBlockDesc &micro_block_desc, const bool reserve_succ_flag) override;
   virtual int close() override { return OB_SUCCESS; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(rest_size), K_(warm_size_percentage), K_(update_step));
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(fixed_percentage), K_(base_percentage), K_(rest_size), K_(warm_size_percentage), K_(update_step));
 protected:
   void update_rest();
   void inner_update_rest();
@@ -48,12 +48,14 @@ protected:
       const blocksstable::ObMicroBlockDesc &micro_block_desc,
       blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache);
 private:
-  bool warm_block(const int64_t level);
+  bool warm_block_for_memory(const int64_t level);
+  bool warm_block_for_percentage();
 protected:
   static const int64_t DATA_BLOCK_CACHE_PERCENTAGE = 5;
   static const int64_t UPDATE_INTERVAL = 50;
   static const int64_t TOP_LEVEL = 6;
 
+  int64_t fixed_percentage_;
   int64_t base_percentage_;
   blocksstable::ObIMicroBlockCache *cache_;
   int64_t rest_size_;
@@ -68,7 +70,7 @@ protected:
 class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 {
 public:
-  ObIndexBlockCachePreWarmer();
+  ObIndexBlockCachePreWarmer(const int64_t fixed_percentage = 0);
   virtual ~ObIndexBlockCachePreWarmer();
   virtual int init(const ObITableReadInfo *table_read_info) override;
 protected:

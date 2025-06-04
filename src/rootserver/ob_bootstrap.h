@@ -105,6 +105,9 @@ private:
   virtual int check_is_all_server_empty(bool &is_empty);
   virtual int check_all_server_bootstrap_mode_match(bool &match);
   virtual int notify_sys_tenant_root_key();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int check_and_notify_logservice_access_point();
+#endif
 #ifdef OB_BUILD_SHARED_STORAGE
   virtual int check_and_notify_shared_storage_info();
 #endif
@@ -176,7 +179,6 @@ private:
       const int64_t begin, const int64_t end);
   virtual int check_is_already_bootstrap(bool &is_bootstrap);
   virtual int init_global_stat();
-  virtual int init_sequence_id();
   virtual int init_system_data();
   virtual int init_all_zone_table();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);

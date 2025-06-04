@@ -158,7 +158,7 @@ int CompareBase::init(const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_
 int CompareBase::fast_check_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((cmp_count_++ & 8191) == 8191)) {
+  if (OB_UNLIKELY((++cmp_count_ & 8191) == 0)) {
     ret = exec_ctx_->check_status();
   }
   return ret;

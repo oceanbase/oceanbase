@@ -75,6 +75,7 @@
   //RPC_S(PRD standby_grant, obrpc::OB_STANDBY_GRANT, (ObStandbyGrantArg));
   RPC_S(PRD revoke_user, obrpc::OB_REVOKE_USER, (ObRevokeUserArg));
   RPC_S(PRD lock_user, obrpc::OB_LOCK_USER, (ObLockUserArg), common::ObSArray<int64_t>);
+  RPC_S(PRD revoke_catalog, obrpc::OB_REVOKE_CATALOG, (ObRevokeCatalogArg));
   RPC_S(PRD revoke_database, obrpc::OB_REVOKE_DB, (ObRevokeDBArg));
   RPC_S(PRD revoke_table, obrpc::OB_REVOKE_TABLE, (ObRevokeTableArg));
   RPC_S(PRD revoke_routine, obrpc::OB_REVOKE_ROUTINE, (ObRevokeRoutineArg));
@@ -304,5 +305,9 @@
   RPC_S(PR5 reload_master_key, obrpc::OB_RELOAD_MASTER_KEY, (obrpc::ObReloadMasterKeyArg), obrpc::ObReloadMasterKeyResult);
 #endif
   RPC_S(PRD alter_user_proxy, obrpc::OB_ALTER_USER_PROXY, (ObAlterUserProxyArg), obrpc::ObAlterUserProxyRes);
+  //----Definitions for managing catalog----
+  RPC_S(PRD handle_catalog_ddl, obrpc::OB_HANDLE_CATALOG_DDL, (ObCatalogDDLArg));
+  //----End of definitions for managing catalog----
   //Rebuild Tablet
   RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
+  RPC_S(PRD force_drop_lonely_lob_aux_table, OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));

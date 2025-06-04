@@ -543,11 +543,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     }
     // incremental direct-load
     else if (ObDirectLoadMethod::is_incremental(method)) {
-      if (GCTX.is_shared_storage_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("in share storage mode, using incremental direct-load is not supported", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "in share storage mode, using incremental direct-load is not supported");
-      } else if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
+      if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("using incremental direct-load without inc_replace or normal is not supported", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace or normal is not supported");
@@ -555,6 +551,16 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
+      } else if (table_schema->is_delete_insert_merge_engine() &&
+                 ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "incremental direct-load does not support delete insert merge table with replace "
+          "mode",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "incremental direct-load does not support delete insert "
+                               "merge table  with replace mode");
       } else if (table_schema->get_simple_index_infos().count() > 0 &&
                  OB_FAIL(ObTableLoadSchema::check_has_non_local_index(
                    schema_guard, table_schema, has_non_normal_local_index))) {
@@ -641,16 +647,6 @@ int ObTableLoadService::check_support_direct_load_for_columns(
         LOG_WARN("invalid column schema", KR(ret), KP(column_schema));
       } else if (column_schema->is_unused()) {
         // 快速删除列, 仍然需要写宏块, 直接填null
-        // TODO : udt类型SQL写入的列数与存储层列数不匹配, 暂时先不做支持
-        if (column_schema->is_xmltype()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("direct-load does not support table has drop xmltype column instant", KR(ret), KPC(column_schema));
-          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop xmltype column instant", tmp_prefix);
-        } else if (column_schema->get_udt_set_id() > 0) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("direct-load does not support table has drop udt column instant", KR(ret), KPC(column_schema));
-          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop udt column instant", tmp_prefix);
-        }
       } else if (column_schema->is_generated_column()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has generated column", KR(ret), KPC(column_schema));

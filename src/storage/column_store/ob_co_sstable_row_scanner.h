@@ -61,29 +61,36 @@ public:
             iter_param_->enable_pd_filter();
   }
   virtual int get_next_rows() override;
-  TO_STRING_KV(KPC_(iter_param),
+  virtual int get_next_rowkey(const bool need_set_border_rowkey,
+                              int64_t &curr_scan_index,
+                              blocksstable::ObDatumRowkey& rowkey,
+                              blocksstable::ObDatumRowkey &border_rowkey,
+                              common::ObIAllocator &allocator) final;
+  TO_STRING_KV(K_(range_idx),
+               K_(is_new_group),
+               K_(reverse_scan),
+               K_(is_limit_end),
+               K_(state),
+               K_(blockscan_state),
+               K_(group_by_project_idx),
+               K_(group_size),
+               K_(batch_size),
+               K_(column_group_cnt),
+               K_(current),
+               K_(end),
+               K_(pending_end_row_id),
+               KP_(iter_param),
                KP_(access_ctx),
-               K_(row_scanner),
-               K_(range_idx),
+               KP_(table),
                KP_(rows_filter),
                KP_(project_iter),
                KP_(getter_project_iter),
-               K_(group_by_project_idx),
-               K_(group_by_iters),
                KP_(group_by_cell),
-               K_(is_new_group),
                KP_(batched_row_store),
                KP_(cg_param_pool),
-               K_(current),
-               K_(end),
-               K_(group_size),
-               K_(batch_size),
-               K_(reverse_scan),
-               K_(state),
-               K_(blockscan_state),
                K_(range),
-               K_(pending_end_row_id),
-               K_(column_group_cnt),
+               K_(row_scanner),
+               K_(group_by_iters),
                K_(getter_projector));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&store_row) override;
@@ -114,10 +121,11 @@ private:
       const ObTableIterParam &row_param,
       ObTableAccessContext &context,
       common::ObIArray<ObTableIterParam*> &iter_params);
-  int construct_cg_iter_params(
+  int construct_cg_iter_params_for_rowkey(
       const ObTableIterParam &row_param,
-      ObTableAccessContext &context,
-      common::ObIArray<ObTableIterParam*> &iter_params);
+    common::ObIArray<ObTableIterParam*>& iter_params);
+  int construct_cg_iter_params(const ObTableIterParam& row_param, ObTableAccessContext& context,
+      common::ObIArray<ObTableIterParam*>& iter_params);
   int construct_cg_agg_iter_params(
       const ObTableIterParam &row_param,
       ObTableAccessContext &context,
@@ -186,6 +194,7 @@ private:
   ObCSRowId pending_end_row_id_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
+  ObCOSSTableV2* table_;
   ObCOSSTableRowsFilter *rows_filter_;
   ObICGIterator *project_iter_;
   ObICGIterator *getter_project_iter_;

@@ -42,6 +42,7 @@ public:
   virtual int check_server_can_migrate_in(const common::ObAddr &server, bool &can_migrate_in) const;
   virtual int is_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
   virtual int get_server_zone(const common::ObAddr &server, common::ObZone &zone) const;
+  virtual int get_zones_count(int64_t &zone_count) const;
   virtual int get_servers_of_zone(
       const common::ObZone &zone,
       common::ObIArray<common::ObAddr> &servers) const;
@@ -181,6 +182,7 @@ public:
   virtual int get_servers_of_zone(
       const common::ObZone &zone,
       common::ObIArray<common::ObAddr> &servers) const;
+  virtual int get_zones_count(int64_t &zone_count) const;
   // empty zone means that get all servers
   virtual int get_servers_of_zone(
       const common::ObZone &zone,

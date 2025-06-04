@@ -24,22 +24,23 @@ namespace sql
 int ObExternalFileWriter::open_file()
 {
   int ret = OB_SUCCESS;
-  if (IntoFileLocation::SERVER_DISK != file_location_) {//OSS,COS,S3
+  if (IntoFileLocation::SERVER_DISK != file_location_) {//OSS,COS,S3,HDFS
     bool is_exist = false;
     ObBackupIoAdapter adapter;
     ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
     // for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
     // OSS,COS can also use multipart writer. need to check performance
-    if (IntoFileLocation::REMOTE_S3 == file_location_) {
+    if (IntoFileLocation::REMOTE_S3 == file_location_
+        || IntoFileLocation::REMOTE_COS == file_location_) {
       access_type = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
     }
-    if (OB_FAIL(adapter.is_exist(url_, &access_info_, is_exist))) {
-      LOG_WARN("fail to check file exist", KR(ret), K(url_), K(access_info_));
+    if (OB_FAIL(adapter.is_exist(url_, access_info_, is_exist))) {
+      LOG_WARN("fail to check file exist", KR(ret), K(url_), KPC(access_info_));
     } else if (is_exist) {
       ret = OB_FILE_ALREADY_EXIST;
       LOG_WARN("file already exist", KR(ret), K(url_), K(access_info_));
-    } else if (OB_FAIL(storage_appender_.open(&access_info_, url_, access_type))) {
-      LOG_WARN("fail to open file", KR(ret), K(url_), K(access_info_));
+    } else if (OB_FAIL(storage_appender_.open(access_info_, url_, access_type))) {
+      LOG_WARN("fail to open file", KR(ret), K(url_), KPC(access_info_));
     } else {
       is_file_opened_ = true;
     }
@@ -63,7 +64,7 @@ int ObExternalFileWriter::close_file()
       file_appender_.close();
     }
   } else if (OB_FAIL(storage_appender_.close())) {
-    LOG_WARN("fail to close storage appender", K(ret), K(url_), K(access_info_));
+    LOG_WARN("fail to close storage appender", K(ret), K(url_), KPC(access_info_));
   }
   if (OB_SUCC(ret)) {
     is_file_opened_ = false;
@@ -187,15 +188,30 @@ int ObCsvFileWriter::flush_to_storage(const char *data, int64_t data_len)
   } else if (!is_file_opened_ && OB_FAIL(open_file())) {
     LOG_WARN("failed to open file", K(ret), K(url_));
   } else {
+    int64_t begin_ts = ObTimeUtility::current_time();
     if (file_location_ == IntoFileLocation::SERVER_DISK) {
       if (OB_FAIL(file_appender_.append(data, data_len, false))) {
         LOG_WARN("failed to append file", K(ret), K(data_len));
+      } else {
+        write_offset_ += data_len;
+        int64_t end_ts = ObTimeUtility::current_time();
+        int64_t cost_time = end_ts - begin_ts;
+        long double speed = (cost_time <= 0) ? 0 :
+                        (long double) data_len * 1000.0 * 1000.0 / 1024.0 / 1024.0 / cost_time;
+        long double total_write = (long double) write_offset_ / 1024.0 / 1024.0;
+        _OB_LOG(TRACE, "write local stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB",
+                cost_time, data_len, speed, total_write);
       }
-    } else if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+    } else {
       int64_t write_size = 0;
-      int64_t begin_ts = ObTimeUtility::current_time();
-      if (OB_FAIL(storage_appender_.append(data, data_len, write_size))) {
-        LOG_WARN("fail to append data", KR(ret), KP(data), K(data_len), K(url_), K(access_info_));
+      const char *location = nullptr;
+      if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
+        LOG_WARN("fail to get locatiton", K(ret), K_(file_location));
+      } else if (OB_ISNULL(location)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid location string", K(ret));
+      } else if (OB_FAIL(storage_appender_.append(data, data_len, write_size))) {
+        LOG_WARN("fail to append data", KR(ret), KP(data), K(data_len), K(url_), KPC(access_info_));
       } else {
         write_offset_ += write_size;
         int64_t end_ts = ObTimeUtility::current_time();
@@ -203,12 +219,9 @@ int ObCsvFileWriter::flush_to_storage(const char *data, int64_t data_len)
         long double speed = (cost_time <= 0) ? 0 :
                         (long double) write_size * 1000.0 * 1000.0 / 1024.0 / 1024.0 / cost_time;
         long double total_write = (long double) write_offset_ / 1024.0 / 1024.0;
-        _OB_LOG(TRACE, "write oss stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB",
+        _OB_LOG(TRACE, "write %s stat, time:%ld write_size:%ld speed:%.2Lf MB/s total_write:%.2Lf MB", location,
                 cost_time, write_size, speed, total_write);
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error. invalid file location", K(ret));
     }
   }
   return ret;

@@ -139,6 +139,7 @@ const int64_t MAX_MEMBER_LIST_LENGTH = MAX_ZONE_NUM * (MAX_IP_PORT_LENGTH + 17 /
 const int64_t OB_MAX_MEMBER_NUMBER = 7;
 const int64_t OB_MAX_GLOBAL_LEARNER_NUMBER = 2000;
 const int64_t MAX_LEARNER_LIST_LENGTH = OB_MAX_GLOBAL_LEARNER_NUMBER * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
+const int64_t MAX_UNIT_LIST_LENGTH = MAX_ZONE_NUM * (17 + 2);//UINT64 + comma + space
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER = 15;
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER = 5;
 const int64_t OB_DEFAULT_MEMBER_NUMBER = 3;
@@ -158,6 +159,7 @@ const int64_t MAX_ELECTION_EVENT_EXTRA_INFO_LENGTH = 512;
 const int64_t MAX_BUFFER_SIZE = 1024 * 1024;
 const int64_t DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM = 100;
 const int64_t OB_DEFAULT_TABLET_SIZE = (1 << 27);
+const int64_t MAX_TABLET_STATUS_LENGTH = 64;
 const int64_t OB_DEFAULT_PCTFREE = 10;
 const int64_t OB_MAX_PCTFREE = 50;
 const int64_t OB_MAX_PCTUSED = 99;
@@ -184,6 +186,9 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const uint64_t OBCG_DEFAULT_GROUP_ID = 0;
 const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
 const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+const uint64_t OB_INTERNAL_CATALOG_ID = 0;
+const char *const OB_INTERNAL_CATALOG_NAME = "internal";
+const char *const OB_INTERNAL_CATALOG_NAME_UPPER = "INTERNAL";
 
 OB_INLINE bool is_valid_group(const uint64_t group_id)
 {
@@ -313,6 +318,8 @@ const int64_t OB_MAX_DATABASE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_DAT
                                                          // reserve some bytes thus OB_MAX_DATABASE_NAME_LENGTH changes will probably not influence it
                                                          // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_DATABASE_NAME_BUF_LENGTH = OB_MAX_DATABASE_NAME_LENGTH + 1;
+const int64_t OB_MAX_CATALOG_NAME_LENGTH = 128;
+const int64_t OB_MAX_CATALOG_NAME_BINARY_LENGTH = 2048;
 const int64_t OB_MAX_TABLEGROUP_NAME_LENGTH = 128; // OB code logic is greater than or equal to an error, so modify it to 65
 const int64_t OB_MAX_ALIAS_NAME_LENGTH = 255;// Compatible with mysql, 255 visible characters. Plus 256 bytes at the end of 0
 const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE = 128;  // Compatible with Oracle, error is reported when the logic is greater than
@@ -635,6 +642,10 @@ const uint64_t OB_APP_MIN_COLUMN_ID = 16;
 
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 1; /* 65520 */
+
+// internal compaction trans seq
+const int64_t DELETE_INSERT_TRANS_SEQUENCE  = ((__INT64_C(1LL << 62)) + 1);
+
 // materialized view log
 const uint64_t OB_MLOG_SEQ_NO_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 2; /* 65521 */
@@ -702,6 +713,14 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// partid pseudo column
+const char *const OB_PART_ID_PSEUDO_COLUMN_NAME = "__ob_partition_id";
+const char *const OB_PART_NAME_PSEUDO_COLUMN_NAME = "__ob_partition_name";
+const char *const OB_PART_INDEX_PSEUDO_COLUMN_NAME = "__ob_partition_index";
+const char *const OB_SUBPART_ID_PSEUDO_COLUMN_NAME = "__ob_sub_partition_id";
+const char *const OB_SUBPART_NAME_PSEUDO_COLUMN_NAME = "__ob_sub_partition_name";
+const char *const OB_SUBPART_INDEX_PSEUDO_COLUMN_NAME = "__ob_sub_partition_index";
+
 // vector index search
 const char *const OB_VEC_VID_COLUMN_NAME = "__vid";
 const char *const OB_VEC_TYPE_COLUMN_NAME_PREFIX = "__type";
@@ -709,6 +728,8 @@ const char *const OB_VEC_VECTOR_COLUMN_NAME_PREFIX = "__vector";
 const char *const OB_VEC_SCN_COLUMN_NAME_PREFIX = "__scn";
 const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
 const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
+const char *const OB_VEC_SPIV_DIM_COLUMN_NAME_PREFIX = "__spiv_dim";
+const char *const OB_VEC_SPIV_VALUE_COLUMN_NAME_PREFIX = "__spiv_value";
 
 const char *const OB_VEC_IVF_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_center_id";
 const char *const OB_VEC_IVF_CENTER_VECTOR_COLUMN_NAME_PREFIX = "__ivf_center_vector";
@@ -716,6 +737,7 @@ const char *const OB_VEC_IVF_DATA_VECTOR_COLUMN_NAME_PREFIX = "__ivf_data_vector
 const char *const OB_VEC_IVF_META_ID_COLUMN_NAME_PREFIX = "__ivf_meta_id";
 const char *const OB_VEC_IVF_META_VECTOR_COLUMN_NAME_PREFIX = "__ivf_meta_vector";
 const char *const OB_VEC_IVF_PQ_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_pq_center_id";
+const char *const OB_VEC_IVF_PQ_CENTER_VECTOR_COLUMN_NAME_PREFIX = "__ivf_pq_center_vector";
 const char *const OB_VEC_IVF_PQ_CENTER_IDS_COLUMN_NAME_PREFIX = "__ivf_pq_center_ids";
 
 // fulltext search
@@ -766,9 +788,10 @@ const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
-const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
-const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
-const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1 = "version=1";
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const int64_t OB_STORAGE_DEL_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
@@ -1489,6 +1512,7 @@ OB_INLINE bool is_inner_pl_object_id(const uint64_t object_id)
 OB_INLINE bool is_dblink_type_id(uint64_t type_id)
 {
   return type_id != common::OB_INVALID_ID
+          && (type_id >> OB_PACKAGE_ID_SHIFT) > OB_MAX_SYS_PL_OBJECT_ID
           && ((type_id <<  OB_MOCK_MASK_SHIFT) & OB_MOCK_DBLINK_UDT_ID_MASK) != 0;
 }
 
@@ -1670,19 +1694,22 @@ OB_INLINE bool is_not_virtual_tenant_id(const uint64_t tenant_id)
   return !is_virtual_tenant_id(tenant_id);
 }
 
+bool is_valid_tenant_id(const uint64_t tenant_id);
 const uint64_t META_TENANT_MASK = (uint64_t)0x1;
 OB_INLINE bool is_meta_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 1 == (tenant_id & META_TENANT_MASK);
+         && 1 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE bool is_user_tenant(const uint64_t tenant_id)
 {
   return !is_sys_tenant(tenant_id)
          && !is_virtual_tenant_id(tenant_id)
-         && 0 == (tenant_id & META_TENANT_MASK);
+         && 0 == (tenant_id & META_TENANT_MASK)
+         && is_valid_tenant_id(tenant_id);
 }
 
 OB_INLINE uint64_t gen_user_tenant_id(const uint64_t tenant_id)
@@ -1765,6 +1792,7 @@ const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 256;                 /
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
 const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
+const int64_t OB_DEFAULT_STACK_SIZE = (1L << 19);                              // 512K
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
@@ -1947,6 +1975,13 @@ const int64_t OB_MAX_CPU_NUM = 64;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
 #endif
+
+const int32_t OB_MAX_NUMA_NUM = 16;
+const int32_t OB_NUMA_SHARED_INDEX = OB_MAX_NUMA_NUM;
+const int32_t OB_MAX_NUMA_NUM_WITH_SHARED = OB_MAX_NUMA_NUM + 1;
+//OB_MAX_NUMA_NUM should not be larger than the number of bits of unsigned long.
+const unsigned long OB_ALL_NUMA_NODEMASK = 0xffffffff;
+
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;
@@ -2138,6 +2173,10 @@ OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
   return is_virtual_tenant_id(tenant_id);
 }
+
+OB_INLINE bool is_internal_catalog_id(const uint64_t catalog_id) { return catalog_id == OB_INTERNAL_CATALOG_ID; }
+
+OB_INLINE bool is_external_catalog_id(const uint64_t catalog_id) { return is_valid_id(catalog_id) && catalog_id >= OB_MIN_USER_OBJECT_ID; }
 
 enum ObNameCaseMode
 {
@@ -2659,6 +2698,7 @@ OB_INLINE char* ob_get_tname_v2()
 }
 
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";
+static const char* DDL_THREAD_NAME = "DDLQueueTh";
 static const char* REPLAY_SERVICE_THREAD_NAME = "ReplaySrv";
 
 // There are many clusters in arbitration server, we need a field identify the different clusters.

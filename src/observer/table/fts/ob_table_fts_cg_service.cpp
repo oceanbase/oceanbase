@@ -45,8 +45,8 @@ int ObTableFtsExprCgService::fill_doc_id_expr_param(ObTableCtx &ctx, ObRawExpr *
   } else {
     ObSQLSessionInfo &sess_info = ctx.get_session_info();
     ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(doc_id_expr);
-    if (OB_FAIL(expr->add_param_expr(calc_tablet_id_expr))) {
-      LOG_WARN("fail to add param expr", K(ret), KP(calc_tablet_id_expr));
+    if (OB_FAIL(expr->set_param_expr(calc_tablet_id_expr))) {
+      LOG_WARN("fail to set param expr", K(ret), KP(calc_tablet_id_expr));
     } else if (OB_FAIL(expr->formalize(&sess_info))) {
       LOG_WARN("fail to formalize", K(ret), K(sess_info));
     }
@@ -110,11 +110,11 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr in data table", K(ret), KPC(col_schema), KPC(table_schema));
         } else if (col_schema_in_data_table->is_doc_id_column()) {
-          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, doc_id_column))) {
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, &session_info, doc_id_column))) {
             LOG_WARN("failed to build doc id column expr", K(ret));
           }
         } else if (col_schema_in_data_table->is_word_count_column()) {
-          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, token_cnt_column))) {
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, &session_info, token_cnt_column))) {
             LOG_WARN("failed to build doc id column expr", K(ret));
           } else if (OB_NOT_NULL(token_cnt_column)) {
             token_cnt_column->set_ref_id(ctx.get_ref_table_id(), col_schema->get_column_id());
@@ -122,7 +122,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
             token_cnt_column->set_database_name(ctx.get_database_name());
           }
         } else if (col_schema_in_data_table->is_word_segment_column()) {
-          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, token_column))) {
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, &session_info, token_column))) {
             LOG_WARN("failed to build doc id column expr", K(ret));
           } else if (OB_NOT_NULL(token_column)) {
             token_column->set_ref_id(ctx.get_ref_table_id(), col_schema->get_column_id());
@@ -130,7 +130,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
             token_column->set_database_name(ctx.get_database_name());
           }
         } else if (col_schema_in_data_table->is_doc_length_column()) {
-          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, doc_length_column))) {
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, &session_info, doc_length_column))) {
             LOG_WARN("failed to build doc id column expr", K(ret));
           } else if (OB_NOT_NULL(doc_length_column)) {
             doc_length_column->set_ref_id(ctx.get_ref_table_id(), col_schema->get_column_id());
@@ -290,7 +290,8 @@ int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema is NULL", K(ret), K(indexed_column_ids.at(i)), K(i));
-        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, column_ref_expr))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema,
+                                                    &ctx.get_session_info(), column_ref_expr))) {
           LOG_WARN("failed to build doc id column expr", K(ret));
         } else if (OB_FAIL(match_against->get_match_columns().push_back(column_ref_expr))) {
           LOG_WARN("fail to push back column ref expr", K(ret));

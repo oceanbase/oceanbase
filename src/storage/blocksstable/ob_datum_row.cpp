@@ -65,14 +65,15 @@ int ObConstDatumRow::set_datums_ptr(char *datums_ptr)
 ObDatumRow::ObDatumRow(const uint64_t tenant_id)
   : local_allocator_("ObDatumRow", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::DEFAULT_CTX_ID),
     count_(0),
-    fast_filter_skipped_(false),
-    have_uncommited_row_(false),
+    read_flag_(0),
     row_flag_(),
     mvcc_row_flag_(),
     trans_id_(),
     scan_index_(0),
     group_idx_(0),
     snapshot_version_(0),
+    insert_version_(0),
+    delete_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
     trans_info_(nullptr)
@@ -168,11 +169,12 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
   if (OB_SUCC(ret)) {
     mvcc_row_flag_.reset();
     trans_id_.reset();
+    read_flag_ = 0;
     scan_index_ = 0;
     group_idx_ = 0;
     snapshot_version_ = 0;
-    fast_filter_skipped_ = false;
-    have_uncommited_row_ = false;
+    insert_version_ = 0;
+    delete_version_ = 0;
   }
 
   return ret;
@@ -181,10 +183,12 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
 
 void ObDatumRow::reset()
 {
-  fast_filter_skipped_ = false;
+  read_flag_ = 0;
   datum_buffer_.reset();
   storage_datums_ = nullptr;
   snapshot_version_ = 0;
+  insert_version_ = 0;
+  delete_version_ = 0;
   group_idx_ = 0;
   scan_index_ = 0;
   trans_id_.reset();
@@ -204,11 +208,12 @@ void ObDatumRow::reuse()
   }
   mvcc_row_flag_.reset();
   trans_id_.reset();
+  read_flag_ = 0;
   scan_index_ = 0;
   group_idx_ = 0;
   snapshot_version_ = 0;
-  fast_filter_skipped_ = false;
-  have_uncommited_row_ = false;
+  insert_version_ = 0;
+  delete_version_ = 0;
   if (OB_NOT_NULL(trans_info_)) {
     trans_info_[0] = '\0';
   }
@@ -223,7 +228,7 @@ int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
     STORAGE_LOG(WARN, "Invalid argument to deep copy datum row", K(ret), K(src));
   } else if (OB_UNLIKELY(get_capacity() < src.count_ || nullptr == storage_datums_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this));
+    STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this), K(src));
   } else if (OB_FAIL(copy_attributes_except_datums(src))) {
     STORAGE_LOG(WARN, "copy attribute from other failed", K(ret), K(src));
   } else {
@@ -246,6 +251,7 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
   } else if (OB_FAIL(reserve(store_row.row_val_.count_))) {
     STORAGE_LOG(WARN, "Failed to reserve datums", K(ret), K(store_row));
   } else {
+    read_flag_ = 0;
     count_ = store_row.row_val_.count_;
     row_flag_ = store_row.flag_;
     mvcc_row_flag_ = store_row.row_type_flag_;
@@ -254,7 +260,8 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
     group_idx_ = store_row.group_idx_;
     snapshot_version_ = store_row.snapshot_version_;
     fast_filter_skipped_ = store_row.fast_filter_skipped_;
-    have_uncommited_row_ = false;
+    insert_version_ = 0;
+    delete_version_ = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
       if (OB_FAIL(storage_datums_[i].from_obj_enhance(store_row.row_val_.cells_[i]))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret), K(i), K(store_row.row_val_.cells_[i]));
@@ -301,11 +308,12 @@ int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
     row_flag_ = other.row_flag_;
     mvcc_row_flag_  = other.mvcc_row_flag_;
     trans_id_ = other.trans_id_;
+    read_flag_ = other.read_flag_;
     scan_index_ = other.scan_index_;
     group_idx_ = other.group_idx_;
     snapshot_version_ = other.snapshot_version_;
-    fast_filter_skipped_ = other.fast_filter_skipped_;
-    have_uncommited_row_ = other.have_uncommited_row_;
+    insert_version_ = other.insert_version_;
+    delete_version_ = other.delete_version_;
   }
   return ret;
 }
@@ -318,14 +326,16 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     STORAGE_LOG(WARN, "Unexpected error for shallow copy invalid datum row", K(ret), K(*this), K(other));
   } else {
     trans_info_ = nullptr;
-    fast_filter_skipped_ = other.fast_filter_skipped_;
     storage_datums_ = other.storage_datums_;
     snapshot_version_ = other.snapshot_version_;
+    insert_version_ = other.insert_version_;
+    delete_version_ = other.delete_version_;
     group_idx_ = other.group_idx_;
     scan_index_ = other.scan_index_;
     trans_id_ = other.trans_id_;
     mvcc_row_flag_ = other.mvcc_row_flag_;
     row_flag_ = other.row_flag_;
+    read_flag_ = other.read_flag_;
     count_ = other.count_;
   }
   return ret;
@@ -348,8 +358,9 @@ OB_DEF_SERIALIZE(ObDatumRow)
 OB_DEF_DESERIALIZE(ObDatumRow)
 {
   int ret = OB_SUCCESS;
-  fast_filter_skipped_ = false;
-  have_uncommited_row_ = false;
+  read_flag_ = 0;
+  insert_version_ = 0;
+  delete_version_ = 0;
   LST_DO_CODE(OB_UNIS_DECODE,
               row_flag_,
               mvcc_row_flag_,
@@ -368,8 +379,6 @@ OB_DEF_DESERIALIZE(ObDatumRow)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE_ARRAY(storage_datums_, count_);
-    fast_filter_skipped_ = false;
-    have_uncommited_row_ = false;
   }
   return ret;
 }
@@ -392,8 +401,9 @@ DEF_TO_STRING(ObDatumRow)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(snapshot_version), K_(fast_filter_skipped),
-      K_(have_uncommited_row), K_(group_idx), K_(count), K_(datum_buffer));
+  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(snapshot_version),
+       K_(have_uncommited_row), K_(fast_filter_skipped), K_(is_insert_filtered), K_(is_delete_filtered),
+       K_(insert_version), K_(delete_version), K_(group_idx), K_(count), K_(datum_buffer));
   if (NULL != buf && buf_len >= 0) {
     if (NULL != storage_datums_) {
       J_COMMA();
@@ -451,6 +461,44 @@ bool ObDatumRow::operator==(const ObNewRow &other) const
     }
   }
   return is_equal;
+}
+
+/*
+ * in delete_insert scenario, only the following conditions fit
+ *
+ * version    result           former1         former2
+ *
+ *  v8        insert
+ * -------------------------------------------------------
+ *  v7                        insert1
+ *  v6                        delete1
+ *  v5
+ *  v4        delete          delete1`
+ * -------------------------------------------------------
+ *  v3                        delete1``        insert2
+ *  v2
+ *  v1                                         delete2
+ * -------------------------------------------------------
+ */
+int ObDatumRow::fuse_delete_insert(const ObDatumRow &former)
+{
+  int ret = OB_SUCCESS;
+  if (0 == count_ || row_flag_.is_not_exist()) {
+    // first val
+    is_insert_filtered_ = former.is_insert_filtered_;
+    is_delete_filtered_ = former.is_delete_filtered_;
+    insert_version_ = former.insert_version_;
+    delete_version_ = former.delete_version_;
+  } else if ((delete_version_ > 0 &&
+              former.delete_version_ > delete_version_) ||
+             (0 == former.delete_version_ &&
+              former.insert_version_ > delete_version_)) {
+    // skip
+  } else {
+    delete_version_ = former.delete_version_;
+    is_delete_filtered_ = former.is_delete_filtered_;
+  }
+  return ret;
 }
 
 //////////////////////////////////////// ObNewRowBuilder //////////////////////////////////////////////

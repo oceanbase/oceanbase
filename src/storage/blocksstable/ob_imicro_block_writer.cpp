@@ -64,7 +64,7 @@ int ObMicroBlockDesc::deep_copy(
     char * block_buffer = nullptr;
     ObMicroBlockHeader *micro_header = nullptr;
     void * row_buffer = nullptr;
-    ObDatumRow *row = nullptr;
+    ObSkipIndexAggResult *agg_row = nullptr;
 
     if (OB_ISNULL(header_) || OB_ISNULL(buf_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -107,16 +107,16 @@ int ObMicroBlockDesc::deep_copy(
         dst.is_last_row_last_flag_ = is_last_row_last_flag_;
 
         if (nullptr != aggregated_row_) {
-          if (OB_ISNULL(row_buffer = allocator.alloc(sizeof(ObDatumRow)))) {
+          if (OB_ISNULL(row_buffer = allocator.alloc(sizeof(ObSkipIndexAggResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             STORAGE_LOG(WARN, "failed to alloc row buf", K(ret));
-          } else if (FALSE_IT(row = new (row_buffer)ObDatumRow())) {
-          } else if (OB_FAIL(row->init(allocator, aggregated_row_->get_column_count()))) {
+          } else if (FALSE_IT(agg_row = new (row_buffer) ObSkipIndexAggResult())) {
+          } else if (OB_FAIL(agg_row->init(aggregated_row_->get_agg_col_cnt(), allocator))) {
             STORAGE_LOG(WARN, "failed to init datum row", K(ret));
-          } else if (OB_FAIL(row->deep_copy(*aggregated_row_, allocator))) {
+          } else if (OB_FAIL(agg_row->deep_copy(*aggregated_row_, allocator))) {
             STORAGE_LOG(WARN, "failed to copy datum row", K(ret));
           } else {
-            dst.aggregated_row_ = row;
+            dst.aggregated_row_ = agg_row;
           }
         }
       }
@@ -127,8 +127,8 @@ int ObMicroBlockDesc::deep_copy(
         allocator.free(block_buffer);
       }
 
-      if (OB_NOT_NULL(row)) {
-        row->~ObDatumRow();
+      if (OB_NOT_NULL(agg_row)) {
+        agg_row->~ObSkipIndexAggResult();
       }
 
       if (OB_NOT_NULL(row_buffer)) {

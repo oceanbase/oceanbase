@@ -597,9 +597,10 @@ DEF_COMMAND(TRANS, kill_part_trans_ctx, 1,
 // @params [in]  obj_id, lock object id
 // @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
 // @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  owner_type, for OUT_TRANS lock and unlock
 // @params [in]  create_tx_id, which transaction create this lock
 // @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
-DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type # remove_lock")
+DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id owner_type create_tx_id op_type # remove_lock")
 {
   int ret = OB_SUCCESS;
   string arg_str;
@@ -610,6 +611,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t obj_id = 0;
   int64_t lock_mode = 0;
   int64_t owner_id = 0;
+  int64_t owner_type = 0;
   int64_t create_tx_id = 0;
   int64_t op_type = 0;
   int64_t lock_op_status = 1; // does not used.
@@ -619,20 +621,20 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
-    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type");
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, owner_type, create_tx_id, op_type");
   } else {
     arg_str = cmd_.substr(action_name_.length() + 1);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (8 != sscanf(arg_str.c_str(),
-                          "%ld %ld %ld %ld %ld %ld %ld %ld",
-                          &tenant_id_to_set, &ls_id_to_set, &obj_type,
-                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type)) {
+  } else if (9 != sscanf(arg_str.c_str(),
+                         "%ld %ld %ld %ld %ld %ld %ld %ld %ld",
+                         &tenant_id_to_set, &ls_id_to_set, &obj_type,
+                         &obj_id, &lock_mode, &owner_id, &owner_type, &create_tx_id, &op_type)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
-               K(tenant_id_to_set), K(ls_id_to_set),
-               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(tenant_id_to_set), K(ls_id_to_set), K(obj_type), K(obj_id),
+               K(lock_mode), K(owner_id), K(owner_type), K(create_tx_id),
                K(op_type), K(lock_op_status), K(seq_no), K(create_timestamp),
                K(create_schema_version));
   } else {
@@ -647,7 +649,8 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObTableLockOp lock_op;
     lock_id.set(real_obj_type, obj_id);
 
-    real_owner_id.convert_from_value(owner_id);
+    real_owner_id.convert_from_value(static_cast<transaction::tablelock::ObLockOwnerType>(owner_type),
+                                     owner_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);
     if (OB_ISNULL(client_)
@@ -664,7 +667,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
       COMMON_LOG(ERROR, "send req fail", K(ret));
     }
   }
-  COMMON_LOG(INFO, "remove_lock", K(arg));
+  COMMON_LOG(INFO, "remove_lock", K(ret), K(arg));
   return ret;
 }
 
@@ -675,12 +678,13 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 // @params [in]  obj_id, lock object id
 // @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
 // @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  owner_type, for OUT_TRANS lock and unlock
 // @params [in]  create_tx_id, which transaction create this lock
 // @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
 // @params [in]  op_status, (1:LOCK_OP_DOING; 2:LOCK_OP_COMPLETE;)
 // @params [in]  commit_version, the lock op transaction commit version
 // @params [in]  commit_scn, the lock op transaction commit scn
-DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type new_op_status commit_version commit_scn# update_lock")
+DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id owner_type create_tx_id op_type new_op_status commit_version commit_scn# update_lock")
 {
   int ret = OB_SUCCESS;
   string arg_str;
@@ -691,6 +695,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t obj_id = 0;
   int64_t lock_mode = 0;
   int64_t owner_id = 0;
+  int64_t owner_type = 0;
   int64_t create_tx_id = 0;
   int64_t op_type = 0;
   int64_t lock_op_status = 1;
@@ -702,21 +707,21 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
-    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type, new_op_status, commit_version, commit_scn");
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, owner_type, create_tx_id, op_type, new_op_status, commit_version, commit_scn");
   } else {
     arg_str = cmd_.substr(action_name_.length() + 1);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (11 != sscanf(arg_str.c_str(),
-                          "%ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld",
+  } else if (12 != sscanf(arg_str.c_str(),
+                          "%ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld",
                           &tenant_id_to_set, &ls_id_to_set, &obj_type,
-                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type,
+                          &obj_id, &lock_mode, &owner_id, &owner_type, &create_tx_id, &op_type,
                           &lock_op_status, &commit_version, &commit_scn)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
-               K(tenant_id_to_set), K(ls_id_to_set),
-               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(tenant_id_to_set), K(ls_id_to_set), K(obj_type), K(obj_id), K(lock_mode),
+               K(owner_id), K(owner_type), K(create_tx_id),
                K(op_type), K(lock_op_status), K(commit_version), K(commit_scn));
   } else {
     share::ObLSID ls_id(ls_id_to_set);
@@ -731,7 +736,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     share::SCN real_commit_version;
     share::SCN real_commit_scn;
 
-    real_owner_id.convert_from_value(owner_id);
+    real_owner_id.convert_from_value(static_cast<transaction::tablelock::ObLockOwnerType>(owner_type), owner_id);
     lock_id.set(real_obj_type, obj_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);
@@ -755,7 +760,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
       COMMON_LOG(ERROR, "send req fail", K(ret));
     }
   }
-  COMMON_LOG(INFO, "update_lock", K(arg));
+  COMMON_LOG(INFO, "update_lock", K(ret), K(arg));
   return ret;
 }
 
@@ -973,6 +978,42 @@ DEF_COMMAND(SERVER, dump_server_usage, 1, "output: [server_info]\n\
   return ret;
 }
 
+DEF_COMMAND(SERVER, force_drop_lonely_lob_aux_table, 1, "tenant_id:data_table_id:lob_meta_table_id:lob_piece_table_id # force_drop_lonely_lob_aux_table")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObForceDropLonelyLobAuxTableArg arg;
+  uint64_t tenant_id = common::OB_INVALID_ID;
+  uint64_t data_table_id = common::OB_INVALID_ID;
+  uint64_t lob_meta_table_id = common::OB_INVALID_ID;
+  uint64_t lob_piece_table_id = common::OB_INVALID_ID;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("invalid argument");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (4 != sscanf(arg_str.c_str(), "%ld:%ld:%ld:%ld", &tenant_id, &data_table_id, &lob_meta_table_id, &lob_piece_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", KR(ret), K(arg_str.c_str()));
+  } else if (OB_FAIL(arg.init(tenant_id, data_table_id, lob_meta_table_id, lob_piece_table_id))) {
+    COMMON_LOG(WARN, "init arg fail", KR(ret), K(tenant_id), K(data_table_id), K(lob_meta_table_id), K(lob_piece_table_id));
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid client", KR(ret));
+  } else if (OB_FAIL(client_->force_drop_lonely_lob_aux_table(arg))) {
+    COMMON_LOG(ERROR, "send req fail", KR(ret), K(arg));
+  }
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to force_drop_lonely_lob_aux_table, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "force_drop_lonely_lob_aux_table", KR(ret), K(arg));
+  return ret;
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_id:cg_id:second_id:third_id:fourth_id #dump ss_macro_block")
 {
@@ -1104,7 +1145,7 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
   int ret = OB_SUCCESS;
   string arg_str;
   ObGetSSMicroBlockMetaArg arg;
-  ObGetSSMicroBlockMetaResult result;
+  ObGetSSMicroBlockMetaRes result;
   ObSSMicroBlockCacheKey &micro_key = arg.micro_key_;
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
@@ -1121,7 +1162,7 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
   } else {
     micro_key.mode_ = static_cast<ObSSMicroBlockCacheKeyMode>(mode);
-    if (micro_key.is_logic_key()) {
+    if (micro_key.is_logical_key()) {
       int64_t version = 0;
       int64_t offset = 0;
       int64_t macro_data_seq = 0;
@@ -1653,8 +1694,8 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
 {
   int ret = OB_SUCCESS;
   string arg_str;
-  ObGetSSMicroCacheInfoArg arg;
-  ObGetSSMicroCacheInfoResult result;
+  ObGetSSMicroCacheAllInfoArg arg;
+  ObGetSSMicroCacheAllInfoResult result;
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
     ADMIN_WARN("should provide tenant_id");
@@ -1674,7 +1715,7 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
   } else {
     ObCStringHelper helper;
     fprintf(stdout, "micro_cache_stat=%s\n", helper.convert(result.micro_cache_stat_));
-    fprintf(stdout, "super_block=%s\n", helper.convert(result.super_block_));
+    fprintf(stdout, "super_block=%s\n", helper.convert(result.super_blk_));
     fprintf(stdout, "arc_info=%s\n", helper.convert(result.arc_info_));
   }
 
@@ -1706,9 +1747,9 @@ DEF_COMMAND(SERVER, set_ss_ckpt_compressor, 1, "tenant_id:ckpt_type:compressor_n
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
   } else {
     if (0 == strncmp(ckpt_type_name, "micro", 5)) {
-      arg.block_type_ = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
+      arg.block_type_ = ObSSPhyBlockType::SS_MICRO_META_BLK;
     } else if (0 == strncmp(ckpt_type_name, "blk", 3)) {
-      arg.block_type_ = ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK;
+      arg.block_type_ = ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK;
     } else {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "ckpt_type is invalid", K(ret), K(ckpt_type_name));
@@ -1731,6 +1772,40 @@ DEF_COMMAND(SERVER, set_ss_ckpt_compressor, 1, "tenant_id:ckpt_type:compressor_n
     fprintf(stderr, "fail to set_ss_ckpt_compressor, ret=%s\n", ob_error_name(ret));
   }
   COMMON_LOG(INFO, "set_ss_ckpt_compressor", K(arg));
+  return ret;
+}
+
+DEF_COMMAND(SERVER, set_ss_cache_size_ratio, 1, "tenant_id:new_micro_size_ratio:new_macro_size_ratio")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObSetSSCacheSizeRatioArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (3 != sscanf(arg_str.c_str(), "%ld:%ld:%ld", &arg.tenant_id_, &arg.micro_cache_size_ratio_,
+                         &arg.macro_cache_size_ratio_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+  } else if (OB_FAIL(client_->set_ss_cache_size_ratio(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret));
+  } else {
+    fprintf(stdout, "Successfully set_ss_cache_size_ratio [tenant_id:%ld, micro_ratio:%ld, macro_ratio:%ld]",
+        arg.tenant_id_, arg.micro_cache_size_ratio_, arg.macro_cache_size_ratio_);
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to set_ss_cache_size_ratio, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "set_ss_cache_size_ratio", K(arg));
   return ret;
 }
 #endif

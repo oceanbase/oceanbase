@@ -303,7 +303,7 @@ int ObCallProcedureResolver::find_call_proc_info(ObCallProcedureStmt &stmt)
   } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(plan_cache, stmt.get_cacheobj_guard(), pc_ctx))) {
       LOG_INFO("get pl function by sql failed, will ignore this error",
               K(ret), K(pc_ctx.key_));
-      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+      HANDLE_PL_CACHE_RET_VALUE(ret);
   } else {
     call_proc_info = static_cast<ObCallProcedureInfo*>(stmt.get_cacheobj_guard().get_cache_obj());
     if (OB_NOT_NULL(call_proc_info)) {
@@ -442,7 +442,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
         OZ (deps.push_back(obj_version));
-        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker,
+        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, session_info_->get_database_id(), synonym_checker,
                                                          *schema_checker_->get_schema_mgr(), &deps));
       }
     }

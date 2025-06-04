@@ -296,8 +296,8 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
         bret = false;
       } else if (ignore_param_) {
         bret = ObExprEqualCheckContext::compare_const(left, right);
-      } else if (left.get_result_type().get_param().is_equal(
-                   right.get_result_type().get_param(), CS_TYPE_BINARY)) {
+      } else if (left.get_param().is_equal(
+                   right.get_param(), CS_TYPE_BINARY)) {
         ObPCParamEqualInfo info;
         info.first_param_idx_ = left.get_value().get_unknown();
         info.second_param_idx_ = right.get_value().get_unknown();
@@ -314,7 +314,7 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
         ObPCConstParamInfo const_param_info;
         if (OB_FAIL(const_param_info.const_idx_.push_back(unkonwn_expr.get_value().get_unknown()))) {
           LOG_WARN("failed to push back element", K(ret));
-        } else if (OB_FAIL(const_param_info.const_params_.push_back(unkonwn_expr.get_result_type().get_param()))) {
+        } else if (OB_FAIL(const_param_info.const_params_.push_back(unkonwn_expr.get_param()))) {
           LOG_WARN("failed to psuh back param const value", K(ret));
         } else if (OB_FAIL(const_param_info_.push_back(const_param_info))) {
           LOG_WARN("failed to push back const param info", K(ret));
@@ -328,8 +328,8 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
     // `1` parsed as decimal int in `a - 1`
     // `1' parsed as number in grouping sets
     // special comparision is needed here to replace const `1`
-    const ObObj l_obj = left.get_value().is_unknown() ? left.get_result_type().get_param() : left.get_value();
-    const ObObj r_obj = right.get_value().is_unknown() ? right.get_result_type().get_param() : right.get_value();
+    const ObObj l_obj = left.get_value().is_unknown() ? left.get_param() : left.get_value();
+    const ObObj r_obj = right.get_value().is_unknown() ? right.get_param() : right.get_value();
     if ((l_obj.is_decimal_int() && r_obj.is_number())
         || (l_obj.is_number() && r_obj.is_decimal_int())) {
       ObNumber l_nmb, r_nmb;

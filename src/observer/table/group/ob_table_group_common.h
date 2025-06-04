@@ -15,7 +15,7 @@
 
 #include "observer/table/ob_table_trans_utils.h"
 #include "observer/table/ob_table_schema_cache.h"
-#include "observer/table/ob_table_session_pool.h"
+#include "observer/table/object_pool/ob_table_object_pool.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/table/ob_table.h"
 #include "share/table/ob_table_rpc_struct.h"

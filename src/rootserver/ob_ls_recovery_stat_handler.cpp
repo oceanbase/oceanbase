@@ -75,6 +75,7 @@ int ObLSRecoveryGuard::init(const uint64_t tenant_id, const share::ObLSID &ls_id
         } else {
           ls_recovery_stat_ = ls_recovery_stat;
           tenant_id_ = tenant_id;
+          LOG_TRACE("inc ref success", K(tenant_id), K(ls_id), K(lbt()));
         }
       }
     }
@@ -131,8 +132,11 @@ int ObLSRecoveryGuard::check_can_add_member(const ObAddr &server, const int64_t 
   return ret;
 }
 
-int ObLSRecoveryGuard::check_can_change_member(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout)
+int ObLSRecoveryGuard::check_can_change_member(
+    const ObMemberList &new_member_list,
+    const int64_t paxos_replica_num,
+    const palf::LogConfigVersion &config_version,
+    const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
@@ -144,8 +148,8 @@ int ObLSRecoveryGuard::check_can_change_member(const ObMemberList &new_member_li
     ret = OB_NOT_INIT;
     LOG_WARN("ls recovery stat is null, not init", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(ls_recovery_stat_->wait_can_change_member_list(new_member_list,
-                     paxos_replica_num, timeout))) {
-    LOG_WARN("failed to check can change member", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+                     paxos_replica_num, config_version, timeout))) {
+    LOG_WARN("failed to check can change member", KR(ret), K(new_member_list), K(paxos_replica_num), K(config_version), K(timeout));
   }
   return ret;
 }
@@ -204,19 +208,21 @@ int ObLSRecoveryStatHandler::inc_ref(const int64_t timeout)
     LOG_WARN("check inner stat error", KR(ret));
   } else {
     int64_t curr_timeout = timeout;
-    const int64_t TIME_WAIT = 100 * 1000;
+    const int64_t TIME_WAIT = 50 * 1000;
     int tmp_ret = OB_SUCCESS;
     ret = OB_EAGAIN;
     do {
       if (0 == ATOMIC_CAS(&ref_cnt_, 0, 1)) {
         ret = OB_SUCCESS;
-      } else if (curr_timeout > 0) {
-        LOG_INFO("wait for inc ref", K(curr_timeout), K(timeout));
-        if (OB_TMP_FAIL(ref_cond_.timedwait(TIME_WAIT))) {
-          LOG_WARN("failed to timedwait", KR(ret), KR(tmp_ret));
+      } else {
+        const int64_t wait_time = std::min(TIME_WAIT, curr_timeout);
+        LOG_INFO("wait for inc ref", K(curr_timeout), K(timeout), K(wait_time));
+        if (OB_TMP_FAIL(ref_cond_.timedwait(wait_time))) {
+          LOG_WARN("failed to timedwait", KR(ret), KR(tmp_ret), K(wait_time));
         }
-        curr_timeout -= TIME_WAIT;
+        curr_timeout -= wait_time;
       }
+      //不能等于0，会出现死循环
     } while (curr_timeout > 0 && OB_EAGAIN == ret);
   }
   return ret;
@@ -275,7 +281,9 @@ int ObLSRecoveryStatHandler::reset_inner_readable_scn()
 }
 
 int ObLSRecoveryStatHandler::wait_can_change_member_list(
-    const ObMemberList &new_member_list, const int64_t paxos_replica_num,
+    const ObMemberList &new_member_list,
+    const int64_t paxos_replica_num,
+    const palf::LogConfigVersion &config_version,
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
@@ -283,7 +291,7 @@ int ObLSRecoveryStatHandler::wait_can_change_member_list(
   if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
-  } else if (OB_FAIL(wait_func_with_timeout_(timeout, new_member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(wait_func_with_timeout_(timeout, new_member_list, paxos_replica_num, config_version))) {
     LOG_WARN("failed to wait func with timeout", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
   }
   LOG_INFO("finish wait for change member_list", KR(ret), K(new_member_list), K(paxos_replica_num),
@@ -681,17 +689,26 @@ int ObLSRecoveryStatHandler::get_palf_stat_(
 {
   int ret = OB_SUCCESS;
   palf_stat.reset();
-  logservice::ObLogService *log_service = NULL;
+  ObLSService *ls_service = nullptr;
+  storage::ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  logservice::ObLogHandler *log_handler = nullptr;
   palf::PalfHandleGuard palf_handle_guard;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get MTL log_service", KR(ret), K_(tenant_id), KPC_(ls));
-  } else if (OB_FAIL(log_service->open_palf(ls_->get_ls_id(), palf_handle_guard))) {
-    LOG_WARN("failed to open palf", KR(ret), K_(tenant_id), KPC_(ls));
-  } else if (OB_FAIL(palf_handle_guard.stat(palf_stat))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_->get_ls_id(), ls_handle, ObLSGetMod::RS_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), K_(tenant_id), KPC_(ls));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ls", KR(ret), K_(tenant_id), KPC_(ls));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handle is null", KR(ret), KPC_(ls));
+  } else if (OB_FAIL(log_handler->stat(palf_stat))) {
     LOG_WARN("get palf_stat failed", KR(ret), KPC_(ls));
   }
 
@@ -796,7 +813,7 @@ int ObLSRecoveryStatHandler::dump_all_replica_readable_scn_(const bool force_dum
 }
 
 int ObLSRecoveryStatHandler::check_member_change_valid_(
-    const ObMemberList &new_member_list, const int64_t paxos_replica_num, bool &is_valid)
+    const ObMemberList &new_member_list, const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   SCN readable_scn;
@@ -808,25 +825,23 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
     LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_FAIL(get_palf_stat_(palf_stat))) {
-    LOG_WARN("failed to get palf stat", KR(ret));
   } else if (OB_FAIL(new_member_list.get_addr_array(addr_list))) {
     LOG_WARN("failed to get addr array", KR(ret), K(new_member_list));
   } else if (OB_FAIL(do_get_majority_readable_scn_V2_(addr_list,
-     rootserver::majority(paxos_replica_num), palf_stat.config_version_, readable_scn))) {
+     rootserver::majority(paxos_replica_num), config_version, readable_scn))) {
     LOG_WARN("failed to get majority readable scn", KR(ret), K(addr_list),
-    K(paxos_replica_num), K(palf_stat));
+    K(paxos_replica_num), K(config_version));
   } else {
     SpinRLockGuard guard(lock_);
     if (readable_scn >= readable_scn_upper_limit_) {
       is_valid = true;
       LOG_INFO("can change member list", K(new_member_list), K(paxos_replica_num),
          "new readable_scn", readable_scn, "current readable_scn", readable_scn_upper_limit_,
-         "ls_id", ls_->get_ls_id(), K(palf_stat));
+         "ls_id", ls_->get_ls_id());
     } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000L)) {
       LOG_INFO("can not change member list",  K(new_member_list), K(paxos_replica_num),
           K(readable_scn), K(readable_scn_upper_limit_),
-          "ls_id", ls_->get_ls_id(), K(palf_stat));
+          "ls_id", ls_->get_ls_id());
     }
   }
   return ret;

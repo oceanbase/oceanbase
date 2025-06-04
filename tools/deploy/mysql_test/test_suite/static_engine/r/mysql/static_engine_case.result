@@ -6,6 +6,7 @@ explain_protocol: 2
 // Case3: 测试空串以及NULL的情况
 alter system flush plan cache global;
 set @@ob_enable_plan_cache = 0;
+alter system set default_table_store_format = "row";
 // Case1: normal test. 
 // 所有带参数的case表达式都被转为不带参数的case表达式
 EXPLAIN select case 1 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
@@ -446,4 +447,6 @@ SELECT CASE 'A' WHEN 0 THEN 0 ELSE 1 END VAL;
 +-----+
 |   0 |
 +-----+
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'A'
 

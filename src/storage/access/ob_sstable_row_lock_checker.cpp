@@ -62,17 +62,20 @@ int ObSSTableRowLockChecker::inner_open(
 int ObSSTableRowLockChecker::init_micro_scanner()
 {
   int ret = OB_SUCCESS;
-  if (nullptr == micro_scanner_) {
-    if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowLockChecker,
-                                             access_ctx_->stmt_allocator_,
-                                             *access_ctx_->stmt_allocator_))) {
+  if (OB_LIKELY(nullptr == micro_data_scanner_)) {
+    if (nullptr == (micro_data_scanner_ = OB_NEWx(ObMicroBlockRowLockChecker,
+                                                  access_ctx_->stmt_allocator_,
+                                                  *access_ctx_->stmt_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for micro block row scanner", K(ret));
-    } else if (OB_FAIL(micro_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
+    } else if (OB_FAIL(micro_data_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
       LOG_WARN("Fail to init micro scanner", K(ret), KP_(sstable));
     }
-  } else if (OB_FAIL(micro_scanner_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
+  } else if (OB_FAIL(micro_data_scanner_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
     LOG_WARN("Fail to switch micro scanner", K(ret), KP_(sstable));
+  }
+  if (OB_SUCC(ret)) {
+    micro_scanner_ = micro_data_scanner_;
   }
   return ret;
 }
@@ -206,17 +209,20 @@ int ObSSTableRowLockMultiChecker::fetch_row(
 int ObSSTableRowLockMultiChecker::init_micro_scanner()
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(nullptr == micro_scanner_)) {
-    if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowLockMultiChecker,
-                                              access_ctx_->stmt_allocator_,
-                                              *access_ctx_->stmt_allocator_))) {
+  if (OB_LIKELY(nullptr == micro_data_scanner_)) {
+    if (nullptr == (micro_data_scanner_ = OB_NEWx(ObMicroBlockRowLockMultiChecker,
+                                                  access_ctx_->stmt_allocator_,
+                                                  *access_ctx_->stmt_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for micro block row scanner", K(ret));
-    } else if (OB_FAIL(micro_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
+    } else if (OB_FAIL(micro_data_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
       LOG_WARN("Fail to init micro scanner", K(ret), KP_(sstable));
     }
-  } else if (OB_FAIL(micro_scanner_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
+  } else if (OB_FAIL(micro_data_scanner_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
     LOG_WARN("Fail to switch micro scanner", K(ret), KP_(sstable));
+  }
+  if (OB_SUCC(ret)) {
+    micro_scanner_ = micro_data_scanner_;
   }
   return ret;
 }

@@ -78,7 +78,7 @@ struct ObNotNullContext
       
   int generate_stmt_context(int64_t stmt_context = NULLABLE_SCOPE::NS_TOP);
   
-  int add_joined_table(const JoinedTable *table);
+  int add_joined_table(const JoinedTable *table, const JoinedTable *skip_table = NULL);
   
   int add_filter(const ObIArray<ObRawExpr *> &filters);
 
@@ -170,7 +170,7 @@ class ObTransformUtils
   private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
-  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 5;
+  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 20;
 
 public:
   struct LazyJoinInfo {
@@ -591,7 +591,7 @@ public:
                                            int64_t sel_index,
                                            bool &is_match);
 
-  static int get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
+  static int get_valid_index_id(ObSqlSchemaGuard *schema_guard,
                                 const ObDMLStmt *stmt,
                                 const TableItem *table_item,
                                 ObIArray<uint64_t> &index_ids);
@@ -635,6 +635,10 @@ public:
   static int classify_scalar_query_ref(ObRawExpr *expr,
                                        ObIArray<ObRawExpr*> &scalar_query_refs,
                                        ObIArray<ObRawExpr*> &non_scalar_query_refs);
+
+  static int extract_query_ref_stmts(const ObIArray<ObRawExpr*> &exprs,
+                                     ObIArray<ObSelectStmt *> &subquery_stmts,
+                                     const bool with_nested = true);
 
   static int extract_query_ref_expr(const ObIArray<ObRawExpr*> &exprs,
                                     ObIArray<ObQueryRefRawExpr *> &subqueries,
@@ -978,6 +982,7 @@ public:
   static int get_from_item(ObDMLStmt *stmt, TableItem *table, FromItem &from);
   
   static int get_outer_join_right_tables(const JoinedTable &joined_table,
+                                         const JoinedTable *skip_table,
                                          ObIArray<uint64_t> &table_ids);
 
   /**
@@ -1498,7 +1503,9 @@ public:
                                            ObRawExpr *not_null_expr,
                                            bool is_true = true);
   static int add_param_null_constraint(ObTransformerCtx &ctx,
-                                      ObRawExpr *not_null_expr);
+                                      ObRawExpr *null_expr);
+  static int add_param_null_constraint(ObTransformerCtx &ctx,
+                                       ObIArray<ObRawExpr *> &null_exprs);
 
   static int add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
                                                 ObRawExpr *expr,
@@ -1508,7 +1515,7 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL,
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> *parent_map = NULL,
                                  const ObIArray<ObSelectStmt*> *ignore_stmts = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
@@ -1635,6 +1642,10 @@ public:
                                           ObIArray<ObRawExpr *> &exprs,
                                           ObIArray<ObRawExpr *> &pullup_exprs,
                                           ObIArray<ObRawExpr *> &new_select_list);
+
+  static int extract_rowid_exprs(const ObDMLStmt *stmt,
+                                 ObIArray<TableItem*> &table_items,
+                                 ObIArray<ObRawExpr*> &rowid_exprs);
 
   static int extract_rowid_exprs(ObIArray<ObRawExpr *> &exprs, ObIArray<ObRawExpr *> &rowid_exprs);
 
@@ -1776,7 +1787,7 @@ public:
                                   TableItem *table,
                                   ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
 
-  static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
+  static int remove_const_exprs(const ObIArray<ObRawExpr *> &input_exprs,
                                 ObIArray<ObRawExpr *> &output_exprs);
 
   static int check_table_contain_in_semi(const ObDMLStmt *stmt,
@@ -1958,6 +1969,9 @@ public:
   static int cartesian_tables_pre_split(ObSelectStmt *subquery,
                                         ObIArray<ObRawExpr*> &outer_conditions,
                                         ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables);
+  static int cartesian_tables_pre_split(const ObIArray<TableItem*> &table_items,
+                                        const ObIArray<ObRawExpr*> &conditions,
+                                        ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables);
   static int do_split_cartesian_tables(ObTransformerCtx *ctx,
                                        ObDMLStmt *stmt,
                                        ObSelectStmt *subquery,
@@ -2036,6 +2050,42 @@ public:
                                               bool &is_valid_join_chain);
   static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
                                   ObSqlBitSet<> &null_reject_rels);
+  static int check_has_exec_param_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool &has_pushed_param);
+  static int partial_cost_eval_validity_check(ObTransformerCtx &ctx,
+                                              ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool check_nlj_inner_path,
+                                              bool &is_valid);
+  static int check_nlj_opportunity(ObTransformerCtx &ctx,
+                                   const ObDMLStmt *root_stmt,
+                                   const ObSelectStmt *stmt,
+                                   const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                   ObIArray<int64_t> &semi_join_stmt_ids,
+                                   bool &has_nlj_opportunity);
+  static int check_projected_cols_used_for_join(const ObSelectStmt *stmt,
+                                                const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                                                const ObIArray<int64_t> &sel_idxs,
+                                                ObIArray<int64_t> &semi_join_stmt_ids,
+                                                bool &used_for_join);
+  static int can_push_dynamic_filter_to_cols(const ObSelectStmt *stmt,
+                                             const ObIArray<ObColumnRefRawExpr*> &col_exprs,
+                                             uint64_t table_id,
+                                             ObIArray<int64_t> &sel_idxs,
+                                             bool &can_filter_pushdown);
+  static int extract_pushdown_cols(const ObQueryRefRawExpr &query_ref,
+                                   uint64_t cur_table_id,
+                                   ObIArray<ObColumnRefRawExpr*> &pushdown_cols);
+  static int collect_semi_join_stmt_ids(const ObDMLStmt &parent_stmt,
+                                        const ObIArray<ObColumnRefRawExpr*> &mapped_col_exprs,
+                                        uint64_t cur_table_id,
+                                        ObIArray<int64_t> &semi_join_stmt_ids);
+  static int get_parent_stmt(const ObSelectStmt *stmt,
+                             const hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> &parent_map,
+                             uint64_t &table_id,
+                             ObDMLStmt *&parent_stmt);
+  static int check_ref_fake_cte_table(ObDMLStmt *stmt, bool &ref_fake_cte_table);
   static int check_stmt_strict_deterministic(const ObSelectStmt *stmt,
                                             ObSQLSessionInfo *session_info,
                                             ObSchemaChecker *schema_checker,

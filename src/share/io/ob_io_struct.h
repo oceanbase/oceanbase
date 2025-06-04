@@ -236,6 +236,9 @@ struct ObIOFailedReqUsageInfo : ObIOGroupUsage
 {
 };
 
+typedef ObSEArray<ObIOUsageInfo, GROUP_START_NUM * static_cast<uint64_t>(ObIOGroupMode::MODECNT)> ObIOUsageInfoArray;
+typedef ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM * static_cast<uint64_t>(ObIOGroupMode::MODECNT)> ObIOFailedReqInfoArray;
+typedef ObSEArray<int64_t, GROUP_START_NUM> ObIOGroupThrottledTimeArray;
 class ObIOUsage final
 {
 public:
@@ -245,17 +248,17 @@ public:
   int refresh_group_num (const int64_t group_num);
   void accumulate(ObIORequest &request);
   void calculate_io_usage();
-  const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &get_io_usage() { return info_; }
-  ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &get_failed_req_usage() { return failed_req_info_; }
-  ObSEArray<int64_t, GROUP_START_NUM> &get_group_throttled_time_us() { return group_throttled_time_us_; }
+  const ObIOUsageInfoArray &get_io_usage() { return info_; }
+  ObIOFailedReqInfoArray &get_failed_req_usage() { return failed_req_info_; }
+  ObIOGroupThrottledTimeArray &get_group_throttled_time_us() { return group_throttled_time_us_; }
   int assign(const ObIOUsage &other);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   int assign_unsafe(const ObIOUsage &other);
 private:
-  ObSEArray<ObIOUsageInfo, GROUP_START_NUM> info_;
-  ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> failed_req_info_;
-  ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
+  ObIOUsageInfoArray info_;
+  ObIOFailedReqInfoArray failed_req_info_;
+  ObIOGroupThrottledTimeArray group_throttled_time_us_;
   mutable common::ObQSyncLock lock_;
 };
 
@@ -569,17 +572,10 @@ public:
 
   int enqueue_callback(ObIORequest &req);
   void try_release_thread();
-  void get_thread_and_runner_num(int64_t &thread_num, int64_t &runner_count);
   int update_thread_count(const int64_t thread_count);
-  int64_t get_thread_count() const;
-  int64_t get_queue_depth() const;
-  int get_queue_count(ObIArray<int64_t> &queue_count_array);
-
-  const ObArray<ObIORunner *> &get_runners() { return runners_; };
-
-  TO_STRING_KV(K(is_inited_), K(config_thread_count_), K(queue_depth_), K(runners_), KPC(io_allocator_));
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
-  int64_t get_callback_queue_idx(const ObIOCallbackType cb_type) const;
+  int64_t get_callback_queue_idx_(const ObIOCallbackType cb_type) const;
 private:
   static const int64_t ATOMIC_WRITE_CALLBACK_THREAD_RATIO = 2;
 private:

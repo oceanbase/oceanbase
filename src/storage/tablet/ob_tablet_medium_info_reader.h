@@ -15,7 +15,7 @@
 
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
-#include "storage/tablet/ob_mds_range_query_iterator.h"
+#include "storage/tablet/ob_mds_cl_range_query_iterator.h"
 #include "storage/multi_data_source/mds_table_iterator.h"
 
 namespace oceanbase
@@ -53,7 +53,6 @@ public:
 private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
-  ObStoreCtx store_ctx_;
   ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> iter_;
 };
 } // namespace storage

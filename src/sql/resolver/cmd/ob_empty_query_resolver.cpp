@@ -23,8 +23,7 @@ int ObEmptyQueryResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObEmptyQueryStmt *empty_query_stmt = NULL;
-  if (T_EMPTY_QUERY != parse_tree.type_ 
-      && T_LOCK_TABLE != parse_tree.type_) {
+  if (T_EMPTY_QUERY != parse_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("parser tree type is not T_EMPTY_QUERY", K(parse_tree.type_), K(ret));
   } else if (0 == parse_tree.value_) {

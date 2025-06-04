@@ -132,7 +132,6 @@ struct ObTransformerCtx
     is_force_materialize_(false),
     is_spm_outline_(false),
     push_down_filters_(),
-    in_accept_transform_(false),
     iteration_level_(0),
     mv_stmt_gen_count_(0),
     cbqt_policy_(TransPolicy::DISABLE_TRANS),
@@ -190,7 +189,7 @@ struct ObTransformerCtx
   //记录semi to inner改写中，代价竞争失败的semi info，避免下一轮迭代重复检查代价
   ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ignore_semi_infos_;
   ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> temp_table_ignore_stmts_;
-  bool eval_cost_;
+  bool eval_cost_;  // mark whether the context is in the process of cost evaluation.
   /* used for hint and outline below */
   int64_t trans_list_loc_;  // outline mode, used to keep transform happened ordering in query_hint.trans_list_
   ObString src_qb_name_;
@@ -207,7 +206,6 @@ struct ObTransformerCtx
 
   bool is_spm_outline_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
-  bool in_accept_transform_;
   uint64_t iteration_level_;
   ObSEArray<MvInfo, 4, common::ModulePageAllocator, true> mv_infos_; // used to perform mv rewrite
   int64_t mv_stmt_gen_count_;
@@ -483,6 +481,7 @@ protected:
                        bool force_accept,
                        bool check_original_plan,
                        bool &trans_happened,
+                       bool eval_partial_cost,
                        void *check_ctx = NULL);
 
   /*
@@ -501,6 +500,13 @@ protected:
                              const int64_t current_level,
                              const ObDMLStmt &stmt,
                              bool &need_trans);
+
+  /**
+   * @brief In principle, every rewriting rule that implements validity check in a heavy manner should implement this method
+   * which involves prepositioning some checks that can be efficiently completed, primarily including
+   * basic form check of the stmt and the presence of some special expressions.
+   */
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject_trans);
 
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans);
 

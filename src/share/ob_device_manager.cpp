@@ -103,6 +103,26 @@ int ObClusterVersionMgr::is_supported_assume_version() const
   return ret;
 }
 
+bool ObClusterEnableObdalConfig::is_enable_obdal() const
+{
+  return GCONF._enable_obdal;
+}
+
+int ObClusterVersionMgr::is_supported_enable_worm_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    OB_LOG(WARN, "get data version failed", K(ret));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_5_2)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "date version is less than 4.3.5.2, set enable_worm is");
+    OB_LOG(WARN, "date version is less than 4.3.5.2, setting enable_worm is not supported", K(ret), K(data_version));
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
 {
@@ -135,6 +155,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(init_obdal_env())) {
+      OB_LOG(WARN, "fail to init obdal", K(ret));
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
         &ObClusterVersionMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
@@ -154,6 +176,7 @@ int ObDeviceManager::init_devices_env()
       const bool compliantRfc3986Encoding =
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
+      cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
     }
   }
 
@@ -200,6 +223,7 @@ void ObDeviceManager::destroy()
     fin_oss_env();
     fin_cos_env();
     fin_s3_env();
+    fin_obdal_env();
     lock_.destroy();
     ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;
@@ -412,7 +436,7 @@ int ObDeviceManager::alloc_device_and_init_(
   int ret = OB_SUCCESS;
   ObDeviceInsInfo *dev_info = nullptr;
   device_handle = nullptr;
-  const int64_t fake_max_io_depth = 256;
+  const int64_t fake_max_io_depth = 512;
   ObQSyncLockWriteGuard guard(lock_);
 
   // Re-check to see if the device was created while acquiring the lock

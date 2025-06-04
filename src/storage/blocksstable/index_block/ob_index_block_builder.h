@@ -385,13 +385,16 @@ public:
            ObSSTableIndexBuilder &sstable_builder,
            const blocksstable::ObMacroSeqParam &macro_seq_param,
            const share::ObPreWarmerParam &pre_warm_param,
+           const bool write_clustered_micro_idx,
            ObIMacroBlockFlushCallback *ddl_callback);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
   int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id, const int64_t ddl_start_row_offset);
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta,
                          const ObMicroBlockData *micro_block_data);
-  int cal_macro_meta_block_size(const ObDatumRowkey &rowkey, int64_t &estimate_block_size);
+  int cal_macro_meta_block_size(const ObDatumRowkey &rowkey,
+                                const int64_t macro_block_bf_size,
+                                int64_t &estimate_block_size);
   int set_parallel_task_idx(const int64_t task_idx);
   inline int64_t get_estimate_index_block_size() const { return estimate_leaf_block_size_; }
   inline int64_t get_estimate_meta_block_size() const { return estimate_meta_block_size_; }
@@ -486,15 +489,27 @@ public:
   ~ObIndexBlockRebuilder();
   int init(
       ObSSTableIndexBuilder &sstable_builder,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
       const int64_t *task_idx,
       const ObITable::TableKey &table_key,
       common::ObIArray<ObIODevice *> *device_handle_array = nullptr);
+  int init(
+      ObSSTableIndexBuilder &sstable_builder,
+      const ObMacroSeqParam &macro_seq_param,
+      const int64_t task_idx,
+      const ObITable::TableKey &table_key,
+      ObIMacroBlockFlushCallback *callback);
   int append_macro_row(
       const char *buf,
       const int64_t size,
       const MacroBlockId &macro_id,
       const int64_t absolute_row_offset/*not used set -1*/);
   int append_macro_row(const ObDataMacroBlockMeta &macro_meta);
+  int append_macro_row(
+      const ObDataMacroBlockMeta &macro_meta,
+      const char *leaf_index_block_buf,
+      const int64_t block_size);
+  int64_t get_last_macro_seq() const { return clustered_index_writer_ ? clustered_index_writer_->get_last_macro_seq() : 0; }
   int close();
   void reset();
   static int get_macro_meta(
@@ -506,6 +521,13 @@ public:
   int get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const;
 
 private:
+  int inner_init(
+      ObSSTableIndexBuilder &sstable_builder,
+      const ObMacroSeqParam &macro_seq_param,
+      const int64_t task_idx,
+      const ObITable::TableKey &table_key,
+      common::ObIArray<ObIODevice *> *device_handle_array,
+      ObIMacroBlockFlushCallback *callback);
   static bool use_absolute_offset(const ObITable::TableKey &table_key);
   void set_task_type(const bool is_cg, const bool use_absolute_offset, const common::ObIArray<ObIODevice *> *device_handle_array);
   OB_INLINE bool need_index_tree_dumper() const;
@@ -611,6 +633,7 @@ public:
                         ObIAllocator &data_allocator,
                         const blocksstable::ObMacroSeqParam &macro_seq_param,
                         const share::ObPreWarmerParam &pre_warm_param,
+                        const bool write_clustered_micro_idx,
                         ObIMacroBlockFlushCallback *callback);
   int init_builder_ptrs(
       ObSSTableIndexBuilder *&sstable_builder,

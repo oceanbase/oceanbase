@@ -553,8 +553,8 @@ public:
   { return micro_data_handles_[(cur_micro_data_fetch_idx_ + max_micro_handle_cnt_) % max_micro_handle_cnt_]; }
   OB_INLINE ObMicroIndexInfo &current_micro_info()
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_]; }
-  OB_INLINE bool is_current_micro_data_blockscan() const
-  { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(iter_param_->has_lob_column_out()); }
+  OB_INLINE bool current_micro_data_can_blockscan() const
+  { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(); }
   OB_INLINE int64_t prefetching_range_idx()
   {
     return 0 == cur_level_ ? cur_range_prefetch_idx_ - 1 :
@@ -565,9 +565,10 @@ public:
   OB_INLINE bool can_index_filter_skip(ObMicroIndexInfo &index_info, ObSampleFilterExecutor *sample_executor)
   {
     return (nullptr == sample_executor || is_not_border(index_info))
-            && index_info.has_agg_data()
-            && index_info.can_blockscan(iter_param_->has_lob_column_out())
-            && index_info.is_filter_uncertain();
+        && index_info.has_agg_data()
+        && index_info.can_blockscan()
+        && (!iter_param_->has_lob_column_out() || !index_info.has_lob_out_row())
+        && index_info.is_filter_uncertain();
   }
   virtual bool read_wait()
   {
@@ -646,7 +647,6 @@ protected:
     for (int16_t level = 0; level < index_tree_height_; level++) {
       tree_handles_[level].can_blockscan_ = false;
     }
-    border_rowkey_.reset();
   }
   void reset_tree_handles();
   void reclaim_tree_handles();
@@ -748,7 +748,6 @@ protected:
       return ret;
     }
     OB_INLINE int get_next_index_row(
-        const bool has_lob_out,
         ObMicroIndexInfo &block_info,
         ObIndexTreeMultiPassPrefetcher &prefetcher)
     {
@@ -758,7 +757,7 @@ protected:
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
           } else if (fetch_idx_ < prefetch_idx_) {
-            if (OB_FAIL(forward(prefetcher, has_lob_out))) {
+            if (OB_FAIL(forward(prefetcher))) {
               STORAGE_LOG(WARN, "Fail to forward index tree handle", K(ret));
             }
           }
@@ -828,9 +827,7 @@ protected:
     int prefetch(
         const int64_t level,
         ObIndexTreeMultiPassPrefetcher &prefetcher);
-    virtual int forward(
-        ObIndexTreeMultiPassPrefetcher &prefetcher,
-        const bool has_lob_out);
+    virtual int forward(ObIndexTreeMultiPassPrefetcher &prefetcher);
     OB_INLINE int check_blockscan(const blocksstable::ObDatumRowkey &border_rowkey)
     {
       int ret = OB_SUCCESS;

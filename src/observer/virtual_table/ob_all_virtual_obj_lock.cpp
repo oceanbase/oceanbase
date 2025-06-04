@@ -26,11 +26,14 @@ ObAllVirtualObjLock::ObAllVirtualObjLock()
       addr_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       ls_(nullptr),
+      tx_ctx_(nullptr),
       ls_iter_guard_(),
       ls_tx_ctx_iter_(),
       obj_lock_iter_(),
       lock_op_iter_(),
-      is_iter_tx_(true)
+      prio_op_iter_(),
+      is_iter_tx_(true),
+      is_iter_priority_list_(true)
 {
 }
 
@@ -50,12 +53,18 @@ void ObAllVirtualObjLock::release_last_tenant()
 {
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_ = nullptr;
+  if (OB_NOT_NULL(tx_ctx_)) {
+    ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx_);
+    tx_ctx_ = nullptr;
+  }
   is_iter_tx_ = true;
   ls_iter_guard_.reset();
   ls_tx_ctx_iter_.reset();
   obj_lock_iter_.reset();
   lock_op_iter_.reset();
+  prio_op_iter_.reset();
   start_to_read_ = false;
+  is_iter_priority_list_ = true;
 }
 
 int ObAllVirtualObjLock::inner_get_next_row(ObNewRow *&row)
@@ -96,6 +105,12 @@ int ObAllVirtualObjLock::get_next_ls()
     ls_tx_ctx_iter_.reset();
     obj_lock_iter_.reset();
     lock_op_iter_.reset();
+    prio_op_iter_.reset();
+    is_iter_priority_list_ = true;
+    if (OB_NOT_NULL(tx_ctx_)) {
+      ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx_);
+      tx_ctx_ = nullptr;
+    }
   }
 
   return ret;
@@ -149,17 +164,36 @@ int ObAllVirtualObjLock::get_next_lock_id(ObLockID &lock_id)
   return ret;
 }
 
-int ObAllVirtualObjLock::get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op)
+int ObAllVirtualObjLock::get_next_lock_op(
+    transaction::tablelock::ObTableLockOp &lock_op,
+    transaction::tablelock::ObTableLockPriority &priority)
 {
   int ret = OB_SUCCESS;
 
   // loop until get lock_op
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(lock_op_iter_.get_next(lock_op))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to get next lock op", K(ret), K(is_iter_tx_), K(ls_id_));
+    if (!is_iter_priority_list_) {
+      if (OB_FAIL(lock_op_iter_.get_next(lock_op))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "fail to get next lock op", K(ret), K(is_iter_tx_), K(ls_id_));
+        }
+        lock_op_iter_.reset();  // clean lock_op_iter to save memory
+      } else {
+        priority = transaction::tablelock::ObTableLockPriority::NORMAL;
       }
-      lock_op_iter_.reset();  // clean lock_op_iter to save memory
+    } else {
+      transaction::tablelock::ObTableLockPrioOp prio_op;
+      if (OB_FAIL(prio_op_iter_.get_next(prio_op))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "fail to get next lock op", K(ret), K(is_iter_tx_), K(ls_id_));
+        }
+        prio_op_iter_.reset();  // clean lock_op_iter to save memory
+      } else {
+        lock_op = prio_op.lock_op_;
+        priority = prio_op.priority_;
+      }
+    }
+    if (OB_FAIL(ret)) {
       if (OB_FAIL(get_next_lock_op_iter())) {
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "fail to get next lock_op_iter", K(ret), K(is_iter_tx_), K(ls_id_));
@@ -221,26 +255,46 @@ int ObAllVirtualObjLock::get_next_lock_op_iter()
 int ObAllVirtualObjLock::get_next_lock_op_iter_from_tx_ctx()
 {
   int ret = OB_SUCCESS;
-  transaction::ObPartTransCtx *tx_ctx = nullptr;
+  lock_op_iter_.reset();
+  const bool need_get_tx_ctx = is_iter_priority_list_;
+  const bool need_revert_tx_ctx = !is_iter_priority_list_;
 
-  if (OB_FAIL(get_next_tx_ctx(tx_ctx))) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "fail to get next tx_ctx", K(ret));
+  // it needs to be placed at the forefront to ensure consistency between
+  // the construction of iterators and the state during iteration
+  is_iter_priority_list_ = !is_iter_priority_list_;
+  // is_iter_priority_list_: get_next_tx_ctx -> iterate_tx_obj_lock_op
+  // !is_iter_priority_list_: iterate_tx_lock_priority_list -> revert_tx_ctx
+  if (need_get_tx_ctx && OB_ISNULL(tx_ctx_)) {
+    if (OB_FAIL(get_next_tx_ctx(tx_ctx_))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "fail to get next tx_ctx", K(ret));
+      }
     }
-  } else if (OB_ISNULL(tx_ctx)) {
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tx_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "tx_ctx is null", K(ret), K(ls_id_));
-  } else {
-    lock_op_iter_.reset();
-    if (OB_FAIL(tx_ctx->iterate_tx_obj_lock_op(lock_op_iter_))) {
-      SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(ls_id_));
+    SERVER_LOG(ERROR, "tx_ctx is null", K(ret), K(ls_id_));
+  } else if (!is_iter_priority_list_) {
+    if (OB_FAIL(tx_ctx_->iterate_tx_obj_lock_op(lock_op_iter_))) {
+      SERVER_LOG(WARN, "fail to get common lock op iter", K(ret), K(ls_id_));
     } else if (OB_FAIL(lock_op_iter_.set_ready())) {
       SERVER_LOG(WARN, "set lock_op_iter ready failed", K(ret), K(ls_id_));
     }
+  } else {
+    if (OB_FAIL(tx_ctx_->iterate_tx_lock_priority_list(prio_op_iter_))) {
+      SERVER_LOG(WARN, "fail to get priority_list lock op iter", K(ret), K(ls_id_));
+    } else if (OB_FAIL(prio_op_iter_.set_ready())) {
+      SERVER_LOG(WARN, "set prio_op_iter ready failed", K(ret), K(ls_id_));
+    }
   }
-  if (OB_NOT_NULL(tx_ctx)) {
-    ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx);
+
+  if (need_revert_tx_ctx && OB_NOT_NULL(tx_ctx_)) {
+    ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx_);
+    tx_ctx_ = nullptr;
   }
+
   return ret;
 }
 
@@ -289,10 +343,11 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   transaction::tablelock::ObTableLockOp lock_op;
+  transaction::tablelock::ObTableLockPriority priority;
   if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {
     SERVER_LOG(WARN, "prepare start to read failed", K(ret));
     ret = OB_ITER_END;  // to avoid throw error code to client
-  } else if (OB_FAIL(get_next_lock_op(lock_op))) {
+  } else if (OB_FAIL(get_next_lock_op(lock_op, priority))) {
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "get_next_lock_op failed", K(ret));
     }
@@ -345,7 +400,7 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           break;
         }
         case OWNER_ID:
-          cur_row_.cells_[i].set_int(lock_op.owner_id_.raw_value());
+          cur_row_.cells_[i].set_int(lock_op.owner_id_.id());
           break;
         case CREATE_TRANS_ID:
           cur_row_.cells_[i].set_int(lock_op.create_trans_id_.get_id());
@@ -416,13 +471,27 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           break;
         }
         case OWNER_TYPE: {
-          // TODO: set the column with real data
+          cur_row_.cells_[i].set_int(lock_op.owner_id_.type());
           break;
         }
         case PRIORITY: {
+         if (OB_FAIL(lock_priority_to_string(priority,
+                                             lock_op_priority_buf_,
+                                             sizeof(lock_op_priority_buf_)))) {
+           SERVER_LOG(WARN, "get lock op priority buf failed", K(ret), K(lock_op));
+         } else {
+           lock_obj_type_buf_[MAX_LOCK_OP_PRIORITY_BUF_LENGTH - 1] = '\0';
+           cur_row_.cells_[i].set_varchar(lock_op_priority_buf_);
+           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+         }
           break;
         }
         case WAIT_SEQ: {
+          if (is_iter_priority_list_ && is_iter_tx_) {
+            cur_row_.cells_[i].set_int(lock_op.create_timestamp_);
+          } else {
+            cur_row_.cells_[i].set_int(0);
+          }
           break;
         }
         default:

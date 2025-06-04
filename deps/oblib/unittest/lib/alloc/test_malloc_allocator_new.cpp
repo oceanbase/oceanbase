@@ -167,7 +167,8 @@ TEST(TestMallocAllocator, allocator_guard)
     ASSERT_EQ(true, guard.lock_);
   }
   {
-    ObTenantCtxAllocator *tmp_ta = new ObTenantCtxAllocator(0,0);
+    ObTenantCtxAllocatorV2 ctx_alloctor(0, 0, NULL, 0);
+    ObTenantCtxAllocator *tmp_ta = new ObTenantCtxAllocator(ctx_alloctor, 0, 0, 0);
     ASSERT_EQ(0, tmp_ta->get_ref_cnt());
     ObTenantCtxAllocatorGuard guard(tmp_ta);
     ASSERT_EQ(1, tmp_ta->get_ref_cnt());
@@ -245,6 +246,7 @@ int main(int argc, char *argv[])
   signal(49, SIG_IGN);
   OB_LOGGER.set_file_name("t.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  set_memory_limit(64LL<<30);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

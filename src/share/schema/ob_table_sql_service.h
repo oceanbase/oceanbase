@@ -85,6 +85,7 @@ public:
                          const common::ObString *ddl_stmt_str,
                          const bool is_truncate_table,
                          const bool is_drop_db,
+                         const bool is_force_drop_lonely_lob_aux_table,
                          share::schema::ObSchemaGetterGuard *schema_guard,
                          share::schema::DropTableIdHashSet *drop_table_set);
 
@@ -191,7 +192,10 @@ public:
                            const ObTableSchema &ori_table,
                            const ObTableSchema &inc_table,
                            const int64_t schema_version);
-
+  int alter_inc_part_policy(ObISQLClient &sql_client, const ObTableSchema &table_schema,
+      const ObTableSchema &inc_table_schema, const int64_t new_schema_version);
+  int alter_inc_subpart_policy(ObISQLClient &sql_client, const ObTableSchema &table_schema,
+      const ObTableSchema &inc_table_schema, const int64_t new_schema_version);
   int drop_inc_part_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,

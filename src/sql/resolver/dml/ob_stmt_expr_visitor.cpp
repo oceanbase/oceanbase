@@ -36,7 +36,10 @@ int ObStmtExprGetter::do_visit(ObRawExpr *&expr)
   int ret = OB_SUCCESS;
   if (NULL == checker_) {
     ret = OB_ERR_UNEXPECTED;
-  } else {
+  } else if (OB_ISNULL(expr_flags_)) {
+    ret = checker_->add_expr(expr);
+  } else if ((match_any_ && expr->get_flags().overlap(*expr_flags_)) ||
+             (!match_any_ && expr->get_flags().is_superset(*expr_flags_))) {
     ret = checker_->add_expr(expr);
   }
   return ret;

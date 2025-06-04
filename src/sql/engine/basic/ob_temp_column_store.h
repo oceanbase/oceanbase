@@ -87,13 +87,6 @@ public:
                               const ObArray<ObLength> &lengths,
                               const int64_t size,
                               int64_t &batch_mem_size);
-    static int calc_nested_size(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                                const ObArray<ObLength> &lengths, const int64_t size,
-                                int64_t &batch_mem_size);
-    int add_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                         const int64_t size, char *head, int64_t &pos);
-    static int distribute_uniform_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                                               const VectorFormat format, const int64_t size);
     int add_batch(ObEvalCtx &ctx,
                   const ObExprPtrIArray &exprs,
                   ShrinkBuffer &buf,
@@ -120,7 +113,6 @@ public:
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
 
-    int get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const;
   private:
     inline static int64_t get_header_size(const int64_t vec_cnt)
     {
@@ -143,7 +135,6 @@ public:
     inline bool has_next() const { return cur_blk_id_ < get_row_cnt(); }
     inline int64_t get_row_cnt() const { return column_store_->get_row_cnt(); }
     inline int64_t get_col_cnt() const { return column_store_->get_col_cnt(); }
-    int nested_from_vector(ObExpr &expr, ObEvalCtx &ctx, const int64_t start_pos, const int64_t size);
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
                        const int64_t max_rows,

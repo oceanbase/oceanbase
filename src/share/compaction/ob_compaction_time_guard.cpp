@@ -208,6 +208,7 @@ int64_t ObCompactionScheduleTimeGuard::to_string(char *buf, const int64_t buf_le
  *  ----------------------------------------------ObCompactionTimeGuard--------------------------------------------------
  */
 constexpr float ObStorageCompactionTimeGuard::COMPACTION_SHOW_PERCENT_THRESHOLD;
+constexpr float ObStorageCompactionTimeGuard::EXECUTE_PERCENT_THRESHOLD;
 const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "WAIT_TO_SCHEDULE",
     "COMPACTION_POLICY",
@@ -236,6 +237,23 @@ const char *ObStorageCompactionTimeGuard::get_comp_event_str(const enum Compacti
   return str;
 }
 
+bool ObStorageCompactionTimeGuard::need_print() const
+{
+  bool bret = false;
+  if (size_ > DAG_WAIT_TO_SCHEDULE && event_times_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
+    bret = true;
+  } else {
+    int64_t total_cost = 0;
+    for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
+      total_cost += event_times_[idx];
+    }
+    if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD && EXECUTE < size_ && event_times_[EXECUTE] < total_cost * EXECUTE_PERCENT_THRESHOLD) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
 int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -248,12 +266,14 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
   for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
     total_cost += event_times_[idx];
   }
+  bool exist_other_slow_event = false;
   if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD) {
     float ratio = 0;
     for (int64_t idx = COMPACTION_POLICY; idx < size_; ++idx) {
       const uint32_t time_interval = event_times_[idx]; // include the retry time since previous event
       ratio = (float)(time_interval)/ total_cost;
-      if (ratio >= COMPACTION_SHOW_PERCENT_THRESHOLD || time_interval >= COMPACTION_SHOW_TIME_THRESHOLD) {
+      if (EXECUTE != idx && (ratio >= COMPACTION_SHOW_PERCENT_THRESHOLD || time_interval >= COMPACTION_SHOW_TIME_THRESHOLD)) {
+        exist_other_slow_event = true;
         fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str(static_cast<CompactionEvent>(idx)), event_times_[idx]);
         if (ratio > 0.01) {
           common::databuff_printf(buf, buf_len, pos, "(%.2f)", ratio);
@@ -262,11 +282,12 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
       }
     }
   }
-  fmt_ts_to_meaningful_str(buf, buf_len, pos, "total", total_cost);
-  if (pos != 0 && pos < buf_len) {
-    buf[pos - 1] = ';';
+  if (exist_other_slow_event) {
+    fmt_ts_to_meaningful_str(buf, buf_len, pos, "total", total_cost);
+    if (pos != 0 && pos < buf_len) {
+      buf[pos - 1] = ';';
+    }
   }
-
   if (pos != 0 && pos < buf_len) {
     pos -= 1;
   }

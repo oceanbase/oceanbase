@@ -1,7 +1,7 @@
 storage_unittest(test_tmp_file)
 storage_unittest(test_tmp_file_meta_tree)
 storage_unittest(test_tmp_file_write_buffer_pool_index_cache)
-#storage_unittest(test_tmp_file_buffer_pool)
+storage_unittest(test_tmp_file_buffer_pool)
 storage_unittest(test_tmp_file_buffer_pool_entry_array)
 storage_unittest(test_tmp_file_flush_list)
 storage_unittest(test_tmp_file_block_manager)

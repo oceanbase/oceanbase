@@ -121,7 +121,7 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
       SHARE_LOG(WARN, "affected rows unexpected", K(ret), K(affected_rows), K(tenant_id),
                                                   K(file_type), K(data_size));
     } else {
-      SHARE_LOG(INFO, "insert successful ", K(ret), K(tenant_id), K(file_type), K(data_size));
+      SHARE_LOG(INFO, "insert successful ", K(ret), K(tenant_id), K(file_type), K(data_size), K(used_size));
     }
   }
   return ret;

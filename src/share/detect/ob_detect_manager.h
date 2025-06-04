@@ -22,33 +22,19 @@
 namespace oceanbase {
 namespace common {
 
-struct ObDetectCallbackNode
-{
-  ObDetectCallbackNode(ObIDetectCallback *cb, uint64_t sequence_id) :
-      next_(nullptr), prev_(nullptr), cb_(cb), sequence_id_(sequence_id), executed_(false) {}
-  ObDetectCallbackNode() : next_(nullptr), prev_(nullptr), cb_(nullptr) {}
-  ~ObDetectCallbackNode() = default;
-  void set_executed() { executed_ = true; }
-  bool is_executed() { return executed_; }
-  ObDetectCallbackNode *next_;
-  ObDetectCallbackNode *prev_;
-  ObIDetectCallback *cb_;
-  uint64_t sequence_id_;
-  bool executed_;
-};
-
 class ObDetectableIdGen
 {
 public:
   static ObDetectableIdGen &instance();
-  uint64_t get_detect_sequence_id() { return ATOMIC_AAF(&detect_sequence_id_, 1); }
-  uint64_t get_callback_node_sequence_id() { return ATOMIC_AAF(&callback_node_sequence_id_, 1); }
+  uint64_t generate_callback_sequence_id() { return ATOMIC_AAF(&callback_sequence_id_, 1); }
   int generate_detectable_id(ObDetectableId &detectable_id, uint64_t tenant_id);
+private:
+  uint64_t generate_detect_sequence_id() { return ATOMIC_AAF(&detect_sequence_id_, 1); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDetectableIdGen);
   ObDetectableIdGen();
   volatile uint64_t detect_sequence_id_; // for DetectableId
-  volatile uint64_t callback_node_sequence_id_; // for mark specific node in linked list(value of CHECK_MAP)
+  volatile uint64_t callback_sequence_id_; // mark specific callback in linked list(value of CHECK_MAP)
 };
 
 // Detect Manager multi Double link list
@@ -91,6 +77,13 @@ typedef hash::ObHashMap<common::ObAddr, obrpc::ObTaskStateDetectReq *,
                 hash::hash_func<common::ObAddr>,
                 hash::equal_to<common::ObAddr>> REQUEST_MAP;
 
+// For implementation workarounds: ObDList is not allowed to copy assign.
+class ObDMCallbackDList final : public ObDList<ObIDetectCallback>
+{
+public:
+  int assign(const ObDMCallbackDList &src);
+};
+
 // design doc:
 class ObDetectManager
 {
@@ -98,91 +91,83 @@ private:
   static const int64_t MAX_TENANT_MEM_LIMIT = 17179869184; //16G
   // for CHECK_MAP
   static const int64_t DEFAULT_CHECK_MAP_BUCKETS_COUNT = 1000000; //100w
-  static const int64_t MINI_MODE_CHECK_MAP_BUCKETS_COUNT = 10000; //1w
-  // for detectable_ids_
-  static const int64_t DEFAULT_SET_BUCKETS_COUNT = 1000000; //100w
-  static const int64_t MINI_MODE_SET_BUCKETS_COUNT = 10000; //1w
-  // for still_need_check_id_
   static const int64_t MIDDLE_SET_BUCKETS_COUNT = 100000; //10w
   // for ObDMMultiDlist bucket
   static const int64_t DM_MDLIST_BUCKETS_COUNT = 128;
   static const int64_t DM_MDLIST_BUCKETS_COUNT_FOR_META_TENANT = 4;
 
-  static const uint64_t ACTIVATE_DELAY_TIME = 5 * 1000L * 1000L; // dm only detects checkitems that have been present for at least "ACTIVATE_DELAY_TIME" seconds
+  // dm only detects check items that have been present for at least "ACTIVATE_DELAY_TIME" seconds
+  static const uint64_t ACTIVATE_DELAY_TIME = 5 * 1000L * 1000L;
 public:
   static int mtl_new(ObDetectManager *&dm);
   static int mtl_init(ObDetectManager *&dm);
   static void mtl_destroy(ObDetectManager *&dm);
 public:
-  /* tool classes */
   /* The CHECK_MAP's construct:
       key_id     bucket node       value
                     ___
-      123  ->      |___|->ObDetectCallbackNode*->ObDetectCallbackNode*->...->nullptr
-                   |___|->ObDetectCallbackNode*->ObDetectCallbackNode*->...->nullptr
+      123  ->      |___|->ObDList<ObIDetectCallback>
+                   |___|->ObDList<ObIDetectCallback>
 
                     ___
-      124  ->      |___|->ObDetectCallbackNode*->ObDetectCallbackNode*->...->nullptr
-                   |___|->ObDetectCallbackNode*->ObDetectCallbackNode*->...->nullptr
+      124  ->      |___|->ObDList<ObIDetectCallback>
+                   |___|->ObDList<ObIDetectCallback>
 
       means the value of the CHECK_MAP is a linked list.
-      for same ObDetectableId, we may insert more than one nodes into the linked list.
-      when the linked list is empty, we use ObObDetectCallbackNodeSetCall to set the first node
-      otherwise, we use ObDetectCallbackNodeAddCall to insert a node into the linked list
+      for same ObDetectableId, we may insert more than one callback into the linked list.
+      when the linked list is empty, we use ObDetectCallbackSetCall to set the first callback
+      otherwise, we use ObDetectCallbackAddCall to insert a callback into the linked list
   */
-  typedef hash::ObHashMap<ObDetectableId, ObDetectCallbackNode *,
+  typedef hash::ObHashMap<ObDetectableId, ObDMCallbackDList,
                   hash::SpinReadWriteDefendMode, hash::hash_func<ObDetectableId>,
                   hash::equal_to<ObDetectableId>> CHECK_MAP;
-
-  // Atomic insert the first detect callback node in linklist
-  class ObObDetectCallbackNodeSetCall
-  {
-    public:
-      explicit ObObDetectCallbackNodeSetCall(ObDetectManager *dm) : dm_(dm) {};
-      int operator()(const hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
-    private:
-      ObDetectManager *dm_;
-  };
-
-  // Atomic insertion a callback node into the linklist
-  class ObDetectCallbackNodeAddCall
+  /* tool classes */
+  // Atomic insert the first detect callback in link list
+  class ObDetectCallbackSetCall
   {
   public:
-    void operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
-
-    ObDetectCallbackNodeAddCall(ObDetectCallbackNode *cb_node, ObDetectManager *dm) :
-        cb_node_(cb_node), dm_(dm), is_empty_(false) {};
-
-    inline bool is_empty()
-    {
-      return is_empty_;
-    }
+    ObDetectCallbackSetCall(ObDetectManager *dm, ObIDetectCallback *callback)
+        : dm_(dm), callback_(callback) {};
+    int operator()(const hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
   private:
-    ObDetectCallbackNode *cb_node_;
+    ObDetectManager *dm_;
+    ObIDetectCallback *callback_;
+  };
+
+  // Atomic insertion a callback into the linked list
+  class ObDetectCallbackAddCall
+  {
+  public:
+    void operator()(hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
+
+    ObDetectCallbackAddCall(ObIDetectCallback *callback, ObDetectManager *dm) :
+        callback_(callback), dm_(dm), is_empty_(false) {};
+
+    inline bool is_empty() const { return is_empty_; }
+  private:
+    ObIDetectCallback *callback_;
     ObDetectManager *dm_;
     bool is_empty_;
   };
 
   // Atomic removal callback, lock the bucket to avoid reading and inserting operations during removal
-  class ObDetectCallbackNodeRemoveCall
+  class ObDetectCallbackRemoveCall
   {
   public:
-    bool operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
-    ObDetectCallbackNodeRemoveCall(ObDetectManager *dm, const uint64_t &node_sequence_id)
-      : found_node_(false), dm_(dm), node_sequence_id_(node_sequence_id) {};
-    bool is_found_node() { return found_node_; };
+    bool operator()(hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
+    ObDetectCallbackRemoveCall(ObDetectManager *dm, const uint64_t &sequence_id)
+      : dm_(dm), sequence_id_(sequence_id) {};
   private:
-    bool found_node_;
     ObDetectManager *dm_;
-    uint64_t node_sequence_id_;
+    uint64_t sequence_id_;
   };
 
   // Atomic execute
-  class ObDetectCallbackNodeExecuteCall
+  class ObDetectCallbackExecuteCall
   {
   public:
-    bool operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
-    ObDetectCallbackNodeExecuteCall(ObDetectManager *dm, const ObDetectableId &detectable_id,
+    bool operator()(hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
+    ObDetectCallbackExecuteCall(ObDetectManager *dm, const ObDetectableId &detectable_id,
         const common::ObAddr &addr) : dm_(dm), detectable_id_(detectable_id), from_svr_addr_(addr) {}
   private:
     friend class ObDetectManager;
@@ -195,9 +180,9 @@ public:
   class ObCheckStateFinishCall
   {
   public:
-    void operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
+    void operator()(hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
     explicit ObCheckStateFinishCall(const common::ObAddr &addr) : addr_(addr), finished_(false) {}
-    bool is_finished() { return finished_; }
+    inline bool is_finished() const { return finished_; }
   private:
     const common::ObAddr &addr_;
     bool finished_;
@@ -208,7 +193,7 @@ public:
   {
   public:
     ObDetectReqGetCall(REQUEST_MAP &req_map, lib::MemoryContext &req_map_context) : req_map_(req_map), req_map_context_(req_map_context) {};
-    void operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry);
+    void operator()(hash::HashMapPair<ObDetectableId, ObDMCallbackDList> &entry);
   private:
     REQUEST_MAP &req_map_;
     lib::MemoryContext &req_map_context_;
@@ -222,16 +207,20 @@ public:
   int register_detectable_id(const ObDetectableId &detectable_id);
   int unregister_detectable_id(const ObDetectableId &detectable_id);
 
-  // @param node_sequence_id, return the unique id of node for unregister
+  // @param sequence_id, return the unique id of callback for unregister
   // @param need_ref, if is true, means that work thread want to use callback.
-  // will add ref_count for callbak so that dm can't free it until ref_count changes to 0
-  // typical scene: qc detects sqc, qc wants to moidfy the state of sqc in callback while callback be freed by dm, add ref_count is necessary
+  // will add ref_count for callback so that dm can't free it until ref_count changes to 0
+  // typical scene: qc detects sqc, qc wants to moidify the state of sqc in callback while callback
+  // be freed by dm, add ref_count is necessary
   // @param args, used in constructor of T
   template <typename T, typename... U>
   int register_check_item(const ObDetectableId &detectable_id, T *&cb,
-                            uint64_t &node_sequence_id, bool need_ref, U& ... args)
+                            uint64_t &sequence_id, bool need_ref, U& ... args)
   {
     int ret = OB_SUCCESS;
+    T *ptr = nullptr;
+    void *buf = nullptr;
+    ObIAllocator &allocator = get_mem_context()->get_malloc_allocator();
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LIB_LOG(ERROR, "[DM] detect manager not inited", K(ret));
@@ -241,44 +230,43 @@ public:
     } else if (detectable_id.is_invalid()) {
       ret = OB_INVALID_ARGUMENT;
       LIB_LOG(WARN, "[DM] invaild detectable_id", K(common::lbt()));
+    } else if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LIB_LOG(WARN, "[DM] failed to new cb ", K(ptr));
     } else {
-      T* ptr = nullptr;
-      ObDetectCallbackNode *cb_node = nullptr;
-      ObIAllocator &allocator = get_mem_context()->get_malloc_allocator();
-      // Simultaneously allocate memory for both ObDetectCallbackNode and ObDetectCallback
-      // to reduce the number of allocations.
-      void *buf = allocator.alloc(sizeof(ObDetectCallbackNode) + sizeof(T));
-      if (OB_NOT_NULL(buf)) {
-        ptr = new((char *)(buf) + sizeof(ObDetectCallbackNode)) T(detectable_id.tenant_id_, args...);
-        if (!ptr->alloc_succ()) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          ptr->destroy();
-          allocator.free(buf);
-          LIB_LOG(WARN, "[DM] failed to new cb ", K(ptr));
-        } else {
-          cb_node = new(buf) ObDetectCallbackNode(ptr, ObDetectableIdGen::instance().get_callback_node_sequence_id());
-          ObCurTraceId::TraceId *cur_thread_id = ObCurTraceId::get_trace_id();
-          ptr->set_trace_id(*cur_thread_id);
-          ptr->d_node_.detectable_id_ = detectable_id;
-          ptr->d_node_.activate_tm_ = ObTimeUtility::current_time() + ACTIVATE_DELAY_TIME;
-          LIB_LOG(DEBUG, "[DM] dm new cb ", K(ptr));
-          if (OB_FAIL(do_register_check_item(detectable_id, cb_node, node_sequence_id, need_ref))) {
-            LIB_LOG(WARN, "[DM] failed to register_check_item", K(ptr));
-          } else {
-            cb = ptr;
-          }
-        }
-      } else {
+      ptr = new(buf) T(detectable_id.tenant_id_, args...);
+      if (!ptr->alloc_succ()) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LIB_LOG(WARN, "[DM] failed to new cb ", K(ptr));
+        delete_callback(ptr);
+      } else {
+        ObCurTraceId::TraceId *cur_thread_id = ObCurTraceId::get_trace_id();
+        sequence_id = ObDetectableIdGen::instance().generate_callback_sequence_id();
+        ptr->set_trace_id(*cur_thread_id);
+        ptr->set_sequence_id(sequence_id);
+        ptr->d_node_.detectable_id_ = detectable_id;
+        ptr->d_node_.activate_tm_ = ObTimeUtility::current_time() + ACTIVATE_DELAY_TIME;
+        // if need_ref is true, which means that work thread may use cb, so add ref_count in case
+        // of deleting cb during ObDetectCallbackExecuteCall
+        // typical scene: qc may change sqc's task state in callback upon receiving the report
+        // message from sqc, but dm may free callback already
+        if (need_ref) {
+          ptr->inc_ref_count();
+        }
+        LIB_LOG(DEBUG, "[DM] dm new cb ", K(ptr));
+        if (OB_FAIL(do_register_check_item(detectable_id, ptr))) {
+          LIB_LOG(WARN, "[DM] failed to register_check_item", K(ptr));
+        } else {
+          cb = ptr;
+        }
       }
     }
     return ret;
   }
 
   // @param detectable_id, key of CHECK_MAP
-  // @param node_sequence_id, mark which node to be removed in the linklist(value of CHECK_MAP)
-  int unregister_check_item(const ObDetectableId &detectable_id, const uint64_t &node_sequence_id);
+  // @param sequence_id, mark which callback to be removed in the link list
+  int unregister_check_item(const ObDetectableId &detectable_id, const uint64_t &sequence_id);
 
   bool is_task_alive(const ObDetectableId &detectable_id)
   {
@@ -288,10 +276,9 @@ public:
   lib::MemoryContext &get_mem_context() { return mem_context_; }
 
 private:
-  int do_register_check_item(const ObDetectableId &detectable_id, ObDetectCallbackNode *cb_node,
-                              uint64_t &node_sequence_id, bool need_ref = false);
+  int do_register_check_item(const ObDetectableId &detectable_id, ObIDetectCallback *callback);
 
-  void delete_cb_node(ObDetectCallbackNode *&cb_node);
+  void delete_callback(ObIDetectCallback *callback);
   int gather_requests(REQUEST_MAP &req_map, lib::MemoryContext &req_map_context);
   void do_detect_local(const ObDetectableId &detectable_id);
   void do_handle_one_result(const ObDetectableId &detectable_id, const obrpc::ObDetectRpcStatus &rpc_status);

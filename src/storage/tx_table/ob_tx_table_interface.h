@@ -99,7 +99,8 @@ public: // dalegate functions
                        memtable::ObMvccTransNode &tnode,
                        const bool need_row_latch);
 
-  int get_recycle_scn(share::SCN &recycle_scn);
+  int get_recycle_scn(share::SCN &recycle_scn,
+                      const bool is_shared_minor = false);
 
   int self_freeze_task();
 

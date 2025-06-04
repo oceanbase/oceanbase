@@ -112,15 +112,17 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCGAggregatedScanner not init", K(ret));
-  } else if (check_agg_finished()) {
+  } else if (check_agg_finished() || 0 == cur_processed_row_count_) {
     ret = OB_ITER_END;
   } else if (!need_access_data_ && !need_get_row_ids_) {
+    ObPushdownRowIdCtx pd_row_id_ctx;
+    pd_row_id_ctx.begin_ = 0;
+    pd_row_id_ctx.end_ = cur_processed_row_count_ - 1;
     if (OB_FAIL(agg_group_->eval_batch(iter_param_,
                                        access_ctx_,
                                        0/*col_offset*/,
                                        nullptr/*reader*/,
-                                       nullptr/*row_ids*/,
-                                       cur_processed_row_count_,
+                                       pd_row_id_ctx,
                                        false/*reserve_memory*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
@@ -151,34 +153,102 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   return ret;
 }
 
-int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t datum_offset)
+int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset)
 {
   UNUSED(datum_offset);
   int ret = OB_SUCCESS;
-  bool need_projected = true;
+  int64_t row_cap = 0;
   if (iter_param_->use_new_format()) {
     micro_scanner_->reserve_reader_memory(false);
     ObAggGroupVec *agg_group_vec = static_cast<ObAggGroupVec *>(agg_group_);
-    need_projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), 0/*col_offset*/, row_ids_, row_cap);
-    if (!need_projected) {
-    } else if (OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
-                                                     col_params_,
-                                                     row_ids_,
-                                                     cell_data_ptrs_,
-                                                     row_cap,
-                                                     datum_infos_,
-                                                     0, /*datum offset*/
-                                                     len_array_,
-                                                     is_padding_mode_,
-                                                     !access_ctx_->block_row_store_->filter_is_null()))) {
-      LOG_WARN("Fail to get next rows", K(ret));
+    const ObCSRange &data_range = prefetcher_.current_micro_info().get_row_range();
+    const int64_t upper_bound = MIN(query_index_range_.end_row_id_, data_range.end_row_id_);
+    const int64_t lower_bound = MAX(query_index_range_.start_row_id_, data_range.start_row_id_);
+    ObPushdownRowIdCtx pd_row_id_ctx;
+    if (OB_ISNULL(agg_group_vec)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null agg group", K(ret), KP(agg_group_vec));
+    } else if (nullptr == filter_bitmap_) {
+      // empty row_ids
+      pd_row_id_ctx.reuse();
+      pd_row_id_ctx.begin_ = current_ - data_range.start_row_id_;
+      pd_row_id_ctx.end_ = upper_bound - data_range.start_row_id_;
+      pd_row_id_ctx.bound_row_id_ = is_reverse_scan_ ? lower_bound : upper_bound;
+      pd_row_id_ctx.is_reverse_ = is_reverse_scan_;
+      if (OB_FAIL(agg_group_vec->agg_pushdown_decoder(micro_scanner_->get_reader(), 0/*col_offset*/, pd_row_id_ctx))) {
+        LOG_WARN("fail to pushdown aggregate to decoder", K(ret), K(pd_row_id_ctx));
+      }
     }
-    LOG_DEBUG("check whether need project in aggregate", K(need_projected), K_(need_access_data), K_(need_get_row_ids));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_offset*/, row_ids_, row_cap, need_projected/*reserve_memory*/, *agg_group_))) {
-    LOG_WARN("Fail to get aggregate result", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (nullptr == filter_bitmap_ && agg_group_vec->is_agg_finish(pd_row_id_ctx)) {
+      current_ = is_reverse_scan_ ? lower_bound - 1 : upper_bound + 1;
+      count += pd_row_id_ctx.get_row_count();
+      if (end_of_scan()) {
+        ret = OB_ITER_END;
+      }
+      LOG_TRACE("all aggregate has been pushdown to decoder", K(ret), K(agg_group_vec->agg_row_id_), K(pd_row_id_ctx));
+    } else if (OB_FAIL(convert_bitmap_to_cs_index(row_ids_,
+                                                  row_cap,
+                                                  current_,
+                                                  query_index_range_,
+                                                  prefetcher_.current_micro_info().get_row_range(),
+                                                  filter_bitmap_,
+                                                  batch_size - count,
+                                                  is_reverse_scan_))) {
+      LOG_WARN("Fail to get row ids", K(ret), K_(current), K_(query_index_range));
+    } else if (0 == row_cap) {
+    } else {
+      pd_row_id_ctx.reuse();
+      pd_row_id_ctx.row_ids_ = row_ids_;
+      pd_row_id_ctx.row_cap_ = row_cap;
+      pd_row_id_ctx.bound_row_id_ = get_bound_row_id();
+      pd_row_id_ctx.is_reverse_ = is_reverse_scan_;
+      if (nullptr != filter_bitmap_ && OB_FAIL(agg_group_vec->agg_pushdown_decoder(micro_scanner_->get_reader(), 0/*col_offset*/, pd_row_id_ctx))) {
+        LOG_WARN("fail to pushdown aggregate to decoder", K(ret), K(pd_row_id_ctx));
+      } else if (agg_group_vec->is_agg_finish(pd_row_id_ctx)) {
+        count += row_cap;
+        LOG_DEBUG("all aggregate has been pushdown to decoder", K(ret), K(agg_group_vec->agg_row_id_), K(pd_row_id_ctx));
+      } else if (OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
+                                                        col_params_,
+                                                        row_ids_,
+                                                        cell_data_ptrs_,
+                                                        row_cap,
+                                                        datum_infos_,
+                                                        0, /*datum offset*/
+                                                        len_array_,
+                                                        is_padding_mode_,
+                                                        !access_ctx_->block_row_store_->filter_is_null()))) {
+        LOG_WARN("fail to get next rows", K(ret));
+      } else if (OB_FAIL(agg_group_vec->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
+                                                   micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
+        LOG_WARN("fail to aggregate batch", K(ret));
+      } else {
+        count += row_cap;
+        if (row_cap > 0 && datum_infos_.count() > 0) {
+          LOG_DEBUG("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(row_cap),
+            "new format datums", sql::ToStrVectorHeader(*datum_infos_.at(0).expr_, iter_param_->op_->get_eval_ctx(),
+                                                        nullptr,  sql::EvalBound(row_cap, true)));
+        }
+      }
+    }
+  } else if (OB_FAIL(convert_bitmap_to_cs_index(row_ids_,
+                                                row_cap,
+                                                current_,
+                                                query_index_range_,
+                                                prefetcher_.current_micro_info().get_row_range(),
+                                                filter_bitmap_,
+                                                batch_size - count,
+                                                is_reverse_scan_))) {
+    LOG_WARN("Fail to get row ids", K(ret), K_(current), K_(query_index_range));
+  } else if (0 == row_cap) {
+  } else {
+    ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, row_cap);
+    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
+                                       micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
+      LOG_WARN("fail to aggregate batch", K(ret));
+    } else {
+      count += row_cap;
+    }
   }
   return ret;
 }

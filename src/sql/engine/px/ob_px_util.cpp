@@ -305,7 +305,6 @@ int ObPXServerAddrUtil::get_external_table_loc(
       ObSEArray<const ObTableScanSpec *, 2> scan_ops;
       const ObTableScanSpec *scan_op = nullptr;
       const ObOpSpec *root_op = NULL;
-      int64_t expected_location_cnt = 0;
       dfo.get_root(root_op);
       if (OB_ISNULL(root_op)) {
         ret = OB_ERR_UNEXPECTED;
@@ -318,20 +317,24 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
                                                             is_odps_external_table))) {
         LOG_WARN("failed to check is odps external table or not", K(ret));
-      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(),
-                                      ((!ext_file_urls.empty() && is_odps_external_table) ?
-                                        all_locations.count() : dfo.get_external_table_files().count())))) {
-
-      } else if (1 == expected_location_cnt) {
-        if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
-          LOG_WARN("fail to push push back", K(ret));
+      } else if (is_odps_external_table) {
+        int64_t expected_location_cnt = std::min(dfo.get_dop(), all_locations.count());
+        if (1 == expected_location_cnt) {
+          if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
+            LOG_WARN("fail to push push back", K(ret));
+          }
+        } else if (expected_location_cnt >= all_locations.count() ?
+                     OB_FAIL(target_locations.assign(all_locations)) :
+                     OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(
+                       all_locations, expected_location_cnt, target_locations))) {
+          LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations),
+                   K(expected_location_cnt));
         }
-      } else if (expected_location_cnt >= all_locations.count() ?
-                   OB_FAIL(target_locations.assign(all_locations))
-                 : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
-                                                                          expected_location_cnt,
-                                                                          target_locations))) {
-        LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+      } else {
+        if (OB_FAIL(ObExternalTableUtils::select_external_table_loc_by_load_balancer(
+              ext_file_urls, all_locations, target_locations))) {
+          LOG_WARN("failed to select external table location", K(ret));
+        }
       }
     }
     LOG_TRACE("calc external table location", K(target_locations));
@@ -400,7 +403,8 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     } else {
       ObArray<int64_t> file_assigned_sqc_ids;
-      OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
+      OZ(ObExternalTableUtils::assigned_files_to_sqcs_by_load_balancer(files, sqcs,
+                                                                       file_assigned_sqc_ids));
       if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
@@ -442,8 +446,9 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     LOG_WARN("NULL ptr or sqc is not empty", K(ret), K(dfo));
   } else if (0 != dfo.get_sqcs_count()) {
     /**
-     * this dfo has been build. do nothing.
+     * this dfo has been built. do nothing.
      */
+    LOG_TRACE("this dfo has been built", K(dfo.get_dfo_id()));
   } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
     LOG_WARN("fail find scan ops in dfo", K(dfo), K(ret));
   } else if (OB_FAIL(ObPXServerAddrUtil::find_dml_ops(dml_ops, *root_op))) {
@@ -584,7 +589,8 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
   int ret = OB_SUCCESS;
   if (IS_DML(op.get_type())) {
     if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
-        PHY_MERGE != op.get_type()) {
+        PHY_MERGE != op.get_type() &&
+        PHY_INSERT_ON_DUP != op.get_type()) {
       // px no need schedule das except merge
     } else if (PHY_LOCK == op.get_type()) {
       // no need lock op
@@ -933,6 +939,11 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
       OB_ISNULL(exec_ctx.get_physical_plan_ctx()->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL phy plan ctx", K(ret), K(exec_ctx.get_physical_plan_ctx()));
+  } else if (0 != parent.get_sqcs_count()) {
+    /**
+     * this dfo has been built. do nothing.
+     */
+    LOG_TRACE("this dfo has been built", K(parent.get_dfo_id()));
   } else if (OB_FAIL(px_node_pool.init(exec_ctx))) {
     LOG_WARN("Fail to init mpp node info", K(ret));
   } else if (px_node_pool.data_node_empty()) {
@@ -1102,15 +1113,46 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
  *
  */
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-    const ObIArray<ObTableLocation> *table_locations,
-    ObExecContext &exec_ctx,
     ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) &&
-                      nullptr == reference_child &&
-                      i < parent.get_child_count(); ++i) {
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+    LOG_WARN("failed to alloc by child distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+                                          const ObIArray<ObTableLocation> *table_locations,
+                                          ObExecContext &exec_ctx,
+                                          ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  ObDfo *reference_child = nullptr;
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
+    LOG_WARN("failed to alloc by data distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_child)
+{
+  int ret = OB_SUCCESS;
+  reference_child = nullptr;
+  for (int64_t i = 0;
+       OB_SUCC(ret) && nullptr == reference_child && i < parent.get_child_count();
+       ++i) {
     ObDfo *candi_child = nullptr;
     if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
       LOG_WARN("failed to get dfo", K(ret));
@@ -1121,15 +1163,6 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
                candi_child->is_out_slave_mapping()) {
       reference_child = candi_child;
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(reference_child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null child", K(ret));
-  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
-    LOG_WARN("failed to alloc by data", K(ret));
-  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
-    LOG_WARN("failed to alloc by child distribution", K(ret));
   }
   return ret;
 }
@@ -3340,7 +3373,7 @@ int ObSlaveMapUtil::build_pwj_slave_map_mn_group(ObDfo &parent, ObDfo &child, ui
    */
   if (parent.get_sqcs_count() != child.get_sqcs_count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pwj must have some sqc count", K(ret));
+    LOG_WARN("pwj must have the same sqc count", K(ret), K(parent.get_sqcs_count()), K(child.get_sqcs_count()));
   } else if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
     LOG_WARN("failed to check dfo pair", K(ret));
   } else if (OB_FAIL(build_mn_channel_per_sqcs(
@@ -3523,21 +3556,8 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
     common::ObSEArray<ObPxSqcMeta *, 8> sqcs;
     ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
     ObPxPartChMapArray &map = child.get_part_ch_map();
-    for (int64_t i = 0; OB_SUCC(ret) &&
-                        nullptr == reference_child &&
-                        i < parent.get_child_count(); ++i) {
-      ObDfo *candi_child = nullptr;
-      if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
-        LOG_WARN("failed to get dfo", K(ret));
-      } else if (OB_ISNULL(candi_child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null child", K(ret));
-      } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
-                 candi_child->is_out_slave_mapping()) {
-        reference_child = candi_child;
-      }
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ObPXServerAddrUtil::find_reference_child(parent, reference_child))) {
+      LOG_WARN("find reference child", K(ret));
     } else if (OB_ISNULL(reference_child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child", K(ret));
@@ -4744,6 +4764,36 @@ int ObPXServerAddrUtil::get_cluster_server_cnt(const ObIArray<ObAddr> &server_li
             K(ret), K(MTL_ID()));
   } else {
     server_cnt = std::max(server_list.count(), tenant_servers.count());
+  }
+  return ret;
+}
+
+// for slave mapping under union all, the parent dfo may also contain scan ops,
+// thus we should check the sqc addr is match
+int ObPXServerAddrUtil::check_slave_mapping_location_constraint(ObDfo &child, ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(child.get_sqcs_count() != parent.get_sqcs_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc count not match for slave_mapping", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+  } else {
+    common::ObIArray<ObPxSqcMeta> &child_sqcs = child.get_sqcs();
+    common::ObIArray<ObPxSqcMeta> &parent_sqcs = parent.get_sqcs();
+    for (int64_t i = 0; i < child_sqcs.count() && OB_SUCC(ret); ++i) {
+      bool match = false;
+      const ObAddr &child_addr = child_sqcs.at(i).get_exec_addr();
+      for (int64_t j = 0; j < parent_sqcs.count() && OB_SUCC(ret); ++j) {
+        const ObAddr &parent_addr = parent_sqcs.at(j).get_exec_addr();
+        if (child_addr == parent_addr) {
+          match = true;
+          break;
+        }
+      }
+      if (OB_UNLIKELY(!match)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sqc addr not match", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+      }
+    }
   }
   return ret;
 }

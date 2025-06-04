@@ -41,7 +41,7 @@ int ObRedisCellEntity::get_expire_ts(int64_t &expire_ts) const
 {
   int ret = OB_SUCCESS;
   ObObj *obj = nullptr;
-  if (model_ == ObRedisModel::STRING) {
+  if (model_ == ObRedisDataModel::STRING) {
     if (OB_FAIL(get_cell(ObRedisUtil::STRING_COL_IDX_EXPIRE_TS, obj))) {
       LOG_WARN("fail to get cell with idx", K(ret));
     } else if (obj->is_null()) {
@@ -64,7 +64,7 @@ int ObRedisCellEntity::get_insert_ts(int64_t &insert_ts) const
 {
   int ret = OB_SUCCESS;
   ObObj *obj = nullptr;
-  if (model_ == ObRedisModel::STRING) {
+  if (model_ == ObRedisDataModel::STRING) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid model type, string do not have insert_ts", K(ret));
   } else if (OB_FAIL(get_cell(ObRedisUtil::COL_IDX_INSERT_TS, obj))) {
@@ -79,10 +79,10 @@ int ObRedisCellEntity::get_is_data(bool &is_data) const
 {
   int ret = OB_SUCCESS;
   ObObj *obj = nullptr;
-  if (model_ == ObRedisModel::STRING) {
+  if (model_ == ObRedisDataModel::STRING) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid model type, string do not have is_data", K(ret));
-  } else if (model_ == ObRedisModel::LIST) {
+  } else if (model_ == ObRedisDataModel::LIST) {
     if (OB_FAIL(get_cell(ObRedisUtil::COL_IDX_IS_DATA, obj))) {
       LOG_WARN("fail to get cell with idx", K(ret));
     } else if (OB_FAIL(obj->get_bool(is_data))) {
@@ -112,7 +112,7 @@ ObRedisRowIterator::ObRedisRowIterator()
       meta_expire_ts_(-1),
       meta_insert_ts_(-1),
       expire_ts_(-1),
-      model_(ObRedisModel::INVALID),
+      model_(ObRedisDataModel::MODEL_MAX),
       is_ttl_table_(false),
       meta_(nullptr),
       return_redis_meta_(false)
@@ -220,7 +220,7 @@ int ObRedisRowIterator::is_last_row_expired(bool &is_expired)
   int ret = OB_SUCCESS;
   ObRedisCellEntity cell(*last_row_, model_);
   // 3. When it expires, the key is deleted
-  if (model_ == ObRedisModel::STRING) {
+  if (model_ == ObRedisDataModel::STRING) {
     int64_t expire_ts = -1;
     if (OB_FAIL(cell.get_expire_ts(expire_ts))) {
       LOG_WARN("fail to get expire timestamp", K(ret));
@@ -327,7 +327,7 @@ int ObRedisRowIterator::get_next_row_ttl(ObNewRow *&row)
       } else {
         last_row_ = row;
         scan_cnt_++;
-        if (model_ == ObRedisModel::STRING) {
+        if (model_ == ObRedisDataModel::STRING) {
           if (OB_FAIL(is_last_row_expired(is_expired))) {
             LOG_WARN("fail to check is last row expired", K(ret), K(expire_ts_));
           }
@@ -396,7 +396,7 @@ int ObRedisRowIterator::get_next_row_scan(ObNewRow *&row)
     } else {
       last_row_ = row;
       scan_cnt_++;
-      if (model_ == ObRedisModel::STRING) {
+      if (model_ == ObRedisDataModel::STRING) {
         if (OB_FAIL(is_last_row_expired(is_expired))) {
           LOG_WARN("fail to check is last row expired", K(ret), K(expire_ts_));
         }

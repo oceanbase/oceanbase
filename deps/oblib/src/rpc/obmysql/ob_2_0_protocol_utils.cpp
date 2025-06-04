@@ -565,6 +565,7 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
                                       || OB_UNLIKELY(param.proto20_context_->is_filename_packet_) ? 1 : 0);
   flag.st_flags_.OB_IS_NEW_EXTRA_INFO = proto20_context.is_new_extra_info_;
   flag.st_flags_.OB_TXN_FREE_ROUTE = proto20_context.txn_free_route_ ? 1 : 0;
+  flag.st_flags_.OB_IS_DUP_LS_MODIFIED = proto20_context.is_dup_ls_modified_ ? 1 : 0;
   uint16_t reserved = 0;
   uint16_t header_checksum = 0;
   int64_t pos = 0;

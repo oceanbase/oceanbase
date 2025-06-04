@@ -779,6 +779,15 @@ private:
                                         _bucket_array,
                                         _bucket_allocer,
                                         EXTEND_RATIO>;
+  class ObEmptySetCallback final
+  {
+  public:
+    ObEmptySetCallback() {}
+    ~ObEmptySetCallback() {}
+    int operator()(const _value_type &entry) { return OB_SUCCESS; }
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObEmptySetCallback);
+  };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHashTable);
 
@@ -1339,11 +1348,24 @@ public:
   // 返回值：
   //   OB_SUCCESS 表示成功
   //   其它 表示出错
-  template<class _callback>
+  template<class _update_callback>
   int set_or_update(const _key_type &key, const _value_type &value,
-                    _callback &callback)
+                    _update_callback &update_callback)
   {
-    return set_or_update(key, value, callback, preproc_);
+    ObEmptySetCallback set_callback;
+    return set_or_update(key, value, set_callback, update_callback, preproc_);
+  }
+
+  // 1. if key not exist, set node and execute set_callback.
+  //    if set_callback failed, erase the node
+  // 2. if key already exist, execute update_callback.
+  //
+  // callback is executed within bucket writelocker
+  template<class _set_callback, class _update_callback>
+  int set_or_update(const _key_type &key, const _value_type &value,
+                    _set_callback &set_callback, _update_callback &update_callback)
+  {
+    return set_or_update(key, value, set_callback, update_callback, preproc_);
   }
 
   int erase_refactored(const _key_type &key, _value_type *value = NULL)
@@ -1632,11 +1654,15 @@ public:
     return ret;
   }
 
-  // 不存在就插入，存在就调用 callback 修改
-  // 该原子操作在bucket上添加的写锁
-  template<class _callback, class _preproc>
+  // 1. if key not exist, set node and execute set_callback.
+  //    if set_callback failed, erase the node
+  // 2. if key already exist, execute update_callback.
+  //
+  // callback is executed within bucket writelocker
+  template<class _set_callback, class _update_callback, class _preproc>
   int set_or_update(const _key_type &key, const _value_type &value,
-                    _callback &callback, _preproc &preproc)
+                    _set_callback &set_callback, _update_callback &update_callback,
+                    _preproc &preproc)
   {
     int ret = OB_SUCCESS;
     uint64_t hash_value;
@@ -1653,7 +1679,7 @@ public:
       hashnode *node = bucket.node;
       while (NULL != node) {
         if (equal_(getkey_(node->data), key)) {
-          callback(preproc(node->data));
+          update_callback(preproc(node->data));
           break;
         } else {
           node = node->next;
@@ -1661,6 +1687,14 @@ public:
       }
       if (NULL == node) {
         ret = internal_set(bucket, value, false);
+        if (OB_SUCC(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(set_callback(value))) {
+            HASH_WRITE_LOG(HASH_WARNING, "hashtable executes callback failed, tmp_ret=%d", tmp_ret);
+            ret = OB_ERR_UNEXPECTED;
+            (void) internal_erase(bucket, key); // never fail because internal_set succeed
+          }
+        }
       }
     }
 

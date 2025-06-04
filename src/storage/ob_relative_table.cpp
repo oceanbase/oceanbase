@@ -16,6 +16,7 @@
 
 #include "share/ob_unique_index_row_transformer.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -42,6 +43,9 @@ void ObRelativeTable::destroy()
   tablet_id_.reset();
   tablet_iter_.reset();
   is_inited_ = false;
+  if (nullptr != truncate_part_filter_) {
+    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
+  }
 }
 
 int ObRelativeTable::init(
@@ -618,6 +622,7 @@ DEF_TO_STRING(ObRelativeTable)
   J_KV(K_(allow_not_ready),
        K_(tablet_id),
        KPC_(schema_param),
+       KPC_(truncate_part_filter),
        K_(tablet_iter));
   J_OBJ_END();
   return pos;
@@ -659,6 +664,46 @@ int ObRelativeTable::set_index_value(
         LOG_WARN("failed to add column id",
                     "column_id", col_desc.col_id_);
       }
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::prepare_truncate_part_filter(
+  ObIAllocator &allocator,
+  const int64_t read_snapshot)
+{
+  int ret = OB_SUCCESS;
+  ObITable *table_ptr = nullptr;
+  const ObTabletHandle *tablet_handle = get_tablet_handle();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(!tablet_iter_.table_iter()->is_valid())) {
+    LOG_DEBUG("[TRUNCATE INFO], empty tablet", KPC(tablet_iter_.table_iter()));
+  } else if (OB_FAIL(tablet_iter_.table_iter()->get_boundary_table(false, table_ptr))) {
+    LOG_WARN("failed to get boundary table", K(ret));
+  } else {
+    const int64_t major_table_version = nullptr != table_ptr && table_ptr->is_major_sstable() ?
+                                        table_ptr->get_snapshot_version() : 0;
+    ObVersionRange read_version_range(major_table_version, read_snapshot);
+    const storage::ObTableReadInfo &read_info = schema_param_->get_read_info();
+    if (OB_UNLIKELY(!read_version_range.is_valid())) {
+      LOG_DEBUG("[TRUNCATE INFO] invalid version range, filter is empty", K(ret), K(read_version_range), KPC_(truncate_part_filter));
+    } else if (OB_UNLIKELY(nullptr != table_ptr && table_ptr->is_major_sstable() && major_table_version <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected major sstable", K(ret), KPC(table_ptr));
+    } else if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
+        *tablet_handle->get_obj(),
+        tablet_iter_.get_split_extra_tablet_handles_ptr(),
+        read_info.get_columns_desc(),
+        read_info.get_columns(),
+        read_version_range,
+        &allocator,
+        truncate_part_filter_))) {
+      LOG_WARN("failed to build truncate part filter", K(ret));
+    } else {
+      LOG_DEBUG("[TRUNCATE INFO]", K(ret), K(read_version_range), KPC_(truncate_part_filter));
     }
   }
   return ret;

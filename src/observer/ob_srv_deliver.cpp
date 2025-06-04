@@ -475,7 +475,7 @@ int ObSrvDeliver::init_queue_threads()
 
   // TODO: fufeng, make it configurable
   if (OB_FAIL(create_queue_thread(lib::TGDefIDs::LeaseQueueTh, "LeaseQueueTh", lease_queue_))) {
-  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, "DDLQueueTh", ddl_queue_))) {
+  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, DDL_THREAD_NAME, ddl_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLPQueueTh, PARALLEL_DDL_THREAD_NAME, ddl_parallel_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::MysqlQueueTh,
                                          "MysqlQueueTh", mysql_queue_))) {
@@ -488,8 +488,8 @@ int ObSrvDeliver::init_queue_threads()
   return ret;
 }
 
-int ObSrvDeliver::acquire_diagnostic_info_object(
-    int64_t tenant_id, int64_t group_id, int64_t session_id, ObDiagnosticInfo *&di)
+int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t group_id,
+    int64_t session_id, ObDiagnosticInfo *&di, bool using_cache)
 {
   int ret = OB_SUCCESS;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
@@ -499,13 +499,12 @@ int ObSrvDeliver::acquire_diagnostic_info_object(
       MTL_SWITCH(tenant_id) {
         if (OB_FAIL(
                 MTL(common::ObDiagnosticInfoContainer *)
-                    ->acquire_diagnostic_info(tenant_id, group_id, session_id, di))) {
+                    ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
           OB_ASSERT(di == nullptr);
           LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id),
               K(session_id));
         } else {
           OB_ASSERT(di != nullptr);
-          common::ObLocalDiagnosticInfo::inc_ref(di);
         }
       }
     }
@@ -609,22 +608,28 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       // possible repost
       req.get_diagnostic_info()->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), pkt.get_request_level(), 0);
     } else if (need_update_stat) {  // simplest way to check is_diagnose_info_enabled
-      const int64_t allocated_sess_id =
-          ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
-      if (OB_SUCCESS != acquire_diagnostic_info_object(
-              tenant_id, group_id, allocated_sess_id, di)) {
+      // using_cache = true means session_id = 0
+      const bool using_cache =
+          ObDiagnosticInfoContainer::get_di_experimental_feature_flag().di_rpc_cache();
+      int64_t session_id = 0;
+      if (!using_cache) {
+        session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
+      }
+      if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
+                            using_cache)) {
         // ignore diagnostic info error
       } else {
         di->get_ash_stat().pcode_ = pkt.get_pcode();
         di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-        snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_PROCESS", tenant_id);
-        snprintf(di->get_ash_stat().module_, ASH_MODULE_STR_LEN, "%s",
-                 obrpc::ObRpcPacketSet::instance().name_of_pcode(pkt.get_pcode()));
+        snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_REQUEST", tenant_id);
+        di->get_ash_stat().module_[0] = '\0';
+        di->get_ash_stat().action_[0] = '\0';
+        di->get_ash_stat().trace_id_ = req.generate_trace_id(GCTX.self_addr());
+        di->get_ash_stat().clear_basic_query_identifier(); //clear the last query identifier
         if (OB_NOT_NULL(req.get_diagnostic_info())) {
           LOG_ERROR("reuse diagnostic info wrongly.", K(&req), K(req.get_diagnostic_info()), K(di));
         }
         req.set_diagnostic_info(di);
-        di->get_ash_stat().trace_id_ = req.generate_trace_id(GCTX.self_addr());
         di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), pkt.get_request_level(), 0);
       }
     }
@@ -646,9 +651,17 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     if (tenant->has_stopped()) {
       ret = OB_TENANT_NOT_IN_SERVER;
       LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
+      if (OB_NOT_NULL(di)) {
+        di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+        // no need to process di ref in obrequest. it would be processed in
+        // ObRpcRequestOperator::response_result
+      }
     } else if (OB_FAIL(tenant->recv_request(req))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         LOG_WARN("tenant receive request fail", K(*tenant), K(req));
+      }
+      if (OB_NOT_NULL(di)) {
+        di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
       }
     }
   } else if (!is_stream) {
@@ -769,9 +782,12 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
             } else {
               di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::FOREGROUND;
               snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_SQL_CMD", tenant_id);
-              conn->di_ = di;
+              conn->set_diagnostic_info(di);
             }
           }
+        }
+        if (ObDiagnosticInfoContainer::get_di_experimental_feature_flag().mysql_obrequest_ref()) {
+          req.set_diagnostic_info(conn->get_diagnostic_info());
         }
         ObTenantDiagnosticInfoSummaryGuard g(di == nullptr ? nullptr : di->get_summary_slot());
         if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
@@ -794,7 +810,7 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
     } else {
       const obmysql::ObMySQLRawPacket &pkt
           = reinterpret_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
-      ObTenantDiagnosticInfoSummaryGuard g(conn->di_ == nullptr ? nullptr : conn->di_->get_summary_slot());
+      ObTenantDiagnosticInfoSummaryGuard g(conn->get_diagnostic_info() == nullptr ? nullptr : conn->get_diagnostic_info()->get_summary_slot());
 
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
@@ -813,22 +829,38 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
             K(tenant_id), K(ret));
       }*/
 
-      if (OB_NOT_NULL(conn->di_)) {
-        conn->di_->get_ash_stat().trace_id_ = req.generate_trace_id(GCTX.self_addr());
-        conn->di_->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
+      ObDiagnosticInfo *di = conn->get_diagnostic_info();
+      if (OB_NOT_NULL(di)) {
+        ObActiveSessionStat &ash_stat = di->get_ash_stat();
+        if (ObDiagnosticInfoContainer::get_di_experimental_feature_flag().mysql_obrequest_ref()) {
+          req.set_diagnostic_info(di);
+        }
+        ash_stat.trace_id_ = req.generate_trace_id(GCTX.self_addr());
+        if (!ash_stat.has_user_module_) {
+          ash_stat.module_[0] = '\0';
+        }
+        if (!ash_stat.has_user_action_) {
+          ash_stat.action_[0] = '\0';
+        }
+        if (need_update_stat) {
+          ash_stat.clear_basic_query_identifier(); //clear the last query identifier
+        }
+        di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
       }
       if (OB_FAIL(ret)) {
             // do nothing
       } else if (tenant->has_stopped()) {
         ret = OB_TENANT_NOT_IN_SERVER;
         LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
-        if (OB_NOT_NULL(conn->di_)) {
-          conn->di_->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+        if (OB_NOT_NULL(conn->get_diagnostic_info())) {
+          conn->get_diagnostic_info()->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+          req.reset_diagnostic_info();
         }
       } else if (OB_FAIL(tenant->recv_request(req))) {
         EVENT_INC(MYSQL_DELIVER_FAIL);
-        if (OB_NOT_NULL(conn->di_)) {
-          conn->di_->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+        if (OB_NOT_NULL(conn->get_diagnostic_info())) {
+          conn->get_diagnostic_info()->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+          req.reset_diagnostic_info();
         }
         LOG_ERROR("deliver request fail", K(req), K(ret), K(*tenant));
         if (OB_SIZE_OVERFLOW == ret) {

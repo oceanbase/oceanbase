@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_param.h"
+#include "share/ob_compute_property.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
@@ -632,7 +633,10 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_partition_table_(false),
     is_normal_cgs_at_the_end_(false),
     is_mlog_table_(false),
-    is_enable_semistruct_encoding_(false)
+    is_enable_semistruct_encoding_(false),
+    is_safe_filter_with_di_(true),
+    aggregate_param_props_(allocator),
+    access_virtual_col_cnt_(0)
 {
   reset();
 }
@@ -668,6 +672,9 @@ void ObTableParam::reset()
   is_normal_cgs_at_the_end_ = false;
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
+  is_safe_filter_with_di_ = true;
+  aggregate_param_props_.reset();
+  access_virtual_col_cnt_ = 0;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -722,9 +729,17 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(parser_properties_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(is_mlog_table_);
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                is_safe_filter_with_di_);
   }
-  OB_UNIS_ENCODE(is_enable_semistruct_encoding_);
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(aggregate_param_props_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(access_virtual_col_cnt_);
+  }
   return ret;
 }
 
@@ -834,9 +849,17 @@ OB_DEF_DESERIALIZE(ObTableParam)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, is_mlog_table_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                is_safe_filter_with_di_);
   }
-  OB_UNIS_DECODE(is_enable_semistruct_encoding_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, access_virtual_col_cnt_);
+  }
   return ret;
 }
 
@@ -899,9 +922,18 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-                is_mlog_table_);
+                is_mlog_table_,
+                is_enable_semistruct_encoding_,
+                is_safe_filter_with_di_);
   }
-  OB_UNIS_ADD_LEN(is_enable_semistruct_encoding_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                aggregate_param_props_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                access_virtual_col_cnt_);
+  }
   return len;
 }
 
@@ -1000,11 +1032,14 @@ int ObTableParam::construct_columns_and_projector(
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_output_projector;
   ObSEArray<bool, COMMON_COLUMN_NUM> tmp_output_sel_mask;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cg_idxs;
+  ObSEArray<uint64_t, COMMON_COLUMN_NUM> truncate_col_ids;
+  const ObIArray<uint64_t> *access_col_ids = &output_column_ids;
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
   bool is_cs = false;
   bool has_all_column_group = false;
+  bool need_truncate_filter = false;
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
@@ -1071,11 +1106,42 @@ int ObTableParam::construct_columns_and_projector(
         }
       }
     }
-
+    if (OB_SUCC(ret) && !is_cs && table_schema.is_global_index_table()) {
+      ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
+      if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
+        LOG_WARN("get column ids failed", K(ret));
+      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+        LOG_WARN("fail to push back trans version col to truncate col ids", K(ret));
+      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID))) {
+        LOG_WARN("fail to push back sql sequence col to truncate col ids", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < non_rowkey_column_ids.count(); ++i) {
+        const uint64_t column_id = non_rowkey_column_ids.at(i).col_id_;
+        const ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
+        } else if (column_schema->is_user_specified_storing_column()) {
+        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+          LOG_WARN("fail to push back non rowkey col id to truncate col ids");
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
+        const uint64_t column_id = output_column_ids.at(i);
+        if (is_contain(truncate_col_ids, column_id)) {
+        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+          LOG_WARN("fail to push back output col id to truncate col ids");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        access_col_ids = &truncate_col_ids;
+        need_truncate_filter = true;
+      }
+    }
     //add other columns
-    for (int32_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
+    for (int32_t i = 0; OB_SUCC(ret) && i < access_col_ids->count(); ++i) {
       tmp_col_extend.reset();
-      const uint64_t column_id = output_column_ids.at(i);
+      const uint64_t column_id = access_col_ids->at(i);
       const ObColumnSchemaV2 *column_schema = NULL;
       ObColumnParam *column = NULL;
       int32_t col_index = OB_INVALID_INDEX;
@@ -1100,6 +1166,10 @@ int ObTableParam::construct_columns_and_projector(
         column->set_meta_type(meta_type);
         col_index = -1;
         mem_col_index = -1;
+        if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID != column_id &&
+            common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID != column_id) {
+          access_virtual_col_cnt_++;
+        }
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
@@ -1217,7 +1287,10 @@ int ObTableParam::construct_columns_and_projector(
                                      &tmp_access_cols_param,
                                      is_cs ? &tmp_cg_idxs : nullptr,
                                      &tmp_access_cols_extend,
-                                     has_all_column_group))) {
+                                     has_all_column_group,
+                                     false/*is_cg_sstable*/,
+                                     need_truncate_filter,
+                                     table_schema.is_delete_insert_merge_engine()))) {
       LOG_WARN("fail to init main read info", K(ret));
     } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
       LOG_WARN("assign failed", K(ret));
@@ -1567,6 +1640,9 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
   column_param.set_accuracy(column_schema.get_accuracy());
   column_param.set_nullable_for_write(!column_schema.is_not_null_for_write());
   column_param.set_nullable_for_read(!column_schema.is_not_null_for_read());
+  if (column_schema.is_xmltype()) {
+    column_param.set_nullable_for_write(true);
+  }
   column_param.set_gen_col_flag(column_schema.is_generated_column(),
                                 column_schema.is_virtual_generated_column());
   column_param.set_gen_col_udf_expr(column_schema.is_generated_column_using_udf());
@@ -1611,6 +1687,28 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   return ret;
 }
 
+int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters)
+{
+  int ret = OB_SUCCESS;
+  bool has_lob_column_out = false;
+  is_safe_filter_with_di_ = true;
+  if (OB_UNLIKELY(!main_read_info_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected not valid read info", K(ret), K_(main_read_info));
+  } else {
+    const ObColDescIArray &out_cols = main_read_info_.get_columns_desc();
+    for (int64_t i = 0; !has_lob_column_out && i < out_cols.count(); i++) {
+      has_lob_column_out = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
+    }
+    if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
+                                                   has_lob_column_out,
+                                                   is_safe_filter_with_di_))) {
+      LOG_WARN("Fail to check filter info", K(ret));
+    }
+  }
+  return ret;
+}
+
 int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1633,7 +1731,10 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_vec_index),
        K_(is_column_replica_table),
        K_(is_normal_cgs_at_the_end),
-       K_(is_mlog_table));
+       K_(is_mlog_table),
+       K_(is_enable_semistruct_encoding),
+       K_(is_safe_filter_with_di),
+       K_(access_virtual_col_cnt));
   J_OBJ_END();
 
   return pos;

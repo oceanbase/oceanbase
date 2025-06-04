@@ -480,6 +480,10 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   if (0 != ret) {
     SSL_CTX_free(ctx);
@@ -554,7 +558,7 @@ int ssl_load_config(int ctx_id, const ssl_config_item_t *ssl_config)
   return ret;
 }
 
-int fd_enable_ssl_for_server(int fd, int ctx_id, int type, int has_method_none)
+int fd_enable_ssl_for_server(int fd, int ctx_id, int type)
 {
   int ret = 0;
   SSL_CTX *ctx = NULL;
@@ -575,10 +579,6 @@ int fd_enable_ssl_for_server(int fd, int ctx_id, int type, int has_method_none)
       ret = EINVAL;
       ussl_log_warn("SSL_set_fd failed, ret:%d, fd:%d, ctx_id:%d", ret, fd, ctx_id);
     } else {
-      //if server has auth method none, server does not verify client identity
-      if (has_method_none) {
-        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-      }
       SSL_set_accept_state(ssl);
       ATOMIC_STORE(&(gs_fd_ssl_array[fd].ssl), ssl);
       ATOMIC_STORE(&(gs_fd_ssl_array[fd].type), type);

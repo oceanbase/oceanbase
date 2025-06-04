@@ -30,6 +30,8 @@ namespace storage
 {
 class ObIMemtable;
 class ObFreezer;
+class CreateMemtableArg;
+
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
 
@@ -207,31 +209,6 @@ private:
   int ret_;
 private:
   DISALLOW_COPY_AND_ASSIGN(MemMgrWLockGuard);
-};
-
-struct CreateMemtableArg {
-  int64_t schema_version_;
-  share::SCN clog_checkpoint_scn_;
-  share::SCN new_clog_checkpoint_scn_;
-  bool for_replay_;
-  bool for_inc_direct_load_;
-
-  CreateMemtableArg(const int64_t schema_version,
-                    const share::SCN clog_checkpoint_scn,
-                    const share::SCN new_clog_checkpoint_scn,
-                    const bool for_replay,
-                    const bool for_inc_direct_load)
-      : schema_version_(schema_version),
-        clog_checkpoint_scn_(clog_checkpoint_scn),
-        new_clog_checkpoint_scn_(new_clog_checkpoint_scn),
-        for_replay_(for_replay),
-        for_inc_direct_load_(for_inc_direct_load) {}
-
-  TO_STRING_KV(K(schema_version_),
-               K(clog_checkpoint_scn_),
-               K(new_clog_checkpoint_scn_),
-               K(for_replay_),
-               K(for_inc_direct_load_));
 };
 
 class ObIMemtableMgr

@@ -447,14 +447,23 @@ int ObAdminDRTaskUtil::get_local_palf_stat_(
     LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      logservice::ObLogService *log_service = NULL;
-      palf::PalfHandleGuard palf_handle_guard;
-      if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+      storage::ObLSHandle ls_handle;
+      logservice::ObLogHandler *log_handler = nullptr;
+      storage::ObLSService *ls_svr = nullptr;
+      storage::ObLS *ls = nullptr;
+
+      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-        LOG_WARN("failed to open palf", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(palf_handle_guard.stat(palf_stat))) {
+        LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+        LOG_WARN("failed to get_ls", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be null", KR(ret));
+      } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log_handler is null", KR(ret), K(ls_id));
+      } else if (OB_FAIL(log_handler->stat(palf_stat))) {
         LOG_WARN("get palf_stat failed", KR(ret), K(tenant_id), K(ls_id));
       } else if (LEADER != palf_stat.role_) {
         ret = OB_STATE_NOT_MATCH;

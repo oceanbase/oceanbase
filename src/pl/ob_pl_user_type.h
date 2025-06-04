@@ -139,6 +139,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -252,6 +253,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                           common::ObIAllocator &allocator,
+                          sql::ObSQLSessionInfo *session,
                           const common::ObCharsetType charset,
                           const common::ObCollationType cs_type,
                           const common::ObCollationType ncs_type,
@@ -408,9 +410,15 @@ public:
 
   int deep_copy(
     common::ObIAllocator &alloc, const ObRecordType &other, bool shaow_copy = true);
+  int deep_copy(
+    ObPLEnumSetCtx &enum_set_ctx, common::ObIAllocator &alloc, const ObRecordType &other, bool shaow_copy = true);
+
 
   int add_record_member(
     const common::ObString &record_name, const ObPLDataType &record_type,
+    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
+  int add_record_member(
+    ObPLEnumSetCtx &enum_set_ctx, const common::ObString &record_name, const ObPLDataType &record_type,
     int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
 
   int add_record_member(const ObRecordMember &record);
@@ -517,6 +525,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -674,6 +683,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,
@@ -747,6 +757,7 @@ public:
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
+                       sql::ObSQLSessionInfo *session,
                        const common::ObCharsetType charset,
                        const common::ObCollationType cs_type,
                        const common::ObCollationType ncs_type,

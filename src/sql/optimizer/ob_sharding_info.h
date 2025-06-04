@@ -364,8 +364,8 @@ private:
                                 ObRawExpr *second_key,
                                 bool &is_equal);
 
-  static int is_lossless_column_cast(const ObRawExpr *expr,
-                                     const sql::ObShardingInfo &sharding_info, bool &is_lossless);
+  static int remove_lossless_cast_for_sharding_key(ObRawExpr *&expr,
+                                                   const ObShardingInfo &sharding_info);
 
   static bool is_part_func_scale_sensitive(const sql::ObShardingInfo &sharding_info,
                                            const common::ObObjType obj_type);

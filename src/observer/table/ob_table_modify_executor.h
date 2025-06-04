@@ -83,7 +83,8 @@ public:
   int init_related_das_rtdef(const sql::DASDMLCtDefArray &das_ctdefs,
                              sql::DASDMLRtDefArray &das_rtdefs);
   int calc_local_tablet_loc(sql::ObDASTabletLoc *&tablet_loc);
-  int calc_tablet_loc(ObExpr *calc_part_id_expr,
+  int calc_tablet_loc(bool is_primary_index,
+                      ObExpr *calc_part_id_expr,
                       ObDASTableLoc &table_loc,
                       ObDASTabletLoc *&tablet_loc);
   // only use for replace and ttl executor

@@ -55,7 +55,7 @@ int ObMPResetConnection::process()
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     session->update_last_active_time();
     session->set_query_start_time(ObTimeUtility::current_time());
-    LOG_TRACE("begin reset connection. ", K(session->get_sessid()), K(session->get_effective_tenant_id()));
+    LOG_TRACE("begin reset connection. ", K(session->get_server_sid()), K(session->get_effective_tenant_id()));
     tenant_id = session->get_effective_tenant_id();
     session->set_txn_free_route(pkt.txn_free_route());
     if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
@@ -193,10 +193,11 @@ int ObMPResetConnection::process()
 
     // 9. Releases locks acquired with GET_LOCK().
     if (OB_SUCC(ret)) {
-      ObTableLockOwnerID raw_owner_id;
-      if (OB_FAIL(raw_owner_id.convert_from_client_sessid(session->get_client_sessid(), session->get_client_create_time()))) {
+      ObTableLockOwnerID owner_id;
+      if (OB_FAIL(owner_id.convert_from_client_sessid(session->get_sid(),
+                                                      session->get_client_create_time()))) {
         LOG_WARN("failed to convert from client sessid", K(ret));
-      } else if (OB_FAIL(ObTableLockDetector::remove_lock_by_owner_id(raw_owner_id.raw_value()))) {
+      } else if (OB_FAIL(ObTableLockDetector::remove_lock_by_owner_id(owner_id))) {
         LOG_WARN("failed to remove lock by owner id", K(ret));
       }
     }
@@ -260,7 +261,7 @@ int ObMPResetConnection::process()
     if (NULL == session) {
       LOG_WARN("will disconnect connection", K(ret), K(need_disconnect));
     } else {
-      LOG_WARN("will disconnect connection", K(ret), K(session->get_sessid()),
+      LOG_WARN("will disconnect connection", K(ret), K(session->get_server_sid()),
                K(need_disconnect));
     }
     force_disconnect();

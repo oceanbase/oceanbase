@@ -114,7 +114,6 @@ private:
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
-  common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   bool is_group_commit_;
   bool is_group_trigger_;

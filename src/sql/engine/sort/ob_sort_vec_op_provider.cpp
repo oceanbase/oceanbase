@@ -78,9 +78,11 @@ int ObSortVecOpProvider::decide_sort_key_type(ObSortVecOpContext &ctx)
   }
   if (!ctx.enable_encode_sortkey_) {
     is_basic_cmp_ = true;
+    is_str_cmp_ = true;
     for (int64_t i = 0; is_basic_cmp_ && i < ctx.sk_exprs_->count(); i++) {
       VecValueTypeClass vec_tc = ctx.sk_exprs_->at(i)->get_vec_value_tc();
       is_basic_cmp_ = is_basic_cmp_type(vec_tc);
+      is_str_cmp_ &= (vec_tc == VEC_TC_STRING);
     }
   }
   return ret;
@@ -102,10 +104,25 @@ int ObSortVecOpProvider::alloc_sort_impl_instance(ObISortVecOpImpl *&sort_op_imp
 }
 
 template <ObSortVecOpProvider::SortType sort_type, ObSortVecOpProvider::SortKeyType sk_type, bool has_addon>
-int ObSortVecOpProvider::init_sort_impl_instance(ObISortVecOpImpl *&sort_op_impl)
+int ObSortVecOpProvider::init_sort_impl_instance(ObSortVecOpContext &ctx, ObISortVecOpImpl *&sort_op_impl)
 {
   int ret = OB_SUCCESS;
-  if (is_basic_cmp_) {
+  // fast compare for sysbench scenario specialization.
+  if (ctx.enable_single_col_compare_ && (is_basic_cmp_ || is_str_cmp_)) {
+    if (is_basic_cmp_) {
+      if (OB_SUCCESS
+          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, true>>(
+                sort_op_impl))) {
+        LOG_WARN("failed to alloc sort impl instance", K(ret));
+      }
+    } else {
+      if (OB_SUCCESS
+          != (ret = alloc_sort_impl_instance<RTSingleColSortImplType<sk_type, false>>(
+                sort_op_impl))) {
+        LOG_WARN("failed to alloc sort impl instance", K(ret));
+      }
+    }
+  } else if (is_basic_cmp_) {
     if (OB_SUCCESS
         != (ret = alloc_sort_impl_instance<RTSortImplType<sort_type, true, sk_type, has_addon>>(
               sort_op_impl))) {
@@ -125,11 +142,11 @@ int ObSortVecOpProvider::init_sort_impl(ObSortVecOpContext &ctx, ObISortVecOpImp
 #define INIT_SORT_IMPL_INSTANCE(sort_type, sk_type, has_addon)                                     \
   do {                                                                                             \
     if (has_addon) {                                                                               \
-      if (OB_SUCCESS != (ret = init_sort_impl_instance<sort_type, sk_type, true>(sort_op_impl))) { \
+      if (OB_SUCCESS != (ret = init_sort_impl_instance<sort_type, sk_type, true>(ctx, sort_op_impl))) { \
         LOG_WARN("failed to init sort impl instance", K(ret));                                     \
       }                                                                                            \
     } else {                                                                                       \
-      if (OB_SUCCESS != (ret = init_sort_impl_instance<sort_type, sk_type, false>(sort_op_impl))) {\
+      if (OB_SUCCESS != (ret = init_sort_impl_instance<sort_type, sk_type, false>(ctx, sort_op_impl))) {\
         LOG_WARN("failed to init sort impl instance", K(ret));                                     \
       }                                                                                            \
     }                                                                                              \

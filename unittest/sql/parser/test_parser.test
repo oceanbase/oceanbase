@@ -191,7 +191,6 @@ create tenant if not exists tt1 replica_num = 1, primary_zone = 'zone1', resourc
 select /*+max_concurrent(-10)*/* from t1;
 select /*+max_concurrent(10)*/* from t1;
 
-alter system refresh time_zone_info;
 
 ########################## test for hierarchical query ###################################
 

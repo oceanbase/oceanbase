@@ -253,6 +253,7 @@ void TestSSTableMacroInfo::prepare_create_sstable_param()
   param_.sstable_logic_seq_ = 0;
   param_.nested_offset_ = 0;
   param_.nested_size_ = 0;
+  param_.rec_scn_.set_min();
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -372,6 +373,7 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.sstable_logic_seq_ = 0;
   param_.nested_offset_ = 0;
   param_.nested_size_ = 0;
+  param_.rec_scn_.set_min();
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -859,9 +861,11 @@ TEST_F(TestSSTableMeta, test_sstable_deep_copy)
 TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
 {
   int ret = OB_SUCCESS;
-  char *src_meta_buf = (char *)ob_malloc(sizeof(ObSSTableMeta), ObMemAttr());
-  MEMSET(src_meta_buf, 0x0, sizeof(ObSSTableMeta));
-  ObSSTableMeta &src_meta = *(new (src_meta_buf) ObSSTableMeta());
+  const int64_t buf_size = 8 << 10; //8K
+  char *base_buf = (char*)ob_malloc(buf_size, ObMemAttr());
+  MEMSET(base_buf, 0, buf_size);
+  ObSSTableMeta *meta_ptr = new (base_buf)ObSSTableMeta();
+  ObSSTableMeta &src_meta = *meta_ptr;
   // add salt
   src_meta.basic_meta_.data_checksum_ = 20240514;
 
@@ -881,7 +885,6 @@ TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
   src_meta.tx_ctx_.len_ = src_meta.tx_ctx_.get_serialize_size();
 
   // test deep copy from dynamic memory meta to flat memory meta
-  const int64_t buf_size = 8 << 10; //8K
   int64_t pos = 0;
   char *flat_buf_1 = (char*)ob_malloc(buf_size, ObMemAttr());
   MEMSET(flat_buf_1, 0, buf_size);
@@ -1035,6 +1038,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   src_sstable_param.sstable_logic_seq_ = 0;
   src_sstable_param.nested_offset_ = 0;
   src_sstable_param.nested_size_ = 0;
+  src_sstable_param.rec_scn_.set_min();
   ret = src_sstable_param.column_checksums_.push_back(2022);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1062,7 +1066,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
 int main(int argc, char **argv)
 {
   system("rm -f test_sstable_meta.log*");
-  OB_LOGGER.set_file_name("test_sstable_meta.log", true);
+  OB_LOGGER.set_file_name("test_sstable_meta.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

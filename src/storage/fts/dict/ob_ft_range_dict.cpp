@@ -298,7 +298,7 @@ int ObFTRangeDict::try_load_cache(const ObFTDictDesc &desc,
   int ret = OB_SUCCESS;
   uint64_t name = static_cast<uint64_t>(desc.type_);
 
-  for (int i = 0; OB_SUCC(ret) && i < range_count; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < range_count; ++i) {
     ObDictCacheKey key(name, MTL_ID(), desc.type_, i);
     ObFTCacheRangeHandle *info = nullptr;
     if (OB_FAIL(range_container.fetch_info_for_dict(info))) {
@@ -307,6 +307,7 @@ int ObFTRangeDict::try_load_cache(const ObFTDictDesc &desc,
                && OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("Failed to get dict from kv cache.", K(ret));
     } else if (OB_ENTRY_NOT_EXIST == ret) {
+      range_container.reset();
       // not found, build cache outthere
     } else if (FALSE_IT(info->type_ = desc.type_)) {
       // impossible

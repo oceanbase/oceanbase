@@ -112,7 +112,8 @@ private:
         tablet_id_batch_vector_(nullptr),
         tablet_id_const_vector_(nullptr),
         col_fixed_(nullptr),
-        col_lob_storage_(nullptr)
+        col_lob_storage_(nullptr),
+        need_project_(false)
     {
     }
     ~BatchCtx() {}
@@ -142,8 +143,9 @@ private:
     // vectorized 2.0 : nullptr(fixed), VEC_UNIFORM_CONST(unfixed)
     ObArray<ObIVector *> const_vectors_;
     ObArray<ObIVector *> append_vectors_;
-    // for write
-    ObArray<ObIVector *> heap_vectors_;
+    // 无主键表或者有xmltype列都需要进行映射
+    bool need_project_;
+    ObArray<ObIVector *> project_vectors_;
     sql::ObBatchRows brs_;
   };
 

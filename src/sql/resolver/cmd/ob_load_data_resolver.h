@@ -83,6 +83,7 @@ private:
     ENUM_OPT_EXTENDED_OPTIONS,
     ENUM_OPT_COMPRESSION,
     ENUM_OPT_USE_PARTITION,
+    ENUM_OPT_ON_ERROR,
     ENUM_TOTAL_COUNT
   };
   ObStmtScope current_scope_;

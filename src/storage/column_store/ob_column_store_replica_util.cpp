@@ -304,7 +304,14 @@ int ObCSReplicaUtil::init_cs_replica_tablet_status(
         }
       } else { // column store
         if (tablet.is_last_major_row_store()) {
-          cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
+          // Tablet with row store major and cs storage schema may from alter cg delayed, or constructed by cs replica
+          if (tablet.is_cs_replica_compat()) {
+            // row store major should convert into column store major before compaction.
+            cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
+          } else {
+            // do not do convert co merge, since the storage schema comes from alter cg delayed, with more columns than base major
+            cs_replica_status = ObCSReplicaTabletStatus::NORMAL_CS_REPLICA;
+          }
         } else {
           cs_replica_status = ObCSReplicaTabletStatus::NORMAL_CS_REPLICA;
         }
@@ -336,8 +343,7 @@ int ObCSReplicaUtil::check_need_process_cs_replica(
   } else {
     need_process_cs_replica = ls.is_cs_replica()
                            && tablet.is_user_tablet()
-                           && tablet.is_user_data_table()
-                           && tablet.is_row_store();
+                           && tablet.is_user_data_table();
   }
   return ret;
 }

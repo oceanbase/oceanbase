@@ -257,6 +257,8 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
                                        (is_mview_table_scan(scan_type) ||
                                         read_snapshot_version >= tablet_meta.snapshot_version_) &&
                                        (!table->is_co_sstable() || static_cast<ObCOSSTableV2 *>(table)->is_all_cg_base()) &&
+                                       OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
+                                       !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                        !tablet_meta.has_transfer_table(); // The query in the transfer scenario does not enable fuse row cache
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();
@@ -284,7 +286,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 
     if (OB_SUCC(ret)) {
       STORAGE_LOG(DEBUG, "row before project", K(iter_del_row_), K(full_row_));
-      if (!full_row_.row_flag_.is_exist_without_delete() && !(iter_del_row_  && full_row_.row_flag_.is_delete())) {
+      if (!full_row_.row_flag_.is_exist_without_delete() && !(need_iter_del_row() && full_row_.row_flag_.is_delete())) {
         ret = OB_ITER_END;
       } else {
         const ObColumnIndexArray &cols_index = read_info->get_columns_index();

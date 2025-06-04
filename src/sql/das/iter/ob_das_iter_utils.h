@@ -100,6 +100,7 @@ public:
                                         const ObLSID &ls_id,
                                         ObDASIter *root_iter);
   static bool is_vec_ivf_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef);
+  static bool is_vec_spiv_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef);
 
 private:
   static int create_das_scan_iter(common::ObIAllocator &alloc,
@@ -265,6 +266,14 @@ private:
                                         transaction::ObTxDesc *trans_desc,
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&iter_tree);
+  static int create_vec_spiv_lookup_tree(ObTableScanParam &scan_param,
+                                         common::ObIAllocator &alloc,
+                                         const ObDASBaseCtDef *attach_ctdef,
+                                         ObDASBaseRtDef *attach_rtdef,
+                                         const ObDASRelatedTabletID &related_tablet_ids,
+                                         transaction::ObTxDesc *trans_desc,
+                                         transaction::ObTxReadSnapshot *snapshot,
+                                         ObDASIter *&iter_tree);
   static int create_text_retrieval_sub_tree(const ObLSID &ls_id,
                                             common::ObIAllocator &alloc,
                                             const ObDASIRScanCtDef *ir_scan_ctdef,
@@ -351,7 +360,7 @@ private:
                                           transaction::ObTxDesc *trans_desc,
                                           transaction::ObTxReadSnapshot *snapshot,
                                           ObDASIter *index_iter,
-                                          const ObTabletID &lookup_tablet_id,
+                                          const ObDASRelatedTabletID &related_tablet_ids,
                                           ObDASCacheLookupIter *&lookup_iter,
                                           const bool lookup_keep_order = true,
                                           const int64_t lookup_batch_size =

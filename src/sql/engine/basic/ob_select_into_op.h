@@ -131,6 +131,7 @@ public:
       line_str_(),
       cs_type_(CS_TYPE_INVALID),
       basic_url_(),
+      access_info_(NULL),
       file_location_(IntoFileLocation::SERVER_DISK),
       write_offset_(0),
       data_writer_(NULL),
@@ -141,6 +142,7 @@ public:
       has_escape_(true),
       has_lob_(false),
       has_json_(false),
+      has_coll_(false),
       print_params_(),
       escape_printer_(),
       do_partition_(false),
@@ -437,7 +439,9 @@ private:
   ObObj file_name_;
   common::ObCollationType cs_type_;
   ObString basic_url_; // url without partition expr
-  share::ObBackupStorageInfo access_info_;
+  common::ObObjectStorageInfo *access_info_;
+  share::ObBackupStorageInfo backup_info_;
+  share::ObHDFSStorageInfo hdfs_info_;
   IntoFileLocation file_location_;
   int64_t write_offset_;
   ObExternalFileWriter* data_writer_;
@@ -448,6 +452,7 @@ private:
   bool has_escape_;
   bool has_lob_;
   bool has_json_;
+  bool has_coll_;
   common::ObObjPrintParams print_params_;
   ObEscapePrinter escape_printer_;
   bool do_partition_;

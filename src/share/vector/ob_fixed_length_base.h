@@ -60,13 +60,13 @@ public:
       set_payload(idx, datum.ptr_, datum.len_);
     }
   }
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int to_rows(const sql::RowMeta &row_meta,
                        sql::ObCompactRow **stored_rows,
                        const uint16_t selector[],
                        const int64_t size,
                        const int64_t col_idx) const override final;
 
-  virtual void to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+  virtual int to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
                        const int64_t size, const int64_t col_idx) const override final;
 
   inline void from(ObLength len, char *data)

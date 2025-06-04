@@ -33,6 +33,7 @@ public:
   // @params[in]  sql_proxy, sql_proxy to use
   // @params[in]  task, which tenant's task to delete
   int delete_task(common::ObISQLClient &sql_proxy,
+                  const uint64_t tenant_id,
                   const ObDRTask &task);
 
   // insert task into __all_ls_replica_task or __all_ls_replica_task_history
@@ -40,6 +41,7 @@ public:
   // @params[in]  task, target task to insert
   // @params[in]  record_history, whether write history table
   int insert_task(common::ObISQLClient &sql_proxy,
+                  const uint64_t tenant_id,
                   const ObDRTask &task,
                   const bool record_history);
 

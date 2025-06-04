@@ -47,12 +47,12 @@ int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &enti
 ////////////////////////////////////////////////////////////////
 ObTableApiExecuteP::ObTableApiExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
-     allocator_("TbExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
      is_group_commit_(false),
      is_group_trigger_(false),
      group_single_op_(nullptr)
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "TbExeP", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 int ObTableApiExecuteP::deserialize()
@@ -321,7 +321,7 @@ int ObTableApiExecuteP::process_group_commit()
     ObTableGroupKey key(ls_id, table_id_, schema_version, op.type());
     ObTableGroupCtx ctx(allocator_);
     bool is_insup_use_put = false;
-    int64_t binlog_row_image_type = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
+    int64_t binlog_row_image_type = TABLEAPI_OBJECT_POOL_MGR->get_binlog_row_image();
     ctx.key_ = &key;
     if (arg_.table_operation_.type() == ObTableOperationType::Type::INSERT_OR_UPDATE) {
       if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,
@@ -461,14 +461,6 @@ int ObTableApiExecuteP::try_process()
     // init_tb_ctx will return some replaceable error code
     result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
-
-    if (OB_NOT_NULL(group_single_op_)) {
-      // In group commit scene:
-      // ret != OB_SUCCESS mean we should response packet by the responser in rpc processor
-      // and here we should free group_single_op_ in hand
-      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
-      group_single_op_ = nullptr;
-    }
   }
 
 #ifndef NDEBUG
@@ -617,6 +609,15 @@ int ObTableApiExecuteP::before_response(int error_code)
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
   if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
     result_.set_entity(result_entity_);
+  }
+  if (error_code != OB_SUCCESS) {
+    if (OB_NOT_NULL(group_single_op_)) {
+      // In group commit scene:
+      // fail maybe from try_process or process_with_retry
+      // and here we should free group_single_op_ in hand
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
+    }
   }
   return ObTableRpcProcessor::before_response(error_code);
 }

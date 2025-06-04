@@ -60,6 +60,80 @@ void ObOpKitStore::destroy()
   }
 }
 
+int ObDiagnosisManager::add_warning_info(int err_ret, int line_idx) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rets_.push_back(err_ret))) {
+    LOG_WARN("failed to push back error code into array", K(ret), K(err_ret));
+  } else if (OB_FAIL(idxs_.push_back(line_idx))) {
+    LOG_WARN("failed to push back line number into array", K(ret), K(line_idx));
+  }
+  return ret;
+}
+
+int ObDiagnosisManager::do_diagnosis(ObBitVector &skip, int64_t limit_num) {
+  int ret = OB_SUCCESS;
+
+  if (idxs_.count() != rets_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idxs_ and rets_ count mismatch", K(ret), K(idxs_.count()), K(rets_.count()));
+  } else if (idxs_.count() > 0) {
+    if (cur_file_url_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("missing cur_file_url", K(ret));
+    } else {
+      ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+
+      bool has_col_info = idxs_.count() == col_names_.count();
+
+      for (int i = 0; OB_SUCC(ret) && i < idxs_.count(); i++) {
+        int64_t idx = idxs_.at(i);
+        int64_t err_ret = rets_.at(i);
+        ObSqlString err_msg;
+
+        if (skip.at(idx)) {
+          continue;
+        }
+
+        if (has_col_info) {
+          ObString cur_col_name = col_names_.at(i);
+          if (OB_FAIL(err_msg.append_fmt("fail to scan file %.*s at line %ld for column %.*s, error: %s",
+                                                        cur_file_url_.length(), cur_file_url_.ptr(),
+                                                        idx + cur_line_number_,
+                                                        cur_col_name.length(), cur_col_name.ptr(),
+                                                        common::ob_strerror(err_ret)))) {
+            LOG_WARN("failed to append error message", K(err_ret));
+          }
+        } else {
+          if (OB_FAIL(err_msg.append_fmt("fail to scan file %.*s at line %ld, error: %s",
+                                        cur_file_url_.length(), cur_file_url_.ptr(),
+                                        idx + cur_line_number_,
+                                        common::ob_strerror(err_ret)))) {
+            LOG_WARN("failed to append error message", K(err_ret));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          skip.set(idx);
+          buffer->append_warning(err_msg.ptr(), err_ret);
+
+          if (limit_num >= 0 && buffer->get_total_warning_count() > limit_num) {
+            ret = OB_REACH_DIAGNOSIS_ERROR_LIMIT;
+          }
+        }
+      }
+
+      idxs_.reuse();
+      rets_.reuse();
+      col_names_.reuse();
+      allocator_.reuse();
+    }
+  } else {
+    // do nothing
+  }
+
+  return ret;
+}
+
 ObExecContext::ObExecContext(ObIAllocator &allocator)
   : allocator_(allocator),
     phy_op_size_(0),
@@ -130,7 +204,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     autoinc_range_interval_(0),
     lob_access_ctx_(nullptr),
     auto_dop_map_(),
-    force_local_plan_(false)
+    force_local_plan_(false),
+    diagnosis_manager_()
 {
 }
 
@@ -1004,7 +1079,7 @@ int ObExecContext::check_extra_status()
       if (OB_SUCCESS != (tmp_ret = it->check())) {
         SQL_ENG_LOG(WARN, "extra check failed", K(tmp_ret), "check_name", it->name(),
                     "query", my_session_->get_current_query_string(),
-                    "key", my_session_->get_sessid(),
+                    "key", my_session_->get_server_sid(),
                     "proxy_sessid", my_session_->get_proxy_sessid());
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
@@ -1181,7 +1256,7 @@ int ObExecContext::deserialize_group_pwj_map(const char *buf, const int64_t data
   return ret;
 }
 
-int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const
 {
   int ret = OB_SUCCESS;
   if (ob_is_reserved_subschema_id(subschema_id)) {
@@ -1195,7 +1270,7 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlU
   return ret;
 }
 
-int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta)
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const
 {
   int ret = OB_SUCCESS;
   if (ob_is_reserved_subschema_id(subschema_id)) {
@@ -1211,6 +1286,7 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubS
 }
 
 int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                    bool is_in_pl,
                                                     const ObEnumSetMeta *&meta) const
 {
   int ret = OB_SUCCESS;
@@ -1221,7 +1297,7 @@ int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
   } else {
-    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta);
+    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, is_in_pl, meta);
   }
   return ret;
 }
@@ -1295,7 +1371,33 @@ int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
   return ret;
 }
 
+int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                 const ObIArray<common::ObString> &type_info,
+                                                 uint16_t &subschema_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_info(obj_meta, type_info, subschema_id);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_string(type_string, subschema_id);
+  }
+  return ret;
+}
+
+int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {

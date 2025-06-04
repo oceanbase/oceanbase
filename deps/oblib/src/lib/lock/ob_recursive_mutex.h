@@ -28,6 +28,8 @@ public:
   int lock();
   int unlock();
   int trylock();
+  int rdlock();
+  int wr2rdlock();
 private:
   ObLatch latch_;
   uint32_t latch_id_;
@@ -63,7 +65,11 @@ inline int ObRecursiveMutex::lock()
 inline int ObRecursiveMutex::unlock()
 {
   int ret = OB_SUCCESS;
-  if (0 == --lock_cnt_) {
+  if (latch_.is_rdlocked()) {
+    if (OB_FAIL(latch_.unlock())) {
+      COMMON_LOG(WARN, "Fail to unlock the ObRecursiveMutex, ", K_(latch_id), K(ret));
+    }
+  } else if (0 == --lock_cnt_) {
     if (OB_FAIL(latch_.unlock())) {
       COMMON_LOG(WARN, "Fail to unlock the ObRecursiveMutex, ", K_(latch_id), K(ret));
     }
@@ -84,6 +90,35 @@ inline int ObRecursiveMutex::trylock()
     } else {
       ++lock_cnt_;
     }
+  }
+  return ret;
+}
+
+inline int ObRecursiveMutex::rdlock()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(latch_.rdlock(latch_id_))) {
+    COMMON_LOG(WARN, "Fail to rdlock ObRecursiveMutex, ", K_(latch_id), K(ret));
+  }
+  return ret;
+}
+
+inline int ObRecursiveMutex::wr2rdlock()
+{
+  int ret = OB_SUCCESS;
+  if (latch_.is_wrlocked_by()) {
+    if (lock_cnt_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "lock count is not 1, can not to downgrade, ", K_(latch_id), K_(lock_cnt), K(ret));
+    } else {
+      --lock_cnt_;
+      if (OB_FAIL(latch_.wr2rdlock())) {
+        COMMON_LOG(WARN, "Fail to downgrade ObRecursiveMutex, ", K_(latch_id), K(ret));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ObRecursiveMutex is not wrlocked, ", K_(latch_id), K(ret));
   }
   return ret;
 }

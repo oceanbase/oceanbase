@@ -307,27 +307,6 @@ public: // derived from ObITable
       storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey);
 
-  // exist/prefix_exist is used to ensure the (prefix) existance of the row
-  // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
-  // tablet_id is necessary for the query_engine's key engine(NB: do we need it now?)
-  // rowkey is the row key used for read
-  // columns is the schema of the new_row, it contains the row key
-  // rows_info is the the above information for multiple rowkeys
-  // is_exist returns the existance of (one of) the rowkey(must not be deleted)
-  // has_found returns the existance of the rowkey(may be deleted)
-  // all_rows_found returns the existance of all of the rowkey(may be deleted) or existance of one of the rowkey(must not be deleted)
-  // may_exist returns the possible existance of the rowkey(may be deleted)
-  virtual int exist(
-      const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
-	  const blocksstable::ObDatumRowkey &rowkey,
-	  bool &is_exist,
-	  bool &has_found);
-  virtual int exist(
-      storage::ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found);
-
   // get/scan is used to read/scan the row
   // param is the memtable access parameter, we need the descriptor(column schema and so on) of row in order to read the value
   // ctx is the reader tx's context, we need the tx_id, version and scn to do the concurrent control(lock_for_read)
@@ -447,6 +426,8 @@ public:
     ATOMIC_STORE(&transfer_freeze_flag_, true);
   }
   inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
+  virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
+  inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
   virtual uint32_t get_freeze_flag() override;
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
@@ -482,7 +463,8 @@ public:
                        K_(contain_hotspot_row),
                        K_(ls_id),
                        K_(transfer_freeze_flag),
-                       K_(recommend_snapshot_version));
+                       K_(recommend_snapshot_version),
+                       K_(is_delete_insert_table));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
 
@@ -580,10 +562,15 @@ private:
   void mvcc_undo_(ObMvccWriteResults &res);
 
   void mvcc_undo_(ObMvccWriteResult &res);
+  int check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set_arg) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;
+  bool transfer_freeze_flag_;
+  bool contain_hotspot_row_;
+  bool is_delete_insert_table_;
+
   storage::ObLSHandle ls_handle_;
   ObSingleMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
@@ -593,14 +580,12 @@ private:
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   // TODO(handora.qc): remove it as soon as possible
   // only used for decide special right boundary of memtable
-  bool transfer_freeze_flag_;
   // only used for decide special snapshot version of memtable
   share::SCN recommend_snapshot_version_;
 
   int64_t state_;
   lib::Worker::CompatMode mode_;
   int64_t minor_merged_time_;
-  bool contain_hotspot_row_;
   transaction::ObTxEncryptMeta *encrypt_meta_;
   common::SpinRWLock encrypt_meta_lock_;
   int64_t max_column_cnt_; // record max column count of row

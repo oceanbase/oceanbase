@@ -574,5 +574,118 @@ int ObZoneTableOperation::get_zone_info(
   } else {}
   return ret;
 }
+
+int ObZoneTableOperation::update_global_config_version_with_lease(
+    ObMySQLTransaction &trans,
+    const int64_t global_config_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_config_version = 0;
+  int64_t current_lease_info_version = 0;
+  int64_t lease_info_version_to_update = 0;
+  int64_t start_time = ObTimeUtility::current_time();
+
+  LOG_INFO("begin to update global config version with lease version", K(global_config_version));
+  if (OB_UNLIKELY(0 >= global_config_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_config_version));
+  } else if (OB_FAIL(get_config_version_with_lease_(trans, current_config_version, current_lease_info_version))) {
+    LOG_WARN("fail to get config version with lease", KR(ret));
+  } else if (global_config_version <= current_config_version) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("current config version is bigger than version to update", KR(ret), K(global_config_version),
+             K(current_config_version), K(current_lease_info_version));
+  } else if (FALSE_IT(lease_info_version_to_update = std::max(current_lease_info_version + 1, ObTimeUtility::current_time()))) {
+    // shall never be here
+  } else if (OB_FAIL(inner_update_global_config_version_with_lease_(
+                         trans, global_config_version, lease_info_version_to_update))) {
+    LOG_WARN("fail to inner update global config version and lease info version", KR(ret),
+             K(global_config_version), K(lease_info_version_to_update));
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  LOG_INFO("finish update global config version with lease version", KR(ret),
+           K(current_config_version), K(current_lease_info_version),
+           K(global_config_version), K(lease_info_version_to_update), K(cost_time));
+  return ret;
+}
+
+int ObZoneTableOperation::get_config_version_with_lease_(
+    ObMySQLTransaction &trans,
+    int64_t &current_config_version,
+    int64_t &current_lease_info_version)
+{
+  int ret = OB_SUCCESS;
+  current_config_version = 0;
+  current_lease_info_version = 0;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    ObMySQLResult *res = NULL;
+    if (OB_FAIL(sql.assign_fmt("SELECT name, value "
+                               "FROM %s "
+                               "WHERE zone = '' "
+                               "AND (name = 'config_version' OR name = 'lease_info_version') "
+                               "FOR UPDATE", OB_ALL_ZONE_TNAME))) {
+      LOG_WARN("fail to construct sql", KR(ret));
+    } else if (OB_FAIL(trans.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr());
+    } else if (OB_ISNULL(res = result.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed");
+    } else {
+      int64_t tmp_real_str_len = 0;
+      char name[OB_MAX_COLUMN_NAME_BUF_LENGTH] = "";
+      int64_t value = 0;
+      while (OB_SUCC(ret) && OB_SUCCESS == (ret = res->next())) {
+        EXTRACT_STRBUF_FIELD_MYSQL(*res, "name", name, static_cast<int64_t>(sizeof(name)), tmp_real_str_len);
+        EXTRACT_INT_FIELD_MYSQL(*res, "value", value, int64_t);
+        (void) tmp_real_str_len; // make compiler happy
+        if (OB_SUCC(ret)) {
+          if (0 == ObString(name).case_compare("config_version")) {
+            current_config_version = value;
+          } else if (0 == ObString(name).case_compare("lease_info_version")) {
+            current_lease_info_version = value;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid name", KR(ret), K(name));
+          }
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObZoneTableOperation::inner_update_global_config_version_with_lease_(
+    ObMySQLTransaction &trans,
+    const int64_t global_config_version_to_update,
+    const int64_t lease_info_version_to_update)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(0 >= global_config_version_to_update)
+      || OB_UNLIKELY(0 >= lease_info_version_to_update)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_config_version_to_update), K(lease_info_version_to_update));
+  } else if (OB_FAIL(sql.assign_fmt("UPDATE %s "
+                                    "SET value = "
+                                    "CASE WHEN name = 'config_version' then %ld "
+                                    "ELSE %ld "
+                                    "END WHERE zone = '' "
+                                    "AND (name = 'config_version' or name = 'lease_info_version')",
+                                    OB_ALL_ZONE_TNAME, global_config_version_to_update, lease_info_version_to_update))) {
+    LOG_WARN("fail to construct sql", KR(ret), K(global_config_version_to_update), K(lease_info_version_to_update));
+  } else if (OB_FAIL(trans.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to update config_version and lease_info_version in __all_zone", KR(ret), K(sql));
+  } else if (2 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
+  }
+  return ret;
+}
+
 }//end namespace share
 }//end namespace oceanbase

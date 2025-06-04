@@ -172,11 +172,6 @@ bool ObTenantStatusCache::enable_adaptive_compaction_with_cpu_load() const
   bool bret = enable_adaptive_compaction_;
   if (!bret || !enable_adaptive_merge_schedule()) {
     // do nothing
-#ifdef ENABLE_DEBUG_LOG
-  } else if (GCONF.enable_crazy_medium_compaction) {
-    bret = true;
-    LOG_DEBUG("set crazy medium, set enable_adaptive_compaction = true");
-#endif
   } else if (MTL(ObTenantTabletStatMgr *)->is_high_tenant_cpu_load()) {
     bret = false;
     if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {

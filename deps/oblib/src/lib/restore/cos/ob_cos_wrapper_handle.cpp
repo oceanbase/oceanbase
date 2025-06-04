@@ -23,7 +23,7 @@ using namespace oceanbase::common;
  * ------------------------------ObCosMemAllocator---------------------
  */
 ObCosMemAllocator::ObCosMemAllocator()
-  : allocator_(ObModIds::BACKUP, OB_MALLOC_NORMAL_BLOCK_SIZE)
+  : allocator_(OB_STORAGE_COS_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id())
 {
 }
 

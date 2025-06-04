@@ -12,7 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tenant_seq_generator.h"
-#include "storage/meta_store/ob_tenant_storage_meta_persister.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "observer/omt/ob_tenant.h"
 namespace oceanbase
 {
@@ -22,7 +22,7 @@ namespace storage
 OB_SERIALIZE_MEMBER(ObTenantMonotonicIncSeqs, object_seq_, tmp_file_seq_, write_seq_);
 
 
-int ObTenantSeqGenerator::init(const bool is_shared_storage, ObTenantStorageMetaPersister &persister)
+int ObTenantSeqGenerator::init(const bool is_shared_storage, ObTenantCheckpointSlogHandler &ckpt_slog_handler)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -30,7 +30,7 @@ int ObTenantSeqGenerator::init(const bool is_shared_storage, ObTenantStorageMeta
     LOG_WARN("has inited", K(ret));
   } else {
     is_shared_storage_ = is_shared_storage;
-    persister_ = &persister;
+    ckpt_slog_handler_ = &ckpt_slog_handler;
     if (is_shared_storage_) {
       omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
       curr_seqs_ = tenant->get_super_block().preallocated_seqs_;
@@ -38,7 +38,7 @@ int ObTenantSeqGenerator::init(const bool is_shared_storage, ObTenantStorageMeta
           curr_seqs_.object_seq_ + BATCH_PREALLOCATE_NUM,
           curr_seqs_.tmp_file_seq_ + BATCH_PREALLOCATE_NUM,
           curr_seqs_.write_seq_ + BATCH_PREALLOCATE_NUM);
-      if (OB_FAIL(persister.update_tenant_preallocated_seqs(preallocated_seqs_))) {
+      if (OB_FAIL(ckpt_slog_handler.update_tenant_preallocated_seqs(preallocated_seqs_))) {
         LOG_WARN("fail to update tenant prealloacated seqs", K(ret), K_(preallocated_seqs));
       } else {
         is_inited_ = true;
@@ -89,7 +89,7 @@ void ObTenantSeqGenerator::destroy()
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
-  persister_ = nullptr;
+  ckpt_slog_handler_ = nullptr;
   curr_seqs_.reset();
   preallocated_seqs_.reset();
   is_inited_ = false;
@@ -208,7 +208,7 @@ int ObTenantSeqGenerator::try_preallocate_()
     }
 
     if (need_update) {
-      if (OB_FAIL(persister_->update_tenant_preallocated_seqs(seqs))) {
+      if (OB_FAIL(ckpt_slog_handler_->update_tenant_preallocated_seqs(seqs))) {
         LOG_WARN("fail to update_tenant_preallocated_seqs", K(ret), K(seqs));
       } else {
         ATOMIC_STORE(&preallocated_seqs_.object_seq_, seqs.object_seq_);

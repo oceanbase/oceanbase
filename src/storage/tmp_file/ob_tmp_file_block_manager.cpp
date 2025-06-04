@@ -442,6 +442,7 @@ int ObTmpFileBlock::dec_ref_cnt(int64_t &ref_cnt)
 
 bool ObTmpFileBlock::on_disk() const
 {
+  SpinRLockGuard guard(lock_);
   return BlockState::ON_DISK == block_state_;
 }
 
@@ -692,12 +693,12 @@ int ObTmpFileBlockManager::write_back_succ(const int64_t block_index, const bloc
   } else if (OB_ISNULL(blk = handle.get())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tmp file block is null", KR(ret), K(block_index));
-  } else if (OB_FAIL(blk->write_back_succ(macro_block_id))) {
-    LOG_WARN("fail to notify write_back_succ", KR(ret), K(block_index), K(macro_block_id), K(handle));
   } else {
     SpinWLockGuard guard(stat_lock_);
     int64_t used_page_num = 0;
-    if (OB_FAIL(blk->get_page_usage(used_page_num))) {
+    if (OB_FAIL(blk->write_back_succ(macro_block_id))) {
+      LOG_WARN("fail to notify write_back_succ", KR(ret), K(block_index), K(macro_block_id), K(handle));
+    } else if (OB_FAIL(blk->get_page_usage(used_page_num))) {
       LOG_WARN("fail to get page usage", KR(ret), K(handle));
     } else {
       used_page_num_ += used_page_num;
@@ -732,11 +733,16 @@ int ObTmpFileBlockManager::release_tmp_file_page(const int64_t block_index,
   } else if (OB_ISNULL(handle.get())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, block should not be null", KR(ret), K(block_index));
-  } else if (OB_FAIL(handle.get()->release_pages(begin_page_id, page_num))) {
-    LOG_WARN("fail to release pages", KR(ret), K(begin_page_id), K(page_num), K(handle));
-  } else if (handle.get()->on_disk()) {
+  } else{
     SpinWLockGuard guard(stat_lock_);
-    used_page_num_ -= page_num;
+    if (OB_FAIL(handle.get()->release_pages(begin_page_id, page_num))) {
+      LOG_WARN("fail to release pages", KR(ret), K(begin_page_id), K(page_num), K(handle));
+    } else if (handle.get()->on_disk()) {
+      used_page_num_ -= page_num;
+      if (used_page_num_ < 0) {
+        LOG_ERROR("invalid used_page_num", K(used_page_num_), K(block_index), K(begin_page_id), K(page_num), K(handle));
+      }
+    }
   }
 
   LOG_DEBUG("release_tmp_file_page", KR(ret), K(block_index), K(begin_page_id), K(page_num), K(handle));
@@ -785,6 +791,9 @@ int ObTmpFileBlockManager::remove_tmp_file_block_(const int64_t block_index)
       LOG_WARN("fail to get page usage", KR(ret), K(block_index), K(handle));
     } else {
       used_page_num_ -= used_page_num;
+      if (used_page_num != 0 || used_page_num_ < 0) {
+        LOG_ERROR("invalid used_page_num when removing tmp file block", K(used_page_num_), K(used_page_num), KPC(blk));
+      }
       physical_block_num_ -= 1;
     }
   }
@@ -802,6 +811,9 @@ int ObTmpFileBlockManager::get_block_usage_stat(int64_t &used_page_num, int64_t 
     SpinRLockGuard guard(stat_lock_);
     used_page_num = used_page_num_;
     macro_block_count = physical_block_num_;
+    if (used_page_num < 0 || macro_block_count < 0) {
+      LOG_ERROR("invalid used_page_num or macro_block_count", K(used_page_num), K(macro_block_count));
+    }
   }
 
   return ret;

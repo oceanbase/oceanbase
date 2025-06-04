@@ -125,6 +125,15 @@
                 TARGET_SERVERS_LIST,
                 SUCCESS_SERVERS_LIST);
   };
+
+  class DBMS_PARTITION {
+    public:
+      DEF_MODULE(DBMS_PARTITION, "DBMS_PARTITION");
+
+      DEF_EVENT(DBMS_PARTITION, MANAGE_DYNAMIC_PARTITION, "MANAGE_DYNAMIC_PARTITION",
+                SUCCESS_TABLE_ID_LIST,
+                FAILED_TABLE_ID_LIST);
+  };
 #endif
 #endif
 ////////////////////////////////////////////////////////////////

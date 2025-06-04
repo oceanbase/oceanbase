@@ -40,8 +40,8 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*), void *stack_add
     // To prevent the check_stack_overflow call before the jump
     // Do not introduce other code between the two set_stackattr
     set_stackattr(stack_addr, stack_size);
+    DEFER(set_stackattr(ori_stack_addr, ori_stack_size));
     ret = jump_call(arg_, func_, (char *)stack_addr + stack_size);
-    set_stackattr(ori_stack_addr, ori_stack_size);
   }
 #else
   ret = func_(arg_);
@@ -109,8 +109,8 @@ inline void dealloc_stack(void *stack_addr, size_t stack_size)
       const size_t stack_size = STACK_PER_EXTEND;                           \
       void *stack_addr = nullptr;                                           \
       if (OB_SUCC(alloc_stack(stack_size, stack_addr))) {                   \
+        DEFER(dealloc_stack(stack_addr, stack_size));                       \
         ret = CALL_WITH_NEW_STACK(func, stack_addr, stack_size);            \
-        dealloc_stack(stack_addr, stack_size);                              \
       }                                                                     \
     }                                                                       \
     ret;                                                                    \

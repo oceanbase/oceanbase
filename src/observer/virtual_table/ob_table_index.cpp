@@ -632,33 +632,45 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
             is_sub_end = true;
           } else if (index_schema->is_vec_index()) {
             uint64_t vec_column_id = OB_INVALID_ID;
-            if (OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
+            if (index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_sparse_vec_index_column_id(vec_column_id))) {
+              LOG_WARN("get generated column id failed", K(ret));
+            } else if (!index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
             } else {
-              ObArray<uint64_t> vec_index_key_column_ids;
-              const ObColumnSchemaV2 *gen_column_schema = NULL;
               if (OB_INVALID_ID == static_cast<uint64_t>(vec_dep_col_idx_)) {
                 vec_dep_col_idx_ = 0;
               }
               if (OB_UNLIKELY(vec_column_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == vec_column_id)) {
                 ret = OB_INVALID_ARGUMENT;
                 LOG_WARN("invalid vec column id", K(ret), K(vec_column_id));
-              } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(vec_column_id))) {
-                ret = OB_SCHEMA_ERROR;
-                SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
-              } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(vec_index_key_column_ids))) {
-                LOG_WARN("get cascaded column ids from column schema failed", K(ret), K(*gen_column_schema));
-              } else if (vec_index_key_column_ids.count() <= vec_dep_col_idx_) {
-                is_sub_end = true;
-                vec_dep_col_idx_ = OB_INVALID_ID;
-              } else if (OB_FAIL(add_vec_index_column(database_name,
-                                                      table_schema,
-                                                      index_schema,
-                                                      cells,
-                                                      col_count,
-                                                      vec_index_key_column_ids[vec_dep_col_idx_]))) {
-                ret = OB_ERR_UNEXPECTED;
-                SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(vec_dep_col_idx_));
+              } else if (index_schema->is_vec_spiv_index()) {
+                if (vec_dep_col_idx_ > 0) {
+                  is_sub_end = true;
+                  vec_dep_col_idx_ = OB_INVALID_ID;
+                } else if (OB_FAIL(add_vec_index_column(database_name, table_schema, index_schema, cells, col_count, vec_column_id))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  SERVER_LOG(WARN, "fail to add sparse vector index column", K(ret), K(col_count), K(vec_dep_col_idx_));
+                }
+              } else {
+                ObArray<uint64_t> vec_index_key_column_ids;
+                const ObColumnSchemaV2 *gen_column_schema = NULL;
+                if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(vec_column_id))) {
+                  ret = OB_SCHEMA_ERROR;
+                  SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
+                } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(vec_index_key_column_ids))) {
+                  LOG_WARN("get cascaded column ids from column schema failed", K(ret), K(*gen_column_schema));
+                } else if (vec_index_key_column_ids.count() <= vec_dep_col_idx_) {
+                  is_sub_end = true;
+                  vec_dep_col_idx_ = OB_INVALID_ID;
+                } else if (OB_FAIL(add_vec_index_column(database_name,
+                                                        table_schema,
+                                                        index_schema,
+                                                        cells,
+                                                        col_count,
+                                                        vec_index_key_column_ids[vec_dep_col_idx_]))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(vec_dep_col_idx_));
+                }
               }
             }
           } else {

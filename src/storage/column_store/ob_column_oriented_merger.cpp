@@ -345,7 +345,7 @@ bool ObCOMerger::is_empty_table(const ObSSTable &sstable) const
   return is_empty_table;
 }
 
-int ObCOMerger::close()
+int ObCOMerger::inner_close()
 {
   int ret = OB_SUCCESS;
   compaction::ObCOMergeWriter *writer = nullptr;
@@ -474,6 +474,7 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
     const blocksstable::ObDatumRow *result_row = nullptr;
     bool need_replay_mergelog = true;
     bool need_move_row_iter = false;
+    ObICompactionFilter::ObFilterRet filter_ret = ObICompactionFilter::FILTER_RET_MAX;
     while (OB_SUCC(ret) && !merge_helper_->is_iter_end()) {
       if (OB_FAIL(share::dag_yield())) {
         STORAGE_LOG(WARN, "fail to yield co merge dag", KR(ret));
@@ -507,6 +508,10 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
       } else if (OB_ISNULL(result_row) || OB_UNLIKELY(!result_row->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "UNEXPECTED result_row", K(ret), KPC(partition_fuser_));
+      } else if (OB_FAIL(try_filter_row(*result_row, filter_ret))) {
+        STORAGE_LOG(WARN, "failed to filter row", K(ret), KPC(result_row));
+      } else if (ObICompactionFilter::FILTER_RET_REMOVE == filter_ret) {
+        continue;
       } else if (OB_FAIL(build_mergelog(*result_row, merge_log, need_replay_mergelog, need_move_row_iter))) {
         STORAGE_LOG(WARN, "failed to build mergelog", K(ret));
       } else if (need_move_row_iter) {

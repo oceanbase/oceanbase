@@ -140,6 +140,42 @@ protected:
   int compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
 };
 
+template <typename Store_Row, bool is_basic_cmp, bool is_topn_sort = false>
+class SingleColCompare : public CompareBase
+{
+  typedef int (*CmpFunc) (const void*, const void*);
+public:
+  using SortVecOpChunk = ObSortVecOpChunk<Store_Row, false>;
+  SingleColCompare(ObIAllocator &allocator) : CompareBase(allocator)
+  {}
+  int init(const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_row_meta,
+           const RowMeta *addon_row_meta, const ObIArray<ObSortFieldCollation> *cmp_sort_collations,
+           ObExecContext *exec_ctx, bool enable_encode_sortkey);
+  int init_cmp_func(const ObIArray<ObExpr *> &cmp_sk_exprs);
+  // compare function for quick sort.
+  OB_INLINE bool operator()(const Store_Row *l, const Store_Row *r);
+  // compare function for in-memory merge sort
+  OB_INLINE bool operator()(Store_Row **l, Store_Row **r);
+  // compare function for external merge sort
+  OB_INLINE bool operator()(const SortVecOpChunk *l, const SortVecOpChunk *r);
+  OB_INLINE bool operator()(const Store_Row *r, ObEvalCtx &eval_ctx);
+  OB_INLINE int with_ties_cmp(const Store_Row *r, ObEvalCtx &eval_ctx);
+  OB_INLINE int with_ties_cmp(const Store_Row *l, const Store_Row *r);
+
+protected:
+  OB_INLINE int compare(const Store_Row *l, const Store_Row *r, const RowMeta *row_meta);
+  OB_INLINE int compare(const Store_Row *r, ObEvalCtx &eval_ctx, const RowMeta *row_meta);
+
+private:
+  // only for fast compare in one column sort
+  static constexpr uint16_t LEN_OFFSET = 13;
+  static constexpr uint16_t DATA_OFFSET = 17 + (is_topn_sort ? 8 : 0);
+  static constexpr uint16_t FIXED_DATA_OFFSET = 9 + (is_topn_sort ? 8 : 0);
+  common::ObObjMeta cmp_obj_meta_;
+  CmpFunc cmp_func_;
+  const ObCharsetInfo *cs_;
+};
+
 template<VecValueTypeClass vec_tc, bool null_first>
 struct FixedCmpFunc
 {
@@ -158,6 +194,15 @@ struct FixedCmpFunc
         ? 0
         : (*(reinterpret_cast<const CType*>(l_v)) < *(reinterpret_cast<const CType*>(r_v)) ? -1 : 1);
     }
+    return cmp_ret;
+  }
+
+  OB_INLINE static int cmp_not_null(const void *l_v, const void *r_v)
+  {
+    int cmp_ret = 0;
+    cmp_ret = *(reinterpret_cast<const CType*>(l_v)) == *(reinterpret_cast<const CType*>(r_v))
+      ? 0
+      : (*(reinterpret_cast<const CType*>(l_v)) < *(reinterpret_cast<const CType*>(r_v)) ? -1 : 1);
     return cmp_ret;
   }
 };

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_PLUGIN_VECTOR_INDEX_SERVICE_DEFINE_H_
 #define OCEANBASE_OBSERVER_OB_PLUGIN_VECTOR_INDEX_SERVICE_DEFINE_H_
 #include "share/ob_ls_id.h"
+#include "logservice/ob_log_base_type.h"
 #include "share/scn.h"
 #include "lib/lock/ob_recursive_mutex.h"
 #include "share/rc/ob_tenant_base.h"
@@ -21,6 +22,8 @@
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_type/ob_vector_common_util.h"
+#include "share/vector_index/ob_tenant_vector_index_async_task.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "ob_vector_kmeans_ctx.h"
 
 namespace oceanbase
@@ -47,16 +50,6 @@ public:
 public:
   common::ObTabletID tablet_id_;
   int64_t context_id_;
-};
-
-struct ObVectorIndexAcquireCtx
-{
-  ObTabletID inc_tablet_id_;
-  ObTabletID vbitmap_tablet_id_;
-  ObTabletID snapshot_tablet_id_;
-  ObTabletID data_tablet_id_;
-
-  TO_STRING_KV(K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), K_(data_tablet_id));
 };
 
 class ObVectorIndexAdapterCandiate final
@@ -108,7 +101,8 @@ public:
       vector_index_service_(nullptr),
       mem_sync_info_(tenant_id),
       memory_context_(memory_context),
-      all_vsag_use_mem_(nullptr)
+      all_vsag_use_mem_(nullptr),
+      async_task_opt_(tenant_id)
   {}
   virtual ~ObPluginVectorIndexMgr();
 
@@ -119,7 +113,8 @@ public:
   VectorIndexAdaptorMap& get_partial_adapter_map() { return partial_index_adpt_map_; }
   VectorIndexAdaptorMap& get_complete_adapter_map() { return complete_index_adpt_map_; }
   IvfVectorIndexHelperMap& get_ivf_helper_map() { return ivf_index_helper_map_; }
-
+  lib::MemoryContext& get_memory_context() { return memory_context_; }
+  uint64_t *get_all_vsag_use_mem() { return all_vsag_use_mem_; }
 
   // thread save interface
   void destroy();
@@ -139,6 +134,8 @@ public:
   int replace_with_complete_adapter(ObVectorIndexAdapterCandiate *candidate,
                                     ObVecIdxSharedTableInfoMap &info_map,
                                     ObIAllocator &allocator);
+  int replace_old_adapter(ObPluginVectorIndexAdaptor *new_adapter);
+  common::RWLock& get_adapter_map_lock() { return adapter_map_rwlock_; }
   int replace_with_full_partial_adapter(ObVectorIndexAcquireCtx &ctx,
                                         ObIAllocator &allocator,
                                         ObPluginVectorIndexAdapterGuard &adapter_guard,
@@ -173,6 +170,7 @@ public:
   int erase_partial_adapter(ObTabletID tablet_id);
   int erase_ivf_build_helper(const ObIvfHelperKey &key);
   ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
+  ObVecIndexAsyncTaskOption &get_async_task_opt() { return async_task_opt_; }
   // for debug
   void dump_all_inst();
   // for virtual table
@@ -220,6 +218,7 @@ private:
   ObVectorIndexMemSyncInfo mem_sync_info_; // handle follower memdata sync
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
+  ObVecIndexAsyncTaskOption async_task_opt_; //
 };
 
 // id to unique identify an vector index adapter
@@ -258,7 +257,9 @@ struct ObPluginVectorIndexIdentity
 
 typedef common::hash::ObHashMap<share::ObLSID, ObPluginVectorIndexMgr*> LSIndexMgrMap;
 // Manage all vector index adapters of a tenant
-class ObPluginVectorIndexService
+class ObPluginVectorIndexService : public logservice::ObIReplaySubHandler,
+                                   public logservice::ObICheckpointSubHandler,
+                                   public logservice::ObIRoleChangeSubHandler
 {
 public:
   ObPluginVectorIndexService()
@@ -270,7 +271,9 @@ public:
     ls_service_(NULL),
     sql_proxy_(NULL),
     memory_context_(NULL),
-    all_vsag_use_mem_(0)
+    all_vsag_use_mem_(0),
+    tenant_vec_async_task_sched_(nullptr),
+    is_vec_async_task_started_(false)
 
   {}
   virtual ~ObPluginVectorIndexService();
@@ -285,7 +288,35 @@ public:
   void wait();
   void destroy();
 
+  // for LS leader operation
+  int flush(share::SCN &rec_scn)
+  {
+    UNUSED(rec_scn);
+    return OB_SUCCESS;
+  }
+  share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
+  // for replay, do nothing
+  int replay(const void *buffer,
+             const int64_t buf_size,
+             const palf::LSN &lsn,
+             const share::SCN &scn)
+  {
+    UNUSED(buffer);
+    UNUSED(buf_size);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
+  void inner_switch_to_follower();
+  void switch_to_follower_forcedly();
+  int switch_to_leader();
+  int switch_to_follower_gracefully();
+  int resume_leader() { return switch_to_leader(); }
+  int alloc_tenant_vec_async_task_sched();
+  ObFIFOAllocator &get_allocator() { return allocator_; }
+
   // feature interfaces
+  ObVecIndexAsyncTaskHandler &get_vec_async_task_handle() { return vec_async_task_handle_; }
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   int get_adapter_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adapter_guard);
   int get_build_helper_inst_guard(ObLSID ls_id, const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
@@ -335,6 +366,7 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
+  uint64_t get_all_vsag_use_mem() { return all_vsag_use_mem_; }
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
                K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
@@ -343,6 +375,7 @@ private:
   int generate_get_aux_info_sql(
       const uint64_t table_id,
       const ObTabletID tablet_id,
+      bool &is_hidden_table,
       ObSqlString &sql_string);
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
@@ -361,6 +394,10 @@ private:
   common::ObArenaAllocator alloc_;
   lib::MemoryContext memory_context_;
   uint64_t all_vsag_use_mem_;
+  ObTenantVecAsyncTaskScheduler *tenant_vec_async_task_sched_;
+  bool is_vec_async_task_started_;
+  ObVecIndexAsyncTaskHandler vec_async_task_handle_;
+
 
 public:
   volatile bool stop_flag_;

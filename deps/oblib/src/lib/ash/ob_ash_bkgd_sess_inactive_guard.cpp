@@ -15,6 +15,7 @@
 #include "lib/ash/ob_ash_bkgd_sess_inactive_guard.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/stat/ob_diagnostic_info_util.h"
 
 using namespace oceanbase::common;
 
@@ -32,6 +33,10 @@ ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard()
 ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard()
 {
   if (need_record_) {
-    GET_DIAGNOSTIC_INFO->get_ash_stat().is_active_session_ = prev_stat_;
+    if (prev_stat_) {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().set_sess_active();
+    } else {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().set_sess_inactive();
+    }
   }
 }

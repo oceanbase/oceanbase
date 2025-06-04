@@ -115,6 +115,7 @@ void ObRemoteLogWriter::wait()
 void ObRemoteLogWriter::run1()
 {
   LOG_INFO("ObRemoteLogWriter thread start");
+  ObDIActionGuard ag("LogService", "LogRestoreService", "RemoteLogWriter");
   lib::set_thread_name("RFLWorker");
 
   const int64_t THREAD_RUN_INTERVAL = 100 * 1000L;

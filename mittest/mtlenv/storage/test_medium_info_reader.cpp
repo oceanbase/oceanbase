@@ -56,21 +56,6 @@ TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
   ASSERT_NE(nullptr, tablet);
 
   {
-    ObTabletCreateDeleteMdsUserData user_data;
-    user_data.tablet_status_ = ObTabletStatus::NORMAL;
-    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 5);
-    user_data.create_commit_scn_ = commit_scn;
-    user_data.create_commit_version_ = 5;
-
-    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(5)));
-    ret = tablet->set_tablet_status(user_data, ctx);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ctx.single_log_commit(commit_scn, commit_scn);
-  }
-
-  {
     // insert data into mds table
     ret = insert_medium_info(1718647202742212010, 1718647202742212010);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -110,38 +95,7 @@ TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
   }
 
   // check mds minor merge has done
-  {
-    int times = 0;
-    bool has_minor = false;
-    do {
-      ObTabletHandle tablet_handle;
-      ObTablet *tablet = nullptr;
-      ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
-      ASSERT_EQ(OB_SUCCESS, ret);
-      tablet = tablet_handle.get_obj();
-      ASSERT_NE(nullptr, tablet);
-
-      ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-      ret = tablet->fetch_table_store(table_store_wrapper);
-      ASSERT_EQ(OB_SUCCESS, ret);
-      const ObTabletTableStore *table_store = table_store_wrapper.get_member();
-
-      if (table_store->mds_sstables_.count() != 1) {
-        // sleep
-        ::ob_usleep(100_ms);
-        ++times;
-        continue;
-      } else {
-        ObSSTable *sstable = table_store->mds_sstables_[0];
-        has_minor = sstable->is_mds_minor_sstable();
-        if (!has_minor) {
-          // sleep
-          ::ob_usleep(100_ms);
-          ++times;
-        }
-      }
-    } while (ret == OB_SUCCESS && !has_minor && times < 60);
-  }
+  MediumInfoCommon::wait_mds_minor_finish(tablet_id);
 
   // read medium info
   ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);

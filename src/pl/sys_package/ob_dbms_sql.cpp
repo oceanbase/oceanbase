@@ -263,7 +263,7 @@ int64_t ObDbmsCursorInfo::search_array(const ObString &name, ObIArray<ObString> 
 int ObDbmsCursorInfo::variable_value(sql::ObSQLSessionInfo *session,
                                      ObIAllocator *allocator,
                                      const ObString &variable_name,
-                                     sql::ObExprResType &result_type,
+                                     sql::ObRawExprResType &result_type,
                                      ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -411,7 +411,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                  ObIAllocator *allocator,
                  int64_t col_idx,
                  const ObObjParam src_obj,
-                 sql::ObExprResType &result_type,
+                 sql::ObRawExprResType &result_type,
                  ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -446,7 +446,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
         ObPLAssocArray *table = reinterpret_cast<ObPLAssocArray*>(result.get_ext());
         ObObjParam obj;
         ObObj key(ObInt32Type);
-        ObExprResType element_type;
+        ObRawExprResType element_type;
         ObExprPLAssocIndex::Info info;
         OX (info.for_write_ = true);
         OX (element_type.set_meta(desc->type_.get_meta_type()));
@@ -488,7 +488,7 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
                                ObIAllocator *allocator,
                                int64_t col_idx,
                                const ObObjParam src_obj,
-                               sql::ObExprResType &result_type,
+                               sql::ObRawExprResType &result_type,
                                ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -660,7 +660,7 @@ int64_t ObDbmsCursorInfo::convert_to_dbms_cursor_id(int64_t id)
 int ObDbmsCursorInfo::column_value(sql::ObSQLSessionInfo *session,
                             ObIAllocator *allocator,
                             int64_t col_idx,
-                            sql::ObExprResType &result_type,
+                            sql::ObRawExprResType &result_type,
                             ObObjParam &result)
 {
   int ret = OB_SUCCESS;
@@ -1268,7 +1268,7 @@ int ObPLDbmsSql::column_value(ObExecContext &exec_ctx, ParamStore &params, ObObj
   int64_t param_count = params.count();
 
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   if (5 == param_count) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("five parameters for column_value not supported", K(ret));
@@ -1301,7 +1301,7 @@ int ObPLDbmsSql::variable_value(ObExecContext &exec_ctx, ParamStore &params, ObO
   ObString name;
   int64_t param_count = params.count();
   // parse all param.
-  ObExprResType result_type;
+  ObRawExprResType result_type;
   OV (3 == param_count, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_varchar(), OB_INVALID_ARGUMENT, params);
   OZ (params.at(1).get_string(name));
@@ -1389,7 +1389,6 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     CK (OB_NOT_NULL(table));
     OZ (ObSPIService::spi_set_collection(exec_ctx.get_my_session()->get_effective_tenant_id(),
                                              NULL,
-                                             exec_ctx.get_allocator(),
                                              *table,
                                              cursor->get_field_columns().count(),
                                              true));
@@ -1651,7 +1650,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     // 2.* fill row store
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
+      bool is_iter_end = false;
+      OZ (spi_cursor->init_row_desc(new_cursor->get_field_columns()));
+      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {
@@ -1675,7 +1676,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OX (new_cursor->open(spi_cursor));
   if (OB_FAIL(ret) && NULL != spi_cursor) {
     spi_cursor->~ObSPICursor();
-    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_sessid()));
+    LOG_WARN("fill cursor failed.", K(ret), K(new_cursor->get_id()), K(session->get_server_sid()));
   }
 
   // 3. set old cursor invalid
@@ -1713,7 +1714,6 @@ int ObPLDbmsSql::to_cursor_number(ObExecContext &exec_ctx, ParamStore &params, O
       OV (OB_NOT_NULL(new_cursor));
       OZ (new_cursor->prepare_entity(*session));
       OZ (fill_dbms_cursor(session, cursor, new_cursor));
-      OX (new_cursor->set_ref_by_refcursor());
       OX (new_cursor->set_stmt_type(stmt::T_SELECT));
       OX (new_cursor->get_sql_stmt() = "SELECT");  // placeholder for SQL stmt
       if (OB_FAIL(ret) && NULL != new_cursor) {
@@ -1744,6 +1744,46 @@ int ObPLDbmsSql::to_cursor_number(ObExecContext &exec_ctx, ParamStore &params, O
   }
   return ret;
 }
+
+int ObPLDbmsSql::to_refcursor(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObDbmsCursorInfo *cursor = NULL;
+
+  if (params.at(0).is_null()) {
+    ret = OB_ERR_DBMS_SQL_CURSOR_NOT_EXIST;
+    LOG_WARN("cursor number is null", K(ret));
+  }
+  OZ (get_cursor(exec_ctx, params, cursor));
+  CK (OB_NOT_NULL(cursor));
+  if (OB_SUCC(ret) && (cursor->get_sql_stmt().empty()
+                      || !ObStmt::is_select_stmt(cursor->get_stmt_type())
+                      || !cursor->isopen()
+                      || (cursor->get_fetched() && !cursor->get_fetched_with_row()))) {
+    ret = OB_ERR_INVALID_CURSOR;
+    LOG_WARN("invlid cursor", K(ret), K(cursor->get_sql_stmt().empty()), K(cursor->get_stmt_type()), K(cursor->isopen()));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObPLCursorInfo* cursor_info = static_cast<ObPLCursorInfo*>(cursor);
+    if (!cursor_info->is_streaming()) {
+      ObSPICursor* spi_cursor = cursor_info->get_spi_cursor();
+      CK (OB_NOT_NULL(spi_cursor));
+      OZ (ObDbmsInfo::deep_copy_field_columns(*cursor->get_allocator(),
+                                              cursor->get_field_columns(),
+                                              spi_cursor->fields_));
+    }
+    OX (cursor->reset_dbms_info());
+    OX (cursor_info->set_is_session_cursor());
+    OX (cursor_info->set_ref_by_refcursor());
+    OX (cursor_info->set_ref_count(1));
+    OX (result.set_extend(reinterpret_cast<int64_t>(cursor_info), PL_REF_CURSOR_TYPE));
+    OX (params.at(0).set_null());
+  }
+
+  return ret;
+}
+
 
 int ObPLDbmsSql::last_error_position(ObExecContext &exec_ctx, ParamStore &params, ObObj &result) {
   int ret = OB_SUCCESS;

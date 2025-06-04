@@ -70,6 +70,10 @@ int ObExprTempTableSSID::calc_temp_table_ssid(const ObExpr &expr, ObEvalCtx &ctx
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid object", K(ret), KPC(param));
     }
+    if (OB_SUCC(ret) && 0 == res.get_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid gtt session id", K(ret));
+    }
     LOG_DEBUG("get result", K(res.get_int()));
   }
   return ret;

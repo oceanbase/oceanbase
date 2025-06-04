@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "lib/thread/ob_async_task_queue.h"
+#include "lib/profile/ob_trace_id.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 namespace oceanbase
 {
 using namespace common;
@@ -110,6 +112,7 @@ void ObAsyncTaskQueue::run2()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    ObDIActionGuard ag("AsyncTaskThreadPool", get_thread_name(), "detect task");
     ObAddr zero_addr;
     while (!stop_) {
       IGNORE_RETURN lib::Thread::update_loop_ts(ObTimeUtility::fast_current_time());
@@ -133,7 +136,7 @@ void ObAsyncTaskQueue::run2()
             int64_t now = ObTimeUtility::current_time();
             int64_t sleep_time = task->get_last_execute_time() + task->get_retry_interval() - now;
             if (sleep_time > 0) {
-              ::usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)));
+              ob_throttle_usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)), 0);
             } else {
               break;
             }
@@ -142,6 +145,7 @@ void ObAsyncTaskQueue::run2()
         // generate trace id
         ObCurTraceId::init(zero_addr);
         // just do it
+        ObDIActionGuard ag(typeid(*task));
         ret = task->process();
         if (OB_FAIL(ret)) {
           LOG_WARN("task process failed, start retry", "max retry time",

@@ -47,6 +47,9 @@ enum ObPDAggType
   PD_RB_BUILD,
   PD_STR_PREFIX_MIN,
   PD_STR_PREFIX_MAX,
+  PD_COUNT_SUM,
+  PD_RB_AND,
+  PD_RB_OR,
   PD_MAX_TYPE
 };
 
@@ -54,6 +57,72 @@ enum FillDatumType
 {
   NULL_DATUM,
   ZERO_DATUM
+};
+
+struct ObPushdownRowIdCtx
+{
+public:
+  ObPushdownRowIdCtx()
+    : row_ids_(nullptr),
+      row_cap_(0),
+      begin_(-1),
+      end_(-1),
+      bound_row_id_(OB_INVALID_CS_ROW_ID),
+      is_reverse_(false)
+  {}
+  ObPushdownRowIdCtx(const int32_t *row_ids, int64_t row_cap, const bool check_scan_order = true)
+    : row_ids_(row_ids),
+      row_cap_(row_cap),
+      begin_(-1),
+      end_(-1),
+      bound_row_id_(OB_INVALID_CS_ROW_ID)
+  {
+    if (check_scan_order) {
+      is_reverse_ = row_cap_ > 1 && row_ids_[1] < row_ids_[0];
+    }
+  }
+  void reuse()
+  {
+    row_ids_ = nullptr;
+    row_cap_ = 0;
+    begin_ = -1;
+    end_ = -1;
+    bound_row_id_ = OB_INVALID_CS_ROW_ID;
+    is_reverse_ = false;
+  }
+  OB_INLINE bool is_valid() const
+  {
+    bool is_valid_bound = (OB_INVALID_CS_ROW_ID == bound_row_id_
+                           || (is_reverse_ && bound_row_id_ <= begin_)
+                           || (!is_reverse_ && bound_row_id_ >= end_));
+    return (nullptr != row_ids_ && row_cap_ > 0)
+        || (nullptr == row_ids_ && begin_ >= 0 && end_ >= begin_ && is_valid_bound);
+  }
+  OB_INLINE int64_t get_row_count() const
+  {
+    return row_ids_ == nullptr ? (end_ - begin_ + 1) : row_cap_;
+  }
+  OB_INLINE int64_t get_row_id(const int64_t idx) const
+  {
+    int64_t row_id = 0;
+    if (row_ids_ != nullptr) {
+      row_id = is_reverse_ ? row_ids_[row_cap_ - 1 - idx] : row_ids_[idx];
+    } else {
+      row_id = begin_ + idx;
+    }
+    return row_id;
+  }
+  TO_STRING_KV(KP_(row_ids), K_(row_cap), K_(begin), K_(end), K_(bound_row_id), K_(is_reverse));
+  /**
+   * if row_ids_ != nullptr, row_ids_ and row_cap_ are valid.
+   * if row_ids_ == nullptr, begin_ and end_ are valid. ==> row_ids: [begin_, end_]
+   */
+  const int32_t *row_ids_;
+  int64_t row_cap_;
+  int64_t begin_;
+  int64_t end_;
+  int64_t bound_row_id_; // row_id boundary reached in one pushdown decoder scan.
+  bool is_reverse_;
 };
 
 // Common interface classes for aggregate pushdown in vectorization 1.0 and 2.0
@@ -82,7 +151,7 @@ public:
   OB_INLINE bool is_max_agg() const { return PD_MAX == agg_type_; }
   OB_INLINE ObBitmap &get_bitmap() { return *bitmap_; };
   VIRTUAL_TO_STRING_KV(K_(agg_type), K_(is_inited), KPC_(bitmap), KP_(agg_row_reader),
-    K_(result_datum), K_(is_assigned_to_group_by_processor));
+    K_(result_datum), K_(skip_index_datum), K_(skip_index_datum_is_prefix), K_(is_assigned_to_group_by_processor));
 protected:
   ObBitmap *bitmap_;
   blocksstable::ObAggRowReader *agg_row_reader_;
@@ -91,6 +160,7 @@ protected:
   common::ObIAllocator &allocator_;
   ObPDAggType agg_type_;
   bool is_assigned_to_group_by_processor_;
+  bool skip_index_datum_is_prefix_;
   bool is_inited_;
 };
 
@@ -106,8 +176,7 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int32_t *row_ids,
-      const int64_t row_count,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       const bool reserve_memory) = 0;
   virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) = 0;
   virtual int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) = 0;

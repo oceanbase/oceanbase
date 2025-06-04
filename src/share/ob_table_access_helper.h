@@ -334,9 +334,9 @@ public:
       ret = OB_ERR_UNEXPECTED;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
     } else if (CLICK_FAIL(GCTX.sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
-      OB_LOG_(WARN, "GCTX.sql_proxy_ insert row failed");
+      OB_LOG_(WARN, "GCTX.sql_proxy_ delete row failed");
     } else {
-      OB_LOG_(INFO, "GCTX.sql_proxy_ insert row success");
+      OB_LOG_(INFO, "GCTX.sql_proxy_ delete row success");
     }
     return ret;
     #undef PRINT_WRAPPER

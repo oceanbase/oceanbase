@@ -128,7 +128,8 @@ public:
       const storage::ObITableReadInfo &read_info,
       ObDatumRow &datum_row,
       memtable::ObNopBitMap &nop_bitmap,
-      bool &read_finished);
+      bool &read_finished,
+      const ObRowHeader *&row_header);
   int read_row_header(const char *row_buf, const int64_t row_len, const ObRowHeader *&row_header);
   int dump_row(const char *row_buf, const int64_t buf_len, FILE* fd);
   int read_column(

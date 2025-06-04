@@ -98,42 +98,53 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
     } else {
       CLOG_LOG(WARN, "failed to check restore status", K(ret), K(ls_id), K(scn));
     }
-  } else if (CLICK_FAIL(check_can_skip_replay_to_mds_(scn, tablet_handle, can_skip_replay))) {
-    CLOG_LOG(WARN, "failed to check can skip reply to mds", K(ret), K(ls_id), K(scn), K(tablet_handle));
-  } else if (can_skip_replay) {
-    //do nothing
-  } else if (CLICK_FAIL(do_replay_(tablet_handle))) {
-    if (OB_NO_NEED_UPDATE == ret) {
-      CLOG_LOG(WARN, "no need replay, skip this log", K(ret), K(ls_id), K(scn));
-    } else if (OB_EAGAIN == ret) {
-      CLOG_LOG_LIMIT(WARN, "failed to replay, need retry", K(ret), K(ls_id), K(scn));
-    } else {
-      CLOG_LOG(WARN, "failed to replay", K(ret), K(ls_id), K(scn));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet should not be NULL", K(ret), KP(tablet));
+  } else if (OB_ISNULL(tablet->get_tablet_pointer_())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet pointer should not be NULL", K(ret), KP(tablet));
+  } else {
+    ObTabletMdsSharedLockGuard mds_truncate_lock_guard(tablet->get_tablet_pointer_()->get_mds_truncate_lock());
+    if (OB_FAIL(mds_truncate_lock_guard.get_ret())) {
+      CLOG_LOG(WARN, "failed to add truncate lock", K(ret), K(ls_id), K(scn), K(tablet_handle));
+    } else if (CLICK_FAIL(check_can_skip_replay_to_mds_(scn, tablet_handle, can_skip_replay))) {
+      CLOG_LOG(WARN, "failed to check can skip reply to mds", K(ret), K(ls_id), K(scn), K(tablet_handle));
+    } else if (can_skip_replay) {
+      //do nothing
+    } else if (CLICK_FAIL(do_replay_(tablet_handle))) {
+      if (OB_NO_NEED_UPDATE == ret) {
+        CLOG_LOG(WARN, "no need replay, skip this log", K(ret), K(ls_id), K(scn));
+      } else if (OB_EAGAIN == ret) {
+        CLOG_LOG_LIMIT(WARN, "failed to replay, need retry", K(ret), K(ls_id), K(scn));
+      } else {
+        CLOG_LOG(WARN, "failed to replay", K(ret), K(ls_id), K(scn));
+      }
     }
-  }
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      const int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
-      const ObLSID errsim_ls_id(errsim_migration_ls_id);
-      const ObString &errsim_migration_dest_server_addr = GCONF.errsim_migration_dest_server_addr.str();
-      common::ObAddr addr;
-      const ObAddr &my_addr = GCONF.self_addr_;
+      if (OB_SUCC(ret)) {
+        const int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
+        const ObLSID errsim_ls_id(errsim_migration_ls_id);
+        const ObString &errsim_migration_dest_server_addr = GCONF.errsim_migration_dest_server_addr.str();
+        common::ObAddr addr;
+        const ObAddr &my_addr = GCONF.self_addr_;
 
-      if (!errsim_migration_dest_server_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_migration_dest_server_addr))) {
-        CLOG_LOG(WARN, "failed to parse from string to addr", K(ret), K(errsim_migration_dest_server_addr));
-      } else {
-        if (ls_id == errsim_ls_id && my_addr == addr) {
-          ret = EN_REPLAY_FATAL_ERROR ? : OB_SUCCESS;
-          if (OB_FAIL(ret)) {
-            STORAGE_LOG(ERROR, "fake EN_REPLAY_FATAL_ERROR", K(ret));
+        if (!errsim_migration_dest_server_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_migration_dest_server_addr))) {
+          CLOG_LOG(WARN, "failed to parse from string to addr", K(ret), K(errsim_migration_dest_server_addr));
+        } else {
+          if ((ls_id == errsim_ls_id && my_addr == addr)
+              || GCONF.errsim_test_tablet_id == tablet->get_tablet_id().id()) {
+            ret = EN_REPLAY_FATAL_ERROR ? : OB_SUCCESS;
+            if (OB_FAIL(ret)) {
+              STORAGE_LOG(ERROR, "fake EN_REPLAY_FATAL_ERROR", K(ret));
+            }
           }
         }
+
       }
-
-    }
 #endif
-
+  }
   return ret;
 }
 
@@ -190,7 +201,7 @@ int ObTabletReplayExecutor::check_can_skip_replay_to_mds_(
     bool &can_skip)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
+  ObTablet *tablet = tablet_handle.get_obj();
   can_skip = false;
 
   if (!scn.is_valid()) {
@@ -198,9 +209,6 @@ int ObTabletReplayExecutor::check_can_skip_replay_to_mds_(
     CLOG_LOG(WARN, "check can skip replay to mds get invalid argument", K(ret), K(scn));
   } else if (!is_replay_update_mds_table_()) {
     can_skip = false;
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "tablet should not be NULL", K(ret), KP(tablet));
   } else if (tablet->get_tablet_meta().mds_checkpoint_scn_ >= scn) {
     can_skip = true;
     CLOG_LOG(INFO, "skip replay to mds", KPC(tablet), K(scn));

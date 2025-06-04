@@ -17,6 +17,7 @@
 #include "lib/lock/ob_recursive_mutex.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_vector_index_async_task.h"
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
@@ -90,6 +91,7 @@ public:
   TO_STRING_KV(K_(is_callback_invoked), K_(is_success), KP_(log_buffer));
   OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }
   OB_INLINE bool is_success() const { return ATOMIC_LOAD(&is_success_); }
+  const char *get_cb_name() const override { return "VectorIndexSyncLogCb"; }
 
 public:
   static const uint32 VECTOR_INDEX_SYNC_LOG_MAX_LENGTH = 16 * 1024; // Max 16KB each log
@@ -252,6 +254,7 @@ public:
   int try_schedule_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   int try_schedule_remaining_tasks(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *current_ctx);
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
+  int get_ls_mgr(ObPluginVectorIndexMgr *&mgr);
 
   // logger interfaces
   int handle_submit_callback(const bool success);
@@ -269,7 +272,8 @@ public:
   int switch_to_leader();
 
   // task save destory
-  void stop() { is_stopped_= true; };
+  void stop();
+  void destroy();
   bool is_stopped() { return (is_stopped_ == true); };
   void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
   void dec_dag_ref() { ATOMIC_DEC(&dag_ref_cnt_); }
@@ -322,6 +326,7 @@ private:
   ObVectorIndexSyncLogCb cb_;
   ObVectorIndexTabletIDArray tablet_id_array_;
   ObVectorIndexTableIDArray table_id_array_;
+  ObVecAsyncTaskExector async_task_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -460,7 +465,6 @@ private:
   ObArenaAllocator first_task_allocator_;
   ObArenaAllocator second_task_allocator_;
 };
-
 
 } // namespace share
 } // namespace oceanbase

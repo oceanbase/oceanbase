@@ -36,7 +36,7 @@ public:
   class Context
   {
   public:
-    Context();
+    Context(ObDirectLoadMemContext *mem_ctx);
     ~Context();
     int add_table(const common::ObTabletID &tablet_id, int64_t range_idx,
                   const ObDirectLoadTableHandle &table);
@@ -60,6 +60,7 @@ public:
   private:
     lib::ObMutex mutex_;
     ObDirectLoadTableHandleArray all_tables_;
+    ObDirectLoadMemContext *mem_ctx_;
   };
 
 public:

@@ -33,6 +33,7 @@ public :
                     bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const;
+  int print_element_at(ObStringBuffer &format_str, uint32_t idx) const;
 
   int32_t get_data_binary_len()
   {
@@ -48,8 +49,9 @@ public :
   int hash(uint64_t &hash_val) const;
   int init();
   int init(ObString &raw_data);
+  int init(uint32_t length, ObString &data_binary);
   int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
-  int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const { return OB_SUCCESS; }
+  int check_validity(const ObCollectionTypeBase &coll_type, const ObIArrayType &array) const { return OB_SUCCESS; }
   int push_null();
   inline void set_child_array(ObIArrayType *child) { data_ = static_cast<ObArrayBase *>(child);}
   inline ObIArrayType *get_child_array() const { return static_cast<ObIArrayType *>(data_);}
@@ -94,6 +96,9 @@ public :
   int overlaps(const ObIArrayType &other, bool &bret) const;
   int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
   int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
+  int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const;
+  int unionize(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt);
+  int intersect(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt);
 
   template<typename T>
   int clone_except(ObIAllocator &alloc, const T *elem_except, bool is_null, ObIArrayType *&output) const

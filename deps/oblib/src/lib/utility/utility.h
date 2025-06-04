@@ -199,6 +199,12 @@ inline void ob_usleep(const useconds_t v, const bool is_idle_sleep)
 
 }
 
+inline void ob_throttle_usleep(const useconds_t v, int errcode, int64_t p3 = 0)
+{
+  ObSleepEventGuard<ObWaitEventIds::TASK_THROTTLE_SLEEP> wait_guard((int64_t)v, (int64_t)v, (int64_t)errcode, p3);
+  ::usleep(v);
+}
+
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3)
@@ -436,6 +442,8 @@ int deep_copy_ob_string(Allocator &allocator, const ObString &src, ObString &dst
 
 int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst);
 int deep_copy_objparam(ObIAllocator &allocator, const ObObjParam &src, ObObjParam &dst);
+
+const char *extract_demangled_class_name(const char *full_class_name, const char *prefix, char *buffer, int64_t &len);
 
 struct SeqLockGuard
 {

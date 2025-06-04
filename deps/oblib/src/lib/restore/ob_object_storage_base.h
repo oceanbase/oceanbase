@@ -60,8 +60,9 @@ public:
   virtual uint32_t calc_delay_time_us(
       const RetType &outcome, const int64_t attempted_retries) const
   {
-    static const uint32_t base_delay_us = 25 * 1000; // 25ms
-    return base_delay_us * (1 << attempted_retries);
+    static const uint32_t base_delay_us = 25 * 1000;        // 25ms
+    static const uint32_t MAX_DELAY_US = 5 * 1000 * 1000LL; // 5s
+    return MIN(base_delay_us * (1 << attempted_retries), MAX_DELAY_US);
   }
 
   virtual void log_error(
@@ -121,20 +122,20 @@ template<typename FuncType, typename... Args>
 FuncRetType<FuncType, Args...> execute_until_timeout(
     ObStorageIORetryStrategyBase<FuncRetType<FuncType, Args...>> &retry_strategy,
     FuncType func,
-    Args... args)
+    Args && ... args)
 {
   int64_t retries = 0;
   bool should_retry_flag = true;
   // func_ret may be pointer, so use {} construct it
   FuncRetType<FuncType, Args...> func_ret {};
   do {
-    func_ret = func(args...);
+    func_ret = func(std::forward<Args>(args)...);
     if (!retry_strategy.should_retry(func_ret, retries)) {
       should_retry_flag = false;
     } else {
       // if should_retry, log the current error
-      retry_strategy.log_error(func_ret, retries);
       uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);
+      retry_strategy.log_error(func_ret, retries);
       ::usleep(sleep_time_us);
     }
     retries++;

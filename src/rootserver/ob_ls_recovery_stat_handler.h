@@ -98,6 +98,7 @@ public:
    * **/
   int check_can_change_member(const ObMemberList &new_member_list,
                               const int64_t paxos_replica_num,
+                              const palf::LogConfigVersion &config_version,
                               const int64_t timeout);
   friend class TestLSRecoveryGuard;
 private:
@@ -193,7 +194,7 @@ public:
    * @return:
   */
   int wait_can_change_member_list(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout);
+      const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, const int64_t timeout);
   TO_STRING_KV(K_(tenant_id), K_(ls), K(ref_cnt_));
   friend class TestLSRecoveryGuard;
   friend class ObLSRecoveryGuard;
@@ -278,7 +279,7 @@ private:
   int wait_func_with_timeout_(const int64_t timeout, Args &&... args);
   int check_member_change_valid_(const common::ObAddr &server, bool &is_valid);
   int check_member_change_valid_(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, bool &is_valid);
+      const int64_t paxos_replica_num, const palf::LogConfigVersion &config_version, bool &is_valid);
   DISALLOW_COPY_AND_ASSIGN(ObLSRecoveryStatHandler);
 
 private:
@@ -319,19 +320,26 @@ inline int ObLSRecoveryStatHandler::wait_func_with_timeout_(
     do {
       if (OB_FAIL(check_member_change_valid_(std::forward<Args>(args)..., is_finish))) {
         RS_LOG(WARN, "failed to check", KR(ret));
-      } else if (current_timeout > 0) {
-        usleep(TIME_WAIT);
-        current_timeout -= TIME_WAIT;
-      } else if (OB_SUCC(ret)) {
-        ret = OB_TIMEOUT;
-        RS_LOG(WARN, "failed to wait server readable scn", KR(ret), K(timeout));
+      } else if (!is_finish) {
+        if (current_timeout > TIME_WAIT) {
+          usleep(TIME_WAIT);
+          current_timeout -= TIME_WAIT;
+        } else {
+          ret = OB_TIMEOUT;
+          RS_LOG(WARN, "failed to wait server readable scn", KR(ret), K(timeout));
+        }
       }
-    } while (current_timeout > 0 && OB_SUCC(ret) && !is_finish);
-  }
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(dump_all_replica_readable_scn_(true))) {
-      RS_LOG(WARN, "failed to dump all replica readable scn", KR(ret), KR(tmp_ret));
+    } while (current_timeout >= 0 && OB_SUCC(ret) && !is_finish);
+
+    if (OB_SUCC(ret) && !is_finish) {
+      ret = OB_ERR_UNEXPECTED;
+      RS_LOG(WARN, "must be timeout or finished", KR(ret), K(timeout));
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(dump_all_replica_readable_scn_(true))) {
+        RS_LOG(WARN, "failed to dump all replica readable scn", KR(ret), KR(tmp_ret));
+      }
     }
   }
   return ret;

@@ -32,6 +32,9 @@
 #include "logservice/palf/palf_env.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_options.h"
+#include "logservice/ipalf/ipalf_env.h"
+#include "logservice/ipalf/interface_structs.h"
+#include "logservice/libpalf/libpalf_env.h"
 
 namespace oceanbase
 {
@@ -147,8 +150,7 @@ void LogService::destroy()
   ls_adapter_.destroy();
   rpc_proxy_.destroy();
   if (NULL != palf_env_) {
-    PalfEnv::destroy_palf_env(palf_env_);
-    palf_env_ = NULL;
+    ipalf::destroy_palf_env(palf_env_);
   }
   FLOG_INFO("LogService is destroyed");
 }
@@ -181,23 +183,64 @@ int LogService::init(const PalfOptions &options,
   int ret = OB_SUCCESS;
 
   const int64_t tenant_id = MTL_ID();
-  if (OB_FAIL(check_and_prepare_dir(base_dir))) {
-    CLOG_LOG(WARN, "check_and_prepare_dir failed", K(ret), K(base_dir));
-  } else if (is_inited_) {
+  if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "LogService init twice", K(ret));
-  } else if (false == options.is_valid() || OB_ISNULL(base_dir) || OB_UNLIKELY(!self.is_valid())
-      || OB_ISNULL(alloc_mgr) || OB_ISNULL(transport)
-      || OB_ISNULL(log_block_pool)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arguments", K(ret), K(options), KP(base_dir), K(self),
-             KP(alloc_mgr), KP(transport), KP(log_block_pool));
-  } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport,
-                                              alloc_mgr, log_block_pool, &monitor_, palf_env_))) {
-    CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
-  } else if (OB_ISNULL(palf_env_)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "palf_env_ is NULL", K(ret));
+  } else if (GCONF.enable_logservice) {
+    FLOG_INFO("LogService init libpalf env", K(ret));
+    // build libpalf env
+    ipalf::LibPalfEnvCreateParams libpalf_params = ipalf::LibPalfEnvCreateParams {
+      .monitor_ = &monitor_
+    };
+    libpalf::LibPalfEnv *libpalf_env = NULL;
+    if (false == options.compress_options_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid arguments", K(options));
+    } else if (OB_FAIL(ipalf::create_palf_env(&libpalf_params, libpalf_env))) {
+      CLOG_LOG(WARN, "failed to create_palf_env", K(libpalf_params), K(ret));
+    } else if (OB_ISNULL(libpalf_env)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "palf_env is NULL", K(ret));
+    } else {
+      palf_env_ = libpalf_env;
+    }
+  } else {
+    FLOG_INFO("LogService init palf env", K(ret));
+    // build palf env
+    ipalf::PalfEnvCreateParams palf_params = ipalf::PalfEnvCreateParams {
+      .options_ = &options,
+      .base_dir_ = base_dir,
+      .self_ = &self,
+      .transport_ = transport,
+      .batch_rpc_ = GCTX.batch_rpc_,
+      .log_alloc_mgr_ = alloc_mgr,
+      .log_block_pool_ = log_block_pool,
+      .monitor_ = &monitor_,
+      .log_local_device_ = LOG_IO_DEVICE_WRAPPER.get_local_device(),
+      .resource_manager_ = &G_RES_MGR,
+      .io_manager_ = &OB_IO_MANAGER,
+    };
+    palf::PalfEnv *palf_env = NULL;
+    if (OB_FAIL(check_and_prepare_dir(base_dir))) {
+      CLOG_LOG(WARN, "check_and_prepare_dir failed", K(ret), K(base_dir));
+    } else if (false == options.is_valid() || OB_ISNULL(base_dir) || OB_UNLIKELY(!self.is_valid())
+        || OB_ISNULL(alloc_mgr) || OB_ISNULL(transport)
+        || OB_ISNULL(log_block_pool)) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid arguments", K(ret), K(options), KP(base_dir), K(self),
+              KP(alloc_mgr), KP(transport), KP(log_block_pool));
+    } else if (OB_FAIL(ipalf::create_palf_env(&palf_params, palf_env))) {
+      CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
+    } else if (OB_ISNULL(palf_env)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "palf_env is NULL", K(ret));
+    } else {
+      palf_env_ = palf_env;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    CLOG_LOG(ERROR, "init ipalf env failed", K(ret));
   } else if (OB_FAIL(ls_adapter_.init())) {
     CLOG_LOG(ERROR, "failed to init ls_adapter", K(ret));
   } else if (OB_FAIL(apply_service_.init(palf_env_, &ls_adapter_))) {
@@ -348,7 +391,7 @@ int LogService::remove_ls(const ObLSID &id, logservice::ObLogHandler &log_handle
 int LogService::check_palf_exist(const ObLSID &id, bool &exist) const
 {
   int ret = OB_SUCCESS;
-  PalfHandle handle;
+  ipalf::IPalfHandle *handle = NULL;
   exist = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -362,7 +405,7 @@ int LogService::check_palf_exist(const ObLSID &id, bool &exist) const
     }
   }
 
-  if (true == handle.is_valid()) {
+  if (OB_NOT_NULL(handle) && true == handle->is_valid()) {
     palf_env_->close(handle);
   }
   return ret;
@@ -371,12 +414,15 @@ int LogService::check_palf_exist(const ObLSID &id, bool &exist) const
 int LogService::add_ls(const ObLSID &id, logservice::ObLogHandler &log_handler)
 {
   int ret = OB_SUCCESS;
-  PalfHandle palf_handle;
-  PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
+  ipalf::IPalfHandle *palf_handle = NULL;
+  ipalf::IPalfHandle *log_handler_palf_handle = log_handler.palf_handle_;
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));
+  } else if (OB_ISNULL(log_handler_palf_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_handler_palf_handle is wrongly nullptr", K(ret));
   } else if (OB_FAIL(palf_env_->open(id.id(), palf_handle))) {
     CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id));
   } else if (OB_FAIL(apply_service_.add_ls(id))) {
@@ -386,14 +432,14 @@ int LogService::add_ls(const ObLSID &id, logservice::ObLogHandler &log_handler)
   // } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
   //         &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
   //   CLOG_LOG(WARN, "logservice::ObLogHandler init failed", K(ret), K(id), KP(palf_env_), K(palf_handle));
-  } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
+  } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
   } else {
     FLOG_INFO("add_ls success", K(ret), K(id), KP(this));
   }
 
   if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
+    if (OB_NOT_NULL(palf_handle) && true == palf_handle->is_valid() && false == log_handler.is_valid()) {
       palf_env_->close(palf_handle);
     }
   }
@@ -409,7 +455,7 @@ int LogService::open_palf(const share::ObLSID &id,
                             palf::PalfHandleGuard &palf_handle_guard)
 {
   int ret = OB_SUCCESS;
-  palf::PalfHandle palf_handle;
+  ipalf::IPalfHandle *palf_handle = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));
@@ -421,7 +467,7 @@ int LogService::open_palf(const share::ObLSID &id,
   }
 
   if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid()) {
+    if (OB_NOT_NULL(palf_handle) && true == palf_handle->is_valid()) {
       palf_env_->close(palf_handle);
     }
   }
@@ -452,10 +498,15 @@ int LogService::get_palf_role(const share::ObLSID &id,
 int LogService::get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
   } else {
-    ret = palf_env_->get_disk_usage(used_size_byte, total_size_byte);
+    palf_env = static_cast<palf::PalfEnv*>(palf_env_);
+    ret = palf_env->get_disk_usage(used_size_byte, total_size_byte);
   }
   return ret;
 }
@@ -463,10 +514,15 @@ int LogService::get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size
 int LogService::get_palf_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
   } else {
-    ret = palf_env_->get_stable_disk_usage(used_size_byte, total_size_byte);
+    palf_env = static_cast<palf::PalfEnv*>(palf_env_);
+    ret = palf_env->get_stable_disk_usage(used_size_byte, total_size_byte);
   }
   return ret;
 }
@@ -476,8 +532,13 @@ int LogService::update_palf_options_except_disk_usage_limit_size()
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObSpinLockGuard guard(update_palf_opts_lock_);
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
+  } else if (FALSE_IT(palf_env = static_cast<palf::PalfEnv*>(palf_env_))) {
   } else if (!tenant_config.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "tenant_config is not valid", K(ret), K(MTL_ID()));
@@ -488,7 +549,7 @@ int LogService::update_palf_options_except_disk_usage_limit_size()
                 tenant_config->log_transport_compress_func, compressor_type))) {
       CLOG_LOG(ERROR, "log_transport_compress_func invalid.", K(ret));
     //需要获取log_disk_usage_limit_size
-    } else if (OB_FAIL(palf_env_->get_options(palf_opts))) {
+    } else if (OB_FAIL(palf_env->get_options(palf_opts))) {
       CLOG_LOG(WARN, "palf get_options failed", K(ret));
     } else {
       palf_opts.disk_options_.log_disk_utilization_threshold_ = tenant_config->log_disk_utilization_threshold;
@@ -500,7 +561,7 @@ int LogService::update_palf_options_except_disk_usage_limit_size()
       palf_opts.rebuild_replica_log_lag_threshold_ = tenant_config->_rebuild_replica_log_lag_threshold;
       palf_opts.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
       palf_opts.enable_log_cache_ = tenant_config->_enable_log_cache;
-      if (OB_FAIL(palf_env_->update_options(palf_opts))) {
+      if (OB_FAIL(palf_env->update_options(palf_opts))) {
         CLOG_LOG(WARN, "palf update_options failed", K(MTL_ID()), K(ret), K(palf_opts));
       } else {
         CLOG_LOG(INFO, "palf update_options success", K(MTL_ID()), K(ret), K(palf_opts));
@@ -514,14 +575,19 @@ int LogService::update_palf_options_except_disk_usage_limit_size()
 int LogService::update_log_disk_usage_limit_size(const int64_t log_disk_usage_limit_size)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   ObSpinLockGuard guard(update_palf_opts_lock_);
   PalfOptions palf_opts;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(palf_env_->get_options(palf_opts))) {
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
+  } else if (FALSE_IT(palf_env = static_cast<palf::PalfEnv*>(palf_env_))) {
+  } else if (OB_FAIL(palf_env->get_options(palf_opts))) {
     CLOG_LOG(WARN, "palf get_options failed", K(ret));
   } else if (FALSE_IT(palf_opts.disk_options_.log_disk_usage_limit_size_ = log_disk_usage_limit_size)) {
-  } else if (OB_FAIL(palf_env_->update_options(palf_opts))) {
+  } else if (OB_FAIL(palf_env->update_options(palf_opts))) {
     CLOG_LOG(WARN, "palf update_options failed", K(ret), K(log_disk_usage_limit_size));
   } else {
     CLOG_LOG(INFO, "update_log_disk_usage_limit_size success", K(log_disk_usage_limit_size), K(MTL_ID()));
@@ -532,21 +598,31 @@ int LogService::update_log_disk_usage_limit_size(const int64_t log_disk_usage_li
 int LogService::get_palf_options(palf::PalfOptions &opts)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
   } else {
-    ret = palf_env_->get_options(opts);
+    palf_env = static_cast<palf::PalfEnv*>(palf_env_);
+    ret = palf_env->get_options(opts);
   }
   return ret;
 }
 
-int LogService::iterate_palf(const ObFunction<int(const PalfHandle&)> &func)
+int LogService::iterate_palf(const ObFunction<int(const ipalf::IPalfHandle&)> &func)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
   } else {
-    ret = palf_env_->for_each(func);
+    palf_env = static_cast<palf::PalfEnv*>(palf_env_);
+    ret = palf_env->for_each(func);
   }
   return ret;
 }
@@ -559,10 +635,10 @@ int LogService::create_ls_(const share::ObLSID &id,
                              logservice::ObLogHandler &log_handler)
 {
   int ret = OB_SUCCESS;
-  PalfHandle palf_handle;
+  ipalf::IPalfHandle *palf_handle = NULL;
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   const bool is_arb_replica = (replica_type == REPLICA_TYPE_ARBITRATION);
-  PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
+  ipalf::IPalfHandle *&log_handler_palf_handle = log_handler.palf_handle_;
   if (false == id.is_valid() ||
       INVALID_TENANT_ROLE == tenant_role ||
       false == palf_base_info.is_valid()) {
@@ -571,22 +647,25 @@ int LogService::create_ls_(const share::ObLSID &id,
   } else if (!is_arb_replica &&
       OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info, palf_handle))) {
     CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type));
-  } else if (false == allow_log_sync && OB_FAIL(palf_handle.disable_sync())) {
+  } else if (false == allow_log_sync && OB_FAIL(palf_handle->disable_sync())) {
     CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));
   } else if (OB_FAIL(apply_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
   // } else if (OB_FAIL(replay_service_.add_ls(id))) {
   //   CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          NULL, palf_handle, palf_env_, &location_adapter_, &log_service_rpc_proxy_))) {
+          NULL, palf_env_, &location_adapter_, &log_service_rpc_proxy_, NULL))) {
     CLOG_LOG(WARN, "logservice::ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
-  } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
+  } else if (OB_ISNULL(log_handler_palf_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log handler init failed, log_handler_palf_handle is nullptr");
+  } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
   } else {
     CLOG_LOG(INFO, "LogService create_ls success", K(ret), K(id), K(log_handler));
   }
   if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
+    if (OB_ISNULL(palf_handle) && true == palf_handle->is_valid() && false == log_handler.is_valid()) {
       palf_env_->close(palf_handle);
     }
   }
@@ -596,10 +675,15 @@ int LogService::create_ls_(const share::ObLSID &id,
 int LogService::get_io_start_time(int64_t &last_working_time)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret));
-  } else if (OB_FAIL(palf_env_->get_io_start_time(last_working_time))) {
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
+  } else if (FALSE_IT(palf_env = static_cast<palf::PalfEnv*>(palf_env_))) {
+  } else if (OB_FAIL(palf_env->get_io_start_time(last_working_time))) {
     CLOG_LOG(WARN, "palf_env get_io_start_time failed", K(ret));
   } else {
     // do nothing
@@ -610,11 +694,16 @@ int LogService::get_io_start_time(int64_t &last_working_time)
 int LogService::check_disk_space_enough(bool &is_disk_enough)
 {
   int ret = OB_SUCCESS;
+  palf::PalfEnv *palf_env = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "logservice is not enabled", K(ret));
   } else {
-    is_disk_enough = palf_env_->check_disk_space_enough();
+    palf_env = static_cast<palf::PalfEnv*>(palf_env_);
+    is_disk_enough = palf_env->check_disk_space_enough();
   }
   return ret;
 }

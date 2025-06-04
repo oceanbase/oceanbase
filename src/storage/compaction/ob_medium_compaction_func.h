@@ -35,21 +35,24 @@ class ObMediumCompactionScheduleFunc
 public:
   ObMediumCompactionScheduleFunc(
     ObLS &ls,
-    ObTabletHandle &tablet_handle,
     const SCN &weak_read_ts,
     const ObMediumCompactionInfoList &medium_info_list,
     ObScheduleTabletCnt *schedule_tablet_cnt,
-    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE)
+    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
+    const int64_t least_medium_snapshot = 0)
     : allocator_("MediumSchedule"),
       ls_(ls),
-      tablet_handle_(tablet_handle),
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
       medium_info_list_(&medium_info_list),
       schedule_tablet_cnt_(schedule_tablet_cnt),
-      merge_reason_(merge_reason)
+      merge_reason_(merge_reason),
+      least_medium_snapshot_(least_medium_snapshot)
   {}
   ~ObMediumCompactionScheduleFunc() {}
-
+  int init_tablet_handle(ObTabletHandle &tablet_handle)
+  {
+    return tablet_handle_.assign(tablet_handle);
+  }
   /*
    * see
    * standby tenant should catch up broadcast scn when freeze info is recycled
@@ -151,6 +154,7 @@ protected:
       const int64_t start_idx,
       const int64_t end_idx,
       const bool is_medium_checker,
+      ObTabletDataChecksumChecker &data_checksum_checker,
       ObIArray<ObCkmErrorTabletLSInfo> &error_pairs,
       int &check_ret);
   int choose_medium_snapshot(
@@ -182,7 +186,6 @@ protected:
     ObGetMergeTablesResult &result,
     int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
-
   int check_frequency(
     const int64_t max_reserved_snapshot,
     const int64_t medium_snapshot);
@@ -192,15 +195,11 @@ protected:
     ObGetMergeTablesResult &result,
     int64_t &schema_version);
   int get_adaptive_reason(const int64_t schedule_major_snapshot);
+  int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60L * 1000L * 1000L; // 60s
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w
-  static bool is_user_request(const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason)
-  {
-    return ObAdaptiveMergePolicy::USER_REQUEST == merge_reason
-      || ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason
-      || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == merge_reason;
-  }
+  static const int64_t RECYCLE_TRUNCATE_INFO_INTERVAL = 2 * 60 * 1000L * 1000L * 1000L;
 #ifdef ERRSIM
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,
@@ -216,6 +215,7 @@ private:
   const ObMediumCompactionInfoList *medium_info_list_;
   ObScheduleTabletCnt *schedule_tablet_cnt_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
+  int64_t least_medium_snapshot_; // choosen medium snapshot should >= least_medium_snapshot_
 };
 
 } //namespace compaction

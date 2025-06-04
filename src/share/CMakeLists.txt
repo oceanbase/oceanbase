@@ -32,6 +32,8 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/sum_opnsize.cpp
   aggregate/group_concat.cpp
   aggregate/approx_count_distinct_synopsis.cpp
+  aggregate/top_fre_hist.cpp
+  aggregate/hybrid_hist.cpp
 
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
@@ -64,6 +66,11 @@ ob_set_subtarget(ob_share_extra ALONE
   datum/ob_datum_funcs.cpp
 )
 
+ob_set_subtarget(ob_share vector
+  vector/ob_discrete_format.cpp
+  vector/ob_continuous_format.cpp
+)
+
 ob_set_subtarget(ob_share ALONE
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
@@ -73,6 +80,7 @@ ob_set_subtarget(ob_share ALONE
   ob_common_rpc_proxy.cpp
   ob_ddl_args.cpp
   ob_mview_args.cpp
+  ob_lonely_table_clean_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -267,6 +275,12 @@ ob_set_subtarget(ob_share common
   ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
   ob_device_credential_task.cpp
+  ob_define.cpp
+  ob_dynamic_partition_manager.cpp
+  ob_scheduled_manage_dynamic_partition.cpp
+  ob_timezone_importer.cpp
+  ob_srs_importer.cpp
+  ob_compute_property.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -293,6 +307,7 @@ ob_set_subtarget(ob_share common_mixed
   inner_table/ob_inner_table_schema.vt.cpp
   inner_table/ob_inner_table_schema.lob.cpp
   inner_table/ob_inner_table_schema_misc.ipp
+  inner_table/ob_sslog_table_schema.cpp
   object/ob_obj_cast.cpp
   parameter/ob_parameter_seed.ipp
   ratelimit/ob_rl_mgr.cpp
@@ -368,7 +383,8 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_batch_exec_dag.cpp
   compaction/ob_new_micro_info.cpp
   storage/ob_i_pre_warmer.cpp
-  storage/ob_storage_cache_common.cpp
+  storage_cache_policy/ob_storage_cache_common.cpp
+  storage_cache_policy/ob_storage_cache_partition_sql_helper.cpp
   partition_table/ob_partition_location.cpp
   longops_mgr/ob_ddl_longops.cpp
   longops_mgr/ob_i_longops.cpp
@@ -554,6 +570,10 @@ ob_set_subtarget(ob_share schema
   schema/ob_mview_info.cpp
   schema/ob_mview_refresh_stats_params.cpp
   schema/ob_mview_refresh_stats.cpp
+  schema/ob_list_row_values.cpp
+  schema/ob_catalog_schema_struct.cpp
+  schema/ob_catalog_mgr.cpp
+  schema/ob_catalog_sql_service.cpp
 )
 
 ob_set_subtarget(ob_share stat
@@ -602,6 +622,17 @@ ob_set_subtarget(ob_share external_table
   external_table/ob_external_table_part_info.cpp
   external_table/ob_external_object_ctx.cpp
 )
+
+ob_set_subtarget(ob_share catalog
+  catalog/ob_catalog_properties.cpp
+  catalog/ob_external_catalog.cpp
+  catalog/ob_catalog_meta_getter.cpp
+  catalog/ob_cached_catalog_meta_getter.cpp
+  catalog/ob_catalog_utils.cpp
+  catalog/odps/ob_odps_catalog_utils.cpp
+  catalog/odps/ob_odps_catalog.cpp
+)
+
 
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp
@@ -680,6 +711,9 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_plugin_vector_index_utils.cpp
   vector_index/ob_vector_index_util.cpp
   vector_index/ob_vector_kmeans_ctx.cpp
+  vector_index/ob_tenant_vector_index_async_task.cpp
+  vector_index/ob_vector_index_async_task.cpp
+  vector_index/ob_vector_index_async_task_util.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
@@ -691,10 +725,15 @@ ob_set_subtarget(ob_share vector_type
   vector_type/ob_vector_l1_distance.cpp
   vector_type/ob_vector_norm.cpp
   vector_type/ob_vector_common_util.cpp
+  vector_type/ob_sparse_vector_ip_distance.cpp
 )
 
 ob_set_subtarget(ob_share domain_id
   domain_id/ob_domain_id.cpp
+)
+
+ob_set_subtarget(ob_share semistruct
+  semistruct/ob_sub_column_path.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

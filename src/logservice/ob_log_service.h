@@ -30,6 +30,9 @@
 #else
 #include "logservice/ob_arbitration_service.h"
 #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/ob_log_service_garbage_collector.h"
+#endif
 #include "ob_reporter_adapter.h"
 #include "ob_ls_adapter.h"
 #include "ob_locality_adapter.h"
@@ -37,10 +40,6 @@
 #include "ob_log_flashback_service.h"                    // ObLogFlashbackService
 #include "ob_log_handler.h"
 #include "ob_log_monitor.h"
-
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_shared_log_service.h"
-#endif
 
 namespace oceanbase
 {
@@ -73,7 +72,10 @@ class ObLSID;
 class ObLocationService;
 class SCN;
 }
-
+namespace ipalf
+{
+class IPalfEnv;
+}
 namespace palf
 {
 class PalfHandleGuard;
@@ -89,10 +91,6 @@ class ObLocalityManager;
 
 namespace logservice
 {
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSharedLogGarbageCollector;
-#endif
-
 class ObLogService
 {
 public:
@@ -201,7 +199,8 @@ public:
   int update_palf_options_except_disk_usage_limit_size();
   int update_log_disk_usage_limit_size(const int64_t log_disk_usage_limit_size);
   int get_palf_options(palf::PalfOptions &options);
-  int iterate_palf(const ObFunction<int(const palf::PalfHandle&)> &func);
+  int get_palf_disk_options(palf::PalfDiskOptions &palf_disk_options);
+  int iterate_palf(const ObFunction<int(const ipalf::IPalfHandle&)> &func);
   int iterate_apply(const ObFunction<int(const ObApplyStatus&)> &func);
   int iterate_replay(const ObFunction<int(const ObReplayStatus&)> &func);
 
@@ -226,15 +225,12 @@ public:
   int get_io_start_time(int64_t &last_working_time);
   int check_disk_space_enough(bool &is_disk_enough);
 
-  palf::PalfEnv *get_palf_env() { return palf_env_; }
+  ipalf::IPalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL
   ObLogReporterAdapter *get_reporter() { return &reporter_; }
   cdc::ObCdcService *get_cdc_service() { return &cdc_service_; }
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
   ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObSharedLogService *get_shared_log_service() {return &shared_log_service_;}
-#endif
   ObLogApplyService *get_log_apply_service()  { return &apply_service_; }
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService *get_arbitration_service() { return &arb_service_; }
@@ -242,12 +238,6 @@ public:
 #endif
   obrpc::ObLogServiceRpcProxy *get_rpc_proxy() { return &rpc_proxy_; }
   ObLogFlashbackService *get_flashback_service() { return &flashback_service_; }
-#ifdef OB_BUILD_SHARED_STORAGE
-  // ============================= shared log start ====================================
-  ObSharedLogGarbageCollector *get_shared_log_gc() { return shared_log_service_.get_shared_log_gc(); }
-  ObLogExternalStorageHandler *get_log_ext_handler() {return shared_log_service_.get_log_ext_handler();}
-  // ============================= shared log end ====================================
-#endif
   int check_need_do_checkpoint(bool &need_do_checkpoint);
 
 private:
@@ -258,6 +248,17 @@ private:
                  const bool allow_log_sync,
                  ObLogHandler &log_handler,
                  ObLogRestoreHandler &restore_handler);
+
+  int create_palf_env_(const palf::PalfOptions &options,
+                       const char *base_dir,
+                       const common::ObAddr &self,
+                       common::ObILogAllocator *alloc_mgr,
+                       rpc::frame::ObReqTransport *transport,
+                       obrpc::ObBatchRpc *batch_rpc,
+                       palf::ILogBlockPool *log_block_pool);
+
+  int do_set_shared_nothing_cbs_(const ObLSID &id, ipalf::IPalfHandle *palf_handle);
+
   struct GetUnrecycableLogDiskSizeFunctor {
     GetUnrecycableLogDiskSizeFunctor() : unrecycable_log_disk_size_(0) {}
     ~GetUnrecycableLogDiskSizeFunctor() { unrecycable_log_disk_size_ = 0; }
@@ -267,10 +268,10 @@ private:
 private:
   bool is_inited_;
   bool is_running_;
-  bool enable_shared_storage_;
+  bool enable_logservice_;
 
   common::ObAddr self_;
-  palf::PalfEnv *palf_env_;
+  ipalf::IPalfEnv *palf_env_;
   IObNetKeepAliveAdapter *net_keepalive_adapter_;
   common::ObILogAllocator *alloc_mgr_;
 
@@ -282,11 +283,6 @@ private:
   obrpc::ObLogServiceRpcProxy rpc_proxy_;
   ObLogReporterAdapter reporter_;
   cdc::ObCdcService cdc_service_;
-#ifdef OB_BUILD_SHARED_STORAGE
-  // ========================== shared log start =================================
-  ObSharedLogService shared_log_service_;
-  // ========================== shared log end ===================================
-#endif
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService arb_service_;
 #endif
@@ -294,6 +290,11 @@ private:
   ObLogFlashbackService flashback_service_;
   ObLogMonitor monitor_;
   ObSpinLock update_palf_opts_lock_;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  SharedGarbageCollector shared_gc_;
+  // for logservice mode, cache configured log disk size to make get_palf_stable_disk_usage() work as shared nothing mode
+  int64_t configured_log_disk_size_;
+#endif
   ObLocalityAdapter locality_adapter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogService);

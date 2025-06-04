@@ -99,6 +99,8 @@ public:
                                                       const uint64_t tenant_id, bool &contains);
   static int contains_major_refresh_mview(ObISQLClient &sql_client,
                                           const uint64_t tenant_id, bool &contains);
+  static int update_mview_data_sync_scn(ObISQLClient &sql_client, uint64_t tenant_id,
+                                        ObMViewInfo &mview_info, const uint64_t refresh_scn);
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
                K_(build_mode),

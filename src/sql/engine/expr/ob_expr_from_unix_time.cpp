@@ -105,7 +105,7 @@ int ObExprFromUnixTime::cg_expr(ObExprCGCtx &op_cg_ctx,
     if (OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1])) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null args", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]));
-    } else if (0 == raw_expr.get_extra()) {
+    } else if (0 == raw_expr.get_from_unixtime_flag()) {
       rt_expr.eval_func_ = &eval_fromtime_normal;
     } else {
       rt_expr.eval_func_ = &eval_fromtime_special;

@@ -238,6 +238,7 @@ void ObDDLTaskExecutor::run1()
   int64_t executed_task_count = 0;
   ObIDDLTask *task = NULL;
   ObIDDLTask *first_retry_task = NULL;
+  ObDIActionGuard ag("DDLService", "DDLTaskExecutor", "detect task");
   lib::set_thread_name("DDLTaskExecutor");
   while (!has_set_stop()) {
     while (!has_set_stop() && executed_task_count < BATCH_EXECUTE_COUNT) {
@@ -258,6 +259,7 @@ void ObDDLTaskExecutor::run1()
         }
         break;
       } else {
+        ObDIActionGuard(ObDIActionGuard::NS_ACTION, "TaskType:%d", task->get_type());
         task->process();
         ++executed_task_count;
         if (task->need_retry()) {
@@ -285,7 +287,8 @@ void ObDDLTaskExecutor::run1()
 
 ObDDLReplicaBuilder::ObDDLReplicaBuilder()
   : is_thread_started_(false),
-    is_stopped_(false)
+    is_stopped_(true),
+    tg_id_(-1)
 {
 
 }
@@ -295,36 +298,102 @@ ObDDLReplicaBuilder::~ObDDLReplicaBuilder()
   destroy();
 }
 
-int ObDDLReplicaBuilder::start()
+int ObDDLReplicaBuilder::init()
 {
   int ret = OB_SUCCESS;
-  if (is_thread_started_) {
-    // do nothing
-  } else if (OB_FAIL(TG_START(lib::TGDefIDs::DdlBuild))) {
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin init ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else if (OB_UNLIKELY(is_thread_started_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("ddl replica builder thread is already started", KR(ret), K(is_thread_started_));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DdlBuild, tg_id_))) {
+    LOG_ERROR("create tg failed", KR(ret));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_WARN("index build thread start failed", KR(ret));
   } else {
     is_thread_started_ = true;
+    is_stopped_ = true;
   }
-  if (OB_SUCC(ret)) {
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish init ddl replica builder",
+            KR(ret), K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  return ret;
+}
+
+int ObDDLReplicaBuilder::start()
+{
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin start ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  int ret = OB_SUCCESS;
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else if (OB_UNLIKELY(!is_thread_started_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("ddl replica builder thread is not started", KR(ret), K(is_thread_started_));
+  } else {
     is_stopped_ = false;
   }
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish start ddl replica builder",
+            KR(ret), K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
   return ret;
 }
 
 void ObDDLReplicaBuilder::stop()
 {
-  is_stopped_ = true;
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin stop ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else {
+    is_stopped_ = true;
+  }
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish stop ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+}
+
+void ObDDLReplicaBuilder::mtl_thread_stop()
+{
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin mtl_thread_stop ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else if (-1 != tg_id_) {
+    TG_STOP(tg_id_);
+  }
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish mtl_thread_stop ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+}
+
+void ObDDLReplicaBuilder::mtl_thread_wait()
+{
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin mtl_thread_wait ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else if (-1 != tg_id_) {
+    TG_WAIT(tg_id_);
+  }
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish mtl_thread_wait ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
 }
 
 void ObDDLReplicaBuilder::destroy()
 {
-  is_stopped_ = true;
-  if (is_thread_started_) {
-    TG_STOP(lib::TGDefIDs::DdlBuild);
-    TG_WAIT(lib::TGDefIDs::DdlBuild);
-    TG_DESTROY(lib::TGDefIDs::DdlBuild);
-    is_thread_started_ = false;
+  FLOG_INFO("[DDL_REPLICA_BUILDER] begin destroy ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
+  if (!is_sys_tenant(MTL_ID())) {
+    LOG_INFO("ddl replica builder should run on SYS tenant", "tenant_id", MTL_ID());
+  } else {
+    if (-1 != tg_id_) {
+      is_stopped_ = true;
+      TG_DESTROY(tg_id_);
+      is_thread_started_ = false;
+      tg_id_ = -1;
+    }
   }
+  FLOG_INFO("[DDL_REPLICA_BUILDER] finish destroy ddl replica builder",
+            K(is_thread_started_), K(is_stopped_), K(tg_id_), "tenant_id", MTL_ID());
 }
 
 int ObDDLReplicaBuilder::push_task(ObAsyncTask &task)
@@ -333,11 +402,11 @@ int ObDDLReplicaBuilder::push_task(ObAsyncTask &task)
   if (OB_UNLIKELY(!is_thread_started_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("ddl builder thread not started", K(ret), K(is_thread_started_));
-  } else if (is_stopped_) {
+  } else if (is_stopped_ || -1 == tg_id_) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("ddl builder has stopped", K(ret), K(is_stopped_));
-  } else if (OB_FAIL(TG_PUSH_TASK(lib::TGDefIDs::DdlBuild, task))) {
-    LOG_WARN("add task to queue failed", K(ret));
+    LOG_WARN("ddl builder has stopped", KR(ret), K(is_stopped_), K(tg_id_));
+  } else if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
+    LOG_WARN("add task to queue failed", KR(ret));
   }
   return ret;
 }

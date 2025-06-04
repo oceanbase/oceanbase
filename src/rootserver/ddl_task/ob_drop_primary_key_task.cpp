@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_drop_primary_key_task.h"
-#include "rootserver/ob_root_service.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

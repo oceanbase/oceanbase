@@ -193,7 +193,6 @@ int ObUpgradeStorageFormatVersionExecutor::upgrade_storage_format_version()
     LOG_WARN("fail to get tenant ids", K(ret));
   } else {
     ObArray<const ObTableSchema *> table_schemas;
-    const int64_t all_core_table_id = OB_ALL_CORE_TABLE_TID;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const uint64_t tenant_id = tenant_ids.at(i);
       if (OB_FAIL(check_stop())) {
@@ -225,7 +224,7 @@ int ObUpgradeStorageFormatVersionExecutor::upgrade_storage_format_version()
             } else if (OB_ISNULL(table_schema)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("error unexpected, table schema must not be NULL", K(ret));
-            } else if (all_core_table_id == table_schema->get_table_id()) {
+            } else if (is_hardcode_schema_table(table_schema->get_table_id())) {
               // do nothing
             } else if (OB_SYS_TENANT_ID != tenant_id && table_schema->is_sys_table()) {
               // do nothing

@@ -821,7 +821,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
 
     if (OB_FAIL(ret)) {
     } else if (tablet_id == data_tablet_id) {
-      data_tablet_handle = tablet_handle;
+      data_tablet_handle.assign(tablet_handle);
     }
   }
 

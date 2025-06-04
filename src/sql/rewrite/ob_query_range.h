@@ -511,11 +511,11 @@ public:
   virtual bool is_ss_range() const {  return table_graph_.skip_scan_offset_ > -1; }
   virtual int64_t get_skip_scan_offset() const {  return table_graph_.skip_scan_offset_; }
 
-  static bool can_be_extract_range(ObItemType cmp_type, const ObExprResType &col_type,
-                            const ObExprCalcType &res_type, common::ObObjType data_type,
+  static bool can_be_extract_range(ObItemType cmp_type, const ObRawExprResType &col_type,
+                            const ObObjMeta &calc_meta, common::ObObjType data_type,
                             bool &always_true);
-  static bool can_domain_be_extract_range(const ObDomainOpType &op_type, const ObExprResType &col_type,
-                                          const ObExprCalcType &res_type, common::ObObjType data_type,
+  static bool can_domain_be_extract_range(const ObDomainOpType &op_type, const ObRawExprResType &col_type,
+                                          const ObObjMeta &res_type, common::ObObjType data_type,
                                           bool &always_true);
 
   // that mean the query range contain non-standard range graph,
@@ -604,7 +604,6 @@ private:
                             const ObRawExpr *r_expr,
                             const ObRawExpr *escape_expr,
                             ObItemType cmp_type,
-                            const ObExprResType &result_type,
                             ObKeyPart *&out_key_part,
                             const common::ObDataTypeCastParams &dtc_params,
                             bool &is_bound_modified);
@@ -612,14 +611,13 @@ private:
                          const ObRawExpr *r_expr,
                          const ObRawExpr *escape_expr,
                          ObItemType cmp_type,
-                         const ObExprResType &result_type,
                          ObKeyPart *&out_key_part,
                          const common::ObDataTypeCastParams &dtc_params);
   int get_column_key_part(const ObRawExpr *l_expr,
                           const ObRawExpr *r_expr,
                           const ObRawExpr *escape_expr,
                           ObItemType cmp_type,
-                          const ObExprResType &result_type,
+                          const ObRawExprResType &result_type,
                           ObKeyPart *&out_key_part,
                           const common::ObDataTypeCastParams &dtc_params,
                           bool &is_bound_modified);
@@ -636,7 +634,6 @@ private:
   int get_row_key_part(const ObRawExpr *l_expr,
                        const ObRawExpr *r_expr,
                        ObItemType cmp_type,
-                       const ObExprResType &result_type,
                        ObKeyPart *&out_key_part,
                        const common::ObDataTypeCastParams &dtc_params);
   int check_row_bound(ObKeyPart *key_part,
@@ -703,18 +700,16 @@ private:
                             const ObDataTypeCastParams &dtc_params);
   int get_multi_in_key_part(const ObOpRawExpr *l_expr,
                             const ObOpRawExpr *r_expr,
-                            const ObExprResType &res_type,
                             ObKeyPart *&out_key_part,
                             const ObDataTypeCastParams &dtc_params);
   int check_const_val_valid(const ObRawExpr *l_expr,
                             const ObRawExpr *r_expr,
-                            const ObExprResType &res_type,
                             const ObDataTypeCastParams &dtc_params,
                             bool &is_valid);
 
   int get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
                              const ObOpRawExpr *r_expr,
-                             const ObExprResType &res_type,
+                             const ObExprResType &cmp_type,
                              ObKeyPart *&out_key_part,
                              const ObDataTypeCastParams &dtc_params);
   int get_rowid_in_key_part(const ObRawExpr *l_expr,
@@ -732,7 +727,7 @@ private:
                       bool &is_val_valid);
   int check_expr_precise(ObKeyPart *key_part,
                          const ObRawExpr *const_expr,
-                         const ObExprCalcType &calc_type,
+                         const ObObjMeta &calc_type,
                          const ObKeyPartPos &key_pos);
   int is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part);
   int split_general_or(ObKeyPart *graph, ObKeyPartList &or_storage);
@@ -953,7 +948,6 @@ private:
                            common::ObCollationType cmp_cs_type,
                            ObKeyPart *&out_key_part,
                            const common::ObDataTypeCastParams &dtc_params);
-  int get_in_expr_res_type(const ObRawExpr *in_expr, int64_t val_idx, ObExprResType &res_type) const;
   inline bool is_standard_graph(const ObKeyPart *root) const;
   bool is_strict_in_graph(const ObKeyPart *root, const int64_t start_pos = 0) const;
   int is_strict_equal_graph(const ObKeyPart *root, const int64_t cur_pos, int64_t &max_pos, bool &is_strict_equal) const;

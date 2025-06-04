@@ -475,7 +475,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
         LOG_WARN("failed to append expired equal params constraints", K(ret));
       } else if (OB_FAIL(remove_const_exec_param(stmt))) {
         LOG_WARN("failed to remove const exec param", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt info", K(ret));
       } else {
         LOG_TRACE("succeed to do replacement internal", KPC(stmt));
@@ -1026,7 +1026,7 @@ int ObTransformConstPropagate::replace_semi_conditions(ObDMLStmt *stmt,
                                             const_ctx,
                                             is_happened))) {
       LOG_WARN("failed to replace semi condition exprs", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -1086,14 +1086,25 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
-  if (const_ctx.allow_trans_) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (const_ctx.allow_trans_) {
     ObSEArray<ObRawExpr *, 8> parent_exprs;
+    bool is_happened = false;
     if (OB_FAIL(recursive_replace_expr(cur_expr,
                                       parent_exprs,
                                       const_ctx,
                                       used_in_compare,
-                                      trans_happened))) {
+                                      is_happened))) {
       LOG_WARN("failed to recursive");
+    } else if (OB_ISNULL(cur_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter", K(ret));
+    } else if (is_happened && OB_FAIL(cur_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else {
+      trans_happened |= is_happened;
     }
   }
   return ret;
@@ -1381,9 +1392,11 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     // for static engine, all params in rigth side of in or not in should have same type
     need_cast = true;
   } else if (const_expr->get_expr_type() == T_NULL &&
-             ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type())) {
+             (ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type()) ||
+              ObDecimalIntType == expr->get_result_type().get_type())) {
     // To adapt to the behavior of casting NULL values for hash compare
     // cast need to be added above NULL for null aware hash type.
+    // cast need to be added above NULL for decimalInt type in in-expr (e.g. c1 in (1.1,1.2))
     need_cast = true;
   } else if (parent_expr->is_win_func_expr()) {
     ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(parent_expr);
@@ -1401,7 +1414,6 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     }
   } else {
     need_cast = !(IS_COMPARISON_OP(parent_expr->get_expr_type()) ||
-                  T_OP_ROW == parent_expr->get_expr_type() ||
                   parent_expr->is_query_ref_expr());
   }
   return ret;
@@ -1523,7 +1535,7 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     // do nothing
   } else {
     const ObObj *dest_val = NULL;
-    const ObExprResType &dst_type = const_info.column_expr_->get_result_type();
+    const ObRawExprResType &dst_type = const_info.column_expr_->get_result_type();
     ObDataTypeCastParams dtc_params = ctx_->session_info_->get_dtc_params();
     ObCastCtx cast_ctx(ctx_->allocator_,
                        &dtc_params,
@@ -2366,6 +2378,11 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
         LOG_WARN("push back failed", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, or_expr_children, or_expr))) {
         LOG_WARN("build or exprs failed", K(ret));
+      } else if (OB_ISNULL(or_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("or expr is null", K(ret));
+      } else if (OB_FAIL(or_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize failed", K(ret));
       } else {
         new_check_cst_expr = or_expr;
       }
@@ -2426,10 +2443,10 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
     } else if (OB_ISNULL(in_expr) || OB_ISNULL(row_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("add expr is null", K(ret), K(in_expr), K(row_expr));
-    } else if (OB_FAIL(in_expr->add_param_expr(part_column_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
-    } else if (OB_FAIL(in_expr->add_param_expr(row_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(in_expr->set_param_exprs(part_column_expr, row_expr))) {
+      LOG_WARN("failed to set param exprs", K(ret));
+    } else if (OB_FAIL(row_expr->init_param_exprs(expr_const_info.multi_const_exprs_.count()))) {
+      LOG_WARN("failed to init param exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !reject && i < expr_const_info.multi_const_exprs_.count(); ++i) {
         ObRawExpr *new_param_expr = NULL;
@@ -2704,6 +2721,8 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
   if (OB_ISNULL(cur_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (T_OP_ROW != cur_expr->get_expr_type()) {
+    // do nothing
   } else if (cur_expr->is_const_expr() || !const_ctx.allow_trans_) {
     can_replace_child = false;
   } else {
@@ -2720,6 +2739,15 @@ int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &
       LOG_WARN("failed to check const expr recursively", K(ret));
     } else {
       can_replace_child &= is_const_recursively;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_replace_child && i < cur_expr->get_param_count(); ++i) {
+      ObRawExpr *&child_expr = cur_expr->get_param_expr(i);
+      if (OB_ISNULL(child_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == child_expr->get_expr_type()) {
+        can_replace_child = false;
+      }
     }
   }
   return ret;

@@ -22,14 +22,13 @@ int __get_palf_env_impl(uint64_t tenant_id, IPalfEnvImpl *&palf_env_impl, const 
 {
   int ret = OB_SUCCESS;
   logservice::ObLogService *log_service = nullptr;
-  PalfEnv *palf_env = nullptr;
-   if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+  if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "get_log_service failed", K(ret));
-	} else if (OB_ISNULL(palf_env = log_service->get_palf_env())) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "get_palf_env failed", K(ret));
-  } else if (OB_ISNULL(palf_env_impl = palf_env->get_palf_env_impl())) {
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "logservice is not compatible with log rpc processor", K(ret));
+  } else if (OB_ISNULL(palf_env_impl = static_cast<PalfEnv*>(log_service->get_palf_env())->get_palf_env_impl())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "get_palf_env_impl failed", K(ret), KP(log_service), KP(palf_env_impl));
   } else if (need_check_tenant_id && tenant_id != palf_env_impl->get_tenant_id()) {

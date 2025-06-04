@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_trigger_executor.h"
 #include "pl/ob_pl_package.h"
+#include "pl/ob_pl_compile_utils.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 
 namespace oceanbase
@@ -24,46 +25,6 @@ using namespace share::schema;
 
 namespace sql
 {
-
-int ObCompileTriggerInf::compile_trigger(sql::ObExecContext &ctx,
-                                          uint64_t tenant_id,
-                                          uint64_t db_id,
-                                          const ObString &trigger_name,
-                                          int64_t schema_version)
-{
-  int ret = OB_SUCCESS;
-  const ObTriggerInfo *trigger_info = nullptr;
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
-  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
-  OZ (ctx.get_sql_ctx()->schema_guard_->get_trigger_info(tenant_id, db_id, trigger_name, trigger_info));
-  if (OB_SUCC(ret) && OB_ISNULL(trigger_info)) {
-    ret = OB_ERR_TRIGGER_NOT_EXIST;
-    LOG_WARN("trigger not exist", K(db_id), K(trigger_name), K(ret));
-  }
-  CK (OB_NOT_NULL(ctx.get_pl_engine()));
-  if (OB_SUCC(ret) && schema_version == trigger_info->get_schema_version()) {
-    ObPLPackage *package_spec = nullptr;
-    ObPLPackage *package_body = nullptr;
-    pl::ObPLPackageGuard package_guard(ctx.get_my_session()->get_effective_tenant_id());
-    pl::ObPLResolveCtx resolve_ctx(ctx.get_allocator(),
-                                    *ctx.get_my_session(),
-                                    *ctx.get_sql_ctx()->schema_guard_,
-                                    package_guard,
-                                    *ctx.get_sql_proxy(),
-                                    false);
-
-    OZ (package_guard.init());
-    OZ (ctx.get_pl_engine()->get_package_manager().get_cached_package(resolve_ctx,
-                                                                      trigger_info->get_package_spec_info().get_package_id(),
-                                                                      package_spec,
-                                                                      package_body));
-    CK (OB_NOT_NULL(package_spec));
-    CK (OB_NOT_NULL(package_body));
-  }
-
-  return ret;
-}
-
 int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -124,26 +85,22 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
       OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
     }
   }
-  if (OB_SUCC(ret) && !has_error
+  if (OB_SUCC(ret)
+      && !has_error
       && ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
            && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
           || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0)
-      && tenant_config.is_valid() && tenant_config->plsql_v2_compatibility) {
+      && tenant_config.is_valid()
+      && tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(arg.trigger_info_.get_tenant_id(), res.trigger_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
           get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
-    OZ (compile_trigger(ctx,
-                        arg.trigger_info_.get_tenant_id(),
-                        arg.trigger_info_.get_database_id(),
-                        arg.trigger_info_.get_trigger_name(),
-                        res.trigger_schema_version_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("fail to persistent trigger", K(ret));
-      ret = OB_SUCCESS;
-      if (NULL != ctx.get_my_session()) {
-        ctx.get_my_session()->reset_warnings_buf();
-      }
-    }
+    OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                       arg.trigger_info_.get_tenant_id(),
+                                       arg.trigger_info_.get_database_id(),
+                                       arg.trigger_info_.get_trigger_name(),
+                                       pl::ObPLCompilerUtils::COMPILE_TRIGGER,
+                                       res.trigger_schema_version_));
   }
   if(arg.with_if_not_exist_ && ret == OB_ERR_TRIGGER_ALREADY_EXIST) {
     const ObString &trigger_name = arg.trigger_info_.get_trigger_name();
@@ -207,21 +164,17 @@ int ObAlterTriggerExecutor::execute(ObExecContext &ctx, ObAlterTriggerStmt &stmt
     } else {
       latest_schema_version = trigger_info.get_schema_version();
     }
-    if (OB_SUCC(ret) &&
-        tenant_config.is_valid() &&
-        tenant_config->plsql_v2_compatibility) {
+    if (OB_SUCC(ret)
+        && tenant_config.is_valid()
+        && tenant_config->plsql_v2_compatibility) {
       OZ (ctx.get_task_exec_ctx().schema_service_->
           get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
-      OZ (compile_trigger(ctx,
-                          trigger_info.get_tenant_id(),
-                          trigger_info.get_database_id(),
-                          trigger_info.get_trigger_name(),
-                          latest_schema_version));
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to persistent trigger", K(ret));
-        common::ob_reset_tsi_warning_buffer();
-        ret = OB_SUCCESS;
-      }
+      OZ (pl::ObPLCompilerUtils::compile(ctx,
+                                         trigger_info.get_tenant_id(),
+                                         trigger_info.get_database_id(),
+                                         trigger_info.get_trigger_name(),
+                                         pl::ObPLCompilerUtils::COMPILE_TRIGGER,
+                                         latest_schema_version));
     }
   }
   return ret;

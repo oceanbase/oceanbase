@@ -42,7 +42,7 @@ int ObMViewPurgeLogExecutor::execute(ObExecContext &ctx, const ObMViewPurgeLogAr
   CK(OB_NOT_NULL(session_info_ = ctx.get_my_session()));
   CK(OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
   OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
-  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_sessid()));
+  OZ(schema_checker_.init(*ctx.get_sql_ctx()->schema_guard_, session_info_->get_server_sid()));
   OX(tenant_id_ = session_info_->get_effective_tenant_id());
   OZ(ObMViewExecutorUtil::check_min_data_version(
     tenant_id_, DATA_VERSION_4_3_0_0, "tenant's data version is below 4.3.0.0, purge mlog is"));
@@ -96,6 +96,18 @@ int ObMViewPurgeLogExecutor::resolve_arg(const ObMViewPurgeLogArg &arg)
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not exist", KR(ret), K(arg));
+    } else if (table_schema->is_materialized_view()) {
+      // when need to purge a materialized view, we need to purge its container table
+      const share::schema::ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_checker_.get_table_schema(tenant_id_, table_schema->get_data_table_id(),
+                                                   container_table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_),
+                 K(table_schema->get_data_table_id()));
+      } else {
+        table_schema = container_table_schema;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(OB_INVALID_ID == table_schema->get_mlog_tid())) {
       ret = OB_ERR_TABLE_NO_MLOG;
       LOG_WARN("table does not have materialized view log", KR(ret), KPC(table_schema));

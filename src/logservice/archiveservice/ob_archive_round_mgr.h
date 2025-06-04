@@ -50,6 +50,7 @@ public:
   void set_archive_force_stop(const ArchiveKey &key);
   void set_archive_interrupt(const ArchiveKey &key);
   void set_archive_suspend(const ArchiveKey &key);
+  int reset_backup_dest(const ArchiveKey &key);
   int get_backup_dest_and_id(const ArchiveKey &key,
       share::ObBackupDest &dest,
       int64_t &dest_id);

@@ -76,9 +76,10 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
         result.reinterpret_data<uint16_t>()[i] = *reinterpret_cast<uint16_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16;
-          row_id < row_cnt; ++row_id) {
-        if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
+      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+        if (value_cmp_t<uint8_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
+          // null value
+        } else if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
       }
@@ -133,9 +134,10 @@ struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
         result.reinterpret_data<uint8_t>()[i] = *reinterpret_cast<uint8_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 8 * 8;
-          row_id < row_cnt; ++row_id) {
-        if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
+      for (int64_t row_id = row_cnt / 8 * 8; row_id < row_cnt; ++row_id) {
+        if (value_cmp_t<uint16_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
+          // null value
+        } else if (value_cmp_t<uint16_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
       }
@@ -151,8 +153,10 @@ struct DictCmpRefNeonArrayInit
 {
   bool operator()()
   {
-    dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
-        = &(DictCmpRefNeonFunc_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    if (REF_LEN != 0) {
+      dict_cmp_ref_funcs[REF_LEN][CMP_TYPE]
+          = &(DictCmpRefNeonFunc_T<REF_LEN, CMP_TYPE>::dict_cmp_ref_func);
+    }
     return true;
   }
 };

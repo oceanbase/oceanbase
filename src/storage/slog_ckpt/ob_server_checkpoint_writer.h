@@ -47,6 +47,7 @@ private:
   bool is_inited_;
   ObStorageLogger *server_slogger_;
   common::ObConcurrentFIFOAllocator allocator_;
+  ObSlogCheckpointFdDispenser fd_dispenser_;
   ObLinkedMacroBlockItemWriter tenant_meta_item_writer_;
 };
 

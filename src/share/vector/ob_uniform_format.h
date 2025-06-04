@@ -78,9 +78,9 @@ public:
 
   OB_INLINE void set_length(const int64_t idx, const ObLength length) override;
 
-  OB_INLINE void set_payload(const int64_t idx,
-                          const void *payload,
-                          const ObLength length) override final {
+  OB_INLINE void set_payload(const int64_t idx, const void *payload,
+                             const ObLength length) override final
+  {
     MEMCPY(const_cast<char *>(get_payload(idx)), payload, length);
     get_datum(idx).pack_ = length;
   }
@@ -89,6 +89,9 @@ public:
                                      const ObLength length) override final {
     get_datum(idx).ptr_ = static_cast<const char *>(payload);
     get_datum(idx).pack_ = length;
+    if (OB_UNLIKELY(is_collection_expr()))  {
+      set_collection_payload_shallow(idx, payload, length);
+    }
   }
 
   inline const ObDatum &get_datum(const int64_t idx) const { return datums_[IS_CONST ? 0 : idx]; }
@@ -111,6 +114,9 @@ public:
 
   DEF_VEC_READ_INTERFACES(ObUniformFormat<IS_CONST>);
   DEF_VEC_WRITE_INTERFACES(ObUniformFormat<IS_CONST>);
+private:
+  void set_collection_payload_shallow(const int64_t idx, const void *payload,
+                                      const ObLength length);
 };
 
 template<bool IS_CONST>
@@ -258,7 +264,19 @@ OB_INLINE int ObUniformFormat<IS_CONST>::to_row(const sql::RowMeta &row_meta,
     }
   }
   return ret;
+}                                                                                              \
 }
 }
-}
+
+#define DEF_SET_COLLECTION_PAYLOAD(is_const)                                                       \
+  template <>                                                                                      \
+  void ObUniformFormat<is_const>::set_collection_payload_shallow(                                  \
+    const int64_t idx, const void *payload, const ObLength length)                                 \
+  {                                                                                                \
+    if (sql::ObCollectionExprUtil::is_compact_fmt_cell(payload)) {                                 \
+      set_has_compact_collection();                                                                \
+    } else {                                                                                       \
+    }                                                                                              \
+  }
+
 #endif // OCEANBASE_SHARE_VECTOR_OB_UNIFORM_FORMAT_H_

@@ -71,9 +71,9 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {
-    if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
+    if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_, ctx_->ddl_param_.schema_version_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
-               K(ctx_->ddl_param_.dest_table_id_));
+               K(ctx_->ddl_param_.dest_table_id_), K(ctx_->ddl_param_.schema_version_));
     }
     // init column idxs
     else if (OB_FAIL(init_column_idxs(column_ids))) {
@@ -211,7 +211,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
     else {
       status_ = status;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
-      add_to_all_server_event();
+      add_to_all_server_event(OB_SUCCESS);
       FLOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
@@ -232,7 +232,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
-      add_to_all_server_event();
+      add_to_all_server_event(error_code);
       FLOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code_), K(lbt()));
     }
   }
@@ -251,7 +251,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort(int error_code)
       error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
     }
     table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
-    add_to_all_server_event();
+    add_to_all_server_event(error_code);
     FLOG_INFO("LOAD DATA COORDINATOR status abort", KR(error_code_), K(lbt()));
   }
   return ret;
@@ -481,13 +481,15 @@ int ObTableLoadCoordinatorCtx::init_sequence()
   return ret;
 }
 
-void ObTableLoadCoordinatorCtx::add_to_all_server_event()
+void ObTableLoadCoordinatorCtx::add_to_all_server_event(int ret_code)
 {
-  SERVER_EVENT_ADD("direct_load", "load_data",
+  SERVER_EVENT_ADD("direct_load", "switch_status",
                    "tenant_id", MTL_ID(),
+                   "trace_id", *ObCurTraceId::get_trace_id(),
+                   "ret", ret_code,
+                   "status", ctx_->job_stat_->coordinator_.status_,
                    "table_name", ctx_->job_stat_->table_name_,
-                   "table_id", ctx_->job_stat_->job_id_,
-                   "status", ctx_->job_stat_->coordinator_.status_);
+                   "table_id", ctx_->job_stat_->job_id_);
 }
 
 int ObTableLoadCoordinatorCtx::init_session_ctx_array()

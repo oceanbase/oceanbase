@@ -71,7 +71,7 @@ int ObExprVecIVFPQCenterIds::cg_expr(
     ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 7 && rt_expr.arg_cnt_ != 1)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 7 && rt_expr.arg_cnt_ != 1 && rt_expr.arg_cnt_ != 2 && rt_expr.arg_cnt_ != 4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
   } else if (OB_UNLIKELY(rt_expr.arg_cnt_ == 7 && OB_ISNULL(rt_expr.args_))) {
@@ -111,6 +111,27 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
   if (expr.arg_cnt_ == 1) {
     expr_datum.set_null();
     LOG_DEBUG("[vec index debug]succeed to genearte empty pq scenter id", KP(&expr), K(expr), K(expr_datum), K(eval_ctx));
+  } else if (expr.arg_cnt_ == 2 || expr.arg_cnt_ == 4) {
+    ObIArrayType *res_arr = nullptr;
+    ObArrayBinary *res_binary_array = nullptr;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    ObPqCenterId pq_center_id(1, 1, 1);
+    ObString res_str;
+
+    if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator, eval_ctx, expr.obj_meta_.get_subschema_id(), res_arr, false/*read_only*/))) {
+      LOG_WARN("construct child array obj failed", K(ret));
+    } else if (OB_ISNULL(res_binary_array = static_cast<ObArrayBinary *>(res_arr))) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("invalid null ObIArrayType", K(ret));
+    } else if (OB_FAIL(generate_empty_pq_ids(tmp_allocator, 1, ObTabletID(1), *res_binary_array))) {
+      LOG_WARN("fail to gen empty pq ids", K(ret));
+    } else if (OB_FAIL(ObArrayExprUtils::set_array_res(
+        res_arr, res_arr->get_raw_binary_len(), expr, eval_ctx, res_str))) {
+      LOG_WARN("get array binary string failed", K(ret));
+    } else {
+      expr_datum.set_string(res_str);
+    }
   } else if (OB_UNLIKELY(7 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));

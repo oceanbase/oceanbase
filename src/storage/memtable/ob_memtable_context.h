@@ -484,6 +484,10 @@ public: // callback
   void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   void inc_pending_log_size(const int64_t size) { trans_mgr_.inc_pending_log_size(size); }
   void inc_flushed_log_size(const int64_t size) { trans_mgr_.inc_flushed_log_size(size); }
+  void *alloc_prio_link_node()
+  { return mem_ctx_obj_pool_.alloc<transaction::tablelock::ObMemCtxLockPrioOpLinkNode>(); }
+  void free_prio_link_node(void *ptr)
+  { mem_ctx_obj_pool_.free<transaction::tablelock::ObMemCtxLockPrioOpLinkNode>(ptr); }
   int64_t get_write_epoch() const { return trans_mgr_.get_write_epoch(); }
 public:
   // tx_status
@@ -515,6 +519,7 @@ public:
   int check_modify_time_elapsed(const common::ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const;
   int check_lock_need_replay(const share::SCN &scn,
                              const transaction::tablelock::ObTableLockOp &lock_op,
                              bool &need_replay);
@@ -546,7 +551,11 @@ public:
   {
     return lock_mem_ctx_.get_lock_memtable(memtable);
   }
-
+  int add_priority_record(const transaction::tablelock::ObTableLockPrioArg &arg,
+                          const transaction::tablelock::ObTableLockOp &lock_op);
+  int remove_priority_record(const transaction::tablelock::ObTableLockOp &lock_op);
+  int get_prio_op_array(transaction::tablelock::ObTableLockPrioOpArray &prio_op_array);
+  int prepare_prio_op_list(const transaction::tablelock::ObTableLockPrioOpArray &prio_op_array);
 private:
   int do_trans_end(
       const bool commit,

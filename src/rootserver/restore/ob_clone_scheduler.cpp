@@ -1909,9 +1909,11 @@ int ObCloneScheduler::convert_parameters_(
       LOG_WARN("fail to trim master key map", KR(ret), K(user_tenant_id), K(latest_master_key_id));
     } else if (!clone_has_encrypt_info) {
       //do nothing
-    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, rpc_proxy_,
-                                    user_tenant_id, tde_method, kms_info))) {
+    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, user_tenant_id,
+                                                               tde_method, kms_info))) {
       LOG_WARN("failed to set_tde_parameters", KR(ret), K(user_tenant_id), K(tde_method));
+    } else if (OB_FAIL(ObRestoreCommonUtil::rebuild_master_key_version(rpc_proxy_, user_tenant_id))) {
+      LOG_WARN("fail to rebuild master key version", K(ret), K(user_tenant_id));
     }
   }
 #endif

@@ -23,6 +23,12 @@
 #include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/atomic_protocol/ob_atomic_tablet_meta_op.h"
+#include "storage/incremental/atomic_protocol/ob_atomic_op_handle.h"
+#include "storage/incremental/atomic_protocol/ob_atomic_tablet_meta_file.h"
+#endif
+
 namespace oceanbase
 {
 namespace blocksstable
@@ -177,28 +183,66 @@ public:
     : ls_id_(ls_id), ls_epoch_(ls_epoch), tablet_id_(tablet_id), tablet_transfer_seq_(tablet_transfer_seq),
       snapshot_version_(0), start_macro_seq_(0),
       ddl_redo_callback_(nullptr), ddl_finish_callback_(nullptr)
+      #ifdef OB_BUILD_SHARED_STORAGE
+      , op_handle_(nullptr), file_(nullptr), reorganization_scn_(0)
+      #endif
     {}
 
-  // shared tablet meta persistence
+  // shared_major tablet meta persistence
   ObTabletPersisterParam(
       const ObTabletID tablet_id,
       const int64_t tablet_transfer_seq,
       const int64_t snapshot_version,
       const int64_t start_macro_seq,
       blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback = nullptr,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback = nullptr)
+      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback = nullptr
+      )
   : ls_id_(), ls_epoch_(0), tablet_id_(tablet_id), tablet_transfer_seq_(tablet_transfer_seq),
     snapshot_version_(snapshot_version), start_macro_seq_(start_macro_seq),
     ddl_redo_callback_(ddl_redo_callback), ddl_finish_callback_(ddl_finish_callback)
+    #ifdef OB_BUILD_SHARED_STORAGE
+    , op_handle_(nullptr), file_(nullptr), reorganization_scn_(0)
+    #endif
   {}
+  #ifdef OB_BUILD_SHARED_STORAGE
+  // inc_shared tablet meta persistence
+  ObTabletPersisterParam(
+      const share::ObLSID ls_id,
+      const ObTabletID tablet_id,
+      const ObMetaUpdateReason update_reason,
+      const int64_t start_macro_seq,
+      ObAtomicOpHandle<ObAtomicTabletMetaOp> *handle,
+      ObAtomicTabletMetaFile *file,
+      blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
+      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
+      const int64_t reorganization_scn)
+  : ls_id_(ls_id), ls_epoch_(0), tablet_id_(tablet_id), tablet_transfer_seq_(OB_INVALID_TRANSFER_SEQ),
+    snapshot_version_(0), start_macro_seq_(start_macro_seq),
+    ddl_redo_callback_(ddl_redo_callback), ddl_finish_callback_(ddl_finish_callback),
+    op_handle_(handle), file_(file), update_reason_(update_reason), reorganization_scn_(reorganization_scn)
+  {}
+  #endif
+
   ObTabletPersisterParam() = delete;
 
   bool is_valid() const;
 
-  bool is_shared_object() const { return snapshot_version_ > 0; }
+  bool is_major_shared_object() const { return snapshot_version_ > 0; }
+  bool is_inc_shared_object() const
+  {
+    #ifdef OB_BUILD_SHARED_STORAGE
+      return (op_handle_ != nullptr) && (file_ != nullptr);
+    #else
+      return false;
+    #endif
+  }
 
   TO_STRING_KV(K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(tablet_transfer_seq),
-   K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback));
+   K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
+   #ifdef OB_BUILD_SHARED_STORAGE
+   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(reorganization_scn)
+   #endif
+   );
 
   share::ObLSID ls_id_;
   int64_t ls_epoch_;
@@ -208,7 +252,12 @@ public:
   int64_t start_macro_seq_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
-
+  #ifdef OB_BUILD_SHARED_STORAGE
+  ObAtomicOpHandle<ObAtomicTabletMetaOp> *op_handle_;
+  ObAtomicTabletMetaFile *file_;
+  ObMetaUpdateReason update_reason_;
+  int64_t reorganization_scn_;
+  #endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletPersisterParam);
 };
 
@@ -300,8 +349,19 @@ public:
       const blocksstable::ObSSTableMacroInfo &macro_info,
       ObBlockInfoSet &block_info_set);
   static int transform_empty_shell(const ObTabletPersisterParam &param, const ObTablet &old_tablet, ObTabletHandle &new_handle);
+  static int get_tablet_persist_size(
+      const ObTablet *tablet,
+      int64_t &size);
+  static int fill_tablet_into_buf(
+      const ObTablet *tablet,
+      const int64_t size,
+      char *buf,
+      int64_t &pos);
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
+  int persist_ss_aggregated_meta(
+      ObTabletHandle &new_handle,
+      ObTabletSpaceUsage &space_usage);
   int delete_blocks_(
     const common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs);
   static int check_macro_seq_isolation_(
@@ -313,7 +373,7 @@ private:
 #endif
   void build_async_write_start_opt_(blocksstable::ObStorageObjectOpt &start_opt) const;
   void sync_cur_macro_seq_from_opt_(const blocksstable::ObStorageObjectOpt &curr_opt);
-  static int inner_persist_and_transform_shared_tablet(
+  static int inner_persist_and_transform(
     const ObTabletPersisterParam &param,
     const ObTablet &old_tablet,
     ObTabletHandle &new_handle);
@@ -418,13 +478,6 @@ private:
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
       common::ObIArray<ObSharedObjectWriteInfo> &write_infos,
       ObMetaDiskAddr &addr);
-  int load_medium_info_list_and_write(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr,
-      int64_t &total_tablet_meta_size,
-      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   int link_write_medium_info_list(
       const ObTabletDumpedMediumInfo *medium_info_list,
       common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,
@@ -443,13 +496,11 @@ private:
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   int persist_aggregated_meta(
-      const ObTabletMacroInfo &tablet_macro_info,
       ObTabletHandle &new_handle,
       ObTabletSpaceUsage &space_usage);
   int fill_tablet_write_info(
       common::ObArenaAllocator &allocator,
       const ObTablet *tablet,
-      const ObTabletMacroInfo &tablet_macro_info,
       ObSharedObjectWriteInfo &write_info) const;
   int load_table_store(
       common::ObArenaAllocator &allocator,
@@ -508,7 +559,7 @@ int ObTabletPersister::fill_write_info(
       write_info.offset_ = 0;
       write_info.size_ = size;
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      if (!param_.is_shared_object()) {
+      if (!param_.is_major_shared_object()) {
         write_info.ls_epoch_ = param_.ls_epoch_;
       } else {
         write_info.write_callback_ = param_.ddl_redo_callback_;

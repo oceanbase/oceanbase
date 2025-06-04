@@ -15,6 +15,7 @@
 
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 
 using namespace oceanbase::sql;
@@ -40,7 +41,7 @@ int ObRevokeResolver::resolve_revoke_role_inner(
   ObSEArray<uint64_t, 4> role_id_array;
   ObArray<ObString> role_user_name;
   ObArray<ObString> role_host_name;
-  
+
   CK (revoke_role != NULL && revoke_stmt != NULL);
   CK ((2 == revoke_role->num_child_ || 4 == revoke_role->num_child_) &&
       NULL != revoke_role->children_[0] &&
@@ -350,71 +351,48 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
           } else {
             ObString db = ObString::make_string("");
             ObString table = ObString::make_string("");
-            if (OB_FAIL(ObGrantResolver::resolve_priv_level(
+            ObString catalog = ObString::make_string("");
+            if (priv_object_node != NULL
+                && OB_FAIL(ObGrantResolver::resolve_priv_level_with_object_type(session_info_,
+                                                                                priv_object_node,
+                                                                                grant_level))) {
+              LOG_WARN("failed to resolve priv level with object", K(ret));
+            } else if (OB_FAIL(ObGrantResolver::resolve_priv_level(
                         params_.schema_checker_->get_schema_guard(),
                         session_info_,
                         priv_level_node,
                         params_.session_info_->get_database_name(), 
-                        db, 
-                        table, 
+                        db,
+                        table,
                         grant_level,
-                        *allocator_))) {
+                        *allocator_,
+                        catalog))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(check_and_convert_name(db, table))) {
-              LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
             } else {
               revoke_stmt->set_grant_level(grant_level);
-              if (OB_FAIL(revoke_stmt->set_database_name(db))) {
+            }
+
+            if (OB_SUCC(ret) && grant_level != OB_PRIV_CATALOG_LEVEL) {
+              if (OB_FAIL(check_and_convert_name(db, table))) {
+                LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
+              } else if (OB_FAIL(revoke_stmt->set_database_name(db))) {
                 LOG_WARN("Failed to set database_name to revoke_stmt", K(ret));
               } else if (OB_FAIL(revoke_stmt->set_table_name(table))) {
                 LOG_WARN("Failed to set table_name to revoke_stmt", K(ret));
-              } else {
-                share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
-                uint64_t object_id = OB_INVALID_ID;
-                ObString object_db_name;
-                if (db.empty() || table.empty()) {
-                  object_type = share::schema::ObObjectType::MAX_TYPE;
-                } else {
-                  ObSynonymChecker synonym_checker;
-                  (void)params_.schema_checker_->get_object_type(tenant_id, db, table,
-                                                                object_type, object_id,
-                                                                object_db_name, false,
-                                                                false, ObString(""),
-                                                                synonym_checker);
-                }
-                if (OB_FAIL(ret)) {
-                } else {
-                  revoke_stmt->set_object_type(object_type);
-                  revoke_stmt->set_object_id(object_id);
-                }
               }
             }
-          }
 
-          if (OB_FAIL(ret)) {
-          } else if (priv_object_node != NULL) {
-            uint64_t compat_version = 0;
-            if (grant_level != OB_PRIV_TABLE_LEVEL) {
-              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-              LOG_WARN("illegal grant", K(ret));
-            } else if (priv_object_node->value_ == 1) {
-              grant_level = OB_PRIV_TABLE_LEVEL;
-            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-              LOG_WARN("fail to get data version", K(tenant_id));
-            } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
-            } else if (priv_object_node->value_ == 2) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-              revoke_stmt->set_object_type(ObObjectType::PROCEDURE);
-            } else if (priv_object_node->value_ == 3) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-              revoke_stmt->set_object_type(ObObjectType::FUNCTION);
+            if (OB_SUCC(ret) && OB_FAIL(ObGrantResolver::resolve_priv_object(priv_object_node,
+                                                                             revoke_stmt,
+                                                                             params_.schema_checker_,
+                                                                             db,
+                                                                             table,
+                                                                             catalog,
+                                                                             tenant_id,
+                                                                             allocator_,
+                                                                             false))) {
+              LOG_WARN("failed to resolve priv object", K(ret));
             }
-            revoke_stmt->set_grant_level(grant_level);
           }
 
         } else if (T_REVOKE_ALL == node->type_ && REVOKE_ALL_NUM_CHILD == node->num_child_) {
@@ -478,11 +456,27 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or 4_3_3_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references/create role/drop role/trigger");
+          } else if (!transaction::tablelock::is_mysql_lock_table_data_version(compat_version)
+                     && ((priv_set & OB_PRIV_LOCK_TABLE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support with this DATA_VERSION", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke lock tables privilege");
           } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
                      && ((priv_set & OB_PRIV_ENCRYPT) != 0 || (priv_set & OB_PRIV_DECRYPT) != 0)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1 or 4_3_5_1", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant encrypt/decrypt privilege");
+          } else if (!((MOCK_DATA_VERSION_4_2_5_2 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_2)
+                     && ((priv_set & OB_PRIV_EVENT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2 or 4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke event");
+          } else if (compat_version < DATA_VERSION_4_3_5_2
+                     && ((priv_set & OB_PRIV_CREATE_CATALOG) != 0 ||
+                         (priv_set & OB_PRIV_USE_CATALOG) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create catalog/use catalog privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -846,6 +840,7 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
   uint64_t tenant_id = OB_INVALID_ID;
   ObPrivLevel grant_level = OB_PRIV_INVALID_LEVEL;
   bool is_directory = false;
+  bool is_catalog = false;
   bool explicit_db = false;
   CK (OB_NOT_NULL(node) && OB_NOT_NULL(revoke_stmt));
   CK (OB_NOT_NULL(params_.schema_checker_) && OB_NOT_NULL(params_.session_info_));
@@ -863,12 +858,13 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
       ObString db = ObString::make_string("");
       ObString table = ObString::make_string("");
       if (OB_FAIL(ObGrantResolver::resolve_obj_ora(priv_level_node,
-                            params_.session_info_->get_database_name(),
-                            db, 
-                            table, 
-                            grant_level,
-                            is_directory,
-                            explicit_db))) {
+                                                   params_.session_info_->get_database_name(),
+                                                   db,
+                                                   table,
+                                                   grant_level,
+                                                   is_directory,
+                                                   explicit_db,
+                                                   is_catalog))) {
         LOG_WARN("Resolve priv_level node error", K(ret));
       }  else if (OB_FAIL(check_and_convert_name(db, table))) {
         LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -889,7 +885,7 @@ int ObRevokeResolver::resolve_revoke_obj_priv_inner(const ParseNode *node,
             OZ (params_.schema_checker_->get_object_type(
                 tenant_id, db, table,
                 object_type, object_id, obj_db_name, is_directory, 
-                explicit_db, ObString(""), synonym_checker));
+                explicit_db, ObString(""), synonym_checker, is_catalog));
             OZ (revoke_stmt->set_database_name(obj_db_name));
           }
           revoke_stmt->set_object_type(object_type);

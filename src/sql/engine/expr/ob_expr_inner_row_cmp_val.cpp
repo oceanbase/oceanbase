@@ -41,9 +41,9 @@ int ObExprInnerRowCmpVal::calc_result_type3(ObExprResType &type,
     type2.set_calc_accuracy(type1.get_accuracy());
     const uint64_t cast_mode = type1.get_cast_mode();
     if (0 != (cast_mode & CM_CONST_TO_DECIMAL_INT_UP)) {
-      type2.add_cast_mode(CM_CONST_TO_DECIMAL_INT_DOWN);
+      type2.add_decimal_int_cast_mode(CM_CONST_TO_DECIMAL_INT_DOWN);
     } else if (0 != (cast_mode & CM_CONST_TO_DECIMAL_INT_DOWN)) {
-      type2.add_cast_mode(CM_CONST_TO_DECIMAL_INT_UP);
+      type2.add_decimal_int_cast_mode(CM_CONST_TO_DECIMAL_INT_UP);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected cast mode", K(ret), K(cast_mode));
@@ -79,7 +79,7 @@ int ObExprInnerRowCmpVal::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw
                                             K(rt_expr.args_[1]->datum_meta_));
   } else {
     rt_expr.eval_func_ = eval_inner_row_cmp_val;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_ret_code();
   }
   return ret;
 }

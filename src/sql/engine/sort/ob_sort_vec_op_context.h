@@ -46,7 +46,7 @@ struct ObSortVecOpContext
   int64_t *sort_row_cnt_;
   union
   {
-    struct
+    struct //FARM COMPAT WHITELIST
     {
       uint32_t enable_encode_sortkey_ : 1;
       uint32_t in_local_order_ : 1;
@@ -54,7 +54,8 @@ struct ObSortVecOpContext
       uint32_t is_fetch_with_ties_ : 1;
       uint32_t has_addon_ : 1;
       uint32_t enable_pd_topn_filter_ : 1;
-      uint32_t reserved_ : 26;
+      uint32_t enable_single_col_compare_ : 1;
+      uint32_t reserved_ : 25;
     };
     uint32_t flag_;
   };

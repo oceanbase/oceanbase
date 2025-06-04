@@ -273,6 +273,8 @@ public:
   template<class T>
   int add_ps_plan(T *plan,
                   ObPlanCacheCtx &pc_ctx);
+  int try_get_plan(common::ObIAllocator &allocator, ObPlanCacheCtx &pc_ctx, ObCacheObjGuard &guard);
+  int try_get_ps_plan(ObCacheObjGuard &guard, const ObPsStmtId stmt_id, ObPlanCacheCtx &pc_ctx);
 
   // cache object access functions
   /* 根据ObPlanCacheKey以及参数在plan cache中查询符合要求的执行计划 */

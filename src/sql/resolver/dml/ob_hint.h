@@ -146,7 +146,7 @@ private:
 public:
   union {
     struct {
-      uint64_t has_direct_ : 1;
+      uint64_t has_direct_ : 1; // FARM COMPAT WHITELIST
       uint64_t need_sort_ : 1;
       uint64_t has_no_direct_ : 1;
       uint64_t reserved_ : 61;
@@ -214,6 +214,11 @@ struct ObOptParamHint
     DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
     DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
     DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
+    DEF(PRESERVE_ORDER_FOR_GROUPBY,)                \
+    DEF(ENABLE_PDML_INSERT_UP,)                     \
+    DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
+    DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
+
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -326,10 +331,13 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_1_BP9  (oceanbase::common::cal_version(4, 2, 1, 9))
 #define COMPAT_VERSION_4_2_1_BP10 (oceanbase::common::cal_version(4, 2, 1, 10))
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
+#define COMPAT_VERSION_4_2_1_BP10 (oceanbase::common::cal_version(4, 2, 1, 10))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
 #define COMPAT_VERSION_4_2_5      (oceanbase::common::cal_version(4, 2, 5, 0))
+#define COMPAT_VERSION_4_2_5_BP1  (oceanbase::common::cal_version(4, 2, 5, 1))
 #define COMPAT_VERSION_4_2_5_BP3  (oceanbase::common::cal_version(4, 2, 5, 3))
+#define COMPAT_VERSION_4_2_5_BP4  (oceanbase::common::cal_version(4, 2, 5, 4))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
@@ -338,7 +346,9 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_5      (oceanbase::common::cal_version(4, 3, 5, 0))
 #define COMPAT_VERSION_4_3_5_BP1  (oceanbase::common::cal_version(4, 3, 5, 1))
 #define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5_BP2
+#define COMPAT_VERSION_4_3_5_BP3  (oceanbase::common::cal_version(4, 3, 5, 3))
+#define COMPAT_VERSION_4_4_0      (oceanbase::common::cal_version(4, 4, 0, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_4_0
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
@@ -657,7 +667,7 @@ public:
 
   // basic/generated table: size = 1
   // joined table: size > 1
-  typedef ObSEArray<ObTableInHint, 4> TablesInHint;
+  typedef ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> TablesInHint;
 
   ObHint(ObItemType hint_type = T_INVALID)
     : hint_class_(HINT_INVALID_CLASS),

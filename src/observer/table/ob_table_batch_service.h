@@ -42,8 +42,9 @@ private:
                        const common::ObIArray<ObTableOperation> &ops,
                        common::ObIArray<ObTableOperationResult> &results);
   static int multi_get_fuse_key_range(ObTableBatchCtx &ctx, ObTableApiSpec &spec,
-                                      const common::ObIArray<ObTableOperation> &ops,
-                                      common::ObIArray<ObTableOperationResult> &results);
+                                      const common::ObIArray<ObITableEntity *> &entities,
+                                      common::ObIArray<ObTableOperationResult> &results,
+                                      int64_t &got_row_count);
   static int multi_op_in_executor(ObTableBatchCtx &ctx,
                                   ObTableApiSpec &pec,
                                   const common::ObIArray<ObTableOperation> &ops,
@@ -98,12 +99,9 @@ private:
                             ObTabletID tablet_id);
   static int check_arg2(bool returning_rowkey,
                         bool returning_affected_entity);
-  static int adjust_entities(ObTableBatchCtx &ctx, const common::ObIArray<ObTableOperation> &ops);
-  static int get_result_index(const ObNewRow &row,
-                              const ObIArray<ObTableOperation> &ops,
-                              const ObIArray<uint64_t> &rowkey_ids,
-                              ObObj *rowkey_cells,
-                              ObIArray<int64_t> &indexs);
+  static int adjust_entities(ObTableBatchCtx &ctx,
+                             const common::ObIArray<ObTableOperation> &ops,
+                             ObIArray<ObITableEntity*> &entities);
   static int check_legality(ObTableBatchCtx &ctx,
                             const common::ObIArray<ObTableOperation> &ops,
                             common::ObIArray<ObTableOperationResult> &results);

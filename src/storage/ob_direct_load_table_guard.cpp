@@ -153,6 +153,9 @@ int ObDirectLoadTableGuard::do_create_memtable_(ObLSHandle &ls_handle)
   ObTabletHandle tablet_handle;
   SCN clog_checkpoint_scn;
 
+  CreateMemtableArg arg;
+  arg.for_inc_direct_load_ = true;
+  arg.for_replay_ = for_replay_;
   if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
           tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     STORAGE_LOG(WARN, "fail to get tablet", K(ret), KPC(this));
@@ -160,8 +163,8 @@ int ObDirectLoadTableGuard::do_create_memtable_(ObLSHandle &ls_handle)
   } else if (ddl_redo_scn_ <= clog_checkpoint_scn) {
     is_write_filtered_ = true;
     ret = OB_SUCCESS;
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(
-                 tablet_id_, 0 /* schema version */, true /* for_direct_load */, for_replay_, clog_checkpoint_scn))) {
+  } else if (FALSE_IT(arg.clog_checkpoint_scn_ = clog_checkpoint_scn)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id_, arg))) {
     STORAGE_LOG(WARN, "fail to create a boundary memtable", K(ret), KPC(this));
   }
   return ret;

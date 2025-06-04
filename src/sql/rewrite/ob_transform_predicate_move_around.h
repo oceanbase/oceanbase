@@ -291,6 +291,14 @@ private:
   int pushdown_through_groupby(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &output_predicates);
 
+  int check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
+                                          ObRawExpr *having_expr,
+                                          bool &is_valid);
+
+  int check_pushdown_through_rollup_validity(ObRawExpr *having_expr,
+                               const ObIArray<ObRawExpr *> &rollup_exprs,
+                               bool &is_valid);
+
   int deduce_param_cond_from_aggr_cond(ObItemType expr_type,
                                        ObRawExpr *first,
                                        ObRawExpr *second,
@@ -397,6 +405,8 @@ private:
 
   int gather_basic_qualify_filter(ObSelectStmt &stmt, ObIArray<ObRawExpr*> &preds);
   int filter_lateral_correlated_preds(TableItem &table_item, ObIArray<ObRawExpr*> &preds);
+  void reset();
+
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;
@@ -405,6 +415,9 @@ private:
   ObSEArray<ObDMLStmt *, 8> transed_stmts_;
   ObSEArray<ObHint *, 4> applied_hints_;
   ObSEArray<ObSqlTempTableInfo *, 2> temp_table_infos_;
+  ObSEArray<ObRawExpr *, 4> null_constraints_;
+  ObSEArray<ObRawExpr *, 4> not_null_constraints_;
+  ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
   bool real_happened_;
 };
 

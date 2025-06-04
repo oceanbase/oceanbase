@@ -240,7 +240,7 @@ int ObTransformMinMax::do_multi_minmax_transform(ObSelectStmt *select_stmt)
       select_stmt->get_column_items().reset();
       if (OB_FAIL(select_stmt->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         LOG_TRACE("succeed to do transform min max", KPC(select_stmt));
@@ -317,7 +317,7 @@ int ObTransformMinMax::deep_copy_subquery_for_aggr(const ObSelectStmt &copied_st
     LOG_WARN("failed to rebuild table hash", K(ret));
   } else if (OB_FAIL(child_stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update column item by id", K(ret));
-  } else if (OB_FAIL(child_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(child_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;

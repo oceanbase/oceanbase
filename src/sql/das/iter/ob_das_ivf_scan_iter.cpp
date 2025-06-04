@@ -966,8 +966,7 @@ int ObDASIvfScanIter::get_pre_filter_rowkey_batch(ObIAllocator &allocator,
   return ret;
 }
 
-int ObDASIvfScanIter::get_rowkey_pre_filter(bool is_vectorized,
-                                            int64_t max_rowkey_count /*=ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE*/)
+int ObDASIvfScanIter::get_rowkey_pre_filter(bool is_vectorized, int64_t max_rowkey_count)
 {
   int ret = OB_SUCCESS;
   uint64_t rowkey_count = 0;
@@ -1081,15 +1080,15 @@ int ObDASIvfScanIter::process_ivf_scan(bool is_vectorized)
 int ObDASIvfScanIter::filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cids,
                                            bool is_vectorized,
                                            int64_t batch_row_count,
-                                           bool &index_end)
+                                           int& push_count)
 {
   int ret = OB_SUCCESS;
   const ObDASScanCtDef *rowkey_cid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_rowkey_cid_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_ROWKEY_CID_SCAN);
   ObExpr *cid_expr = rowkey_cid_ctdef->result_output_[0];
 
-  int push_count = 0;
   if (!is_vectorized) {
+    bool index_end = false;
     for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !index_end; ++i) {
       ObString cid;
       if (OB_FAIL(get_cid_from_rowkey_cid_table(cid))) {
@@ -1101,25 +1100,22 @@ int ObDASIvfScanIter::filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cid
         LOG_WARN("failed to add rowkey", K(ret));
       }
     }
+    int tmp_ret = ret;
+    if (OB_FAIL(
+            ObDasVecScanUtils::reuse_iter(ls_id_, rowkey_cid_iter_, rowkey_cid_scan_param_, rowkey_cid_tablet_id_))) {
+      LOG_WARN("failed to reuse rowkey cid iter.", K(ret));
+    } else {
+      ret = tmp_ret;
+    }
   } else {
-    rowkey_cid_iter_->clear_evaluated_flag();
-    int64_t scan_row_cnt = 0;
-    if (OB_FAIL(rowkey_cid_iter_->get_next_rows(scan_row_cnt, batch_row_count))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("failed to get next row.", K(ret));
-      }
-      index_end = true;
-    }
-
-    if (OB_FAIL(ret) && OB_ITER_END != ret) {
-    } else if (scan_row_cnt > 0) {
-      ret = OB_SUCCESS;
-    }
-
+    IVF_GET_NEXT_ROWS_BEGIN(rowkey_cid_iter_)
     if (OB_SUCC(ret)) {
+      ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
+      guard.set_batch_size(scan_row_cnt);
       ObDatum *cid_datum = cid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
 
       for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+        guard.set_batch_idx(i);
         ObString cid = cid_datum[i].get_string();
         if (!check_cid_exist(nearest_cids, cid)) {
           push_count++;
@@ -1128,6 +1124,7 @@ int ObDASIvfScanIter::filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cid
         }
       }
     }
+    IVF_GET_NEXT_ROWS_END(rowkey_cid_iter_, rowkey_cid_scan_param_, rowkey_cid_tablet_id_)
   }
 
   return ret;
@@ -1145,8 +1142,9 @@ int ObDASIvfScanIter::filter_pre_rowkey_batch(const ObIArray<ObString> &nearest_
   ObExpr *cid_expr = rowkey_cid_ctdef->result_output_[0];
 
   int count = 0;
-  bool index_end = false;
-  while (OB_SUCC(ret) && count < filted_rowkeys_count && !index_end) {
+  int push_count = 0;
+
+  while (OB_SUCC(ret) && count < filted_rowkeys_count) {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && count < filted_rowkeys_count; ++i) {
       if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(
               pre_fileter_rowkeys_[count++], rowkey_cid_scan_param_, rowkey_cid_ctdef->ref_table_id_))) {
@@ -1157,16 +1155,8 @@ int ObDASIvfScanIter::filter_pre_rowkey_batch(const ObIArray<ObString> &nearest_
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(do_rowkey_cid_table_scan())) {
       LOG_WARN("do rowkey cid table scan failed", K(ret));
-    } else if (OB_FAIL(filter_rowkey_by_cid(nearest_cids, is_vectorized, batch_row_count, index_end))) {
+    } else if (OB_FAIL(filter_rowkey_by_cid(nearest_cids, is_vectorized, batch_row_count, push_count))) {
       LOG_WARN("filter rowkey batch failed", K(ret), K(nearest_cids), K(is_vectorized), K(batch_row_count));
-    } else {
-      int tmp_ret = ret; // NOTE(liyao): 跳过reuse_iter返回值
-      if (OB_FAIL(ObDasVecScanUtils::reuse_iter(
-              ls_id_, rowkey_cid_iter_, rowkey_cid_scan_param_, rowkey_cid_tablet_id_))) {
-        LOG_WARN("failed to reuse rowkey cid iter.", K(ret));
-      } else {
-        ret = tmp_ret;
-      }
     }
   }
 
@@ -1178,25 +1168,28 @@ int ObDASIvfScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_vect
   int ret = OB_SUCCESS;
 
   int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-  ObSEArray<ObString, 8> nearest_cids;
-  nearest_cids.set_attr(ObMemAttr(MTL_ID(), "VecIdxNearCid"));
-  if (OB_FAIL(get_nearest_probe_center_ids(is_vectorized, nearest_cids))) {
-    LOG_WARN("failed to get nearest probe center ids", K(ret));
-  } else if (nearest_cids.count() == 1 && nearest_cids.at(0).empty()) {
-    // cid_center table is empty
-    // return PRE_ENLARGEMENT_FACTOR * limit n rowkeys
-    if (OB_FAIL(get_rowkey_pre_filter(
-            is_vectorized, get_nprobe(limit_param_, PRE_ENLARGEMENT_FACTOR)))) {
-      LOG_WARN("failed to gen rowkeys itr brute pre", K(ret));
-    } else if (OB_FAIL(process_ivf_scan_brute())) {
+  // Firstly, scan whether it is an brute search.
+  if (OB_FAIL(get_rowkey_pre_filter(is_vectorized, IVF_MAX_BRUTE_FORCE_SIZE))) {
+    LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
+  } else if (pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
+    // brute_force: directly return rowkey
+    if (OB_FAIL(process_ivf_scan_brute())) {
       LOG_WARN("failed to process ivf_scan brute filter", K(ret), K_(pre_fileter_rowkeys), K_(saved_rowkeys));
     }
   } else {
-    if (OB_FAIL(get_rowkey_pre_filter(is_vectorized))) {
-      LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
-    } else if (pre_fileter_rowkeys_.count() < ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE) {
-      // brute_force: directly return rowkey
-      if (OB_FAIL(process_ivf_scan_brute())) {
+    ObSEArray<ObString, 8> nearest_cids;
+    nearest_cids.set_attr(ObMemAttr(MTL_ID(), "VecIdxNearCid"));
+    if (OB_FAIL(get_nearest_probe_center_ids(is_vectorized, nearest_cids))) {
+      LOG_WARN("failed to get nearest probe center ids", K(ret));
+    } else if (nearest_cids.count() == 1 && nearest_cids.at(0).empty()) {
+      // cid_center table is empty
+      // return PRE_ENLARGEMENT_FACTOR * limit n rowkeys
+      pre_fileter_rowkeys_.reset();
+      if (OB_FAIL(inv_idx_scan_iter_->reuse())) {
+        LOG_WARN("failed to reuse iter", K(ret));
+      } else if (OB_FAIL(get_rowkey_pre_filter(is_vectorized, get_nprobe(limit_param_, PRE_ENLARGEMENT_FACTOR)))) {
+        LOG_WARN("failed to gen rowkeys itr brute pre", K(ret));
+      } else if (OB_FAIL(process_ivf_scan_brute())) {
         LOG_WARN("failed to process ivf_scan brute filter", K(ret), K_(pre_fileter_rowkeys), K_(saved_rowkeys));
       }
     } else if (OB_FAIL(filter_pre_rowkey_batch(nearest_cids, is_vectorized, batch_row_count))) {
@@ -1467,10 +1460,10 @@ int ObDASIvfPQScanIter::get_pq_cid_vec_by_pq_cid(const ObString &pq_cid, float *
           }
         } else if (FALSE_IT(++row_cnt)) {
         } else if (OB_FALSE_IT(vec = pq_center_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_).get_string())) {
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                        &mem_context_->get_arena_allocator(),
-                        ObLongTextType,
-                        CS_TYPE_BINARY,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                        mem_context_->get_arena_allocator(),
+                        pq_center_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_),
+                        pq_cid_vec_ctdef->result_output_.at(PQ_CENTROID_VEC_IDX)->datum_meta_,
                         has_lob_header,
                         vec))) {
           LOG_WARN("failed to get real data.", K(ret));
@@ -1553,6 +1546,7 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
     // 1.1 Calculate the residual r(x) = x - cid_vec
     //     split r(x) into m parts, the jth part is called r(x)[j]
     float *residual = nullptr;
+    splited_residual.reset();
     if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(mem_context_->get_arena_allocator(), dim_, search_vec, cur_cid_vec, residual))) {
       LOG_WARN("fail to calc residual vector", K(ret), K(dim_));
     } else if (OB_FAIL(ObVectorIndexUtil::split_vector(mem_context_->get_arena_allocator(), m_, dim_, residual, splited_residual))) {
@@ -1811,14 +1805,14 @@ int ObDASIvfPQScanIter::filter_rowkey_by_cid(const ObIArray<IvfCidVecPair> &near
                                             bool is_vectorized,
                                             int64_t batch_row_count,
                                             IvfRowkeyHeap &rowkey_heap,
-                                            bool &index_end)
+                                            int& push_count)
 {
   int ret = OB_SUCCESS;
   const ObDASScanCtDef *rowkey_cid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_rowkey_cid_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_ROWKEY_CID_SCAN);
-  int push_count = 0;
 
   if (!is_vectorized) {
+    bool index_end = false;
     for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !index_end; ++i) {
       ObString cid;
       ObArrayBinary *pq_center_ids = nullptr;
@@ -1837,7 +1831,6 @@ int ObDASIvfPQScanIter::filter_rowkey_by_cid(const ObIArray<IvfCidVecPair> &near
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next row.", K(ret));
       }
-      index_end = true;
     }
 
     if (OB_FAIL(ret) && OB_ITER_END != ret) {
@@ -1879,8 +1872,9 @@ int ObDASIvfPQScanIter::filter_pre_rowkey_batch(const ObIArray<IvfCidVecPair> &n
   ObExpr *cid_expr = rowkey_cid_ctdef->result_output_[0];
 
   int count = 0;
-  bool index_end = false;
-  while (OB_SUCC(ret) && count < filted_rowkeys_count && !index_end) {
+  int push_count = 0;
+
+  while (OB_SUCC(ret) && count < filted_rowkeys_count) {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && count < filted_rowkeys_count; ++i) {
       if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(
               pre_fileter_rowkeys_[count++], rowkey_cid_scan_param_, rowkey_cid_ctdef->ref_table_id_))) {
@@ -1891,7 +1885,7 @@ int ObDASIvfPQScanIter::filter_pre_rowkey_batch(const ObIArray<IvfCidVecPair> &n
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(do_rowkey_cid_table_scan())) {
       LOG_WARN("do rowkey cid table scan failed", K(ret));
-    } else if (OB_FAIL(filter_rowkey_by_cid(nearest_cids, is_vectorized, batch_row_count, rowkey_heap, index_end))) {
+    } else if (OB_FAIL(filter_rowkey_by_cid(nearest_cids, is_vectorized, batch_row_count, rowkey_heap, push_count))) {
       LOG_WARN("filter rowkey batch failed", K(ret), K(nearest_cids), K(is_vectorized), K(batch_row_count));
     } else {
       int tmp_ret = ret;
@@ -1930,7 +1924,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
       LOG_WARN("failed to process ivf_scan brute filter", K(ret), K_(pre_fileter_rowkeys), K_(saved_rowkeys));
     }
   } else {
-    if (OB_FAIL(get_rowkey_pre_filter(is_vectorized))) {
+    if (OB_FAIL(get_rowkey_pre_filter(is_vectorized, ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE))) {
       LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
     } else if (pre_fileter_rowkeys_.count() < ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE) {
       // brute_force: directly return rowkey
@@ -2097,30 +2091,18 @@ int ObDASIvfSQ8ScanIter::get_real_search_vec_u8(bool is_vectorized, ObString &re
           guard.set_batch_idx(i);
           if (i == ObIvfConstant::SQ8_META_MIN_IDX || i == ObIvfConstant::SQ8_META_STEP_IDX) {
             ObString c_vec = meta_vec_datum[i].get_string();
-            if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                    &mem_context_->get_arena_allocator(),
-                    ObLongTextType,
-                    CS_TYPE_BINARY,
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                    mem_context_->get_arena_allocator(),
+                    meta_vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_),
+                    sq_meta_ctdef->result_output_.at(META_VECTOR_IDX)->datum_meta_,
                     has_lob_header,
                     c_vec))) {
               LOG_WARN("failed to get real data.", K(ret));
             } else if (i == ObIvfConstant::SQ8_META_MIN_IDX) {
               // if not has lob, need deepcopy, because datum_row whill reuse
-              if (!has_lob_header) {
-                if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, min_vec))) {
-                  LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-                }
-              } else {
-                min_vec = c_vec;
-              }
+              min_vec = c_vec;
             } else if (i == ObIvfConstant::SQ8_META_STEP_IDX) {
-              if (!has_lob_header) {
-                if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, step_vec))) {
-                  LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-                }
-              } else {
-                step_vec = c_vec;
-              }
+              step_vec = c_vec;
             }
           }
         }
@@ -2150,30 +2132,17 @@ int ObDASIvfSQ8ScanIter::get_real_search_vec_u8(bool is_vectorized, ObString &re
           LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
         } else if (row_index == ObIvfConstant::SQ8_META_MIN_IDX || row_index == ObIvfConstant::SQ8_META_STEP_IDX) {
           c_vec = datum_row->storage_datums_[1].get_string();
-          if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                  &mem_context_->get_arena_allocator(),
-                  ObLongTextType,
-                  CS_TYPE_BINARY,
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+                  mem_context_->get_arena_allocator(),
+                  datum_row->storage_datums_[1],
+                  sq_meta_ctdef->result_output_.at(1)->datum_meta_,
                   sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header(),
                   c_vec))) {
             LOG_WARN("failed to get real data.", K(ret));
           } else if (row_index == ObIvfConstant::SQ8_META_MIN_IDX) {
-            // if not has lob, need deepcopy, because datum_row whill reuse
-            if (!sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header()) {
-              if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, min_vec))) {
-                LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-              }
-            } else {
-              min_vec = c_vec;
-            }
+            min_vec = c_vec;
           } else if (row_index == ObIvfConstant::SQ8_META_STEP_IDX) {
-            if (!sq_meta_ctdef->result_output_.at(1)->obj_meta_.has_lob_header()) {
-              if (OB_FAIL(ob_write_string(vec_op_alloc_, c_vec, step_vec))) {
-                LOG_WARN("failed to write string", K(ret), K(c_vec), K(min_vec));
-              }
-            } else {
-              step_vec = c_vec;
-            }
+            step_vec = c_vec;
           }
         }
         row_index++;

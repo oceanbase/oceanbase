@@ -16,6 +16,7 @@
 #include "lib/container/ob_vector.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "src/share/schema/ob_udt_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
   class name##Executor                                     \
@@ -42,11 +43,6 @@ public:
   ObCreateUDTExecutor() {}
   virtual ~ObCreateUDTExecutor() {}
   int execute(ObExecContext &ctx, ObCreateUDTStmt &stmt);
-  static int compile_udt(sql::ObExecContext &ctx,
-                  const ObString &db_name,
-                  const ObString &udt_name,
-                  int64_t type_code,
-                  int64_t schema_version);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUDTExecutor);
 };

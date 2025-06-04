@@ -62,12 +62,13 @@ typedef common::hash::ObHashMap<uint64_t, transaction::tablelock::ObTableLockMod
 public:
   ObDDLHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
-    const uint64_t tenant_id);
+    const uint64_t tenant_id,
+    const char* parallel_ddl_type);
   virtual ~ObDDLHelper();
 
   int init(rootserver::ObDDLService &ddl_service);
 
-  virtual int execute();
+  virtual int execute() final;
   static int obj_lock_database_name(
              ObDDLSQLTransaction &trans,
              const uint64_t tenant_id,
@@ -86,14 +87,20 @@ public:
              const transaction::tablelock::ObTableLockMode lock_mode);
 protected:
   virtual int check_inner_stat_();
-
+  virtual int init_() = 0;
   /* main actions */
   int start_ddl_trans_();
+  virtual int lock_objects_() = 0;
+  virtual int generate_schemas_() = 0;
   virtual int calc_schema_version_cnt_() = 0;
   int gen_task_id_and_schema_versions_();
+  virtual int operate_schemas_() = 0;
   int serialize_inc_schema_dict_();
   int wait_ddl_trans_();
+  virtual int operation_before_commit_() = 0;
   int end_ddl_trans_(const int return_ret);
+  virtual int clean_on_fail_commit_() = 0;
+  virtual int construct_and_adjust_result_(int &returen_ret) = 0;
   /*--------------*/
 protected:
   // lock database name
@@ -168,6 +175,7 @@ protected:
   // should use this guard after related objects are locked
   share::schema::ObLatestSchemaGuard latest_schema_guard_;
   common::ObArenaAllocator allocator_;
+  const char* parallel_ddl_type_;
 private:
   static const int64_t OBJECT_BUCKET_NUM = 1024;
   DISALLOW_COPY_AND_ASSIGN(ObDDLHelper);

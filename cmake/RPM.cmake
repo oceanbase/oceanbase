@@ -120,6 +120,30 @@ else()
   add_custom_target(ob_table ALL
     DEPENDS obtable obtable_static)
 endif()
+
+# add software package info
+set(RPM_DIST "")
+if (OB_BUILD_OPENSOURCE)
+  execute_process(
+      COMMAND rpm --eval "%{dist}"
+      OUTPUT_VARIABLE RPM_DIST
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+  )
+endif()
+
+set(CPACK_FULL_PACKAGE_NAME
+  "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}${RPM_DIST}.${ARCHITECTURE}.rpm")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package.template
+              ${CMAKE_CURRENT_SOURCE_DIR}/tools/ocp/software_package
+              @ONLY)
+
+install(FILES
+  tools/ocp/software_package
+  DESTINATION "."
+  COMPONENT server)
+
 message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
 
 # refs https://stackoverflow.com/questions/48711342/what-does-the-cpack-preinstall-target-do

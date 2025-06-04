@@ -365,12 +365,13 @@ int ObRebuildTabletDagNet::fill_comment(char *buf, const int64_t buf_len) const
   int ret = OB_SUCCESS;
   const int64_t MAX_TRACE_ID_LENGTH = 64;
   char task_id_str[MAX_TRACE_ID_LENGTH] = { 0 };
+  int64_t pos = 0;
   UNUSED(buf);
   UNUSED(buf_len);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild tablet dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+  } else if (OB_FAIL(databuff_print_obj(task_id_str, MAX_TRACE_ID_LENGTH, pos, ctx_->task_id_))) {
     LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
   } else {
   }
@@ -410,7 +411,7 @@ int ObRebuildTabletDagNet::clear_dag_net_ctx()
   } else {
     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->switch_next_stage(result))) {
+    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
@@ -631,6 +632,8 @@ int ObInitialRebuildTabletTask::process()
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
   } else if (OB_FAIL(check_tablet_status_())) {
     LOG_WARN("failed to check tablet status", K(ret));
+  } else if (tablet_id_array_.empty()) {
+    //do nothing
   } else if (OB_FAIL(build_tablet_group_ctx_())) {
     LOG_WARN("failed to build tablet group ctx", K(ret));
   } else if (OB_FAIL(generate_rebuild_tablet_dags_())) {
@@ -1160,9 +1163,10 @@ int ObTabletRebuildMajorDag::init(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     }
+  } else if (OB_FAIL(copy_tablet_ctx_.tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else {
     status = ObCopyTabletStatus::TABLET_EXIST;
-    copy_tablet_ctx_.tablet_handle_ = tablet_handle;
     compat_mode_ = tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 

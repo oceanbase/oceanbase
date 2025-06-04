@@ -14,8 +14,7 @@
 #define OCEANBASE_LIB_OBJPOOL_OB_SMALL_OBJ_POOL_H__
 
 #include "lib/allocator/ob_small_allocator.h"   // ObSmallAllocator
-#include "lib/queue/ob_fixed_queue.h"           // ObFixedQueue
-#include "lib/list/ob_atomic_list.h"
+#include "lib/queue/ob_link_queue.h"            // ObLinkQueue
 
 namespace oceanbase
 {
@@ -25,7 +24,7 @@ template <class T>
 class ObSmallObjPool
 {
 public:
-  struct ObjItem
+  struct ObjItem : public ObLink
   {
     enum
     {
@@ -34,7 +33,6 @@ public:
       SRC_ALLOC = 2,    // Dynamically allocated elements, released after use
     };
 
-    void *next_;
     int8_t src_type_;
     T obj_;
 
@@ -78,7 +76,7 @@ private:
   int64_t fixed_count_;
   int64_t free_count_;
   int64_t alloc_count_;
-  ObAtomicList free_list_;
+  ObMultiSpLinkQueue<16> free_list_;
   ObSmallAllocator allocator_;  // Obj allocator
 
 private:
@@ -118,8 +116,6 @@ int ObSmallObjPool<T>::init(const int64_t fixed_count,
   } else if (OB_FAIL(allocator_.init(obj_size, label, tenant_id, block_size))) {
     LIB_LOG(ERROR, "init small allocator fail", K(ret), K(obj_size), K(label),
         K(tenant_id), K(block_size));
-  } else if (OB_FAIL(free_list_.init("SmallObjPool", 0))) {
-    LIB_LOG(ERROR, "init free list fail", K(fixed_count));
   } else {
     fixed_count_ = fixed_count;
     free_count_ = 0;
@@ -140,8 +136,10 @@ void ObSmallObjPool<T>::destroy()
 
     inited_ = false;
     ObjItem *obj = NULL;
+    ObLink *node = NULL;
 
-    while (OB_NOT_NULL(obj = (ObjItem*)free_list_.pop())) {
+    while (OB_SUCCESS == free_list_.pop(node)) {
+      obj = static_cast<ObjItem *>(node);
       obj->~ObjItem();
       allocator_.free(obj);
       obj = NULL;
@@ -160,11 +158,13 @@ int ObSmallObjPool<T>::alloc(T *&obj)
 {
   int ret = OB_SUCCESS;
   ObjItem *obj_item = NULL;
+  ObLink *node = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "small obj pool has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_NOT_NULL(obj_item = (ObjItem*)free_list_.pop())) {
+  } else if (OB_SUCC(free_list_.pop(node))) {
+    obj_item = static_cast<ObjItem *>(node);
     obj = &obj_item->obj_;
     (void)ATOMIC_AAF(&free_count_, -1);
   } else if (OB_FAIL(alloc_obj_(obj))) {

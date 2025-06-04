@@ -448,6 +448,32 @@ inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned sc
 // ==================================================================================
 // batch cast to decimalint types
 
+template<typename in_type>
+static void logging_truncated_decint(const ObExpr &expr, ObEvalCtx &ctx, int64_t batch_size,
+                                     const ObBitVector &skip, const ObScale in_scale, const ObScale out_scale)
+{
+  ObDatumVector arg_dv = expr.args_[0]->locate_expr_datumvector(ctx);
+  if (CM_IS_COLUMN_CONVERT(expr.extra_) && in_scale > out_scale && lib::is_mysql_mode()) {
+    in_type sf = get_scale_factor<in_type>(in_scale - out_scale);
+    int diff_len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(in_scale - out_scale);
+    for (int i = 0; i < batch_size; i++) {
+      if (skip.at(i) || arg_dv.at(i)->is_null()) { continue; }
+      in_type input_val = *reinterpret_cast<const in_type *>(arg_dv.at(i)->get_decimal_int());
+      bool logging_warning = false;
+      if (diff_len > sizeof(in_type)) {
+        logging_warning = (input_val != 0);
+      } else {
+        logging_warning = ((input_val % sf) != 0);
+      }
+      if (logging_warning) {
+        sql::ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+                                                        OB_ERR_DATA_TRUNCATED, ObString(""),
+                                                        ObString(""), expr.extra_);
+      }
+    }
+  }
+}
+
 template <typename in_type, typename out_type, bool is_up_scale, bool is_explicit>
 
 static int decimalint_fast_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
@@ -473,6 +499,7 @@ static int decimalint_fast_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const 
       } else {
         batch_implicit_scale<in_type, out_type, false>(arg_dv, result_dv, in_scale - out_scale,
                                                        batch_size, skip, eval_flags);
+        logging_truncated_decint<in_type>(expr, ctx, batch_size, skip, in_scale, out_scale);
       }
     }
   }
@@ -502,8 +529,9 @@ static int decimalint_fast_cast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
       scale_down_with_types<in_type, out_type>(child_res->get_decimal_int(), in_scale - out_scale,
                                                res_val, truncated);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
-      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) & truncated) {
-        log_user_warning_truncated(ctx.exec_ctx_.get_user_logging_ctx());
+      if (truncated) {
+        ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+          OB_ERR_DATA_TRUNCATED, ObString("") /*type_str*/, ObString("") /*input*/, expr.extra_);
       }
     }
   }
@@ -623,6 +651,7 @@ int ObBatchCast::implicit_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const O
   } else {                                                                                         \
     batch_explicit_scale<in_type, out_type, false>(arg_dv, result_dv, in_scale - out_scale,        \
                                                    out_prec, batch_size, skip, eval_flags);        \
+    logging_truncated_decint<in_type>(expr, ctx, batch_size, skip, in_scale, out_scale);           \
   }
 
 #define DO_IMPLICIT_CAST(in_type, out_type)                                                        \
@@ -1231,6 +1260,8 @@ int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     // child is questionmark, do not need evaluation.
     const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
@@ -1254,6 +1285,8 @@ static int _eval_questionmark_nmb2decint(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     // child is questionmark, do not need evaluation.
     const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
@@ -1282,6 +1315,8 @@ static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, 
   ObDatum *child_eval_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
     LOG_WARN("failef to eval child datum");
+  } else if (child_eval_datum->is_null()) {
+    expr_datum.set_null();
   } else {
     ObScale out_scale = expr.datum_meta_.scale_;
     ObPrecision out_prec = expr.datum_meta_.precision_;

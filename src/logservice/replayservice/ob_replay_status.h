@@ -20,6 +20,8 @@
 #include "share/scn.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_iterator.h"
+#include "logservice/ipalf/ipalf_handle.h"
+#include "logservice/ipalf/ipalf_iterator.h"
 #include "logservice/palf/palf_handle.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_spin_rwlock.h"
@@ -33,9 +35,11 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace ipalf
 {
-class PalfEnv;
+class IPalfEnv;
+class IPalfHandle;
+class IPalfLogIterator;
 }
 namespace logservice
 {
@@ -306,7 +310,7 @@ public:
   int get_base_lsn(palf::LSN &lsn) const;
   int get_base_scn(share::SCN &scn) const;
   int need_skip(const share::SCN &scn, bool &need_skip);
-  int get_log(const char *&buffer, int64_t &nbytes, share::SCN &scn, palf::LSN &offset);
+  int get_log(const char *&buffer, int64_t &nbytes, share::SCN &scn, palf::LSN &lsn, palf::LSN &end_lsn);
   int next_log(const share::SCN &replayable_point,
                bool &iterate_end_by_replayable_point);
   // 以当前的终点作为新起点重置迭代器
@@ -336,7 +340,7 @@ private:
   //initial log scn when enable replay, logs which scn small than this value should skip replay
   share::SCN base_scn_;
   //for unittest, should be a member not pointer
-  palf::PalfBufferIterator iterator_;
+  ipalf::IPalfLogIterator iterator_;
 };
 
 class ObReplayServiceReplayTask : public ObReplayServiceTask
@@ -455,7 +459,7 @@ public:
   ObReplayStatus();
   ~ObReplayStatus();
   int init(const share::ObLSID &id,
-           palf::PalfEnv *palf_env,
+           ipalf::IPalfEnv *palf_env,
            ObLogReplayService *rp_sv);
   void destroy();
 public:
@@ -635,8 +639,8 @@ private:
   ObReplayServiceReplayTask task_queues_[common::REPLAY_TASK_QUEUE_SIZE];
   ObReplayServiceSubmitTask submit_log_task_;
 
-  palf::PalfEnv *palf_env_;
-  palf::PalfHandle palf_handle_;
+  ipalf::IPalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
   ObReplayFsCb fs_cb_;
   mutable int64_t get_log_info_debug_time_;
   mutable int64_t try_wrlock_debug_time_;

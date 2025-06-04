@@ -15,7 +15,7 @@
 #include "share/schema/ob_udf_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_locality_util.h"
-#include "share/storage/ob_storage_cache_common.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
 
 
 #include "pl/ob_pl_stmt.h"
@@ -1527,6 +1527,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     // fill macro block bloom filter
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, enable_macro_block_bloom_filter, table_schema,
         true/*skip null error*/, true/*ignore_column_error*/, false);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, merge_engine_type, table_schema, ObMergeEngineType,
+        true/*skip null*/, true/*ignore column error*/, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_properties, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1542,6 +1544,14 @@ int ObSchemaRetrieveUtils::fill_table_schema(
           && OB_FAIL(table_schema.get_local_session_var().fill_local_session_var_from_str(local_session_var))) {
         SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_session_var", K(ret));
       }
+    }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, semistruct_encoding_type, table_schema,
+        int64_t, true/*skip null error*/, ignore_column_error, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, dynamic_partition_policy, table_schema, true/*skip_null_error*/, true/*skip_column_error*/, "");
+    if (OB_SUCC(ret)) {
+      bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
+      table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
@@ -1946,8 +1956,12 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROLE) != 0 ? OB_PRIV_CREATE_ROLE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_ROLE) != 0 ? OB_PRIV_DROP_ROLE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_LOCK_TABLE) != 0 ? OB_PRIV_LOCK_TABLE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_ENCRYPT) != 0 ? OB_PRIV_ENCRYPT : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_DECRYPT) != 0 ? OB_PRIV_DECRYPT : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_EVENT) != 0 ? OB_PRIV_EVENT : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_CATALOG) != 0 ? OB_PRIV_CREATE_CATALOG : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_USE_CATALOG) != 0 ? OB_PRIV_USE_CATALOG : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2215,6 +2229,26 @@ bool ObSchemaRetrieveUtils::compare_user_id(
 }
 
 template<typename T>
+int ObSchemaRetrieveUtils::fill_catalog_priv_schema(
+    const uint64_t tenant_id, T &result, ObCatalogPriv &catalog_priv, bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  catalog_priv.reset();
+  is_deleted = false;
+
+  catalog_priv.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, user_id, catalog_priv, tenant_id);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, catalog_name, catalog_priv);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, priv_set, catalog_priv, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, catalog_priv, int64_t);
+  }
+
+  return ret;
+}
+
+template<typename T>
 int ObSchemaRetrieveUtils::fill_db_priv_schema(
     const uint64_t tenant_id, T &result, ObDBPriv &db_priv, bool &is_deleted)
 {
@@ -2250,6 +2284,8 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_EVENT) != 0 ? OB_PRIV_EVENT : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_LOCK_TABLE) != 0 ? OB_PRIV_LOCK_TABLE: 0);
     }
   }
 
@@ -3755,6 +3791,46 @@ int ObSchemaRetrieveUtils::retrieve_link_column_schema(
 }
 
 template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_catalog_priv_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObIArray<S> &catalog_priv_array)
+{
+  int ret = common::OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S catalog_priv(&allocator);
+  ObCatalogPrivSortKey pre_catalog_sort_key;
+  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    bool is_deleted = false;
+    catalog_priv.reset();
+    allocator.reuse();
+    if (OB_FAIL(fill_catalog_priv_schema(tenant_id, result, catalog_priv, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to fill catalog privileges", K(ret));
+    } else if (catalog_priv.get_sort_key() == pre_catalog_sort_key) {
+      // ignore it
+      ret = common::OB_SUCCESS;
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(TRACE, "catalog_priv is is_deleted", K(catalog_priv));
+    } else if (OB_FAIL(catalog_priv_array.push_back(catalog_priv))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_catalog_sort_key.deep_copy(catalog_priv.get_sort_key(), tmp_allocator))) {
+        SHARE_SCHEMA_LOG(WARN, "deep copy failed", KR(ret));
+      }
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get catalog privileges. iter quit", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T, typename S>
 int ObSchemaRetrieveUtils::retrieve_db_priv_schema(
     const uint64_t tenant_id,
     T &result,
@@ -4563,8 +4639,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ObString tmp_storage_cache_policy;
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
       result, "storage_cache_policy", tmp_storage_cache_policy, true/*skip null*/, true/*ignore column error*/, OB_DEFAULT_STORAGE_CACHE_POLICY_STR);
-
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
       ObStorageCachePolicyType policy_type = ObStorageCachePolicyType::MAX_POLICY;
       if (OB_FAIL(get_storage_cache_policy_type_from_str(tmp_storage_cache_policy, policy_type))) {
         SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type", K(ret), K(tmp_storage_cache_policy));
@@ -4572,6 +4647,15 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         table_schema.set_storage_cache_policy_type(policy_type);
       }
     }
+
+    ObString dynamic_partition_policy;
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      result, "dynamic_partition_policy", dynamic_partition_policy, true/*skip_null_error*/, true/*skip_column_error*/, "");
+    if (OB_SUCC(ret)) {
+      bool with_dynamic_partition_policy = !dynamic_partition_policy.empty();
+      table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
+    }
+
   }
   return ret;
 }
@@ -5029,7 +5113,7 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
         result, "storage_cache_policy", tmp_part_storage_cache_policy, true, /* skip null error*/ true,/*skip column error*/ OB_DEFAULT_PART_STORAGE_CACHE_POLICY_STR);
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
         if (OB_FAIL(storage::get_storage_cache_policy_type_from_part_str(tmp_part_storage_cache_policy, part_storage_cache_policy_type))) {
           SHARE_SCHEMA_LOG(WARN, "fail to get storage cache policy type from str", K(ret));
         } else {
@@ -5759,7 +5843,7 @@ int ObSchemaRetrieveUtils::fill_sys_table_lob_tid(ObTableSchema &table)
   uint64_t lob_meta_table_id = OB_INVALID_ID;
   uint64_t lob_piece_table_id = OB_INVALID_ID;
   if (is_system_table(table_id)) {
-    if (OB_ALL_CORE_TABLE_TID == table_id) {
+    if (is_hardcode_schema_table(table_id)) {
       // do nothing
     } else if (!get_sys_table_lob_aux_table_id(table_id, lob_meta_table_id, lob_piece_table_id)) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -5775,6 +5859,8 @@ int ObSchemaRetrieveUtils::fill_sys_table_lob_tid(ObTableSchema &table)
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_policy);
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_group);
 RETRIEVE_SCHEMA_FUNC_DEFINE(rls_context);
+
+RETRIEVE_SCHEMA_FUNC_DEFINE(catalog);
 
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_rls_column_schema(
@@ -5956,6 +6042,27 @@ int ObSchemaRetrieveUtils::fill_rls_column_schema(
   return ret;
 }
 
+template<typename T>
+int ObSchemaRetrieveUtils::fill_catalog_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObCatalogSchema &catalog_schema,
+    bool &is_deleted)
+{
+  catalog_schema.reset();
+  is_deleted = false;
+  int ret = common::OB_SUCCESS;
+  catalog_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, catalog_id, catalog_schema, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, catalog_schema, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, catalog_name, catalog_schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, catalog_properties, catalog_schema, true/*skip null*/, false, "");
+  }
+  return ret;
+}
 
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_object_list(

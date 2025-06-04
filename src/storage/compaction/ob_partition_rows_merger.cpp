@@ -783,7 +783,7 @@ int ObPartitionMergeHelper::find_rowkey_minimum_iters(MERGE_ITER_ARRAY &minimum_
   } else if (OB_UNLIKELY(merge_iters_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null merge iters", K(ret), K(merge_iters_));
-  } else if (rows_merger_->empty()) {
+  } else if (OB_UNLIKELY(rows_merger_->empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "rows_merger_ is empty", K(ret), KPC(rows_merger_));
   } else {

@@ -164,11 +164,12 @@ int ObMediumListChecker::check_next_schedule_medium(
                  KR(ret), K(next_medium_info), K(last_major_snapshot));
       }
     } else if (next_medium_info.is_major_compaction()) { // check next freeze info in inner_table & medium_info
-      share::ObFreezeInfo freeze_info;
+      ObSEArray<share::ObFreezeInfo, 4> freeze_infos;
 
-      if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_snapshot_version,
+      if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_major_snapshot,
                                            last_major_snapshot,
-                                           freeze_info))) {
+                                           false/*include_equal*/,
+                                           freeze_infos))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("failed to get freeze info", K(ret), K(last_major_snapshot));
         } else if (force_check) {
@@ -178,14 +179,14 @@ int ObMediumListChecker::check_next_schedule_medium(
         } else { // if force_check = false, not return errno; check next time
           ret = OB_SUCCESS;
         }
-      } else if (OB_UNLIKELY(freeze_info.frozen_scn_.get_val_for_tx() < next_medium_info.medium_snapshot_)) {
+      } else if (OB_UNLIKELY(freeze_infos.at(0).frozen_scn_.get_val_for_tx() < next_medium_info.medium_snapshot_)) {
         if (next_medium_info.is_skip_tenant_major_) {
           // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-          FLOG_INFO("medium info have marked skip tenant major, may have schema issue when schedule tenant major", KR(ret), K(next_medium_info), K(freeze_info));
+          FLOG_INFO("medium info have marked skip tenant major, may have schema issue when schedule tenant major", KR(ret), K(next_medium_info), K(freeze_infos));
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("next major medium info may lost",
-            KR(ret), "freeze_version", freeze_info.frozen_scn_.get_val_for_tx(), K(next_medium_info), K(last_major_snapshot));
+            KR(ret), "freeze_version", freeze_infos.at(0).frozen_scn_.get_val_for_tx(), K(next_medium_info), K(last_major_snapshot));
         }
       }
     } else {

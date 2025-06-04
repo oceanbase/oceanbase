@@ -17,6 +17,8 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "pl/ob_pl_type.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {
@@ -37,8 +39,7 @@ public:
                         const ObExprOperatorType type,
                         ObIExprExtraInfo *&copied_info) const override;
 
-  template <typename RE>
-  int from_raw_expr(RE &expr);
+  int from_raw_expr(const ObObjectConstructRawExpr &pl_expr);
 
   int64_t rowsize_;
   uint64_t udt_id_;
@@ -63,7 +64,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int eval_object_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
-  static int check_types(const common::ObObj *objs_stack,
+  static int check_types(ObEvalCtx &ctx, const common::ObObj *objs_stack,
                          const common::ObIArray<ObExprResType> &elem_types,
                          int64_t param_num);
   static int fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs);
@@ -78,9 +79,9 @@ public:
   }
   inline void set_rowsize(int64_t rowsize) { rowsize_ = rowsize; }
   inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
-  inline int set_elem_types(const common::ObIArray<ObExprResType> &elem_types)
+  inline int set_elem_types(const common::ObIArray<ObRawExprResType> &elem_types)
   {
-    return elem_types_.assign(elem_types);
+    return ObExprResultTypeUtil::assign_type_array(elem_types, elem_types_);
   }
 private:
   int64_t rowsize_;

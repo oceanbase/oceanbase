@@ -550,12 +550,18 @@ int ObIndexTreeBlockDumper::append_next_level_row(const ObMicroBlockDesc &micro_
     STORAGE_LOG(WARN, "Fail to copy last key", K(ret), K(micro_block_desc.last_rowkey_));
   } else {
     if (index_block_aggregator_.need_data_aggregate()) {
-      const ObDatumRow &aggregated_row = index_block_aggregator_.get_aggregated_row();
-      ObDatumRow *agg_row = OB_NEWx(ObDatumRow, sstable_allocator_);
-      if (OB_FAIL(agg_row->init(*sstable_allocator_, aggregated_row.get_column_count()))) {
-        LOG_WARN("Fail to init aggregated row", K(ret), K(aggregated_row));
-      } else if (OB_FAIL(agg_row->deep_copy(aggregated_row, *sstable_allocator_))) {
-        STORAGE_LOG(WARN, "Failed to deep copy datum row", K(ret), K(aggregated_row));
+      const ObSkipIndexAggResult *aggregated_row = next_row_desc->aggregated_row_;
+      ObSkipIndexAggResult *agg_row = OB_NEWx(ObSkipIndexAggResult, sstable_allocator_);
+      if (OB_ISNULL(agg_row)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to new datum row for deep copy", K(ret));
+      } else if (OB_ISNULL(aggregated_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr to aggreged row with ");
+      } else if (OB_FAIL(agg_row->init(aggregated_row->get_agg_col_cnt(), *sstable_allocator_))) {
+        LOG_WARN("Fail to init aggregated row", K(ret), KPC(aggregated_row));
+      } else if (OB_FAIL(agg_row->deep_copy(*aggregated_row, *sstable_allocator_))) {
+        STORAGE_LOG(WARN, "Failed to deep copy datum row", K(ret), KPC(aggregated_row));
       } else {
         next_row_desc->aggregated_row_ = agg_row;
       }

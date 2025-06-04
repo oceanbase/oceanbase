@@ -31,7 +31,7 @@ TG_DEF(StandbyTimestampService, StandbyTimestampService, THREAD_POOL, 1)
 TG_DEF(TSnapSvc, TSnapSvc, THREAD_POOL, 1)
 TG_DEF(WeakReadService, WeakRdSrv, THREAD_POOL, 1)
 // TG_DEF(TransTaskWork, TransTaskWork, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(12), 1), transaction::ObThreadLocalTransCtx::MAX_BIG_TRANS_TASK)
-TG_DEF(DDLTaskExecutor3, DDLTaskExecutor3, THREAD_POOL, ThreadCountPair(8, 2))
+TG_DEF(DDLTaskExecutor3, DDLTaskExecutor3, REENTRANT_THREAD_POOL, ThreadCountPair(8, 2))
 TG_DEF(TSWorker, TSWorker, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(12), 1), transaction::ObTsWorker::MAX_TASK_NUM)
 TG_DEF(BRPC, BRPC, THREAD_POOL, ThreadCountPair(obrpc::ObBatchRpc::MAX_THREAD_COUNT, obrpc::ObBatchRpc::MINI_MODE_THREAD_COUNT))
 TG_DEF(RLMGR, RLMGR, THREAD_POOL, 1)
@@ -176,6 +176,8 @@ TG_DEF(TieredStorageTimer, TieredStorageTimer, TIMER)
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+TG_DEF(VectorAsyncTaskPool, VectorAsyncTask, QUEUE_THREAD, 1, 8)   // for tmp
+
 #ifdef OB_BUILD_SHARED_STORAGE
 TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPrewarmHandler::MAX_TASK_NUM)
 TG_DEF(MicCacheLTimer, MicCacheLTimer, TIMER)
@@ -187,6 +189,8 @@ TG_DEF(SSTmpFileShrinkWBP, TmpFileShrink, TIMER)
 TG_DEF(TmpFileFlushTimer, TmpFileFlushTimer, TIMER)
 TG_DEF(TmpFilePrereadTimer, TmpFilePrereadTimer, TIMER)
 TG_DEF(ReplicaPrewarmTimer, ReplicaPrewarmTimer, TIMER)
+TG_DEF(StorageCachePolicyMgr, StorageCachePolicyMgr, TIMER)
+TG_DEF(StorageCacheTabletScheduler, StorageCacheTabletScheduler, QUEUE_THREAD, 1, storage::ObStorageCacheTabletScheduler::MAX_TASK_NUM)
 TG_DEF(TenantDirGCTimer, TntGCTimer, TIMER)
 TG_DEF(ObPublicBlockGCThread, PubGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPublicBlockGCThread::THREAD_NUM,
@@ -196,6 +200,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPrivateBlockGCThread::THREAD_NUM,
        storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),
        storage::ObPrivateBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
 #endif
 
 

@@ -908,6 +908,7 @@ int ObTransformConditionalAggrCoalesce::create_and_replace_aggrs_for_merge(ObSel
     for (int i = 0; OB_SUCC(ret) && i < view_stmt->get_select_item_size(); i++) {
       ObRawExpr *col_expr = NULL;
       ObAggFunRawExpr* aggr_for_merge = NULL;
+      ObRawExpr *aggr_with_cast = NULL;
       ObItemType aggr_type = T_INVALID;
       if (OB_ISNULL(select_expr = view_stmt->get_select_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -924,9 +925,15 @@ int ObTransformConditionalAggrCoalesce::create_and_replace_aggrs_for_merge(ObSel
         LOG_WARN("failed to create aggr for merge", K(ret));
       } else if (OB_FAIL(select_stmt->get_aggr_items().push_back(aggr_for_merge))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FALSE_IT(aggr_with_cast = aggr_for_merge)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        col_expr,
+                                                                        aggr_with_cast,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(cols_for_replace.push_back(col_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(aggrs_for_merge.push_back(aggr_for_merge))) {
+      } else if (OB_FAIL(aggrs_for_merge.push_back(aggr_with_cast))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
     }

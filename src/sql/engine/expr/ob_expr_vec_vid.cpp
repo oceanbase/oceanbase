@@ -71,6 +71,7 @@ int ObExprVecVid::cg_expr(
 {
   int ret = OB_SUCCESS;
   if (raw_ctx.arg_cnt_ == 0) {
+    expr_datum.set_null();
     LOG_DEBUG("[vec index debug]succeed to genearte empty vid", KP(&raw_ctx), K(raw_ctx), K(expr_datum), K(eval_ctx));
   } else if (OB_UNLIKELY(1 != raw_ctx.arg_cnt_) || OB_ISNULL(raw_ctx.args_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -88,7 +89,7 @@ int ObExprVecVid::cg_expr(
         LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id));
       } else {
         expr_datum.set_int(seq_id);
-        FLOG_INFO("succeed to genearte vector id", K(tablet_id), K(seq_id));
+        LOG_DEBUG("succeed to genearte vector id", K(tablet_id), K(seq_id));
       }
     }
   }

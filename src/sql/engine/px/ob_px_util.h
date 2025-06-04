@@ -185,9 +185,11 @@ public:
                                                     ObDfo &child);
   static int alloc_by_local_distribution(ObExecContext &exec_ctx,
                                          ObDfo &root);
-  static int alloc_by_reference_child_distribution(const ObIArray<ObTableLocation> *table_locations,
+  static int alloc_by_reference_child_distribution(ObDfo &parent);
+  static int alloc_distribution_of_reference_child(const ObIArray<ObTableLocation> *table_locations,
                                                    ObExecContext &exec_ctx,
                                                    ObDfo &parent);
+  static int find_reference_child(ObDfo &parent, ObDfo *&reference_child);
   static int add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
                                              ObExecContext &ctx,
                                              ObDfo &dfo);
@@ -241,6 +243,9 @@ public:
                                   int64_t &server_cnt);
   static int get_cluster_server_cnt(const ObIArray<ObAddr> &server_list,
                                     int64_t &server_cnt);
+
+  static int check_slave_mapping_location_constraint(ObDfo &child, ObDfo &parent);
+
 private:
   static int find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op);

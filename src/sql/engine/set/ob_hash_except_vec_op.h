@@ -47,6 +47,7 @@ private:
   //Continue processing the row on the right or return the row directly from the hash table
   bool get_row_from_hash_table_;
   int batch_process_right_vectorize(const int64_t batch_size);
+  const ObCompactRow **store_rows_ = nullptr;
 };
 
 } // end namespace sql

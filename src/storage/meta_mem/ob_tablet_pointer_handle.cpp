@@ -20,13 +20,17 @@ namespace storage
 
 ObTabletPointerHandle::ObTabletPointerHandle()
   : ObResourceHandle<ObTabletPointer>::ObResourceHandle(),
-    map_(nullptr)
+    map_(nullptr),
+    base_pointer_(nullptr),
+    base_pointer_alloc_(nullptr)
 {
 }
 
 ObTabletPointerHandle::ObTabletPointerHandle(ObTabletPointerMap &map)
     : ObResourceHandle<ObTabletPointer>::ObResourceHandle(),
-      map_(&map)
+      map_(&map),
+      base_pointer_(nullptr),
+      base_pointer_alloc_(nullptr)
 {
 }
 
@@ -34,7 +38,9 @@ ObTabletPointerHandle::ObTabletPointerHandle(
     ObResourceValueStore<ObTabletPointer> *ptr,
     ObTabletPointerMap *map)
     : ObResourceHandle<ObTabletPointer>::ObResourceHandle(),
-      map_(map)
+      map_(map),
+      base_pointer_(nullptr),
+      base_pointer_alloc_(nullptr)
 {
   abort_unless(common::OB_SUCCESS == set(ptr, map));
 }
@@ -42,6 +48,12 @@ ObTabletPointerHandle::ObTabletPointerHandle(
 ObTabletPointerHandle::~ObTabletPointerHandle()
 {
   reset();
+}
+
+
+ObTabletBasePointer* ObTabletPointerHandle::get_resource_ptr() const
+{
+  return (base_pointer_ == nullptr) ? ObResourceHandle<ObTabletPointer>::get_resource_ptr() : base_pointer_->get_value_ptr();
 }
 
 void ObTabletPointerHandle::reset()
@@ -54,23 +66,44 @@ void ObTabletPointerHandle::reset()
       STORAGE_LOG(WARN, "fail to decrease handle reference count", K(ret));
     } else {
       ObResourceHandle<ObTabletPointer>::ptr_ = nullptr;
+      base_pointer_ = nullptr;
+      base_pointer_alloc_ = nullptr;
     }
+  } else if (nullptr != base_pointer_) {
+    int64_t ret_cnt = -1;
+    if (OB_FAIL(base_pointer_->dec_ref_cnt(ret_cnt))) {
+      STORAGE_LOG(WARN, "fail to decrease handle reference count", K(ret));
+    } else if (ret_cnt == 0) {
+      base_pointer_->~ObResourceValueStore<ObTabletBasePointer>();
+      base_pointer_alloc_->free(base_pointer_->get_value_ptr());
+    }
+    base_pointer_ = nullptr;
+    base_pointer_alloc_ = nullptr;
   }
 }
 
 bool ObTabletPointerHandle::is_valid() const
 {
-  return nullptr != ObResourceHandle<ObTabletPointer>::ptr_
+  // only one is valid;
+  return (nullptr != ObResourceHandle<ObTabletPointer>::ptr_
       && nullptr != ObResourceHandle<ObTabletPointer>::ptr_->get_value_ptr()
-      && nullptr != map_;
+      && nullptr != map_)
+        ^
+         (nullptr != base_pointer_
+      && nullptr != base_pointer_->get_value_ptr()
+      && nullptr != base_pointer_alloc_);
 }
 
 int ObTabletPointerHandle::assign(const ObTabletPointerHandle &other)
 {
   int ret = common::OB_SUCCESS;
   if (this != &other) {
-    if (OB_FAIL(set(other.ptr_, other.map_))) {
-      STORAGE_LOG(WARN, "failed to set member", K(ret), K(other));
+    if (OB_NOT_NULL(other.base_pointer_)) {
+      base_pointer_ = other.base_pointer_;
+    } else {
+      if (OB_FAIL(set(other.ptr_, other.map_))) {
+        STORAGE_LOG(WARN, "failed to set member", K(ret), K(other));
+      }
     }
   }
   return ret;
@@ -84,6 +117,9 @@ int ObTabletPointerHandle::set(
   if (OB_ISNULL(ptr) || OB_ISNULL(map)) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(ptr), KP(map));
+  } else if (OB_NOT_NULL(base_pointer_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "base_pointer should be nullptr", K(ret), KPC(this));
   } else {
     reset();
     if (OB_FAIL(map->inc_handle_ref(ptr))) {

@@ -782,15 +782,13 @@ int ObRoaring64Bin::contains(uint64_t value, bool &is_contains)
   is_contains = false;
   uint32_t high32 = static_cast<uint32_t>(value >> 32);
   uint32_t low32 = static_cast<uint32_t>(value & 0xFFFFFFFF);
+  int32_t idx = 0;
   if (!this->is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRoaring64Bin is not inited", K(ret));
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < buckets_ && high32 <= high32_[i]; ++i) {
-      if (high32 == high32_[i] && OB_FAIL(roaring_bufs_[i]->contains(low32, is_contains))) {
-        LOG_WARN("fail to check value is_contains in ObRoaringBin", K(ret), K(i), K(low32));
-      }
-    }
+  } else if (OB_FALSE_IT(idx = this->high32_advance_until(-1, high32))){
+  } else if (idx < buckets_ && OB_FAIL(roaring_bufs_[idx]->contains(low32, is_contains))) {
+    LOG_WARN("fail to check value is_contains in ObRoaringBin", K(ret), K(idx), K(low32));
   }
   return ret;
 }
@@ -809,9 +807,9 @@ int ObRoaring64Bin::calc_and_cardinality(ObRoaring64Bin *rb, uint64_t &cardinali
       uint32_t l_high32 = high32_[l_idx];
       uint32_t r_high32 = rb->high32_[r_idx];
       if (l_high32 < r_high32) {
-        l_idx++;
+        l_idx = this->high32_advance_until(l_idx, r_high32);
       } else if (l_high32 > r_high32){
-        r_idx++;
+        r_idx = rb->high32_advance_until(r_idx, l_high32);
       } else {
         // l_high32 == r_high32
         uint64_t rb32_card = 0;

@@ -297,6 +297,7 @@ int TestCompactionPolicy::mock_sstable(
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
     param.filled_tx_scn_ = table_key.get_end_scn();
+    param.rec_scn_ = table_key.get_start_scn();
   }
 
   void *buf = nullptr;
@@ -356,6 +357,7 @@ int TestCompactionPolicy::mock_column_sstable(
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
     param.filled_tx_scn_ = table_key.get_end_scn();
+    param.rec_scn_ = table_key.get_start_scn();
   }
 
   if (OB_FAIL(ret)) {
@@ -1542,7 +1544,8 @@ TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 
   ObStorageHATabletBuilderUtil::BatchBuildTabletTablesExtraParam extra_batch_param;
-  ret = ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls, tablet_id, hybrid_major_handle_array, storage_schema, extra_batch_param);
+  ObBuildMajorSSTablesParam major_sstables_param(storage_schema, false/*has_truncate_info*/);
+  ret = ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls, tablet_id, hybrid_major_handle_array, major_sstables_param, extra_batch_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletHandle tablet_handle;

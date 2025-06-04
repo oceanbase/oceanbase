@@ -55,7 +55,7 @@ public:
     common::ObString default_;
     common::ObString extra_;
     common::ObString privileges_;
-    sql::ObExprResType result_type_;
+    sql::ObRawExprResType result_type_;
     int64_t is_hidden_;
     bool is_string_lob_;
     int64_t get_data_length() const;

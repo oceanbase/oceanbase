@@ -63,11 +63,17 @@ int ObExprArrayConcat::calc_result_typeN(ObExprResType& type,
     LOG_WARN("exec ctx is null", K(ret));
   }
   for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
+    ObCollectionTypeBase *coll_type = NULL;
     if (types_stack[i].is_null()) {
       is_null_res = true;
     } else if (!ob_is_collection_sql_type(types_stack[i].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid data type", K(ret), K(types_stack[i].get_type()));
+    } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, types_stack[i].get_subschema_id(), coll_type))) {
+      LOG_WARN("failed to get array type by subschema id", K(ret), K(types_stack[i].get_subschema_id()));
+    } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
     } else if (i > 0 && !is_null_res && OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, deduce_type, types_stack[i], deduce_type))) {
       LOG_WARN("deduce calc type failed", K(ret));
     }
@@ -269,14 +275,11 @@ int ObExprArrayConcat::eval_array_concat_vector(const ObExpr &expr, ObEvalCtx &c
         bool is_null = false;
         if (arr_vec[i]->is_null(idx)) {
           is_null = true;
-        } else if (arr_vec[i]->get_format() == VEC_UNIFORM || arr_vec[i]->get_format() == VEC_UNIFORM_CONST) {
+        } else {
           ObString arr_str = arr_vec[i]->get_string(idx);
           if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
             LOG_WARN("construct array obj failed", K(ret));
           }
-        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                      tmp_allocator, ctx, *expr.args_[i], subschema_id, idx, src_arr))) {
-          LOG_WARN("construct array obj failed", K(ret));
         }
         if (OB_FAIL(ret) || is_null) {
         } else if (OB_FAIL(res_arr->insert_from(*src_arr))) {

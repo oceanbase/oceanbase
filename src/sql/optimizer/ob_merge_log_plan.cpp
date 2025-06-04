@@ -653,6 +653,7 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
     ObRawExpr *const_expr = NULL;
     ObRawExpr *param_1 = NULL;
     ObRawExpr *param_2 = NULL;
+    ObRawExpr *orig_const_expr = NULL;
     bool is_const = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < conds.count(); ++i) {
       const_expr = NULL;
@@ -671,15 +672,17 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       } else if (part_expr == param_1 && param_2->is_const_expr()) {
         const_expr = param_2;
+        orig_const_expr = cur_expr->get_param_expr(1);
       } else if (part_expr == param_2 && param_1->is_const_expr()) {
         const_expr = param_1;
+        orig_const_expr = cur_expr->get_param_expr(0);
       }
 
       if (NULL != const_expr && ob_is_valid_obj_tc(const_expr->get_type_class())) {
         if (OB_FAIL(ObObjCaster::is_const_consistent(const_expr->get_result_type().get_obj_meta(),
                                                       part_expr->get_result_type().get_obj_meta(),
-                                                      cur_expr->get_result_type().get_calc_type(),
-                                                      cur_expr->get_result_type().get_calc_meta().get_collation_type(),
+                                                      orig_const_expr->get_result_type().get_type(),
+                                                      orig_const_expr->get_result_type().get_collation_type(),
                                                       is_const))) {
           LOG_WARN("check expr type is strict monotonic failed", K(ret));
         } else if (!is_const) {

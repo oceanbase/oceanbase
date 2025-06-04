@@ -118,6 +118,7 @@ ObMergeStaticInfo::ObMergeStaticInfo()
     progressive_merge_num_(0),
     kept_snapshot_info_(),
     participant_table_info_(),
+    mds_filter_info_str_("\0"),
     merge_level_(MERGE_LEVEL_MAX),
     exec_mode_(ObExecMode::EXEC_MODE_MAX),
     merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -152,6 +153,7 @@ void ObMergeStaticInfo::reset()
   base_major_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
   co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   is_full_merge_ = false;
+  MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
 }
 
 void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
@@ -171,6 +173,8 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   base_major_status_ = other.base_major_status_;
   co_major_merge_type_ = other.co_major_merge_type_;
   is_full_merge_ = other.is_full_merge_;
+  MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
+  strncpy(mds_filter_info_str_, other.mds_filter_info_str_, strlen(other.mds_filter_info_str_));
 }
 /**
  * -------------------------------------------------------------------ObMergeRunningInfo-------------------------------------------------------------------
@@ -388,6 +392,7 @@ int ObSSTableMergeHistory::update_block_info(
   const bool without_row_cnt)
 {
   int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(lock_);
   if (without_row_cnt) {
     block_info_.add_without_row_cnt(block_info);
   } else {
@@ -405,7 +410,9 @@ void ObSSTableMergeHistory::update_start_time()
 int ObSSTableMergeHistory::fill_comment(char *buf, const int64_t buf_len, const char* other_info) const
 {
   int ret = OB_SUCCESS;
-  compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len, "comment", running_info_.comment_);
+  if (strlen(running_info_.comment_) > 0) {
+    compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len, "comment", running_info_.comment_);
+  }
   if (0 != diagnose_info_.suspect_add_time_) {
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "[suspect info=");
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, other_info);

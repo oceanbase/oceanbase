@@ -14,6 +14,7 @@
 #include "ob_micro_block_row_getter.h"
 #include "storage/access/ob_sstable_row_getter.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
 
 namespace oceanbase
 {
@@ -378,6 +379,11 @@ int ObMicroBlockRowGetter::inner_get_row(
       }
     } else {
       row = &row_;
+      if (OB_UNLIKELY(!sstable_->is_major_sstable() &&
+                      IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
+                      OB_FAIL(context_->check_filtered_by_base_version(row_)))) {
+        TRANS_LOG(WARN, "check base version filter fail", K(ret));
+      }
       LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), KPC_(read_info),
                 K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(macro_id));
     }
@@ -394,7 +400,7 @@ int ObMicroBlockRowGetter::inner_get_row(
       //put row cache, ignore fail
       ObRowCacheKey row_cache_key(
           MTL_ID(),
-          param_->tablet_id_,
+          sstable_->get_key().get_tablet_id(),
           rowkey,
           read_info_->get_datum_utils(),
           sstable_->get_data_version(),

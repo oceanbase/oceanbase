@@ -61,7 +61,7 @@ int ZSetCommandOperator::do_zadd(int64_t db, const ObString &key,
   // add meta, zadd do not update expire time
   bool is_new_meta = false;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisModel::ZSET, is_new_meta, meta))) {
+  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisDataModel::ZSET, is_new_meta, meta))) {
     LOG_WARN("fail to check and insup meta", K(ret));
   } else if (OB_FAIL(do_zadd_data(db, key, mem_score_map, is_new_meta))) {
     LOG_WARN("fail to do zadd data", K(ret), K(db), K(key), K(is_new_meta));
@@ -183,7 +183,7 @@ int ZSetCommandOperator::do_zincrby(int64_t db, const ObString &key, const ObStr
   ObRedisMeta *meta = nullptr;  // unused
   double new_val = increment;
   ObTableBatchOperation ops;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::ZSET, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::ZSET, meta))) {
     if (ret == OB_ITER_END) {
       is_meta_exists = false;
       ret = OB_SUCCESS;
@@ -196,7 +196,7 @@ int ZSetCommandOperator::do_zincrby(int64_t db, const ObString &key, const ObStr
   } else if (!is_meta_exists) {
     // insert both meta and data
     ObITableEntity *put_meta_entity = nullptr;
-    if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::HASH, *meta, put_meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::HASH, *meta, put_meta_entity))) {
       LOG_WARN("fail to generate meta entity", K(ret), K(db), K(key), KPC(meta));
     } else if (OB_FAIL(ops.insert_or_update(*put_meta_entity))) {
       LOG_WARN("fail to put meta entity", K(ret));
@@ -440,7 +440,7 @@ int ZSetCommandOperator::do_zrank(int64_t db, const ObString &member, ZRangeCtx 
     }
     ObRedisZSetMeta *set_meta = nullptr;
     ObRedisMeta *meta = nullptr;
-    if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisModel::ZSET, meta))) {
+    if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisDataModel::ZSET, meta))) {
       LOG_WARN("fail to get meta", K(ret), K(zrange_ctx));
     } else if (FALSE_IT(set_meta = reinterpret_cast<ObRedisZSetMeta*>(meta))) {
     } else if (OB_FAIL(build_score_scan_query(op_temp_allocator_, zrange_ctx, query))) {
@@ -686,7 +686,7 @@ int ZSetCommandOperator::do_zrange_inner(int64_t db, const ZRangeCtx &zrange_ctx
   ObRedisZSetMeta *set_meta = nullptr;
   ObRedisMeta *meta = nullptr;
   if (OB_FAIL(ret) || card == 0 || start > end) {
-  } else if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisModel::ZSET, meta))) {
+  } else if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisDataModel::ZSET, meta))) {
     if (ret == OB_ITER_END) {
       // not exists key, return empty array
       ret = OB_SUCCESS;
@@ -814,7 +814,7 @@ int ZSetCommandOperator::do_zrange_by_score_inner(int64_t db, const ZRangeCtx &z
   if ((is_max_min_equal && (!zrange_ctx.max_inclusive_ || !zrange_ctx.min_inclusive_))
       || (zrange_ctx.max_ < zrange_ctx.min_) || (zrange_ctx.offset_ < 0)) {
     // do nothing, return empty array
-  } else if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisModel::ZSET, meta))) {
+  } else if (OB_FAIL(get_meta(db, zrange_ctx.key_, ObRedisDataModel::ZSET, meta))) {
     if (ret == OB_ITER_END) {
       // not exists key, return empty array
       ret = OB_SUCCESS;
@@ -882,7 +882,7 @@ int ZSetCommandOperator::do_zcount(int64_t db, const ObString &key, double min, 
   range_ctx.max_inclusive_ = max_inclusive;
   ObRedisZSetMeta *set_meta = nullptr;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::ZSET, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::ZSET, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get meta", K(ret), K(db), K(key));
     }
@@ -1001,10 +1001,10 @@ int ZSetCommandOperator::do_zunion_store(int64_t db, const ObString &dest,
   redis_ctx_.need_dist_das_ = false;
   bool is_exists = false; // unused
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(del_complex_key(ObRedisModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
+  } else if (OB_FAIL(del_complex_key(ObRedisDataModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
     LOG_WARN("fail to delete dest", K(ret), K(db), K(dest));
   } else if (!ms_map.empty()) {
-    if (OB_FAIL(insup_meta(db, dest, ObRedisModel::ZSET))) {
+    if (OB_FAIL(insup_meta(db, dest, ObRedisDataModel::ZSET))) {
       LOG_WARN("fail to insert up meta", K(ret), K(db), K(dest));
     } else if (OB_FAIL(do_zadd_data(db, dest, ms_map, true/*is_new_meta*/))) {
       LOG_WARN("fail to do zadd", K(ret), K(db), K(dest), K(ms_map.size()));
@@ -1163,10 +1163,10 @@ int ZSetCommandOperator::do_zinter_store(int64_t db, const ObString &dest,
   redis_ctx_.need_dist_das_ = false;
   bool is_exists = false; // unused
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(del_complex_key(ObRedisModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
+  } else if (OB_FAIL(del_complex_key(ObRedisDataModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
     LOG_WARN("fail to delete dest", K(ret), K(db), K(dest));
   } else if (!ms_map.empty()) {
-    if (OB_FAIL(insup_meta(db, dest, ObRedisModel::ZSET))) {
+    if (OB_FAIL(insup_meta(db, dest, ObRedisDataModel::ZSET))) {
       LOG_WARN("fail to insert up meta", K(ret), K(db), K(dest));
     } else if (OB_FAIL(do_zadd_data(db, dest, ms_map, true/*is_new_meta*/))) {
       LOG_WARN("fail to do zadd", K(ret), K(db), K(dest), K(ms_map.size()));

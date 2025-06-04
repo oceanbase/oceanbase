@@ -16,6 +16,7 @@
 #include "pl/ob_pl.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/obmp_query.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -290,6 +291,11 @@ public:
     } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable())) {
       if (is_ddl_stmt_packet_retry_err(err)) {
         try_packet_retry(v);
+#ifdef ERRSIM
+        if (REACH_THREAD_TIME_INTERVAL(10_s)) {
+          SERVER_EVENT_SYNC_ADD("ddl_errsim", "ddl_retry", KR(err));
+        }
+#endif
       } else {
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;
@@ -875,6 +881,8 @@ void ObQueryRetryCtrl::short_wait_retry_proc(ObRetryParam &v)
       start_px_worker_insufficient_retry_wait_event(v.session_ ,v.ctx_);
     } else if (OB_GTS_NOT_READY == v.err_ || OB_GTI_NOT_READY == v.err_) {
       start_gts_not_ready_retry_wait_event(v.session_ ,v.err_);
+    } else if (OB_TX_PENDING_LOG_OVERFLOW == v.err_) {
+      start_log_cb_not_ready_retry_wait_event(v.session_, v.err_);
     } else if ( OB_REPLICA_NOT_READABLE == v.err_) {
       start_replica_not_readable_retry_wait_event(v.session_);
     }
@@ -1188,6 +1196,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("TRX",      OB_TRY_LOCK_ROW_CONFLICT,           try_lock_row_conflict_proc, inner_try_lock_row_conflict_proc,                     nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANSACTION_SET_VIOLATION,       trx_set_violation_proc,     trx_set_violation_proc,                               nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_CANNOT_SERIALIZE,          trx_can_not_serialize_proc, trx_can_not_serialize_proc,                           nullptr);
+  ERR_RETRY_FUNC("TRX",      OB_TX_PENDING_LOG_OVERFLOW,         short_wait_retry_proc,      short_wait_retry_proc,                                ObDASRetryCtrl::task_network_retry_proc);
   ERR_RETRY_FUNC("TRX",      OB_GTS_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_GTI_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_WEAK_READ_VERSION_NOT_READY, short_wait_retry_proc,    short_wait_retry_proc,                                nullptr);
@@ -1375,8 +1384,8 @@ void ObQueryRetryCtrl::start_schema_error_retry_wait_event(ObSQLSessionInfo &ses
   GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::SCHEMA_RETRY_WAIT,
         error_code,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().table_id_,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().table_schema_version_);
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(table_schema_version_));
 }
 
 void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1384,7 +1393,7 @@ void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &s
   GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::LOCATION_RETRY_WAIT,
         error_code,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().ls_id_,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
         0);
 }
 
@@ -1392,9 +1401,9 @@ void ObQueryRetryCtrl::start_rowlock_retry_wait_event(ObSQLSessionInfo &session)
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::ROW_LOCK_WAIT,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().holder_tx_id_,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().holder_data_seq_num_,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().holder_lock_timestamp_);
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_tx_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_data_seq_num_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(holder_lock_timestamp_));
 }
 
 void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(
@@ -1402,9 +1411,9 @@ void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
       ObWaitEventIds::INSUFFICIENT_PX_WORKER_RETRY_WAIT,
-      session.get_retry_info_for_update().get_retry_ash_diag_info().dop_,
-      session.get_retry_info_for_update().get_retry_ash_diag_info().required_px_workers_number_,
-      session.get_retry_info_for_update().get_retry_ash_diag_info().admitted_px_workers_number_);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(dop_),
+      ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(required_px_workers_number_),
+      ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(admitted_px_workers_number_));
 }
 
 void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
@@ -1412,7 +1421,16 @@ void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &se
   GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::GTS_NOT_READEY_RETRY_WAIT,
         error_code,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().sys_ls_leader_addr_,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(sys_ls_leader_addr_),
+        0);
+}
+
+void ObQueryRetryCtrl::start_log_cb_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
+{
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
+        ObWaitEventIds::TX_PENDING_LOG_OVERFLOW_RETRY_WAIT,
+        error_code,
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
         0);
 }
 
@@ -1421,8 +1439,9 @@ void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event(ObSQLSessionI
   common::ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
   if (OB_NOT_NULL(di)) {
     di->get_ash_stat().begin_retry_wait_event(ObWaitEventIds::REPLICA_NOT_READABLE_RETRY_WAIT,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().ls_id_,
-        di->get_ash_stat().tablet_id_, 0);
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(ls_id_),
+        ACTIVE_SESSION_RETRY_DIAG_INFO_GETTER(tablet_id_),
+        0);
   }
 }
 

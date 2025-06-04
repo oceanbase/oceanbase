@@ -418,6 +418,10 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
     * SSL handshake being unprocessed, forbid it.
     */
     SSL_CTX_set_read_ahead(ctx, 0);
+
+#ifdef SSL_OP_NO_RENEGOTIATION
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#endif
   }
   return ctx;
 }
@@ -570,8 +574,12 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
         ERR_clear_error();
         int ssl_ret = SSL_do_handshake(ssl);
         if (ssl_ret > 0) {
-          rbytes = -1;
-          errno = EINTR;
+          if ((rbytes = SSL_read(ssl, buf, nbytes)) > 0) {
+            COMMON_LOG(INFO, "read data after SSL_do_handshake succ", K(rbytes), K(fd));
+          } else {
+            rbytes = -1;
+            errno = EINTR;
+          }
           gs_ssl_array[fd].hand_shake_done = 1;
           COMMON_LOG(INFO, "SSL_do_handshake succ", K(fd));
         } else {

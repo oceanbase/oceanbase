@@ -120,10 +120,9 @@ int ObFullTabletCreator::throttle_tablet_creation()
   return ret;
 }
 
-int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
+int ObFullTabletCreator::create_tablet(ObTablet *&tablet)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
   ObArenaAllocator *allocator = nullptr;
   ObMetaDiskAddr mem_addr;
   const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
@@ -145,11 +144,7 @@ int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
     tablet->set_tablet_addr(mem_addr);
     ATOMIC_INC(&created_tablets_cnt_);
   }
-  if (OB_SUCC(ret)) {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
-    tablet_handle.set_obj(tablet, allocator, t3m);
-    tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-  } else {
+  if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(tablet)) {
       tablet->~ObTablet();
       tablet = nullptr;

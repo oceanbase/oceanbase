@@ -92,6 +92,7 @@ int ObPxSubCoord::pre_process()
     if (IS_INTERRUPTED()) {
       // 当前是被QC中断的，不再向QC发送中断
     } else {
+      ObInterruptUtil::update_schema_error_code(sqc_arg_.exec_ctx_, ret);
       (void) ObInterruptUtil::interrupt_qc(sqc_arg_.sqc_, ret, sqc_arg_.exec_ctx_);
     }
   }
@@ -280,6 +281,7 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
                                  const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, root.id_);
   if (IS_PX_RECEIVE(root.get_type())) {
     ObPxReceiveSpec *receive_op = reinterpret_cast<ObPxReceiveSpec *>(&root);
     ObOperatorKit *kit = ctx.get_operator_kit(receive_op->id_);

@@ -27,6 +27,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
+#include "storage/shared_storage/ob_ss_object_access_util.h"
 
 #undef private
 #undef protected
@@ -95,7 +96,7 @@ TEST_F(TestSegmentFileManager, test_gc_segment_file)
   write_tmp_file_info.io_desc_.set_unsealed();
   write_tmp_file_info.mtl_tenant_id_ = MTL_ID();
   write_tmp_file_info.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(write_tmp_file_info.mtl_tenant_id_);
-  write_tmp_file_info.tmp_file_valid_length_ = write_io_size;
+  write_tmp_file_info.set_tmp_file_valid_length(write_io_size);
   ObSSObjectStorageWriter object_storage_writer;
   ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_tmp_file_info, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
@@ -118,7 +119,7 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
 {
   int ret = OB_SUCCESS;
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
-  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, tenant_file_mgr);
   ASSERT_NE(nullptr, disk_space_mgr);
   MacroBlockId file_id;
@@ -143,7 +144,7 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
   write_info.size_ = write_io_size;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
-  write_info.tmp_file_valid_length_ = write_io_size;
+  write_info.set_tmp_file_valid_length(write_io_size);
 
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
@@ -153,42 +154,48 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   int64_t expected_tmp_file_alloc_size = write_io_size;
   expected_tmp_file_alloc_size += statbuf.size_;
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
+  ObSSMacroCacheStat cache_stat;
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 2: write local segment file 0-16KB, alloc_size=0
-  write_info.tmp_file_valid_length_ = write_io_size;
+  write_info.set_tmp_file_valid_length(write_io_size);
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 3: write local segment file 8KB-24KB, alloc_size=8KB
   write_info.offset_ = 8 * 1024; // 8KB
-  write_info.tmp_file_valid_length_ = 24 * 1024;  // 24KB
+  write_info.set_tmp_file_valid_length(24 * 1024);  // 24KB
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   expected_tmp_file_alloc_size += 8 * 1024;
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 4: write local segment file 32KB-48KB (with 8KB hole), alloc_size=24KB
   write_info.offset_ = 24 * 1024 + 8 * 1024; // 32KB
-  write_info.tmp_file_valid_length_ = 48 * 1024; // 48KB
+  write_info.set_tmp_file_valid_length(48 * 1024); // 48KB
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   expected_tmp_file_alloc_size += 24 * 1024;
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 5: write local segment file 48KB-64KB, alloc_size=16KB
   write_info.offset_ = 48 * 1024; // 24KB
-  write_info.tmp_file_valid_length_ = 64 * 1024;  // 64KB
+  write_info.set_tmp_file_valid_length(64 * 1024);  // 64KB
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   expected_tmp_file_alloc_size += 16 * 1024;
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 6: write one new local segment file 8KB-16KB(with 8KB hole), alloc_size=16KB
@@ -196,10 +203,11 @@ TEST_F(TestSegmentFileManager, test_overwrite_segment_file)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
   write_info.offset_ = 8 * 1024; // 8KB
   write_info.size_ = 8 * 1024; // 8KB
-  write_info.tmp_file_valid_length_ = 16 * 1024; // 16KB
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->append_file(write_info, write_object_handle));
+  write_info.set_tmp_file_valid_length(16 * 1024); // 16KB
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::append_file(write_info, write_object_handle));
   expected_tmp_file_alloc_size += 16 * 1024; // 16KB
-  ASSERT_EQ(expected_tmp_file_alloc_size, disk_space_mgr->get_tmp_file_write_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_tmp_file_alloc_size, cache_stat.used_);
   write_object_handle.reset();
 
   // test 7: delete tmp file

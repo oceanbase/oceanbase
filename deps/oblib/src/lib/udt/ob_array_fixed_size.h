@@ -33,7 +33,7 @@ public :
   ArrayFormat get_format() const { return ArrayFormat::Fixed_Size; }
   uint32_t *get_offsets() const { return nullptr; }
   char *get_data() const { return reinterpret_cast<char*>(data_);}
-  int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const { return OB_SUCCESS; }
+  int check_validity(const ObCollectionTypeBase &coll_type, const ObIArrayType &array) const { return OB_SUCCESS; }
   int push_null();
   int push_back(T value, bool is_null = false);
   int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const;
@@ -41,6 +41,7 @@ public :
                     bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const;
+  int print_element_at(ObStringBuffer &format_str, uint32_t idx) const;
 
   int32_t get_data_binary_len();
   int get_data_binary(char *res_buf, int64_t buf_len);
@@ -49,6 +50,7 @@ public :
   int hash(uint64_t &hash_val) const;
   int init();
   int init(ObString &raw_data);
+  int init(uint32_t length, ObString &data_binary);
   int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
 
   int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len);
@@ -136,6 +138,13 @@ public :
   }
 
   int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
+  int push_not_in_set(const ObArrayFixedSize<T> *arr_bin_ptr,
+          hash::ObHashSet<ObString> &elem_set,
+          bool &arr_contain_null,
+          const bool &contain_null);
+  int except(ObIAllocator &alloc, ObIArrayType *arr2, ObIArrayType *&output) const;
+  int unionize(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt);
+  int intersect(ObIAllocator &alloc, ObIArrayType **arr, uint32_t arr_cnt);
 
 private :
   T *data_;

@@ -416,7 +416,8 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
-  remote_info.session_id_ = session->get_sessid();
+  remote_info.session_id_ = session->get_server_sid();
+  remote_info.stmt_type_ = session->get_stmt_type();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
@@ -546,8 +547,9 @@ int ObDataAccessService::do_sync_remote_das_task(
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
-  remote_info.session_id_ = session->get_sessid();
+  remote_info.session_id_ = session->get_server_sid();
   remote_info.plan_id_ = session->get_current_plan_id();
+  remote_info.stmt_type_ = session->get_stmt_type();
   if (das_ref.is_parallel_submit()) {
     if (OB_ISNULL(das_ref.get_das_parallel_ctx().get_tx_desc_bak())) {
       ret = OB_ERR_UNEXPECTED;
@@ -766,6 +768,8 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
   int ret = OB_SUCCESS;
   ObDASParallelTask *task = nullptr;
   omt::ObMultiTenant *omt = GCTX.omt_;
+  ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
+  int64_t timeout_ts = plan_ctx->get_timeout_timestamp();
   DISABLE_SQL_MEMLEAK_GUARD;
   if (NULL == omt) {
     ret = OB_ERR_UNEXPECTED;
@@ -773,7 +777,7 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
   } else if (OB_ISNULL(task = ObDASParallelTaskFactory::alloc(das_ref.get_das_ref_count_ctx()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret));
-  } else if (OB_FAIL(task->init(&agg_task, group_id))) {
+  } else if (OB_FAIL(task->init(&agg_task, timeout_ts, group_id))) {
     LOG_WARN("init parallel task failed", K(ret), K(agg_task));
   } else if (OB_FAIL(omt->recv_request(MTL_ID(), *task))) {
     LOG_WARN("fail to push parallel_das_task", K(ret), KPC(task));

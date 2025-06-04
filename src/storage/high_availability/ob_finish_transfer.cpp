@@ -17,6 +17,7 @@
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "storage/member_table/ob_member_table_operation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -123,6 +124,8 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   process_perf_diagnose_info_(ObStorageHACostItemName::TRANSFER_FINISH_BEGIN,
       start_ts, tablet_list.count(), round_, false/*is_report*/);
   diagnose_result_msg_ = share::ObStorageHACostItemName::MAX_NAME;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
+
   if (!task_id.is_valid() || OB_INVALID_ID == tenant_id || !src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(src_ls_id), K(dest_ls_id));
@@ -265,8 +268,10 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         // tablet_id_list.
         //    a) When the leader and follower of src_ls receive on_redo, change the ObTabletStatus of transfer_tablets to
         //    TRANFER_OUT_DELETED (the status may share DELETED)
-        if (FAILEDx(
-                do_tx_finish_transfer_out_(task_id, tenant_id, src_ls_id, dest_ls_id, finish_scn, tablet_list, conn))) {
+
+        if (OB_FAIL(ret)) {
+        } else if (!is_shared_storage && OB_FAIL(do_tx_finish_transfer_out_(task_id, tenant_id, src_ls_id, dest_ls_id,
+            finish_scn, tablet_list, conn))) {
           LOG_WARN("failed to do tx finish transfer out",
               K(ret),
               K(task_id),

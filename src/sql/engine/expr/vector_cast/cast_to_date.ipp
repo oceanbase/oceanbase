@@ -62,8 +62,8 @@ struct ToDateCastImpl
       date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(expr.extra_)
                                     ? false : CM_IS_NO_ZERO_DATE(expr.extra_);
       FloatDoubleToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -111,8 +111,8 @@ struct ToDateCastImpl
       date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(expr.extra_)
                                     ? false : CM_IS_NO_ZERO_DATE(expr.extra_);
       IntUIntToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -161,8 +161,8 @@ struct ToDateCastImpl
         const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type)
                                          ? tz_info_local : NULL;
         DatetimeToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tz_info);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -226,8 +226,8 @@ struct ToDateCastImpl
       } else {
         IN_TYPE sf = get_scale_factor<IN_TYPE>(in_scale);
         DecimalintToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode, sf);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -264,8 +264,8 @@ struct ToDateCastImpl
       };
 
       NumberToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -316,8 +316,8 @@ struct ToDateCastImpl
       date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(expr.extra_);
       date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(expr.extra_);
       StringToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }

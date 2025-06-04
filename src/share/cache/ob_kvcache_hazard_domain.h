@@ -14,12 +14,10 @@
 #define OCEANBASE_COMMON_OB_KVCACHE_HAZARD_DOMAIN_H_
 
 #include "lib/container/ob_bit_set.h"
-#include "lib/container/ob_vector.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_sort.h"
 #include "share/cache/ob_kvcache_hazard_pointer.h"
 #include "share/cache/ob_kvcache_store.h"
 #include "share/cache/ob_kvcache_struct.h"
@@ -72,15 +70,23 @@ private:
   void hazptr_reset();
   ObKVMemBlockHandle* hazptr_get_mb_handle() const;
   int hazptr_assign(const HazptrHolder& other);
+  void hazptr_move_from(HazptrHolder& other);
   int refcnt_protect(bool& success, ObKVMemBlockHandle* mb_handle, int32_t seq_num);
   int refcnt_protect(bool& success, ObKVMemBlockHandle* mb_handle);
   void refcnt_release();
   void refcnt_reset();
+  void refcnt_move_from(HazptrHolder& other);
   ObKVMemBlockHandle* refcnt_get_mb_handle() const;
   int refcnt_assign(const HazptrHolder& other);
 
 union {
-  HazardPointer* hazptr_;
+  struct {
+    union {
+      HazardPointer* hazptr_;
+      SharedHazptr shared_hazptr_;
+    };
+    bool is_shared_;
+  };
   ObKVMemBlockHandle* mb_handle_;
 };
 };
@@ -161,7 +167,7 @@ private:
   int64_t last_wash_time_us_;
 };
 
-class HazardDomain final {
+struct HazardDomain final {
 public:
   int init(int64_t mb_handle_num);
   void reset_retire_list();
@@ -170,7 +176,7 @@ public:
   void choose_and_release_hazptrs(HazptrList& list, int64_t num_to_release);
   int retire(ObKVMemBlockHandle* mb_handle);
   // all the retired memblock must have the same `inst_`
-  int retire(ObLink* head, ObLink* tail, uint64_t mb_size);
+  int retire(ObLink* head, ObLink* tail, uint64_t retire_size);
   template<typename F>
   int reclaim(F func);
   static HazardDomain& get_instance();

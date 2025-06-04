@@ -13,11 +13,12 @@
 
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "share/ob_tablet_autoincrement_param.h"
-#include "storage/blocksstable/ob_storage_datum.h"
-#include "share/vector/ob_fixed_length_vector.h"
+#include "share/schema/ob_table_param.h"
 #include "share/vector/ob_continuous_vector.h"
 #include "share/vector/ob_discrete_vector.h"
+#include "share/vector/ob_fixed_length_vector.h"
 #include "share/vector/ob_uniform_vector.h"
+#include "storage/blocksstable/ob_storage_datum.h"
 
 namespace oceanbase
 {
@@ -26,6 +27,7 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 using namespace share;
+using namespace share::schema;
 using namespace sql;
 
 int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass value_tc,
@@ -266,6 +268,28 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
   } else if (OB_ISNULL(vector)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc vector", KR(ret));
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::new_vector(const ObColDesc &col_desc, ObIAllocator &allocator,
+                                        ObIVector *&vector)
+{
+  int ret = OB_SUCCESS;
+  const int16_t precision = col_desc.col_type_.is_decimal_int()
+                              ? col_desc.col_type_.get_stored_precision()
+                              : PRECISION_UNKNOWN_YET;
+  VecValueTypeClass value_tc =
+    get_vec_value_tc(col_desc.col_type_.get_type(), col_desc.col_type_.get_scale(), precision);
+  const bool is_fixed = is_fixed_length_vec(value_tc);
+  if (is_fixed) { // fixed format
+    if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_FIXED, value_tc, allocator, vector))) {
+      LOG_WARN("fail to new fixed vector", KR(ret), K(value_tc));
+    }
+  } else { // discrete format
+    if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_DISCRETE, value_tc, allocator, vector))) {
+      LOG_WARN("fail to new discrete vector", KR(ret), K(value_tc));
+    }
   }
   return ret;
 }
@@ -611,6 +635,32 @@ int ObDirectLoadVectorUtils::expand_const_datum(const ObDatum &const_datum,
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected vector format", KR(ret), K(dest_format));
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::set_vector_all_null(ObIVector *vector, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == vector || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(vector), K(batch_size));
+  } else {
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_FIXED:
+      case VEC_CONTINUOUS:
+      case VEC_DISCRETE: {
+        ObBitmapNullVectorBase *base = static_cast<ObBitmapNullVectorBase *>(vector);
+        base->set_has_null();
+        base->get_nulls()->set_all(batch_size);
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", KR(ret), K(format));
         break;
     }
   }

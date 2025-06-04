@@ -443,8 +443,6 @@ public:
   bool is_error_ignored() const { return is_error_ignored_; }
   void set_select_into(bool is_select_into) { is_select_into_  = is_select_into; }
   bool is_select_into() const { return is_select_into_; }
-  void set_diagnosis(bool is_diagnosis) { is_diagnosis_  = is_diagnosis; }
-  bool is_diagnosis() const { return is_diagnosis_; }
   void set_is_result_accurate(bool is_accurate) { is_result_accurate_ = is_accurate; }
   bool is_result_accurate() const { return is_result_accurate_; }
   void set_foreign_key_checks(bool foreign_key_checks) { foreign_key_checks_ = foreign_key_checks; }
@@ -503,8 +501,8 @@ public:
   bool is_exec_param_readable() const { return param_store_.count() > original_param_cnt_; }
   void set_orig_question_mark_cnt(const int64_t cnt) { orig_question_mark_cnt_ = cnt; }
   int64_t get_orig_question_mark_cnt() const { return orig_question_mark_cnt_; }
-  void set_is_ps_rewrite_sql() { is_ps_rewrite_sql_ = true; }
-  bool get_is_ps_rewrite_sql() const { return is_ps_rewrite_sql_; }
+  void set_ps_fixed_array_index(const common::ObIArray<int64_t> &fixed_array) { ps_fixed_array_index_ = &fixed_array; }
+  const common::ObIArray<int64_t> *get_ps_fixed_array_index() const { return ps_fixed_array_index_; }
   void set_plan_start_time(int64_t t) { plan_start_time_ = t; }
   int64_t get_plan_start_time() const { return plan_start_time_; }
   int replace_batch_param_datum(const int64_t cur_group_id, const int64_t start_param, const int64_t param_cnt);
@@ -518,10 +516,12 @@ public:
   void set_rich_format(bool v) { enable_rich_format_ = v; }
   bool is_rich_format() const { return enable_rich_format_; }
 
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const;
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const;
   bool is_subschema_ctx_inited();
-  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                       bool is_in_pl,
+                                       const ObEnumSetMeta *&meta) const;
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
@@ -529,9 +529,13 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
+  int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const;
   int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
                                     const ObIArray<common::ObString> &type_info,
                                     uint16_t &subschema_id);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id) const;
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
@@ -561,6 +565,8 @@ public:
     is_direct_insert_plan_ = is_direct_insert_plan;
   }
   inline bool get_is_direct_insert_plan() const { return is_direct_insert_plan_; }
+  inline void set_enable_adaptive_pc(bool v) { enable_adaptive_pc_ = v; }
+  inline bool enable_adaptive_pc() const { return enable_adaptive_pc_; }
   bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
 private:
   int init_param_store_after_deserialize();
@@ -571,6 +577,9 @@ private:
                             ObDatum *&datum,
                             ObEvalInfo *&eval_info,
                             VectorHeader *&vec_header);
+  int inner_get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                          const ObIArray<common::ObString> &type_info,
+                                          uint16_t &subschema_id) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlanCtx);
 private:
@@ -697,7 +706,7 @@ private:
   bool is_ps_protocol_;
   //used for monitor operator information
   int64_t plan_start_time_;
-  bool is_ps_rewrite_sql_;
+  const common::ObIArray<int64_t> *ps_fixed_array_index_;
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
   ObSubSchemaCtx subschema_ctx_;
@@ -716,7 +725,7 @@ private:
   int64_t total_ssstore_read_row_count_;
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
   bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
-  bool is_diagnosis_;
+  bool enable_adaptive_pc_;
 };
 
 }

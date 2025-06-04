@@ -13,6 +13,8 @@
 #ifndef OB_MICRO_BLOCK_HANDLE_MGR_H_
 #define OB_MICRO_BLOCK_HANDLE_MGR_H_
 
+#include "share/ob_i_tablet_scan.h"
+#include "sql/plan_cache/ob_plan_cache_util.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
@@ -173,7 +175,8 @@ public:
   ObMicroBlockHandleMgr();
   ~ObMicroBlockHandleMgr();
   void reset();
-  int init(const bool enable_prefetch_limiting, ObTableScanStoreStat &stat, ObQueryFlag &query_flag);
+  int init(const bool enable_prefetch_limiting, ObTableScanStoreStat& store_stat, ObTableScanStatistic* scan_stat,
+      ObQueryFlag& query_flag);
   int get_micro_block_handle(
       ObTableAccessContext *access_ctx,
       blocksstable::ObMicroIndexInfo &index_block_info,
@@ -200,12 +203,14 @@ public:
   void dec_hold_size(ObMicroBlockDataHandle &handle);
   bool reach_hold_limit() const;
   OB_INLINE bool is_valid() const { return is_inited_; }
+  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us);
   TO_STRING_KV(K_(is_inited), KP_(table_store_stat), KPC_(query_flag),
                K_(cache_mem_ctrl), KP_(data_block_cache), KP_(index_block_cache));
 private:
   blocksstable::ObDataMicroBlockCache *data_block_cache_;
   blocksstable::ObIndexMicroBlockCache *index_block_cache_;
   ObTableScanStoreStat *table_store_stat_;
+  ObTableScanStatistic* table_scan_stat_;
   ObQueryFlag *query_flag_;
   ObFIFOAllocator block_io_allocator_;
   ObCacheMemController cache_mem_ctrl_;

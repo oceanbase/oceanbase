@@ -85,7 +85,7 @@ void prepare_data_desc(ObWholeDataStoreDesc &data_desc,ObTableSchema *table_sche
   int ret = OB_SUCCESS;
   ret = data_desc.init(false/*is_ddl*/, *table_schema, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
   ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-  table_schema->get_micro_index_clustered(), 0/*transfer_seq*/);
+  table_schema->get_micro_index_clustered(), 0/*transfer_seq*/, share::SCN::min_scn());
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -120,7 +120,6 @@ protected:
   static const int64_t SNAPSHOT_VERSION = 2;
   const uint64_t tenant_id_;
   ObTenantFreezeInfoMgr *mgr_;
-  ObDecodeResourcePool *decode_res_pool_;
   ObTableSchema table_schema_;
   ObTableSchema index_schema_;
   ObTenantCompactionMemPool *mem_pool_;
@@ -138,7 +137,6 @@ protected:
 TestConcurrencyDefenses::TestConcurrencyDefenses()
   : tenant_id_(500),
   mgr_(nullptr),
-  decode_res_pool_(nullptr),
   mem_pool_(nullptr),
   tenant_base_(500),
   shared_blk_mgr_(nullptr),
@@ -167,26 +165,22 @@ void TestConcurrencyDefenses::SetUp()
   int ret = OB_SUCCESS;
   timer_service_ = OB_NEW(ObTimerService, ObModIds::TEST, 500);
   mgr_ = OB_NEW(ObTenantFreezeInfoMgr, ObModIds::TEST);
-  decode_res_pool_ = OB_NEW(ObDecodeResourcePool, ObModIds::TEST);
   shared_blk_mgr_ = OB_NEW(ObSharedMacroBlockMgr, ObModIds::TEST);
   mem_pool_ = OB_NEW(ObTenantCompactionMemPool, ObModIds::TEST);
   tenant_base_.set(timer_service_);
   tenant_base_.set(shared_blk_mgr_);
   tenant_base_.set(mgr_);
-  tenant_base_.set(decode_res_pool_);
   tenant_base_.set(mem_pool_);
   share::ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, timer_service_->start());
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(OB_SUCCESS, mgr_->init(500, *GCTX.sql_proxy_));
-  ASSERT_EQ(OB_SUCCESS, decode_res_pool_->init());
   ASSERT_EQ(OB_SUCCESS, mem_pool_->init());
   ASSERT_EQ(OB_SUCCESS, shared_blk_mgr_->init());
   fake_freeze_info();
   ASSERT_EQ(timer_service_, MTL(ObTimerService *));
   ASSERT_EQ(shared_blk_mgr_, MTL(ObSharedMacroBlockMgr *));
   ASSERT_EQ(mgr_, MTL(ObTenantFreezeInfoMgr *));
-  ASSERT_EQ(decode_res_pool_, MTL(ObDecodeResourcePool *));
   ASSERT_EQ(mem_pool_, MTL(ObTenantCompactionMemPool *));
   int tmp_ret = OB_SUCCESS;
 
@@ -361,12 +355,11 @@ private:
   ObSSTableIndexBuilder *sstable_builder_;
   common::SpinRWLock lock_;
   share::ObTenantBase tenant_base_;
-  ObDecodeResourcePool *decode_res_pool_;
 };
 
 TestConcurrencyDefensesStressMacroWriter::TestConcurrencyDefensesStressMacroWriter()
   : tenant_id_(0), thread_cnt_(0), row_count_(0), allocator_(), row_generate_(NULL), data_store_desc_(NULL), start_seq_(NULL),
-    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500), decode_res_pool_(nullptr)
+    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500)
 {
 }
 
@@ -388,11 +381,8 @@ int TestConcurrencyDefensesStressMacroWriter::init(uint64_t tenant_id, const int
     lob_iter_ = lob_iter;
     index_writer_ = index_writer;
     set_thread_count(static_cast<int32_t>(thread_cnt));
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_base_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_base_);
     tenant_base_.init();
-    decode_res_pool_->init();
   }
   return ret;
 }
@@ -443,13 +433,12 @@ private:
   ObSSTableIndexBuilder *sstable_builder_;
   common::SpinRWLock lock_;
   share::ObTenantBase tenant_base_;
-  ObDecodeResourcePool *decode_res_pool_;
 
 };
 
 TestConcurrencyDefensesStressIndexBuilder::TestConcurrencyDefensesStressIndexBuilder()
   : tenant_id_(0), thread_cnt_(0), row_count_(0), allocator_(), row_generate_(NULL), table_schema_(nullptr), data_store_desc_(NULL),
-    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500), decode_res_pool_(nullptr)
+    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500)
 {
 }
 
@@ -472,11 +461,8 @@ int TestConcurrencyDefensesStressIndexBuilder::init(uint64_t tenant_id, const in
     lob_iter_ = lob_iter;
     index_writer_ = index_writer;
     set_thread_count(static_cast<int32_t>(thread_cnt));
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_base_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_base_);
     tenant_base_.init();
-    decode_res_pool_->init();
   }
   return ret;
 }
@@ -531,7 +517,7 @@ TEST_F(TestConcurrencyDefenses, test_index_builder_concurrency_defense)
   ObWholeDataStoreDesc data_desc;
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
   ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-  table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
+  table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, share::SCN::min_scn()/*reorgnize scn*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   data_desc.get_desc().sstable_index_builder_ = &sstable_builder;
 

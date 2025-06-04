@@ -335,6 +335,7 @@ void ObLobSplitContext::destroy()
   for (int64_t i = 0; i < sub_maps_.count(); i++) {
     if (sub_maps_.at(i) != nullptr) {
       sub_maps_.at(i)->clean_up();
+      sub_maps_.at(i)->~ObExternalSort<ObLobIdItem, ObLobIdItemCompare>();
       allocator_.free(sub_maps_.at(i));
     }
   }
@@ -925,7 +926,7 @@ ObTabletLobWriteSSTableCtx::~ObTabletLobWriteSSTableCtx()
 {
 }
 
-int ObTabletLobWriteSSTableCtx::init(const ObSSTable &org_sstable, const int64_t major_snapshot_version)
+int ObTabletLobWriteSSTableCtx::init(const ObSSTable &org_sstable, const ObStorageSchema &storage_schema, const int64_t major_snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (!org_sstable.is_valid()) {
@@ -942,6 +943,12 @@ int ObTabletLobWriteSSTableCtx::init(const ObSSTable &org_sstable, const int64_t
       merge_type_ = org_sstable.is_major_sstable() ? compaction::MAJOR_MERGE : compaction::MINOR_MERGE;
       dst_uncommitted_tx_id_arr_.reset();
       dst_major_snapshot_version_ = major_snapshot_version;
+      if (org_sstable.is_major_sstable()) {
+        meta_.schema_version_ = storage_schema.get_schema_version();
+        meta_.latest_row_store_type_ = storage_schema.get_row_store_type();
+        meta_.progressive_merge_round_ = storage_schema.get_progressive_merge_round();
+        meta_.progressive_merge_step_ = 0;
+      }
     }
   }
   return ret;
@@ -1243,6 +1250,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
                                param_->data_format_version_,
                                micro_index_clustered,
                                tablet_handle.get_obj()->get_transfer_seq(),
+                               tablet_handle.get_obj()->get_reorganization_scn(),
                                write_sstable_ctx.table_key_.get_end_scn()))) {
       LOG_WARN("fail to init data store desc", K(ret), "dest_tablet_id", new_tablet_id, KPC(param_), KPC(ctx_));
     } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = index_builder)) {
@@ -1578,7 +1586,7 @@ int ObTabletLobWriteDataTask::create_sstables(
       // build lost mds sstable into tablet.
       ObTableHandleV2 mds_table_handle;
       ObTablesHandleArray mds_sstables_handle;
-      if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
+      if (OB_FAIL(ObTabletSplitUtil::build_mds_sstable(
             build_mds_arena,
             ctx_->ls_handle_,
             ctx_->lob_meta_tablet_handle_,
@@ -1820,7 +1828,7 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
         LOG_INFO("open one sstable rowscan", KPC(table));
         ObTabletLobWriteSSTableCtx write_sstable_ctx;
         ObSSTable *sst = static_cast<ObSSTable*>(table);
-        if (OB_FAIL(write_sstable_ctx.init(*sst, major_snapshot_version))) {
+        if (OB_FAIL(write_sstable_ctx.init(*sst, *lob_meta_storage_schema, major_snapshot_version))) {
           LOG_WARN("init write sstable ctx failed", K(ret));
         } else if (OB_FAIL(write_sstable_ctx.dst_uncommitted_tx_id_arr_.prepare_allocate(ctx->new_lob_tablet_ids_.count(), 0))) {
           LOG_WARN("failed to prepare allocate", K(ret), K(ctx->new_lob_tablet_ids_));
@@ -1902,7 +1910,7 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
       } else if (!table->is_sstable()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be sstable", K(ret), KPC(table), K(table_iter));
-      } else if (table->is_major_sstable()) {
+      } else if (table->is_major_sstable() && !table->is_meta_major_sstable()) {
         if (!last_major_table_handle.is_valid() || table->get_snapshot_version() > last_major_table_handle.get_table()->get_snapshot_version()) {
           last_major_table_handle = table_handle;
         }
@@ -1924,7 +1932,7 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
     ObArray<ObColDesc> col_descs;
     ObTabletLobWriteSSTableCtx write_sstable_ctx;
     ObSSTable *sst = static_cast<ObSSTable*>(last_major_table_handle.get_table());
-    if (OB_FAIL(write_sstable_ctx.init(*sst, major_snapshot_version))) {
+    if (OB_FAIL(write_sstable_ctx.init(*sst, *lob_meta_storage_schema, major_snapshot_version))) {
       LOG_WARN("init write sstable ctx failed", K(ret));
     } else if (OB_FAIL(write_sstable_ctx_array.push_back(write_sstable_ctx))) {
       LOG_WARN("push back write sstable ctx failed", K(ret));

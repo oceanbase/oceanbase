@@ -108,6 +108,8 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
   addon_store_.reset();
   inited_ = false;
   io_event_observer_ = nullptr;
+  is_fixed_key_sort_enabled_ = false;
+  fixed_sort_key_len_ = 0;
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -353,6 +355,42 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
         rows_ = &(const_cast<common::ObIArray<Store_Row *> &>(topn_heap_->get_heap_data()));
       }
     }
+    if (OB_SUCC(ret) && OB_FAIL(init_fixed_key_sort())) {
+      SQL_ENG_LOG(WARN, "init fixed key sort failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename Compare, typename Store_Row, bool has_addon>
+int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_fixed_key_sort()
+{
+  int ret = OB_SUCCESS;
+  if (enable_encode_sortkey_) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_DISABLE_NEWSORT_FIXED_KEY_OPT) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+    } else {
+      is_fixed_key_sort_enabled_ = true;
+      fixed_sort_key_len_ = 0;
+      for (int64_t i = 0; i < sk_collations_->count(); ++i) {
+        ObExpr *expr = sk_exprs_->at(sk_collations_->at(i).field_idx_);
+        int64_t encoding_len = get_type_encoding_sortkey_size_map()[expr->datum_meta_.type_];
+        if (encoding_len != -1) {
+          fixed_sort_key_len_ += encoding_len;
+        } else {
+          is_fixed_key_sort_enabled_ = false;
+          break;
+        }
+        if (fixed_sort_key_len_ > 18) {
+          is_fixed_key_sort_enabled_ = false;
+          break;
+        }
+      }
+      if (fixed_sort_key_len_ < 2) {
+        is_fixed_key_sort_enabled_ = false;
+      }
+    }
   }
   return ret;
 }
@@ -526,9 +564,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_row(
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
     ObExpr *expr = exprs.at(i);
     ObIVector *vec = expr->get_vector(ctx);
-    if (expr->is_nested_expr() && !is_uniform_format(vec->get_format())) {
-      OZ(ObCompactRow::nested_vec_to_row(*expr, ctx, row_meta, stored_row, batch_idx, i));
-    } else if (OB_FAIL(vec->to_row(row_meta, stored_row, batch_idx, i))) {
+    if (OB_FAIL(vec->to_row(row_meta, stored_row, batch_idx, i))) {
       SQL_ENG_LOG(WARN, "failed to to row", K(ret), K(expr));
     }
   }
@@ -820,11 +856,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::attach_rows(const ObExprPtrI
     } else {
       ObExpr *e = exprs.at(col_idx);
       ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-      if (e->is_nested_expr() && !is_uniform_format(vec->get_format())) {
-        if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*e, ctx, row_meta, srows, read_rows, col_idx))) {
-          LOG_WARN("fail to do nested expr from rows", K(ret));
-        }
-      } else if (VEC_UNIFORM_CONST != vec->get_format()) {
+      if (VEC_UNIFORM_CONST != vec->get_format()) {
         ret = vec->from_rows(row_meta, srows, read_rows, col_idx);
         exprs.at(col_idx)->set_evaluated_projected(ctx);
       }
@@ -1475,18 +1507,24 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
       if (part_cnt_ > 0) {
         OZ(do_partition_sort(*sk_row_meta_, *rows_, begin, rows_->count()));
       } else if (enable_encode_sortkey_) {
-        bool can_encode = true;
-        ObAdaptiveQS<Store_Row> aqs(*rows_, *sk_row_meta_, mem_context_->get_malloc_allocator());
-        if (OB_FAIL(aqs.init(*rows_, mem_context_->get_malloc_allocator(), begin, rows_->count(),
-                             can_encode))) {
-          SQL_ENG_LOG(WARN, "failed to init aqs", K(ret));
-        } else if (can_encode) {
-          aqs.sort(begin, rows_->count());
-        } else {
-          enable_encode_sortkey_ = false;
-          comp_.fallback_to_disable_encode_sortkey();
-          lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
-        }
+          if (is_fixed_key_sort_enabled_) {
+            if (OB_FAIL(do_fixed_key_sort(begin))) {
+              SQL_ENG_LOG(WARN, "failed to do fixed key sort", K(ret));
+            }
+          } else {
+            bool can_encode = true;
+            ObAdaptiveQS<Store_Row> aqs(*rows_, *sk_row_meta_, mem_context_->get_malloc_allocator());
+            if (OB_FAIL(aqs.init(*rows_, mem_context_->get_malloc_allocator(), begin, rows_->count(),
+                              can_encode))) {
+              SQL_ENG_LOG(WARN, "failed to init aqs", K(ret));
+            } else if (can_encode) {
+              aqs.sort(begin, rows_->count());
+            } else {
+              enable_encode_sortkey_ = false;
+              comp_.fallback_to_disable_encode_sortkey();
+              lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+            }
+          }
       } else {
         lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
       }
@@ -1542,6 +1580,55 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
     const int64_t sort_cpu_time = ObTimeUtility::fast_current_time() - curr_time;
     op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::SORT_INMEM_SORT_TIME;
     op_monitor_info_.otherstat_3_value_ += sort_cpu_time;
+  }
+  return ret;
+}
+
+template <typename Compare, typename Store_Row, bool has_addon>
+int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_fixed_key_sort(int64_t begin)
+{
+  #define FIXED_KEY_SORT(sort_key_len)                                          \
+    case (sort_key_len): {                                                       \
+      FixedKeySort<Store_Row, sort_key_len> fixed_key_sort(                   \
+          *rows_, *sk_row_meta_, mem_context_->get_malloc_allocator());          \
+      if (OB_FAIL(fixed_key_sort.init(*rows_,                                   \
+                                      mem_context_->get_malloc_allocator(),     \
+                                      begin, rows_->count(), can_encode))) {    \
+        SQL_ENG_LOG(WARN, "failed to init fixed_key_sort", K(ret));             \
+      } else if (can_encode) {                                                   \
+        fixed_key_sort.sort(begin, rows_->count());                             \
+      }                                                                          \
+      break;                                                                     \
+    }
+  int ret = OB_SUCCESS;
+  bool can_encode = true;
+  switch (fixed_sort_key_len_) {
+    FIXED_KEY_SORT(2)
+    FIXED_KEY_SORT(3)
+    FIXED_KEY_SORT(4)
+    FIXED_KEY_SORT(5)
+    FIXED_KEY_SORT(6)
+    FIXED_KEY_SORT(7)
+    FIXED_KEY_SORT(8)
+    FIXED_KEY_SORT(9)
+    FIXED_KEY_SORT(10)
+    FIXED_KEY_SORT(11)
+    FIXED_KEY_SORT(12)
+    FIXED_KEY_SORT(13)
+    FIXED_KEY_SORT(14)
+    FIXED_KEY_SORT(15)
+    FIXED_KEY_SORT(16)
+    FIXED_KEY_SORT(17)
+    FIXED_KEY_SORT(18)
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected encode sort key len", K(ret), K(fixed_sort_key_len_));
+    }
+  }
+  if (OB_SUCC(ret) && !can_encode) {
+    enable_encode_sortkey_ = false;
+    comp_.fallback_to_disable_encode_sortkey();
+    lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
   }
   return ret;
 }

@@ -141,7 +141,7 @@ int ObLSCreator::create_user_ls(
     const uint64_t source_tenant_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_time = ObTimeUtility::current_time(); 
+  const int64_t start_time = ObTimeUtility::current_time();
   LOG_INFO("start to create log stream", K_(id), K_(tenant_id));
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -247,6 +247,7 @@ int ObLSCreator::create_tenant_sys_ls(
   int ret = OB_SUCCESS;
   LOG_INFO("start to create log stream", K_(id), K_(tenant_id));
   const int64_t start_time = ObTimeUtility::current_time();
+  const bool is_duplicate_ls = is_tenant_sslog_ls(tenant_id_, id_);
   share::ObLSStatusInfo status_info;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -266,7 +267,8 @@ int ObLSCreator::create_tenant_sys_ls(
     common::ObMemberList member_list;
     share::ObLSStatusInfo exist_status_info;
     const SCN create_scn = SCN::base_scn();
-    ObLSFlag flag(ObLSFlag::NORMAL_FLAG); // TODO: sys ls should be duplicate
+    ObLSFlag flag = is_duplicate_ls ? ObLSFlag(ObLSFlag::DUPLICATE_FLAG) : ObLSFlag(ObLSFlag::NORMAL_FLAG);
+    // TODO: sys ls should be duplicate
     if (OB_FAIL(status_info.init(tenant_id_, id_, 0, share::OB_LS_CREATING, 0,
                                    primary_zone, flag))) {
       LOG_WARN("failed to init ls info", KR(ret), K(id_), K(primary_zone),
@@ -276,8 +278,7 @@ int ObLSCreator::create_tenant_sys_ls(
         LOG_WARN("failed to alloc clone tenant ls addr", KR(ret),
                       K(source_tenant_id), K(tenant_id_), K(addr), K(source_tenant_id));
       }
-    } else if (OB_FAIL(alloc_sys_ls_addr(tenant_id_, pool_list,
-            zone_locality, addr))) {
+    } else if (OB_FAIL(alloc_sys_ls_addr(tenant_id_, pool_list, zone_locality, is_duplicate_ls, addr))) {
       LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(pool_list));
     } else if (is_meta_tenant(tenant_id_)) {
       share::ObLSLifeAgentManager ls_life_agent(*proxy_);
@@ -1030,6 +1031,7 @@ int ObLSCreator::alloc_sys_ls_addr(
     const uint64_t tenant_id,
     const ObIArray<share::ObResourcePoolName> &pools,
     const share::schema::ZoneLocalityIArray &zone_locality_array,
+    const bool is_duplicate_ls,
     ObILSAddr &ls_addr)
 {
   int ret = OB_SUCCESS;
@@ -1053,7 +1055,7 @@ int ObLSCreator::alloc_sys_ls_addr(
                          zone_locality_array,
                          unit_info_array,
                          true/*is_sys_ls*/,
-                         false/*is_duplicate_ls*/,
+                         is_duplicate_ls,
                          ls_addr))) {
     LOG_WARN("fail to construct ls addrs for tenant sys ls", KR(ret), K(zone_locality_array),
              K(unit_info_array), K(ls_addr));

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2021 OceanBase
+	/**
+	 * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -514,6 +514,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   T_FUN_SYS_MYSQL_TO_CHAR = 783,
   T_FUN_INNER_TYPE_TO_ENUMSET = 784,
+
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -954,6 +955,9 @@ typedef enum ObItemType
   T_FUN_SYS_CHECK_CATALOG_ACCESS = 1916,
   T_FUN_SYS_SPIV_DIM = 1917,  // sparse vector index
   T_FUN_SYS_SPIV_VALUE = 1918,
+  T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
+  T_FUN_STARTUP_MODE = 1920,
+
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
@@ -1021,6 +1025,7 @@ typedef enum ObItemType
   T_FUN_SYS_RB_CONTAINS = 2072,
   T_FUN_INNER_PREFIX_MIN = 2073,
   T_FUN_INNER_PREFIX_MAX = 2074,
+  T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER = 2075,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2744,6 +2749,7 @@ typedef enum ObItemType
   // macro block bloom filter
   T_ENABLE_MACRO_BLOCK_BLOOM_FILTER = 4786,
   T_DISTRIBUTE_HASH_LOCAL = 4787,
+
   // external catalog
   T_CREATE_CATALOG = 4788,
   T_ALTER_CATALOG = 4789,
@@ -2763,6 +2769,7 @@ typedef enum ObItemType
   // parser config: ik_mode
   T_IK_MODE = 4800,
   T_DML_PARALLEL = 4801,
+
   //pl dbms scheduler calendar
   T_SCHED_CALENDAR = 4802,
   T_SCHED_CALENDAR_LIST = 4803,
@@ -2814,6 +2821,45 @@ typedef enum ObItemType
   T_DYNAMIC_PARTITION_BIGINT_PRECISION = 4839,
 
   T_DATABASE_FACTOR = 4840,
+  T_IGNORE_LAST_EMPTY_COLUMN = 4841,
+  T_LOG_ERROR_LIMIT = 4842,
+  T_LOG_ERROR_UNLIMITED = 4843,
+
+  T_FLUSH_TABLE_MOCK = 4844,
+  T_TRIGGER_STORAGE_CACHE = 4845,
+
+  // logservice access point
+  T_BOOTSTRAP_INFO = 4846,
+  T_LOGSERVICE_ACCESS_POINT = 4847,
+  T_UNIT_LIST = 4848,
+
+  T_SP_SYS_DISPATCH_CALL = 4849,
+
+  // location object
+  T_CREATE_LOCATION = 4850,
+  T_ALTER_LOCATION = 4851,
+  T_DROP_LOCATION = 4852,
+  T_LOCATION_OBJECT = 4853,
+  T_CREDENTIAL_OPTION_LIST = 4854,
+  T_CREDENTIAL_OPTION = 4855,
+  T_SHOW_LOCATIONS = 4856,
+  T_SHOW_CREATE_LOCATION = 4857,
+  T_LOCATION_UTILS_LIST = 4858,
+  T_LOCATION_UTILS = 4859,
+
+  T_LOG_ERROR=4860,
+  T_READ_ERROR_LOG=4861,
+
+  T_PLUGIN_PROPERTIES = 4862,
+  T_GENERAL_PROPERTY  = 4863,
+  T_PLUGIN_NAME       = 4864,
+
+
+  T_UDF_PROPERTY = 4865,
+  T_UDF_PROPERTY_LIST = 4866,
+
+  T_MICRO_BLOCK_FORMAT_VERSION = 4867,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2948,7 +2994,13 @@ typedef enum ObOutlineType
 
 #define IS_DML_STMT(op)  \
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
-#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS || (op) == T_SHOW_CREATE_USER)
+#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS \
+                           || (op) == T_SHOW_CREATE_USER || (op) == T_SHOW_CATALOGS \
+                           || (op) == T_SHOW_CREATE_CATALOG || (op) == T_SHOW_PROFILE \
+                           || (op) == T_SHOW_PROCEDURE_CODE || (op) == T_SHOW_FUNCTION_CODE \
+                           || (op) == T_SHOW_ENGINE || (op) == T_SHOW_OPEN_TABLES \
+                           || (op) == T_SHOW_PLUGINS || (op) == T_SHOW_CHECK_TABLE \
+                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);
@@ -2969,8 +3021,12 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_SYS_RB_BUILD_AGG ||\
                          (op) == T_FUN_SYS_RB_OR_AGG ||\
                          (op) == T_FUN_SYS_RB_AND_AGG ||\
+                         (op) == T_FUN_SYS_RB_OR_CARDINALITY_AGG ||\
+                         (op) == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||\
                          (op) == T_FUNC_SYS_ARRAY_AGG ||\
-                         ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
+                         ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
+                         (op) == T_FUN_INNER_PREFIX_MAX || \
+                         (op) == T_FUN_INNER_PREFIX_MIN)
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)
@@ -2980,7 +3036,7 @@ extern const char *get_type_name(int type);
 
 #define IS_KEEP_AGGR_FUN(op) ((op) >= T_FUN_KEEP_MAX && (op) <= T_FUN_KEEP_STDDEV)
 
-#define IS_JSON_COMPATIBLE_OP(op) (IS_COMMON_COMPARISON_OP(op) || (op) == T_OP_ROW || (op) == T_OP_LIKE)
+#define IS_JSON_COMPATIBLE_OP(op) (IS_COMMON_COMPARISON_OP(op) || (op) == T_OP_ROW || (op) == T_OP_LIKE || (op) == T_OP_BTW)
 #define IS_TYPE_DEMOTION_FUN(op) ((T_FUN_SYS_DEMOTE_CAST == (op) || \
                                    T_FUN_SYS_RANGE_PLACEMENT == (op)))
 

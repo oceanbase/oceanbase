@@ -66,6 +66,7 @@ public:
   virtual void TearDown();
   virtual void prepare_schema();
   virtual void prepare_data(const int64_t micro_block_size = 0);
+  virtual void prepare_discontinuous_data(const int64_t micro_block_size = 0, const int64_t split_seed = -1);
   virtual void prepare_partial_ddl_data();
   virtual void prepare_partial_cg_data();
   virtual void prepare_cg_data();
@@ -133,7 +134,6 @@ protected:
   ObTableReadInfo read_info_;
   static ObArenaAllocator allocator_;
   ObTabletHandle tablet_handle_;
-  ObFixedArray<ObSkipIndexColMeta, common::ObIAllocator> agg_col_metas_;
   bool need_agg_data_;
   ObTableReadInfo cg_read_info_;
   ObDatumRowkey start_key_;
@@ -173,7 +173,7 @@ void TestIndexBlockDataPrepare::prepare_query_param(const bool is_reverse_scan, 
   context_.allocator_ = test_allocator;
   context_.stmt_allocator_ = test_allocator;
   context_.limit_param_ = nullptr;
-  ASSERT_EQ(OB_SUCCESS, context_.micro_block_handle_mgr_.init(false /* disable limit */, context_.table_store_stat_, context_.query_flag_));
+  ASSERT_EQ(OB_SUCCESS, context_.micro_block_handle_mgr_.init(false /* disable limit */, context_.table_store_stat_, context_.table_scan_stat_, context_.query_flag_));
   context_.is_inited_ = true;
 }
 
@@ -207,7 +207,6 @@ TestIndexBlockDataPrepare::TestIndexBlockDataPrepare(
     data_macro_block_cnt_(0),
     schema_cols_(),
     read_info_(),
-    agg_col_metas_(&allocator_),
     need_agg_data_(need_aggregate_data),
     rows_per_mirco_block_(rows_per_mirco_block),
     mirco_blocks_per_macro_block_(mirco_blocks_per_macro_block),
@@ -606,6 +605,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
   param.recycle_version_ = 0;
   param.root_macro_seq_ = 0;
   param.co_base_snapshot_version_ = 0;
+  param.rec_scn_ = table_key.get_start_scn();
   MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (merge_type_ == MAJOR_MERGE) {
     OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
@@ -617,6 +617,56 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
 }
 
 void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
+{
+  ObMacroBlockWriter writer;
+  row_generate_.reset();
+  const share::SCN reorganization_scn(share::SCN::min_scn());
+  share::SCN end_scn;
+  end_scn.convert_for_tx(SNAPSHOT_VERSION);
+  ObWholeDataStoreDesc desc;
+  ASSERT_EQ(OB_SUCCESS, desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION,
+                                  DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
+  desc.get_desc().static_desc_->schema_version_ = 10;
+  void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
+  root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
+  ASSERT_NE(nullptr, root_index_builder_);
+  desc.get_desc().sstable_index_builder_ = root_index_builder_;
+
+  ASSERT_TRUE(desc.is_valid());
+
+  // ObDataStoreDesc index_desc;
+  // ASSERT_EQ(OB_SUCCESS, index_desc.init(index_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION));
+  // index_desc.schema_version_ = 10;
+  // ASSERT_TRUE(index_desc.is_valid());
+
+  ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
+  if (micro_block_size > 0) {
+    root_index_builder_->index_store_desc_.get_desc().micro_block_size_ = 500;
+  }
+
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
+
+  insert_data(writer);
+
+  ASSERT_EQ(OB_SUCCESS, writer.close());
+  // data write ctx has been moved to root_index_builder
+  ASSERT_EQ(writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
+  data_macro_block_cnt_ = root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
+  ASSERT_GE(data_macro_block_cnt_, 0);
+
+  const int64_t column_cnt =
+    table_schema_.get_column_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  close_builder_and_prepare_sstable(column_cnt);
+  prepare_ddl_memtable();
+}
+
+void TestIndexBlockDataPrepare::prepare_discontinuous_data(const int64_t micro_block_size, const int64_t split_seed)
 {
   ObMacroBlockWriter writer;
   row_generate_.reset();
@@ -638,11 +688,6 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   // index_desc.schema_version_ = 10;
   // ASSERT_TRUE(index_desc.is_valid());
 
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-    // ASSERT_EQ(OB_SUCCESS, index_desc.agg_meta_array_.assign(agg_col_metas_));
-  }
-
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
   if (micro_block_size > 0) {
     root_index_builder_->index_store_desc_.get_desc().micro_block_size_ = 500;
@@ -656,7 +701,16 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   ASSERT_EQ(OB_SUCCESS, writer.open(desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));
 
-  insert_data(writer);
+  if (split_seed > 0) {
+    const int64_t max_row_cnt = max_row_cnt_;
+    max_row_cnt_ = split_seed;
+    insert_data(writer);
+    min_row_seed_ = split_seed + 1;
+    max_row_cnt_ = max_row_cnt;
+    insert_data(writer);
+  } else {
+    insert_data(writer);
+  }
 
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to root_index_builder
@@ -690,9 +744,11 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   // get IntType column
   uint16_t cg_cols[1];
   ObWholeDataStoreDesc desc;
-  share::SCN scn;
-  scn.convert_for_tx(SNAPSHOT_VERSION);
-  ASSERT_EQ(OB_SUCCESS, desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, scn));
+  const share::SCN reorganization_scn(share::SCN::min_scn());
+  share::SCN end_scn;
+  end_scn.convert_for_tx(SNAPSHOT_VERSION);
+  ASSERT_EQ(OB_SUCCESS, desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_,
+      SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
   ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
   for (int64_t i = 0; i < col_descs.count(); ++i) {
     if (col_descs.at(i).col_type_.type_ == ObIntType) {
@@ -714,8 +770,8 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   OK(data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
                     merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION,
                     table_schema_.get_micro_index_clustered(),
-                    0 /*transfer_seq*/,
-                    scn, &cg_schema, 0));
+                    0 /*transfer_seq*/, reorganization_scn,
+                    end_scn, &cg_schema, 0));
   data_desc.get_desc().static_desc_->schema_version_ = 10;
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
@@ -791,7 +847,6 @@ void TestIndexBlockDataPrepare::prepare_ddl_memtable()
 void TestIndexBlockDataPrepare::insert_data(ObMacroBlockWriter &data_writer)
 {
   row_cnt_ = 0;
-
   int64_t seed = min_row_seed_;
   ObDatumRow row;
   ObDatumRow multi_row;
@@ -806,7 +861,6 @@ void TestIndexBlockDataPrepare::insert_data(ObMacroBlockWriter &data_writer)
     rows_per_mirco_block = INT64_MAX;
     rows_per_macro_block = INT64_MAX;
   }
-
   while (true) {
     if (row_cnt_ >= max_row_cnt_) {
       break;
@@ -892,17 +946,16 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ObMacroBlockWriter writer;
   row_generate_.reset();
   ObWholeDataStoreDesc desc;
+  const share::SCN reorganization_scn(share::SCN::min_scn());
   share::SCN end_scn;
   end_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, desc.init(true/*is ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, end_scn));
+  ASSERT_EQ(OB_SUCCESS, desc.init(true/*is ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
+      merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   merge_root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer */);
   ASSERT_NE(nullptr, merge_root_index_builder_);
   desc.get_desc().sstable_index_builder_ = merge_root_index_builder_;
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, merge_root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -970,17 +1023,16 @@ void TestIndexBlockDataPrepare::prepare_partial_cg_data()
   ObMacroBlockWriter writer;
   row_generate_.reset();
   ObWholeDataStoreDesc desc;
+  const share::SCN reorganization_scn(share::SCN::min_scn());
   share::SCN end_scn;
   end_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, desc.init(true/*is ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, end_scn));
+  ASSERT_EQ(OB_SUCCESS, desc.init(true/*is ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
+      merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   merge_root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need index buffer */);
   ASSERT_NE(nullptr, merge_root_index_builder_);
   desc.get_desc().sstable_index_builder_ = merge_root_index_builder_;
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, merge_root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -1130,6 +1182,7 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   param.nested_size_ = res.nested_size_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.ddl_scn_.convert_from_ts(ObTimeUtility::current_time());
+  param.rec_scn_.set_min();
   param.contain_uncommitted_row_ = false;
   param.encrypt_id_ = res.encrypt_id_;
   param.master_key_id_ = res.master_key_id_;
@@ -1210,18 +1263,17 @@ void TestIndexBlockDataPrepare::prepare_contrastive_sstable()
   row_generate_.reset();
 
   ObWholeDataStoreDesc desc;
+  const share::SCN reorganization_scn(share::SCN::min_scn());
   share::SCN end_scn;
   end_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, end_scn));
+  ASSERT_EQ(OB_SUCCESS, desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
+      merge_type_, SNAPSHOT_VERSION, CLUSTER_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, reorganization_scn, end_scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);
   desc.get_desc().sstable_index_builder_ = root_index_builder_;
 
   ASSERT_TRUE(desc.is_valid());
-  if (need_agg_data_) {
-    ASSERT_EQ(OB_SUCCESS, desc.get_desc().col_desc_->agg_meta_array_.assign(agg_col_metas_));
-  }
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(desc.get_desc()));
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;

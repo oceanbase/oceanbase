@@ -14,6 +14,8 @@
 #include "storage/high_availability/ob_physical_copy_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction/ob_refresh_tablet_util.h"
+#include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
 
 namespace oceanbase
@@ -185,7 +187,14 @@ int ObPhysicalCopyTask::fetch_macro_block_(
   ObStorageHAMacroBlockWriter *writer = NULL;
   ObICopyMacroBlockReader *reader = NULL;
   ObIndexBlockRebuilder index_block_rebuilder;
-
+  blocksstable::ObMacroSeqParam macro_seq_param;
+  macro_seq_param.start_ = 0;
+  macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode() && task_idx_ > 0) {
+    macro_seq_param.start_ += task_idx_ * oceanbase::compaction::MACRO_STEP_SIZE;
+  }
+#endif
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
@@ -195,7 +204,7 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
     } else if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, &task_idx_, copy_ctx_->table_key_))) {
+            *copy_ctx_->sstable_index_builder_, macro_seq_param, &task_idx_, copy_ctx_->table_key_))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));

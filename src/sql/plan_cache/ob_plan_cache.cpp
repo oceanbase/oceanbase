@@ -528,6 +528,37 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   return ret;
 }
 
+int ObPlanCache::try_get_plan(common::ObIAllocator &allocator, ObPlanCacheCtx &pc_ctx,
+                              ObCacheObjGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  pc_ctx.has_inactive_plan_ = false;
+  if (OB_ISNULL(pc_ctx.compare_plan_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(pc_ctx.compare_plan_));
+  } else if (OB_FAIL(get_plan(allocator, pc_ctx, guard))) {
+    SQL_PC_LOG(TRACE, "failed to try get plan", K(ret), K(pc_ctx.fp_result_.pc_key_));
+  }
+  return ret;
+}
+
+int ObPlanCache::try_get_ps_plan(ObCacheObjGuard &guard, const ObPsStmtId stmt_id,
+                                 ObPlanCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  pc_ctx.has_inactive_plan_ = false;
+  ObPhysicalPlanCtx *pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  int64_t original_param_cnt = pctx->get_param_store().count();
+  if (OB_ISNULL(pc_ctx.compare_plan_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(pc_ctx.compare_plan_));
+  } else if (OB_FAIL(get_ps_plan(guard, stmt_id, pc_ctx))) {
+    SQL_PC_LOG(TRACE, "failed to try get ps plan", K(ret), K(pc_ctx.fp_result_.pc_key_));
+  }
+  pctx->restore_param_store(original_param_cnt);
+  return ret;
+}
+
 //plan cache获取plan入口
 //1.fast parser获取param sql及raw params
 //2.根据param sql获得pcv set
@@ -705,42 +736,44 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
                                                     raw_sql,
                                                     fp_result))) {
         LOG_WARN("failed to fast parser", K(ret), K(sql_mode), K(pc_ctx.raw_sql_));
-      } else if (OB_FAIL(check_can_do_insert_opt(allocator,
-                                                 pc_ctx,
-                                                 fp_result,
-                                                 can_do_batch_insert,
-                                                 batch_count,
-                                                 first_truncated_sql,
-                                                 is_insert_values))) {
-        LOG_WARN("fail to do insert optimization", K(ret));
-      } else if (can_do_batch_insert) {
-        if (OB_FAIL(rebuild_raw_params(allocator,
-                                       pc_ctx,
-                                       fp_result,
-                                       batch_count))) {
-          LOG_WARN("fail to rebuild raw_param", K(ret), K(batch_count));
-        } else if (pc_ctx.insert_batch_opt_info_.multi_raw_params_.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected multi_raw_params, can't do batch insert opt, but not need to return error",
-              K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
-        } else if (OB_ISNULL(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr, can't do batch insert opt, but not need to return error",
-              K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
-        } else {
-          fp_result.raw_params_.reset();
-          if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
-            LOG_WARN("fail to assign raw_param", K(ret));
+      } else if (!pc_ctx.try_get_plan_) {
+        if (OB_FAIL(check_can_do_insert_opt(allocator,
+                                                  pc_ctx,
+                                                  fp_result,
+                                                  can_do_batch_insert,
+                                                  batch_count,
+                                                  first_truncated_sql,
+                                                  is_insert_values))) {
+          LOG_WARN("fail to do insert optimization", K(ret));
+        } else if (can_do_batch_insert) {
+          if (OB_FAIL(rebuild_raw_params(allocator,
+                                        pc_ctx,
+                                        fp_result,
+                                        batch_count))) {
+            LOG_WARN("fail to rebuild raw_param", K(ret), K(batch_count));
+          } else if (pc_ctx.insert_batch_opt_info_.multi_raw_params_.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected multi_raw_params, can't do batch insert opt, but not need to return error",
+                K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
+          } else if (OB_ISNULL(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null ptr, can't do batch insert opt, but not need to return error",
+                K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
           } else {
-            pc_ctx.sql_ctx_.set_is_do_insert_batch_opt(batch_count);
-            fp_result.pc_key_.name_.assign_ptr(first_truncated_sql.ptr(), first_truncated_sql.length());
-            LOG_DEBUG("print new fp_result.pc_key_.name_", K(fp_result.pc_key_.name_));
+            fp_result.raw_params_.reset();
+            if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
+              LOG_WARN("fail to assign raw_param", K(ret));
+            } else {
+              pc_ctx.sql_ctx_.set_is_do_insert_batch_opt(batch_count);
+              fp_result.pc_key_.name_.assign_ptr(first_truncated_sql.ptr(), first_truncated_sql.length());
+              LOG_DEBUG("print new fp_result.pc_key_.name_", K(fp_result.pc_key_.name_));
+            }
           }
+        } else if (!is_insert_values &&
+                  OB_FAIL(ObValuesTableCompression::try_batch_exec_params(allocator, pc_ctx,
+                                                        *pc_ctx.sql_ctx_.session_info_, fp_result))) {
+          LOG_WARN("failed to check fold params valid", K(ret));
         }
-      } else if (!is_insert_values &&
-                 OB_FAIL(ObValuesTableCompression::try_batch_exec_params(allocator, pc_ctx,
-                                                      *pc_ctx.sql_ctx_.session_info_, fp_result))) {
-        LOG_WARN("failed to check fold params valid", K(ret));
       }
     }
   }

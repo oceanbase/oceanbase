@@ -186,7 +186,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 29;
+  static const int64_t DATA_VERSION_NUM = 33;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -262,6 +262,8 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 3)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 4)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 5)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
 
@@ -348,7 +350,22 @@ private:
   int post_upgrade_for_optimizer_stats();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 2)
+class ObUpgradeFor4352Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4352Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4352Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_dynamic_partition();
+};
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 3)
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 0)
+
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

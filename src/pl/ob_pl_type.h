@@ -378,7 +378,7 @@ public:
   void reset_charset() { charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI; }
   ObCollationType get_charset() const { return charsetnr_; }
 
-  uint64_t get_type_info_id() const { return type_info_id_; }
+  uint64_t get_type_info_id() const { return is_enum_or_set_type() ? type_info_id_ : OB_INVALID_ID; }
   int set_type_info(const ObIArray<common::ObString> &type_info);
   pl::ObPLEnumSetCtx* get_enum_set_ctx() { return enum_set_ctx_; }
   void set_enum_set_ctx(pl::ObPLEnumSetCtx *enum_set_ctx) { enum_set_ctx_ = enum_set_ctx; }
@@ -569,7 +569,7 @@ public:
 
   int serialize(share::schema::ObSchemaGetterGuard &schema_guard, const sql::ObSQLSessionInfo &session, const common::ObTimeZoneInfo *tz_info,
                 obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
-  int deserialize(share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator,
+  int deserialize(share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator, sql::ObSQLSessionInfo *session,
                   const common::ObCharsetType charset, const common::ObCollationType cs_type,
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
                   const char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
@@ -761,32 +761,35 @@ class ObObjAccessIdx
 public:
   enum AccessType //必须与enum ExternalType的定义保持一致
   {
-    IS_INVALID = -1,
-    IS_LOCAL = 0,      //本地变量：PL内部定义的变量
-    IS_DB_NS = 1,          //外部变量：包变量所属的DB
-    IS_PKG_NS = 2,         //外部变量：包变量所属的PKG
-    IS_PKG = 3,            //外部变量：包变量
-    IS_USER = 4,           //外部变量：用户变量
-    IS_SESSION = 5,        //外部变量：SESSION系统变量
-    IS_GLOBAL = 6,         //外部变量：GLOBAL系统变量
-    IS_TABLE_NS = 7,       //外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
-    IS_TABLE_COL = 8,      //外部变量: 用户列,用于实现 %TYPE
-    IS_LABEL_NS = 9,       //Label
-    IS_SUBPROGRAM_VAR = 10, //Subprogram Var
-    IS_EXPR = 11,           //for table type access index
-    IS_CONST = 12,          //常量 special case for is_expr
-    IS_PROPERTY = 13,       //固有属性，如count
-    IS_INTERNAL_PROC = 14,  //Package中的Procedure
-    IS_EXTERNAL_PROC = 15, //Standalone的Procedure
-    IS_NESTED_PROC = 16,
-    IS_TYPE_METHOD = 17,    //自定义类型的方法
-    IS_SYSTEM_PROC = 18,    //系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
-    IS_UDT_NS = 19,
-    IS_UDF_NS = 20,
-    IS_LOCAL_TYPE = 21,     // 本地的自定义类型
-    IS_PKG_TYPE = 22,       // 包中的自定义类型
-    IS_SELF_ATTRIBUTE = 23, // self attribute for udt
-    IS_DBLINK_PKG_NS = 24,  // dblink package
+    IS_INVALID            = -1,
+    IS_LOCAL              = 0,//本地变量：PL内部定义的变量
+    IS_DB_NS              = 1,//外部变量：包变量所属的DB
+    IS_PKG_NS             = 2,//外部变量：包变量所属的PKG
+    IS_PKG                = 3,//外部变量：包变量
+    IS_USER               = 4,//外部变量：用户变量
+    IS_SESSION            = 5,//外部变量：SESSION系统变量
+    IS_GLOBAL             = 6,//外部变量：GLOBAL系统变量
+    IS_TABLE_NS           = 7,//外部变量: 用户表,用于实现 %TYPE, %ROWTYPE
+    IS_TABLE_COL          = 8,//外部变量: 用户列,用于实现 %TYPE
+    IS_LABEL_NS           = 9,//Label
+    IS_SUBPROGRAM_VAR     = 10,//Subprogram Var
+    IS_EXPR               = 11,//for table type access index
+    IS_CONST              = 12,//常量 special case for is_expr
+    IS_PROPERTY           = 13,//固有属性，如count
+    IS_INTERNAL_PROC      = 14,//Package中的Procedure
+    IS_EXTERNAL_PROC      = 15,//Standalone的Procedure
+    IS_NESTED_PROC        = 16,//
+    IS_TYPE_METHOD        = 17,//自定义类型的方法
+    IS_SYSTEM_PROC        = 18,//系统中已经预定义的Procedure(如: RAISE_APPLICATION_ERROR)
+    IS_UDT_NS             = 19,
+    IS_UDF_NS             = 20,
+    IS_LOCAL_TYPE         = 21,// 本地的自定义类型
+    IS_PKG_TYPE           = 22,// 包中的自定义类型
+    IS_SELF_ATTRIBUTE     = 23,// self attribute for udt
+    IS_DBLINK_PKG_NS      = 24,// dblink package
+    IS_UDT_MEMBER_ROUTINE = 25,// UDT member routine
+    IS_TRIGGER            = 26,// Trigger
+    IS_SEQUENCE           = 27,// Sequence
   };
 
   ObObjAccessIdx()
@@ -849,6 +852,10 @@ public:
   bool is_pkg_type() const { return IS_PKG_TYPE == access_type_; }
   bool is_udt_type() const { return IS_UDT_NS == access_type_; }
   bool is_udf_type() const { return IS_UDF_NS == access_type_; }
+  bool is_pkg_ns() const { return IS_PKG_NS == access_type_; }
+  bool is_database() const { return IS_DB_NS == access_type_; }
+  bool is_trigger() const { return IS_TRIGGER == access_type_; }
+  bool is_sequence() const { return IS_SEQUENCE == access_type_; }
 
   static bool is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
@@ -878,7 +885,7 @@ public:
   static int get_package_id(const sql::ObRawExpr *expr,
                             uint64_t& package_id, uint64_t *p_var_idx = NULL);
   static bool has_same_collection_access(const sql::ObRawExpr *expr, const sql::ObObjAccessRawExpr *access_expr);
-  static bool has_collection_access(const sql::ObRawExpr *expr);
+  static int has_collection_access(const sql::ObRawExpr *expr, bool &collection_access);
   static int datum_need_copy(const sql::ObRawExpr *into, const sql::ObRawExpr *value, AccessType &alloc_scop);
   static int64_t get_local_variable_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static int64_t get_subprogram_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
@@ -909,6 +916,7 @@ enum ObPLCursorFlag {
   TRANSFERING_RESOURCE = 4, // this cursor is returned by a udf
   SYNC_CURSOR = 8, // this cursor from package cursor sync, can not used by this server.
   INVALID_CURSOR = 16, // this cursor is convert to a dbms cursor, invalid for dynamic cursor op.
+  DBMS_SQL_CURSOR = 32, // this is a dbms_sql cursor
 };
 class ObPLCursorInfo
 {
@@ -985,7 +993,9 @@ public:
     forall_rollback_ = false;
     if (is_session_cursor()) {
       cursor_flag_ = SESSION_CURSOR;
-    } else {
+    } else if (is_dbms_sql_cursor()) {
+      cursor_flag_ = DBMS_SQL_CURSOR;
+    }else {
       cursor_flag_ = CURSOR_FLAG_UNDEF;
     }
     // ref_count_ = 0; // 这个不要清零，因为oracle在close之后，它的ref count还是保留的
@@ -1020,7 +1030,7 @@ public:
     spi_cursor_ = spi_cursor;
     is_explicit_ = spi_cursor != NULL;
   }
-  virtual int close(sql::ObSQLSessionInfo &session, bool is_reuse = false);
+  virtual int close(sql::ObSQLSessionInfo &session, bool is_reuse = false, bool close_by_open_thread = false);
 
   inline void set_id(int64_t id) { id_ = id; }
   inline void set_entity(lib::MemoryContext entity) { entity_ = entity; }
@@ -1031,6 +1041,7 @@ public:
   inline void set_for_update() { for_update_ = true; }
   inline void set_hidden_rowid() { has_hidden_rowid_ = true; }
   inline void set_streaming() { is_streaming_ = true; }
+  inline void set_unstreaming() { is_streaming_ = false; }
   inline void set_scrollable() { is_scrollable_ = true; }
   inline bool is_scrollable() { return is_scrollable_; }
   inline bool get_fetched() const { return fetched_; }
@@ -1067,7 +1078,7 @@ public:
   inline const ObNewRow &get_last_row() const { return last_row_; }
   inline ObNewRow &get_last_row() { return last_row_; }
   inline sql::ObSPIResultSet* get_cursor_handler() const { return reinterpret_cast<sql::ObSPIResultSet*>(spi_cursor_); }
-  inline sql::ObSPICursor* get_spi_cursor() const { return reinterpret_cast<sql::ObSPICursor*>(spi_cursor_); }
+  virtual inline sql::ObSPICursor* get_spi_cursor() const { return reinterpret_cast<sql::ObSPICursor*>(spi_cursor_); }
 
   inline bool get_isopen() const { return is_explicit_ ? isopen_ : false; }
   inline bool get_save_exception() const { return save_exception_; }
@@ -1117,8 +1128,16 @@ public:
 
   inline ObIAllocator *get_allocator() { return NULL == entity_ ? allocator_ : &entity_->get_arena_allocator(); }
 
-  inline void set_ref_by_refcursor() { set_flag_bit(REF_BY_REFCURSOR); }
+  inline void set_ref_by_refcursor() {
+    set_flag_bit(REF_BY_REFCURSOR);
+    clear_flag_bit(DBMS_SQL_CURSOR);
+  }
   inline bool is_ref_by_refcursor() const { return test_flag_bit(REF_BY_REFCURSOR); }
+  inline void set_dbms_sql_cursor() {
+    set_flag_bit(DBMS_SQL_CURSOR);
+    clear_flag_bit(REF_BY_REFCURSOR);
+  }
+  inline bool is_dbms_sql_cursor() const { return test_flag_bit(DBMS_SQL_CURSOR); }
 
   inline void set_is_session_cursor() { set_flag_bit(SESSION_CURSOR); }
   inline bool is_session_cursor() const { return test_flag_bit(SESSION_CURSOR); }
@@ -1152,10 +1171,14 @@ public:
                           bool is_local_for_update = false,
                           sql::ObSQLSessionInfo* session_info = nullptr);
   ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
-
+  virtual int get_field_count(int64_t &field_count)
+  {
+    return OB_NOT_SUPPORTED;
+  }
 
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }
+  virtual inline bool is_async() { return false; }
 
   TO_STRING_KV(K_(id),
                K_(is_explicit),
@@ -1222,6 +1245,79 @@ protected:
   bool is_packed_;
   ObString sql_text_;     //non seesion的非流式游标保存sql text
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
+};
+
+class ObPsCursorInfo : public ObPLCursorInfo
+{
+public:
+  ObPsCursorInfo(ObIAllocator *allocator) :
+    ObPLCursorInfo(allocator),
+    cursor_store_(NULL),
+    spin_lock_(common::ObLatchIds::PS_CURSOR_LOCK),
+    fetch_size_(512),
+    store_ret_(OB_SUCCESS),
+    client_close_(false),
+    ora_max_ret_rows_(INT64_MAX)
+  {
+    is_async_ = can_open_async_cursor();
+  };
+
+  virtual ~ObPsCursorInfo()
+  {
+    cursor_store_ = NULL;
+    fetch_size_ = 0;
+    store_ret_ = false;
+    client_close_ = false;
+    ps_sql_.reset();
+  }
+
+  inline void set_cursor_store(sql::ObSPICursor *cursor_store) { cursor_store_ = cursor_store; }
+  inline sql::ObSPICursor *get_cursor_store() { return cursor_store_; }
+  virtual inline sql::ObSPICursor* get_spi_cursor() const { return cursor_store_; }
+  inline void set_spi_cursor(sql::ObSPICursor *v) { spi_cursor_ = v; }
+  inline ObSpinLock &get_spin_lock() { return spin_lock_; }
+  inline void set_fetch_size(uint64_t fetch_size) { fetch_size_ = fetch_size; }
+  inline uint64_t get_fetch_size() { return fetch_size_; }
+  inline void set_store_ret(int store_ret) { ATOMIC_STORE(&store_ret_, store_ret); }
+  inline int get_store_ret() { return ATOMIC_LOAD(&store_ret_); }
+  inline void set_client_close(bool client_close) { ATOMIC_STORE(&client_close_, client_close); }
+  inline bool is_client_close() { return ATOMIC_LOAD(&client_close_); }
+  inline void set_ps_sql(ObString &sql) { ps_sql_ = sql; }
+  inline ObString &get_ps_sql() { return ps_sql_; }
+  inline ParamStore &get_exec_params() { return exec_params_; }
+  virtual inline bool is_async() { return is_async_; }
+  inline void set_is_async(bool is_async) { is_async_ = is_async; }
+  inline void set_ora_max_ret_rows(int64_t max_ret_rows) { ora_max_ret_rows_ = max_ret_rows; }
+  inline int64_t get_ora_max_ret_rows() { return ora_max_ret_rows_; }
+  int init_params(ParamStore &exec_params);
+  int prepare_cursor_store(sql::ObSQLSessionInfo &session,
+                           const common::ColumnsFieldIArray &fields);
+  virtual int close(sql::ObSQLSessionInfo &session,
+                    bool is_reuse = false,
+                    bool close_by_open_thread = false);
+  virtual int get_field_columns(const common::ColumnsFieldArray *&fields);
+  virtual int get_field_count(int64_t &field_count);
+  ObPLExecCtx *get_exec_ctx() { return exec_ctx_; }
+  void set_exec_ctx(ObPLExecCtx *exec_ctx) { exec_ctx_ = exec_ctx;}
+  static void reduce_async_cursor_count();
+
+private:
+  // if return true, need to reduce async ps cursor count after detory cursor
+  // if return false, do nothing
+  static bool can_open_async_cursor();
+
+private:
+  ObPLExecCtx *exec_ctx_;
+  sql::ObSPICursor *cursor_store_; // store row data for cursor
+  ObSpinLock spin_lock_; // only use it in async mode
+  uint64_t fetch_size_; // the fetch size of cursor, only make sense in async mode
+  int store_ret_; // the store thread return value, only make sense in async mode
+  volatile bool client_close_; // whether the client has closed the cursor, only make sense in async mode
+  bool is_async_;  // whether the current cursor is asynchronous
+  common::ObString ps_sql_;
+  ParamStore exec_params_; // the params of ps stmt
+  int64_t ora_max_ret_rows_;
+  static int32_t ASYNC_PS_CURSOR_COUNT; // the number of asynchronous cursors on the current server
 };
 
 class ObPLGetCursorAttrInfo

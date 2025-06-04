@@ -2067,7 +2067,6 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
         LOG_WARN("ls should not be NULL", K(ret), K(tablet_restore_ctx_));
       } else if (OB_FAIL(ls->ha_get_tablet(tablet_restore_ctx_.tablet_id_, tablet_restore_ctx_.tablet_handle_))) {
         if (OB_TABLET_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
           FLOG_INFO("tablet has been deleted", K(tablet_restore_ctx_));
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(tablet_restore_ctx_));
@@ -2227,6 +2226,7 @@ int ObTabletRestoreTask::init(ObTabletRestoreCtx &tablet_restore_ctx)
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_SET_RESTORE_TASK_FAILED_FOR_RETRY)
 int ObTabletRestoreTask::process()
 {
   int ret = OB_SUCCESS;
@@ -2299,6 +2299,14 @@ int ObTabletRestoreTask::process()
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(tablet_restore_ctx_));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)
+      && (GCONF.errsim_test_tablet_id == tablet_restore_ctx_->tablet_id_.id())
+      && ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)) {
+    ret = EN_SET_RESTORE_TASK_FAILED_FOR_RETRY;
+  }
+#endif
   return ret;
 }
 

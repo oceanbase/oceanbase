@@ -872,7 +872,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case NLJ_BATCHING_ENABLED:
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_TOPN_RUNTIME_FILTER:
-    case DISABLE_GTT_SESSION_ISOLATION: {
+    case DISABLE_GTT_SESSION_ISOLATION:
+    case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -1012,6 +1013,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && 0 <= val.get_int();
       break;
     }
+    case ENABLE_PDML_INSERT_UP:
     case ENABLE_CONSTANT_TYPE_DEMOTION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
@@ -1023,6 +1025,12 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("range"));
       break;
     }
+    case PARQUET_FILTER_PUSHDOWN_LEVEL:
+    case ORC_FILTER_PUSHDOWN_LEVEL: {
+      is_valid = val.is_int() && val.get_int() >= 0 && val.get_int() <= 4;
+      break;
+    }
+
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -1331,6 +1339,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_DISTINCT_PUSHDOWN: return T_DISTINCT_PUSHDOWN;
     case T_NO_USE_HASH_SET: return T_USE_HASH_SET;
     case T_NO_USE_DISTRIBUTED_DML:    return T_USE_DISTRIBUTED_DML;
+    case T_NO_PUSH_SUBQ:         return T_PUSH_SUBQ;
     default:                    return type;
   }
 }
@@ -1412,6 +1421,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
     case T_INDEX_ASC_HINT:    return "INDEX_ASC";
     case T_INDEX_DESC_HINT:   return "INDEX_DESC";
+    case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
     default:                    return NULL;
   }
 }

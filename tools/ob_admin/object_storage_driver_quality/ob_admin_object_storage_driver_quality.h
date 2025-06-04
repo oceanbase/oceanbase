@@ -51,6 +51,9 @@ const std::string RED_COLOR_PREFIX = "\033[0;32;31m";
 const std::string LIGHT_BLUE_PREFIX = "\033[1;34m";
 const std::string DARY_GRAY_PREFIX = "\033[1;30m";
 
+// metric final dump file name
+static const char *metric_final_dump_file_name = "metric_final_dump.ini";
+
 // global constant
 constexpr int64_t TIME_STR_LENGTH = 128;
 constexpr int64_t FILE_PATH_LENGTH = common::OB_MAX_URI_LENGTH;
@@ -81,6 +84,23 @@ constexpr double  DEFAULT_LIMIT_CPU                 = 0.2;          // the defau
 constexpr int64_t DEFAULT_QUEUE_SIZE                = 100;          // the default task handler queue size
 constexpr int64_t DEFAULT_PROB_OF_WRITING_OLD_DATA  = 20;
 constexpr int64_t DEFAULT_PROB_OF_PARALLEL          = 10;
+static constexpr double LATENCY_QUANTILES[] = {
+  0,
+  0.5,
+  0.9,
+  0.95,
+  0.99,
+  1.0
+};
+
+static const char *LATENCY_QUANTILES_TITLE[] = {
+  "min",
+  "P50",
+  "P90",
+  "P95",
+  "P99",
+  "max"
+};
 
 enum OSDQOpType
 {
@@ -94,15 +114,22 @@ enum OSDQOpType
 
 
 // in order to show in metric summary
-static const char *osdq_op_type_names[] = {
+static const char *OSDQ_OP_TYPE_NAMES[] = {
   "WS",
   "MW",
   "AW",
   "RS",
   "DE"
 };
+static const char *OSDQ_OP_TYPE_NAMES_FOR_FINAL_DUMP[] = {
+  "put",
+  "multipart",
+  "append",
+  "pread",
+  "delete"
+};
 
-static_assert((sizeof(osdq_op_type_names) / sizeof(char *)) == static_cast<int>(MAX_OPERATE_TYPE),
+static_assert((sizeof(OSDQ_OP_TYPE_NAMES) / sizeof(char *)) == static_cast<int>(MAX_OPERATE_TYPE),
     "the length of osdq_op_type_names should be equal to MAX_OPERATE_TYPE");
 
 double cal_time_diff(const timeval &start, const timeval &end);
@@ -245,6 +272,8 @@ public:
    */
   int summary(const char *map_name_str, OSDQLogEntry &log) const;
 
+  int get_latency_quantile_vals(ObIArray<int64_t> &latency_quantile_vals) const;
+
   /**
    *  @brief Just estimating the dynamic memory requested by time_map_
    */
@@ -349,6 +378,7 @@ private:
 
   int print_csv_title_();
   int print_csv_dump_();
+  int final_dump_();
 
 private:
   static constexpr int64_t TITLE_LEN = 64;
@@ -400,7 +430,7 @@ struct OSDQParameters
   ~OSDQParameters() {}
   TO_STRING_KV(K(base_path_), K(storage_info_str_), K(scene_type_),
       K(run_time_s_), K(interval_s_), K(thread_cnt_), K(resource_limited_type_),
-      K(limit_run_time_s_), K(limit_memory_mb_), K(limit_cpu_));
+      K(limit_run_time_s_), K(limit_memory_mb_), K(limit_cpu_), K(use_obdal_));
   // common param
   char base_path_[common::OB_MAX_URI_LENGTH];
   char storage_info_str_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
@@ -414,6 +444,7 @@ struct OSDQParameters
   int64_t limit_run_time_s_;
   int64_t limit_memory_mb_;
   double limit_cpu_;
+  bool use_obdal_;
 };
 
 class OSDQScene;
@@ -437,6 +468,7 @@ public:
 
 private:
   int parse_cmd_(int argc, char *argv[]);
+  int param_dump();
   int set_environment_();
   int run_all_tests_();
   int print_usage_();

@@ -416,9 +416,7 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
             } else {
               negotiation_message_t nego_message_ack;
               nego_message_ack.type = nego_message->type;
-              int has_method_none = test_server_auth_methods(USSL_AUTH_NONE);
-              if (0 != fd_enable_ssl_for_server(s->fd, ssl_config_ctx_id, nego_message->type,
-                  has_method_none)) {
+              if (0 != fd_enable_ssl_for_server(s->fd, ssl_config_ctx_id, nego_message->type)) {
                 err = EUCLEAN;
                 s->has_error = 1;
                 ussl_log_error("fd_enable_ssl_for_server failed, fd:%d", s->fd);

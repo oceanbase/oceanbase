@@ -419,6 +419,9 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
                                        K(session), K(raw_sql.empty()));
     } else if (OB_FAIL(session->save_session(*session_value))) {
       LOG_WARN("failed to save session", K(ret));
+    } else if (session->is_in_external_catalog()
+               && OB_FAIL(session->set_internal_catalog_db())) {
+      LOG_WARN("failed to set catalog", K(ret));
     } else if (lib::is_oracle_mode()) {
       if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
         LOG_WARN("failed to init oracle proxy", K(ret));

@@ -1699,55 +1699,6 @@ int ObDDLKV::get_schema_info(
     }                                                                                           \
   }
 
-int ObDDLKV::exist(
-    const ObTableIterParam &param,
-    ObTableAccessContext &context,
-    const ObDatumRowkey &rowkey,
-    bool &is_exist,
-    bool &has_found)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support get for full direct load", K(ret));
-  } else if (ddl_memtables_.count() == 0) {
-    is_exist = false;
-    has_found = false;
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else if (OB_FAIL(ddl_memtables_.at(0)->exist(param, context, rowkey, is_exist, has_found))) {
-    LOG_WARN("fail to get row", K(ret));
-  }
-  return ret;
-}
-
-int ObDDLKV::exist(ObRowsInfo &rowsInfo, bool &is_exist, bool &has_found)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support get for full direct load", K(ret));
-  } else if (ddl_memtables_.count() == 0) {
-    is_exist = false;
-    has_found = false;
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else if (OB_FAIL(ddl_memtables_.at(0)->exist(rowsInfo, is_exist, has_found))) {
-    LOG_WARN("fail to get row", K(ret));
-  }
-  return ret;
-}
-
 int ObDDLKV::scan(
     const ObTableIterParam &param,
     ObTableAccessContext &context,

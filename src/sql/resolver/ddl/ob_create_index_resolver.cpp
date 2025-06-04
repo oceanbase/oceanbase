@@ -202,10 +202,19 @@ int ObCreateIndexResolver::resolve_index_column_node(
           const ObColumnSchemaV2 *column_schema = NULL;
           if (is_oracle_mode()) { // oracle mode is not support vector column yet
           } else if (OB_NOT_NULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
-            if (ob_is_collection_sql_type(column_schema->get_data_type()) && index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
+            if (ob_is_collection_sql_type(column_schema->get_data_type())) {
+              bool is_sparse_vec_col = false;
+              if (index_keyname_ != INDEX_KEYNAME::VEC_KEY) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not support index type create on vector or array column yet", K(ret), K(index_keyname_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on vector or array column is");
+              } else if (OB_FAIL(ObVectorIndexUtil::is_sparse_vec_col(column_schema->get_extended_type_info(), is_sparse_vec_col))) {
+                LOG_WARN("fail to check is sparse vec col", K(ret));
+              } else if (is_sparse_vec_col) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("build sparse vector index afterward not supported", K(ret), K(index_keyname_));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "build sparse vector index afterward is");
+              }
             }
           }
         }
@@ -223,10 +232,10 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.prefix_len_ = 0;
       }
       // not support fts or vec index in same table
+      uint64_t tenant_data_version = 0;
       if (OB_SUCC(ret)) {
         bool has_fts_index = false;
         bool has_vec_index = false;
-        uint64_t tenant_data_version = 0;
         if (OB_ISNULL(session_info_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
@@ -245,7 +254,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
       }
 #ifdef OB_BUILD_SHARED_STORAGE
       if (OB_SUCC(ret)) {
-        if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_) {
+        if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_ && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
@@ -253,7 +262,9 @@ int ObCreateIndexResolver::resolve_index_column_node(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode() && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)) {
+        } else if (GCTX.is_shared_storage_mode()
+                   && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
+                   && tenant_data_version < DATA_VERSION_4_3_5_2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
@@ -479,6 +490,18 @@ int ObCreateIndexResolver::resolve_index_option_node(
       }
     }
   }
+  // Set default storage cache policy for index, cause the index_scope_ only be set after resolve_table_options
+  if (OB_FAIL(ret)) {
+  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode() && storage_cache_policy_.empty()) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+      LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
+    } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
+      if (OB_FAIL(set_default_storage_cache_policy(true/*is_create_index*/))) {
+        SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
+      }
+    }
+  }
 
   // storing column
   if (OB_SUCC(ret)) {
@@ -594,6 +617,9 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null", K(ret));
+  } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index in catalog is");
   } else {
     stmt_ = crt_idx_stmt;
     if_not_exist_node = parse_tree.children_[7];
@@ -777,7 +803,18 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-  if (OB_SUCC(ret) &&
+  // Check storage cache policy for index
+  if (OB_FAIL(ret)) {
+  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
+    ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+    // Version validation is included in check_and_set_default_storage_cache_policy
+    if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy_, &index_schema))) {
+      LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy_));;
+    }
+  }
+
+
+if (OB_SUCC(ret) &&
       OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
           data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {
     LOG_WARN("fail to check supportability for building index",
@@ -953,8 +990,10 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
     index_arg.sql_mode_ = session_info_->get_sql_mode();
+    index_arg.is_index_scope_specified_ = !(NOT_SPECIFIED == index_scope_);
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
+    create_index_stmt->set_storage_cache_policy(storage_cache_policy_);
     if (OB_FAIL(ret)) {
     } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_ &&
                OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, index_arg.index_type_, index_arg.index_name_, index_arg.index_name_))) {

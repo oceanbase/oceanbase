@@ -16,6 +16,7 @@
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/worker.h"
 #include "sql/parser/parse_malloc.h"
+#include "common/ob_target_specific.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

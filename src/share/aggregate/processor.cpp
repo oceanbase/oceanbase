@@ -27,16 +27,7 @@ int Processor::init()
   if (inited_) {
     LOG_DEBUG("already inited, do nothing");
   } else {
-    if (OB_ISNULL(row_selector_ = (uint16_t *)allocator_.alloc(
-                    sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      MEMSET(row_selector_, 0, sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (agg_ctx_.aggr_infos_.count() <= 0) {
+    if (agg_ctx_.aggr_infos_.count() <= 0) {
       // do nothing
     } else if (OB_UNLIKELY(agg_ctx_.aggr_infos_.count() >= MAX_SUPPORTED_AGG_CNT)) {
       ret = OB_NOT_SUPPORTED;
@@ -88,7 +79,6 @@ void Processor::destroy()
   }
   fast_single_row_aggregates_.reset();
   allocator_.reset();
-  row_selector_ = nullptr;
   cur_batch_group_idx_ = 0;
   cur_batch_group_buf_ = nullptr;
   inited_ = false;
@@ -597,6 +587,69 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
       }
       break;
     }
+    case T_FUN_TOP_FRE_HIST: {
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        TopFreHistVecExtraResult *&top_store = extra->top_fre_hist_store_;
+        if (nullptr == top_store) {
+          void *tmp_buf = NULL;
+          extra->is_top_fre_hist_ = true;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(TopFreHistVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(top_store = new (tmp_buf) TopFreHistVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          } else if (OB_FAIL(top_store->init_topk_fre_histogram_item(agg_ctx.allocator_,
+                                                                     aggr_info,
+                                                                     agg_ctx.eval_ctx_))) {
+            LOG_WARN("failed to init topk fre histogram item", K(ret));
+          } else {
+            extra_store_inited = true;
+            agg_ctx.need_advance_collect_ = true;
+          }
+        }
+      }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        HybridHistVecExtraResult *&store = extra->hybrid_hist_store_;
+        DataStoreVecExtraResult *&data_store = extra->data_store;
+
+        if (nullptr == store) {
+          void *tmp_buf = NULL;
+          extra->is_hybrid_hist_ = true;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(HybridHistVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(store = new (tmp_buf) HybridHistVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          } else if (OB_FAIL(store->init_data_set(agg_ctx.allocator_,
+                                                  aggr_info,
+                                                  agg_ctx.eval_ctx_,
+                                                  agg_ctx.io_event_observer_))) {
+            LOG_WARN("failed to init data set", K(ret));
+          } else if (OB_FAIL(alloc_extra_space_with_order_by(agg_ctx,
+                                                             data_store,
+                                                             extra_allocator,
+                                                             aggr_info))) {
+            SQL_LOG(WARN, "alloc extra space with order by failed", K(ret));
+          } else {
+            data_store->set_need_count(true);
+            extra_store_inited = true;
+            agg_ctx.need_advance_collect_ = true;
+          }
+        }
+      }
+      break;
+    }
     case T_FUN_GROUP_RANK:
     case T_FUN_GROUP_DENSE_RANK:
     case T_FUN_GROUP_PERCENT_RANK:
@@ -616,10 +669,10 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
-    case T_FUN_HYBRID_HIST:
-    case T_FUN_TOP_FRE_HIST:
     case T_FUN_AGG_UDF:
-    case T_FUNC_SYS_ARRAY_AGG: {
+    case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
       agg_ctx.need_advance_collect_ = true;
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported aggregate type", K(ret), K(aggr_info.get_expr_type()));
@@ -1101,6 +1154,9 @@ inline static int add_one_row(IAggregate *aggr, RuntimeContext &agg_ctx, const i
     reinterpret_cast<ColumnFmt *>(data_vec)->get_payload(batch_idx, data, data_len);
     is_null = reinterpret_cast<ColumnFmt *>(data_vec)->is_null(batch_idx);
   }
+  ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx.eval_ctx_);
+  guard.set_batch_size(batch_size);
+  guard.set_batch_idx(batch_idx);
   if (OB_FAIL(aggr->add_one_row(agg_ctx, batch_idx, batch_size, is_null, data, data_len, agg_col_id,
                                 agg_cell))) {
     SQL_LOG(WARN, "add one row failed", K(ret));

@@ -152,10 +152,13 @@ int ObTransformExprPullup::need_transform(const ObIArray<ObParentDMLStmt> &paren
   int ret = OB_SUCCESS;
   bool is_valid = false;
   need_trans = false;
-
-  if (OB_FAIL(check_stmt_validity(&stmt, is_valid))) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
     LOG_WARN("fail check stmt validity", K(ret));
-  } else if (is_valid) {
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else {
     const ObSelectStmt &select_stmt = static_cast<const ObSelectStmt &>(stmt);
     const ObQueryHint *query_hint = NULL;
     if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
@@ -791,9 +794,9 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
         if (OB_FAIL(parent.replace_relation_exprs(old_child_project_columns,
                                                   select_exprs_can_pullup))) {
           LOG_WARN("fail to replace inner stmt expr", K(ret));
-        } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("fail to formalize stmt", K(ret));
-        } else if (OB_FAIL(child.formalize_stmt(ctx_->session_info_))) {
+        } else if (OB_FAIL(child.formalize_stmt(ctx_->session_info_, false))) {
           LOG_WARN("fail to formalize stmt", K(ret));
         }
       }

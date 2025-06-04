@@ -14,6 +14,7 @@
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "src/storage/multi_data_source/mds_table_impl.h"
+#include "storage/truncate_info/ob_truncate_info.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -189,7 +190,7 @@ int ObTabletDumpMdsNodeOperator::dump<compaction::ObMediumCompactionInfoKey, com
   if (table_id == key.mds_table_id_ && unit_id == key.mds_unit_id_) {
     const mds::TwoPhaseCommitState &state = node.status_.get_state();
     if (OB_UNLIKELY(state != mds::TwoPhaseCommitState::ON_COMMIT)) {
-      ret = OB_SUCCESS;
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid state", K(ret), K(state));
     } else if (!medium_info_list.is_memory_object()) {
       if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator_, medium_info_list.ptr_))) {
@@ -250,37 +251,5 @@ int ObTabletDumpMdsNodeOperator::operator()(const mds::MdsDumpKV &kv)
   return ret;
 }
 
-
-ObTabletMediumInfoNodeOperator::ObTabletMediumInfoNodeOperator(ObTabletDumpedMediumInfo &medium_info_list, common::ObIAllocator &allocator)
-  : medium_info_list_(medium_info_list),
-    allocator_(allocator),
-    dumped_(false)
-{
-}
-
-int ObTabletMediumInfoNodeOperator::operator()(const mds::MdsDumpKV &kv)
-{
-  int ret = OB_SUCCESS;
-  constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
-  constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
-  const mds::MdsDumpKey &key = kv.k_;
-  const mds::MdsDumpNode &node = kv.v_;
-
-  if (table_id == key.mds_table_id_ && unit_id == key.mds_unit_id_) {
-    const mds::TwoPhaseCommitState &state = node.status_.get_state();
-    if (OB_UNLIKELY(state != mds::TwoPhaseCommitState::ON_COMMIT)) {
-      ret = OB_SUCCESS;
-      LOG_WARN("invalid state", K(ret), K(state));
-    } else if (OB_FAIL(medium_info_list_.append(key, node))) {
-      LOG_WARN("failed to copy mds dump node", K(ret));
-    } else {
-      dumped_ = true;
-    }
-  }
-
-  return ret;
-
-  return ret;
-}
 } // namespace storage
 } // namespace oceanbase

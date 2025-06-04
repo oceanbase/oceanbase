@@ -51,10 +51,9 @@ public:
     char *buf_{nullptr};
     int64_t buf_len_{0};
     int64_t idx_{0};
-    ObMetaDiskAddr addr_{};
     int32_t crc_{0};
 
-    TO_STRING_KV(KP_(buf), K_(buf_len), K_(idx), K_(addr), K_(crc));
+    TO_STRING_KV(KP_(buf), K_(buf_len), K_(idx), K_(crc));
   };
 
 protected:
@@ -62,7 +61,6 @@ protected:
   void build_item_buf(ObArray<ItemInfo> &item_arr);
   void write_items(ObArray<ItemInfo> &item_arr);
   void iter_read_items(const ObArray<ItemInfo> &item_arr);
-  void read_items(const ObArray<ItemInfo> &item_arr);
 
 protected:
   static const int64_t MACRO_BLOCK_SIZE = 128 * 1024;
@@ -120,17 +118,12 @@ void TestLinkedMacroBlock::write_items(ObArray<ItemInfo> &item_arr)
 {
   ObLinkedMacroBlockItemWriter item_writer;
   ObMemAttr mem_attr(MTL_ID(), "test");
-  ASSERT_EQ(OB_SUCCESS, item_writer.init(true, mem_attr));
+  ASSERT_EQ(OB_SUCCESS, item_writer.init_for_slog_ckpt(1, 0, mem_attr, nullptr));
   for (int64_t i = 0; i < item_arr.count(); i++) {
     ASSERT_EQ(OB_SUCCESS,
       item_writer.write_item(item_arr.at(i).buf_, item_arr.at(i).buf_len_, &item_arr.at(i).idx_));
   }
   ASSERT_EQ(OB_SUCCESS, item_writer.close());
-  for (int64_t i = 0; i < item_arr.count(); i++) {
-    ASSERT_EQ(
-      OB_SUCCESS, item_writer.get_item_disk_addr(item_arr.at(i).idx_, item_arr.at(i).addr_));
-    LOG_INFO("item addr", K(i), K(item_arr.at(i).addr_));
-  }
 
   ObIArray<MacroBlockId> &block_list = item_writer.get_meta_block_list();
 
@@ -155,8 +148,7 @@ void TestLinkedMacroBlock::iter_read_items(const ObArray<ItemInfo> &item_arr)
       int32_t calc_crc = static_cast<int32_t>(ob_crc64(item_buf, item_buf_len));
       ASSERT_EQ(item_arr.at(idx).crc_, calc_crc);
 
-      LOG_INFO("check addr", K(item_arr.at(idx).addr_), K(addr));
-      ASSERT_EQ(item_arr.at(idx).addr_, addr);
+      LOG_INFO("check addr", K(addr));
       idx++;
     } else {
       break;
@@ -164,24 +156,6 @@ void TestLinkedMacroBlock::iter_read_items(const ObArray<ItemInfo> &item_arr)
   }
   ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(idx, item_arr.count());
-}
-
-void TestLinkedMacroBlock::read_items(const ObArray<ItemInfo> &item_arr)
-{
-  ObLinkedMacroBlockItemReader item_reader;
-  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "test");
-  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_, mem_attr));
-  char *item_buf = nullptr;
-  int64_t item_buf_len = 0;
-  for (int64_t i = 0; i < item_arr.count(); i++) {
-    item_buf = static_cast<char *>(allocator_.alloc(item_arr.at(i).addr_.size_));
-    ASSERT_NE(nullptr, item_buf);
-    ASSERT_EQ(OB_SUCCESS,
-      item_reader.read_item(
-        block_handle_.get_meta_block_list(), item_arr.at(i).addr_, item_buf, item_buf_len));
-    int32_t calc_crc = static_cast<int32_t>(ob_crc64(item_buf, item_buf_len));
-    ASSERT_EQ(item_arr.at(i).crc_, calc_crc);
-  }
 }
 
 TEST_F(TestLinkedMacroBlock, empty_write_test)
@@ -217,7 +191,6 @@ TEST_F(TestLinkedMacroBlock, single_item_full_block_test)
 
   ASSERT_NO_FATAL_FAILURE(write_items(item_arr));
   ASSERT_TRUE(entry_block_.is_valid());
-  ASSERT_NO_FATAL_FAILURE(read_items(item_arr));
   ASSERT_NO_FATAL_FAILURE(iter_read_items(item_arr));
 }
 
@@ -239,7 +212,6 @@ TEST_F(TestLinkedMacroBlock, multi_small_item_test)
 
   ASSERT_NO_FATAL_FAILURE(write_items(item_arr));
   ASSERT_TRUE(entry_block_.is_valid());
-  ASSERT_NO_FATAL_FAILURE(read_items(item_arr));
   ASSERT_NO_FATAL_FAILURE(iter_read_items(item_arr));
 }
 
@@ -257,7 +229,6 @@ TEST_F(TestLinkedMacroBlock, multi_large_item_test)
 
   ASSERT_NO_FATAL_FAILURE(write_items(item_arr));
   ASSERT_TRUE(entry_block_.is_valid());
-  ASSERT_NO_FATAL_FAILURE(read_items(item_arr));
   ASSERT_NO_FATAL_FAILURE(iter_read_items(item_arr));
 }
 
@@ -281,7 +252,6 @@ TEST_F(TestLinkedMacroBlock, hybrid_small_and_large_item_test)
 
   ASSERT_NO_FATAL_FAILURE(write_items(item_arr));
   ASSERT_TRUE(entry_block_.is_valid());
-  ASSERT_NO_FATAL_FAILURE(read_items(item_arr));
   ASSERT_NO_FATAL_FAILURE(iter_read_items(item_arr));
 }
 

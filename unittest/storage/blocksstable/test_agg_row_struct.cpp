@@ -51,11 +51,13 @@ public:
 
 protected:
   ObArenaAllocator allocator_;
+  int64_t data_version_;
 };
 
 TestAggRow::TestAggRow()
     : allocator_()
 {
+  data_version_ = DATA_VERSION_4_3_5_2;
 }
 TestAggRow::~TestAggRow()
 {
@@ -262,8 +264,10 @@ void TestAggRow::prepare_agg_row_writer(ObAggRowWriter & row_writer)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   /* ---------------------------------- agg_datums ---------------------------------- */
-  ObStorageDatum * storage_datums = static_cast<ObStorageDatum *>(allocator_.alloc(sizeof(ObStorageDatum) * 21));
-  ASSERT_NE(nullptr, storage_datums);
+  ObSkipIndexAggResult *agg_result = OB_NEWx(ObSkipIndexAggResult, &allocator_);
+  ASSERT_NE(nullptr, agg_result);
+  ASSERT_EQ(OB_SUCCESS, agg_result->init(21, allocator_));
+  ObStorageDatum *storage_datums = agg_result->agg_row_.storage_datums_;
 
   // col 0
   set_datum(storage_datums[0], "0xf2	0xcc	0xe9	0xce	0xff	0xff	0xff	0xff", 8, 8);
@@ -295,7 +299,7 @@ void TestAggRow::prepare_agg_row_writer(ObAggRowWriter & row_writer)
   set_datum(storage_datums[20], "0x01	0x00	0x00	0x00	0x00	0x00	0x00	0x00", 8, 8);
 
   const ObStorageDatum * const_datums = storage_datums;
-  row_writer.agg_datums_ = const_datums;
+  row_writer.agg_data_ = agg_result;
 
   /* ---------------------------------- others ---------------------------------- */
   row_writer.column_count_ = 21;
@@ -384,8 +388,8 @@ TEST_F(TestAggRow, test_agg_row)
   memset(has, false, sizeof(has));
   ObArray<ObSkipIndexColMeta> agg_cols;
   ObArray<bool> is_null;
-  ObDatumRow agg_row;
-  OK(agg_row.init(test_cnt));
+  ObSkipIndexAggResult agg_row;
+  OK(agg_row.init(test_cnt, allocator_));
   int cnt = 0;
   while (cnt < test_cnt) {
     ObSkipIndexColMeta col_meta;
@@ -397,9 +401,9 @@ TEST_F(TestAggRow, test_agg_row)
       OK(agg_cols.push_back(col_meta));
       bool null = (rand() % 5 == 0);
       if (null) {
-        agg_row.storage_datums_[cnt].set_null();
+        agg_row.agg_row_.storage_datums_[cnt].set_null();
       } else {
-        agg_row.storage_datums_[cnt].set_int(cnt);
+        agg_row.agg_row_.storage_datums_[cnt].set_int(cnt);
       }
       OK(is_null.push_back(null));
       has[col_idx][col_type] = true;
@@ -408,7 +412,7 @@ TEST_F(TestAggRow, test_agg_row)
   }
 
   ObAggRowWriter row_writer;
-  OK(row_writer.init(agg_cols, agg_row, allocator_));
+  OK(row_writer.init(agg_cols, agg_row, data_version_, allocator_));
   int64_t buf_size = row_writer.get_serialize_data_size();
   char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
   ASSERT_NE(nullptr, buf);

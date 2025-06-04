@@ -122,8 +122,8 @@ int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("request is null", K(ret));
     } else {
-      ObTableLSExecuteEndTransCb * cb = OB_NEW(ObTableLSExecuteEndTransCb,
-                                               ObMemAttr(MTL_ID(), "TbLsExuTnCb"), req);
+      ObTableLSExecuteEndTransCb *cb = OB_NEW(ObTableLSExecuteEndTransCb,
+                                              ObMemAttr(MTL_ID(), "TbLsExuTnCb"), req);
       if (OB_ISNULL(cb)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memroy for ls execute callback", K(ret));
@@ -139,7 +139,7 @@ int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
 
 ObTableAPITransCb* ObTableLSExecuteCreateCbFunctor::new_callback()
 {
-  ObTableLSExecuteEndTransCb *cb = nullptr;
+  ObTableAPITransCb *cb = nullptr;
   if (is_inited_) {
     cb = cb_;
   }
@@ -167,9 +167,14 @@ void ObTableAPITransCb::destroy_cb_if_no_ref()
   int32_t new_ref = ATOMIC_SAF(&ref_count_, 1);
   if (0 >= new_ref) {
     // @caution !!!
-    this->~ObTableAPITransCb();
-    ob_free(this);
+    destroy_cb();
   }
+}
+
+void ObTableAPITransCb::destroy_cb()
+{
+  this->~ObTableAPITransCb();
+  ob_free(this);
 }
 
 void ObTableAPITransCb::set_lock_handle(ObHTableLockHandle *lock_handle)
@@ -354,54 +359,27 @@ void ObTableLSExecuteEndTransCb::callback(int cb_param)
       LOG_DEBUG("send ls execute response", K(cb_param));
     }
   }
+
+  free_dependent_results();
   this->destroy_cb_if_no_ref();
+}
+
+void ObTableLSExecuteEndTransCb::free_dependent_results()
+{
+  for (int64_t i = 0; i < dependent_results_.count(); i++) {
+    if (OB_NOT_NULL(dependent_results_.at(i))) {
+      if (is_alloc_from_pool_) {
+        TABLEAPI_OBJECT_POOL_MGR->free_res(dependent_results_.at(i));
+      } else {
+        dependent_results_.at(i)->~ObTableLSOpResult();
+      }
+      dependent_results_.at(i) = nullptr;
+    }
+  }
 }
 
 void ObTableLSExecuteEndTransCb::callback(int cb_param, const transaction::ObTransID &trans_id)
 {
   UNUSED(trans_id);
   this->callback(cb_param);
-}
-
-int ObTableLSExecuteEndTransCb::assign_ls_execute_result(const ObTableLSOpResult &result)
-{
-  int ret = OB_SUCCESS;
-
-  int64_t tablet_result_cnt = result.count();
-
-  if (OB_FAIL(result_.assign_rowkey_names(result.get_rowkey_names()))) {
-    LOG_WARN("fail to assign rowkey names", K(ret), "rowkey names", result_.get_rowkey_names());
-  } else if (OB_FAIL(result_.assign_properties_names(result.get_properties_names()))) {
-    LOG_WARN("fail to assign property names", K(ret), "properties_names", result_.get_properties_names());
-  } else if (OB_FAIL(result_.prepare_allocate(tablet_result_cnt))) {
-    LOG_WARN("fail to prepare allocate tablet op result", K(ret), K(tablet_result_cnt));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < result.count(); i++) {
-    const ObTableTabletOpResult &src_tablet_result = result.at(i);
-    ObTableTabletOpResult &dst_tablet_result = result_.at(i);
-    int64_t single_res_cnt = src_tablet_result.count();
-    if (OB_FAIL(dst_tablet_result.prepare_allocate(single_res_cnt))) {
-      LOG_WARN("fail to prepare allocatate single op result", K(ret), K(i), K(single_res_cnt));
-    } else {
-      dst_tablet_result.assign_properties_names(&result_.get_properties_names());
-      dst_tablet_result.set_all_rowkey_names(&result_.get_rowkey_names());
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < single_res_cnt; j++) {
-      const ObTableSingleOpResult &src_single_result = src_tablet_result.at(j);
-      ObTableSingleOpResult &dst_single_result = dst_tablet_result.at(j);
-      if (OB_FAIL(dst_single_result.deep_copy(allocator_, entity_factory_, src_single_result))) {
-        LOG_WARN("failed to deep copy result", K(ret));
-      } else {
-        ObITableEntity *entity = dst_single_result.get_entity();
-        if (OB_ISNULL(entity)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("entity is null", K(ret));
-        } else {
-          entity->set_properties_names(&result_.get_rowkey_names());
-          entity->set_rowkey_names(&result_.get_properties_names());
-        }
-      }
-    }
-  } // end for
-  return ret;
 }

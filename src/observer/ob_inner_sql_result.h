@@ -39,7 +39,7 @@ class ObInnerSQLResult : public common::sqlclient::ObMySQLResult
 {
   friend class ObInnerSQLConnection;
 public:
-  explicit ObInnerSQLResult(sql::ObSQLSessionInfo &session, bool is_inner_session);
+  explicit ObInnerSQLResult(sql::ObSQLSessionInfo &session, bool is_inner_session, ObDiagnosticInfo *di);
   virtual ~ObInnerSQLResult();
   int init();
   int init(bool has_tenant_resource);
@@ -226,6 +226,7 @@ private:
   omt::ObTenant *tenant_;
   ObLDHandle handle_;
   bool is_inner_session_;
+  ObDiagnosticInfo *inner_sql_di_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLResult);
 };

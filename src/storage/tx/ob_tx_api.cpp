@@ -59,6 +59,7 @@ namespace transaction {
 
 inline int ObTransService::init_tx_(ObTxDesc &tx,
                                     const uint32_t session_id,
+                                    const uint32_t client_sid,
                                     const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
@@ -66,6 +67,7 @@ inline int ObTransService::init_tx_(ObTxDesc &tx,
   tx.addr_      = self_;
   tx.sess_id_   = session_id;
   tx.assoc_sess_id_ = session_id;
+  tx.client_sid_ = client_sid;
   tx.alloc_ts_  = ObClockGenerator::getClock();
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
@@ -90,13 +92,14 @@ inline int ObTransService::init_tx_(ObTxDesc &tx,
 
 int ObTransService::acquire_tx(ObTxDesc *&tx,
                                const uint32_t session_id,
+                               const uint32_t client_sid,
                                const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret));
   } else {
-    ret = init_tx_(*tx, session_id, cluster_version);
+    ret = init_tx_(*tx, session_id, client_sid, cluster_version);
   }
   TRANS_LOG(TRACE, "acquire tx", KPC(tx), K(session_id));
   if (OB_SUCC(ret)) {
@@ -219,12 +222,15 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
 #ifdef ENABLE_DEBUG_LOG
       if (spin_cnt > 2300) {
         // at least wait 600s
-        ob_abort();
+        TRANS_LOG(ERROR, "the tx desc's ref not clean more than 10 minutes, maybe threads hange", K(tx));
       }
 #endif
     }
-    // it is safe to operate tx without lock when not shared
-    ret = reinit_tx_(tx, tx.sess_id_, data_version);
+    {
+      // must acquire lock, in async cursor protocol, and ac=1, fetch can access tx while execute do reuse_tx
+      ObSpinLockGuard guard(tx.lock_);
+      ret = reinit_tx_(tx, tx.sess_id_, tx.client_sid_, data_version);
+    }
   }
   TRANS_LOG(DEBUG, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -238,10 +244,10 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
   return ret;
 }
 
-int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint64_t cluster_version)
+int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint32_t client_sid, const uint64_t cluster_version)
 {
   tx.reset();
-  return init_tx_(tx, session_id, cluster_version);
+  return init_tx_(tx, session_id, client_sid, cluster_version);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
@@ -330,12 +336,11 @@ int ObTransService::rollback_tx(ObTxDesc &tx)
 {
   TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
-  TX_STAT_ROLLBACK_INC
   ObSpinLockGuard guard(tx.lock_);
   tx.inc_op_sn();
   switch(tx.state_) {
   case ObTxDesc::State::ABORTED:
-    TX_STAT_ROLLBACK_INC
+    if (tx.active_ts_ > 0) { TX_STAT_ROLLBACK_INC }
     tx.state_ = ObTxDesc::State::ROLLED_BACK;
     break;
   case ObTxDesc::State::ROLLED_BACK:
@@ -354,12 +359,10 @@ int ObTransService::rollback_tx(ObTxDesc &tx)
     break;
   case ObTxDesc::State::ACTIVE:
   case ObTxDesc::State::IMPLICIT_ACTIVE:
-    TX_STAT_ROLLBACK_INC
     tx.state_ = ObTxDesc::State::IN_TERMINATE;
     tx.abort_cause_ = OB_TRANS_ROLLBACKED;
     abort_participants_(tx);
   case ObTxDesc::State::IDLE:
-    TX_STAT_ROLLBACK_INC
     tx.state_ = ObTxDesc::State::ROLLED_BACK;
     tx.finish_ts_ = ObClockGenerator::getClock();
     tx_post_terminate_(tx);
@@ -419,10 +422,18 @@ int ObTransService::commit_tx(ObTxDesc &tx, const int64_t expire_ts, const ObStr
     // plus 10s to wait callback, if callback leaky, wakeup self
     int64_t wait_us = MAX(expire_ts - ObTimeUtility::current_time(), 0) + 10 * 1000 * 1000L;
     if (OB_FAIL(cb.wait(wait_us, result))) {
-      TRANS_LOG(WARN, "wait commit fail", K(ret), K(expire_ts), K(wait_us), K(tx));
+      TRANS_LOG(WARN, "wait commit fail", K(ret), K(expire_ts), K(wait_us), K(tx.tx_id_));
       /* NOTE: must cancel callback before release it */
-      tx.cancel_commit_cb();
-      ret = ret == OB_TIMEOUT ? OB_TRANS_STMT_TIMEOUT : ret;
+      ObITxCallback *cb_ret = tx.cancel_commit_cb();
+      if (OB_ISNULL(cb_ret)) {
+        // cancel cb fail, the cb has been processing, need wait
+        while (OB_FAIL(cb.wait(1_s, result))) {
+          TRANS_LOG(WARN, "wait commit fail, retry", K(ret), K(tx.tx_id_));
+        }
+        ret = result;
+      } else {
+        ret = ret == OB_TIMEOUT ? OB_TRANS_STMT_TIMEOUT : ret;
+      }
     } else {
       ret = result;
     }
@@ -1994,19 +2005,18 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
         trans_used_time_us = tx.finish_ts_ - tx.active_ts_;
         TX_STAT_TIME_USED(trans_used_time_us);
       }
-    }
-    if (tx.is_committed()) {
-      TX_STAT_COMMIT_INC;
-      TX_STAT_COMMIT_TIME_USED(tx.finish_ts_ - tx.commit_ts_);
-    }
-    else if (tx.is_rollbacked()) {
-      TX_STAT_ROLLBACK_INC;
-      if (tx.commit_ts_ > 0) {
-        TX_STAT_ROLLBACK_TIME_USED(MAX(0, tx.finish_ts_ - tx.commit_ts_));
+      if (tx.is_committed()) {
+        TX_STAT_COMMIT_INC;
+        TX_STAT_COMMIT_TIME_USED(tx.finish_ts_ - tx.commit_ts_);
+      } else if (tx.is_rollbacked()) {
+        TX_STAT_ROLLBACK_INC;
+        if (tx.commit_ts_ > 0) {
+          TX_STAT_ROLLBACK_TIME_USED(MAX(0, tx.finish_ts_ - tx.commit_ts_));
+        }
       }
-    }
-    else {
-      // TODO: COMMIT_UNKNOWN, COMMIT_TIMEOUT
+      else {
+        // TODO: COMMIT_UNKNOWN, COMMIT_TIMEOUT
+      }
     }
     switch(tx.parts_.count()) {
     case 0:  TX_STAT_READONLY_INC break;

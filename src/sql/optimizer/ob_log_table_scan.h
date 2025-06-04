@@ -106,6 +106,14 @@ enum ObVectorAuxTableIdx
   VEC_MAX_AUX_TBL_IDX = 4
 };
 
+enum ObVectorSPIVColumnIdx
+{
+  // for SPIV
+  SPIV_AUX_DOCID_COL = 0, // docid col in dim_docid_value table
+  SPIV_AUX_VALUE_COL = 1, // value col in dim_docid_value table
+  SPIV_MAX_COL_CNT = 2
+};
+
 enum ObVectorHNSWColumnIdx
 {
   // for HNSW
@@ -225,7 +233,14 @@ struct ObVecIndexInfo
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
   ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return algorithm_type_; }
   bool is_vec_aux_table_id(uint64_t tid) const;
-  inline bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
+  inline bool is_hnsw_vec_scan() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+  }
+  inline bool is_spiv_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_SPIV; }
   inline bool is_ivf_vec_scan() const
   {
     return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
@@ -235,11 +250,20 @@ struct ObVecIndexInfo
   inline bool is_ivf_flat_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT; }
   inline bool is_ivf_sq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
   inline bool is_ivf_pq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
+  inline bool is_hnsw_bq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+  inline bool vec_index_with_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
+  inline bool vec_index_without_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
+  inline bool vec_index_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
+  inline bool vec_index_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
+
   inline bool is_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   inline bool is_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
-  inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan();}
+  inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan() || is_spiv_scan();}
+
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
+  int64_t get_extra_info_columns_count() const { return extra_info_columns_.count(); }
+  ObColumnRefRawExpr* get_extra_info_column(int idx) const { return idx < extra_info_columns_.count() ? extra_info_columns_[idx] : nullptr; }
   int check_vec_aux_column_is_all_inited(bool& is_all_null) const;
   int check_vec_aux_table_is_all_inited(bool& is_all_null) const;
   // topn infos
@@ -252,6 +276,7 @@ struct ObVecIndexInfo
   // add all aux tid into array
   common::ObSEArray<uint64_t, 5, common::ModulePageAllocator, true> aux_table_id_;
   common::ObSEArray<ObColumnRefRawExpr*, 10, common::ModulePageAllocator, true> aux_table_column_;
+  common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> extra_info_columns_;
 
   uint64_t main_table_tid_;
   ObVecIndexType vec_type_;
@@ -280,6 +305,7 @@ public:
         table_name_(),
         index_name_(),
         scan_direction_(default_asc_direction()),
+        scan_order_(common::ObQueryFlag::ScanOrder::Forward),
         for_update_(false),
         for_update_wait_us_(-1), /* default infinite */
         pre_query_range_(NULL),
@@ -546,6 +572,12 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
 
+  inline const common::ObIArray<ObRawExpr *> &get_pseudo_columnref_exprs() const
+  { return pseudo_columnref_exprs_; }
+
+  inline common::ObIArray<ObRawExpr *> &get_pseudo_columnref_exprs()
+  { return pseudo_columnref_exprs_; }
+
 // removal it in cg layer, up to opt layer.
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
   { return ddl_output_column_ids_; }
@@ -640,6 +672,7 @@ public:
            (1 == ranges_.count() && ranges_.at(0).is_whole_range());
   }
   ObOrderDirection get_scan_direction() const { return scan_direction_; }
+  common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   void set_index_back(bool index_back) { index_back_ = index_back; }
   bool get_index_back() const { return index_back_; }
   void set_is_multi_part_table_scan(bool multi_part_tsc)
@@ -777,6 +810,7 @@ public:
                                   ObIArray<ObRawExpr*> &nonpushdown_filters,
                                   ObIArray<ObRawExpr*> &pushdown_filters) const;
   int has_nonpushdown_filter(bool &has_npd_filter);
+  int has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_items, bool &has_npd_aggr);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
   int replace_index_merge_pushdown_filters(ObIndexMergeNode *node, ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
@@ -786,7 +820,7 @@ public:
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
   int generate_auto_split_filter();
   int construct_table_split_range_filter(ObSQLSessionInfo *session, const int64_t filter_type);
-  int create_exec_param_for_auto_split(const ObExprResType &type, ObRawExpr *&expr);
+  int create_exec_param_for_auto_split(const ObRawExprResType &type, ObRawExpr *&expr);
   uint64_t get_auto_split_filter_type() const { return auto_split_filter_type_; };
   const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
   const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
@@ -809,6 +843,14 @@ public:
   inline bool need_rowkey_doc_expr() const { return is_tsc_with_domain_id() || has_func_lookup(); }
   int prepare_hnsw_vector_access_exprs();
   int prepare_ivf_vector_access_exprs();
+  int prepare_spiv_vector_access_exprs();
+  int prepare_spiv_dim_docid_value_tbl_access_exprs(const ObTableSchema *dim_docid_value_tbl,
+                                                    const ObTableSchema *table_schema,
+                                                    ObRawExprFactory *expr_factory,
+                                                    TableItem *table_item,
+                                                    ObColumnRefRawExpr *&aux_docid_column,
+                                                    ObColumnRefRawExpr *&aux_value_column,
+                                                    ObColumnRefRawExpr *&vec_data_column);
   int add_rowkey_access_exprs(const ObTableSchema *table_schema,
                               ObSqlSchemaGuard *schema_guard,
                               ObRawExprFactory *expr_factory,
@@ -853,6 +895,10 @@ public:
                                             TableItem *table_item,
                                             ObColumnRefRawExpr *&sq_meta_id_column,
                                             ObColumnRefRawExpr *&sq_meta_vec_column);
+
+  int prepare_extra_info_columns(ObVecIndexInfo &vc_info, const ObTableSchema *delta_buf_table,
+                                 const ObTableSchema *table_schema, ObRawExprFactory *expr_factory,
+                                 TableItem *table_item);
   int prepare_hnsw_delta_buf_tbl_access_exprs(const ObTableSchema *delta_buf_table,
                                             const ObTableSchema *table_schema,
                                             ObRawExprFactory *expr_factory,
@@ -875,7 +921,7 @@ public:
                                             ObColumnRefRawExpr *&snapshot_key_column,
                                             ObColumnRefRawExpr *&snapshot_data_column);
   int prepare_hnsw_index_id_col();
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan() || has_merge_fts_index(); }
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan() || has_merge_fts_index() || is_spiv_vec_scan(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline void set_rowkey_vid_tid(const uint64_t rowkey_vid_tid) { rowkey_vid_tid_ = rowkey_vid_tid;}
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
@@ -898,10 +944,13 @@ public:
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
   inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
   inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
-  inline bool is_primary_vec_idx_scan() const { return is_pre_vec_idx_scan() && ref_table_id_ == index_table_id_; }
+  inline bool is_primary_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() && ref_table_id_ == index_table_id_; }
   inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
-  inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER; }
+  inline bool is_vec_idx_scan_pre_filter() const { return vector_index_info_.vec_index_pre_filter(); }
+  inline bool is_vec_idx_scan_post_filter() const { return is_index_scan() && vector_index_info_.vec_index_post_filter(); }
+  inline bool is_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() || is_vec_idx_scan_post_filter(); }
+  inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
+  inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; } // spiv only
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
 
@@ -941,6 +990,7 @@ public:
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
+  int set_scan_order();
   int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);
 private: // member functions
   //called when index_back_ set
@@ -964,7 +1014,7 @@ private: // member functions
   int allocate_group_id_expr();
   int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
   int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_hnsw_scan = false);
   int extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &exprs);
   int get_text_retrieval_calc_exprs(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &all_exprs);
   int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
@@ -983,7 +1033,11 @@ private: // member functions
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
-  int prepare_rowkey_vid_dep_exprs();
+  int prepare_rowkey_vid_dep_exprs(const bool is_rowkey_docid = false);
+  int build_column_expr(ObRawExprFactory &expr_factory,
+                        const share::schema::ObColumnSchemaV2 &column_schema,
+                        ObColumnRefRawExpr *&column_expr);
+  int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -1003,6 +1057,7 @@ protected: // memeber variables
   common::ObString table_name_;
   common::ObString index_name_;
   ObOrderDirection scan_direction_;
+  common::ObQueryFlag::ScanOrder scan_order_;
   bool      for_update_;       // FOR UPDATE clause
   int64_t for_update_wait_us_; // 0 means nowait, -1 means infinite
   // query range after preliminary extract, which will be stored in physical plan
@@ -1158,6 +1213,7 @@ protected: // memeber variables
 
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

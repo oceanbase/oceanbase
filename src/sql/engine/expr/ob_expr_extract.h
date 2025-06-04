@@ -31,18 +31,20 @@ public:
                                 ObExprResType &date,
                                 common::ObExprTypeCtx &type_ctx) const;
 
-  template<typename T_ARG, typename T_RES>
   static int calc_oracle(
       const ObSQLSessionInfo *session,
       ObEvalCtx &ctx,
       const ObObjType obj_type,
-      const T_ARG &obj,
+      const ObDatum &date,
       const ObDateUnitType &extract_unit,
-      T_RES &result);
+      ObIAllocator *allocator,
+      bool &is_null,
+      bool &is_number_res,
+      number::ObNumber &num_res,
+      ObString &str_res);
 
-  template<typename T_ARG, typename T_RES>
   static int calc(ObObjType date_type,
-      const T_ARG &date,
+      const ObDatum &date,
       const ObDateUnitType extract_field,
       const ObScale scale,
       const ObCastMode cast_mode,
@@ -50,7 +52,8 @@ public:
       const int64_t cur_ts_value,
       const ObDateSqlMode date_sql_mode,
       bool has_lob_header,
-      T_RES &result);
+      bool &is_null,
+      int64_t &result);
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

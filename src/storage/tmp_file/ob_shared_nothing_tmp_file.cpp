@@ -104,10 +104,6 @@ int ObSharedNothingTmpFile::InnerFlushInfo::init_by_tmp_file_flush_info(const Ob
   flush_data_page_num_ = flush_info.flush_data_page_num_;
   flush_virtual_page_id_ = flush_info.flush_virtual_page_id_;
   file_size_ = flush_info.file_size_;
-  if (!flush_info.flush_meta_page_array_.empty()
-      && OB_FAIL(flush_meta_page_array_.assign(flush_info.flush_meta_page_array_))) {
-    LOG_WARN("fail to assign flush_meta_page_array_", KR(ret), K(flush_info));
-  }
   return ret;
 }
 
@@ -1907,6 +1903,7 @@ int ObSharedNothingTmpFile::collect_flush_data_page_id_(
     info.batch_flush_idx_ = flush_info_idx;
     info.flush_virtual_page_id_ = copy_begin_page_virtual_id;
     info.has_last_page_lock_ = has_last_page_lock;
+    info.type_ = ObTmpFileFlushInfo::Type::DATA;
     // record file_size to check if the last page is appended while flushing
     if (has_last_page_lock) {
       info.file_size_ = file_size_;
@@ -1976,6 +1973,8 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
 
   ObTmpFileTreeEvictType flush_type = need_flush_tail ?
                                       ObTmpFileTreeEvictType::FULL : ObTmpFileTreeEvictType::MAJOR;
+
+  int64_t flush_info_idx = -1;
   if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_FLUSH_SEQUENCE != inner_flush_ctx_.flush_seq_
         && flush_sequence != inner_flush_ctx_.flush_seq_
         && flush_sequence != flush_task.get_flush_seq())) {
@@ -1990,18 +1989,19 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(flush_infos.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
+  } else if (FALSE_IT(flush_info_idx = flush_infos.size() - 1)) {
   } else if (OB_FAIL(meta_tree_.flush_meta_pages_for_block(block_index, flush_type, buf, write_offset,
-                                                           meta_flush_context, info.flush_meta_page_array_))) {
+                                                           meta_flush_context,
+                                                           flush_infos.at(flush_info_idx).flush_meta_page_array_))) {
     LOG_WARN("fail to flush meta pages for block", KR(ret), K(fd_), K(flush_task), K(meta_flush_context), KPC(this));
-  } else if (0 == info.flush_meta_page_array_.count()) {
+  } else if (0 == flush_infos.at(flush_info_idx).flush_meta_page_array_.count()) {
     ret = OB_ITER_END;
   }
 
   if (OB_SUCC(ret)) {
-    int64_t flush_info_idx = flush_infos.size() - 1;
     info.batch_flush_idx_ = flush_info_idx;
-
     info.fd_ = fd_;
+    info.type_ = ObTmpFileFlushInfo::Type::META;
     // set flush_info in flush_task
     if (OB_FAIL(info.file_handle_.init(this))) {
       LOG_WARN("fail to init tmp file handle", KR(ret), K(fd_), K(flush_task), KPC(this));

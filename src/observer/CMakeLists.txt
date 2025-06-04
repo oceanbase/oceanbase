@@ -106,6 +106,7 @@ ob_set_subtarget(ob_server mysql
   mysql/ob_feedback_proxy_utils.cpp
   mysql/ob_dl_queue.cpp
   mysql/ob_construct_queue.cpp
+  mysql/ob_feedback_proxy_utils.cpp
 )
 
 ob_set_subtarget(ob_server net
@@ -169,7 +170,9 @@ ob_set_subtarget(ob_server table
   table/ob_table_cg_service.cpp
   table/ob_table_cache.cpp
   table/ob_table_schema_cache.cpp
-  table/ob_table_session_pool.cpp
+  table/object_pool/ob_table_object_pool.cpp
+  table/object_pool/ob_table_sess_pool.cpp
+  table/object_pool/ob_table_system_variable.cpp
   table/ob_table_op_wrapper.cpp
   table/ob_table_query_common.cpp
   table/ob_table_direct_load_processor.cpp
@@ -228,6 +231,31 @@ ob_set_subtarget(ob_server table
   table/ob_table_multi_batch_service.cpp
   table/ob_redis_execute_processor_v2.cpp
   table/fts/ob_table_fts_cg_service.cpp
+  table/adapters/ob_hbase_cell_iter.cpp
+  table/adapters/ob_normal_adapter_iter.cpp
+  table/adapters/ob_series_adapter_iter.cpp
+  table/adapters/ob_i_adapter.cpp
+  table/adapters/ob_hbase_normal_adapter.cpp
+  table/adapters/ob_hbase_series_adapter.cpp
+  table/adapters/ob_hbase_adapter_factory.cpp
+  table/cf_service/ob_hbase_column_family_service.cpp
+  table/cf_service/ob_hbase_cf_iterator.cpp
+  table/cf_service/ob_hbase_multi_cf_iterator.cpp
+  table/cf_service/ob_hbase_tablet_merge_iterator.cpp
+  table/models/ob_i_model.cpp
+  table/models/ob_hbase_model.cpp
+  table/models/ob_table_model.cpp
+  table/models/ob_redis_model.cpp
+  table/tableapi/ob_table_api_service.cpp
+  table/part_calc/ob_table_part_calc.cpp
+  table/part_calc/ob_table_part_clip.cpp
+  table/trans/ob_table_trans_ctrl.cpp
+  table/common/ob_table_sequential_grouper.cpp
+  table/async_query/ob_hbase_async_query_iter.cpp
+  table/common/ob_table_query_session.cpp
+  table/common/ob_table_query_session_mgr.cpp
+  table/common/ob_hbase_common_struct.cpp
+  table/ob_table_merge_filter.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -415,6 +443,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tablet_info.cpp
   virtual_table/ob_all_virtual_server.cpp
   virtual_table/ob_all_virtual_server_storage.cpp
+  virtual_table/ob_all_virtual_sswriter_group_stat.cpp
+  virtual_table/ob_all_virtual_sswriter_lease_mgr.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
   virtual_table/ob_all_virtual_tablet_compaction_progress.cpp
   virtual_table/ob_all_virtual_io_status.cpp
@@ -465,6 +495,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_mysql_user_table.cpp
   virtual_table/ob_plan_cache_plan_explain.cpp
   virtual_table/ob_session_variables.cpp
+  virtual_table/ob_show_create_catalog.cpp
   virtual_table/ob_show_create_database.cpp
   virtual_table/ob_show_create_procedure.cpp
   virtual_table/ob_show_create_table.cpp
@@ -522,6 +553,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
+  virtual_table/ob_all_virtual_tenant_mview_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
   virtual_table/ob_all_virtual_ss_local_cache_info.cpp
   virtual_table/ob_all_virtual_vector_index_info.cpp
@@ -533,6 +565,14 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
   virtual_table/ob_all_virtual_plugin_info.cpp
   virtual_table/ob_all_virtual_cs_replica_tablet_stats.cpp
+  virtual_table/ob_all_virtual_ss_tablet_meta.cpp
+  virtual_table/ob_all_virtual_ss_ls_meta.cpp
+  virtual_table/ob_all_virtual_ss_sstable_mgr.cpp
+  virtual_table/ob_all_virtual_dynamic_partition_table.cpp
+  virtual_table/ob_all_virtual_storage_cache_task.cpp
+  virtual_table/ob_all_virtual_tablet_local_cache.cpp
+  virtual_table/ob_tenant_show_catalog_databases.cpp
+  virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.cpp
 )
 
 ob_server_add_target(ob_server)

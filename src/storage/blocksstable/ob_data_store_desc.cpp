@@ -72,7 +72,10 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   micro_index_clustered_ = desc.micro_index_clustered_;
   enable_macro_block_bloom_filter_ = desc.enable_macro_block_bloom_filter_;
   need_submit_io_ = desc.need_submit_io_;
+  is_delete_insert_table_ = desc.is_delete_insert_table_;
   encoding_granularity_ = desc.encoding_granularity_;
+  reorganization_scn_ = desc.reorganization_scn_;
+  semistruct_encoding_type_ = desc.semistruct_encoding_type_;
   return ret;
 }
 
@@ -123,16 +126,17 @@ int ObStaticDataStoreDesc::init(
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const share::SCN &reorganization_scn,
     const bool need_submit_io,
     const uint64_t encoding_granularity)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
   if (OB_UNLIKELY(!merge_schema.is_valid() || !ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0
-    || (!is_major && !end_scn.is_valid()) || !is_valid_exec_mode(exec_mode))) {
+    || (!is_major && !end_scn.is_valid()) || !is_valid_exec_mode(exec_mode) || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(snapshot_version), K(end_scn),
-      "exec_mode", exec_mode_to_str(exec_mode));
+      "exec_mode", exec_mode_to_str(exec_mode), K(reorganization_scn));
   } else {
     reset();
     is_ddl_ = is_ddl;
@@ -143,6 +147,7 @@ int ObStaticDataStoreDesc::init(
     exec_mode_ = exec_mode;
     encoding_granularity_ = encoding_granularity;
     enable_macro_block_bloom_filter_ = merge_schema.get_enable_macro_block_bloom_filter();
+    reorganization_scn_ = reorganization_scn;
 
     if (compaction::is_mds_merge(merge_type_)) {
       // Disable for mds table.
@@ -160,11 +165,14 @@ int ObStaticDataStoreDesc::init(
 
     if (FAILEDx(init_encryption_info(merge_schema))) {
       STORAGE_LOG(WARN, "fail to get encrypt info from table schema", K(ret));
+    } else if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semistruct_encoding_type_))) {
+      STORAGE_LOG(WARN, "Failed to get semistruct encoding option", K(ret));
     } else {
       schema_version_ = merge_schema.get_schema_version();
       snapshot_version_ = snapshot_version;
       progressive_merge_round_ = merge_schema.get_progressive_merge_round();
       compressor_type_ = merge_schema.get_compressor_type();
+      is_delete_insert_table_ = merge_schema.is_delete_insert_merge_engine();
       (void) init_block_size(merge_schema);
       if (is_major) {
         uint64_t compat_version = 0;
@@ -919,6 +927,7 @@ int ObWholeDataStoreDesc::init(
     const int64_t cluster_version,
     const bool micro_index_clustered,
     const int64_t tablet_transfer_seq,
+    const share::SCN &reorganization_scn,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
     const uint16_t table_cg_idx,
@@ -939,7 +948,7 @@ int ObWholeDataStoreDesc::init(
 
   if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, tablet_transfer_seq, merge_type,
                                 snapshot_version, end_scn, cluster_version,
-                                exec_mode, micro_index_clustered, need_submit_io, encoding_granularity))) {
+                                exec_mode, micro_index_clustered, reorganization_scn, need_submit_io, encoding_granularity))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

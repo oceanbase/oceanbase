@@ -46,7 +46,6 @@ public:
   ~ObCOMergeProjector() = default;
   int init(const ObStorageColumnGroupSchema &cg_schema);
   const blocksstable::ObDatumRow &get_project_row() const { return project_row_; }
-  bool is_all_nop(const blocksstable::ObDatumRow &row) const;
   int project(const blocksstable::ObDatumRow &row);
   int project(const blocksstable::ObDatumRow &row, blocksstable::ObDatumRow &result_row, bool &is_all_nop) const;
   TO_STRING_KV(K_(is_inited), K_(projector), K_(project_row))

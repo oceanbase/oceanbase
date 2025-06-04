@@ -22,7 +22,7 @@ namespace table
 class ObRedisTTLCtx
 {
 public:
-  explicit ObRedisTTLCtx() : meta_(nullptr), model_(ObRedisModel::INVALID), return_meta_(false)
+  explicit ObRedisTTLCtx() : meta_(nullptr), model_(ObRedisDataModel::MODEL_MAX), return_meta_(false)
   {}
   virtual ~ObRedisTTLCtx()
   {
@@ -45,18 +45,18 @@ public:
   {
     return_meta_ = flag;
   }
-  OB_INLINE ObRedisModel get_model() const
+  OB_INLINE ObRedisDataModel get_model() const
   {
     return model_;
   }
-  OB_INLINE void set_model(ObRedisModel model)
+  OB_INLINE void set_model(ObRedisDataModel model)
   {
     model_ = model;
   }
 
 private:
   const ObRedisMeta *meta_;
-  ObRedisModel model_;
+  ObRedisDataModel model_;
   bool return_meta_;  // result include redis meta (whether meta is expired or not)
 };
 

@@ -150,9 +150,13 @@ int ObDASMergeIter::set_merge_status(MergeType merge_type)
     get_next_rows_ = &ObDASMergeIter::get_next_seq_rows;
     seq_task_idx_ = 0;
     DASTaskIter task_iter = das_ref_->begin_task_iter();
+    // if this is index scan task in global index back, we cannot update_pseudo_columns
+    // need_update_partition_id_ will be false
     if (need_update_partition_id_) {
       if (OB_FAIL(update_output_tablet_id(*task_iter))) {
         LOG_WARN("failed to update output tablet id", K(ret), K((*task_iter)->get_tablet_loc()->tablet_id_));
+      } else if (OB_FAIL(update_pseudo_columns(*task_iter))) {
+        LOG_WARN("failed to update update_pseudo_columns", K(ret), K((*task_iter)->get_tablet_loc()->tablet_id_));
       }
     }
   } else {
@@ -284,6 +288,12 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
     eval_infos_ = merge_param.eval_infos_;
     need_update_partition_id_ = merge_param.need_update_partition_id_;
     pdml_partition_id_ = merge_param.pdml_partition_id_;
+    pseudo_partition_id_expr_ = merge_param.pseudo_partition_id_expr_;
+    pseudo_sub_partition_id_expr_ = merge_param.pseudo_sub_partition_id_expr_;
+    pseudo_partition_name_expr_ = merge_param.pseudo_partition_name_expr_;
+    pseudo_sub_partition_name_expr_ = merge_param.pseudo_sub_partition_name_expr_;
+    pseudo_partition_index_expr_ = merge_param.pseudo_partition_index_expr_;
+    pseudo_sub_partition_index_expr_ = merge_param.pseudo_sub_partition_index_expr_;
     partition_id_calc_type_ = merge_param.partition_id_calc_type_;
     ref_table_id_ = merge_param.ref_table_id_;
     should_scan_index_ = merge_param.should_scan_index_;
@@ -297,7 +307,6 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
     das_ref_->set_enable_rich_format(merge_param.enable_rich_format_);
     used_for_keep_order_ = merge_param.used_for_keep_order_;
     merge_type_ = used_for_keep_order_ ? SORT_MERGE : SEQUENTIAL_MERGE;
-
     if (group_id_expr_ != nullptr) {
       for (int64_t i = 0; i < output_->count(); i++) {
         if (output_->at(i) == group_id_expr_) {
@@ -310,7 +319,35 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
         LOG_WARN("fail to get group id idx", K(ret), KPC_(group_id_expr), KPC_(output));
       }
     }
+    if (OB_SUCC(ret) && has_pseudo_part_id_columnref()) {
+      // get table_schema for pseudo partition id column
+      ObSqlCtx *sql_ctx = NULL;
+      const ObTableSchema *table_schema = NULL;
+      if (OB_ISNULL(sql_ctx = exec_ctx_->get_sql_ctx())
+          || OB_ISNULL(sql_ctx->schema_guard_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: sql ctx or schema guard is null", K(ret));
+      } else if (OB_FAIL(sql_ctx->schema_guard_->get_table_schema(
+                  MTL_ID(),
+                  merge_param.ref_table_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(merge_param.ref_table_id_), K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("table schema is null", K(MTL_ID()),
+            K(merge_param.ref_table_id_), K(sql_ctx->schema_guard_->get_tenant_id()), K(ret));
+      } else {
+        table_schema_ = table_schema;
+        part_level_ = table_schema_->get_part_level();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
+        is_diagnosis_enabled_ = exec_ctx_->get_my_session()->is_diagnosis_enabled();
+      }
+    }
   }
+
   return ret;
 }
 
@@ -492,6 +529,278 @@ int ObDASMergeIter::update_output_tablet_id(ObIDASTaskOp *output_das_task)
   return ret;
 }
 
+bool ObDASMergeIter::has_pseudo_part_id_columnref()
+{
+  return pseudo_partition_id_expr_ != NULL || pseudo_sub_partition_id_expr_ != NULL ||
+         pseudo_partition_name_expr_ != NULL || pseudo_sub_partition_name_expr_ != NULL ||
+         pseudo_partition_index_expr_ != NULL || pseudo_sub_partition_index_expr_ != NULL;
+}
+
+int ObDASMergeIter::update_pseudo_columns(ObIDASTaskOp *output_das_task)
+{
+  int ret = OB_SUCCESS;
+  if (has_pseudo_part_id_columnref() && OB_NOT_NULL(eval_ctx_) && OB_NOT_NULL(output_das_task)) {
+    const ObDASTabletLoc *tablet_loc = nullptr;
+    if (should_scan_index_) {
+      tablet_loc = ObDASUtils::get_related_tablet_loc(*output_das_task->get_tablet_loc(), ref_table_id_);
+    } else {
+      tablet_loc = output_das_task->get_tablet_loc();
+    }
+    if (OB_ISNULL(tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr tablet loc", K(ret));
+    } else {
+      if (pseudo_partition_id_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<false, PseudoCalcType::PSEUDO_PART_ID>)(
+            tablet_loc, pseudo_partition_id_expr_))) {
+        LOG_WARN("failed to update_pseudo_parittion_id", K(ret));
+      } else if (pseudo_sub_partition_id_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<true, PseudoCalcType::PSEUDO_PART_ID>)(
+            tablet_loc, pseudo_sub_partition_id_expr_))) {
+        LOG_WARN("failed to update_pseudo_sub_parittion_id", K(ret));
+      } else if (pseudo_partition_name_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<false, PseudoCalcType::PSEUDO_PART_NAME>)(
+            tablet_loc, pseudo_partition_name_expr_))) {
+        LOG_WARN("failed to update_pseudo_parittion_id", K(ret));
+      } else if (pseudo_sub_partition_name_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<true, PseudoCalcType::PSEUDO_PART_NAME>)(
+            tablet_loc, pseudo_sub_partition_name_expr_))) {
+        LOG_WARN("failed to update_pseudo_sub_parittion_id", K(ret));
+      } else if (pseudo_partition_index_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<false, PseudoCalcType::PSEUDO_PART_INDEX>)(
+            tablet_loc, pseudo_partition_index_expr_))) {
+        LOG_WARN("failed to update_pseudo_parittion_id", K(ret));
+      } else if (pseudo_sub_partition_index_expr_ != NULL &&
+          OB_FAIL((update_pseudo_parittion_id<true, PseudoCalcType::PSEUDO_PART_INDEX>)(
+            tablet_loc, pseudo_sub_partition_index_expr_))) {
+        LOG_WARN("failed to update_pseudo_sub_parittion_id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template<bool is_sub_partition, PseudoCalcType calc_type>
+int ObDASMergeIter::update_pseudo_parittion_id(const ObDASTabletLoc *tablet_loc, const ObExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  int64_t output_id = OB_INVALID_ID;
+  bool is_null = false;
+
+  if (part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ONE) {
+    if (is_sub_partition) {
+      is_null = true;
+    } else {
+      output_id = tablet_loc->partition_id_;
+    }
+  } else if (part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
+    if (is_sub_partition) {
+      output_id = tablet_loc->partition_id_;
+    } else {
+      output_id = tablet_loc->first_level_part_id_;
+    }
+  } else if (part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
+    is_null = true;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("got unexpected part_level", K(part_level_), K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_vectorized_) {
+      if (das_ref_->enable_rich_format_ &&
+          OB_FAIL(expr->init_vector(*eval_ctx_, VectorFormat::VEC_UNIFORM, max_size_))) {
+        LOG_WARN("init vector failed", K(ret));
+      } else {
+        ObDatum *datums = expr->locate_datums_for_update(*eval_ctx_, max_size_);
+        if (is_null) {
+          for (int64_t i = 0; i < max_size_; i++) {
+            datums[i].set_null();
+          }
+        } else {
+          if (calc_type == PseudoCalcType::PSEUDO_PART_ID) {
+            if (lib::is_oracle_mode()) {
+              ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
+              number::ObNumber res_nmb;
+              if (OB_FAIL(res_nmb.from(output_id, tmp_alloc_g.get_allocator()))) {
+                LOG_WARN("get number from arg failed", K(ret));
+              } else {
+                for (int64_t i = 0; i < max_size_; i++) {
+                  datums[i].set_number(res_nmb);
+                }
+              }
+            } else {
+              for (int64_t i = 0; i < max_size_; i++) {
+                datums[i].set_int(output_id);
+              }
+            }
+          } else if (calc_type == PseudoCalcType::PSEUDO_PART_NAME) {
+            ObString partition_name;
+            if (OB_FAIL(get_name_by_partition_id(output_id, partition_name, is_sub_partition))) {
+              LOG_WARN("failed to get_name_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+            } else {
+              // deep copy str
+              char *buf = expr->get_str_res_mem(*eval_ctx_, partition_name.length());
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("allocate memory failed", K(ret), K(partition_name.length()));
+              } else {
+                MEMCPY(buf, partition_name.ptr(), partition_name.length());
+                for (int64_t i = 0; i < max_size_; i++) {
+                  datums[i].set_string(buf, partition_name.length());
+                }
+              }
+            }
+          } else if (calc_type == PseudoCalcType::PSEUDO_PART_INDEX) {
+            int64_t paritition_index;
+            if (OB_FAIL(get_index_by_partition_id(output_id, paritition_index, is_sub_partition))) {
+              LOG_WARN("failed to get_index_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+            } else {
+              if (lib::is_oracle_mode()) {
+                number::ObNumber res_nmb;
+                ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
+                if (OB_FAIL(res_nmb.from(paritition_index, tmp_alloc_g.get_allocator()))) {
+                  LOG_WARN("get number from arg failed", K(ret));
+                } else {
+                  for (int64_t i = 0; i < max_size_; i++) {
+                    datums[i].set_number(res_nmb);
+                  }
+                }
+              } else {
+                for (int64_t i = 0; i < max_size_; i++) {
+                  datums[i].set_int(paritition_index);
+                }
+              }
+            }
+          }
+        }
+      }
+    } else {
+      if (is_null) {
+        expr->locate_datum_for_write(*eval_ctx_).set_null();
+      } else {
+        if (calc_type == PseudoCalcType::PSEUDO_PART_ID) {
+          if (lib::is_oracle_mode()) {
+            ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
+            number::ObNumber res_nmb;
+            if (OB_FAIL(res_nmb.from(output_id, tmp_alloc_g.get_allocator()))) {
+              LOG_WARN("get number from arg failed", K(ret));
+            } else {
+              expr->locate_datum_for_write(*eval_ctx_).set_number(res_nmb);
+            }
+          } else {
+            expr->locate_datum_for_write(*eval_ctx_).set_int(output_id);
+          }
+        } else if (calc_type == PseudoCalcType::PSEUDO_PART_NAME) {
+          ObString partition_name;
+          if (OB_FAIL(get_name_by_partition_id(output_id, partition_name, is_sub_partition))) {
+            LOG_WARN("failed to get_name_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+          } else {
+            // deep copy str
+            char *buf = expr->get_str_res_mem(*eval_ctx_, partition_name.length());
+            if (OB_ISNULL(buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret), K(partition_name.length()));
+            } else {
+              MEMCPY(buf, partition_name.ptr(), partition_name.length());
+              expr->locate_datum_for_write(*eval_ctx_).set_string(buf, partition_name.length());
+            }
+          }
+        } else if (calc_type ==  PseudoCalcType::PSEUDO_PART_INDEX) {
+          int64_t paritition_index;
+          if (OB_FAIL(get_index_by_partition_id(output_id, paritition_index, is_sub_partition))) {
+            LOG_WARN("failed to get_index_by_partition_id", K(ret), K(output_id), K(is_sub_partition));
+          } else {
+            if (lib::is_oracle_mode()) {
+              ObEvalCtx::TempAllocGuard tmp_alloc_g(*eval_ctx_);
+              number::ObNumber res_nmb;
+              if (OB_FAIL(res_nmb.from(paritition_index, tmp_alloc_g.get_allocator()))) {
+                LOG_WARN("get number from arg failed", K(ret));
+              } else {
+                expr->locate_datum_for_write(*eval_ctx_).set_number(res_nmb);
+              }
+            } else {
+              expr->locate_datum_for_write(*eval_ctx_).set_int(paritition_index);
+            }
+          }
+        }
+      }
+    }
+    expr->set_evaluated_projected(*eval_ctx_);
+    LOG_TRACE("find the partition id expr in pdml table scan", K(ret), K(output_id), K(expr),
+              KPC(tablet_loc), K(is_sub_partition));
+  }
+  return ret;
+}
+
+int ObDASMergeIter::get_index_by_partition_id(int64_t partition_id, int64_t &index, bool is_sub_partition)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *part = NULL;
+  const ObSubPartition *subpart = nullptr;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table_schema_ is null", K(ret));
+  } else {
+    if (is_sub_partition) {
+      if (OB_FAIL(table_schema_->get_subpartition_by_sub_part_id(
+                partition_id, part, subpart))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else if (OB_ISNULL(subpart)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else {
+        index = subpart->get_sub_part_idx();
+      }
+    } else {
+      if (OB_FAIL(table_schema_->get_partition_by_part_id(partition_id, mode, part))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else if (OB_ISNULL(part)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else {
+        index = part->get_part_idx();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASMergeIter::get_name_by_partition_id(int64_t partition_id, ObString &name, bool is_sub_partition)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *part = NULL;
+  const ObSubPartition *subpart = nullptr;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table_schema_ is null", K(ret));
+  } else {
+    if (is_sub_partition) {
+      if (OB_FAIL(table_schema_->get_subpartition_by_sub_part_id(
+                partition_id, part, subpart))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else if (OB_ISNULL(subpart)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else {
+        name = subpart->get_part_name();
+      }
+    } else {
+      if (OB_FAIL(table_schema_->get_partition_by_part_id(partition_id, mode, part))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else if (OB_ISNULL(part)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("fail to get partition", K(ret), K(partition_id));
+      } else {
+        name = part->get_part_name();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASMergeIter::get_next_seq_row()
 {
   int ret = OB_SUCCESS;
@@ -514,8 +823,23 @@ int ObDASMergeIter::get_next_seq_row()
         }
         ret = scan_op->get_output_result_iter()->get_next_row();
         scan_op->get_scan_param().need_update_tablet_param_ = false;
+
+        if (OB_SUCC(ret)) {
+          if (is_diagnosis_enabled_) {
+            if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to get diagnosis info", K(ret));
+            }
+          }
+        }
+
         if (OB_SUCC(ret)) {
           got_row = true;
+          if (has_pseudo_part_id_columnref()) {
+            if (OB_FAIL(update_pseudo_columns(scan_op))) {
+              LOG_WARN("failed to update output tablet id", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
+            }
+          }
         } else if (OB_ITER_END == ret) {
           ++seq_task_idx_;
           if (seq_task_idx_ == das_tasks_arr_.count()) {
@@ -524,7 +848,9 @@ int ObDASMergeIter::get_next_seq_row()
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
             scan_op->get_scan_param().need_update_tablet_param_ = true;
-            if (need_update_partition_id_) {
+            if (OB_FAIL(update_pseudo_columns(scan_op))) {
+              LOG_WARN("failed to update_pseudo_columns", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
+            } else if (need_update_partition_id_) {
               if (OB_FAIL(update_output_tablet_id(scan_op))) {
                 LOG_WARN("failed to update output tablet id", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
               }
@@ -559,19 +885,35 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
         if (scan_op->is_local_task()) {
           reset_datum_ptr(scan_op, capacity);
         }
-        count = 0;
-        if (first_get_row_) {
-          scan_op->get_scan_param().need_update_tablet_param_ = true;
-        }
-        ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
-        scan_op->get_scan_param().need_update_tablet_param_ = false;
-        if (OB_ITER_END == ret && count > 0) {
-          ret = OB_SUCCESS;
+        if (OB_SUCC(ret)) {
+          count = 0;
+          if (first_get_row_) {
+            scan_op->get_scan_param().need_update_tablet_param_ = true;
+          }
+          ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
+          scan_op->get_scan_param().need_update_tablet_param_ = false;
+
+          if (OB_SUCC(ret)) {
+            if (is_diagnosis_enabled_) {
+              if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to get diagnosis info", K(ret));
+              }
+            }
+          }
+
+          if (OB_ITER_END == ret && count > 0) {
+            ret = OB_SUCCESS;
+          }
         }
         if (OB_SUCC(ret)) {
           got_rows = true;
           if (!scan_op->is_local_task()) {
             update_wild_datum_ptr(count);
+          }
+          // only for global index back and use pseudo_partition_id_expr_ in filter
+          if (OB_FAIL(update_pseudo_columns(scan_op))) {
+            LOG_WARN("update output tablet id failed", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
           }
         } else if (OB_ITER_END == ret) {
           ++seq_task_idx_;
@@ -581,9 +923,13 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
             scan_op->get_scan_param().need_update_tablet_param_ = true;
-            if (need_update_partition_id_) {
+            if (OB_FAIL(update_pseudo_columns(scan_op))) {
+              LOG_WARN("failed to update_pseudo_columns", K(ret),
+                K(scan_op->get_tablet_loc()->tablet_id_));
+            } else if (need_update_partition_id_) {
               if (OB_FAIL(update_output_tablet_id(scan_op))) {
-                LOG_WARN("update output tablet id failed", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
+                LOG_WARN("failed to update output tablet id", K(ret),
+                  K(scan_op->get_tablet_loc()->tablet_id_));
               }
             }
           }
@@ -637,13 +983,18 @@ int ObDASMergeIter::get_next_sorted_row()
     if (output_idx == OB_INVALID_INDEX) {
       ret = OB_ITER_END;
     } else {
-      if (need_update_partition_id_) {
+      if (OB_FAIL(update_pseudo_columns(das_tasks_arr_[output_idx]))) {
+        LOG_WARN("failed to update_pseudo_columns", K(ret),
+          K(das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_));
+      } else if (need_update_partition_id_) {
+        ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
         if (OB_FAIL(update_output_tablet_id(das_tasks_arr_[output_idx]))) {
-          ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
           LOG_WARN("failed to update output tablet id", K(ret), K(tablet_id));
         }
       }
-      ret = merge_store_rows_arr_[output_idx].to_expr(false, 1);
+      if (OB_SUCC(ret)) {
+        ret = merge_store_rows_arr_[output_idx].to_expr(false, 1);
+      }
       if (OB_SUCC(ret)) {
         merge_state_arr_[output_idx].row_store_have_data_ = merge_store_rows_arr_[output_idx].have_data();
       } else {
@@ -676,6 +1027,9 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
       if (OB_SUCC(ret)) {
         if (!scan_op->is_local_task()) {
           update_wild_datum_ptr(count);
+        }
+        if (OB_FAIL(update_pseudo_columns(scan_op))) {
+          LOG_WARN("failed to update_pseudo_columns", K(ret));
         }
       }
     }
@@ -736,15 +1090,20 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
       } else {
         // We need keep the datum points to the frame.
         reset_wild_datum_ptr();
-        if (need_update_partition_id_) {
+        if (OB_FAIL(update_pseudo_columns(das_tasks_arr_[output_idx]))) {
+          LOG_WARN("failed to update_pseudo_columns", K(ret),
+            K(das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_));
+        } else if (need_update_partition_id_) {
+          ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
           if (OB_FAIL(update_output_tablet_id(das_tasks_arr_[output_idx]))) {
-            ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
             LOG_WARN("failed to update output tablet id", K(ret), K(tablet_id));
           }
         }
         MergeStoreRows &store_rows = merge_store_rows_arr_.at(output_idx);
         int64_t ret_count = used_for_keep_order_ ? 1 : std::min(store_rows.row_cnt_with_cur_group_idx(), capacity);
-        ret = store_rows.to_expr(true, ret_count);
+        if (OB_SUCC(ret)) {
+          ret = store_rows.to_expr(true, ret_count);
+        }
         if (OB_SUCC(ret)) {
           count = ret_count;
           merge_state_arr_[output_idx].row_store_have_data_ = merge_store_rows_arr_[output_idx].have_data();

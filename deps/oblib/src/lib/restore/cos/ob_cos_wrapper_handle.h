@@ -26,6 +26,8 @@ namespace oceanbase
 namespace common
 {
 
+static constexpr char OB_STORAGE_COS_ALLOCATOR[] = "StorageCOS";
+
 // Allocator for creating cos handle
 class ObCosMemAllocator
 {

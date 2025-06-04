@@ -262,7 +262,8 @@ bool ObCopyTabletInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletInfoArg,
-    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, version_);
+    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_,
+    is_only_copy_major_, version_);
 
 ObCopyTabletInfo::ObCopyTabletInfo()
   : tablet_id_(),
@@ -378,7 +379,8 @@ bool ObCopyTabletsSSTableInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletsSSTableInfoArg,
-    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, tablet_sstable_info_arg_list_, version_);
+    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_,
+    tablet_sstable_info_arg_list_, version_);
 
 
 ObCopyTabletSSTableInfo::ObCopyTabletSSTableInfo()
@@ -1116,8 +1118,7 @@ bool ObCopyLSViewArg::is_valid() const
       && ls_id_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObCopyLSViewArg,
-    tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObCopyLSViewArg, tenant_id_, ls_id_);
 
 
 ObStorageWakeupTransferServiceArg::ObStorageWakeupTransferServiceArg()
@@ -1468,41 +1469,41 @@ int ObStorageStreamRpcP<RPC_CODE>::is_follower_ls(logservice::ObLogService *log_
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-ObGetMicroBlockCacheInfoArg::ObGetMicroBlockCacheInfoArg()
+ObGetHAMicroCacheLSInfoArg::ObGetHAMicroCacheLSInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_()
 {
 }
 
-bool ObGetMicroBlockCacheInfoArg::is_valid() const
+bool ObGetHAMicroCacheLSInfoArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
 }
 
-void ObGetMicroBlockCacheInfoArg::reset()
+void ObGetHAMicroCacheLSInfoArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroCacheLSInfoArg, tenant_id_, ls_id_);
 
-ObGetMicroBlockCacheInfoRes::ObGetMicroBlockCacheInfoRes()
+ObGetHAMicroCacheLSInfoRes::ObGetHAMicroCacheLSInfoRes()
   : ls_cache_info_()
 {
 }
 
-bool ObGetMicroBlockCacheInfoRes::is_valid() const
+bool ObGetHAMicroCacheLSInfoRes::is_valid() const
 {
   return ls_cache_info_.is_valid();
 }
 
-void ObGetMicroBlockCacheInfoRes::reset()
+void ObGetHAMicroCacheLSInfoRes::reset()
 {
   ls_cache_info_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObGetMicroBlockCacheInfoRes, ls_cache_info_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroCacheLSInfoRes, ls_cache_info_);
 
 ObGetMigrationCacheJobInfoArg::ObGetMigrationCacheJobInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -1565,28 +1566,28 @@ void ObGetMicroBlockKeyArg::reset()
 
 OB_SERIALIZE_MEMBER(ObGetMicroBlockKeyArg, tenant_id_, ls_id_, job_info_);
 
-ObCopyMicroBlockKeySetRes::ObCopyMicroBlockKeySetRes()
+ObGetHAMicroMetaSetRes::ObGetHAMicroMetaSetRes()
   : header_(),
     key_set_array_()
 {
 }
 
-ObCopyMicroBlockKeySetRes::~ObCopyMicroBlockKeySetRes()
+ObGetHAMicroMetaSetRes::~ObGetHAMicroMetaSetRes()
 {
 }
 
-bool ObCopyMicroBlockKeySetRes::is_valid() const
+bool ObGetHAMicroMetaSetRes::is_valid() const
 {
   return header_.is_valid();
 }
 
-void ObCopyMicroBlockKeySetRes::reset()
+void ObGetHAMicroMetaSetRes::reset()
 {
   header_.reset();
   key_set_array_.reset();
 }
 
-int ObCopyMicroBlockKeySetRes::assign(const ObCopyMicroBlockKeySetRes &other)
+int ObGetHAMicroMetaSetRes::assign(const ObGetHAMicroMetaSetRes &other)
 {
   int ret = OB_SUCCESS;
   if (!other.is_valid()) {
@@ -1603,26 +1604,26 @@ int ObCopyMicroBlockKeySetRes::assign(const ObCopyMicroBlockKeySetRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCopyMicroBlockKeySetRes, header_, key_set_array_);
+OB_SERIALIZE_MEMBER(ObGetHAMicroMetaSetRes, header_, key_set_array_);
 
-ObMigrateWarmupKeySet::ObMigrateWarmupKeySet()
+ObHAMicroPrewarmMetaSet::ObHAMicroPrewarmMetaSet()
   : tenant_id_(OB_INVALID_ID),
     key_sets_()
 {
 }
 
-bool ObMigrateWarmupKeySet::is_valid() const
+bool ObHAMicroPrewarmMetaSet::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !key_sets_.empty();
 }
 
-void ObMigrateWarmupKeySet::reset()
+void ObHAMicroPrewarmMetaSet::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   key_sets_.reset();
 }
 
-int ObMigrateWarmupKeySet::assign(const ObMigrateWarmupKeySet &arg)
+int ObHAMicroPrewarmMetaSet::assign(const ObHAMicroPrewarmMetaSet &arg)
 {
   int ret = OB_SUCCESS;
   if (!arg.is_valid()) {
@@ -1636,25 +1637,25 @@ int ObMigrateWarmupKeySet::assign(const ObMigrateWarmupKeySet &arg)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObMigrateWarmupKeySet, tenant_id_, key_sets_);
+OB_SERIALIZE_MEMBER(ObHAMicroPrewarmMetaSet, tenant_id_, key_sets_);
 
-ObSSLSFetchMicroBlockArg::ObSSLSFetchMicroBlockArg()
+ObGetLSReplicaMicroBlockArg::ObGetLSReplicaMicroBlockArg()
   : tenant_id_(OB_INVALID_TENANT_ID), micro_metas_()
 {
 }
 
-bool ObSSLSFetchMicroBlockArg::is_valid() const
+bool ObGetLSReplicaMicroBlockArg::is_valid() const
 {
   return (is_valid_tenant_id(tenant_id_) && !micro_metas_.empty());
 }
 
-void ObSSLSFetchMicroBlockArg::reset()
+void ObGetLSReplicaMicroBlockArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   micro_metas_.reset();
 }
 
-int ObSSLSFetchMicroBlockArg::assign(const ObSSLSFetchMicroBlockArg &other)
+int ObGetLSReplicaMicroBlockArg::assign(const ObGetLSReplicaMicroBlockArg &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
@@ -1666,7 +1667,7 @@ int ObSSLSFetchMicroBlockArg::assign(const ObSSLSFetchMicroBlockArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObSSLSFetchMicroBlockArg, tenant_id_, micro_metas_);
+OB_SERIALIZE_MEMBER(ObGetLSReplicaMicroBlockArg, tenant_id_, micro_metas_);
 
 #endif
 
@@ -1781,9 +1782,10 @@ int ObFetchTabletInfoP::process()
     int64_t tablet_count = 0;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
-
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
       const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
       if (0 != tmp_max_tablet_num) {
         max_tablet_num = tmp_max_tablet_num;
@@ -1796,10 +1798,10 @@ int ObFetchTabletInfoP::process()
     const int64_t cost_time = 10 * 1000 * 1000;
     common::ObTimeGuard timeguard("ObFetchTabletInfoP", cost_time);
     timeguard.click();
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -1888,14 +1890,19 @@ int ObFetchSSTableInfoP::process()
     ObLS *ls = nullptr;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
     LOG_INFO("start to fetch tablet sstable info", K(arg_));
 
     last_send_time_ = this->get_receive_timestamp();
 
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -2298,35 +2305,43 @@ int ObFetchSSTableMacroInfoP::process()
 
   if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
     LOG_ERROR("switch tenant fail", K(ret), K(arg_));
-  } else if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-  } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed set data to result", K(ret));
-  } else if (OB_ISNULL(bandwidth_throttle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
-                KP_(bandwidth_throttle));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("fail to get log stream", KR(ret), K(arg_));
-  } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
-    LOG_WARN("failed to get migration status", K(ret), K(arg_));
-  } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
-    ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
-    STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
-  } else if (OB_FAIL(fetch_sstable_macro_info_header_())) {
-    LOG_WARN("failed to fetch sstable macro info header", K(ret), K(arg_));
   } else {
-    if (arg_.need_check_seq_) {
-      if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
-        LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
+
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (OB_ISNULL(bandwidth_throttle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
+                  KP_(bandwidth_throttle));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(arg_));
+    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+      ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+      STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
+    } else if (OB_FAIL(fetch_sstable_macro_info_header_())) {
+      LOG_WARN("failed to fetch sstable macro info header", K(ret), K(arg_));
+    } else {
+      if (arg_.need_check_seq_) {
+        if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+          LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+        }
       }
     }
   }
@@ -3492,10 +3507,11 @@ int ObStorageFetchLSViewP::process()
     max_tablet_num_ = 32;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
-
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
       if (0 != tmp_max_tablet_num) {
         max_tablet_num_ = tmp_max_tablet_num;
       }
@@ -3540,10 +3556,10 @@ int ObStorageFetchLSViewP::process()
     const int64_t cost_time = 10 * 1000 * 1000;
     common::ObTimeGuard timeguard("ObStorageFetchLSViewP", cost_time);
     timeguard.click();
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -3977,6 +3993,7 @@ int ObFetchMicroBlockKeysP::set_header_attr_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_MICRO_KEY_SET_RECONNECT);
 int ObFetchMicroBlockKeysP::process()
 {
   int ret = OB_SUCCESS;
@@ -3986,12 +4003,9 @@ int ObFetchMicroBlockKeysP::process()
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
       ObCopyMicroBlockKeySetProducer producer;
-      ObCopyMicroBlockKeySet key_set;
+      ObCopyMicroPrewarmMetaSet key_set;
       ObCopyMicroBlockKeySetRpcHeader rpc_header;
       int64_t max_key_set_size = WARMUP_MAX_KEY_SET_SIZE_IN_RPC; // 4M;
-#ifdef ERRSIM
-      max_key_set_size = GCONF.errsim_max_key_set_size; // test multi rpc get key set
-#endif
       const int64_t start_ts = ObTimeUtil::current_time();
       int64_t end_blk_idx = 0;
       int64_t key_set_count = 0;
@@ -4019,16 +4033,24 @@ int ObFetchMicroBlockKeysP::process()
           } else if (!key_set.is_valid()) {
             LOG_INFO("skip this key set", K(arg_), K(key_set));
           } else {
-            // dest will judge ObMigrateWarmupKeySet serialize size,
+            // dest will judge ObHAMicroPrewarmMetaSet serialize size,
             if (OB_FAIL(result_.key_set_array_.key_sets_.push_back(key_set))) {
               STORAGE_LOG(WARN, "fail to fill key set", K(ret), K(key_set));
-            } else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
+            }
+#ifdef ERRSIM
+            else if (EN_MICRO_KEY_SET_RECONNECT && key_set_count > 0) {
+              result_.key_set_array_.key_sets_.pop_back();
+              connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
+              break;
+            }
+#endif
+            else if (result_.key_set_array_.get_serialize_size() > max_key_set_size) {
               result_.key_set_array_.key_sets_.pop_back();
               connect_status = ObCopyMicroBlockKeySetRpcHeader::ConnectStatus::RECONNECT;
               break;
             } else {
               key_set_count++;
-              key_count += key_set.micro_block_key_metas_.count();
+              key_count += key_set.micro_prewarm_metas_.count();
               end_blk_idx = key_set.blk_idx_;
             }
           }
@@ -4042,7 +4064,8 @@ int ObFetchMicroBlockKeysP::process()
           result_.header_ = rpc_header;
         }
       }
-      LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts, K(key_count));
+      LOG_INFO("finish fetch micro block header", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+          K(key_count), K(arg_), K(rpc_header));
     }
   }
   return ret;
@@ -4066,7 +4089,7 @@ int ObFetchMicroBlockP::process()
       char *buf = NULL;
       last_send_time_ = this->get_receive_timestamp();
       int64_t key_count = 0;
-      ObSArray<ObSSMicroBlockCacheKeyMeta> key_meta_array;
+      ObSArray<ObSSMicroPrewarmMeta> key_meta_array;
       const int64_t start_ts = ObTimeUtil::current_time();
       const int64_t first_receive_ts = this->get_receive_timestamp();
       LOG_INFO("start to fetch micro block", K(arg_));
@@ -4241,14 +4264,14 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
         STORAGE_LOG(ERROR, "bandwidth_throttle must not null", KR(ret), KP_(bandwidth_throttle));
       } else {
         SMART_VARS_2((storage::ObReplicaPrewarmMicroBlockProducer, producer),
-                     (ObSSLSFetchMicroBlockArg, arg)) {
+                     (ObGetLSReplicaMicroBlockArg, arg)) {
           if (OB_FAIL(arg.assign(arg_))) {
             LOG_WARN("fail to assign copy fetch micro block arg", KR(ret), K(arg_));
           } else if (OB_FAIL(producer.init(arg.micro_metas_))) {
             LOG_WARN("fail to init replica prewarm micro block producer", KR(ret), K(arg));
           } else {
             while (OB_SUCC(ret)) {
-              ObSSMicroBlockCacheKeyMeta micro_meta;
+              ObSSMicroPrewarmMeta micro_meta;
               if (OB_FAIL(producer.get_next_micro_block(micro_meta, data))) {
                 if (OB_ITER_END != ret) {
                   STORAGE_LOG(WARN, "fail to get next micro block", KR(ret));
@@ -4295,14 +4318,19 @@ int ObRebuildTabletSSTableInfoP::process()
     ObLS *ls = nullptr;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
     LOG_INFO("start to fetch tablet sstable info", K(arg_));
 
     last_send_time_ = this->get_receive_timestamp();
 
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc rebuild tablet data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -4907,11 +4935,11 @@ int ObStorageRpc::get_ls_micro_block_cache_info(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const ObStorageHASrcInfo &src_info,
-    ObSSLSCacheInfo &ls_cache_info)
+    ObSSMicroCacheLSInfo &ls_cache_info)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObGetMicroBlockCacheInfoArg arg;
-  obrpc::ObGetMicroBlockCacheInfoRes res;
+  obrpc::ObGetHAMicroCacheLSInfoArg arg;
+  obrpc::ObGetHAMicroCacheLSInfoRes res;
   ls_cache_info.reset();
 
   if (!is_inited_) {
@@ -4977,7 +5005,7 @@ int ObStorageRpc::get_micro_block_key_set(
     const share::ObLSID &ls_id,
     const ObStorageHASrcInfo &src_info,
     const ObMigrationCacheJobInfo &job_info,
-    obrpc::ObCopyMicroBlockKeySetRes &res)
+    obrpc::ObGetHAMicroMetaSetRes &res)
 {
   int ret = OB_SUCCESS;
   res.reset();

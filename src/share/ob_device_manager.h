@@ -47,10 +47,24 @@ public:
   ObClusterVersionMgr() {}
   virtual ~ObClusterVersionMgr() {}
   virtual int is_supported_assume_version() const override;
+  virtual int is_supported_enable_worm_version() const override;
   static ObClusterVersionMgr &get_instance()
   {
     static ObClusterVersionMgr mgr;
     return mgr;
+  }
+};
+
+class ObClusterEnableObdalConfig: public ObClusterEnableObdalConfigBase
+{
+public:
+  ObClusterEnableObdalConfig() {};
+  virtual ~ObClusterEnableObdalConfig() override {};
+  virtual bool is_enable_obdal() const override;
+  static ObClusterEnableObdalConfig &get_instance()
+  {
+    static ObClusterEnableObdalConfig cfg;
+    return cfg;
   }
 };
 

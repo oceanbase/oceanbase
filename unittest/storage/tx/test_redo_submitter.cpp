@@ -108,7 +108,7 @@ int succ_submit_redo_log_out(ObTxLogBlock & b,
 {
   submitted_scn.convert_for_tx(123123123);
   if (log_cb) {
-    ((ObPartTransCtx*)(log_cb->ctx_))->return_log_cb_(log_cb);
+    ((ObPartTransCtx*)(log_cb->get_group_ptr()->get_tx_ctx()))->return_log_cb_(log_cb);
     log_cb = NULL;
   }
   return OB_SUCCESS;

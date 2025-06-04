@@ -76,7 +76,8 @@ public :
       lucky_one_(true),
       query_range_by_runtime_filter_(),
       extract_finished_(false),
-      gi_op_id_(common::OB_INVALID_ID) {}
+      gi_op_id_(common::OB_INVALID_ID),
+      pump_version_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
   TO_STRING_KV(K(partitions_info_),
@@ -123,6 +124,9 @@ public :
   bool extract_finished_;
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
   int64_t gi_op_id_;
+  // %task_version_ is increased when task regenerated.
+  // Used to help detecting taskset change in GI.
+  int64_t pump_version_;
   //-----end
 };
 
@@ -375,7 +379,6 @@ public:
   pump_args_(),
   need_partition_pruning_(false),
   pruning_table_locations_(),
-  pump_version_(0),
   is_taskset_reset_(false),
   fetch_task_ret_(OB_SUCCESS),
   finished_cnt_(0)
@@ -428,7 +431,6 @@ public:
                           int64_t worker_id,
                           ObGranuleSplitterType splitter_type);
 
-  int64_t get_pump_version() const { return pump_version_; }
   bool is_taskset_reset() const { return is_taskset_reset_; }
   void set_fetch_task_ret(int ret) { ATOMIC_STORE(&fetch_task_ret_, ret); }
   int get_fetch_task_ret() const { return ATOMIC_LOAD(&fetch_task_ret_); }
@@ -535,9 +537,6 @@ private:
   bool need_partition_pruning_;
   common::ObArray<ObTableLocation> pruning_table_locations_;
 
-  // %pump_version_ is increased when pump changed (task regenerated).
-  // Used to help detecting taskset change in GI.
-  int64_t pump_version_;
 
   bool is_taskset_reset_;
   // when granule tasks are fetched concurrently, if one thread failed to fetch task,

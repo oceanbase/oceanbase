@@ -213,11 +213,11 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
                 LOG_WARN("raw expr in column item is null", K(ret));
               } else {
                 ObGeoType geo_type = raw_expr->get_geo_type();
-                uint64_t cast_mode = expr->get_extra();
+                uint64_t cast_mode = expr->get_cast_mode();
                 if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
                   LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
                 } else {
-                  expr->set_extra(cast_mode);
+                  expr->set_cast_mode(cast_mode);
                 }
               }
             }
@@ -279,7 +279,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             const share::schema::ObTableSchema *table_schema = NULL;
             ObArray<ColumnItem> column_items;
             CK (OB_NOT_NULL(table_item));
-            OZ (resolve_all_basic_table_columns(*table_item, false, &column_items));
+            if (table_item->is_basic_table() || table_item->is_link_table()) {
+              OZ (resolve_all_basic_table_columns(*table_item, false, &column_items));
+            } else if (table_item->is_generated_table() || table_item->is_temp_table()) {
+              OZ (resolve_all_generated_table_columns(*table_item, column_items));
+            }
             for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
               OZ (target_list.push_back(column_items.at(i).get_expr()));
             }
@@ -340,21 +344,9 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               params_.param_list_->at(param_idx)).set_need_to_check_type(true));
             } else {
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
-              ObObj val = c_expr->get_result_type().get_param();
               OX (c_expr->set_result_type(col_expr->get_result_type()));
-              OX (c_expr->set_param(val));
-              if (col_expr->get_result_type().get_obj_meta().is_collection_sql_type()
-                  && col_expr->get_enum_set_values().count() > 0) {
-                // array type
-                uint16_t subschema_id = 0;
-                if (OB_ISNULL(session_info_) || OB_ISNULL(session_info_->get_cur_exec_ctx())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("session or exec ctx is null", K(ret), K(session_info_));
-                } else if (OB_FAIL(session_info_->get_cur_exec_ctx()->get_subschema_id_by_type_string(col_expr->get_enum_set_values().at(0), subschema_id))) {
-                  LOG_WARN("failed to get array type subschema id", K(ret));
-                } else {
-                  c_expr->set_subschema_id(subschema_id);
-                }
+              if (col_expr->get_result_type().get_obj_meta().is_collection_sql_type()) {
+                c_expr->set_subschema_id(col_expr->get_subschema_id());
               }
             }
           }
@@ -567,6 +559,8 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
   update_with_vector_index = false;
   ObIndexType index_type = INDEX_TYPE_MAX;
   ObArray<uint64_t> part_key_col_ids;
+  ObArray<uint64_t> row_key_col_ids;
+  bool has_extra_info = false;
   // get part keys
   if (!table_schema->is_partitioned_table()) {
     // do nothing
@@ -577,6 +571,15 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
             OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(part_key_col_ids))) {
     LOG_WARN("failed to get column ids", K(ret));
   }
+  if (OB_FAIL(ret)) {
+  } else if (table_schema->get_rowkey_info().get_size() > 0 &&
+             OB_FAIL(table_schema->get_rowkey_info().get_column_ids(row_key_col_ids))) {
+    LOG_WARN("failed to get column ids", K(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::check_has_extra_info(*table_schema, *schema_guard,
+                                                             has_extra_info))) {  // check if has extra_info
+    LOG_WARN("failed to check has extra info", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count() && !update_with_vector_index; ++i) {
     const ObAssignment &as = assigns.at(i);
     if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema,
@@ -588,6 +591,12 @@ int ObDelUpdResolver::check_update_vector_col_with_vector_index(const ObTableSch
     } else if (!update_with_vector_index && !part_key_col_ids.empty()) {
       // check if update with part key, update with part key should also update vid
       if (has_exist_in_array(part_key_col_ids, as.column_expr_->get_column_id())) {
+        update_with_vector_index = true;
+      }
+    }
+    if (OB_SUCC(ret) && has_extra_info && !update_with_vector_index && !row_key_col_ids.empty()) {
+      // check if has extra_info, update with row key should also update vid
+      if (has_exist_in_array(row_key_col_ids, as.column_expr_->get_column_id())) {
         update_with_vector_index = true;
       }
     }
@@ -712,11 +721,11 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
                   LOG_WARN("raw expr in column item is null", K(ret));
                 } else {
                   ObGeoType geo_type = raw_expr->get_geo_type();
-                  uint64_t cast_mode = assignment.expr_->get_extra();
+                  uint64_t cast_mode = assignment.expr_->get_cast_mode();
                   if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
                     LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
                   } else {
-                    assignment.expr_->set_extra(cast_mode);
+                    assignment.expr_->set_cast_mode(cast_mode);
                   }
                 }
               }
@@ -1499,6 +1508,10 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
   int ret = OB_SUCCESS;
   ObString table_name;
   ObString database_name;
+  ObString catalog_name;
+  uint64_t catalog_id = OB_INVALID_ID;
+  UNUSED(catalog_name);
+  UNUSED(catalog_id);
   uint64_t database_id = OB_INVALID_ID;
   uint64_t dblink_id = OB_INVALID_ID;
   ObString synonym_name;
@@ -1520,10 +1533,12 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
     LOG_WARN("relation_factor_node type should be T_RELATION_FACTOR", K(relation_factor_node->type_));
   } else if (OB_FAIL(resolve_table_relation_factor_wrapper(relation_factor_node,
                                                            dblink_id,
+                                                           catalog_id,
                                                            database_id,
                                                            table_name,
                                                            synonym_name,
                                                            synonym_db_name,
+                                                           catalog_name,
                                                            database_name,
                                                            dblink_name,
                                                            is_db_explicit,
@@ -2934,22 +2949,6 @@ int ObDelUpdResolver::build_column_conv_function_with_value_desc(ObInsertTableIn
                                         ObObjMeta::is_binary(tbl_col->get_data_type(),
                                                              tbl_col->get_collation_type())))) {
       LOG_WARN("failed to build column conv expr", K(ret));
-    } else if (column_item->is_geo_) {
-      // 1. set geo sub type to cast mode to column covert expr when update
-      // 2. check geo type while doing column covert.
-      ObColumnRefRawExpr *raw_expr = column_item->get_expr();
-      if (OB_ISNULL(raw_expr)) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("raw expr in column item is null", K(ret));
-      } else {
-        ObGeoType geo_type = raw_expr->get_geo_type();
-        uint64_t cast_mode = column_ref->get_extra();
-        if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
-          LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
-        } else {
-          column_ref->set_extra(cast_mode);
-        }
-      }
     }
     if (OB_SUCC(ret)) {
       if (trigger_exist &&
@@ -3171,13 +3170,20 @@ int ObDelUpdResolver::build_column_conv_function_for_udt_column(ObInsertTableInf
       }
 
       if (OB_SUCC(ret)) {
-       ObConstRawExpr *c_expr = NULL;
-       if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_NULL,
+        ObConstRawExpr *c_expr = NULL;
+        ObRawExpr *raw_c_expr = NULL;
+        if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_NULL,
                                                           c_expr))) {
           LOG_WARN("create raw expr failed", K(ret));
+        } else if (FALSE_IT(raw_c_expr = c_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                                  *params_.allocator_,
+                                                                  *column_item->get_expr(), // build col conv for udt column
+                                                                  raw_c_expr, session_info_))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
         } else {
           // udt column convert expr is useless, make T_NULL for it;
-          table_info.column_conv_exprs_.at(idx) = c_expr;
+          table_info.column_conv_exprs_.at(idx) = raw_c_expr;
           table_info.column_conv_exprs_.at(hidd_idx) = function_expr;
           LOG_DEBUG("add column conv expr", K(*function_expr));
         }
@@ -4251,7 +4257,7 @@ int ObDelUpdResolver::create_session_row_label_expr(ObDmlTableInfo& table_info,
     } else {
       ObString func_name(N_OLS_SESSION_ROW_LABEL);
       session_row_label_func->set_func_name(func_name);
-      if (OB_FAIL(session_row_label_func->add_param_expr(policy_name_expr))) {
+      if (OB_FAIL(session_row_label_func->set_param_expr(policy_name_expr))) {
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(session_row_label_func->formalize(session_info_))) {
         LOG_WARN("failed to do formalize", K(ret));
@@ -4304,7 +4310,7 @@ int ObDelUpdResolver::add_select_list_for_set_stmt(ObSelectStmt &select_stmt)
 {
   int ret = OB_SUCCESS;
   SelectItem new_select_item;
-  ObExprResType res_type;
+  ObRawExprResType res_type;
   ObSelectStmt *child_stmt = NULL;
   if (!select_stmt.is_set_stmt()) {
     //do nothing
@@ -4371,7 +4377,7 @@ int ObDelUpdResolver::add_new_sel_item_for_oracle_temp_table(ObSelectStmt &selec
     if (OB_SUCC(ret)) {
       session_id_expr->set_func_name(N_TEMP_TABLE_SSID);
       select_item.expr_ = session_id_expr;
-      if (OB_FAIL(session_id_expr->add_param_expr(temp_table_type))) {
+      if (OB_FAIL(session_id_expr->set_param_expr(temp_table_type))) {
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(session_id_expr->formalize(session_info_))) {
         LOG_WARN("fail to formalize expr", K(ret));
@@ -4520,6 +4526,7 @@ int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id
       LOG_WARN("failed to get column schema", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_,
                                                          *column_schema,
+                                                         session_info_,
                                                          session_id_expr))) {
       LOG_WARN("build column expr failed", K(ret));
     } else if (OB_ISNULL(session_id_expr)) {
@@ -4532,6 +4539,7 @@ int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id
       LOG_WARN("failed to get column schema", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_,
                                                          *column_schema2,
+                                                         session_info_,
                                                          sess_create_time_expr))) {
       LOG_WARN("build column expr failed", K(ret));
     } else if (OB_ISNULL(sess_create_time_expr)) {
@@ -4586,7 +4594,7 @@ int ObDelUpdResolver::add_new_value_for_oracle_temp_table(ObIArray<ObRawExpr*> &
       session_id_expr->set_func_name(N_TEMP_TABLE_SSID);
       val.set_int(oracle_tmp_table_type_);
       temp_table_type->set_value(val);
-      if (OB_FAIL(session_id_expr->add_param_expr(temp_table_type))) {
+      if (OB_FAIL(session_id_expr->set_param_expr(temp_table_type))) {
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(session_id_expr->formalize(session_info_))) {
         LOG_WARN("fail to formalize expr", K(ret));
@@ -4632,6 +4640,7 @@ int ObDelUpdResolver::add_new_column_for_oracle_label_security_table(ObIArray<ui
         LOG_WARN("failed to get column schema", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_,
                                                            *column_schema,
+                                                           session_info_,
                                                            label_se_column_expr))) {
         LOG_WARN("build column expr failed", K(ret));
       } else if (OB_ISNULL(label_se_column_expr)) {
@@ -4987,11 +4996,21 @@ int ObDelUpdResolver::resolve_json_partial_update_flag(ObIArray<ObTableAssignmen
     }
     for (int64_t i = 0; OB_SUCC(ret) && need_partial_update && i < table_assigns.count(); ++i) {
       ObTableAssignment &table_assign = table_assigns.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+      // if there ara rowkey columns update, disable json partial update.
+      bool has_rowkey_update = false;
+      for (int64_t j = 0; OB_SUCC(ret) && ! has_rowkey_update && j < table_assign.assignments_.count(); ++j) {
         ObAssignment &assign = table_assign.assignments_.at(j);
-        bool allow_json_partial_update = false;
-        if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
-          LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+        if (OB_NOT_NULL(assign.column_expr_) && assign.column_expr_->is_rowkey_column()) {
+          has_rowkey_update = true;
+        }
+      }
+      if (OB_SUCC(ret) && ! has_rowkey_update) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+          ObAssignment &assign = table_assign.assignments_.at(j);
+          bool allow_json_partial_update = false;
+          if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
+            LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+          }
         }
       }
     }
@@ -5014,7 +5033,8 @@ int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *re
       if (OB_FAIL(mark_json_partial_update_flag(ref_expr, json_expr, depth + 1, allow_json_partial_update))) {
         LOG_WARN("mark_json_partial_update_flag fail", K(ret), KP(ref_expr), KP(expr), KP(json_expr));
       } else if (allow_json_partial_update) {
-        json_expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | json_expr->get_extra());
+        json_expr->set_json_partial_update_flag(
+                OB_JSON_PARTIAL_UPDATE_LAST_EXPR | json_expr->get_json_partial_update_flag());
       }
     }
   } else if (expr_type != T_FUN_SYS_JSON_REPLACE
@@ -5023,12 +5043,15 @@ int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *re
   } else if (OB_FAIL(mark_json_partial_update_flag(ref_expr, expr->get_param_expr(0), depth + 1, allow_json_partial_update))) {
     LOG_WARN("mark fail", K(ret));
   } else if (allow_json_partial_update) {
-    expr->set_extra(OB_JSON_PARTIAL_UPDATE_ALLOW | expr->get_extra());
+    expr->set_json_partial_update_flag(
+            OB_JSON_PARTIAL_UPDATE_ALLOW | expr->get_json_partial_update_flag());
     if (depth == 0) {
-      expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | expr->get_extra());
+      expr->set_json_partial_update_flag(
+              OB_JSON_PARTIAL_UPDATE_LAST_EXPR | expr->get_json_partial_update_flag());
     }
     if (expr->get_param_expr(0)->is_column_ref_expr()) {
-      expr->set_extra(OB_JSON_PARTIAL_UPDATE_FIRST_EXPR | expr->get_extra());
+      expr->set_json_partial_update_flag(
+              OB_JSON_PARTIAL_UPDATE_FIRST_EXPR | expr->get_json_partial_update_flag());
     }
   }
   return ret;

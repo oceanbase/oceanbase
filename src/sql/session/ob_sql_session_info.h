@@ -48,6 +48,7 @@
 #include "storage/tx/ob_tx_free_route.h"
 #include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "sql/plan_cache/ob_plan_cache_util.h"
 
 namespace oceanbase
 {
@@ -441,6 +442,7 @@ public:                                                                 \
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
   int compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
+  int display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index); \
 };
 DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
 DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
@@ -628,6 +630,9 @@ public:
     #ifdef OB_BUILD_SPM
       select_plan_type_ = ObSpmCacheCtx::INVALID_TYPE;
     #endif
+      catalog_id_ = OB_INVALID_ID;
+      db_id_ = OB_INVALID_ID;
+      db_name_.reset();
     }
   public:
     ObAuditRecordData audit_record_;
@@ -637,6 +642,9 @@ public:
   #ifdef OB_BUILD_SPM
     ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
   #endif
+    uint64_t catalog_id_;
+    uint64_t db_id_;
+    common::ObSqlString db_name_;
   };
 
   class CursorCache {
@@ -694,7 +702,7 @@ public:
               SQL_ENG_LOG(ERROR, "failed to erase hash map", K(ret), K(iter->first));
               break;
             }
-          } else if (OB_FAIL(session.close_cursor(cursor->get_id()))) {
+          } else if (OB_FAIL(session.close_cursor(cursor->get_id(), false))) {
             SQL_ENG_LOG(WARN, "failed to close session cursor", K(ret), K(cursor->get_id()));
           } else {
             SQL_ENG_LOG(INFO, "clsoe session cursor implicit successed!", K(cursor->get_id()));
@@ -765,6 +773,11 @@ public:
                                  enable_enhanced_cursor_validation_(false),
                                  enable_enum_set_subschema_(false),
                                  _ob_sqlstat_enable_(true),
+                                 force_enable_plan_tracing_(false),
+                                 pc_adaptive_min_exec_time_threshold_(0),
+                                 pc_adaptive_effectiveness_ratio_threshold_(0),
+                                 enable_adaptive_plan_cache_(false),
+                                 enable_ps_parameterize_(true),
                                  session_(session)
     {
     }
@@ -796,6 +809,24 @@ public:
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
     bool enable_immediate_row_conflict_check() const { return ATOMIC_LOAD(&enable_immediate_row_conflict_check_); }
+    bool force_enable_plan_tracing() const
+    {
+      return force_enable_plan_tracing_;
+    }
+    int64_t get_pc_adaptive_effectiveness_ratio_threshold() const
+    {
+      return pc_adaptive_effectiveness_ratio_threshold_;
+    }
+    int64_t get_pc_adaptive_min_exec_time_threshold() const
+    {
+      return pc_adaptive_min_exec_time_threshold_;
+    }
+    bool enable_plan_cache_adaptive() const
+    {
+      return enable_adaptive_plan_cache_;
+    }
+
+    bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -827,6 +858,11 @@ public:
     bool enable_enhanced_cursor_validation_;
     bool enable_enum_set_subschema_;
     bool _ob_sqlstat_enable_;
+    bool force_enable_plan_tracing_;
+    int64_t pc_adaptive_min_exec_time_threshold_;
+    int64_t pc_adaptive_effectiveness_ratio_threshold_;
+    bool enable_adaptive_plan_cache_;
+    bool enable_ps_parameterize_;
     ObSQLSessionInfo *session_;
   };
 
@@ -905,7 +941,7 @@ public:
   {
     global_sessid_ = global_sessid;
   }
-  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { return dblink_context_; }
+  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { dblink_ctx_acc_cnt_++; return dblink_context_; }
   void set_sql_request_level(int64_t sql_req_level) { sql_req_level_ = sql_req_level; }
   int64_t get_sql_request_level() { return sql_req_level_; }
   int64_t get_next_sql_request_level() { return sql_req_level_ + 1; }
@@ -1000,7 +1036,7 @@ public:
       ret = OB_HASH_NOT_EXIST;
       SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
     } else if (OB_FAIL(ps_session_info_map_.read_atomic<Visitor>(stmt_id, visitor))) {
-      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_server_sid()));
       if (ret == OB_HASH_NOT_EXIST) {
         ret = OB_EER_UNKNOWN_STMT_HANDLER;
       }
@@ -1015,7 +1051,7 @@ public:
       ret = OB_HASH_NOT_EXIST;
       SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
     } else if (OB_FAIL(ps_session_info_map_.atomic_refactored<T>(stmt_id, update))) {
-      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_server_sid()));
       if (ret == OB_HASH_NOT_EXIST) {
         ret = OB_EER_UNKNOWN_STMT_HANDLER;
       }
@@ -1110,8 +1146,19 @@ public:
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
   pl::ObDbmsCursorInfo *get_dbms_cursor(int64_t cursor_id);
   int add_cursor(pl::ObPLCursorInfo *cursor);
-  int close_cursor(pl::ObPLCursorInfo *&cursor);
-  int close_cursor(int64_t cursor_id);
+  int close_cursor(pl::ObPLCursorInfo *&cursor, bool close_by_open_thread = false);
+  int close_cursor(int64_t cursor_id, bool close_by_open_thread = false);
+    inline void inc_session_cursor() {
+    if (lib::is_diagnose_info_enabled()) {
+      EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
+      EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+    }
+  };
+  inline void dec_session_cursor() {
+    if (lib::is_diagnose_info_enabled()) {
+      EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
+    }
+  };
   int make_cursor(pl::ObPLCursorInfo *&cursor);
   int add_non_session_cursor(pl::ObPLCursorInfo *cursor);
   void del_non_session_cursor(pl::ObPLCursorInfo *cursor);
@@ -1119,6 +1166,10 @@ public:
   int make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
                        uint64_t id = OB_INVALID_ID);
   int close_dbms_cursor(int64_t cursor_id);
+  int make_ps_cursor(pl::ObPsCursorInfo *&cursor,
+                     ParamStore &exec_params,
+                     ObString &sql,
+                     uint64_t id);
   int print_all_cursor();
 
   inline void *get_inner_conn() { return inner_conn_; }
@@ -1366,6 +1417,7 @@ public:
   bool is_spf_mlj_group_rescan_enabled() const;
   bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
+  int is_preserve_order_for_groupby_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
   bool is_sqlstat_enabled();
@@ -1532,6 +1584,32 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_ob_sqlstat_enable();
+  }
+  bool force_enable_plan_tracing()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.force_enable_plan_tracing();
+  }
+  const AdaptivePCConf get_adaptive_pc_conf()
+  {
+    AdaptivePCConf conf;
+    cached_tenant_config_info_.refresh();
+    conf.enable_adaptive_plan_cache_ = cached_tenant_config_info_.enable_plan_cache_adaptive();
+    conf.pc_adaptive_effectiveness_ratio_threshold_ =
+      cached_tenant_config_info_.get_pc_adaptive_effectiveness_ratio_threshold();
+    conf.pc_adaptive_min_exec_time_threshold_ =
+      cached_tenant_config_info_.get_pc_adaptive_min_exec_time_threshold();
+    return conf;
+  }
+  bool enable_plan_cache_adaptive()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_plan_cache_adaptive();
+  }
+  bool is_enable_ps_parameterize()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_ps_parameterize();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
@@ -1885,6 +1963,7 @@ private:
   ObExecContext *cur_exec_ctx_;
   bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
   oceanbase::sql::ObDblinkCtxInSession dblink_context_;
+  int64_t dblink_ctx_acc_cnt_;
   int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock
   int64_t expect_group_id_;
   // When try packet retry failed, set this flag true and retry at current thread.
@@ -1924,14 +2003,14 @@ inline bool ObSQLSessionInfo::is_terminate(int &ret) const
     bret = true;
     SQL_ENG_LOG(WARN, "query interrupted session",
                 "query", get_current_query_string(),
-                "key", get_sessid(),
+                "key", get_server_sid(),
                 "proxy_sessid", get_proxy_sessid());
     ret = common::OB_ERR_QUERY_INTERRUPTED;
   } else if (QUERY_DEADLOCKED == get_session_state()) {
     bret = true;
     SQL_ENG_LOG(WARN, "query deadlocked",
                 "query", get_current_query_string(),
-                "key", get_sessid(),
+                "key", get_server_sid(),
                 "proxy_sessid", get_proxy_sessid());
     ret = common::OB_DEAD_LOCK;
   } else if (SESSION_KILLED == get_session_state()) {

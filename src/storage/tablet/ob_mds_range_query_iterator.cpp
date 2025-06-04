@@ -10,7 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_mds_range_query_iterator.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/tablet/ob_mds_range_query_iterator.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -18,11 +19,11 @@ namespace oceanbase
 namespace storage
 {
 
-int ob_get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table)
+int ObMdsRangeQueryIteratorHelper::get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObTabletPointer *tablet_pointer = nullptr;
+  ObTabletBasePointer *tablet_pointer = nullptr;
 
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_INVALID_ARGUMENT;
@@ -39,7 +40,7 @@ int ob_get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &m
   return ret;
 }
 
-int ob_gcheck_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete)
+int ObMdsRangeQueryIteratorHelper::check_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
@@ -51,6 +52,22 @@ int ob_gcheck_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_da
     is_data_complete = tablet->get_tablet_meta().ha_status_.is_data_status_complete();
   }
 
+  return ret;
+}
+
+int ObMdsRangeQueryIteratorHelper::get_tablet_ls_id_and_tablet_id(
+      const ObTabletHandle &tablet_handle,
+      ObLSID &ls_id,
+      ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    MDS_LOG(WARN, "invalid argument", K(ret), K(tablet_handle));
+  } else {
+    ls_id = tablet_handle.get_obj()->get_ls_id();
+    tablet_id = tablet_handle.get_obj()->get_tablet_id();
+  }
   return ret;
 }
 

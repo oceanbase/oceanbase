@@ -19,7 +19,6 @@
 #include "ob_pl_adt_service.h"
 #include "ob_pl_exception_handling.h"
 #include "ob_pl_di_adt_service.h"
-#include "lib/hash/ob_placement_hashmap.h"
 #include "pl/ob_pl_user_type.h"
 
 namespace oceanbase {
@@ -81,6 +80,7 @@ public:
     jit::ObLLVMFunction spi_destruct_collection_;
     jit::ObLLVMFunction spi_reset_composite_;
     jit::ObLLVMFunction spi_copy_datum_;
+    jit::ObLLVMFunction spi_cast_enum_set_to_string_;
     jit::ObLLVMFunction spi_destruct_obj_;
     jit::ObLLVMFunction spi_sub_nestedtable_;
     jit::ObLLVMFunction spi_alloc_complex_var_;
@@ -111,6 +111,7 @@ public:
     jit::ObLLVMFunction spi_get_parent_allocator_;
     jit::ObLLVMFunction spi_get_current_expr_allocator_;
     jit::ObLLVMFunction spi_adjust_error_trace_;
+    jit::ObLLVMFunction spi_convert_anonymous_array_;
   };
 
   struct EHStack
@@ -266,6 +267,9 @@ public:
                          bool in_warning,
                          bool signal);
   int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
+#ifdef OB_BUILD_ORACLE_PL
+  int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &error_code);
+#endif
   int generate_destruct_out_params();
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
@@ -350,6 +354,13 @@ public:
   int generate_user_type(const ObUserDefinedType &type);
   int generate_obj_access_expr();
   int generate_set_variable(int64_t expr, jit::ObLLVMValue &value, bool is_default, int64_t stmt_id, bool in_notfound, bool in_warning);
+  int cast_enum_set_to_str(const ObPLBlockNS &ns,
+                           uint64_t type_info_id,
+                           jit::ObLLVMValue &src,
+                           jit::ObLLVMValue &dest,
+                           uint64_t location,
+                           bool in_notfound,
+                           bool in_warning);
   common::ObIAllocator &get_allocator() { return allocator_; }
   const ObSqlExpression *get_expr(int64_t i) const { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   ObSqlExpression *get_expr(int64_t i) { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
@@ -709,7 +720,7 @@ private:
                         jit::ObLLVMValue &allocator_ptr,
                         jit::ObLLVMValue &ret_value,
                         jit::ObLLVMBasicBlock &exit,
-                        const sql::ObExprResType &res_type);
+                        const sql::ObRawExprResType &res_type);
   int generate_get_record_attr(const ObObjAccessIdx &current_access,
                                            uint64_t udt_id,
                                            bool for_write,
@@ -726,12 +737,12 @@ private:
                                            jit::ObLLVMValue &current_allocator,
                                            jit::ObLLVMValue &ret_value_ptr,
                                            jit::ObLLVMBasicBlock& exit,
-                                           const sql::ObExprResType &res_type);
+                                           const sql::ObRawExprResType &res_type);
   int generate_get_attr_func(const common::ObIArray<ObObjAccessIdx> &idents,
                              int64_t param_count, const
                              common::ObString &func_name,
                              bool for_write,
-                             const sql::ObExprResType &res_type);
+                             const sql::ObRawExprResType &res_type);
 #ifdef OB_BUILD_ORACLE_PL
   int build_nested_table_type(const ObNestedTableType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
   int build_assoc_array_type(const ObAssocArrayType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
@@ -758,7 +769,7 @@ private:
   int generate_arith_calc(jit::ObLLVMValue &left,
                           jit::ObLLVMValue &right,
                           ObItemType type,
-                          const sql::ObExprResType &result_type,
+                          const sql::ObRawExprResType &result_type,
                           int64_t stmt_id,
                           bool in_notfound,
                           bool in_warning,

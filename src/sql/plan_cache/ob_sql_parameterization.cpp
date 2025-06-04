@@ -398,6 +398,11 @@ bool ObSqlParameterization::is_execute_mode(SQL_EXECUTION_MODE mode)
   return (PS_EXECUTE_MODE == mode || PL_EXECUTE_MODE == mode);
 }
 
+bool ObSqlParameterization::is_text_mode(SQL_EXECUTION_MODE mode)
+{
+  return TEXT_MODE == mode;
+}
+
 /* fix:
 * decide if a number param can ignore scale check when choosing plancache.
 * if current node type is expr list or number,
@@ -1077,6 +1082,7 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
   if (OB_FAIL(ret)) {
   } else if (is_prepare_mode(mode)
             || is_transform_outline
+            || (is_text_mode(mode) && pc_ctx.force_enable_plan_tracing_)
 #ifdef OB_BUILD_SPM
             || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_
 #endif
@@ -1265,7 +1271,7 @@ int ObSqlParameterization::construct_no_check_type_params(const ObIArray<int64_t
       LOG_WARN("Invalid offset", K(ret), K(offset), K(params.count()));
     } else if (need_check_type_offsets.has_member(offset)) {
       // do nothing
-    } else if (!params.at(offset).is_ext()) { // extend type need to be checked
+    } else if (!params.at(offset).is_ext() && !ob_is_enumset_inner_tc(params.at(offset).get_meta().get_type())) { // extend type and enum or set inner type need to be checked
       params.at(offset).set_need_to_check_type(false);
     } else {
       // real type do not need to be checked

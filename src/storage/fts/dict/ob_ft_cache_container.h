@@ -37,6 +37,7 @@ public:
       : type_(ObFTDictType::DICT_TYPE_INVALID), handle_(), key_(nullptr), value_(nullptr)
   {
   }
+  ~ObFTCacheRangeHandle() {}
 };
 
 class ObFTCacheRangeContainer
@@ -72,6 +73,7 @@ public:
          iter != handles_.end();
          ++iter) {
       if (OB_NOT_NULL(*iter)) {
+        (*iter)->~ObFTCacheRangeHandle();
         alloc_.free(*iter);
         *iter = nullptr;
       }

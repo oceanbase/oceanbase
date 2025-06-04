@@ -539,6 +539,7 @@ int ObZoneManagerBase::stop_zone(const ObZone &zone)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_NOT_CHECH_SAME_REGION_IN_SHARED_STORAGE_MODE);
 int ObZoneManagerBase::alter_zone(
     const obrpc::ObAdminZoneArg &arg)
 {
@@ -576,6 +577,9 @@ int ObZoneManagerBase::alter_zone(
           ObRegion old_region;
           if (OB_FAIL(zone_infos_[index].get_region(old_region))) {
             LOG_WARN("failed to get_region", KR(ret));
+          } else if (OB_UNLIKELY(ERRSIM_NOT_CHECH_SAME_REGION_IN_SHARED_STORAGE_MODE)) {
+            // for test, skip check same region.
+            LOG_INFO("errsim not check same region in ss mode", KR(ret));
           } else if (old_region != my_region) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("alter region of one of several zones not allowed in shared_storage mode",

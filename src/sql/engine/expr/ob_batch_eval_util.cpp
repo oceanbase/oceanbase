@@ -144,22 +144,10 @@ int binary_operand_vector_eval(const ObExpr &expr,
   return ret;
 }
 
-int ObNestedArithOpBaseFunc::construct_attr_param(ObIAllocator &alloc, ObEvalCtx &ctx, ObExpr &param_expr,
-                                  const uint16_t meta_id, int64_t row_idx, ObIArrayType *&param_obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, meta_id, param_obj))) {
-    LOG_WARN("construct array obj failed", K(ret));
-  } else if (OB_FAIL(ObArrayExprUtils::assemble_array_attrs(ctx, param_expr, row_idx, param_obj))) {
-    LOG_WARN("assemble array attrs failed", K(ret));
-  }
-  return ret;
-}
-
 int ObNestedArithOpBaseFunc::construct_param(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id,
                              ObString &str_data, ObIArrayType *&param_obj)
 {
-  return ObArrayExprUtils::get_array_obj(alloc, ctx, meta_id, str_data, param_obj);
+  return ObNestedVectorFunc::construct_param(alloc, ctx, meta_id, str_data, param_obj);
 }
 
 int ObNestedArithOpBaseFunc::construct_res_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t meta_id, ObIArrayType *&res_obj)

@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "ob_ls_transfer_info.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
@@ -51,6 +52,9 @@ enum ObMigrationStatus
   OB_MIGRATION_STATUS_ADD_WAIT = 11,
   OB_MIGRATION_STATUS_REBUILD_WAIT = 12,
   OB_MIGRATION_STATUS_GC = 13,  // ls wait allow gc
+  OB_MIGRATION_STATUS_REPLACE = 14,
+  OB_MIGRATION_STATUS_REPLACE_WAIT = 15,
+  OB_MIGRATION_STATUS_REPLACE_FAIL = 16,
   OB_MIGRATION_STATUS_MAX,
 };
 
@@ -73,6 +77,7 @@ struct ObMigrationOpType
   static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < MAX_LS_OP; }
   static bool need_keep_old_tablet(const TYPE &type);
   static int get_ls_wait_status(const TYPE &type, ObMigrationStatus &wait_status);
+  static int convert_to_dr_type(const TYPE &type, obrpc::ObDRTaskType &dr_type);
 };
 
 struct ObMigrationStatusHelper

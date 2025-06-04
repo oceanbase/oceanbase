@@ -306,6 +306,7 @@ public:
     char *buf,
     const int64_t buf_size,
     const bool is_range_read,
+    const bool has_meta,
     int64_t &read_size);
 
   // Get whole object

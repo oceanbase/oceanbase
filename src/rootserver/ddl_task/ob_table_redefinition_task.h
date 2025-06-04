@@ -67,6 +67,7 @@ public:
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const override { return true; }
   static bool check_task_status_is_pending(const share::ObDDLTaskStatus task_status);
+  virtual bool is_ddl_task_can_be_cancelled() const;
   INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_),
       K(is_copy_indexes_), K(is_copy_triggers_), K(is_copy_constraints_),
@@ -123,6 +124,7 @@ private:
   int64_t target_cg_cnt_;
   bool use_heap_table_ddl_plan_;
   bool is_ddl_retryable_;
+  bool has_rebuild_domain_indexes_;
 };
 
 }  // end namespace rootserver

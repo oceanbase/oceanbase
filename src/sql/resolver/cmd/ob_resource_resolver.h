@@ -328,7 +328,22 @@ int ObResourceUnitOptionResolver<T>::check_value_(const ValueT value,
     const ObItemType type) const
 {
   int ret = OB_SUCCESS;
-  if (T_IOPS_WEIGHT != type
+  if (T_DATA_DISK_SIZE == type) {
+    // data_disk_size should be >= 0, and 0 is supported after 4.3.5.2
+    if (OB_UNLIKELY(value < 0)) {
+      print_invalid_argument_user_error_(type, ", value can not be negative");
+      ret = common::OB_INVALID_ARGUMENT;
+      LOG_WARN("param can not be negative", KR(ret), K(type), K(value));
+    } else if (0 == value) {
+      uint64_t sys_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+        LOG_WARN("failed to get sys tenant min data version", KR(ret));
+      } else if (sys_data_version < DATA_VERSION_4_3_5_2) {
+        ret = common::OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SYS tenant data version is below 4.3.5.2, DATA_DISK_SIZE being 0");
+      }
+    }
+  } else if (T_IOPS_WEIGHT != type
       && T_NET_BANDWIDTH_WEIGHT != type) {
     if (OB_UNLIKELY(value <= 0)) {
       // iops weight and net_bandwidth_weight are allowed to set zero

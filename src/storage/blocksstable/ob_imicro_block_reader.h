@@ -44,6 +44,7 @@ class ObAggCellVec;
 class ObGroupByCellBase;
 class ObGroupByCell;
 class ObGroupByCellVec;
+struct ObPushdownRowIdCtx;
 };
 namespace memtable {
 class ObIMvccCtx;
@@ -278,6 +279,7 @@ public:
     Decoder,
     CSDecoder,
     MemtableReader,
+    NewFlatReader,
     MaxReaderType
   };
   ObIMicroBlockReader()
@@ -287,21 +289,21 @@ public:
   }
   virtual ~ObIMicroBlockReader() {}
   virtual void reset() { ObIMicroBlockReaderInfo::reset(); }
-  virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) = 0;
+  virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) { return OB_NOT_SUPPORTED; }
   //when there is not read_info in input parameters, it indicates reading all columns from all rows
   //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
-  virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) = 0;
+  virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) {return OB_NOT_SUPPORTED; }
   virtual int get_row(const int64_t index, ObDatumRow &row) = 0;
   virtual int get_row_header(
       const int64_t row_idx,
-      const ObRowHeader *&row_header) = 0;
-  virtual int get_row_count(int64_t &row_count) = 0;
+      const ObRowHeader *&row_header) { return OB_NOT_SUPPORTED; }
+  virtual int get_row_count(int64_t &row_count) { return OB_NOT_SUPPORTED; }
   virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
       int64_t &trans_version,
-      int64_t &sql_sequence) = 0;
+      int64_t &sql_sequence) { return OB_NOT_SUPPORTED; }
   int locate_range(
       const ObDatumRange &range,
       const bool is_left_border,
@@ -320,14 +322,17 @@ public:
     UNUSEDx(col_id, row_ids, row_cap, contains_null, col_param, count);
     return OB_NOT_SUPPORTED;
   }
-  virtual int64_t get_column_count() const = 0;
+  virtual int64_t get_column_count() const { return OB_NOT_SUPPORTED; }
   // For column store
   virtual int find_bound(const ObDatumRowkey &key,
                  const bool lower_bound,
                  const int64_t begin_idx,
                  const int64_t end_idx,
                  int64_t &row_idx,
-                 bool &equal) = 0;
+                 bool &equal)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   virtual int get_column_datum(
       const ObTableIterParam &iter_param,
       const ObTableAccessContext &context,
@@ -365,11 +370,10 @@ public:
   }
   virtual int get_aggregate_result(
       const int32_t col_offset,
-      const int32_t *row_ids,
-      const int64_t row_cap,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       storage::ObAggCellVec &agg_cell)
   {
-    UNUSEDx(col_offset, row_ids, row_cap, agg_cell);
+    UNUSEDx(col_offset, pd_row_id_ctx, agg_cell);
     return OB_NOT_SUPPORTED;
   }
   // for normal group by pushdown
@@ -432,17 +436,30 @@ public:
       const bool lower_bound,
       const int64_t begin_idx,
       int64_t &row_idx,
-      bool &equal) = 0;
+      bool &equal)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
-      int32_t &compare_result) = 0;
+      int32_t &compare_result)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   static int filter_white_filter(
       const sql::ObWhiteFilterExecutor &filter,
       const common::ObDatum &datum,
       bool &filtered);
   virtual bool has_lob_out_row() const = 0;
   OB_INLINE ObReaderType get_type() const { return reader_type_; }
+  OB_INLINE bool is_memtable_reader() const { return MemtableReader == reader_type_; }
+  int locate_border_row_id(
+      const ObDatumRowkey &rowkey,
+      const int64_t begin_idx,
+      const int64_t end_idx,
+      int64_t &border_row_idx,
+      bool &is_equal);
   static bool need_padding(const bool is_padding_mode, const ObObjMeta &obj_meta)
   {
     return is_padding_mode && obj_meta.is_fixed_len_char_type();
@@ -454,7 +471,10 @@ protected:
       int64_t &row_idx,
       bool &equal,
       int64_t &end_key_begin_idx,
-      int64_t &end_key_end_idx) = 0;
+      int64_t &end_key_end_idx)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   int validate_filter_info(
       const sql::PushdownFilterInfo &pd_filter_info,
       const sql::ObPushdownFilterExecutor &filter,

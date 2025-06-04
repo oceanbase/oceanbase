@@ -20,6 +20,8 @@
 
 #include "storage/compaction/ob_partition_merge_iter.h"
 #include "ob_index_block_data_prepare.h"
+#include "storage/ob_micro_block_index_iterator.h"
+#include <random>
 
 bool mock_micro_index_clustered_result = true;
 
@@ -284,6 +286,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
       sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false, true));
   ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_desc));
+  ASSERT_EQ(macro_desc.macro_block_id_, first_macro_id);
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next_macro_block(macro_desc));
 
   // scan major sstable with start key is not multi-version rowkey and left bound is not inclusive
@@ -423,6 +426,318 @@ TEST_F(TestIndexBlockTreeCursor, test_get_cs_range)
       ASSERT_EQ(expect_row_offset, cs_range.start_key_.datums_[0].get_int());
     }
   }
+}
+
+TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
+{
+  // calculate the total number of all micro blocks
+  int64_t data_micro_block_cnt_ = 0;
+  ObIndexBlockMacroIterator macro_iter;
+  MacroBlockId macro_block_id;
+  int64_t start_row_offset;
+  int tmp_ret = OB_SUCCESS;
+  int64_t macro_block_cnt = 0;
+  int64_t micro_block_cnt = 0;
+  ObDatumRange iter_range;
+  iter_range.set_whole_range();
+  ASSERT_EQ(OB_SUCCESS, macro_iter.open(
+      sstable_,
+      iter_range,
+      tablet_handle_.get_obj()->get_rowkey_read_info(),
+      allocator_,
+      false,
+      true));
+  tmp_ret = OB_SUCCESS;
+  ObMacroBlockDesc macro_desc;
+  while (OB_SUCCESS == tmp_ret) {
+    macro_desc.reset();
+    tmp_ret = macro_iter.get_next_macro_block(macro_desc);
+    if (OB_SUCCESS == tmp_ret) {
+      macro_block_cnt++;
+      const ObIArray<blocksstable::ObMicroIndexInfo> &index_infos = macro_iter.get_micro_index_infos();
+      data_micro_block_cnt_ += index_infos.count();
+      STORAGE_LOG(DEBUG, "Show Macro block descriptor", K(macro_desc), K(macro_block_cnt));
+      ASSERT_TRUE(macro_desc.is_valid());
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_EQ(data_macro_block_cnt_, macro_block_cnt);
+
+
+  ObMicroBlockIndexIterator micro_iter;
+  tmp_ret = OB_SUCCESS;
+  ObMicroIndexInfo micro_index_info;
+  iter_range.set_whole_range();
+
+  // reverse whole scan
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, true));
+  while (OB_SUCCESS == tmp_ret) {
+    tmp_ret = micro_iter.get_next(micro_index_info);
+    STORAGE_LOG(DEBUG, "Reverse get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
+    if (OB_SUCCESS == tmp_ret) {
+      micro_block_cnt++;
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_EQ(data_micro_block_cnt_, micro_block_cnt);
+
+  // sequential whole scan
+  tmp_ret = OB_SUCCESS;
+  micro_block_cnt = 0;
+  micro_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+  tmp_ret = micro_iter.get_next(micro_index_info);
+  while (OB_SUCCESS == tmp_ret) {
+    micro_block_cnt++;
+    STORAGE_LOG(DEBUG, "Sequential get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
+    tmp_ret = micro_iter.get_next(micro_index_info);
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+  ASSERT_EQ(data_micro_block_cnt_, micro_block_cnt);
+
+  // scan range lower than sstable first rowkey
+  ObDatumRow row;
+  ObDatumRowkey first_micro_endkey;
+  ObMicroBlockId first_micro_id;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(min_row_seed_ - 1, row));
+  micro_iter.reset();
+  iter_range.reset();
+  iter_range.start_key_.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.end_key_.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.border_flag_.set_inclusive_start();
+  iter_range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+  ASSERT_EQ(OB_SUCCESS, micro_iter.get_next(micro_index_info));
+  ASSERT_TRUE(micro_index_info.is_valid());
+  first_micro_id.macro_id_ = micro_index_info.row_header_->get_macro_id();
+  first_micro_id.offset_ = micro_index_info.row_header_->get_block_offset();
+  first_micro_id.size_ = micro_index_info.row_header_->get_block_size();
+
+  // deep copy first endkey
+  const ObDatumRowkey *rowkey_ = micro_index_info.endkey_.get_compact_rowkey();
+  int64_t copy_size = rowkey_->get_deep_copy_size();
+  char *key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+  ASSERT_NE(nullptr, key_buf);
+  rowkey_->deep_copy(first_micro_endkey, key_buf, copy_size);
+
+  ASSERT_EQ(OB_ITER_END, micro_iter.get_next(micro_index_info));
+
+  // scan range with start key equal to endkey
+  iter_range.reset();
+  micro_iter.reset();
+  iter_range.start_key_ = first_micro_endkey;
+  iter_range.end_key_ = first_micro_endkey;
+  iter_range.border_flag_.set_inclusive_start();
+  iter_range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+  ASSERT_EQ(OB_SUCCESS, micro_iter.get_next(micro_index_info));
+  ASSERT_TRUE(micro_index_info.is_valid());
+
+  ASSERT_EQ(first_micro_id.macro_id_, micro_index_info.row_header_->get_macro_id());
+  ASSERT_EQ(first_micro_id.offset_, micro_index_info.row_header_->get_block_offset());
+  ASSERT_EQ(first_micro_id.size_, micro_index_info.row_header_->get_block_size());
+  ASSERT_EQ(OB_ITER_END, micro_iter.get_next(micro_index_info));
+
+  // scan major sstable with start key is not multi-version rowkey and left bound is not inclusive
+  iter_range.reset();
+  micro_iter.reset();
+  iter_range.start_key_.assign(first_micro_endkey.datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.end_key_.set_max_rowkey();
+  iter_range.border_flag_.unset_inclusive_start();
+  iter_range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+  ASSERT_EQ(OB_SUCCESS, micro_iter.get_next(micro_index_info));
+  bool micro_id_is_equal = first_micro_id.offset_ == micro_index_info.row_header_->get_block_offset()
+                        && first_micro_id.size_ == micro_index_info.row_header_->get_block_size()
+                        && first_micro_id.macro_id_ == micro_index_info.row_header_->get_macro_id();
+  ASSERT_EQ(false, micro_id_is_equal);
+  allocator_.free(key_buf);
+
+  // scan range larger than sstable last rowkey
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(max_row_seed_ + 1, row));
+  micro_iter.reset();
+  iter_range.reset();
+  iter_range.start_key_.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.end_key_.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.border_flag_.set_inclusive_start();
+  iter_range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_BEYOND_THE_RANGE, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+
+  //collect the endkeys while sequential scan
+  ObArray<ObDatumRowkey> micro_endkeys_;
+  tmp_ret = OB_SUCCESS;
+  micro_iter.reset();
+  iter_range.reset();
+  std::random_device rd;  // random seed
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> left_distrib(min_row_seed_, max_row_seed_);
+  int64_t left = left_distrib(gen);
+  std::uniform_int_distribution<> len_distrib(0, max_row_seed_-min_row_seed_+1);
+  int64_t len = len_distrib(gen);
+  int64_t right = left+len-1;
+
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(left, row));
+  iter_range.start_key_.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  ObDatumRow row_right;
+  ASSERT_EQ(OB_SUCCESS, row_right.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(right, row_right));
+  iter_range.end_key_.assign(row_right.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
+  iter_range.border_flag_.set_inclusive_start();
+  iter_range.border_flag_.set_inclusive_end();
+  STORAGE_LOG(INFO, "the range info: ", K(left), K(right), K(min_row_seed_), K(max_row_seed_));
+
+  ASSERT_EQ(OB_SUCCESS, micro_iter.open(
+    sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
+  tmp_ret = micro_iter.get_next(micro_index_info);
+  while (OB_SUCCESS == tmp_ret) {
+    ObDatumRowkey endkey;
+    const ObDatumRowkey *rowkey_ = micro_index_info.endkey_.get_compact_rowkey();
+    int64_t copy_size = rowkey_->get_deep_copy_size();
+    char *key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+    ASSERT_NE(nullptr, key_buf);
+    rowkey_->deep_copy(endkey, key_buf, copy_size);
+    micro_endkeys_.push_back(endkey);
+    STORAGE_LOG(DEBUG, "Sequential get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
+    tmp_ret = micro_iter.get_next(micro_index_info);
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_ret);
+
+  //check the endkey in micro_index_info while sequential scan
+  macro_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, macro_iter.open(
+      sstable_,
+      iter_range,
+      tablet_handle_.get_obj()->get_rowkey_read_info(),
+      allocator_,
+      false,
+      true));
+  int tmp_macro_ret = OB_SUCCESS;
+  const ObDatumRowkey *end_key = nullptr;
+  int cmp_ret = 0;
+  int endkey_id = 0;
+  ObArray<int> endkey_bound_ids;
+  bool is_first_macro_block = true;
+  ObDatumRowkey previous_macro_start_key;
+  ObDatumRowkey previous_macro_end_key;
+
+  while (OB_SUCCESS == tmp_macro_ret) {
+    macro_desc.reset();
+    tmp_macro_ret = macro_iter.get_next_macro_block(macro_desc);
+    if (OB_SUCCESS == tmp_macro_ret) {
+      if (!is_first_macro_block) {
+        //check the previous macro block range
+        ASSERT_EQ(OB_SUCCESS, previous_macro_end_key.compare(micro_endkeys_.at(endkey_id-1),
+              tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),cmp_ret));
+        ASSERT_EQ(0, cmp_ret);
+        int count = endkey_bound_ids.count();
+        if (!previous_macro_start_key.is_min_rowkey()){
+          ASSERT_GE(2, count);
+          int idx = endkey_bound_ids.at(count-2);
+          ASSERT_EQ(OB_SUCCESS, previous_macro_start_key.compare(micro_endkeys_.at(idx),
+                  tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),cmp_ret));
+          ASSERT_EQ(0, cmp_ret);
+        } else {
+          ASSERT_EQ(1, count);
+        }
+      }
+
+      ASSERT_TRUE(macro_desc.is_valid());
+      const ObIArray<blocksstable::ObMicroIndexInfo> &index_infos = macro_iter.get_micro_index_infos();
+      for (int64_t i = 0; i < index_infos.count(); ++i) {
+        const ObMicroIndexInfo &info = index_infos.at(i);
+        end_key = info.endkey_.get_compact_rowkey();
+        ASSERT_EQ(OB_SUCCESS, end_key->compare(micro_endkeys_.at(endkey_id++),
+              tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),cmp_ret));
+        ASSERT_EQ(0, cmp_ret);
+      }
+
+      //deep copy the start key and end key of macro range
+      const ObDatumRowkey start_key_tmp = macro_desc.range_.get_start_key();
+      int64_t copy_size = start_key_tmp.get_deep_copy_size();
+      char *key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+      ASSERT_NE(nullptr, key_buf);
+      start_key_tmp.deep_copy(previous_macro_start_key, key_buf, copy_size);
+
+      const ObDatumRowkey end_key_tmp = macro_desc.range_.get_end_key();
+      copy_size = end_key_tmp.get_deep_copy_size();
+      key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+      ASSERT_NE(nullptr, key_buf);
+      end_key_tmp.deep_copy(previous_macro_end_key, key_buf, copy_size);
+
+      endkey_bound_ids.push_back(endkey_id-1);
+      is_first_macro_block = false;
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_macro_ret);
+
+
+  //check the endkey in micro_index_info while reverse scan
+  macro_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, macro_iter.open(
+      sstable_,
+      iter_range,
+      tablet_handle_.get_obj()->get_rowkey_read_info(),
+      allocator_,
+      true,
+      true));
+  tmp_macro_ret = OB_SUCCESS;
+  end_key = nullptr;
+  cmp_ret = 0;
+  endkey_id = micro_endkeys_.count()-1;
+  int endkey_bound_id = endkey_bound_ids.count()-1;
+  bool is_last_block = true;
+  while (OB_SUCCESS == tmp_macro_ret) {
+    macro_desc.reset();
+    tmp_macro_ret = macro_iter.get_next_macro_block(macro_desc);
+    if (OB_SUCCESS == tmp_macro_ret) {
+      if (!is_last_block) {
+        endkey_bound_id--;
+        //check the previous macro block range
+        if (!previous_macro_start_key.is_min_rowkey()){
+          ASSERT_EQ(OB_SUCCESS, previous_macro_start_key.compare(micro_endkeys_.at(endkey_id),
+                  tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),cmp_ret));
+          ASSERT_EQ(0, cmp_ret);
+          ASSERT_EQ(endkey_id, endkey_bound_ids.at(endkey_bound_id));
+        } else {
+          ASSERT_EQ(0, endkey_bound_id);
+        }
+      }
+
+      ASSERT_TRUE(macro_desc.is_valid());
+      const ObIArray<blocksstable::ObMicroIndexInfo> &index_infos = macro_iter.get_micro_index_infos();
+      for (int64_t i = index_infos.count()-1; i >=0; i--) {
+        const ObMicroIndexInfo &info = index_infos.at(i);
+        end_key = info.endkey_.get_compact_rowkey();
+        ASSERT_EQ(OB_SUCCESS, end_key->compare(micro_endkeys_.at(endkey_id--),
+              tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),cmp_ret));
+        ASSERT_EQ(0, cmp_ret);
+      }
+
+      //deep copy the start key and end key of macro range
+      const ObDatumRowkey start_key_tmp = macro_desc.range_.get_start_key();
+      int64_t copy_size = start_key_tmp.get_deep_copy_size();
+      char *key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+      ASSERT_NE(nullptr, key_buf);
+      start_key_tmp.deep_copy(previous_macro_start_key, key_buf, copy_size);
+
+      const ObDatumRowkey end_key_tmp = macro_desc.range_.get_end_key();
+      copy_size = end_key_tmp.get_deep_copy_size();
+      key_buf = reinterpret_cast<char *>(allocator_.alloc(copy_size));
+      ASSERT_NE(nullptr, key_buf);
+      end_key_tmp.deep_copy(previous_macro_end_key, key_buf, copy_size);
+
+      is_last_block = false;
+    }
+  }
+  ASSERT_EQ(OB_ITER_END, tmp_macro_ret);
+  allocator_.reset();
 }
 
 } // end blocksstable

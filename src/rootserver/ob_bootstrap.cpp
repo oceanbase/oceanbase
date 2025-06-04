@@ -241,6 +241,10 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("cannot do bootstrap on not empty server", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_root_key())) {
     LOG_WARN("fail to notify sys tenant root key", KR(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (OB_FAIL(check_and_notify_logservice_access_point())) {
+    LOG_WARN("fail to notify logservice access point", KR(ret));
+#endif
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (OB_FAIL(check_and_notify_shared_storage_info())) {
     LOG_WARN("fail to notify shared-storage info", KR(ret));
@@ -263,6 +267,40 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObPreBootstrap::check_and_notify_logservice_access_point()
+{
+  int ret = OB_SUCCESS;
+  const ObString &logservice_access_point = arg_.logservice_access_point_;
+  if (!GCONF.enable_logservice) {
+    // do nothing
+  } else if (logservice_access_point.empty()) {
+    // TODO by qingxia: close this fast way before release
+    // ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logservice_access_point is empty with enable_logservice", KR(ret), K(arg_));
+  } else if (!GCONF.logservice_access_point.set_value(logservice_access_point)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("logservice storage info too long!", KR(ret), K(logservice_access_point));
+  } else {
+    // Notify rs_list nodes with logservice access point
+    ObNotifyLogServiceAccessPointArg rpc_arg;
+    ObNotifyLogServiceAccessPointResult rpc_result;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+      if (OB_FAIL(rpc_arg.init(logservice_access_point))) {
+        LOG_WARN("fail to init rpc_arg", KR(ret), K(logservice_access_point));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+                                    .notify_logservice_access_point(rpc_arg, rpc_result))) {
+        LOG_WARN("fail to send rpc notify_logservice_access_point", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+      } else if (OB_FAIL(rpc_result.get_ret())) {
+        LOG_WARN("notify_logservice_access_point via rpc failed", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+      }
+    }
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+#endif
 
 #ifdef OB_BUILD_SHARED_STORAGE
 /*
@@ -631,8 +669,8 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
 {
   int ret = OB_SUCCESS;
   bool already_bootstrap = true;
-  ObSArray<ObTableSchema> table_schemas;
   ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
+  ObSArray<ObTableSchema> table_schemas;
   begin_ts_ = ObTimeUtility::current_time();
 
   BOOTSTRAP_LOG(INFO, "start do execute_bootstrap");
@@ -923,7 +961,7 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   int ret = OB_SUCCESS;
   if (is_system_table(data_table_id)) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-      if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+      if (is_hardcode_schema_table(data_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_sys_table_lob_aux_schema(data_table_id, lob_meta_schema, lob_piece_schema))) {
         LOG_WARN("fail to get sys table lob aux schema", KR(ret), K(data_table_id));
@@ -1249,29 +1287,10 @@ int ObBootstrap::init_global_stat()
           OB_INVALID_VERSION);
       if (OB_FAIL(schema_status_proxy->set_tenant_schema_status(tenant_status))) {
         LOG_WARN("fail to init create partition status", KR(ret), K(tenant_status));
-      } else if (OB_FAIL(init_sequence_id())) {
-        LOG_WARN("failed to init_sequence_id", KR(ret));
       } else {}
     }
   }
   BOOTSTRAP_CHECK_SUCCESS();
-  return ret;
-}
-
-int ObBootstrap::init_sequence_id()
-{
-  int ret = OB_SUCCESS;
-  const int64_t rootservice_epoch = 0;
-  ObMultiVersionSchemaService &multi_schema_service = ddl_service_.get_schema_service();
-  ObSchemaService *schema_service = multi_schema_service.get_schema_service();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check_inner_stat failed", K(ret));
-  } else if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", K(ret));
-  } else if (OB_FAIL(schema_service->init_sequence_id(rootservice_epoch))) {
-    LOG_WARN("init sequence id failed", K(ret), K(rootservice_epoch));
-  }
   return ret;
 }
 

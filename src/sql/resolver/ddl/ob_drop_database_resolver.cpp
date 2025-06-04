@@ -47,6 +47,9 @@ int ObDropDatabaseResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
+  } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop database in catalog is");
   } else {
     ObDropDatabaseStmt *drop_database_stmt = NULL;
     if (OB_ISNULL(drop_database_stmt = create_stmt<ObDropDatabaseStmt>())) {

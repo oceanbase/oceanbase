@@ -602,6 +602,73 @@ int64_t ObGlobalTableStat::get_micro_block_count() const
   return micro_block_count_;
 }
 
+const ObIArray<uint64_t>& ObGlobalSkipRateStat::get_skip_sample_cnt_arr() const
+{
+  return skip_sample_cnt_arr_;
+}
+
+const ObIArray<double>& ObGlobalSkipRateStat::get_skip_rate_arr() const
+{
+  return cg_skip_rate_arr_;
+}
+
+int ObGlobalSkipRateStat::add(const ObIArray<uint64_t> &skip_sample_cnt_arr, const ObIArray<double> &cg_skip_rate_arr)
+{
+  int ret = OB_SUCCESS;
+  if (cg_skip_rate_arr.empty()) {
+    //do nothing
+  } else if (count_ == 0 &&
+             !cg_skip_rate_arr.empty() &&
+             OB_FAIL(cg_skip_rate_arr_.prepare_allocate(cg_skip_rate_arr.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else if (count_ == 0 &&
+             !skip_sample_cnt_arr.empty() &&
+             OB_FAIL(skip_sample_cnt_arr_.prepare_allocate(skip_sample_cnt_arr.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else if (OB_UNLIKELY(cg_skip_rate_arr.count() != cg_skip_rate_arr_.count()) ||
+             OB_UNLIKELY(skip_sample_cnt_arr.count() != skip_sample_cnt_arr_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(cg_skip_rate_arr), K(cg_skip_rate_arr_), K(skip_sample_cnt_arr));
+  } else if (count_ == 0 && OB_FAIL(cg_skip_rate_arr_.assign(cg_skip_rate_arr))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (count_ == 0 && OB_FAIL(skip_sample_cnt_arr_.assign(skip_sample_cnt_arr))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    for (int64_t i = 0; i < cg_skip_rate_arr_.count(); ++i) {
+      if (count_ == 0) {
+        cg_skip_rate_arr_.at(i) *= (double)skip_sample_cnt_arr_.at(i);
+      } else {
+        cg_skip_rate_arr_.at(i) += (cg_skip_rate_arr.at(i) * (double)skip_sample_cnt_arr.at(i));
+        skip_sample_cnt_arr_.at(i) += (double)skip_sample_cnt_arr.at(i);
+      }
+    }
+    count_++;
+    LOG_TRACE("OPT:skip rate stat add ",K(cg_skip_rate_arr_),K(skip_sample_cnt_arr), K(count_), K(ret));
+  }
+  return ret;
+}
+
+int ObGlobalSkipRateStat::merge()
+{
+  int ret = OB_SUCCESS;
+  if (cg_skip_rate_arr_.empty()) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; i < cg_skip_rate_arr_.count(); ++i) {
+      if (cg_skip_rate_arr_.at(i) == 0) {
+        //do nothing
+      } else if (OB_UNLIKELY(!cg_skip_rate_arr_.at(i) && skip_sample_cnt_arr_.at(i) == 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(cg_skip_rate_arr_), K(skip_sample_cnt_arr_));
+      } else {
+        cg_skip_rate_arr_.at(i) /= (double)skip_sample_cnt_arr_.at(i);
+      }
+    }
+  }
+  LOG_TRACE("OPT:skip rate stat merge",K(cg_skip_rate_arr_), K(skip_sample_cnt_arr_), K(ret));
+  return ret;
+}
+
 void ObGlobalNdvEval::add(int64_t ndv, const char *llc_bitmap)
 {
   if (llc_bitmap != NULL) {
@@ -815,6 +882,7 @@ void ObGlobalAllColEvals::merge(const ObOptColumnStat &col_stats)
     null_eval_.add(col_stats.get_num_null());
     avglen_eval_.add(col_stats.get_avg_len());
     cg_blk_eval_.add_cg_blk_cnt(col_stats.get_cg_macro_blk_cnt(), col_stats.get_cg_micro_blk_cnt());
+    cg_skip_rate_eval_.add_cg_skip_rate(col_stats.get_cg_skip_rate(), col_stats.get_cg_micro_blk_cnt());
     // a partition has min/max values only when it contains a valid value in the other word, ndv is not zero
     if (col_stats.get_num_distinct() != 0) {
       min_eval_.add(col_stats.get_min_value());

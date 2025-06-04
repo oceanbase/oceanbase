@@ -146,6 +146,13 @@ int ObSharedObjectsWriteCtx::advance_data_seq()
   int ret = OB_SUCCESS;
   if (ObStorageObjectType::SHARED_MAJOR_META_MACRO == next_opt_.object_type_) {
     next_opt_.ss_share_opt_.data_seq_++;
+  } else if (ObStorageObjectType::SHARED_TABLET_SUB_META == next_opt_.object_type_) {
+    if (UINT32_MAX == next_opt_.ss_tablet_sub_meta_opt_.data_seq_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("write too many second meta_blocks", K(ret), K(next_opt_));
+    } else {
+      next_opt_.ss_tablet_sub_meta_opt_.data_seq_ = next_opt_.ss_tablet_sub_meta_opt_.data_seq_ + 1;
+    }
   }
   return ret;
 }
@@ -1084,7 +1091,7 @@ int ObSharedObjectReaderWriter::inner_write_block(
       object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       object_info.io_desc_.set_unsealed();
       object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
-      object_info.ls_epoch_id_ = write_info.ls_epoch_;
+      object_info.set_ls_epoch_id(write_info.ls_epoch_);
 
       if (OB_FAIL(ret)) {
       } else if (OB_NOT_NULL(write_info.write_callback_) && need_flush) {
@@ -1210,7 +1217,7 @@ int ObSharedObjectReaderWriter::async_read(
   object_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   object_read_info.io_timeout_ms_ = read_info.io_timeout_ms_;
 #ifdef OB_BUILD_SHARED_STORAGE
-  object_read_info.ls_epoch_id_ = read_info.ls_epoch_;
+  object_read_info.set_ls_epoch_id(read_info.ls_epoch_);
 #endif
   object_read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   object_read_info.io_callback_ = read_info.io_callback_;

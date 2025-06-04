@@ -27,7 +27,7 @@
 #include "share/resource_manager/ob_resource_plan_info.h"
 #include "storage/ob_storage_checked_object_base.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
+#include "storage/shared_storage/micro_cache/ob_ss_physical_block_info.h"
 #include "storage/shared_storage/ob_ss_fd_cache_struct.h"
 #endif
 
@@ -51,7 +51,7 @@ class ObObjectDevice;
 static constexpr int64_t CLOCK_IDLE_THRESHOLD_US = 100 * 1000L;  // 100ms
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L;        // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L;     // 5min
-static constexpr int64_t GROUP_START_NUM = 3L;
+static constexpr int64_t GROUP_START_NUM = 1L;
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L;  // 5s
 static constexpr int64_t MAX_DETECT_READ_WARN_TIMES = 10L;
 static constexpr int64_t MAX_DETECT_READ_ERROR_TIMES = 100L;
@@ -98,6 +98,8 @@ enum ObIOModule {
   SSTABLE_MACRO_BLOCK_WRITE_IO,
   CLOG_WRITE_IO,
   CLOG_READ_IO,
+  INC_ATOMIC_PROTOCOL_IO,
+  INC_SSTABLE_UPLOAD_IO,
   // end
   SYS_MODULE_END_ID
 };
@@ -228,7 +230,11 @@ enum class ObIOCallbackType : uint8_t {
   TEST_CALLBACK = 11, // just for unittest
   SS_TMP_FILE_CALLBACK = 12,
   TMP_CACHED_READ_CALLBACK = 13,
-  MAX_CALLBACK_TYPE = 14
+  INC_UPLOAD_ASYNC_MACRO_READ_CALLBACK = 14,
+  EXTERNAL_DATA_LOAD_FROM_REMOTE_CALLBACK = 15,
+  EXTERNAL_DATA_CACHED_READ_CALLBACK = 16,
+  EX_CACHED_READ_CALLBACK = 17,
+  MAX_CALLBACK_TYPE = 18
 };
 
 bool is_atomic_write_callback(const ObIOCallbackType type);
@@ -250,6 +256,7 @@ public:
   {
     return type_;
   }
+  virtual const char *get_cb_name() const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 
 protected:
@@ -313,11 +320,14 @@ public:
   ObSSIOInfo &operator=(const ObSSIOInfo &other);
 
 public:
-  storage::ObSSPhysicalBlockHandle phy_block_handle_;  // hold ref_cnt
+  storage::ObSSPhyBlockHandle phy_block_handle_;  // hold ref_cnt
   storage::ObSSFdCacheHandle fd_cache_handle_;
   int64_t tmp_file_valid_length_;
+  uint64_t effective_tablet_id_; // indicate effective tablet id about partition split
+  bool is_write_cache_; // indicate write or read macro cache
 
-  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),  K_(tmp_file_valid_length));
+  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),
+                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache));
 };
 #endif
 
@@ -572,6 +582,8 @@ public:
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  oceanbase::share::ObFunctionType get_func_type() const;
+  bool is_local_clog_not_isolated();
   bool is_object_device_req() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
@@ -720,6 +732,7 @@ public:
   struct UnitConfig
   {
     UnitConfig();
+    UnitConfig(const share::ObUnitConfig &unit_config);
     bool is_valid() const;
     TO_STRING_KV(K_(min_iops), K_(max_iops), K_(weight), K_(max_net_bandwidth), K_(net_bandwidth_weight));
     int64_t min_iops_;
@@ -748,9 +761,23 @@ public:
     ObIOMode mode_;
   };
 
+  struct ParamConfig
+  {
+  public:
+    ParamConfig();
+    ~ParamConfig();
+    bool is_valid() const;
+    TO_STRING_KV(K_(memory_limit), K_(callback_thread_count), K_(enable_io_tracer), K_(object_storage_io_timeout_ms));
+
+  public:
+    int64_t memory_limit_;
+    int64_t callback_thread_count_;
+    bool enable_io_tracer_;
+    int64_t object_storage_io_timeout_ms_;
+  };
+
 public:
   ObTenantIOConfig();
-  explicit ObTenantIOConfig(const share::ObUnitConfig &unit_config);
   ~ObTenantIOConfig();
   void destroy();
   static const ObTenantIOConfig &default_instance();
@@ -764,13 +791,11 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
 public:
-  int64_t memory_limit_;
-  int64_t callback_thread_count_;
   UnitConfig unit_config_;
-  ObSEArray<GroupConfig, GROUP_START_NUM * 3> group_configs_;
+  typedef ObSEArray<GroupConfig, GROUP_START_NUM * (static_cast<uint64_t>(ObIOMode::MAX_MODE) + 1)> ObIOGroupConfigArray;
+  ObIOGroupConfigArray group_configs_;
   bool group_config_change_;
-  bool enable_io_tracer_;
-  int64_t object_storage_io_timeout_ms_;
+  ParamConfig param_config_;
 };
 
 struct ObAtomIOClock final

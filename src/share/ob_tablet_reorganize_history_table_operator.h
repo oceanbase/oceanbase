@@ -142,6 +142,7 @@ private:
   static int inner_batch_insert_(
       ObISQLClient &sql_proxy,
       const uint64_t tenant_id,
+      const share::ObLSID src_ls_id,
       const ObTabletID &tablet_id,
       const ObSArray<ObTabletID> &dest_tablet_ids,
       const int64 start_time,

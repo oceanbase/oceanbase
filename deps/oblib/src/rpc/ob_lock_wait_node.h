@@ -116,6 +116,7 @@ struct ObLockWaitNode: public common::SpHashNode
            const int64_t total_trans_node_cnt,
            const char *key,
            const uint32_t sess_id,
+           const uint32_t client_sid,
            const uint32_t holder_sess_id,
            int64_t tx_id,
            int64_t holder_tx_id,
@@ -157,6 +158,7 @@ struct ObLockWaitNode: public common::SpHashNode
                K_(try_lock_times),
                KCSTRING_(key),
                K_(sessid),
+               K_(client_sid),
                K_(holder_sessid),
                K_(block_sessid),
                K_(run_ts),
@@ -180,6 +182,7 @@ struct ObLockWaitNode: public common::SpHashNode
   uint64_t tablet_id_;
   int64_t try_lock_times_;
   uint32_t sessid_;
+  uint32_t client_sid_;
   uint32_t holder_sessid_;
   uint32_t block_sessid_;
   int64_t tx_id_;

@@ -50,7 +50,7 @@ public:
   share::ObUnitInfoGetter::ObTenantConfig unit_;
   storage::ObTenantSuperBlock super_block_;
   storage::ObTenantCreateStatus create_status_;
-  int64_t epoch_; // no need serialize for shared-nothing
+  int64_t epoch_;
 };
 
 }  // end namespace omt

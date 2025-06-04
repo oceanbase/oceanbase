@@ -180,7 +180,7 @@ private:
                                         ObIArray<ObAggFunRawExpr *> &new_aggr_items);
 
   int add_cast_expr(ObRawExpr *expr,
-                    const ObExprResType &dst_type,
+                    const ObRawExprResType &dst_type,
                     ObRawExpr *&new_expr);
 
   int add_win_exprs(ObSelectStmt *select_stmt,

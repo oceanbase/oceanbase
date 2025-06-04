@@ -13,8 +13,8 @@
 
 
 #include <gtest/gtest.h>
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #define private public
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "observer/ob_server.h"
 #undef private
 
@@ -73,6 +73,7 @@ TEST_F(TestRawExprToStr, basic)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
+  session.effective_tenant_id_ = 1;
   ctx.session_info_ = &session;
   OBSERVER.init_version();
 
@@ -124,6 +125,8 @@ TEST_F(TestRawExprToStr, basic)
 
 int main(int argc, char **argv)
 {
+  system("rm -f ./test_raw_expr_to_str.log*");
+  OB_LOGGER.set_file_name("test_raw_expr_to_str.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();

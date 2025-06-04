@@ -574,6 +574,31 @@ int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableOpe
   return ret;
 }
 
+int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableSingleOp> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ops.count(); ++i) {
+    const ObIArray<ObTableSingleOpEntity> &entities = ops.at(i).get_entities();
+    for (int64_t j = 0; OB_SUCC(ret) && j < entities.count(); ++j) {
+      const ObITableEntity &entity = entities.at(j);
+      ObHTableCellEntity3 htable_cell(&entity);
+      ObString row = htable_cell.get_rowkey();
+      if (row.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null htable rowkey", K(ret));
+      } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, row, lock_mode, handle))) {
+        LOG_WARN("fail to lock htable row", K(ret), K(table_id), K(row), K(lock_mode));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
 {
   int ret = OB_SUCCESS;
@@ -620,34 +645,89 @@ int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, O
   return ret;
 }
 
-bool ObHTableUtils::is_htable_schema(const ObTableSchema &table_schema)
+int ObHTableUtils::get_mode_type(const ObTableSchema &table_schema, ObHbaseModeType &mode_type)
 {
-  bool is_htable_schema = false;
-  const ObColumnSchemaV2 *rowkey_schema = NULL;
-  const ObColumnSchemaV2 *qualifier_schema = NULL;
-  const ObColumnSchemaV2 *version_schema = NULL;
-  const ObColumnSchemaV2 *value_schema = NULL;
+  int ret = OB_SUCCESS;
+  bool matched = false;
+  mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  const ObColumnSchemaV2 *second_schema = NULL;
+  if (OB_ISNULL(second_schema = table_schema.get_column_schema_by_idx(1))) {
+    // do nothing
+  } else if (ObHTableConstants::CQ_CNAME_STR.case_compare(second_schema->get_column_name()) == 0) {
+    if (OB_FAIL(match_hbase_normal_mode(table_schema, matched))) {
+      LOG_WARN("fail to match hbase normal mode", K(ret), K(table_schema));
+    } else if (matched) {
+      mode_type = ObHbaseModeType::OB_HBASE_NORMAL_TYPE;
+    }
+  } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(second_schema->get_column_name()) == 0) {
+    if (OB_FAIL(match_hbase_series_mode(table_schema, matched))) {
+      LOG_WARN("fail to match hbase series mode", K(ret), K(table_schema));
+    } else if (matched) {
+      mode_type = ObHbaseModeType::OB_HBASE_SERIES_TYPE;
+    }
+  }
+  return ret;
+}
 
-  if (OB_ISNULL(rowkey_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+int ObHTableUtils::match_hbase_normal_mode(const ObTableSchema &table_schema, bool &matched)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(ret);
+  matched = false;
+  const ObColumnSchemaV2 *key_column = NULL;
+  const ObColumnSchemaV2 *version_column = NULL;
+  const ObColumnSchemaV2 *value_column = NULL;
+  if (OB_ISNULL(key_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
     // do nothing
-  } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(rowkey_schema->get_column_name()) != 0) {
+  } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(key_column->get_column_name()) != 0) {
     // do nothing
-  } else if (OB_ISNULL(qualifier_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_Q))) {
+  } else if (OB_ISNULL(version_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
     // do nothing
-  } else if (ObHTableConstants::CQ_CNAME_STR.case_compare(qualifier_schema->get_column_name()) != 0) {
+  } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(version_column->get_column_name()) != 0) {
     // do nothing
-  } else if (OB_ISNULL(version_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+  } else if (OB_ISNULL(value_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
     // do nothing
-  } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(version_schema->get_column_name()) != 0) {
-    // do nothing
-  } else if (OB_ISNULL(value_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
-    // do nothing
-  } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_schema->get_column_name()) != 0) {
+  } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_column->get_column_name()) != 0) {
     // do nothing
   } else {
-    is_htable_schema = true;
+    matched = true;
   }
-  return is_htable_schema;
+  return ret;
+}
+
+int ObHTableUtils::match_hbase_series_mode(const ObTableSchema &table_schema, bool &matched)
+{
+  int ret = OB_SUCCESS;
+  matched = false;
+  const ObColumnSchemaV2 *key_column = NULL;
+  const ObColumnSchemaV2 *series_column = NULL;
+  const ObColumnSchemaV2 *value_column = NULL;
+  const ObColumnSchemaV2 *add_schema = NULL;
+  if (OB_ISNULL(key_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    // do nothing
+  } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(key_column->get_column_name()) != 0) {
+    // do nothing
+  } else if (OB_ISNULL(series_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_S))) {
+    // do nothing
+  } else if (ObHTableConstants::SEQ_CNAME_STR.case_compare(series_column->get_column_name()) != 0) {
+    // do nothing
+  } else if (OB_ISNULL(value_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    // do nothing
+  } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_column->get_column_name()) != 0) {
+    // do nothing
+  } else if (value_column->get_data_type() != ObJsonType) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "series table value column type must be json");
+    LOG_WARN("series table value column type must be json", K(ret), K(value_column->get_data_type()));
+  } else if (OB_NOT_NULL(add_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL)) &&
+                ObHTableConstants::TTL_CNAME_STR.case_compare(add_schema->get_column_name()) == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "series table not support cell ttl");
+    LOG_WARN("series table not support cell ttl", K(ret));
+  } else {
+    matched = true;
+  }
+  return ret;
 }
 
 int ObHTableUtils::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name)
@@ -786,5 +866,342 @@ int ObHTableUtils::merge_key_range(ObKeyRangeTree& tree)
     }
   }
 
+  return ret;
+}
+
+int ObHTableUtils::cons_query_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  ObHTableFilter &filter = query.htable_filter();
+  if (OB_FAIL(build_range_by_entity(entity, allocator, query))) {
+    LOG_WARN("fail to build range from delete entity", K(ret), K(entity));
+  } else if (OB_FAIL(gen_filter_by_entity(entity, filter))) {
+    LOG_WARN("fail to gen filter from delete entity", K(ret), K(entity));
+  } else {}
+  return ret;
+}
+
+int ObHTableUtils::build_range_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObNewRange> &scan_ranges = query.get_scan_ranges();
+  scan_ranges.reset();
+  ObHTableCellEntity3 htable_cell(&entity);
+  ObString row =  htable_cell.get_rowkey();
+  ObObj *pk_objs_start = nullptr;
+  ObObj *pk_objs_end = nullptr;
+  int64_t buf_size = sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE;
+
+  if (OB_ISNULL(pk_objs_start = static_cast<ObObj *>(allocator.alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret), K(buf_size));
+  } else if (OB_ISNULL(pk_objs_end = (ObObj *)allocator.alloc(buf_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret), K(buf_size));
+  } else if (htable_cell.last_get_is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("K is null", K(ret), K(entity));
+  } else {
+    ObString qualifier = htable_cell.get_qualifier();
+    ObNewRange range;
+    pk_objs_start[0].set_varbinary(row);
+    pk_objs_start[2].set_min_value();
+    pk_objs_end[0].set_varbinary(row);
+    pk_objs_end[2].set_max_value();
+    // delete column family when qualifier is null
+    if (htable_cell.last_get_is_null()) {
+      pk_objs_start[1].set_min_value();
+      pk_objs_end[1].set_max_value();
+    } else {
+      pk_objs_start[1].set_varbinary(qualifier);
+      pk_objs_end[1].set_varbinary(qualifier);
+    }
+    range.start_key_.assign(pk_objs_start, 3);
+    range.end_key_.assign(pk_objs_end, 3);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+
+    if (OB_FAIL(scan_ranges.push_back(range))) {
+      LOG_WARN("fail to push back hbase delete scan range", K(ret), K(range));
+    }
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::gen_filter_by_entity(const ObITableEntity &entity, ObHTableFilter &filter)
+{
+  int ret = OB_SUCCESS;
+  ObHTableCellEntity3 htable_cell(&entity);
+  ObString row =  htable_cell.get_rowkey();
+  ObString qualifier;
+  filter.set_valid(true);
+  filter.clear_columns();
+  if (htable_cell.last_get_is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("K is null", K(ret), K(entity));
+  } else if (FALSE_IT(qualifier = htable_cell.get_qualifier())) {
+    // do nothing
+  } else if (htable_cell.last_get_is_null()) {
+    // delete column family, so we need to scan all qualifier
+    // wildcard scan
+  } else if (OB_FAIL(filter.add_column(qualifier))) {
+    LOG_WARN("failed to add column", K(ret));
+  }
+  int64_t timestamp = -htable_cell.get_timestamp();        // negative to get the original value
+  if (-ObHTableConstants::LATEST_TIMESTAMP == timestamp) {  // INT64_MAX
+    // delete the most recently added cell
+    filter.set_max_versions(1);
+    filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
+  } else if (timestamp > 0) {
+    // delete the specific version
+    filter.set_max_versions(1);
+    filter.set_timestamp(timestamp);
+  } else if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) { // -INT64_MAX
+    // delete all version
+    filter.set_max_versions(INT32_MAX);
+    filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
+  } else {
+    // delete all versions less than or equal to the timestamp
+    filter.set_max_versions(INT32_MAX);
+    filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, (-timestamp) + 1);
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::construct_entity_from_row(const ObNewRow &row,
+                                             ObKvSchemaCacheGuard &schema_cache_guard,
+                                             ObTableEntity &entity)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableColumnInfo *> &column_infos = schema_cache_guard.get_column_info_array();
+  if (column_infos.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column infos is empty", K(ret));
+  } else if (row.get_count() < ObHTableConstants::HTABLE_ROWKEY_SIZE || row.get_count() > column_infos.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row count is invalid", K(ret), K(row.get_count()), K(column_infos.count()));
+  } else {
+    uint32_t i = 0;
+    for (; OB_SUCC(ret) && i < ObHTableConstants::HTABLE_ROWKEY_SIZE; ++i) {
+      if (OB_ISNULL(column_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is null", K(ret), K(i));
+      } else if (OB_FAIL(entity.set_rowkey(column_infos.at(i)->column_name_, row.get_cell(i)))) {
+        LOG_WARN("fail to set rowkey", K(ret), K(i), K(row.get_cell(i)), KPC(column_infos.at(i)));
+      }
+    }
+    for (; OB_SUCC(ret) && i < row.get_count(); ++i) {
+      if (OB_ISNULL(column_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is null", K(ret), K(i));
+      } else if (OB_FAIL(entity.set_property(column_infos.at(i)->column_name_, row.get_cell(i)))) {
+        LOG_WARN("fail to set property", K(ret), K(i), K(row.get_cell(i)), KPC(column_infos.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::process_columns(const ObIArray<ObString>& columns,
+                                   ObIArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                   ObIArray<ObString>& real_columns)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+    ObString column = columns.at(i);
+    ObString real_column = column.after('.');
+    ObString family = column.split_on('.');
+    if (family.empty()) {
+      // do nothing
+    } else if (OB_FAIL(real_columns.push_back(real_column))) {
+      LOG_WARN("fail to push column name", K(ret));
+    } else if (OB_FAIL(family_addfamily_flag_pairs.push_back(std::make_pair(family, real_column.empty())))) {
+      LOG_WARN("fail to push family name and addfamily flag", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObHTableUtils::is_get_all_qualifier(const ObIArray<ObString>& columns)
+{
+  bool is_get_all = false;
+  // we process format of all column string is like: '<family>.<qualifier>' here,
+  // and we can make sure it is in batch_get
+  for (int i = 0; i < columns.count() && !is_get_all; ++i) {
+    ObString column = columns.at(i);
+    ObString qualifier = column.after('.');
+    if (qualifier.empty()) {
+      is_get_all = true;
+    }
+  }
+  return is_get_all;
+}
+
+int ObHTableUtils::check_family_existence_with_base_name(const ObString& table_name,
+                                                         const ObString& base_tablegroup_name,
+                                                         table::ObTableEntityType entity_type,
+                                                         const ObIArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                                         std::pair<ObString, bool>& flag,
+                                                         bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString tmp_name;
+  bool is_found = false;
+  for (int i = 0; !is_found && i < family_addfamily_flag_pairs.count(); ++i) {
+    std::pair<ObString, bool> family_addfamily_flag = family_addfamily_flag_pairs.at(i);
+    if (!ObHTableUtils::is_tablegroup_req(base_tablegroup_name, entity_type)) {
+      // here is for ls batch hbase get
+      // ls batch hbsae get will carry family in its qualifier
+      // to determine whether this get is a tablegroup operation or not
+      // the base_tablegroup_name will be a real table name like: "test$family1"
+      if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
+        LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
+      }
+    } else {
+      if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
+        LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
+      } else if (OB_FAIL(tmp_name.append("$"))) {
+        LOG_WARN("fail to append", K(ret));
+      } else if (OB_FAIL(tmp_name.append(family_addfamily_flag.first))) {
+        LOG_WARN("fail to append", K(ret), K(family_addfamily_flag.first));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (table_name == tmp_name.string()) {
+        flag = family_addfamily_flag;
+        is_found = true;
+      }
+    }
+    tmp_name.reuse();
+  }
+  if (OB_SUCC(ret)) {
+    exist = is_found;
+  }
+  return ret;
+}
+
+int ObHTableUtils::update_query_columns(ObTableQuery& query,
+                                        const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                        const ObArray<ObString>& real_columns,
+                                        const std::pair<ObString, bool>& family_addfamily_flag)
+{
+  int ret = OB_SUCCESS;
+  query.htable_filter().clear_columns();
+  bool is_all_family = family_addfamily_flag.second;
+  if (!is_all_family) {
+    const ObString &family_name = family_addfamily_flag.first;
+    for (int i = 0; OB_SUCC(ret) && i < family_addfamily_flag_pairs.count(); ++i) {
+      ObString curr_family = family_addfamily_flag_pairs.at(i).first;
+      if (curr_family == family_name) {
+        ObString real_column = real_columns.at(i);
+        if (OB_FAIL(query.htable_filter().add_column(real_column))) {
+          LOG_WARN("fail to add column to htable_filter", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
+                                    uint64_t arg_table_id,
+                                    ObTableApiCredential &credential,
+                                    bool is_tablegroup_req,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const ObSimpleTableSchemaV2 *&simple_table_schmea,
+                                    ObKvSchemaCacheGuard &schema_cache_guard)
+
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_schema_info(arg_table_name, credential, is_tablegroup_req, schema_guard,
+                               simple_table_schmea, schema_cache_guard))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_table_name), K(credential), K(is_tablegroup_req));
+  }
+  // TODO: @dazhi
+  // else if (simple_table_schmea->get_table_id() != arg_table_id) {
+  //   ret = OB_SCHEMA_ERROR;
+  //   LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+  //           K(simple_table_schmea->get_table_id()));
+  // }
+  return ret;
+}
+
+int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
+                                    ObTableApiCredential &credential,
+                                    bool is_tablegroup_req,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const ObSimpleTableSchemaV2 *&simple_table_schema,
+                                    ObKvSchemaCacheGuard &schema_cache_guard)
+{
+int ret = OB_SUCCESS;
+if (schema_cache_guard.is_inited()) {
+  // skip and do nothing
+} else if (OB_ISNULL(GCTX.schema_service_)) {
+  ret = OB_ERR_UNEXPECTED;
+  LOG_WARN("invalid schema service", K(ret));
+} else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential.tenant_id_, schema_guard))) {
+  LOG_WARN("fail to get schema guard", K(ret), K(credential.tenant_id_));
+/*When is_tablegroup_req is true, simple_table_schema is not properly initialized.
+  Defaulting to use the first element (index 0). */
+} else if (is_tablegroup_req &&
+           OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, simple_table_schema))) {
+  LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
+            K(credential.database_id_), K(arg_table_name));
+} else if (!is_tablegroup_req
+            && OB_FAIL(schema_guard.get_simple_table_schema(credential.tenant_id_,
+                                                            credential.database_id_,
+                                                            arg_table_name,
+                                                            false, /* is_index */
+                                                            simple_table_schema))) {
+  LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_),
+            K(credential.database_id_), K(arg_table_name));
+} else if (OB_ISNULL(simple_table_schema) || simple_table_schema->get_table_id() == OB_INVALID_ID) {
+  ret = OB_TABLE_NOT_EXIST;
+  ObString db("");
+  LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, arg_table_name.length(), arg_table_name.ptr(), db.length(), db.ptr());
+  LOG_WARN("table not exist", K(ret), K(credential.tenant_id_), K(credential.database_id_), K(arg_table_name));
+} else if (simple_table_schema->is_in_recyclebin()) {
+  ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+  LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+  LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_table_name));
+} else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
+                                           simple_table_schema->get_table_id(),
+                                           simple_table_schema->get_schema_version(),
+                                           schema_guard))) {
+  LOG_WARN("fail to init schema cache guard", K(ret));
+}
+return ret;
+}
+
+/// Get all table schemas based on the tablegroup name
+/// Since we only have one table in tablegroup, we could considered tableID as the target table now
+int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
+                                          ObTableApiCredential &credential,
+                                          const ObString &arg_tablegroup_name,
+                                          const ObSimpleTableSchemaV2 *&simple_table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  ObSEArray<const schema::ObSimpleTableSchemaV2*, 8> table_schemas;
+  if (OB_FAIL(schema_guard.get_tablegroup_id(credential.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
+    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_tablegroup_name));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
+    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
+  } else {
+    if (table_schemas.count() != 1) {
+      // TODO: @dazhi
+      // ret = OB_NOT_SUPPORTED;
+      // LOG_USER_ERROR(OB_NOT_SUPPORTED, "each Table has not one Family currently");
+      // LOG_WARN("number of table in table gourp must be equal to one now", K(arg_tablegroup_name), K(table_schemas.count()), K(ret));
+      simple_table_schema = table_schemas.at(0);
+    } else {
+      simple_table_schema = table_schemas.at(0);
+    }
+  }
   return ret;
 }

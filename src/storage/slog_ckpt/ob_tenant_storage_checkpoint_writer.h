@@ -49,12 +49,14 @@ public:
   ~ObTenantStorageCheckpointWriter() = default;
   ObTenantStorageCheckpointWriter(const ObTenantStorageCheckpointWriter &) = delete;
   ObTenantStorageCheckpointWriter &operator=(const ObTenantStorageCheckpointWriter &) = delete;
-  int init(const ObTenantStorageMetaType meta_type,
-           ObTenantCheckpointSlogHandler *ckpt_slog_handler);
+  int init(const ObTenantStorageMetaType meta_type, ObTenantCheckpointSlogHandler *ckpt_slog_handler);
   void reset();
 
   // record meta for ckpt
-  int record_meta(blocksstable::MacroBlockId &ls_meta_entry);
+  int record_meta(
+      blocksstable::MacroBlockId &ls_meta_entry,
+      blocksstable::MacroBlockId &wait_gc_tablet_entry,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
 
   // record meta for snapshot
   int record_single_ls_meta(
@@ -71,6 +73,7 @@ public:
 
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
+  int get_wait_gc_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int batch_compare_and_swap_tablet();
   int rollback();
 
@@ -98,18 +101,33 @@ private:
   int copy_ls_meta_for_creating(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int write_item(const ObLSCkptMember &ls_ckpt_member);
   int close(blocksstable::MacroBlockId &ls_meta_entry);
-  int do_record_ls_meta(ObLS &ls, share::SCN &clog_max_scn);
+  int do_record_ls_meta(
+      ObLS &ls,
+      share::SCN &clog_max_scn,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
   int get_tablet_with_addr(
+      const int64_t ls_epoch,
       const TabletItemAddrInfo &addr_info,
       ObTabletHandle &tablet_handle);
-  int record_ls_meta(blocksstable::MacroBlockId &ls_entry_block);
-  int record_tablet_meta(ObLS &ls, blocksstable::MacroBlockId &tablet_meta_entry, share::SCN &clog_max_scn);
+  int record_ls_meta(
+      blocksstable::MacroBlockId &ls_entry_block,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
+  int record_tablet_meta(
+      ObLS &ls,
+      blocksstable::MacroBlockId &tablet_meta_entry,
+      share::SCN &clog_max_scn,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
+  int record_wait_gc_tablet(
+      blocksstable::MacroBlockId &wait_gc_tablet_entry,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
   int persist_and_copy_tablet(
       const ObTabletMapKey &tablet_key,
       const ObMetaDiskAddr &old_addr,
+      const int64_t ls_epoch,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)]);
   int copy_tablet(
       const ObTabletMapKey &tablet_key,
+      const int64_t ls_epoch,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)],
       share::SCN &clog_max_scn);
   static int handle_old_version_tablet_for_compat(
@@ -125,6 +143,7 @@ private:
   common::ObArray<TabletItemAddrInfo> tablet_item_addr_info_arr_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;
   ObLinkedMacroBlockItemWriter tablet_item_writer_;
+  ObLinkedMacroBlockItemWriter wait_gc_tablet_item_writer_;
 };
 
 }  // end namespace storage

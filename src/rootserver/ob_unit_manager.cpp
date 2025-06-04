@@ -17,6 +17,7 @@
 #include "ob_unit_manager.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_tenant_memstore_info_operator.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h"  // for ObSysDDLServiceUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "rootserver/ob_heartbeat_service.h"
@@ -535,7 +536,9 @@ int ObUnitManager::alter_unit_config(const ObUnitConfig &unit_config)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pools is null", KP(pools), K(ret));
       } else {
-        if (OB_FAIL(check_expand_resource_("ALTER_RESOURCE_UNIT", *pools, old_ur, new_ur))) {
+        if (OB_FAIL(check_data_disk_size_mode_change_(*pools, old_ur, new_ur))) {
+          LOG_WARN("check data_disk_size mode change failed", K(old_ur), K(new_ur), KR(ret));
+        } else if (OB_FAIL(check_expand_resource_("ALTER_RESOURCE_UNIT", *pools, old_ur, new_ur))) {
           LOG_WARN("check expand config failed", K(old_ur), K(new_ur), KR(ret));
         } else if (OB_FAIL(check_shrink_resource_(*pools, old_ur, new_ur))) {
           LOG_WARN("check shrink config failed", K(old_ur), K(new_ur), KR(ret));
@@ -3486,58 +3489,6 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
   return ret;
 }
 
-//The F/L scheme has new restrictions.
-//If the logonly replica exists in the locality before adding the Logonly pool, the change is not allowed
-int ObUnitManager::check_locality_for_logonly_unit(const share::schema::ObTenantSchema &tenant_schema,
-                                                   const ObIArray<ObResourcePoolName> &pool_names,
-                                                   bool &is_permitted)
-{
-  int ret = OB_SUCCESS;
-  is_permitted = true;
-  ObArray<ObZone> zone_with_logonly_unit;
-  ObArray<share::ObZoneReplicaNumSet> zone_locality;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else if (pool_names.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(pool_names), K(ret));
-  } else {
-    FOREACH_CNT_X(pool_name, pool_names, OB_SUCCESS == ret) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(*pool_name, pool))) {
-        LOG_WARN("get resource pool by name failed", "pool_name", *pool_name, K(ret));
-      } else if (NULL == pool) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool is null", KP(pool), K(ret));
-      } else if (REPLICA_TYPE_LOGONLY != pool->replica_type_) {
-        //nothing todo
-      } else {
-        for (int64_t i = 0; i < pool->zone_list_.count() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(zone_with_logonly_unit.push_back(pool->zone_list_.at(i)))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tenant_schema.get_zone_replica_attr_array(zone_locality))) {
-    LOG_WARN("fail to get zone replica attr array", K(ret));
-  } else {
-    for (int64_t i = 0; i < zone_locality.count() && OB_SUCC(ret); i++) {
-      if ((zone_locality.at(i).replica_attr_set_.get_logonly_replica_num() == 1
-           || zone_locality.at(i).replica_attr_set_.get_encryption_logonly_replica_num() == 1)
-          && has_exist_in_array(zone_with_logonly_unit, zone_locality.at(i).zone_)) {
-        is_permitted = false;
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("logonly replica already exist before logonly pool create", K(ret), K(zone_locality),
-                 K(zone_with_logonly_unit));
-      }
-    }
-  }
-  return ret;
-}
-
 /* when expand zone resource for tenant this func is invoked,
  * we need to check whether the tenant units are in deleting.
  * if any tenant unit is in deleting,
@@ -3618,6 +3569,79 @@ int ObUnitManager::check_expand_zone_resource_allowed_by_new_unit_stat_(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected unit status", KR(ret), KPC(pool), KPC(unit));
         } else {/* good */}
+      }
+    }
+  }
+  return ret;
+}
+
+// check if data_disk_size of tenant's resource pools are all zero or all non-zero
+int ObUnitManager::check_expand_zone_resource_allowed_by_data_disk_size_(
+    const uint64_t tenant_id,
+    const common::ObIArray<share::ObResourcePoolName> &pool_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_names));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // check pass
+  } else {
+    bool is_data_disk_size_zero = false;
+    // check new pools
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
+      share::ObResourcePool *pool = NULL;
+      ObUnitConfig *unit_config = nullptr;
+      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
+        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
+      } else if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KR(ret));
+      } else if (OB_FAIL(get_unit_config_by_id(pool->unit_config_id_, unit_config))) {
+        LOG_WARN("fail to get unit config by pool", KR(ret));
+      } else if (OB_ISNULL(unit_config)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit_config ptr is null", KR(ret));
+      } else if (0 == i) {
+        is_data_disk_size_zero = (0 == unit_config->data_disk_size());
+      } else if (is_data_disk_size_zero != (0 == unit_config->data_disk_size())) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("data_disk_size of tenant should be all-zero or all-nonzero", KR(ret),
+                 K(is_data_disk_size_zero), KPC(pool), KPC(unit_config));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The DATA_DISK_SIZE for all resource pools of a tenant must be consistently "
+                       "set to either zero or non-zero values. Mixed configurations are");
+      } else { /*good*/ }
+    }
+    // check curr pools
+    ObArray<share::ObResourcePool *> *curr_pools = nullptr;
+    if (FAILEDx(get_pools_by_tenant_(tenant_id, curr_pools))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
+      }
+    } else if (OB_ISNULL(curr_pools)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("curr_pools is null", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < curr_pools->count(); ++i) {
+        share::ObResourcePool *pool = curr_pools->at(i);
+        ObUnitConfig *unit_config = nullptr;
+        if (OB_ISNULL(pool)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool is null ptr", KR(ret));
+        } else if (OB_FAIL(get_unit_config_by_id(pool->unit_config_id_, unit_config))) {
+          LOG_WARN("fail to get unit config by pool", KR(ret));
+        } else if (OB_ISNULL(unit_config)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit_config ptr is null", KR(ret));
+        } else if (is_data_disk_size_zero != (0 == unit_config->data_disk_size())) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("data_disk_size of tenant should be all-zero or all-nonzero", KR(ret),
+                  K(is_data_disk_size_zero), KPC(pool), KPC(unit_config));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The DATA_DISK_SIZE for all resource pools of a tenant must be consistently "
+                        "set to either zero or non-zero values. Mixed configurations are");
+        } else { /*good*/ }
       }
     }
   }
@@ -3977,6 +4001,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "grant pool when pools in shrinking");
   } else if (OB_FAIL(check_expand_zone_resource_allowed_by_new_unit_stat_(pool_names))) {
     LOG_WARN("fail to check grant pools allowed by unit stat", KR(ret));
+  } else if (OB_FAIL(check_expand_zone_resource_allowed_by_data_disk_size_(tenant_id, pool_names))) {
+    LOG_WARN("fail to check grant pools allowed by data_disk_size", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_pools_unit_num_legal_(
           tenant_id, pool_names, unit_num_legal, legal_unit_num))) {
     LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
@@ -5185,10 +5211,9 @@ int ObUnitManager::check_dest_data_version_is_loaded_(
  if (OB_FAIL(check_inner_stat_())) {
    LOG_WARN("check_inner_stat failed", KR(ret), K(inited_), K(loaded_));
  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-            || !addr.is_valid()
-            || OB_ISNULL(proxy_))) {
+            || !addr.is_valid())) {
    ret = OB_INVALID_ARGUMENT;
-   LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(addr), KP_(proxy));
+   LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(addr));
  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFTAULT_TIMEOUT_TS))) {
    LOG_WARN("fail to set default timeout ctx", KR(ret));
  } else if (OB_UNLIKELY(!addr.ip_to_string(ip_buf, sizeof(ip_buf)))) {
@@ -5214,7 +5239,10 @@ int ObUnitManager::check_dest_data_version_is_loaded_(
      } else {
        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
          sqlclient::ObMySQLResult *result = NULL;
-         if (OB_FAIL(proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+         if (OB_ISNULL(GCTX.sql_proxy_)) {
+           ret = OB_INVALID_ARGUMENT;
+           LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+         } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
            LOG_WARN("fail to read by sql", KR(ret), K(sql));
          } else if (OB_ISNULL(result = res.get_result())) {
            ret = OB_ERR_UNEXPECTED;
@@ -5379,20 +5407,20 @@ int ObUnitManager::rollback_persistent_units_(
   return ret;
 }
 
-int ObUnitManager::get_tenant_unit_servers(
+int ObUnitManager::get_tenant_unit_servers_with_lock(
     const uint64_t tenant_id,
     const common::ObZone &zone,
     common::ObIArray<common::ObAddr> &server_array) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
-  if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, server_array))) {
-    LOG_WARN("fail to get_tenant_unit_servers_", KR(ret), K(tenant_id), K(zone));
+  if (OB_FAIL(get_tenant_unit_servers(tenant_id, zone, server_array))) {
+    LOG_WARN("fail to get_tenant_unit_servers", KR(ret), K(tenant_id), K(zone));
   }
   return ret;
 }
 
-int ObUnitManager::get_tenant_unit_servers_(
+int ObUnitManager::get_tenant_unit_servers(
     const uint64_t tenant_id,
     const common::ObZone &zone,
     common::ObIArray<common::ObAddr> &server_array) const
@@ -5738,14 +5766,14 @@ int ObUnitManager::get_excluded_servers(const uint64_t resource_pool_id,
     }
   }
   // get all tenant resource pool related servers on target zone
-  else if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, excluded_servers))) {
+  else if (OB_FAIL(get_tenant_unit_servers(tenant_id, zone, excluded_servers))) {
     LOG_WARN("get tennat unit server fail", KR(ret), K(tenant_id), K(zone));
   }
 
   if (OB_SUCC(ret) && GCONF.enable_sys_unit_standalone) {
     // When the system tenant is deployed independently,
     // the server where the unit of the system tenant is located is also required as the executed servers
-    if (OB_FAIL(get_tenant_unit_servers_(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
+    if (OB_FAIL(get_tenant_unit_servers(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
       LOG_WARN("fail to get tenant unit servers", KR(ret), K(zone));
     } else if (OB_FAIL(append(excluded_servers, sys_standalone_servers))) {
       LOG_WARN("fail to append other excluded servers", K(ret));
@@ -6169,7 +6197,8 @@ int ObUnitManager::compute_server_resource_(
     server_resource.max_assigned_[RES_LOG_DISK] = server_resource.assigned_[RES_LOG_DISK];
     server_resource.capacity_[RES_LOG_DISK] = static_cast<double>(report_resource.log_disk_total_);
     // RES_DATA_DISK
-    server_resource.assigned_[RES_DATA_DISK] = static_cast<double>(sum_load.data_disk_size());
+    server_resource.assigned_[RES_DATA_DISK] = static_cast<double>(MAX(sum_load.data_disk_size(),
+                                               report_resource.report_data_disk_assigned_));
     server_resource.max_assigned_[RES_DATA_DISK] = server_resource.assigned_[RES_DATA_DISK];
     server_resource.capacity_[RES_DATA_DISK] = static_cast<double>(report_resource.data_disk_total_);
   }
@@ -6723,6 +6752,8 @@ int ObUnitManager::alter_pool_unit_config(share::ObResourcePool  *pool,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "unit MEMORY_SIZE less than __min_full_resource_pool_memory");
   } else if (OB_FAIL(pools.push_back(pool))) {
     LOG_WARN("push back pool into array fail", KR(ret), K(pool), K(pools));
+  } else if (OB_FAIL(check_data_disk_size_mode_change_(pools, config->unit_resource(), alter_config->unit_resource()))) {
+    LOG_WARN("check data_disk_size mode change failed", KR(ret), K(config), K(alter_config));
   } else if (OB_FAIL(check_expand_resource_(
       "ALTER_RESOURCE_POOL_UNIT_CONFIG",
       pools,
@@ -8432,6 +8463,42 @@ int ObUnitManager::check_shrink_memory(
               K(max_used_ratio), K(max_used_memory), K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+// check whether granted unit data_disk_size change between 0 and non-0
+int ObUnitManager::check_data_disk_size_mode_change_(
+    const common::ObIArray<share::ObResourcePool *> &pools,
+    const share::ObUnitResource &old_ur,
+    const share::ObUnitResource &new_ur) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check inner stat failed", KR(ret));
+  } else if (OB_UNLIKELY(pools.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pools is empty", KR(ret));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // no need to check in SN mode, pass
+  } else if ((old_ur.data_disk_size() == 0) == (new_ur.data_disk_size() == 0)) {
+    // 0 and non-0 mode not changed, check pass
+  } else {
+    bool has_granted_pool = false;
+    for (int64_t i = 0; i < pools.count() && OB_SUCC(ret) && !has_granted_pool; i++) {
+      if (OB_ISNULL(pools.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is nullptr", KR(ret));
+      } else if (pools.at(i)->is_granted_to_tenant()) {
+        has_granted_pool = true;
+      }
+    }
+    if (OB_SUCC(ret) && has_granted_pool) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifying data_disk_size between zero and non-zero values");
+      LOG_WARN("modifying data_disk_size between zero and non-zero values not supported",
+                KR(ret), K(old_ur), K(new_ur));
     }
   }
   return ret;
@@ -11521,9 +11588,12 @@ int ObUnitManager::fetch_new_unit_group_id(uint64_t &unit_group_id)
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     uint64_t combine_id = OB_INVALID_ID;
-    ObMaxIdFetcher id_fetcher(*proxy_);
+    ObMaxIdFetcher id_fetcher(*GCTX.sql_proxy_);
     if (OB_FAIL(id_fetcher.fetch_new_max_id(OB_SYS_TENANT_ID,
         OB_MAX_USED_UNIT_GROUP_ID_TYPE, combine_id))) {
       LOG_WARN("fetch_new_max_id failed", "id_type", OB_MAX_USED_UNIT_ID_TYPE, K(ret));

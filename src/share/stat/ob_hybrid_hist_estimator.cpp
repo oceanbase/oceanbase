@@ -85,7 +85,11 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                                 est_percent,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false, false))) {
+  } else if (OB_FAIL(fill_hints(allocator,
+                                param.tab_name_,
+                                param.gather_vectorize_,
+                                false,
+                                !need_sample))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
@@ -98,7 +102,9 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
   } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
+             OB_FAIL(fill_partition_info(allocator,
+                                         param,
+                                         param.partition_infos_.at(0)))) {
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(fill_specify_scn_info(allocator, param.sepcify_scn_))) {
     LOG_WARN("failed to fill specify scn info", K(ret));

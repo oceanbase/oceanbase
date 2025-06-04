@@ -819,12 +819,12 @@ private:
 
 #ifdef OB_BUILD_SHARED_STORAGE
 // migration micro cache related
-struct ObGetMicroBlockCacheInfoArg final
+struct ObGetHAMicroCacheLSInfoArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetMicroBlockCacheInfoArg();
-  ~ObGetMicroBlockCacheInfoArg() {}
+  ObGetHAMicroCacheLSInfoArg();
+  ~ObGetHAMicroCacheLSInfoArg() {}
   bool is_valid() const;
   void reset();
 
@@ -834,18 +834,18 @@ public:
   share::ObLSID ls_id_;
 };
 
-struct ObGetMicroBlockCacheInfoRes final
+struct ObGetHAMicroCacheLSInfoRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetMicroBlockCacheInfoRes();
-  ~ObGetMicroBlockCacheInfoRes() {}
+  ObGetHAMicroCacheLSInfoRes();
+  ~ObGetHAMicroCacheLSInfoRes() {}
   bool is_valid() const;
   void reset();
 
   TO_STRING_KV(K_(ls_cache_info));
 public:
-  ObSSLSCacheInfo ls_cache_info_;
+  ObSSMicroCacheLSInfo ls_cache_info_;
 };
 
 struct ObGetMigrationCacheJobInfoArg final
@@ -895,60 +895,60 @@ public:
   ObMigrationCacheJobInfo job_info_;
 };
 
-struct ObMigrateWarmupKeySet final
+struct ObHAMicroPrewarmMetaSet final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObMigrateWarmupKeySet();
-  ~ObMigrateWarmupKeySet() {}
+  ObHAMicroPrewarmMetaSet();
+  ~ObHAMicroPrewarmMetaSet() {}
   bool is_valid() const;
   void reset();
-  int assign(const ObMigrateWarmupKeySet &arg);
+  int assign(const ObHAMicroPrewarmMetaSet &arg);
   TO_STRING_KV(K_(tenant_id), K_(key_sets));
 public:
   uint64_t tenant_id_;
-  common::ObSArray<ObCopyMicroBlockKeySet> key_sets_;
+  common::ObSArray<ObCopyMicroPrewarmMetaSet> key_sets_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObMigrateWarmupKeySet);
+  DISALLOW_COPY_AND_ASSIGN(ObHAMicroPrewarmMetaSet);
 };
 
-struct ObCopyMicroBlockKeySetRes final
+struct ObGetHAMicroMetaSetRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCopyMicroBlockKeySetRes();
-  ~ObCopyMicroBlockKeySetRes();
+  ObGetHAMicroMetaSetRes();
+  ~ObGetHAMicroMetaSetRes();
   bool is_valid() const;
   void reset();
-  int assign(const ObCopyMicroBlockKeySetRes &other);
+  int assign(const ObGetHAMicroMetaSetRes &other);
   TO_STRING_KV(
       K_(header),
       K_(key_set_array));
 public:
   ObCopyMicroBlockKeySetRpcHeader header_;
-  obrpc::ObMigrateWarmupKeySet key_set_array_;
+  obrpc::ObHAMicroPrewarmMetaSet key_set_array_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObCopyMicroBlockKeySetRes);
+  DISALLOW_COPY_AND_ASSIGN(ObGetHAMicroMetaSetRes);
 };
 
-struct ObSSLSFetchMicroBlockArg final
+struct ObGetLSReplicaMicroBlockArg final
 {
 public:
-  static const int64_t OB_SS_LS_FETCH_MICRO_BLOCK_ARG_VERSION = 1;
-  OB_UNIS_VERSION(OB_SS_LS_FETCH_MICRO_BLOCK_ARG_VERSION);
+  static const int64_t OB_REPLICA_PREWARM_GET_MICRO_BLOCK_ARG_VERSION = 1;
+  OB_UNIS_VERSION(OB_REPLICA_PREWARM_GET_MICRO_BLOCK_ARG_VERSION);
 public:
-  ObSSLSFetchMicroBlockArg();
-  virtual ~ObSSLSFetchMicroBlockArg() {}
+  ObGetLSReplicaMicroBlockArg();
+  virtual ~ObGetLSReplicaMicroBlockArg() {}
   bool is_valid() const;
   void reset();
-  int assign(const ObSSLSFetchMicroBlockArg &other);
+  int assign(const ObGetLSReplicaMicroBlockArg &other);
   TO_STRING_KV(K_(tenant_id), K_(micro_metas));
 
 public:
   uint64_t tenant_id_;
-  ObSArray<storage::ObSSMicroBlockCacheKeyMeta> micro_metas_;
+  ObSArray<storage::ObSSMicroPrewarmMeta> micro_metas_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObSSLSFetchMicroBlockArg);
+  DISALLOW_COPY_AND_ASSIGN(ObGetLSReplicaMicroBlockArg);
 };
 #endif
 
@@ -984,8 +984,8 @@ public:
   RPC_SS(PR5 lob_query, OB_LOB_QUERY, (ObLobQueryArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_ls_view, OB_HA_FETCH_LS_VIEW, (ObCopyLSViewArg), common::ObDataBuffer);
 #ifdef OB_BUILD_SHARED_STORAGE
-  RPC_SS(PR5 fetch_micro_block, OB_HA_FETCH_MICRO_BLOCK, (ObMigrateWarmupKeySet), common::ObDataBuffer);
-  RPC_SS(PR5 fetch_replica_prewarm_micro_block, OB_REPLICA_PREWARM_FETCH_MICRO_BLOCK, (ObSSLSFetchMicroBlockArg), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_micro_block, OB_HA_FETCH_MICRO_BLOCK, (ObHAMicroPrewarmMetaSet), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_replica_prewarm_micro_block, OB_REPLICA_PREWARM_FETCH_MICRO_BLOCK, (ObGetLSReplicaMicroBlockArg), common::ObDataBuffer);
 #endif
   RPC_SS(PR5 fetch_rebuild_tablet_sstable_info, OB_HA_REBUILD_TABLET_SSTABLE_INFO, (ObRebuildTabletSSTableInfoArg), common::ObDataBuffer);
   //single
@@ -1005,8 +1005,8 @@ public:
   RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
   RPC_S(PR5 fetch_ls_member_and_learner_list, OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST, (ObFetchLSMemberAndLearnerListArg), ObFetchLSMemberAndLearnerListInfo);
 #ifdef OB_BUILD_SHARED_STORAGE
-  RPC_S(PR5 fetch_micro_block_keys, OB_HA_FETCH_MICRO_BLOCK_KEYS, (ObGetMicroBlockKeyArg), ObCopyMicroBlockKeySetRes);
-  RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetMicroBlockCacheInfoArg), ObGetMicroBlockCacheInfoRes);
+  RPC_S(PR5 fetch_micro_block_keys, OB_HA_FETCH_MICRO_BLOCK_KEYS, (ObGetMicroBlockKeyArg), ObGetHAMicroMetaSetRes);
+  RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetHAMicroCacheLSInfoArg), ObGetHAMicroCacheLSInfoRes);
   RPC_S(PR5 get_migration_cache_job_info, OB_HA_GET_MIGRATION_CACHE_JOB_INFO, (ObGetMigrationCacheJobInfoArg), ObGetMigrationCacheJobInfoRes);
 #endif
 
@@ -1721,7 +1721,7 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObStorageHASrcInfo &src_info,
-      ObSSLSCacheInfo &cache_info);
+      ObSSMicroCacheLSInfo &cache_info);
   virtual int get_ls_migration_cache_job_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -1733,7 +1733,7 @@ public:
       const share::ObLSID &ls_id,
       const ObStorageHASrcInfo &src_info,
       const ObMigrationCacheJobInfo &job_info,
-      obrpc::ObCopyMicroBlockKeySetRes &res);
+      obrpc::ObGetHAMicroMetaSetRes &res);
 #endif
 private:
   bool is_inited_;
@@ -1748,7 +1748,8 @@ class ObStorageStreamRpcReader
 public:
   ObStorageStreamRpcReader();
   virtual ~ObStorageStreamRpcReader() {}
-  int init(common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  int init(
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int fetch_next_buffer_if_need();
   int check_need_fetch_next_buffer(bool &need_fetch);
   int fetch_next_buffer();

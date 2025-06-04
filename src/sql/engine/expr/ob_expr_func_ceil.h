@@ -43,6 +43,9 @@ public:
       const ObDatumMeta &in_meta, const ObDatumMeta &out_meta,
       ObDatum &res_datum);
 
+  template <typename T, bool IS_FLOOR, bool NEG>
+  static T ceil_floor_trival(T in, const T in_scale_power, const T in_scale_power_minus_one);
+
   template <typename LeftVec, typename ResVec>
   static int inner_calc_ceil_floor_vector(const ObExpr &expr,
                                          int intput_type,

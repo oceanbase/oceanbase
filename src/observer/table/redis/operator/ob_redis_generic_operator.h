@@ -42,18 +42,18 @@ public:
   int do_persist(int64_t db, const ObString &key);
 
 private:
-  int do_model_ttl(int64_t db, const ObString &key, ObRedisModel model, int64_t conv_unit,
+  int do_model_ttl(int64_t db, const ObString &key, ObRedisDataModel model, int64_t conv_unit,
                    int64_t &status);
   int update_model_expire(int64_t db, const ObString &key, int64_t expire_ts,
-                          ObRedisModel model, ExpireStatus &expire_status);
-  int is_key_exists(int64_t db, const ObString &key, ObRedisModel model, bool &exists);
-  int del_key(int64_t db, const ObString &key, ObRedisModel model, bool &exists);
+                          ObRedisDataModel model, ExpireStatus &expire_status);
+  int is_key_exists(int64_t db, const ObString &key, ObRedisDataModel model, bool &exists);
+  int del_key(int64_t db, const ObString &key, ObRedisDataModel model, bool &exists);
   int do_expire_at_us(int64_t db, const ObString &key, int64_t expire_ts);
   int get_subkey_count_by_meta(
     int64_t db,
     const ObString &key,
     const ObRedisMeta *meta,
-    ObRedisModel model,
+    ObRedisDataModel model,
     int64_t &row_cnt);
   DISALLOW_COPY_AND_ASSIGN(GenericCommandOperator);
 };

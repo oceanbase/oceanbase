@@ -22,6 +22,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_allocator.cpp
   ob_pl_code_generator.cpp
   ob_pl_compile.cpp
+  ob_pl_compile_utils.cpp
   ob_pl_di_adt_service.cpp
   ob_pl_exception_handling.cpp
   ob_pl_interface_pragma.cpp
@@ -66,6 +67,11 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_limit_calculator_mysql.cpp
   sys_package/ob_dbms_vector_mysql.cpp
   sys_package/ob_dbms_external_table.cpp
+  sys_package/ob_dbms_partition.cpp
+)
+
+ob_set_subtarget(ob_pl pl_recompile
+  pl_recompile/ob_pl_recompile_task_helper.cpp
 )
 
 ob_set_subtarget(ob_pl dblink

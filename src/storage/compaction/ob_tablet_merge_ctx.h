@@ -26,6 +26,7 @@
 #include "storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
 #include "storage/compaction/ob_major_pre_warmer.h"
 #include "storage/compaction/ob_ss_macro_block_validator.h"
+#include "storage/incremental/ob_ls_inc_sstable_uploader.h"
 #endif
 
 namespace oceanbase
@@ -71,7 +72,13 @@ public:
 
 struct ObTabletMiniMergeCtx : public ObTabletMergeCtx
 {
-  DEFAULT_CONSTRUCTOR(ObTabletMiniMergeCtx, ObTabletMergeCtx);
+  ObTabletMiniMergeCtx(ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator)
+    : ObTabletMergeCtx(param, allocator)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , upload_register_handle_()
+#endif
+  {}
+  virtual ~ObTabletMiniMergeCtx() {}
 protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int prepare_schema() override; // update with memtables
@@ -81,8 +88,11 @@ private:
   virtual int update_tablet(
     ObTabletHandle &new_tablet_handle) override;
   void try_schedule_compaction_after_mini(storage::ObTabletHandle &tablet_handle);
-  int try_schedule_adaptive_merge(ObTabletHandle &tablet_handle, bool &create_meta_dag);
   int try_report_tablet_stat_after_mini();
+private:
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSTableUploadRegHandle upload_register_handle_;
+#endif
 };
 
 // for minor & meta_major
@@ -93,9 +103,11 @@ protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int cal_merge_param() override;
   int get_tables_by_key(ObGetMergeTablesResult &get_merge_table_result);
+  virtual int prepare_compaction_filter() override; // for tx_minor
 private:
-  int prepare_compaction_filter(); // for tx_minor
   int init_static_param_tx_id();
+  int prepare_tx_table_compaction_filter_();
+  int prepare_member_table_compaction_filter_();
 };
 
 struct ObTabletMajorMergeCtx : public ObTabletMergeCtx
@@ -107,8 +119,10 @@ protected:
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   virtual int cal_merge_param() override {
     return ObBasicTabletMergeCtx::cal_major_merge_param(
-        false /*force_full_merge*/, progressive_merge_mgr_);
+        has_filter() /*force_full_merge*/, progressive_merge_mgr_);
   }
+  virtual int prepare_compaction_filter() override
+  { return alloc_mds_info_compaction_filter(); }
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

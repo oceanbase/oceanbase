@@ -47,6 +47,7 @@ class ObSQLSessionInfo;
 class ObExecContext;
 class ObLogicalOperator;
 class ObJoinOrder;
+class AccessPath;
 struct ColumnItem;
 struct RangeExprs;
 struct ObExprSelPair;
@@ -145,10 +146,33 @@ class OptSelectivityCtx
     assumption_type_(UNKNOWN_JOIN)
   { }
 
+  struct ExprDeduceInfo {
+    ExprDeduceInfo() {}
+    /*
+     * antecedent exprs deduce consequence exprs
+     * e.g. antecedent `(c1,c2) in ((1,1), (2,2))`
+     *      =>
+     *      consequence `c1 in (1,2)`, `c2 in (1,2)`
+     */
+    ObSEArray<ObRawExpr *, 1> antecedent_;
+    ObSEArray<ObRawExpr *, 1> consequence_;
+
+    DISABLE_COPY_ASSIGN(ExprDeduceInfo);
+    void reuse() {
+      antecedent_.reuse();
+      consequence_.reuse();
+    }
+
+    int assign(const ExprDeduceInfo &other);
+    int add_antecedent(ObIArray<ObRawExpr *> &exprs);
+    int add_consequence(ObIArray<ObRawExpr *> &exprs);
+
+    TO_STRING_KV(K_(antecedent), K_(consequence));
+  };
+
   ObOptimizerContext &get_opt_ctx() const { return const_cast<ObOptimizerContext &>(opt_ctx_); }
   const ObDMLStmt *get_stmt() const { return stmt_; }
   const ObLogPlan *get_plan() const { return plan_; }
-  
   const EqualSets *get_equal_sets() const { return equal_sets_; }
   void set_equal_sets(EqualSets *equal_sets) { equal_sets_ = equal_sets; } 
 
@@ -209,6 +233,7 @@ class OptSelectivityCtx
   ObJoinType get_assumption_type() const {
     return UNKNOWN_JOIN == assumption_type_ ? join_type_ : assumption_type_;
   }
+  const ObIArray<ExprDeduceInfo> &get_deduce_infos() const { return deduce_infos_; }
 
   void init_op_ctx(const EqualSets *equal_sets, const double current_rows,
                    const ObIArray<double> *ambient_card = NULL)
@@ -219,6 +244,7 @@ class OptSelectivityCtx
     equal_sets_ = equal_sets;
     current_rows_ = current_rows;
     ambient_card_ = ambient_card;
+    deduce_infos_.reuse();
   }
 
   // child should be in the same query block
@@ -236,6 +262,7 @@ class OptSelectivityCtx
     current_rows_ = -1.0;
     equal_sets_ = equal_sets;
     ambient_card_ = NULL;
+    deduce_infos_.reuse();
   }
 
   void clear()
@@ -246,6 +273,7 @@ class OptSelectivityCtx
     equal_sets_ = NULL;
     current_rows_ = -1;
     ambient_card_ = NULL;
+    deduce_infos_.reuse();
   }
 
   void init_row_count(const double row_count1, const double row_count2)
@@ -258,8 +286,10 @@ class OptSelectivityCtx
     ambient_card_ = NULL;
   }
 
+  int init_deduce_infos(AccessPath *path);
+
   TO_STRING_KV(KP_(stmt), KP_(equal_sets), K_(join_type), KPC_(left_rel_ids), KPC_(right_rel_ids),
-               K_(row_count_1), K_(row_count_2), K_(current_rows), KPC_(ambient_card));
+               K_(row_count_1), K_(row_count_2), K_(current_rows), KPC_(ambient_card), K_(deduce_infos));
 
  private:
   ObOptimizerContext &opt_ctx_;
@@ -287,6 +317,7 @@ class OptSelectivityCtx
    * Used to calculate the selectivity of ambient card.
   */
   ObJoinType assumption_type_;
+  ObSEArray<ExprDeduceInfo, 1, common::ModulePageAllocator, true> deduce_infos_;
 };
 
 class OptColumnMeta
@@ -301,7 +332,7 @@ public:
     min_max_inited_(false),
     cg_macro_blk_cnt_(0),
     cg_micro_blk_cnt_(0),
-    cg_skip_rate_(1.0),
+    cg_skip_rate_(0.0),
     base_ndv_(-1.0)
   {
     min_val_.set_min_value();
@@ -314,7 +345,7 @@ public:
             const double avg_len,
             const int64_t cg_macro_blk_cnt = 0,
             const int64_t cg_micro_blk_cnt = 0,
-            const double cg_skip_rat = 1.0);
+            const double cg_skip_rate = 0.0);
 
   uint64_t get_column_id() const { return column_id_; }
   void set_column_id(const uint64_t column_id) { column_id_ = column_id; }
@@ -713,7 +744,7 @@ public:
   static int calculate_conditional_selectivity(const OptTableMetas &table_metas,
                                                const OptSelectivityCtx &ctx,
                                                common::ObIArray<ObRawExpr *> &total_filters,
-                                               common::ObIArray<ObRawExpr *> &append_filters,
+                                               const common::ObIArray<ObRawExpr *> &append_filters,
                                                double &total_sel,
                                                double &conditional_sel,
                                                ObIArray<ObExprSelPair> &all_predicate_sel);
@@ -799,7 +830,11 @@ public:
   static double scale_distinct(double selected_rows, double rows, double ndv);
 
   static inline double revise_between_0_1(double num)
-  { return num < 0 ? 0 : (num > 1 ? 1 : num); }
+  {
+    bool ignore_inf_error = OB_SUCCESS == (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS);
+    return std::isfinite(num) ? (num < 0 ? 0 : (num > 1 ? 1 : num)) :
+           (ignore_inf_error ? 1.0 : num);
+  }
 
   static int get_column_range_sel(const OptTableMetas &table_metas,
                                   const OptSelectivityCtx &ctx,
@@ -1212,8 +1247,8 @@ public:
                                   const OptSelectivityCtx &ctx,
                                   const ObRawExpr *expr,
                                   double *ndv,
-                                  double *nns,
-                                  double *base_ndv);
+                                  double *nns = nullptr,
+                                  double *base_ndv = nullptr);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);
@@ -1242,6 +1277,7 @@ public:
   ObIArray<double> &get_part_rows() { return part_rows_; }
   double get_hist_scale() { return hist_scale_; }
   const ObColumnRefRawExpr *get_column_expr() { return column_expr_; }
+  double get_density() const { return density_; }
 
 protected:
   virtual int inner_get_sel(const OptSelectivityCtx &ctx,
@@ -1268,7 +1304,8 @@ private:
 class ObHistEqualSelHelper: public ObHistSelHelper
 {
 public:
-  ObHistEqualSelHelper() = default;
+  ObHistEqualSelHelper() :
+    is_neq_(false) {}
   virtual ~ObHistEqualSelHelper() = default;
 
   int set_compare_value(const OptSelectivityCtx &ctx,
@@ -1280,6 +1317,7 @@ public:
   void set_compare_value(const ObObj &value) {
     compare_value_ = value;
   }
+  void set_not_eq(bool neq) { is_neq_ = neq; }
 protected:
   virtual int inner_get_sel(const OptSelectivityCtx &ctx,
                             const ObHistogram &histogram,
@@ -1291,6 +1329,7 @@ protected:
                                bool &is_rare_value);
 private:
   ObObj compare_value_;
+  bool is_neq_;
 
   DISALLOW_COPY_AND_ASSIGN(ObHistEqualSelHelper);
 };

@@ -250,6 +250,7 @@ public:
     return TabletMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn();
   }
   virtual bool can_be_minor_merged() override;
+  virtual void set_delete_insert_flag(const bool is_delete_insert) {}
   int inc_unsubmitted_cnt();
   int dec_unsubmitted_cnt();
   int set_freezer(ObFreezer *handler);
@@ -369,7 +370,7 @@ public:
   ObMtStat &get_mt_stat() { return mt_stat_; }
   const ObMtStat &get_mt_stat() const { return mt_stat_; }
   share::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
-  share::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
+  virtual share::SCN get_rec_scn() override { return rec_scn_.atomic_get(); }
   ObTabletMemtableMgr *get_memtable_mgr();
   // *************** getter *****************
 

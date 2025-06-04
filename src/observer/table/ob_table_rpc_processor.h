@@ -26,6 +26,7 @@
 #include "observer/ob_req_time_service.h"
 #include "ob_table_trans_utils.h"
 #include "ob_table_audit.h"
+#include "observer/table/common/ob_table_common_struct.h"
 
 namespace oceanbase
 {
@@ -51,11 +52,13 @@ public:
   virtual int process() override;
 private:
   int get_ids();
+  void sync_capacity(uint8_t client_type);
   int verify_password(const ObString &tenant, const ObString &user, const ObString &pass_secret,
                       const ObString &pass_scramble, const ObString &database, uint64_t &user_token);
   int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database,
                           int64_t ttl_us, uint64_t user_token, ObString &credential);
   bool can_use_redis_v2();
+  int check_client_type(uint8_t client_type);
 private:
   const ObGlobalContext &gctx_;
   table::ObTableApiCredential credential_;
@@ -142,6 +145,7 @@ public:
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
 protected:
   virtual int check_arg() = 0;
+  virtual int check_mode_type(table::ObKvSchemaCacheGuard& schema_cache_guard);
   virtual int try_process() = 0;
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) { return nullptr; }
   virtual void set_req_has_wokenup() = 0;
@@ -150,11 +154,9 @@ protected:
   virtual table::ObTableEntityType get_entity_type() = 0;
   virtual bool is_kv_processor() = 0;
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
-  // init schema guard for tablegroup
-  int init_tablegroup_schema(const ObString &arg_tablegroup_name);
   // init schema guard
   virtual int init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
-  virtual int init_schema_info(uint64_t table_id, const ObString &arg_table_name);
+  virtual int init_schema_info(uint64_t table_id, const ObString &arg_table_name, bool check_match = true);
   virtual int init_schema_info(const ObString &arg_table_name);
   int check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard);
   int get_tablet_id(const share::schema::ObSimpleTableSchemaV2 * simple_table_schema,
@@ -165,7 +167,10 @@ protected:
                                             bool is_same_type,
                                             bool is_same_properties_names,
                                             table::ObTableOperationType::Type op_type);
+  bool can_retry(int retcode);
+  virtual bool is_new_try_process() { return false; };
 protected:
+  common::ObArenaAllocator allocator_;
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;
   storage::ObAccessService *access_service_;
@@ -191,6 +196,7 @@ protected:
   transaction::ObTxReadSnapshot tx_snapshot_;
   common::ObAddr user_client_addr_;
   table::ObTableAuditCtx audit_ctx_;
+  table::ObTableExecCtx exec_ctx_;
 };
 
 template<class T>
@@ -208,7 +214,10 @@ public:
   virtual int after_process(int error_code) override;
 
 protected:
-  virtual void set_req_has_wokenup() override;
+  virtual void set_req_has_wokenup() override
+  {
+    RpcProcessor::req_ = NULL;
+  }
   int64_t get_timeout_ts() const;
   int64_t get_timeout() const;
   virtual uint64_t get_request_checksum() = 0;
@@ -233,67 +242,6 @@ int64_t ObTableRpcProcessor<T>::get_timeout() const
   }
   return timeout;
 }
-
-struct ObTableInfoBase {
-  explicit ObTableInfoBase()
-                          : table_id_(OB_INVALID_ID),
-                            simple_schema_(nullptr),
-                            schema_cache_guard_(),
-                            schema_version_(OB_INVALID_VERSION) {}
-
-  virtual ~ObTableInfoBase() {}
-
-  int64_t get_table_id() const {
-    return table_id_;
-  }
-
-  void set_table_id(int64_t table_id) {
-    table_id_ = table_id;
-  }
-
-  const ObString& get_real_table_name() const {
-    return real_table_name_;
-  }
-
-  void set_real_table_name(const ObString& real_table_name) {
-    real_table_name_ = real_table_name;
-  }
-
-  const share::schema::ObSimpleTableSchemaV2* get_simple_schema() {
-    return simple_schema_;
-  }
-
-  void set_simple_schema(const share::schema::ObSimpleTableSchemaV2* simple_schema) {
-    simple_schema_ = simple_schema;
-  }
-
-  table::ObKvSchemaCacheGuard& get_schema_cache_guard() {
-    return schema_cache_guard_;
-  }
-
-  void set_schema_cache_guard(const table::ObKvSchemaCacheGuard& schema_cache_guard) {
-    schema_cache_guard_ = schema_cache_guard;
-  }
-
-  int64_t get_schema_version() const {
-    return schema_version_;
-  }
-
-  void set_schema_version(int64_t schema_version) {
-    schema_version_ = schema_version;
-  }
-
-  TO_STRING_KV(K(table_id_),
-               KP(simple_schema_),
-               K(schema_cache_guard_),
-               K(schema_version_));
-
-  int64_t table_id_;
-  ObString real_table_name_;
-  const share::schema::ObSimpleTableSchemaV2* simple_schema_;
-  table::ObKvSchemaCacheGuard schema_cache_guard_;
-  int64_t schema_version_;
-};
 
 } // end namespace observer
 } // end namespace oceanbase

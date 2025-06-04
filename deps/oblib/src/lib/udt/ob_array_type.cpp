@@ -16,6 +16,7 @@
 #include "ob_array_binary.h"
 #include "ob_array_nested.h"
 #include "ob_vector_type.h"
+#include "ob_map_type.h"
 #include "lib/ob_errno.h"
 
 namespace oceanbase {
@@ -69,85 +70,8 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
     const ObCollectionArrayType *arr_type = static_cast<const ObCollectionArrayType *>(&array_meta);
     if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-      switch (elem_type->basic_meta_.get_obj_type()) {
-        case ObNullType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(int8_t);
-          break;
-        }
-        case ObTinyIntType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(int8_t);
-          break;
-        }
-        case ObSmallIntType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(int16_t);
-          break;
-        }
-        case ObInt32Type: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(int32_t);
-          break;
-        }
-        case ObIntType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(int64_t);
-          break;
-        }
-        case ObUTinyIntType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(uint8_t);
-          break;
-        }
-        case ObUSmallIntType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(uint16_t);
-          break;
-        }
-        case ObUInt32Type: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(uint32_t);
-          break;
-        }
-        case ObUInt64Type: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(uint64_t);
-          break;
-        }
-        case ObUFloatType:
-        case ObFloatType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(float);
-          break;
-        }
-        case ObUDoubleType:
-        case ObDoubleType: {
-          CONSTRUCT_FIXED_ARRAY_OBJ(double);
-          break;
-        }
-        case ObDecimalIntType: {
-          ObPrecision preci = elem_type->basic_meta_.get_precision();
-          if (get_decimalint_type(preci) == DECIMAL_INT_32) {
-            CONSTRUCT_FIXED_ARRAY_OBJ(int32_t);
-          } else if (get_decimalint_type(preci) == DECIMAL_INT_64) {
-            CONSTRUCT_FIXED_ARRAY_OBJ(int64_t);
-          } else if (get_decimalint_type(preci) == DECIMAL_INT_128) {
-            CONSTRUCT_FIXED_ARRAY_OBJ(int128_t);
-          } else if (get_decimalint_type(preci) == DECIMAL_INT_256) {
-            CONSTRUCT_FIXED_ARRAY_OBJ(int256_t);
-          } else if (get_decimalint_type(preci) == DECIMAL_INT_512) {
-            CONSTRUCT_FIXED_ARRAY_OBJ(int512_t);
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            OB_LOG(WARN, "unexpected precision", K(ret), K(preci));
-          }
-          if (OB_SUCC(ret)) {
-            arr_obj->set_scale(elem_type->basic_meta_.get_scale());
-          }
-          break;
-        }
-        case ObVarcharType : {
-          CONSTRUCT_ARRAY_OBJ(ObArrayBinary, char);
-          break;
-        }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          OB_LOG(WARN, "unsupported type", K(ret), K(elem_type->basic_meta_.get_obj_type()));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        arr_obj->set_element_type(static_cast<int32_t>(elem_type->basic_meta_.get_obj_type()));
+      if (FAILEDx(construct_basic_elem(alloc, *elem_type, arr_obj, read_only))) {
+        OB_LOG(WARN, "failed to construct basic element", K(ret), K(array_meta.type_id_));
       }
     } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
                || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
@@ -160,9 +84,16 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
         ObArrayNested *nested_arr = static_cast<ObArrayNested *>(arr_obj);
         nested_arr->set_child_array(arr_child);
       }
+    } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_MAP_TYPE
+               || arr_type->element_type_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "not supported nested map type", K(ret), K(arr_type->element_type_->type_id_));
     } else {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "unexpected collect info type", K(ret), K(arr_type->element_type_->type_id_));
+    }
+    if (OB_SUCC(ret)) {
+      arr_obj->set_array_type(arr_type);
     }
   } else if (array_meta.type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     const ObCollectionArrayType *arr_type = static_cast<const ObCollectionArrayType *>(&array_meta);
@@ -187,12 +118,129 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
         OB_LOG(WARN, "not supported vector element type", K(ret), K(obj_type));
       }
     }
+    if (OB_SUCC(ret)) {
+      arr_obj->set_array_type(arr_type);
+    }
+  } else if (array_meta.type_id_ == ObNestedType::OB_MAP_TYPE
+             || array_meta.type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+    const ObCollectionMapType *map_type = static_cast<const ObCollectionMapType *>(&array_meta);
+    void *buf = alloc.alloc(sizeof(ObMapType));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "alloc memory failed", K(ret), K(array_meta.type_id_));
+    } else {
+      ObMapType *arr_ptr = new (buf) ObMapType();
+      arr_obj = arr_ptr;
+      ObIArrayType *map_key = NULL;
+      ObIArrayType *map_value = NULL;
+      if (map_type->key_type_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+          || map_type->value_type_->type_id_ != ObNestedType::OB_ARRAY_TYPE) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "map key and value should be array type", K(ret), K(map_type->key_type_->type_id_), K(map_type->value_type_->type_id_));
+      } else if (OB_FAIL(construct(alloc, *map_type->key_type_, map_key, read_only))) {
+        OB_LOG(WARN, "failed to construct map key", K(ret), K(array_meta.type_id_));
+      } else if (OB_FAIL(construct(alloc, *map_type->value_type_, map_value, read_only))) {
+        OB_LOG(WARN, "failed to construct map value", K(ret), K(array_meta.type_id_));
+      }
+      if (OB_SUCC(ret)) {
+        arr_obj->set_element_type(static_cast<int32_t>(ObCollectionSQLType));
+        arr_obj->set_array_type(static_cast<const ObCollectionMapType *>(&array_meta));
+        ObMapType *map_obj = static_cast<ObMapType *>(arr_obj);
+        map_obj->set_key_array(map_key);
+        map_obj->set_value_array(map_value);
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected collect info type", K(ret), K(array_meta.type_id_));
   }
+  return ret;
+}
+
+int ObArrayTypeObjFactory::construct_basic_elem(common::ObIAllocator &alloc, const ObCollectionBasicType &array_meta,
+                                                ObIArrayType *&arr_obj, bool read_only)
+{
+  int ret = OB_SUCCESS;
+  switch (array_meta.basic_meta_.get_obj_type()) {
+    case ObNullType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(int8_t);
+      break;
+    }
+    case ObTinyIntType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(int8_t);
+      break;
+    }
+    case ObSmallIntType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(int16_t);
+      break;
+    }
+    case ObInt32Type: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(int32_t);
+      break;
+    }
+    case ObIntType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(int64_t);
+      break;
+    }
+    case ObUTinyIntType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(uint8_t);
+      break;
+    }
+    case ObUSmallIntType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(uint16_t);
+      break;
+    }
+    case ObUInt32Type: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(uint32_t);
+      break;
+    }
+    case ObUInt64Type: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(uint64_t);
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(float);
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      CONSTRUCT_FIXED_ARRAY_OBJ(double);
+      break;
+    }
+    case ObDecimalIntType: {
+      ObPrecision preci = array_meta.basic_meta_.get_precision();
+      if (get_decimalint_type(preci) == DECIMAL_INT_32) {
+        CONSTRUCT_FIXED_ARRAY_OBJ(int32_t);
+      } else if (get_decimalint_type(preci) == DECIMAL_INT_64) {
+        CONSTRUCT_FIXED_ARRAY_OBJ(int64_t);
+      } else if (get_decimalint_type(preci) == DECIMAL_INT_128) {
+        CONSTRUCT_FIXED_ARRAY_OBJ(int128_t);
+      } else if (get_decimalint_type(preci) == DECIMAL_INT_256) {
+        CONSTRUCT_FIXED_ARRAY_OBJ(int256_t);
+      } else if (get_decimalint_type(preci) == DECIMAL_INT_512) {
+        CONSTRUCT_FIXED_ARRAY_OBJ(int512_t);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "unexpected precision", K(ret), K(preci));
+      }
+      if (OB_SUCC(ret)) {
+        arr_obj->set_scale(array_meta.basic_meta_.get_scale());
+      }
+      break;
+    }
+    case ObVarcharType : {
+      CONSTRUCT_ARRAY_OBJ(ObArrayBinary, char);
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "unsupported type", K(ret), K(array_meta.basic_meta_.get_obj_type()));
+    }
+  }
   if (OB_SUCC(ret)) {
-    arr_obj->set_array_type(static_cast<const ObCollectionArrayType *>(&array_meta));
+    arr_obj->set_element_type(static_cast<int32_t>(array_meta.basic_meta_.get_obj_type()));
+    // arr_obj->set_array_type(static_cast<const ObCollectionTypeBase *>(&array_meta));
   }
   return ret;
 }

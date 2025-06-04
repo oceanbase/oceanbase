@@ -112,6 +112,8 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "SHUTDOWN"; break;
     case OB_PRIV_RELOAD:
       name = "RELOAD"; break;
+    case OB_PRIV_LOCK_TABLE:
+      name = "LOCK TABLES"; break;
     case OB_PRIV_CREATE_ROLE:
       name = "CREATE ROLE"; break;
     case OB_PRIV_DROP_ROLE:
@@ -122,6 +124,12 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "ENCRYPT"; break;
     case OB_PRIV_DECRYPT:
       name = "DECRYPT"; break;
+    case OB_PRIV_EVENT:
+      name = "EVENT"; break;
+    case OB_PRIV_CREATE_CATALOG:
+      name = "CREATE CATALOG"; break;
+    case OB_PRIV_USE_CATALOG:
+      name = "USE CATALOG"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
@@ -871,6 +879,77 @@ int ObDDLSqlGenerator::gen_routine_priv_sql(const obrpc::ObAccountArg &account,
   }
   LOG_DEBUG("gen routine priv sql", K(sql_string.string()), K(priv_string.string()),
             K(need_priv), K(is_grant), K(account));
+  return ret;
+}
+
+int ObDDLSqlGenerator::gen_catalog_priv_sql(const obrpc::ObAccountArg &account,
+                                            const ObNeedPriv &need_priv,
+                                            const bool is_grant,
+                                            ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  char GRANT_CATALOG_SQL[] = "GRANT %s ON CATALOG `%.*s` TO `%.*s`";
+  char REVOKE_CATALOG_SQL[] = "REVOKE %s ON CATALOG `%.*s` FROM `%.*s`";
+  char NEW_GRANT_CATALOG_SQL[] = "GRANT %s ON CATALOG `%.*s` TO `%.*s`@`%.*s`";
+  char NEW_REVOKE_CATALOG_SQL[] = "REVOKE %s ON CATALOG `%.*s` FROM `%.*s`@`%.*s`";
+  ObSqlString priv_string;
+  if (OB_UNLIKELY(OB_UNLIKELY(!account.is_valid()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("db or user_name is empty", K(ret), K(need_priv), K(account));
+  } else if (need_priv.priv_level_ != OB_PRIV_CATALOG_LEVEL) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("priv level is invalid", K(need_priv), K(ret));
+  } else if (need_priv.priv_set_ & (~(OB_PRIV_CATALOG_ACC | OB_PRIV_GRANT))) {
+    ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+    LOG_WARN("Grant/Revoke privilege than can not be used",
+              "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if ((need_priv.priv_set_ & OB_PRIV_CATALOG_ACC) == OB_PRIV_CATALOG_ACC) {
+      if (OB_FAIL(priv_string.append("ALL PRIVILEGES"))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (!is_grant) {
+        if ((need_priv.priv_set_ & OB_PRIV_GRANT)) {
+          if (OB_FAIL(priv_string.append(", GRANT OPTION"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
+        }
+      }
+    } else if (OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string))) {
+      LOG_WARN("get priv to name failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? GRANT_CATALOG_SQL : REVOKE_CATALOG_SQL),
+                                        priv_string.string().ptr(),
+                                        need_priv.catalog_.length(),
+                                        need_priv.catalog_.ptr(),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? NEW_GRANT_CATALOG_SQL : NEW_REVOKE_CATALOG_SQL),
+                                        priv_string.string().ptr(),
+                                        need_priv.catalog_.length(),
+                                        need_priv.catalog_.ptr(),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr(),
+                                        account.host_name_.length(),
+                                        account.host_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_grant) {
+    if (need_priv.priv_set_ & OB_PRIV_GRANT) {
+      if (OB_FAIL(sql_string.append(" WITH GRANT OPTION"))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("gen catalog priv sql", K(sql_string.string()), K(is_grant), K(need_priv));
   return ret;
 }
 

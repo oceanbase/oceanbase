@@ -15,6 +15,7 @@
 
 #include "ob_unit_table_operator.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "share/ob_all_server_tracer.h" // for SVR_TRACER
 #include "src/share/ob_common_rpc_proxy.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 
@@ -822,6 +823,49 @@ int ObUnitTableOperator::get_units_by_resource_pools(
     }
   }
 
+  return ret;
+}
+
+int ObUnitTableOperator::get_alive_servers_by_tenant(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObAddr> &server_array) const
+{
+  int ret = OB_SUCCESS;
+  server_array.reset();
+  common::ObArray<ObUnit> units;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_units_by_tenant(tenant_id, units))) {
+    LOG_WARN("fail to get units", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t index = 0; OB_SUCC(ret) && index < units.count(); ++index) {
+      const common::ObAddr &unit_addr = units.at(index).server_;
+      const common::ObAddr &unit_migrate_from_server_addr = units.at(index).migrate_from_server_;
+      bool is_alive = false;
+      if (OB_FAIL(SVR_TRACER.check_server_alive(unit_addr, is_alive))) {
+        LOG_WARN("check_server_alive failed", KR(ret), K(unit_addr));
+      } else if (is_alive) {
+        if (OB_FAIL(server_array.push_back(unit_addr))) {
+          LOG_WARN("push_back failed", KR(ret), K(unit_addr));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (unit_migrate_from_server_addr.is_valid()) {
+          if (OB_FAIL(SVR_TRACER.check_server_alive(unit_migrate_from_server_addr, is_alive))) {
+            LOG_WARN("check_server_alive failed", KR(ret), K(unit_migrate_from_server_addr));
+          } else if (is_alive) {
+            if (OB_FAIL(server_array.push_back(unit_migrate_from_server_addr))) {
+              LOG_WARN("push_back failed", KR(ret), K(unit_migrate_from_server_addr));
+            }
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

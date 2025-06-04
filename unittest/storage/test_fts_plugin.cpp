@@ -10,7 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
+
+#include <cstdint>
 #include <gtest/gtest.h>
+#include <vector>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -744,6 +748,29 @@ TEST_F(ObTestNgramFTParseHelper, test_parse_corner_case)
   ObFTWord word_68(strlen("68"), "68", cs_type_);
   ASSERT_EQ(OB_SUCCESS, words.get_refactored(word_68, word_cnt));
   ASSERT_EQ(1, word_cnt);
+}
+
+TEST(ObTestNgramImpl, test_ngram_impl)
+{
+  ObFTNgramImpl ngram_impl;
+  ObString fulltext = ObString::make_string("tt ad-ef gh_ij");
+  ngram_impl.init(common::ObCharset::get_charset(ObCollationType::CS_TYPE_UTF8MB4_BIN),
+                  fulltext.ptr_,
+                  fulltext.length(),
+                  2,
+                  3);
+  const char *word;
+  int64_t word_len;
+  int64_t char_cnt;
+  int64_t word_freq;
+
+  std::vector<std::string> expected_words
+      = {"tt", "ad", "ef", "gh", "gh_", "h_", "h_i", "_i", "_ij", "ij"};
+  std::vector<std::string> iter_words;
+  while (ngram_impl.get_next_token(word, word_len, char_cnt, word_freq) != OB_ITER_END) {
+    iter_words.push_back(std::string(word, word_len));
+  }
+  ASSERT_EQ(expected_words, iter_words);
 }
 
 } // end namespace storage

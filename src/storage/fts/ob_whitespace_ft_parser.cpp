@@ -12,12 +12,11 @@
 
 #include "storage/fts/ob_whitespace_ft_parser.h"
 
-#include "storage/fts/ob_whitespace_ft_parser.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include "storage/fts/ob_fts_literal.h"
-#include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_struct.h"
+#include "storage/fts/ob_whitespace_ft_parser.h"
+#include "storage/fts/utils/ob_ft_char_utils.h"
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -28,8 +27,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
 
 ObSpaceFTParser::ObSpaceFTParser()
   : cs_(nullptr),

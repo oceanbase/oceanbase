@@ -52,6 +52,7 @@ protected:
       const ObStoreRowLockState &lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
+  int check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
 protected:
   bool check_exist_;
   share::SCN snapshot_version_;

@@ -249,16 +249,19 @@ int MutatorRow::parse_columns_(
                     K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
 
                 if (is_parse_new_col) {
-                  ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+                  // new_cols in MutatorRow for delete operation expect nop data, however delete_insert table mode set data(copy from old_cols), should skip such data;
+                  if (OB_LIKELY(!dml_flag.is_delete())) {
+                    ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
 
-                  if (OB_ISNULL(lob_data_get_ctx)) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
-                  } else {
-                    new(lob_data_get_ctx) ObLobDataGetCtx();
-                    lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data);
+                    if (OB_ISNULL(lob_data_get_ctx)) {
+                      ret = OB_ALLOCATE_MEMORY_FAILED;
+                      LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+                    } else {
+                      new(lob_data_get_ctx) ObLobDataGetCtx();
+                      lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data);
 
-                    new_lob_ctx_cols_.add(lob_data_get_ctx);
+                      new_lob_ctx_cols_.add(lob_data_get_ctx);
+                    }
                   }
                 } else {
                   if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {

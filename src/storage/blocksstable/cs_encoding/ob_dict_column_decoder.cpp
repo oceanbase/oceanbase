@@ -2265,19 +2265,19 @@ int ObDictColumnDecoder::read_reference(
 
 int ObDictColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int32_t *row_ids,
-    const int64_t row_cap,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
     storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = col_ctx.dict_ctx_;
   const bool is_const_encoding = dict_ctx.dict_meta_->is_const_encoding_ref();
   const uint64_t dict_val_cnt = dict_ctx.dict_meta_->distinct_val_cnt_;
-  if (OB_UNLIKELY(nullptr == row_ids || row_cap <= 0)) {
+  if (OB_UNLIKELY(!pd_row_id_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_DEBUG("Invalid arguments to get aggregate result", KR(ret), KP(row_ids), K(row_cap));
+    LOG_WARN("Invalid arguments to get aggregate result", KR(ret), K(pd_row_id_ctx));
   } else {
     bool all_null = false;
+    const int64_t row_cap = pd_row_id_ctx.get_row_count();
     if (dict_val_cnt == 0) {
       // skip if all null
     } else if (row_cap == dict_ctx.micro_block_header_->row_count_) { // cover whole microblock
@@ -2296,7 +2296,7 @@ int ObDictColumnDecoder::get_aggregate_result(
         LOG_WARN("Failed to reserve memory for bitmap", KR(ret), K(row_cap));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-          row_id = row_ids[i];
+          row_id = pd_row_id_ctx.get_row_id(i);
           if (OB_FAIL(decode_and_aggregate(col_ctx, row_id, storage_datum, agg_cell))) {
             LOG_WARN("Failed to decode", KR(ret), K(row_id));
           }

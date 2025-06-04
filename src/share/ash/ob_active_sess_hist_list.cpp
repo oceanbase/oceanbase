@@ -17,7 +17,15 @@
 #include "share/config/ob_server_config.h"
 #include "lib/guard/ob_shared_guard.h"          // ObShareGuard
 #include "lib/ob_running_mode.h"
-
+namespace oceanbase
+{
+namespace common
+{
+share::ObActiveSessHistList* __attribute__((used)) lib_get_ash_list_instance() {
+  return &share::ObActiveSessHistList::get_instance();
+}
+}
+}
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
@@ -38,17 +46,18 @@ ObActiveSessHistList::ObActiveSessHistList()
   }
 }
 
-ObActiveSessHistList &ObActiveSessHistList::get_instance()
+ObActiveSessHistList& ObActiveSessHistList::get_instance()
 {
   static ObActiveSessHistList the_one;
   return the_one;
 }
 
+
 int ObActiveSessHistList::init()
 {
   int ret = OB_SUCCESS;
   if (ash_buffer_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INIT_TWICE;
     LOG_WARN("ash buffer exist", KR(ret));
   } else if (OB_FAIL(mutex_.trylock())) {
     LOG_WARN("previous ash resize task is executing", KR(ret));
@@ -84,7 +93,7 @@ int ObActiveSessHistList::resize_ash_size()
       LOG_WARN("failed to allocate ash buffer", KR(ret));
     } else {
       // copy old to new
-      ReverseIterator iter = create_reverse_iterator_no_lock();
+      ForwardIterator iter = create_forward_iterator_no_lock();
       while (iter.has_next()) {
         const ObActiveSessionStatItem &stat = iter.next();
         if (iter.distance() <= tmp->size()) {

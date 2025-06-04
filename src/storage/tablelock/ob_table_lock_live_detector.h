@@ -67,6 +67,10 @@ private:
                                              ObIArray<ObTuple<ObAddr, int64_t>> &server_session_list,
                                              bool &all_alive);
   static int check_server_is_online_(const ObString &svr_ip, const int64_t svr_port, bool &is_online);
+  static int get_owner_id_list_from_table_(ObIAllocator &allocator, ObArray<ObTableLockOwnerID *> &owner_ids);
+  static int get_owner_id_list_from_table_(ObIAllocator &allocator,
+                                           const bool is_new_table,
+                                           ObArray<ObTableLockOwnerID *> &owner_ids);
 };
 
 class ObTableLockDetector
@@ -109,25 +113,63 @@ public:
                                                  const ObLockRequest &lock_req,
                                                  int64_t &cnt);
   static int do_detect_and_clear();
-  static int remove_lock_by_owner_id(const int64_t raw_owner_id);
+  static int remove_lock_by_owner_id(const ObTableLockOwnerID &owner_id);
   static int remove_expired_lock_id();
+
+  static int check_lock_id_exist_in_inner_table(sql::ObSQLSessionInfo *session_info,
+                                                const uint64_t &obj_id,
+                                                const ObLockOBJType &obj_type,
+                                                bool &exist);
+  static int check_lock_owner_exist_in_inner_table(sql::ObSQLSessionInfo *session_info,
+                                                   const uint32_t client_session_id,
+                                                   const uint64_t client_session_create_ts,
+                                                   bool &exist);
+  static int check_lock_exist_in_inner_table(sql::ObSQLSessionInfo *session_info,
+                                             const ObTableLockTaskType &task_type,
+                                             const ObLockRequest &lock_req,
+                                             bool &exist);
+  static int check_and_set_old_detect_table_is_empty();
+  static int get_table_name(const bool is_new_table, char *table_name);
+  static int get_lock_mode_by_owner_id_and_lock_id(const int64_t tenant_id,
+                                                   const ObTableLockOwnerID &owner_id,
+                                                   const uint64_t lock_id,
+                                                   ObTableLockMode &lock_mode);
+  static int get_lock_owner_by_lock_id(const uint64_t &lock_id, ObTableLockOwnerID &lock_owner);
+  static int get_unlock_request_list(sql::ObSQLSessionInfo *session,
+                                     const ObTableLockOwnerID &owner_id,
+                                     const ObTableLockTaskType task_type,
+                                     ObIAllocator &allocator,
+                                     ObIArray<ObLockRequest *> &arg_list);
+  static bool old_detect_table_is_empty();
 
 private:
   static int record_detect_info_to_inner_table_(observer::ObInnerSQLConnection *inner_conn,
-                                                const char *table_name,
                                                 const ObTableLockTaskType &task_type,
                                                 const ObLockRequest &lock_req,
                                                 bool &need_record_to_lock_table);
-  static int check_dbms_lock_record_exist_(observer::ObInnerSQLConnection *inner_conn,
-                                           const char *table_name,
-                                           const ObTableLockTaskType &task_type,
-                                           const ObLockRequest &lock_req,
-                                           bool &is_existed);
+  static int check_lock_exist_(observer::ObInnerSQLConnection *inner_conn,
+                               const ObSqlString &where_cond,
+                               const ObTableLockOwnerID &lock_owner,
+                               bool &exist);
+  static int check_lock_exist_(observer::ObInnerSQLConnection *inner_conn,
+                               const ObSqlString &where_cond,
+                               bool &exist);
+  static int check_lock_exist_in_table_(observer::ObInnerSQLConnection *inner_conn,
+                                        const char *table_name,
+                                        const ObSqlString &where_cond,
+                                        bool &exist);
+  static int check_lock_exist_in_table_(observer::ObInnerSQLConnection *inner_conn,
+                                        const ObSqlString &where_cond,
+                                        const ObTableLockOwnerID lock_owner,
+                                        const bool is_new_table,
+                                        bool &exist);
   static int generate_insert_dml_(const ObTableLockTaskType &task_type,
                                   const ObLockRequest &lock_req,
+                                  const bool is_new_table,
                                   share::ObDMLSqlSplicer &dml);
   static int add_pk_column_to_dml_(const ObTableLockTaskType &task_type,
                                    const ObLockRequest &lock_req,
+                                   const bool is_new_table,
                                    share::ObDMLSqlSplicer &dml);
   static int generate_update_sql_(const char *table_name, const share::ObDMLSqlSplicer &dml, ObSqlString &sql);
   static int generate_select_sql_(const char *table_name, const share::ObDMLSqlSplicer &dml, ObSqlString &sql);
@@ -137,12 +179,53 @@ private:
   static int update_cnt_of_lock_(const char *table_name,
                                  observer::ObInnerSQLConnection *conn,
                                  const share::ObDMLSqlSplicer &dml);
-  static int get_cnt_of_lock_(const char *table_name,
-                              observer::ObInnerSQLConnection *conn,
-                              const share::ObDMLSqlSplicer &dml,
-                              int64_t &cnt);
+  static int get_cnt_of_lock_(observer::ObInnerSQLConnection *conn,
+                              const ObTableLockTaskType &task_type,
+                              const ObLockRequest &lock_req,
+                              const bool &only_check_old_table,
+                              int64_t &cnt,
+                              bool &is_from_old_table);
+  static int get_cnt_of_lock_(observer::ObInnerSQLConnection *conn,
+                              const ObTableLockTaskType &task_type,
+                              const ObLockRequest &lock_req,
+                              int64_t &cnt_in_new_table,
+                              int64_t &cnt_in_old_table);
+  static int get_lock_cnt_in_table_(observer::ObInnerSQLConnection *conn,
+                                    const bool is_new_table,
+                                    const ObTableLockTaskType &task_type,
+                                    const ObLockRequest &lock_req,
+                                    int64_t &cnt);
+  static int get_lock_cnt_in_table_(observer::ObInnerSQLConnection *conn,
+                                    const char *table_name,
+                                    const share::ObDMLSqlSplicer &dml,
+                                    int64_t &cnt);
+  static int remove_detect_info_from_table_(observer::ObInnerSQLConnection *conn,
+                                            const ObTableLockTaskType &task_type,
+                                            const ObLockRequest &lock_req,
+                                            const int64_t cnt_in_old_table,
+                                            const int64_t cnt_in_new_table,
+                                            int64_t &real_del_cnt);
+  static int remove_detect_info_from_table_(observer::ObInnerSQLConnection *conn,
+                                            const ObTableLockTaskType &task_type,
+                                            const ObLockRequest &lock_req,
+                                            const bool is_new_table);
+  static int get_table_name_and_dml_with_pk_column_(const bool is_new_table,
+                                                    const ObTableLockTaskType &task_type,
+                                                    const ObLockRequest &lock_req,
+                                                    char *table_name,
+                                                    share::ObDMLSqlSplicer &dml);
+  static int get_unlock_request_list_(common::sqlclient::ObMySQLResult *res,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObLockRequest *> &arg_list);
+  static int generate_get_unlock_request_sql_(const ObTableLockOwnerID &owner_id,
+                                              const ObTableLockTaskType task_type,
+                                              ObSqlString &sql);
+  static int parse_unlock_request_(common::sqlclient::ObMySQLResult &res, ObIAllocator &allocator, ObLockRequest *&arg);
+  static int fill_owner_id_for_unlock_request_(const ObTableLockOwnerID &owner_id, ObIArray<ObLockRequest *> &arg_list);
+  static int get_lock_owner_where_cond_(const ObTableLockOwnerID lock_owner,
+                                        const bool is_new_table,
+                                        ObSqlString &where_cond);
   static bool is_unlock_task_(const ObTableLockTaskType &task_type);
-
 public:
   static const char *detect_columns[DETECT_INFO_COLUMN_SIZE];
   // detect session alive

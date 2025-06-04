@@ -254,6 +254,7 @@ int ObDbmsStatsGather::init_opt_stat(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   BlockNumStat *block_num_stat = NULL;
+  SkipRateStat *skip_rate_stat = NULL;
   ObOptTableStat *&tab_stat = stat.table_stat_;
   if (OB_FAIL(stat.column_stats_.prepare_allocate(param.column_params_.count())))  {
     LOG_WARN("failed to prepare allocate column stat", K(ret));
@@ -285,6 +286,22 @@ int ObDbmsStatsGather::init_opt_stat(ObIAllocator &allocator,
       tab_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
     }
   }
+
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_ISNULL(param.partition_id_skip_rate_map_)) {
+    skip_rate_stat = NULL; //index do not gather skip rate
+  } else if (OB_FAIL(param.partition_id_skip_rate_map_->get_refactored(part_id, skip_rate_stat))) {
+    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get refactored", K(ret));
+    }
+  } else if (OB_ISNULL(skip_rate_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(skip_rate_stat));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
     ObOptColumnStat *&col_stat = stat.column_stats_.at(i);
     if (OB_UNLIKELY(!param.column_params_.at(i).need_col_stat())) {
@@ -308,7 +325,24 @@ int ObDbmsStatsGather::init_opt_stat(ObIAllocator &allocator,
                 param.column_group_params_.at(j).column_id_arr_.at(0) == param.column_params_.at(i).column_id_) {
               col_stat->set_cg_macro_blk_cnt(block_num_stat->cg_macro_cnt_arr_.at(j));
               col_stat->set_cg_micro_blk_cnt(block_num_stat->cg_micro_cnt_arr_.at(j));
+              found_it = true;
             }
+          }
+        }
+      }
+      if (skip_rate_stat != NULL &&
+          param.column_group_params_.count() != 0) {
+        if (OB_LIKELY(param.all_column_params_.count() == skip_rate_stat->cg_skip_rate_arr_.count())) {
+          bool found_it = false;
+          for (int64_t j = 0; !found_it && j < param.all_column_params_.count(); ++j) {
+            if (param.column_params_.at(i).column_id_ == param.all_column_params_.at(j).column_id_) {
+              col_stat->set_cg_skip_rate(skip_rate_stat->cg_skip_rate_arr_.at(j));
+              found_it = true;
+            }
+            LOG_TRACE("OPT: init_opt_stat", K(param.column_params_.at(i).column_id_),
+                                            K(param.all_column_params_.at(j).column_id_),
+                                            K(col_stat->get_cg_skip_rate()),
+                                            K(skip_rate_stat->cg_skip_rate_arr_.at(j)));
           }
         }
       }

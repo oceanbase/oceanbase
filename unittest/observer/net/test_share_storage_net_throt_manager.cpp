@@ -14,7 +14,6 @@
 #include <gmock/gmock.h>
 #define private public
 #include "observer/net/ob_shared_storage_net_throt_service.h"
-
 namespace oceanbase
 {
 using namespace common;

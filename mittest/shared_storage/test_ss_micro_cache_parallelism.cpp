@@ -37,53 +37,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
 
-public:
-  struct TestSSMicroCacheParallellismCtx
-  {
-  public:
-    ObSSMicroCache *micro_cache_;
-    uint64_t tenant_id_;
-    int64_t min_micro_size_;
-    int64_t max_micro_size_;
-    int64_t micro_cnt_;
-    int64_t interval_us_;
-    int64_t arc_limit_;
-
-    TestSSMicroCacheParallellismCtx() { reset(); }
-    bool is_valid() const { return (nullptr != micro_cache_) && (min_micro_size_ > 0) && (max_micro_size_ >= min_micro_size_)
-                                   && (micro_cnt_ > 0) && (arc_limit_ > 0); }
-    void reset()
-    {
-      micro_cache_ = nullptr;
-      tenant_id_ = OB_INVALID_TENANT_ID;
-      min_micro_size_ = 0;
-      max_micro_size_ = 0;
-      micro_cnt_ = 0;
-      interval_us_ = 0;
-      arc_limit_ = 0;
-    }
-
-    TO_STRING_KV(KP_(micro_cache), K_(tenant_id), K_(min_micro_size), K_(max_micro_size), K_(micro_cnt), K_(interval_us),
-      K_(arc_limit));
-  };
-
-  class TestSSMicroCacheParallellismThread : public Threads
-  {
-  public:
-    TestSSMicroCacheParallellismThread(ObTenantBase *tenant_base, TestSSMicroCacheParallellismCtx &ctx)
-        : tenant_base_(tenant_base), ctx_(ctx), fail_cnt_(0) {}
-    void run(int64_t idx) final;
-    int64_t get_fail_cnt() { return ATOMIC_LOAD(&fail_cnt_); }
-  private:
-    int build_io_info(ObIOInfo &io_info, const uint64_t tenant_id, const ObSSMicroBlockCacheKey &micro_key,
-                      const int32_t size, char *read_buf);
-    int parallel_add_micro_block(int64_t idx);
-
-  private:
-    ObTenantBase *tenant_base_;
-    TestSSMicroCacheParallellismCtx &ctx_;
-    int64_t fail_cnt_;
-  };
+  int parallel_add_micro_block(const int64_t micro_cnt, const int64_t micro_size);
 };
 
 void TestSSMicroCacheParallelism::SetUpTestCase()
@@ -121,48 +75,18 @@ void TestSSMicroCacheParallelism::TearDown()
   micro_cache->destroy();
 }
 
-void TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread::run(int64_t idx)
-{
-  ObTenantEnv::set_tenant(tenant_base_);
-  parallel_add_micro_block(idx);
-}
-
-int TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread::build_io_info(
-    ObIOInfo &io_info,
-    const uint64_t tenant_id,
-    const ObSSMicroBlockCacheKey &micro_key,
-    const int32_t size,
-    char *read_buf)
+int TestSSMicroCacheParallelism::parallel_add_micro_block(const int64_t micro_cnt, const int64_t micro_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!micro_key.is_valid() || size <= 0 || tenant_id == OB_INVALID_TENANT_ID) || OB_ISNULL(read_buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(micro_key), K(read_buf), K(size), K(tenant_id));
-  } else {
-    io_info.tenant_id_ = tenant_id;
-    io_info.offset_ = micro_key.micro_id_.offset_;
-    io_info.size_ = size;
-    io_info.flag_.set_wait_event(1);
-    io_info.timeout_us_ = 5 * 1000 * 1000;
-    io_info.buf_ = read_buf;
-    io_info.user_data_buf_ = read_buf;
-  }
-  return ret;
-}
-
-int TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread::parallel_add_micro_block(int64_t idx)
-{
-  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObArenaAllocator allocator;
   char *read_buf = nullptr;
-  if (OB_UNLIKELY(!ctx_.is_valid())) {
+  if (OB_UNLIKELY(micro_cnt <= 0 || micro_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K_(ctx));
+    LOG_WARN("invalid argument", KR(ret), K(micro_cnt), K(micro_cnt));
   } else {
     char *buf = nullptr;
-    const int64_t payload_offset = ObSSPhyBlockCommonHeader::get_serialize_size() +
-                                   ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
-    const int32_t micro_size = (ctx_.min_micro_size_ + ctx_.max_micro_size_) / 2;
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
     const int32_t block_size = 2 * 1024 * 1024;
     const int32_t avg_micro_cnt = block_size / micro_size;
     if (OB_UNLIKELY(avg_micro_cnt <= 1)) {
@@ -173,13 +97,13 @@ int TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread::parallel_ad
       LOG_WARN("fail to allocate memory", KR(ret), K(micro_size));
     }
     int32_t tmp_cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.micro_cnt_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < micro_cnt; ++i) {
       MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1000 + i);
       char c = macro_id.hash() % 26 + 'a';
       MEMSET(buf, c, micro_size);
       const int32_t offset = payload_offset;
       ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      ret = ctx_.micro_cache_->add_micro_block_cache(micro_key, buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ret = micro_cache->add_micro_block_cache(micro_key, buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
       ++tmp_cnt;
       if (tmp_cnt >= avg_micro_cnt) {
         ob_usleep(100 * 1000);
@@ -187,10 +111,6 @@ int TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread::parallel_ad
       }
     }
     allocator.clear();
-  }
-
-  if (OB_FAIL(ret)) {
-    ATOMIC_INC(&fail_cnt_);
   }
   return ret;
 }
@@ -204,27 +124,26 @@ TEST_F(TestSSMicroCacheParallelism, test_parallel_add_same_data)
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
   const int64_t exp_total_data_size = total_data_blk_cnt / 2 * block_size;
 
   const int64_t thread_num = 4;
-  TestSSMicroCacheParallelism::TestSSMicroCacheParallellismCtx ctx;
-  ctx.micro_cache_ = micro_cache;
-  ctx.tenant_id_ = MTL_ID();
-  ctx.min_micro_size_ = 8 * 1024;
-  ctx.max_micro_size_ = 8 * 1024;
-  const int32_t avg_micro_size = (ctx.min_micro_size_ + ctx.max_micro_size_) / 2;
-  ctx.micro_cnt_ = exp_total_data_size / avg_micro_size / 4;
-  ctx.interval_us_ = 50;
-  ctx.arc_limit_ = micro_meta_mgr.arc_info_.limit_;
-  int64_t start_us = ObTimeUtility::current_time();
-  LOG_INFO("TEST: start case", K(ctx));
+  const int64_t micro_size = 8 * 1024;
+  const int64_t micro_cnt = exp_total_data_size / micro_size / thread_num;
 
-  TestSSMicroCacheParallelism::TestSSMicroCacheParallellismThread threads(ObTenantEnv::get_tenant(), ctx);
-  threads.set_thread_count(thread_num);
-  threads.start();
-  threads.wait();
-  ASSERT_EQ(0, threads.get_fail_cnt());
+  ObTenantBase *tenant_base = MTL_CTX();
+  auto test_func = [&](const int64_t idx) {
+    ObTenantEnv::set_tenant(tenant_base);
+    ASSERT_EQ(OB_SUCCESS, parallel_add_micro_block(micro_cnt, micro_size));
+  };
+  std::vector<std::thread> ths;
+  for (int64_t i = 0; i < thread_num; ++i) {
+    std::thread th(test_func, i);
+    ths.push_back(std::move(th));
+  }
+  for (int64_t i = 0; i < thread_num; ++i) {
+    ths[i].join();
+  }
 }
 
 } // namespace storage

@@ -546,7 +546,7 @@ int ObTabletSplitMdsHelper::get_valid_timeout(const int64_t abs_timeout_us, int6
   return ret;
 }
 
-int ObTabletSplitMdsHelper::get_split_data_with_timeout(ObTablet &tablet, ObTabletSplitMdsUserData &split_data, const int64_t abs_timeout_us)
+int ObTabletSplitMdsHelper::get_split_data_with_timeout(const ObTablet &tablet, ObTabletSplitMdsUserData &split_data, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   int64_t timeout_us = 0;
@@ -668,7 +668,40 @@ int ObTabletSplitMdsHelper::calc_split_dst_lob(
   return ret;
 }
 
-int ObTabletSplitMdsHelper::get_split_info(ObTablet &tablet, ObIAllocator &allocator, ObTabletSplitTscInfo &split_info)
+int ObTabletSplitMdsHelper::get_split_info_with_cache(const ObTablet &tablet, ObIAllocator &allocator, ObTabletSplitTscInfo &split_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const uint8_t bucket_id = get_itid() & 0xF;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObTabletSplitCacheKey cache_key(tenant_id, tablet_id, bucket_id);
+  ObTabletSplitCacheValueHandle cache_handle;
+  if (OB_FAIL(ObStorageCacheSuite::get_instance().get_tablet_split_cache().get_split_cache(cache_key, cache_handle))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get row from fuse row cache", K(ret), K(cache_key));
+    } else if (OB_FAIL(get_split_info(tablet, allocator, split_info))) {
+      LOG_WARN("failed to get split info", K(ret), K(tablet_id));
+    } else if (split_info.is_split_dst_with_partkey() || split_info.is_split_dst_without_partkey()) {
+      int tmp_ret = OB_SUCCESS;
+      ObTabletSplitCacheValue cache_value;
+      if (OB_TMP_FAIL(cache_value.init(split_info))) {
+        LOG_WARN("fail to init cache value", K(tmp_ret));
+      } else if (OB_TMP_FAIL(ObStorageCacheSuite::get_instance().get_tablet_split_cache().put_split_cache(cache_key, cache_value))) {
+        LOG_WARN("fail to put cache", K(tmp_ret));
+      } else {
+        LOG_INFO("put cache", K(cache_key), K(cache_value));
+      }
+    }
+  } else {
+    if (OB_FAIL(cache_handle.row_value_->deep_copy(split_info, allocator))) {
+      LOG_WARN("failed to deep copy", K(ret), K(cache_handle));
+    }
+  }
+  return ret;
+}
+
+int ObTabletSplitMdsHelper::get_split_info(const ObTablet &tablet, ObIAllocator &allocator, ObTabletSplitTscInfo &split_info)
 {
   int ret = OB_SUCCESS;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
@@ -698,12 +731,14 @@ int ObTabletSplitMdsHelper::get_split_info(ObTablet &tablet, ObIAllocator &alloc
   return ret;
 }
 
-int ObTabletSplitMdsHelper::get_is_spliting(ObTablet &tablet, bool &is_split_dst)
+int ObTabletSplitMdsHelper::get_is_spliting(const ObTablet &tablet, bool &is_split_dst)
 {
   int ret = OB_SUCCESS;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
   is_split_dst = false;
-  if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable())) {
+  if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid())) {
+    is_split_dst = true;
+  } else if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable())) {
     const int64_t timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S;
     ObTabletSplitMdsUserData data;
     if (OB_FAIL(tablet.ObITabletMdsInterface::get_split_data(data, timeout))) {
@@ -1197,7 +1232,7 @@ int ObTabletSplitMdsHelper::set_tablet_status(
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
-    if (OB_EMPTY_RESULT == ret && !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+    if (OB_EMPTY_RESULT == ret && !tablet->get_tablet_meta().ha_status_.check_allow_read()) {
       ret = OB_EAGAIN;
     } else {
       LOG_WARN("failed to get tx data", K(ret), KPC(tablet));

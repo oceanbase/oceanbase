@@ -205,7 +205,7 @@ private:
   static constexpr int LARGE_ACHUNK_SIZE_MAP[] = {
     4, 6, 8, 10, 12, 14, 16, 18, 20 /*MB*/
   };
-  static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
+  static constexpr int64_t DEFAULT_LIMIT = 8L << 30;  // 8GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int32_t MAX_LARGE_ACHUNK_SIZE = 20<<20;
@@ -219,11 +219,9 @@ public:
 public:
   AChunkMgr();
 
-  AChunk *alloc_chunk(
-      const uint64_t size = ACHUNK_SIZE,
-      bool high_prio = false);
+  AChunk *alloc_chunk(const uint64_t size, const int32_t numa_id, bool high_prio = false);
   void free_chunk(AChunk *chunk);
-  AChunk *alloc_co_chunk(const uint64_t size = ACHUNK_SIZE);
+  AChunk *alloc_co_chunk(const uint64_t size, const int32_t numa_id);
   void free_co_chunk(AChunk *chunk);
   static OB_INLINE uint64_t aligned(const uint64_t size);
   static OB_INLINE uint64_t hold(const uint64_t size);
@@ -231,8 +229,10 @@ public:
   {
     max_chunk_cache_size_ = max_cache_size;
     int64_t large_chunk_cache_size = use_large_chunk_cache ? INT64_MAX : 0;
-    for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
-      slots_[i]->set_max_chunk_cache_size(large_chunk_cache_size);
+    for (int i = 0; i < OB_MAX_NUMA_NUM; ++i) {
+      for (int j = MIN_LARGE_ACHUNK_INDEX; j <= MAX_LARGE_ACHUNK_INDEX; ++j) {
+        slots_[i][j]->set_max_chunk_cache_size(large_chunk_cache_size);
+      }
     }
   }
   inline static AChunk *ptr2chunk(const void *ptr);
@@ -252,13 +252,12 @@ public:
 
   int64_t sync_wash();
 
-private:
 
 private:
-  void *direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
+  void *direct_alloc(const uint64_t size, const int32_t numa_id, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void direct_free(const void *ptr, const uint64_t size);
   // wrap for mmap
-  void *low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
+  void *low_alloc(const uint64_t size, const int32_t numa_id, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void low_free(const void *ptr, const uint64_t size);
   int32_t slot_idx(const uint64_t size)
   {
@@ -272,20 +271,20 @@ private:
       return (int32_t)((size - 1) / INTACT_ACHUNK_SIZE) - 1 + MIN_LARGE_ACHUNK_INDEX;
     }
   }
-  void inc_maps(const uint64_t size)
+  void inc_maps(const uint64_t size, const int32_t numa_id)
   {
     int32_t idx = slot_idx(size);
-    ATOMIC_FAA(&slots_[idx].maps_, 1);
+    ATOMIC_FAA(&slots_[numa_id][idx].maps_, 1);
   }
-  void inc_unmaps(const uint64_t size)
+  void inc_unmaps(const uint64_t size, const int32_t numa_id)
   {
     int32_t idx = slot_idx(size);
-    ATOMIC_FAA(&slots_[idx].unmaps_, 1);
+    ATOMIC_FAA(&slots_[numa_id][idx].unmaps_, 1);
   }
   bool push_chunk(AChunk* chunk, const uint64_t all_size, const uint64_t hold_size)
   {
     int32_t idx = slot_idx(all_size);
-    bool bret = slots_[idx]->push(chunk);
+    bool bret = slots_[chunk->numa_id_][idx]->push(chunk);
     if (bret) {
       if (idx >= MIN_LARGE_ACHUNK_INDEX) {
         ATOMIC_FAA(&large_cache_hold_, hold_size);
@@ -294,9 +293,9 @@ private:
     }
     return bret;
   }
-  AChunk* pop_chunk_with_index(int32_t idx)
+  AChunk* pop_chunk_with_index(const int32_t idx, const int32_t numa_id)
   {
-    AChunk *chunk = slots_[idx]->pop();
+    AChunk *chunk = slots_[numa_id][idx]->pop();
     if (NULL != chunk) {
       int64_t hold_size = chunk->hold();
       if (idx >= MIN_LARGE_ACHUNK_INDEX) {
@@ -306,22 +305,22 @@ private:
     }
     return chunk;
   }
-  AChunk* pop_chunk_with_size(const uint64_t size)
+  AChunk* pop_chunk_with_size(const uint64_t size, const int32_t numa_id)
   {
     AChunk* chunk = NULL;
     int32_t idx = slot_idx(size);
     if (NORMAL_ACHUNK_SIZE == size) {
       for (int i = 0; NULL == chunk && i < NORMAL_ACHUNK_NWAY; ++i) {
-        chunk = pop_chunk_with_index((i + idx) % NORMAL_ACHUNK_NWAY);
+        chunk = pop_chunk_with_index((i + idx) % NORMAL_ACHUNK_NWAY, numa_id);
       }
     } else {
-      chunk = pop_chunk_with_index(idx);
+      chunk = pop_chunk_with_index(idx, numa_id);
     }
     return chunk;
   }
-  AChunk* popall_with_index(int32_t idx, int64_t &hold)
+  AChunk* popall_with_index(const int32_t idx, const int32_t numa_id, int64_t &hold)
   {
-    AChunk *head = slots_[idx]->popall(hold);
+    AChunk *head = slots_[numa_id][idx]->popall(hold);
     if (NULL != head) {
       if (idx >= MIN_LARGE_ACHUNK_INDEX) {
         ATOMIC_FAA(&large_cache_hold_, -hold);
@@ -330,17 +329,17 @@ private:
     }
     return head;
   }
-  int64_t get_maps(int32_t idx) const
+  int64_t get_maps(const int32_t idx, const int32_t numa_id) const
   {
-    return slots_[idx].maps_;
+    return slots_[numa_id][idx].maps_;
   }
-  int64_t get_unmaps(int32_t idx) const
+  int64_t get_unmaps(const int32_t idx, const int32_t numa_id) const
   {
-    return slots_[idx].unmaps_;
+    return slots_[numa_id][idx].unmaps_;
   }
-  const AChunkList& get_freelist(int32_t idx) const
+  const AChunkList& get_freelist(const int32_t idx, const int32_t numa_id) const
   {
-    return slots_[idx].free_list_;
+    return slots_[numa_id][idx].free_list_;
   }
 protected:
   int64_t limit_;
@@ -350,7 +349,7 @@ protected:
   int64_t cache_hold_;
   int64_t large_cache_hold_;
   int64_t max_chunk_cache_size_;
-  Slot slots_[HUGE_ACHUNK_INDEX + 1];
+  Slot slots_[OB_MAX_NUMA_NUM][HUGE_ACHUNK_INDEX + 1];
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)

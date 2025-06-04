@@ -29,7 +29,7 @@ struct ObTableScanRange
 public:
   ObTableScanRange();
   ~ObTableScanRange() { reset(); }
-  int init(ObTableScanParam &scan_param, const bool is_tablet_spliting);
+  int init(ObTableScanParam &scan_param, const ObTablet &tablet, const bool is_tablet_spliting);
   int init(ObTableScanParam &scan_param,
            const common::ObSimpleBatch &simple_batch,
            common::ObIAllocator &allocator);
@@ -46,22 +46,19 @@ public:
   TO_STRING_KV(K_(rowkeys), K_(ranges), K_(status), K_(is_inited));
 private:
   int init_rowkeys(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
+      const ObTablet &tablet,
       const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObQueryFlag &scan_flag,
       const blocksstable::ObStorageDatumUtils *datum_utils);
   int init_ranges(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
+      const ObTablet &tablet,
       const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObQueryFlag &scan_flag,
       const blocksstable::ObStorageDatumUtils *datum_utils);
   int init_ranges_in_skip_scan(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
+      const ObTablet &tablet,
       const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
@@ -71,8 +68,7 @@ private:
       const common::ObNewRange &range,
       bool &is_false);
   int get_split_partition_rowkeys(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
+      const ObTablet &tablet_handle,
       const common::ObIArray<common::ObNewRange> &ranges,
       const blocksstable::ObStorageDatumUtils *datum_utils);
 private:

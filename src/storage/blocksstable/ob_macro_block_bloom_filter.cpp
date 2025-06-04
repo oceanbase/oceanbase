@@ -22,39 +22,53 @@ namespace oceanbase
 {
 namespace blocksstable
 {
-ObMacroBlockBloomFilter::ObMacroBlockBloomFilter()
+
+ObMicroBlockBloomFilter::ObMicroBlockBloomFilter()
     : rowkey_column_count_(0),
+      empty_read_prefix_(0),
       datum_utils_(nullptr),
-      enable_macro_block_bloom_filter_(false),
-      max_row_count_(0),
-      version_(MACRO_BLOCK_BLOOM_FILTER_V1),
+      hash_set_(),
       row_count_(0),
-      bf_(),
-      macro_reader_()
+      macro_reader_(MTL_ID()),
+      is_inited_(false)
 {
 }
 
-ObMacroBlockBloomFilter::~ObMacroBlockBloomFilter()
+ObMicroBlockBloomFilter::~ObMicroBlockBloomFilter()
 {
   reset();
 }
 
-int ObMacroBlockBloomFilter::alloc_bf(const ObDataStoreDesc &data_store_desc, const int64_t bf_size)
+void ObMicroBlockBloomFilter::reuse()
+{
+  hash_set_.reuse();
+  row_count_ = 0;
+}
+
+void ObMicroBlockBloomFilter::reset()
+{
+  rowkey_column_count_ = 0;
+  empty_read_prefix_ = 0;
+  datum_utils_ = nullptr;
+  hash_set_.reuse();
+  row_count_ = 0;
+  is_inited_ = false;
+}
+
+int ObMicroBlockBloomFilter::init(const ObDataStoreDesc &data_store_desc)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(bf_size <= 0 ||
-                  !data_store_desc.is_valid() ||
-                  !data_store_desc.enable_macro_block_bloom_filter() ||
-                  !data_store_desc.get_datum_utils().is_valid() ||
-                  data_store_desc.get_row_column_count() <= 0)) {
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("fail to init micro block bloom filter, init twice", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!data_store_desc.is_valid() ||
+                         !data_store_desc.enable_macro_block_bloom_filter() ||
+                         !data_store_desc.get_datum_utils().is_valid() ||
+                         data_store_desc.get_row_column_count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to allocate new bloom filter, invalid data store desc", K(ret), K(data_store_desc), K(bf_size));
-  } else if (OB_UNLIKELY(bf_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to allocate new bloom filter", K(ret), K(bf_));
-  } else if (FALSE_IT(max_row_count_ = calc_max_row_count(bf_size))) {
-  } else if (OB_FAIL(bf_.init_by_row_count(max_row_count_, ObBloomFilter::BLOOM_FILTER_FALSE_POSITIVE_PROB))) {
-    LOG_WARN("fail to init new bloom filter", K(ret), K(bf_size));
+    LOG_WARN("fail to init micro block bloom filter, invalid data store desc", K(ret), K(data_store_desc));
+  } else if (OB_FAIL(hash_set_.create(1024, "MicroBFHashset", "MicroBFHashset", MTL_ID()))) {
+    LOG_WARN("fail to create hash set", K(ret));
   } else {
     if (data_store_desc.is_cg()) { // Fetch datum utils for rowkey murmurhash.
       const ObITableReadInfo *index_read_info;
@@ -69,75 +83,62 @@ int ObMacroBlockBloomFilter::alloc_bf(const ObDataStoreDesc &data_store_desc, co
     } else {
       datum_utils_ = &(data_store_desc.get_datum_utils());
     }
-    rowkey_column_count_ = datum_utils_->get_rowkey_count();
-    enable_macro_block_bloom_filter_ = data_store_desc.enable_macro_block_bloom_filter();
+    if (OB_SUCC(ret)) {
+      rowkey_column_count_ = datum_utils_->get_rowkey_count();
+      // As same as load bf.
+      empty_read_prefix_
+          = rowkey_column_count_ - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
+      is_inited_ = true;
+    }
   }
   return ret;
 }
 
-bool ObMacroBlockBloomFilter::is_valid() const
-{
-  return version_ == MACRO_BLOCK_BLOOM_FILTER_V1
-         && enable_macro_block_bloom_filter_ == true
-         && rowkey_column_count_ > 0
-         && datum_utils_ != nullptr
-         && datum_utils_->is_valid()
-         && max_row_count_ > 0
-         && bf_.is_valid();
-}
-
-bool ObMacroBlockBloomFilter::should_persist() const
-{
-  return is_valid() && row_count_ > 0 && row_count_ <= max_row_count_;
-}
-
-int64_t ObMacroBlockBloomFilter::calc_max_row_count(const int64_t bf_size) const
-{
-  int64_t bf_nbit = bf_size * 8;  // in bits, not byte
-  double bf_nhash = -std::log(ObBloomFilter::BLOOM_FILTER_FALSE_POSITIVE_PROB) / std::log(2);
-  return static_cast<int64_t>(bf_nbit * std::log(2) / bf_nhash);
-}
-
-int ObMacroBlockBloomFilter::insert_row(const ObDatumRow &row)
+int ObMicroBlockBloomFilter::insert_row(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   ObDatumRowkey rowkey;
   uint64_t key_hash = 0;
 
-  // update row_count_.
-  row_count_++;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
     LOG_WARN("fail to insert row", K(ret), KPC(this));
-  } else if (row_count_ > max_row_count_) {
-    // do nothing.
-  } else if (OB_FAIL(rowkey.assign(row.storage_datums_, rowkey_column_count_))) {
-    LOG_WARN("fail to fetch rowkey from datum row", K(ret), K(row), K(rowkey_column_count_));
+  } else if (OB_UNLIKELY(!row.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to insert row, invalid row", K(ret), K(row));
+  } else if (OB_UNLIKELY(row.get_column_count() < empty_read_prefix_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to insert row, invalid column count", K(ret), K(row), KPC(this));
+  } else if (OB_FAIL(rowkey.assign(row.storage_datums_, empty_read_prefix_))) {
+    LOG_WARN("fail to fetch rowkey from datum row",
+             K(ret), K(row), K(rowkey_column_count_), K(empty_read_prefix_));
   } else if (OB_FAIL(rowkey.murmurhash(0, *datum_utils_, key_hash))) {
     LOG_WARN("fail to murmurhash rowkey", K(ret), K(rowkey), K(row));
-  } else if (OB_FAIL(bf_.insert(key_hash))) {
-    LOG_WARN("fail to insert into bloom filter", K(ret), K(key_hash), K(bf_));
+  } else if (OB_FAIL(hash_set_.set_refactored(static_cast<uint32_t>(key_hash), 1 /* cover */))) {
+    LOG_WARN("fail to insert into hash set", K(ret), K(row), K(key_hash), KPC(this));
+  } else {
+    row_count_++;
   }
+
   return ret;
 }
 
-int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
+int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
 {
   int ret = OB_SUCCESS;
 
   ObMicroBlockData decompressed_data;
   ObMicroBlockData micro_block_data(micro_block.data_.get_buf(), micro_block.data_.get_buf_size());
 
-  if (OB_UNLIKELY(!micro_block.is_valid())) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("fail to insert row", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!micro_block.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to insert micro block, invalid argument", K(ret), K(micro_block), KPC(this));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to insert micro block, unexpected internal status", K(ret), KPC(this));
-  } else if (FALSE_IT(row_count_ += micro_block.header_.row_count_)) { // update row_count_.
-  } else if (row_count_ > max_row_count_) {
-    // do nothing.
   } else {
     compaction::ObLocalArena temp_allocator("MaBlkBFReuse");
     ObMicroBlockHeader header;
@@ -174,7 +175,7 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
           LOG_WARN("fail to get next row",
                    K(ret), K(row.is_valid()), K(reader->get_column_count()), K(row_idx), K(row_count));
         } else if (OB_FAIL(insert_row(row))) {
-          LOG_WARN("fail to insert row into macro block bloom filter",
+          LOG_WARN("fail to insert row into micro block bloom filter",
                    K(ret), K(row), K(reader->get_column_count()), K(row_idx), K(row_count), KPC(this));
         }
       }
@@ -184,21 +185,21 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
   return ret;
 }
 
-int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_block_desc,
+int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_block_desc,
                                                 const ObMicroIndexInfo &micro_index_info)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!micro_block_desc.is_valid() || !micro_index_info.is_valid())) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("fail to insert row", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || !micro_index_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to insert micro block, invalid argument",
              K(ret), K(micro_block_desc), K(micro_index_info), KPC(this));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to insert micro block, unexpected internal status", K(ret), KPC(this));
-  } else if (FALSE_IT(row_count_ += micro_block_desc.row_count_)) { // update row_count_.
-  } else if (row_count_ > max_row_count_) {
-    // do nothing.
   } else {
     compaction::ObLocalArena temp_allocator("MaBlkBFReuse");
     const ObMicroBlockHeader *header = micro_block_desc.header_;
@@ -234,7 +235,7 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
           LOG_WARN("fail to get next row",
                    K(ret), K(row.is_valid()), K(reader->get_column_count()), K(row_idx), K(row_count));
         } else if (OB_FAIL(insert_row(row))) {
-          LOG_WARN("fail to insert row into macro block bloom filter",
+          LOG_WARN("fail to insert row into micro block bloom filter",
                    K(ret), K(row), K(reader->get_column_count()), K(row_idx), K(row_count), KPC(this));
         }
       }
@@ -244,7 +245,7 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
   return ret;
 }
 
-int ObMacroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBlockHeader &header,
+int ObMicroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBlockHeader &header,
                                                                const ObMicroBlockData &micro_data,
                                                                const ObMicroIndexInfo &micro_index_info,
                                                                ObMicroBlockData &decompressed_data)
@@ -273,11 +274,142 @@ int ObMacroBlockBloomFilter::decrypt_and_decompress_micro_data(const ObMicroBloc
   return ret;
 }
 
+template <typename F>
+int ObMicroBlockBloomFilter::foreach(F &functor) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("fail to foreach hash set, not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(hash_set_.foreach_refactored(functor))) {
+    LOG_WARN("fail to foreach hash set", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObMacroBlockBloomFilter::MergeMicroBlockFunctor::operator()(common::hash::HashSetTypes<uint32_t>::pair_type &pair)
+{
+  int ret = OB_SUCCESS;
+  uint32_t hash_val = pair.first;
+  if (OB_FAIL(bf_.insert(hash_val))) {
+    LOG_WARN("fail to insert hash val", K(ret), K(hash_val), K(bf_));
+  }
+  return ret;
+}
+
+int64_t ObMacroBlockBloomFilter::predict_next(const int64_t curr_macro_block_row_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_count = curr_macro_block_row_count;
+  if (OB_UNLIKELY(curr_macro_block_row_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("fail to predict next, invalid argument", K(ret), K(curr_macro_block_row_count));
+    row_count = 0;
+  }
+  return (row_count == 0) ? 0 : (row_count * 1.3 + 1);
+}
+
+ObMacroBlockBloomFilter::ObMacroBlockBloomFilter()
+    : rowkey_column_count_(0),
+      empty_read_prefix_(0),
+      max_row_count_(0),
+      version_(MACRO_BLOCK_BLOOM_FILTER_V1),
+      row_count_(0),
+      bf_(),
+      macro_reader_()
+{
+}
+
+ObMacroBlockBloomFilter::~ObMacroBlockBloomFilter()
+{
+  reset();
+}
+
+int ObMacroBlockBloomFilter::alloc_bf(const ObDataStoreDesc &data_store_desc, const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(row_count < 0 ||
+                  !data_store_desc.is_valid() ||
+                  !data_store_desc.enable_macro_block_bloom_filter() ||
+                  !data_store_desc.get_datum_utils().is_valid() ||
+                  data_store_desc.get_row_column_count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to allocate new bloom filter, invalid data store desc", K(ret), K(data_store_desc), K(row_count));
+  } else if (OB_UNLIKELY(bf_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to allocate new bloom filter", K(ret), K(bf_));
+  } else {
+    const int64_t MAX_ROW_COUNT = calc_max_row_count(MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE);
+    max_row_count_ = (row_count == 0 || row_count > MAX_ROW_COUNT) ? MAX_ROW_COUNT : row_count ;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(bf_.init_by_row_count(max_row_count_, ObBloomFilter::BLOOM_FILTER_FALSE_POSITIVE_PROB))) {
+    LOG_WARN("fail to init new bloom filter", K(ret), K(max_row_count_));
+  } else {
+    if (data_store_desc.is_cg()) { // Fetch datum utils for rowkey murmurhash.
+      const ObITableReadInfo *index_read_info;
+      if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+        LOG_WARN("fail to get index read info for cg sstable", K(ret), K(data_store_desc));
+      } else if (OB_UNLIKELY(!index_read_info->get_datum_utils().is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid datum utails for cg sstable", K(ret), KPC(index_read_info));
+      } else {
+        rowkey_column_count_ = index_read_info->get_datum_utils().get_rowkey_count();
+      }
+    } else {
+      rowkey_column_count_ = data_store_desc.get_datum_utils().get_rowkey_count();
+    }
+    // As same as load bf.
+    empty_read_prefix_
+        = rowkey_column_count_ - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
+  }
+  return ret;
+}
+
+bool ObMacroBlockBloomFilter::is_valid() const
+{
+  return version_ == MACRO_BLOCK_BLOOM_FILTER_V1
+         && rowkey_column_count_ > 0
+         && empty_read_prefix_ > 0
+         && max_row_count_ > 0
+         && bf_.is_valid();
+}
+
+bool ObMacroBlockBloomFilter::should_persist() const
+{
+  return is_valid() && row_count_ > 0 && row_count_ <= max_row_count_;
+}
+
+int ObMacroBlockBloomFilter::merge(const ObMicroBlockBloomFilter &micro_bf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(rowkey_column_count_ != micro_bf.get_rowkey_column_count()
+                  || empty_read_prefix_ != micro_bf.get_empty_read_prefix())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to merge, invalid argument", K(ret), K(micro_bf), KPC(this));
+  } else if (FALSE_IT(row_count_ += micro_bf.get_row_count())) {
+  } else if (row_count_ > max_row_count_) {
+    // do nothing.
+  } else {
+    MergeMicroBlockFunctor functor(bf_);
+    if (OB_FAIL(micro_bf.foreach(functor))) {
+      LOG_WARN("fail to merge micro bf", K(ret), K(micro_bf), KPC(this));
+    }
+  }
+  return ret;
+}
+
+void ObMacroBlockBloomFilter::reuse()
+{
+  row_count_ = 0;
+  bf_.clear();
+}
+
 void ObMacroBlockBloomFilter::reset()
 {
   rowkey_column_count_ = 0;
-  datum_utils_ = nullptr;
-  enable_macro_block_bloom_filter_ = false;
+  empty_read_prefix_ = 0;
   max_row_count_ = 0;
   version_ = MACRO_BLOCK_BLOOM_FILTER_V1;
   row_count_ = 0;
@@ -311,7 +443,6 @@ int ObMacroBlockBloomFilter::serialize(char *buf, const int64_t buf_len, int64_t
     LOG_WARN("fail to serialize macro block bloom filter, unexpected error",
              K(ret), K(pos), K(initial_pos), K(serialize_size), K(buf_len), KPC(this));
   }
-  FLOG_INFO("cmdebug, serialize macro block bloom filter", K(ret), KPC(this));
   return ret;
 }
 

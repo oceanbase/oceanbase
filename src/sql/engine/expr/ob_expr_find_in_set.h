@@ -35,10 +35,16 @@ public:
     return true;
   }
   static int calc_find_in_set_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int calc_find_in_set_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
-	 DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
+  template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
+  static int calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template <typename Arg0Vec, typename ResVec>
+  static int calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL);
+  DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
 };
 
 } /* namespace sql */

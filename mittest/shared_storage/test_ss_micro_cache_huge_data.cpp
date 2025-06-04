@@ -160,8 +160,7 @@ int TestSSMicroCacheHugeData::TestSSMicroCacheHugeDataThread::parallel_add_micro
     LOG_WARN("invalid argument", KR(ret), K_(ctx));
   } else {
     char *buf = nullptr;
-    const int64_t payload_offset = ObSSPhyBlockCommonHeader::get_serialize_size() +
-                                   ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
+    const int64_t payload_offset = ObSSMemBlock::get_reserved_size();
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.micro_cnt_; ++i) {
       const int32_t micro_size = ObRandom::rand(ctx_.min_micro_size_, ctx_.max_micro_size_);
       MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id((idx + 1) * ctx_.micro_cnt_ + i);
@@ -199,9 +198,8 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
-  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
   const int64_t exp_total_data_size = total_data_blk_cnt * block_size * 3;
 
   const int64_t thread_num = 4;
@@ -227,13 +225,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   LOG_INFO("TEST: finish case, check result", K(cost_ms), K(cache_stat), K(arc_info));
 
   ob_usleep(10 * 1000 * 1000);
-  start_us = ObTimeUtility::current_time();
-  const int64_t CASE_TIMEOUT_US = 60 * 1000 * 1000; // in case reorgan_task is still running, we wait more time
-  while (cache_stat.mem_blk_stat().mem_blk_bg_used_cnt_ == cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_
-         && (ObTimeUtility::current_time() - start_us <= CASE_TIMEOUT_US)) {
-    ob_usleep(1000 * 1000);
-  }
-
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_fg_used_cnt_);
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_bg_used_cnt_);
   int64_t max_result_val = arc_info.limit_ * 105 / 100;
@@ -243,16 +235,14 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   const int64_t ori_valid_size = arc_info.get_valid_size();
 
   LOG_INFO("TEST: start update arc", K(cache_stat), K(arc_info));
-  micro_ckpt_task.ckpt_op_.enable_update_arc_limit_ = false;
   ob_usleep(1000);
-  const int64_t tmp_arc_limit = arc_info.limit_ / 4;
+  const int64_t tmp_arc_limit = arc_info.limit_ / 8;
   arc_info.update_arc_limit(tmp_arc_limit);
   ASSERT_EQ(tmp_arc_limit, arc_info.limit_);
 
-  ob_usleep(10 * 1000 * 1000);
+  ob_usleep(30 * 1000 * 1000);
   LOG_INFO("TEST: finish update arc", K(cache_stat), K(arc_info));
   ASSERT_LT(arc_info.get_valid_size(), ori_valid_size);
-
 }
 
 } // namespace storage

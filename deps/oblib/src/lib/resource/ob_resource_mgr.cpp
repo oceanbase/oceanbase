@@ -15,6 +15,7 @@
 
 #include "ob_resource_mgr.h"
 #include "lib/utility/utility.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ void *ObTenantMemoryMgr::alloc_cache_mb(const int64_t size)
   attr.tenant_id_ = tenant_id_;
   attr.prio_ = OB_NORMAL_ALLOC;
   attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
+  attr.numa_id_ = AFFINITY_CTRL.get_numa_id();
   if (NULL != (chunk = alloc_chunk(size, attr))) {
     const int64_t all_size = CHUNK_MGR.aligned(size);
     SANITY_UNPOISON(chunk, all_size);
@@ -257,9 +259,9 @@ AChunk *ObTenantMemoryMgr::alloc_chunk_(const int64_t size, const ObMemAttr &att
 {
   AChunk *chunk = nullptr;
   if (OB_UNLIKELY(attr.ctx_id_ == ObCtxIds::CO_STACK)) {
-    chunk = CHUNK_MGR.alloc_co_chunk(static_cast<uint64_t>(size));
+    chunk = CHUNK_MGR.alloc_co_chunk(static_cast<uint64_t>(size), attr.numa_id_);
   } else {
-    chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), OB_HIGH_ALLOC == attr.prio_);
+    chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), attr.numa_id_, OB_HIGH_ALLOC == attr.prio_);
   }
   return chunk;
 }

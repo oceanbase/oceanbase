@@ -359,7 +359,7 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
                   break;
                 case 'U':
                 case 'u':
-                  num_rows_upd = count;
+                  num_rows_upd = (count / 2);
                   break;
                 case 'D':
                 case 'd':

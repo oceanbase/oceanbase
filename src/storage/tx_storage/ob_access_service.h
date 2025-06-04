@@ -105,6 +105,9 @@ public:
       const share::ObLSID &ls_id,
       transaction::ObTxDesc &tx_desc,
       const transaction::tablelock::ObReplaceLockParam &lock_param);
+  int add_lock_into_queue(const share::ObLSID &ls_id,
+                          transaction::ObTxDesc &tx_desc,
+                          const transaction::tablelock::ObLockParam &param);
   // ObITabletScan interface
   virtual int table_scan(
       ObVTableScanParam &vparam,
@@ -134,6 +137,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
       const int16_t branch_id,
+      concurrent_control::ObWriteFlag &write_flag,
       ObStoreCtxGuard &ctx_guard,
       const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
 
@@ -217,6 +221,33 @@ public:
       int64_t &memtable_row_count,
       common::ObIArray<int64_t> &cg_macro_cnt_arr,
       common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
+
+  int estimate_skip_index_sortedness(
+      const share::ObLSID &ls_id,
+      const uint64_t& table_id,
+      const common::ObTabletID &tablet_id,
+      const uint64_t column_id,
+      const int64_t sample_count,
+      const int64_t timeout_us,
+      double &sortedness,
+      uint64_t& res_sample_count) const;
+
+  int estimate_skip_index_sortedness(
+      const share::ObLSID &ls_id,
+      const uint64_t& table_id,
+      const common::ObTabletID &tablet_id,
+      const common::ObIArray<uint64_t> &column_ids,
+      const common::ObIArray<uint64_t> &sample_counts,
+      const int64_t timeout_us,
+      common::ObIArray<double> &sortedness,
+      common::ObIArray<uint64_t> &res_sample_counts) const;
+
+  int inner_tablet_scan(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObTableScanParam &param,
+      ObNewRowIterator *&result);
+
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
   int check_data_disk_full_(
@@ -266,6 +297,12 @@ protected:
   {
     return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
   }
+
+  int do_table_scan_(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &data_tablet_id,
+      ObTableScanParam &param,
+      ObNewRowIterator *&result);
 
 private:
   bool is_inited_;

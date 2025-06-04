@@ -19,6 +19,7 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_session_stat.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -39,7 +40,7 @@ Thread &Thread::current()
   return *current_thread_;
 }
 
-Thread::Thread(Threads *threads, int64_t idx, int64_t stack_size)
+Thread::Thread(Threads *threads, int64_t idx, int64_t stack_size, int32_t numa_node)
     : pth_(0),
       threads_(threads),
       idx_(idx),
@@ -54,7 +55,8 @@ Thread::Thread(Threads *threads, int64_t idx, int64_t stack_size)
       tid_(0),
       thread_list_node_(this),
       cpu_time_(0),
-      create_ret_(OB_NOT_RUNNING)
+      create_ret_(OB_NOT_RUNNING),
+      numa_node_(numa_node)
 {}
 
 Thread::~Thread()
@@ -66,6 +68,7 @@ int Thread::start()
 {
   int ret = OB_SUCCESS;
   const int64_t count = ATOMIC_FAA(&total_thread_count_, 1);
+  ObNumaNodeGuard numa_guard(numa_node_);
   if (count >= get_max_thread_num() - OB_RESERVED_THREAD_NUM) {
     ATOMIC_FAA(&total_thread_count_, -1);
     ret = OB_SIZE_OVERFLOW;
@@ -160,6 +163,9 @@ uint64_t Thread::get_tenant_id() const
 
 void Thread::run()
 {
+  if (OB_NUMA_SHARED_INDEX != numa_node_) {
+    AFFINITY_CTRL.thread_bind_to_node(numa_node_);
+  }
   IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
   if (OB_NOT_NULL(run_wrapper_)) {
     {

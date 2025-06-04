@@ -911,7 +911,7 @@
     ObString str_value; \
     if (OB_SUCCESS == (ret = (result).get_varchar(column_name, str_value))) \
     { \
-        real_length = MIN(str_value.length(), max_length); \
+        real_length = MIN(str_value.length(), max_length - 1); \
         MEMCPY(field, str_value.ptr(), real_length); \
         field[real_length] = '\0'; \
     } \

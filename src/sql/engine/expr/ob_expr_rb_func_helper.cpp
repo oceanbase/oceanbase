@@ -80,6 +80,63 @@ int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &alloca
   return ret;
 }
 
+int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObDatum *&rb_datum, ObRoaringBitmap *&rb, bool &is_rb_null)
+{
+  INIT_SUCC(ret);
+  ObString get_str;
+  if (rb_datum->is_null()) {
+    is_rb_null = true;
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                         allocator,
+                         *rb_datum,
+                         rb_arg->datum_meta_,
+                         rb_arg->obj_meta_.has_lob_header(),
+                         get_str))) {
+    LOG_WARN("fail to get real string data", K(ret), K(get_str));
+  } else if (rb_arg->datum_meta_.type_ != ObRoaringBitmapType) {
+    bool need_validate = true;
+    if (OB_FAIL(ObRbUtils::check_binary(get_str))) {
+      LOG_WARN("invalid roaringbitmap binary string", K(ret));
+    } else if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb, need_validate))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObIVector *&rb_vec, ObRoaringBitmap *&rb, bool &is_rb_null, int64_t idx)
+{
+  INIT_SUCC(ret);
+  ObString get_str;
+  if (rb_vec->is_null(idx)) {
+    is_rb_null = true;
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                         allocator,
+                         rb_vec,
+                         rb_arg->datum_meta_,
+                         rb_arg->obj_meta_.has_lob_header(),
+                         get_str,
+                         idx))) {
+    LOG_WARN("fail to get real string data", K(ret), K(get_str));
+  } else if (rb_arg->datum_meta_.type_ != ObRoaringBitmapType) {
+    bool need_validate = true;
+    if (OB_FAIL(ObRbUtils::check_binary(get_str))) {
+      LOG_WARN("invalid roaringbitmap binary string", K(ret));
+    } else if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb, need_validate))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObRbUtils::rb_deserialize(allocator, get_str, rb))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRbExprHelper::pack_rb_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str)
 {
   int ret = OB_SUCCESS;

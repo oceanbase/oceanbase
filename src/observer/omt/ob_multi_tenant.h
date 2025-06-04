@@ -121,6 +121,7 @@ public:
   int update_tenant_data_disk_size(const uint64_t tenant_id,
                                     const int64_t new_data_disk_size);
   int update_safe_time_config();
+  int update_ss_garbage_collection_service_config();
 #endif
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);

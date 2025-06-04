@@ -150,11 +150,11 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTableLockOwnerID OWNER_ONE;
-  OWNER_ONE.convert_from_value(1);
+  OWNER_ONE.convert_from_value(static_cast<ObLockOwnerType>(0), 1);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
   ObTableLockOwnerID lock_owner;
-  lock_owner.convert_from_value(0);
+  lock_owner.convert_from_value(static_cast<ObLockOwnerType>(0), 0);
   ObLS *ls = nullptr;
   ObLockMemtable *lock_memtable = nullptr;
   ObCheckpointExecutor *checkpoint_executor = nullptr;

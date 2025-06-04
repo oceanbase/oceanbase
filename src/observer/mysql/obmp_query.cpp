@@ -21,6 +21,7 @@
 #include "observer/mysql/ob_async_plan_driver.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_server.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
@@ -133,7 +134,7 @@ int ObMPQuery::process()
         //session has been killed some moment ago
         ret = OB_ERR_SESSION_INTERRUPTED;
         LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
-                 K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+                 K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
       } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, sql_))) {
         // 注意，retry info和last query trace id的逻辑要写在query lock内，否则会有并发问题
         LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K_(sql));
@@ -178,7 +179,7 @@ int ObMPQuery::process()
                       client_info, session.get_client_info(),
                       module_name, session.get_module_name(),
                       action_name, session.get_action_name(),
-                      sess_id, session.get_sessid());
+                      sess_id, session.get_server_sid());
         }
 
         THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
@@ -204,7 +205,7 @@ int ObMPQuery::process()
           } else {
             session.set_app_trace_id(pre_parse_result.trace_id_);
             LOG_DEBUG("app trace id", "app_trace_id", pre_parse_result.trace_id_,
-                                      "sessid", session.get_sessid(), K_(sql));
+                                      "sessid", session.get_server_sid(), K_(sql));
           }
         }
 
@@ -447,7 +448,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT)
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
@@ -479,7 +480,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
     bool is_trans_ctrl_cmd = false;
     bool do_trans_ctrl_opt = false;
     stmt::StmtType stmt_type = stmt::T_NONE;
-    if (ERRSIM_BEGIN_COMMIT_OPT && !multi_stmt_item.is_part_of_multi_stmt()) {
+    if (!ERRSIM_BEGIN_COMMIT_OPT_DISABLE && !multi_stmt_item.is_part_of_multi_stmt()) {
       check_is_trans_ctrl_cmd(multi_stmt_item.get_sql(), is_trans_ctrl_cmd, stmt_type);
       if (is_trans_ctrl_cmd && !session.associated_xa()) {
         do_trans_ctrl_opt = true;
@@ -503,6 +504,10 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       do {
         ret = OB_SUCCESS; //当发生本地重试的时候，需要重置错误码，不然无法推进重试
         need_disconnect = true;
+        // if query need mock schema, will remember table_id in mocked_tables (local thread var)
+        // when resolve, and then will try mock a table schema in sqlschemaguard.
+        // ObSQLMockSchemaGuard here is only used for reset mocked_tables.
+        ObSQLMockSchemaGuard mock_schema_guard;
         // do the real work
         //create a new temporary memory context for executing sql can
         //avoid the problem the memory cannot be released in time due to too many sql items
@@ -572,7 +577,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   // do { do_process } while(retry) 之前出错才会
   // 走到send_error_packet逻辑
   // 所以无需考虑当前为sync还是async模式
-  if (!OB_SUCC(ret) && need_response_error && is_conn_valid()) {
+  if (!OB_SUCC(ret) && need_response_error && is_conn_valid() &&
+        !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
     send_error_packet(ret, NULL);
   }
   ctx_.reset();
@@ -602,6 +608,9 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                      need_disconnect);
     ctx_.first_plan_hash_ = 0;
     ctx_.first_outline_data_.reset();
+    ctx_.first_equal_param_cons_cnt_ = 0;
+    ctx_.first_const_param_cons_cnt_ = 0;
+    ctx_.first_expr_cons_cnt_ = 0;
     ctx_.clear();
   }
   return ret;
@@ -711,6 +720,13 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
   const bool enable_sqlstat = session.is_sqlstat_enabled();
+  bool is_rollback = false;
+  bool is_commit = false;
+  if (0 == sql.case_compare("commit")) {
+    is_commit = true;
+  } else if (0 == sql.case_compare("rollback")) {
+    is_rollback = true;
+  }
   single_process_timestamp_ = ObTimeUtility::current_time();
   /* !!!
    * 注意req_timeinfo_guard一定要放在result前面
@@ -758,7 +774,6 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
       // exec cmd
       FLTSpanGuard(sql_execute);
-      bool is_rollback = (0 == sql.case_compare("rollback"));
       if (OB_FAIL(process_trans_ctrl_cmd(session,
                                          need_disconnect,
                                          async_resp_used,
@@ -781,11 +796,18 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       }
     }
 
+    //注意: 在response_result接口调用后不要再使用sql_这个成员变量，这是因为sql_指向的内存来自于ObReqPacket
+    //而在事务异步提交应答客户端的流程中，应答客户端的流程位于ApplyService线程，跟SQL Worker线程没有时序保证
+    //response_result启动异步应答客户端流程后，有可能会造成先回包再执行下面的逻辑，如果回包先完成，将会导致
+    //ObReqPacket内存被释放，因而导致sql_指向非法内存地址，在下面这些逻辑访问sql_将导致crash
+    //而同步应答客户端的流程并没有类似的问题，这是因为同步应答客户端对最后一个包的flush动作位于这个接口的最下方，
+    //但异步应答流程没有这个保证
     int tmp_ret = OB_SUCCESS;
     tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
     if (OB_SUCCESS != tmp_ret) {
-      LOG_INFO("query info:", K(sql_),
-               "sess_id", session.get_sessid(),
+      LOG_INFO("query info:",
+               "sql", session.get_current_query_string(),
+               "sess_id", session.get_server_sid(),
                "database_id", session.get_database_id(),
                "database_name", session.get_database_name(),
                "trans_id", audit_record.trans_id_);
@@ -799,22 +821,6 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
     audit_record.exec_timestamp_.update_stage_time();
 
-    if (enable_perf_event) {
-      audit_record.exec_record_.record_end();
-      record_stat(stmt_type, exec_end_timestamp_, session, ret);
-      audit_record.stmt_type_ = stmt_type;
-      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-      audit_record.update_event_stage_state();
-    }
-    if (enable_sqlstat) {
-      sqlstat_record.record_sqlstat_end_value();
-      sqlstat_record.set_rows_processed(0);
-      sqlstat_record.set_partition_cnt(0);
-      sqlstat_record.set_is_route_miss(session.partition_hit().get_bool()? 0 : 1);
-      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
-    }
-
     // store the warning message from the most recent statement in the current session
     if ((OB_SUCC(ret) && is_diagnostics_stmt) || async_resp_used) {
       // If diagnostic stmt execute successfully, it dosen't clear the warning message.
@@ -825,7 +831,8 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
     }
 
-    if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid()) {
+    if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() &&
+          !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
       LOG_WARN("query failed", K(ret), K(session), K(sql));
       // 这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
       // 则需要在下面回复一个error_packet作为收尾。
@@ -836,6 +843,22 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
         LOG_WARN("send error packet failed", K(ret), K(err));
       }
     }
+  }
+
+  if (enable_perf_event) {
+    audit_record.exec_record_.record_end();
+    record_stat(stmt_type, exec_end_timestamp_, session, ret, is_commit, is_rollback);
+    audit_record.stmt_type_ = stmt_type;
+    audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+    audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+    audit_record.update_event_stage_state();
+  }
+  if (enable_sqlstat) {
+    sqlstat_record.record_sqlstat_end_value();
+    sqlstat_record.set_rows_processed(0);
+    sqlstat_record.set_partition_cnt(0);
+    sqlstat_record.set_is_route_miss(session.partition_hit().get_bool()? 0 : 1);
+    sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
   }
 
   audit_record.status_ = (0 == ret || OB_ITER_END == ret)
@@ -1124,11 +1147,18 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         }
       }
 
+      //注意: 在response_result接口调用后不要再使用sql_这个成员变量，这是因为sql_指向的内存来自于ObReqPacket
+      //而在事务异步提交应答客户端的流程中，应答客户端的流程位于ApplyService线程，跟SQL Worker线程没有时序保证
+      //response_result启动异步应答客户端流程后，有可能会造成先回包再执行下面的逻辑，如果回包先完成，将会导致
+      //ObReqPacket内存被释放，因而导致sql_指向非法内存地址，在下面这些逻辑访问sql_将导致crash
+      //而同步应答客户端的流程并没有类似的问题，这是因为同步应答客户端对最后一个包的flush动作位于这个接口的最下方，
+      //但异步应答流程没有这个保证
       int tmp_ret = OB_SUCCESS;
       tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
-        LOG_INFO("query info:", K(sql_),
-              "sess_id", result.get_session().get_sessid(),
+        LOG_INFO("query info:",
+              "sql", result.get_session().get_current_query_string(),
+              "sess_id", result.get_session().get_server_sid(),
               "database_id", result.get_session().get_database_id(),
               "database_name", result.get_session().get_database_name(),
               "trans_id", audit_record.trans_id_);
@@ -1141,25 +1171,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       bool first_record = (1 == audit_record.try_cnt_);
       ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_end();
-        record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret);
-        audit_record.stmt_type_ = result.get_stmt_type();
-        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.update_event_stage_state();
-      }
-      if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
-        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
-        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
-        sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
-        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
-                                                   ctx_.cur_sql_,
-                                                   result.get_physical_plan());
-      }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
         && OB_NOT_NULL(result.get_physical_plan())) {
@@ -1198,7 +1209,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
         }
 
-        if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() && !THIS_WORKER.need_retry()) {
+        if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() && !THIS_WORKER.need_retry() &&
+              !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("query should be rerouted", K(ret), K(async_resp_used));
           } else {
@@ -1217,6 +1229,25 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           }
         }
       }
+    }
+
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret, result.is_commit_cmd(), result.is_rollback_cmd());
+      audit_record.stmt_type_ = result.get_stmt_type();
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+      sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+      sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                 ctx_.cur_sql_,
+                                                 result.get_physical_plan());
     }
 
     audit_record.status_ = (0 == ret || OB_ITER_END == ret)
@@ -1298,21 +1329,29 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         audit_record.table_scan_stat_ = plan_ctx->get_table_scan_stat();
       }
       if (NULL != plan) {
+        AdaptivePCConf adpt_pc_conf;
+        bool enable_adaptive_pc = plan_ctx->enable_adaptive_pc();
+        if (enable_adaptive_pc) {
+          adpt_pc_conf = session.get_adaptive_pc_conf();
+        }
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  false, // false mean not first update plan stat
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  true,
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
                                  true,
-                                 table_row_count_list);
+                                 table_row_count_list,
+                                 enable_adaptive_pc ? &adpt_pc_conf : nullptr);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
       }
@@ -1554,7 +1593,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_START_TRANS:
     case stmt::T_END_TRANS:
     case stmt::T_SHOW_CHECK_TABLE:
-    case stmt::T_SHOW_CREATE_USER: {
+    case stmt::T_SHOW_CREATE_USER:
+    case stmt::T_SET_CATALOG:
+    case stmt::T_SHOW_CATALOGS:
+    case stmt::T_SHOW_CREATE_CATALOG: {
       is_readonly = true;
       break;
     }
@@ -1661,7 +1703,9 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
 inline void ObMPQuery::record_stat(const stmt::StmtType type,
                                    const int64_t end_time,
                                    const sql::ObSQLSessionInfo& session,
-                                   const int64_t ret) const
+                                   const int64_t ret,
+                                   const bool is_commit_cmd,
+                                   const bool is_rollback_cmd) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
@@ -1690,6 +1734,26 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
       ADD_STMT_STAT(REPLACE);
       ADD_STMT_STAT(UPDATE);
       ADD_STMT_STAT(DELETE);
+      case stmt::T_END_TRANS:
+        if (is_commit_cmd) {
+          EVENT_ADD(SQL_COMMIT_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_COMMIT_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        } else if (is_rollback_cmd) {
+          EVENT_ADD(SQL_ROLLBACK_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_ROLLBACK_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        }
+        break;
+
     default:
     {
       EVENT_ADD(SQL_OTHER_TIME, time_cost);

@@ -30,6 +30,7 @@
 #include "storage/fts/ik/ob_ik_char_util.h"
 #include "storage/fts/ik/ob_ik_token.h"
 #include "storage/fts/ob_ik_ft_parser.h"
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
 
 #include <alloca.h>
 #include <chrono>
@@ -828,74 +829,6 @@ TEST_F(FTParserTest, DISABLED_benchmark)
   }
 }
 
-class DicthubTest : public ::testing::Test
-{
-public:
-  virtual void SetUp() override
-  {
-    // ObTestFTPluginHelper::init_plugin_env();
-  }
-
-  virtual void TearDown() override
-  {
-    // ObTestFTPluginHelper::destroy_plugin_env();
-  }
-
-  static void get_dict_info(const int count, ObFTDictHub &hub, const ObFTDictInfoKey &key)
-  {
-    ObFTDictInfo info;
-    int ret = hub.get_dict_info(key, info);
-    ASSERT_EQ(OB_SUCCESS, ret) << "Get dict info failed.";
-  }
-
-  static void put_dict_info(const int count,
-                            ObFTDictHub &hub,
-                            const ObFTDictInfoKey &key,
-                            const ObFTDictInfo &info)
-  {
-    int ret = hub.put_dict_info(key, info);
-    ASSERT_EQ(OB_SUCCESS, ret) << "Put dict info failed.";
-  }
-
-public:
-};
-
-TEST(DICT_TEST, test_dict_get_together)
-{
-  ObFTDictHub hub;
-  int ret = hub.init();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObFTDictInfoKey key;
-  key.type_ = 1;
-
-  ObFTDictInfo info;
-  info.range_count_ = 10;
-  info.type_ = ObFTDictType::DICT_IK_STOP;
-  info.charset_ = CHARSET_INVALID;
-
-  // put once
-  DicthubTest::put_dict_info(1, hub, key, info);
-
-  std::thread t_put_1(DicthubTest::put_dict_info,
-                      1000,
-                      std::ref(hub),
-                      std::ref(key),
-                      std::ref(info));
-  std::thread t_put_2(DicthubTest::put_dict_info,
-                      1000,
-                      std::ref(hub),
-                      std::ref(key),
-                      std::ref(info));
-
-  std::thread t_get_1(DicthubTest::get_dict_info, 1000, std::ref(hub), std::ref(key));
-  std::thread t_get_2(DicthubTest::get_dict_info, 1000, std::ref(hub), std::ref(key));
-
-  t_put_1.join();
-  t_put_2.join();
-  t_get_1.join();
-  t_get_2.join();
-}
 
 } // end namespace storage
 } // end namespace oceanbase

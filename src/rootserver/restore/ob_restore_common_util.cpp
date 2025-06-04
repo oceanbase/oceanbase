@@ -333,7 +333,6 @@ int ObRestoreCommonUtil::check_tenant_is_existed(ObMultiVersionSchemaService *sc
 }
 
 int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
-                                            obrpc::ObCommonRpcProxy *rpc_proxy,
                                             const uint64_t tenant_id,
                                             const ObString &tde_method,
                                             const ObString &kms_info)
@@ -344,10 +343,9 @@ int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
   int64_t affected_row = 0;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
                   || !ObTdeMethodUtil::is_valid(tde_method)
-                  || NULL == sql_proxy
-                  || NULL == rpc_proxy)) {
+                  || NULL == sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tde_method), KP(sql_proxy), KP(rpc_proxy));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tde_method), KP(sql_proxy));
   } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = '%.*s'",
                                                     tde_method.length(), tde_method.ptr()))) {
     LOG_WARN("failed to assign fmt", KR(ret), K(tde_method));
@@ -365,7 +363,25 @@ int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
   } else if (OB_FAIL(sql_proxy->write(tenant_id, sql.ptr(), affected_row))) {
     LOG_WARN("failed to execute", KR(ret), K(tenant_id));
   }
-  if (OB_SUCC(ret)) {
+#endif
+  return ret;
+}
+
+int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id)
+                  || NULL == rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(rpc_proxy));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant config", K(ret), K(tenant_id));
+  } else if (!ObTdeMethodUtil::is_valid(ObString(tenant_config->tde_method.get_value()))) {
+    //do nothing
+  } else {
     const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
     obrpc::ObReloadMasterKeyArg arg;
     obrpc::ObReloadMasterKeyResult result;

@@ -279,7 +279,7 @@ TEST_F(TestTimer, without_start)
   ObTimer timer;
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
-  usleep(50000); // 50ms
+  usleep(100000); // 100ms
   ASSERT_EQ(1, task.task_run_count_);
   timer.stop();
   timer.wait();
@@ -287,7 +287,7 @@ TEST_F(TestTimer, without_start)
   // ensure that the timer still works after destroy and re-init
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
-  usleep(50000); // 50ms
+  usleep(100000); // 100ms
   ASSERT_EQ(2, task.task_run_count_);
   timer.stop();
   timer.wait();

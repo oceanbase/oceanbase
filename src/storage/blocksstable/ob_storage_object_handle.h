@@ -22,12 +22,15 @@ namespace storage
   class ObBloomFilterBuildTask;
 #ifdef OB_BUILD_SHARED_STORAGE
   class ObBaseFileManager;
-  class ObSSTmpFileFlushTask;
+  class ObSSMacroCacheFlushTask;
   class ObSSPreReadTask;
   class ObSSMicroCacheHandler;
   class ObSSMicroCache;
+  class ObSSMicroCache;
   class ObTenantFileManager;
+  class ObServerFileManager;
   class ObSSBaseReader;
+  class ObSSTableMacroPrewarmer;
 #endif
 }
 namespace blocksstable
@@ -44,12 +47,15 @@ class ObStorageObjectHandle final
   friend class storage::ObBloomFilterBuildTask; // in construct_func
   friend class blocksstable::ObMacroBlockWriter; // int ObMacroBlockWriter::alloc_block_from_device
   #ifdef OB_BUILD_SHARED_STORAGE
-  friend class storage::ObSSTmpFileFlushTask;
+  friend class storage::ObSSMacroCacheFlushTask;
   friend class storage::ObSSPreReadTask;
   friend class storage::ObSSMicroCacheHandler;
   friend class storage::ObSSMicroCache;
+  friend class storage::ObSSMicroCache;
   friend class storage::ObTenantFileManager;
+  friend class storage::ObServerFileManager;
   friend class storage::ObSSBaseReader;
+  friend class storage::ObSSTableMacroPrewarmer;
   #endif
 public:
   ObStorageObjectHandle() = default;
@@ -83,8 +89,6 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int ss_async_read(const ObStorageObjectReadInfo &read_info);
   int ss_async_write(const ObStorageObjectWriteInfo &write_info);
-  int get_file_manager(const uint64_t tenant_id,
-                       storage::ObBaseFileManager *&file_manager);
 #endif
 
 private:

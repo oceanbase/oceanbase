@@ -1371,6 +1371,22 @@ int ObBasicStatsEstimator::generate_column_group_ids(const ObTableStatParam &par
   return ret;
 }
 
+int ObBasicStatsEstimator::prepare_skip_params(const ObTableStatParam &param,
+                                               ObIArray<uint64_t> &sample_counts,
+                                               ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
+    if (OB_FAIL(sample_counts.push_back(param.skip_rate_sample_cnt_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(column_ids.push_back(param.column_params_.at(i).column_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  LOG_TRACE("OPT:prepare_skip_params", K(sample_counts), K(column_ids));
+  return ret;
+}
+
 int ObBasicStatsEstimator::check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
                                                                             const int64_t memtable_row_cnt,
                                                                             const int64_t cg_cnt,
@@ -1411,28 +1427,33 @@ int ObBasicStatsEstimator::get_gather_table_type_list(ObSqlString &gather_table_
 int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
                                                          const int64_t tenant_id,
                                                          const int64_t max_table_cnt,
+                                                         int64_t &total_part_cnt,
                                                          ObIArray<AsyncStatTable> &stat_tables)
 {
   int ret = OB_SUCCESS;
   ObSqlString select_sql;
-  if (OB_FAIL(select_sql.append_fmt("SELECT table_id, "\
-                                    "        partition_id "\
-                                    "  FROM   %s"\
-                                    "  WHERE  table_id IN (SELECT DISTINCT table_id "\
-                                    "                      FROM   %s "\
-                                    "                      WHERE  tenant_id = %lu "\
-                                    "                            AND stale_stats = 1 "\
-                                    "                            AND stattype_locked = 0  "\
-                                    "                            AND (spare2 < 5 or spare2 is null) limit %lu) "\
-                                    "        AND (spare2 < 5 or spare2 is null)  "\
-                                    "        AND tenant_id = %lu "\
-                                    "        AND stale_stats = 1 "\
-                                    "        AND stattype_locked = 0 order by 1, 2",
-                                    share::OB_ALL_TABLE_STAT_TNAME,
-                                    share::OB_ALL_TABLE_STAT_TNAME,
-                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                    max_table_cnt,
-                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
+  if (OB_FAIL(select_sql.append_fmt(
+          "SELECT table_id, tablet_id, avg(changed_ratio) over (partition by table_id)  ratio from "\
+          " ( SELECT    m.table_id, m.tablet_id, (CASE WHEN (m.last_inserts-m.last_deletes) = 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as double) "\
+          "                            ELSE (m.inserts - m.last_inserts + m.updates - m.last_updates + m.deletes - m.last_deletes) * 1.0 / (m.last_inserts-m.last_deletes) END) as changed_ratio "\
+          "  FROM    %s m "\
+          "  LEFT JOIN %s up "\
+          "  ON        m.table_id = up.table_id "\
+          "  AND       up.pname = 'ASYNC_GATHER_STALE_RATIO' "\
+          "  JOIN      %s gp "\
+          "  ON        gp.sname = 'ASYNC_GATHER_STALE_RATIO' "\
+          "  where m.tenant_id = %lu AND "\
+          " (CASE WHEN (m.last_inserts-m.last_deletes) = 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as "\
+          " double) "\
+          "    ELSE (m.inserts - m.last_inserts + m.updates - m.last_updates + m.deletes - m.last_deletes) * 1.0 "\
+          " / (m.last_inserts-m.last_deletes) END) > cast(coalesce(up.valchar, gp.spare4) as double))t "\
+          " order by ratio desc,table_id  limit %lu ",
+          share::OB_ALL_MONITOR_MODIFIED_TNAME,
+          share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
+          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+          share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+          max_table_cnt
+          ))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
@@ -1450,21 +1471,22 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
           int64_t idx_col2 = 1;
           ObObj obj;
           int64_t table_id = 0;
-          int64_t partition_id = 0;
+          int64_t tablet_id = 0;
           if (OB_FAIL(client_result->get_obj(idx_col1, obj))) {
             LOG_WARN("failed to get object", K(ret));
           } else if (OB_FAIL(obj.get_int(table_id))) {
             LOG_WARN("failed to get int", K(ret), K(obj));
           } else if (OB_FAIL(client_result->get_obj(idx_col2, obj))) {
             LOG_WARN("failed to get object", K(ret));
-          } else if (OB_FAIL(obj.get_int(partition_id))) {
+          } else if (OB_FAIL(obj.get_int(tablet_id))) {
             LOG_WARN("failed to get int", K(ret), K(obj));
           } else if ((stat_tables.empty() || table_id != (stat_tables.at(stat_tables.count() - 1).table_id_)) &&
                      OB_FAIL(stat_tables.push_back(AsyncStatTable(table_id)))) {
             LOG_WARN("failed to push back", K(ret));
-          } else if (OB_FAIL(stat_tables.at(stat_tables.count() - 1).partition_ids_.push_back(partition_id))) {
+          } else if (OB_FAIL(stat_tables.at(stat_tables.count() - 1).tablet_ids_.push_back(static_cast<uint64_t>(tablet_id)))) {
             LOG_WARN("failed to push back", K(ret));
           }
+          total_part_cnt++;
         }
         ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
       }
@@ -1546,6 +1568,372 @@ int ObBasicStatsEstimator::fill_partition_info(ObIAllocator &allocator,
         MEMCPY(buf, raw_sql_str.ptr(), raw_sql_str.length());
         where_string_.assign(buf, raw_sql_str.length());
       }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::add_global_skip_rate(ObGlobalSkipRateStat &global_skip_rate,
+                                                EstimateSkipRateRes &estimate_res,
+                                                BlockNumStat *block_num_stat)
+{
+  int ret = OB_SUCCESS;
+  if (block_num_stat != NULL && !block_num_stat->cg_micro_cnt_arr_.empty()) {
+    ObSEArray<uint64_t, 4> cg_micro_arr;
+    for (int i = 0; OB_SUCC(ret) && i < block_num_stat->cg_micro_cnt_arr_.count(); i++) {
+      if (OB_FAIL(cg_micro_arr.push_back(block_num_stat->cg_micro_cnt_arr_.at(i)))) {
+        LOG_WARN("fail to push back element", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(global_skip_rate.add(cg_micro_arr,
+                                            estimate_res.cg_skip_rate_arr_))) {
+      LOG_WARN("faild to add", K(ret));
+    }
+  } else if (OB_FAIL(global_skip_rate.add(estimate_res.skip_sample_cnt_arr_,
+                                          estimate_res.cg_skip_rate_arr_))) {
+    LOG_WARN("faild to add", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::estimate_skip_rate(ObExecContext &ctx,
+                                              const ObTableStatParam &param,
+                                              PartitionIdSkipRateMap &id_skip_rate_map,
+                                              PartitionIdBlockMap &id_block_map)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalSkipRateStat global_skip_rate;
+  ObSEArray<ObGlobalSkipRateStat, 4> first_part_skip_rates;
+  ObSEArray<ObTabletID, 4> tablet_ids;
+  ObSEArray<ObObjectID, 4> partition_ids;
+  ObSEArray<EstimateSkipRateRes, 4> estimate_result;
+  hash::ObHashMap<int64_t, int64_t> first_part_idx_map;
+  ObSEArray<uint64_t, 4> column_ids;
+  ObSEArray<uint64_t, 4> sample_counts;
+  uint64_t table_id = share::is_oracle_mapping_real_virtual_table(param.table_id_) ?
+                      share::get_real_table_mappings_tid(param.table_id_) : param.table_id_;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if(data_version < DATA_VERSION_4_3_5_2) {
+    //do nothing
+  } else if (is_virtual_table(table_id)) {//virtual table no need skip rate
+    //do nothing
+  } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
+             OB_FAIL(first_part_skip_rates.prepare_allocate(param.all_part_infos_.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
+             OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
+    LOG_WARN("failed to generate first part idx map", K(ret));
+  } else if (OB_FAIL(get_all_tablet_id_and_object_id(param, tablet_ids, partition_ids))) {
+    LOG_WARN("failed to get all tablet id and object id", K(ret));
+  } else if (OB_FAIL(prepare_skip_params(param, sample_counts, column_ids))) {
+    LOG_WARN("failed to prepare_skip_params", K(ret), K(param), K(sample_counts), K(column_ids));
+  } else if (OB_FAIL(request_estimate_skip_rate(ctx, param, table_id, tablet_ids,
+                                                partition_ids, sample_counts, column_ids, estimate_result))) {
+    LOG_WARN("failed to request_estimate_skip_rate", K(ret), K(param), K(sample_counts), K(column_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < estimate_result.count(); ++i) {
+      SkipRateStat *skip_rate_stat = NULL;
+      BlockNumStat *block_num_stat = NULL;
+      void *buf = NULL;
+      if (OB_ISNULL(param.allocator_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
+      } else if (OB_ISNULL(buf = param.allocator_->alloc(sizeof(SkipRateStat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), K(buf));
+      } else if (estimate_result.at(i).cg_skip_rate_arr_.count() != column_ids.count()||
+                 estimate_result.at(i).cg_skip_rate_arr_.count() != estimate_result.at(i).skip_sample_cnt_arr_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(estimate_result.at(i).cg_skip_rate_arr_.count()),
+                                             K(estimate_result.at(i).skip_sample_cnt_arr_.count()));
+      } else if (OB_FAIL(id_block_map.get_refactored(estimate_result.at(i).part_id_, block_num_stat))) {
+        if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get refactored", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else {
+        skip_rate_stat = new (buf) SkipRateStat();
+        int64_t partition_id = static_cast<int64_t>(estimate_result.at(i).part_id_);
+        if (OB_FAIL(skip_rate_stat->cg_skip_rate_arr_.assign(estimate_result.at(i).cg_skip_rate_arr_))) {
+          LOG_WARN("failed to assign", K(ret));
+        } else if (OB_FAIL(skip_rate_stat->skip_sample_cnt_arr_.assign(estimate_result.at(i).skip_sample_cnt_arr_))) {
+          LOG_WARN("failed to assign", K(ret));
+        } else if (OB_FAIL(id_skip_rate_map.set_refactored(partition_id, skip_rate_stat))) {
+          LOG_WARN("failed to set refactored", K(ret));
+        } else if (param.part_level_ == share::schema::PARTITION_LEVEL_ONE) {
+          //process global
+          if (OB_FAIL(add_global_skip_rate(global_skip_rate, estimate_result.at(i), block_num_stat))) {
+            LOG_WARN("faild to add", K(ret));
+          }
+        }  else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
+          int64_t cur_part_id = -1;
+          if (OB_UNLIKELY(!ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_, partition_id, cur_part_id))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(partition_id), K(cur_part_id), K(param));
+          } else if (OB_FAIL(add_global_skip_rate(global_skip_rate, estimate_result.at(i), block_num_stat))) {
+            LOG_WARN("faild to add", K(ret));
+          } else {
+            //process first level part stat
+            int64_t idx = 0;
+            if (OB_FAIL(first_part_idx_map.get_refactored(cur_part_id, idx))) {
+              LOG_WARN("failed to set refactored", K(ret));
+            } else if (OB_UNLIKELY(idx < 0 || idx >= first_part_skip_rates.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get invalid part id", K(ret), K(idx), K(partition_id), K(cur_part_id),
+                                              K(first_part_skip_rates.count()));
+            } else if (OB_FAIL(add_global_skip_rate(first_part_skip_rates.at(idx), estimate_result.at(i), block_num_stat))) {
+              LOG_WARN("faild to add", K(ret));
+            }
+          }
+        }
+        LOG_TRACE("OPT:basic id_skip_rate_map", K(partition_id), K(skip_rate_stat->cg_skip_rate_arr_));
+      }
+    }
+
+    // process global skip rate
+    if (OB_SUCC(ret) && (param.part_level_ == share::schema::PARTITION_LEVEL_ONE ||
+                         param.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {
+      if (OB_FAIL(global_skip_rate.merge())) {
+        LOG_WARN("fail to merge global skip rate", K(ret));
+      } else {
+        SkipRateStat *skip_rate_stat = NULL;
+        void *buf = NULL;
+        if (OB_ISNULL(param.allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
+        } else if (OB_ISNULL(buf = param.allocator_->alloc(sizeof(SkipRateStat)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret), K(buf));
+        } else {
+          skip_rate_stat = new (buf) SkipRateStat();
+          int64_t partition_id = -1;  // total stat
+          if (OB_FAIL(skip_rate_stat->cg_skip_rate_arr_.assign(global_skip_rate.get_skip_rate_arr()))) {
+            LOG_WARN("failed to assign", K(ret));
+          } else if (OB_FAIL(id_skip_rate_map.set_refactored(partition_id, skip_rate_stat))) {
+            LOG_WARN("failed to set refactored", K(ret));
+          }
+          LOG_TRACE("OPT:total id_skip_rate_map", K(partition_id), K(skip_rate_stat->cg_skip_rate_arr_));
+        }
+      }
+    }
+    // process first level part skip rate
+    if (OB_SUCC(ret) && (param.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {
+      if (OB_UNLIKELY(first_part_skip_rates.count() != param.all_part_infos_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(first_part_skip_rates), K(param.all_part_infos_));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < first_part_skip_rates.count(); ++i) {
+          SkipRateStat *skip_rate_stat = NULL;
+          void *buf = NULL;
+          if (OB_ISNULL(param.allocator_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
+          } else if (OB_ISNULL(buf = param.allocator_->alloc(sizeof(SkipRateStat)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory", K(ret), K(buf));
+          } else if (OB_FAIL(first_part_skip_rates.at(i).merge())) {
+            LOG_WARN("fail to merge global skip rate", K(ret));
+          } else {
+            skip_rate_stat = new (buf) SkipRateStat();
+            int64_t partition_id = param.all_part_infos_.at(i).part_id_;
+            if (OB_FAIL(skip_rate_stat->cg_skip_rate_arr_.assign(first_part_skip_rates.at(i).get_skip_rate_arr()))) {
+              LOG_WARN("failed to assign", K(ret));
+            } else if (OB_FAIL(id_skip_rate_map.set_refactored(partition_id, skip_rate_stat))) {
+              LOG_WARN("failed to set refactored", K(ret));
+            }
+            LOG_TRACE("OPT:first level id_skip_rate_map", K(partition_id), K(skip_rate_stat->cg_skip_rate_arr_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::request_estimate_skip_rate(ObExecContext &ctx,
+                                                      const ObTableStatParam &param,
+                                                      const uint64_t table_id,
+                                                      const ObIArray<ObTabletID> &tablet_ids,
+                                                      const ObIArray<ObObjectID> &partition_ids,
+                                                      const ObIArray<uint64_t> &sample_counts,
+                                                      const ObIArray<uint64_t> &column_ids,
+                                                      ObIArray<EstimateSkipRateRes> &estimate_res)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_cnt = 0;
+  const int64_t MAX_RETRY_CNT = 10;
+  uint64_t start_time = ObTimeUtility::current_time_ms();//for debug remove later
+  do {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("failed to check status", K(ret));
+      retry_cnt = MAX_RETRY_CNT;
+    } else if (OB_FAIL(do_estimate_skip_rate(ctx, param, table_id,
+                                             false, tablet_ids,
+                                             partition_ids, sample_counts, column_ids, estimate_res))) {
+      LOG_WARN("failed to do estimate block count and row count", K(ret));
+      if (DAS_CTX(ctx).get_location_router().is_refresh_location_error(ret)) {
+        DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
+        ++ retry_cnt;
+        ob_usleep(1000L * 1000L); // retry interval 1s
+      } else {
+        retry_cnt = MAX_RETRY_CNT;
+      }
+    }
+  } while (OB_FAIL(ret) && retry_cnt < MAX_RETRY_CNT);
+  LOG_INFO("request_estimate_skip_rate total cost", K(ObTimeUtility::current_time_ms()-start_time), K(retry_cnt));
+  return ret;
+}
+
+int ObBasicStatsEstimator::do_estimate_skip_rate(ObExecContext &ctx,
+                                                 const ObTableStatParam &param,
+                                                 const uint64_t table_id,
+                                                 bool force_leader,
+                                                 const ObIArray<ObTabletID> &tablet_ids,
+                                                 const ObIArray<ObObjectID> &partition_ids,
+                                                 const ObIArray<uint64_t> &sample_counts,
+                                                 const ObIArray<uint64_t> &column_ids,
+                                                 ObIArray<EstimateSkipRateRes> &estimate_res)
+{
+  int ret = OB_SUCCESS;
+  typedef common::ObSEArray<ObCandiTabletLoc, 4> ObCandiTabletLocArray;
+  SMART_VAR(ObCandiTabletLocArray, candi_tablet_locs) {
+    if (OB_FAIL(get_tablet_locations(ctx, table_id, tablet_ids, partition_ids, candi_tablet_locs))) {
+      LOG_WARN("failed to get tablet locations", K(ret));
+    } else if (OB_UNLIKELY(candi_tablet_locs.count() != tablet_ids.count() ||
+                           candi_tablet_locs.count() != partition_ids.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(candi_tablet_locs.count()), K(tablet_ids.count()),
+                                      K(partition_ids.count()), K(ret));
+    } else if (OB_FAIL(estimate_res.prepare_allocate(partition_ids.count()))) {
+      LOG_WARN("Partitoin location list prepare error", K(ret));
+    } else {
+      ObSEArray<ObAddr, 4> all_selected_addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
+        ObAddr selected_addr;
+        if (!force_leader &&
+            OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
+                                                                  candi_tablet_locs.at(i),
+                                                                  true,
+                                                                  selected_addr))) {
+          LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
+                                                                K(ctx.get_addr()));
+        } else if (force_leader &&
+                   OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
+                                                                         selected_addr))) {
+          LOG_WARN("failed to get strong partition replicate addr", K(ret));
+        } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {/*do nothing*/}
+      }
+      ObSqlBitSet<> skip_idx_set;
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_selected_addr.count(); ++i) {
+        if (skip_idx_set.has_member(i)) {//have been estimate
+          //do nothing
+        } else {
+          ObAddr &cur_selected_addr = all_selected_addr.at(i);
+          obrpc::ObEstSkipRateArg arg;
+          obrpc::ObEstSkipRateRes result;
+          ObSEArray<int64_t, 4> selected_tablet_idx;
+          for (int64_t j = i ; OB_SUCC(ret) && j < all_selected_addr.count(); ++j) {
+            if (skip_idx_set.has_member(j)) {//have been estimate
+              //do nothing
+            } else if (all_selected_addr.at(j) == cur_selected_addr) {
+              if (OB_UNLIKELY(tablet_ids.at(j) !=
+                              candi_tablet_locs.at(j).get_partition_location().get_tablet_id())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(ret), K(tablet_ids), K(j),
+                                K(candi_tablet_locs.at(j).get_partition_location().get_tablet_id()));
+              } else {
+                obrpc::ObEstSkipRateArgElement arg_element;
+                arg_element.tenant_id_ = param.tenant_id_;
+                arg_element.table_id_ = table_id;
+                arg_element.tablet_id_ = candi_tablet_locs.at(j).get_partition_location().get_tablet_id();
+                arg_element.ls_id_ = candi_tablet_locs.at(j).get_partition_location().get_ls_id();
+                if (OB_FAIL(arg_element.sample_count_.assign(sample_counts))) {
+                  LOG_WARN("failed to assign", K(ret));
+                } else if (OB_FAIL(arg_element.column_ids_.assign(column_ids))) {
+                  LOG_WARN("failed to assign", K(ret));
+                } else if (OB_FAIL(arg.tablet_params_arg_.push_back(arg_element))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else if (OB_FAIL(skip_idx_set.add_member(j))) {//record
+                  LOG_WARN("failed to add members", K(ret));
+                } else if (OB_FAIL(selected_tablet_idx.push_back(j))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else {/*do nothing*/}
+              }
+            } else {/*do nothing*/}
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(storage_estimate_skip_rate(ctx, cur_selected_addr, arg, result))) {
+              LOG_WARN("failed to stroage estimate skip rate", K(ret));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
+                int64_t idx = selected_tablet_idx.at(i);
+                if (OB_UNLIKELY(idx >= estimate_res.count() || idx >= partition_ids.count() ||
+                                selected_tablet_idx.count() != result.tablet_params_res_.count())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get unexpected error", K(idx), K(arg), K(estimate_res), K(result), K(partition_ids),
+                                                  K(selected_tablet_idx), K(ret));
+                } else if (OB_FAIL(estimate_res.at(idx).cg_skip_rate_arr_.assign(result.tablet_params_res_.at(i).cg_skip_rate_arr_))) {
+                    LOG_WARN("failed to assign", K(ret));
+                } else if (OB_FAIL(estimate_res.at(idx).skip_sample_cnt_arr_.assign(result.tablet_params_res_.at(i).sample_count_))) {
+                    LOG_WARN("failed to assign", K(ret));
+                } else {
+                  estimate_res.at(idx).part_id_ = partition_ids.at(idx);
+                }
+              }
+              LOG_TRACE("OPT:succeed to estimate skip rate", K(selected_tablet_idx),
+                                                             K(partition_ids),
+                                                             K(tablet_ids),
+                                                             K(arg), K(result),
+                                                             K(estimate_res));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::storage_estimate_skip_rate(ObExecContext &ctx,
+                                                      const ObAddr &addr,
+                                                      const obrpc::ObEstSkipRateArg &arg,
+                                                      obrpc::ObEstSkipRateRes &result)
+{
+  int ret = OB_SUCCESS;
+  if (addr == ctx.get_addr()) {
+    if (OB_FAIL(ObStorageEstimator::estimate_skip_rate(arg, result))) {
+      LOG_WARN("failed to estimate skip rate", K(ret));
+    } else {
+      LOG_TRACE("succeed to do estimate skip rate", K(addr), K(arg), K(result));
+    }
+  } else {
+    obrpc::ObSrvRpcProxy *rpc_proxy = NULL;
+    const ObSQLSessionInfo *session_info = NULL;
+    int64_t timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
+    if (OB_ISNULL(session_info = ctx.get_my_session()) ||
+        OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("rpc_proxy or session is null", K(ret), K(rpc_proxy), K(session_info));
+    } else if (0 >= timeout) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("query timeout is reached", K(ret), K(timeout));
+    } else if (OB_FAIL(rpc_proxy->to(addr)
+                       .timeout(timeout)
+                       .by(session_info->get_rpc_tenant_id())
+                       .estimate_skip_rate(arg, result))) {
+      LOG_WARN("failed to remote storage est failed", K(ret));
+    } else {
+      LOG_TRACE("succeed to do estimate skip rate", K(addr), K(arg), K(result));
     }
   }
   return ret;

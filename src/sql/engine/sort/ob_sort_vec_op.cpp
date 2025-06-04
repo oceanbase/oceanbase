@@ -294,18 +294,13 @@ int ObSortVecOp::get_next_batch_prescan_store(const int64_t max_rows, int64_t &r
       LOG_WARN("failed to get batch row");
     }
   } else if (MY_SPEC.has_addon_) {
-    int64_t addon_max_read_rows = sk_read_rows;
     int64_t addon_read_rows = 0;
-    while (OB_SUCC(ret) && addon_max_read_rows > 0) {
-      addon_read_rows = 0;
-      if (OB_FAIL(addon_row_iter_.get_next_batch(addon_max_read_rows, addon_read_rows,
-                  addon_stored_rows + (sk_read_rows - addon_max_read_rows)))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("failed to get batch row");
-        }
-      } else {
-        addon_max_read_rows -= addon_read_rows;
-      }
+    if (OB_FAIL(addon_row_iter_.get_next_batch(sk_read_rows, addon_read_rows, addon_stored_rows))) {
+      LOG_WARN("failed to get batch row");
+    } else if (sk_read_rows != addon_read_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The count of sk rows does not match the add-on rows.", K(ret),
+        K(sk_read_rows), K(addon_read_rows));
     }
   }
   if (OB_SUCC(ret)) {
@@ -354,9 +349,6 @@ int ObSortVecOp::scan_all_then_sort_batch()
         const ObCompactRow *addon_rows[MAX_BATCH_SIZE];
         int64_t max_batch_size = min(256, MY_SPEC.max_batch_size_);
         int64_t read_rows = -1;
-        if (MY_SPEC.has_addon_) {
-          addon_row_iter_.set_blk_holder(&blk_holder_);
-        }
         while (OB_SUCC(ret)) {
           if (OB_FAIL(
                 get_next_batch_prescan_store(max_batch_size, read_rows, &sk_rows[0],
@@ -370,7 +362,6 @@ int ObSortVecOp::scan_all_then_sort_batch()
           }
         }
         if (MY_SPEC.has_addon_) {
-          blk_holder_.release();
           addon_row_iter_.reset();
           addon_row_store_.reset();
         }
@@ -408,6 +399,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   context.eval_ctx_ = &eval_ctx_;
   context.exec_ctx_ = &ctx_;
   context.enable_encode_sortkey_ = MY_SPEC.enable_encode_sortkey_opt_;
+  context.enable_single_col_compare_ = MY_SPEC.enable_single_col_compare_opt_;
   context.topn_cnt_ = topn_cnt;
   context.is_fetch_with_ties_ = MY_SPEC.is_fetch_with_ties_;
   context.has_addon_ = MY_SPEC.has_addon_;

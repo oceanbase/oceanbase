@@ -72,16 +72,14 @@ static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
 static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;   // 10ms
 
-// TODO: check length
 static constexpr int MAX_S3_REGION_LENGTH = 128;
-static constexpr int MAX_S3_ENDPOINT_LENGTH = 128;
-static constexpr int MAX_S3_ACCESS_ID_LENGTH = 128;   // ak, access key id
-static constexpr int MAX_S3_SECRET_KEY_LENGTH = 128;  // sk, secret key
+static constexpr int MAX_S3_ENDPOINT_LENGTH = 256;
+static constexpr int MAX_S3_ACCESS_ID_LENGTH = 256;   // ak, access key id
+static constexpr int MAX_S3_SECRET_KEY_LENGTH = 256;  // sk, secret key
 static constexpr int MAX_S3_CLIENT_NUM = 97;
 static constexpr int MAX_S3_PART_NUM = 10000;
 static constexpr int64_t S3_MULTIPART_UPLOAD_BUFFER_SIZE = 8 * 1024 * 1024L;
 
-static constexpr char OB_S3_APPENDABLE_FORMAT_CONTENT_V1[] = "version=1";
 static constexpr char OB_STORAGE_S3_ALLOCATOR[] = "StorageS3";
 static constexpr char S3_SDK[] = "S3SDK";
 

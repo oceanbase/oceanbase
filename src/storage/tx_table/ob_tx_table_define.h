@@ -17,6 +17,9 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_tx_data_define.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_task_queue.h"
+#endif
 
 namespace oceanbase
 {
@@ -99,6 +102,9 @@ public:
     exec_info_.reset();
     table_lock_info_.reset();
     compatible_version_ = -1;
+#ifdef OB_BUILD_SHARED_STORAGE
+    notify_task_queue_view_.reset();
+#endif
   }
   void destroy() { reset(); }
   TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard),
@@ -113,6 +119,9 @@ public:
   // used to handle compatible issue when deserialize,
   // not serialized, set from ObTxCtxTableMeta
   int32_t compatible_version_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  sslog::ObSSLogNotifyTaskQueueView notify_task_queue_view_;
+#endif
 };
 
 struct ObTxCtxTableMeta

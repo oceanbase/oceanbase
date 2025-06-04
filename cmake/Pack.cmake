@@ -1,4 +1,4 @@
-set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
+ob_define(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
@@ -32,6 +32,9 @@ if (OB_BUILD_OPENSOURCE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh
                 @ONLY)
+                configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase.service
+                @ONLY)
 endif()
 
 ## server
@@ -62,12 +65,17 @@ install(FILES
   src/share/parameter/default_parameter.json
   src/share/system_variable/default_system_variable.json
   tools/timezone_V1.log
+  tools/timezone.data
+  tools/timezone_name.data
+  tools/timezone_trans.data
+  tools/timezone_trans_type.data
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
+  tools/upgrade/deps_compat.yml
   DESTINATION etc
   COMPONENT server)
 

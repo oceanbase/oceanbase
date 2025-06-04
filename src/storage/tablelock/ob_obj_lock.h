@@ -47,6 +47,116 @@ class ObTransID;
 
 namespace tablelock
 {
+class ObObjLockPriorityTask : public common::ObDLinkBase<ObObjLockPriorityTask>
+{
+public:
+  ObObjLockPriorityTask() : id_(-1), owner_id_(), create_ts_(-1), priority_(ObTableLockPriority::INVALID)
+  {}
+  explicit ObObjLockPriorityTask(
+      const int64_t id,
+      const ObTableLockOwnerID &owner_id,
+      const int64_t create_ts,
+      const ObTableLockPriority priority)
+    : id_(id), owner_id_(owner_id), create_ts_(create_ts), priority_(priority)
+  {}
+  ~ObObjLockPriorityTask()
+  { id_ = -1; owner_id_.reset(); create_ts_ = -1; priority_ = ObTableLockPriority::INVALID; }
+  ObTableLockOwnerID get_owner_id() const { return owner_id_; }
+  int64_t get_trans_id() const { return id_; }
+  int64_t get_create_ts() const { return create_ts_; }
+  void set_create_ts(const int64_t create_ts) { create_ts_ = create_ts; }
+  ObTableLockPriority get_priority() const { return priority_; }
+  void set_priority(const ObTableLockPriority priority) { priority_ = priority; }
+  bool is_obsolete(const int64_t timeout_us) const;
+  bool is_target(const ObObjLockPriorityTaskID &id) const;
+public:
+  TO_STRING_KV(K_(id), K_(owner_id), K_(create_ts), K_(priority));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObObjLockPriorityTask);
+private:
+  int64_t id_;
+  ObTableLockOwnerID owner_id_;
+  // used to check whether the task is obsolete
+  int64_t create_ts_;
+  ObTableLockPriority priority_;
+};
+
+typedef common::ObDList<ObObjLockPriorityTask> ObObjLockPriorityTaskList;
+
+// NOTE thread-unsafe
+// we use current id to represent the role
+// if current id is -1 and current prio is INVALID, uncertain role (by DEFAULT)
+// if current id is INT64_MAX and current prio is LOW, it serves for follower
+// if current id is 0 and current prio is INVALID, it serves for leader and queue is empty
+// otherwise, it is leader and the queue is not empty
+class ObObjLockPriorityQueue
+{
+public:
+  ObObjLockPriorityQueue()
+    : current_id_(-1), current_owner_id_(), current_priority_(ObTableLockPriority::INVALID),
+      high1_list_(), high2_list_(), normal_list_(), total_size_(0),
+      last_create_ts_(-1)
+  {}
+  void reset(ObMalloc &allocator);
+  // without duplicate task
+  int push(
+      const ObObjLockPriorityTaskID &id,
+      const ObTableLockPriority priority,
+      int64_t &create_ts,
+      ObMalloc &allocator);
+  int add_with_create_ts(
+      const ObObjLockPriorityTaskID &id,
+      const ObTableLockPriority priority,
+      const int64_t create_ts,
+      ObMalloc &allocator);
+  int wait_for_first(
+      const ObTableLockPriority priority,
+      const ObObjLockPriorityTaskID &id,
+      int64_t timeout_us);
+  int generate_first();
+  bool is_exist(
+      const ObObjLockPriorityTaskID &id,
+      const ObTableLockPriority priority,
+      ObObjLockPriorityTask *&target_task);
+  int remove(
+      const ObObjLockPriorityTaskID &id,
+      const ObTableLockPriority priority,
+      ObMalloc &allocator);
+  int check_first(
+      const ObTableLockPriority priority,
+      const ObObjLockPriorityTaskID &id);
+  int64_t get_size() const { return ATOMIC_LOAD(&total_size_); }
+  int64_t get_current_id() const { return ATOMIC_LOAD(&current_id_); }
+  bool is_empty() const { return 0 == ATOMIC_LOAD(&total_size_); }
+  void print() const;
+public:
+  // for target new leader
+  bool need_clear_for_leader() const;
+  bool need_switch_service_for_follower() const;
+  void generate_dummy_first_for_follower();
+private:
+  bool is_first_(
+      const ObTableLockPriority priority,
+      const ObObjLockPriorityTaskID &id) const;
+public:
+  TO_STRING_KV(KP(this), K_(current_id), K_(current_owner_id), K_(current_priority),
+      K_(total_size), K_(last_create_ts), K_(high1_list),
+      K_(normal_list));
+public:
+  static const int64_t MAX_QUEUE_SIZE = 512;
+private:
+  int64_t current_id_;
+  ObTableLockOwnerID current_owner_id_;
+  ObTableLockPriority current_priority_;
+  // TODO, use scalable container
+  // order by create ts
+  ObObjLockPriorityTaskList high1_list_;
+  ObObjLockPriorityTaskList high2_list_;  // this list is useless currentlly
+  ObObjLockPriorityTaskList normal_list_;
+  int64_t total_size_;
+  int64_t last_create_ts_;
+};
+
 struct ObLockParam;
 class ObLockTableSplitLogCb;
 //typedef common::ObSEArray<ObTransID, 16> ObTxIDArray;
@@ -141,7 +251,27 @@ public:
   const ObLockID &get_lock_id() const { return lock_id_; }
   void set_lock_id(const ObLockID &lock_id) { lock_id_ = lock_id; }
   bool contain(const ObLockID &lock_id) { return lock_id_ == lock_id; }
-  TO_STRING_KV(K_(lock_id), K_(is_deleted), K_(row_share), K_(row_exclusive), K_(max_split_epoch));
+  int add_priority_task(
+      const ObLockParam &param,
+      storage::ObStoreCtx &ctx,
+      ObTableLockOp &lock_op,
+      ObMalloc &allocator);
+  int prepare_priority_task(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op,
+      ObMalloc &allocator);
+  int check_first_for_priority(
+      const ObLockParam &param,
+      storage::ObStoreCtx &ctx,
+      const ObTableLockOp &lock_op,
+      const int64_t timeout_us,
+      bool &is_first);
+  int remove_priority_task(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op,
+      ObMalloc &allocator);
+  int switch_to_leader(ObMalloc &allocator);
+  int switch_to_follower(ObMalloc &allocator);
   int table_lock_split(const ObTabletID &src_tablet_id,
                        const ObSArray<common::ObTabletID> &dst_tablet_ids,
                        const transaction::ObTransID &trans_id,
@@ -150,6 +280,8 @@ public:
   int set_split_epoch(const share::SCN &scn, const bool for_replay = false);
   int get_split_epoch(share::SCN &scn);
   int reset_split_epoch();
+
+  TO_STRING_KV(K_(lock_id), K_(is_deleted), K_(row_share), K_(row_exclusive), K_(max_split_epoch));
 private:
   void print_() const;
   void reset_(ObMalloc &allocator);
@@ -195,10 +327,11 @@ private:
       ObMalloc &allocator);
   int check_allow_unlock_(const ObTableLockOp &unlock_op);
   int check_op_allow_lock_(const ObTableLockOp &lock_op);
-  int get_exist_lock_mode_without_curr_trans(const uint64_t lock_mode_cnt_in_same_trans[],
-                                             ObTableLockMode &lock_mode_without_curr_trans,
-                                             const ObTransID &trans_id,
-                                             const bool is_for_replace = false);
+  int get_other_trans_lock_mode_(
+      const uint64_t lock_mode_cnt_in_same_trans[],
+      ObTableLockMode &lock_mode_without_curr_trans,
+      const ObTransID &trans_id,
+      const bool is_for_replace = false);
   void check_need_recover_(
       const ObTableLockOp &lock_op,
       const ObTableLockOpList *op_list,
@@ -273,7 +406,11 @@ private:
   int get_split_epoch_(share::SCN &scn);
   int reset_split_epoch_();
   void check_curr_trans_lock_is_valid_(const uint64_t lock_mode_cnt_in_same_trans[], const int64_t *lock_mode_cnt);
-
+  int remove_priority_task_(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op,
+      ObMalloc &allocator);
+  int switch_to_follower_(ObMalloc &allocator);
 private:
   int check_op_allow_lock_from_list_(
       const ObTableLockOp &lock_op,
@@ -298,9 +435,17 @@ private:
   {
     ATOMIC_DEC(&row_exclusive_);
   }
-  int get_exist_lock_mode_cnt_without_curr_trans_(
+  int get_other_trans_lock_mode_(
       const ObTableLockMode &lock_mode,
       const uint64_t lock_mode_cnt_in_same_trans[]);
+  bool exist_others_(
+       const ObTableLockOp &myself,
+       const int64_t lock_modes);
+  bool exist_others_(
+       const ObTableLockOp &myself,
+       const ObTableLockOpList *op_list);
+  bool exist_self_(const ObTableLockOp &self);
+  int check_enable_lock_priority_(bool &enable_lock_priority);
 public:
   RWLock rwlock_;
   bool is_deleted_;
@@ -320,6 +465,7 @@ private:
   int64_t row_share_;
   int64_t row_exclusive_;
   ObLockID lock_id_;
+  ObObjLockPriorityQueue priority_queue_;
 };
 
 class ObOBJLockFactory
@@ -401,7 +547,6 @@ public:
                        ObLockOpIterator &iter);
   // check all obj locks in the lock map, and clear it if it's empty.
   int check_and_clear_obj_lock(const bool force_compact);
-
   int table_lock_split(const ObTabletID &src_tablet_id,
                        const ObSArray<common::ObTabletID> &dst_tablet_ids,
                        const transaction::ObTransID &trans_id,
@@ -415,6 +560,18 @@ public:
   int get_split_epoch(const ObLockID &lock_id,
                       share::SCN &split_scn);
   int reset_split_epoch(const ObLockID &lock_id);
+  int add_priority_task(
+      const ObLockParam &param,
+      storage::ObStoreCtx &ctx,
+      ObTableLockOp &lock_op);
+  int prepare_priority_task(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op);
+  int remove_priority_task(
+      const ObTableLockPrioArg &arg,
+      const ObTableLockOp &lock_op);
+  int switch_to_leader();
+  int switch_to_follower();
 private:
   class LockIDIterFunctor
   {

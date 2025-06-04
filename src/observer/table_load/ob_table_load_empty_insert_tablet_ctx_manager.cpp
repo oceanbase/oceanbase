@@ -136,7 +136,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   ObTableLoadSchema table_load_schema;
   ObDirectLoadInsertTableParam insert_table_param;
   ObDirectLoadInsertDataTableContext tmp_insert_table_ctx;
-  if (OB_FAIL(table_load_schema.init(MTL_ID(), table_id))) {
+  if (OB_FAIL(table_load_schema.init(MTL_ID(), table_id, ddl_param.schema_version_))) {
     LOG_WARN("fail to init table load schema", KR(ret));
   }
   insert_table_param.table_id_ = table_id;

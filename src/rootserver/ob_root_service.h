@@ -50,7 +50,6 @@
 #include "rootserver/ob_create_inner_schema_executor.h"
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_schema_history_recycler.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
@@ -61,6 +60,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
+#include "rootserver/ob_catalog_ddl_service.h"
 #include "rootserver/ob_root_rebuild_tablet.h"
 
 namespace oceanbase
@@ -447,7 +447,6 @@ public:
   common::ObWorkQueue &get_task_queue() { return task_queue_; }
   common::ObWorkQueue &get_inspect_task_queue() { return inspect_task_queue_; }
   common::ObServerConfig *get_server_config() { return config_; }
-  ObDDLScheduler &get_ddl_task_scheduler() { return ddl_scheduler_; }
   int64_t get_core_meta_table_version() { return core_meta_table_version_; }
   ObSchemaHistoryRecycler &get_schema_history_recycler() { return schema_history_recycler_; }
   ObRootMinorFreeze &get_root_minor_freeze() { return root_minor_freeze_; }
@@ -552,6 +551,7 @@ public:
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
   int create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res);
   int drop_lob(const obrpc::ObDropLobArg &arg);
+  int force_drop_lonely_lob_aux_table(const obrpc::ObForceDropLonelyLobAuxTableArg &drop_table_arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
@@ -596,6 +596,7 @@ public:
   int grant(const obrpc::ObGrantArg &arg);
   int revoke_user(const obrpc::ObRevokeUserArg &arg);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObSArray<int64_t> &failed_index);
+  int revoke_catalog(const obrpc::ObRevokeCatalogArg &arg);
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
@@ -718,6 +719,10 @@ public:
   int handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg);
   int handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg);
   //----End of functions for managing row level security----
+
+  //----Functions for managing catalog----
+  int handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg);
+  //----End of functions for managing catalog----
 
   // server related
   int load_server_manager();
@@ -865,7 +870,6 @@ public:
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
-  ObDDLScheduler &get_ddl_scheduler() { return ddl_scheduler_; }
   ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
@@ -904,6 +908,9 @@ private:
   int check_parallel_ddl_conflict(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObDDLArg &arg);
+  int increase_rs_epoch_and_get_proposal_id_(
+      int64_t &new_rs_epoch,
+      int64_t &proposal_id_to_check);
   int fetch_sys_tenant_ls_info();
   // create system table in mysql backend for debugging mode.
   int init_debug_database();
@@ -967,6 +974,8 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_config_after_bootstrap_();
+  int set_static_config_after_bootstrap_();
+  int set_dynamic_config_after_bootstrap_();
   int wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list);
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
@@ -994,6 +1003,7 @@ private:
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
+  int start_ddl_service_();
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;
@@ -1091,8 +1101,6 @@ private:
   // for set_config
   ObLatch set_config_lock_;
 
-  ObDDLScheduler ddl_scheduler_;
-  share::ObDDLReplicaBuilder ddl_builder_;
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
   ObUpdateRsListTimerTask update_rs_list_timer_task_;

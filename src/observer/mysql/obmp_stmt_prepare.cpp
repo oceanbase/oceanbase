@@ -185,7 +185,7 @@ int ObMPStmtPrepare::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
       LOG_WARN("fail to get query timeout", K_(sql), K(ret));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
@@ -222,7 +222,7 @@ int ObMPStmtPrepare::process()
                       client_info, session.get_client_info(),
                       module_name, session.get_module_name(),
                       action_name, session.get_action_name(),
-                      sess_id, session.get_sessid());
+                      sess_id, session.get_server_sid());
       }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
@@ -486,31 +486,31 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
           bool first_record = (1 == audit_record.try_cnt_);
           ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
           audit_record.exec_timestamp_.update_stage_time();
-
-          if (enable_perf_event) {
-            audit_record.exec_record_.record_end();
-            audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-            audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-            audit_record.update_event_stage_state();
-            if (!THIS_THWORKER.need_retry()) {
-              const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-              EVENT_INC(SQL_PS_PREPARE_COUNT);
-              EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-            }
-          }
-          if (enable_sqlstat) {
-            sqlstat_record.record_sqlstat_end_value();
-            sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
-            sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
-            sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
-            sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
-            sqlstat_record.move_to_sqlstat_cache(result.get_session(),
-                                                       ctx_.cur_sql_,
-                                                       result.get_physical_plan());
-          }
         }
       }
     } // diagnose end
+
+    if (enable_perf_event) {
+      audit_record.exec_record_.record_end();
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
+      if (!THIS_THWORKER.need_retry()) {
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        EVENT_INC(SQL_PS_PREPARE_COUNT);
+        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
+      }
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+      sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+      sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+      sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                 ctx_.cur_sql_,
+                                                 result.get_physical_plan());
+    }
 
     // 重试需要满足一下条件：
     // 1. rs.open 执行失败

@@ -159,22 +159,21 @@ ObMacroBlock::~ObMacroBlock()
   reset();
 }
 
-
-int ObMacroBlock::init(
-  const ObDataStoreDesc &spec,
-  const int64_t &cur_macro_seq,
-  compaction::ObMergeBlockInfo &merge_block_info)
+int ObMacroBlock::init(const ObDataStoreDesc &spec,
+                       const int64_t &cur_macro_seq,
+                       compaction::ObMergeBlockInfo &merge_block_info,
+                       const int64_t bf_max_row_count)
 {
   int ret = OB_SUCCESS;
   reuse();
   // Init macro block bloom filter.
   if (spec.enable_macro_block_bloom_filter()) {
-    if (OB_UNLIKELY(spec.get_tablet_id().is_ls_inner_tablet())) {
+    if (OB_UNLIKELY(spec.get_tablet_id().is_ls_inner_tablet() || bf_max_row_count < 0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument, cannot create macro block bloom filter for ls inner tablet",
-               K(ret), K(spec), K(spec.get_tablet_id()));
-    } else if (OB_FAIL(macro_block_bf_.alloc_bf(spec))) {
-      LOG_WARN("fail to allocate macro block bloom filter", K(ret), K(spec));
+               K(ret), K(spec), K(spec.get_tablet_id()), K(bf_max_row_count));
+    } else if (OB_FAIL(macro_block_bf_.alloc_bf(spec, bf_max_row_count))) {
+      LOG_WARN("fail to allocate macro block bloom filter", K(ret), K(spec), K(bf_max_row_count));
     }
   }
   // Init macro block.
@@ -259,7 +258,9 @@ int ObMacroBlock::check_micro_block(const ObMicroBlockDesc &micro_block_desc) co
   return ret;
 }
 
-int ObMacroBlock::write_micro_block(const ObMicroBlockDesc &micro_block_desc, int64_t &data_offset)
+int ObMacroBlock::write_micro_block(const ObMicroBlockDesc &micro_block_desc,
+                                    int64_t &data_offset,
+                                    const ObMicroBlockBloomFilter *micro_block_bf)
 {
   int ret = OB_SUCCESS;
   data_offset = data_.length();
@@ -310,6 +311,13 @@ int ObMacroBlock::write_micro_block(const ObMicroBlockDesc &micro_block_desc, in
                                         macro_header_.column_checksum_))) {
           STORAGE_LOG(WARN, "fail to add column checksum", K(ret));
         }
+      }
+      // Merge micro block bloom filter to macro block.
+      if (OB_FAIL(ret)) {
+      } else if (micro_block_bf == nullptr || !spec_->enable_macro_block_bloom_filter()) {
+        // do nothing.
+      } else if (OB_FAIL(macro_block_bf_.merge(*micro_block_bf))) {
+        LOG_WARN("fail to merge micro block", K(ret), K(macro_block_bf_), KPC(micro_block_bf));
       }
     }
   }
@@ -555,6 +563,7 @@ int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
       LOG_WARN("fail to serialize macro block bloom filter", K(ret), K(macro_block_bf_), K(serialized_bf_size));
     } else {
       macro_meta.val_.macro_block_bf_buf_ = serialized_bf_buf;
+      LOG_INFO("serialize macro block bloom filter", K(ret), K(macro_block_bf_));
     }
   }
 

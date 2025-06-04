@@ -292,33 +292,47 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
       /*do nothing*/
     }
     if (OB_SUCC(ret)) {
-      if (parent->has_temp_table_scan() && !parent->is_thread_inited()) {
-        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_temp_child_distribution(ctx,
-                                                                         *parent))) {
+      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent->get_in_slave_mapping_type());
+      if (parent->is_thread_inited()) {
+      } else if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+            coord_info_.pruning_table_location_, ctx, *parent))) {
+        LOG_WARN("alloc distribution of reference child failed", K(ret));
+      } else if (parent->has_temp_table_scan()) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_temp_child_distribution(ctx, *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
-        } else { /*do nohting.*/ }
-      } else if (parent->is_root_dfo() && !parent->is_thread_inited() &&
-          OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(ctx, *parent))) {
-        LOG_WARN("fail to alloc local distribution", K(ret));
-      } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
-                 parent->is_in_slave_mapping() &&
-                 (SlaveMappingType::SM_PWJ_HASH_HASH == parent->get_in_slave_mapping_type() ||
-                  SlaveMappingType::SM_PPWJ_HASH_HASH == parent->get_in_slave_mapping_type())) {
-        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-            coord_info_.pruning_table_location_,
-            ctx,
-            *parent))) {
+        }
+      } else if (parent->is_root_dfo()) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(ctx, *parent))) {
+          LOG_WARN("fail to alloc local distribution", K(ret));
+        }
+      } else if (parent->has_scan_op() || parent->has_dml_op()) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
+                coord_info_.pruning_table_location_, ctx, *parent))) {
+          LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
+        }
+        LOG_TRACE("alloc_by_data_distribution", K(parent));
+      } else if (has_reference_child) {
+        if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(*parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
-      } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
-          OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
-          coord_info_.pruning_table_location_, ctx, *parent))) {
+      } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
+                     coord_info_.pruning_table_location_, ctx, *parent))) {
         LOG_WARN("fail to alloc data distribution", K(ret));
       }
       if (OB_SUCC(ret) && !parent->is_scheduled()) {
         if (OB_FAIL(set_temp_table_ctx_for_sqc(ctx, *parent))) {
           LOG_WARN("failed to set temp table ctx", K(ret));
         }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (parent->need_access_store() && parent->is_in_slave_mapping()
+               && ObPQDistributeMethod::HASH == child->get_dist_method()
+               && child->is_out_slave_mapping()) {
+      if (OB_FAIL(ObPXServerAddrUtil::check_slave_mapping_location_constraint(*child, *parent))) {
+        LOG_WARN("slave mapping location constraint not satisfy", K(parent->get_dfo_id()),
+                 K(child->get_dfo_id()));
       }
     }
     if (OB_SUCC(ret)) {
@@ -1419,7 +1433,11 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     if (!parent.is_scheduled()) {
-      if (parent.has_temp_table_scan()) {
+      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent.get_in_slave_mapping_type());
+      if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+            coord_info_.pruning_table_location_, exec_ctx, parent))) {
+        LOG_WARN("alloc distribution of reference child failed", K(ret));
+      } else if (parent.has_temp_table_scan()) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_temp_child_distribution(exec_ctx,
                                                                          parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
@@ -1461,13 +1479,8 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
           }
           LOG_TRACE("alloc_by_local_distribution", K(parent));
-        } else if (parent.is_in_slave_mapping() &&
-                  (SlaveMappingType::SM_PWJ_HASH_HASH == parent.get_in_slave_mapping_type() ||
-                   SlaveMappingType::SM_PPWJ_HASH_HASH == parent.get_in_slave_mapping_type())) {
-          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-                  coord_info_.pruning_table_location_,
-                  exec_ctx,
-                  parent))) {
+        } else if (has_reference_child) {
+          if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent, px_node_pool_))) {
@@ -1485,7 +1498,15 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
     }
   }
 
-
+  if (OB_FAIL(ret)) {
+  } else if (parent.need_access_store() && parent.is_in_slave_mapping()
+             && ObPQDistributeMethod::HASH == child.get_dist_method()
+             && child.is_out_slave_mapping()) {
+    if (OB_FAIL(ObPXServerAddrUtil::check_slave_mapping_location_constraint(child, parent))) {
+      LOG_WARN("slave mapping location constraint not satisfy", K(parent.get_dfo_id()),
+               K(child.get_dfo_id()));
+    }
+  }
 
   // 优化分支：QC 和它的 child dfo 之前的数据通道在满足一定条件时尽早分配
   bool can_prealloc = false;

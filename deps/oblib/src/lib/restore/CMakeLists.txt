@@ -24,7 +24,9 @@ oblib_add_library(restore OBJECT
   ob_object_device.cpp
   hmac_signature.cpp
   ob_object_device.h
-  ob_object_storage_base.cpp)
+  ob_object_storage_base.cpp
+  obdal/obdal_accessor.h
+  obdal/obdal_accessor.cpp)
 
 add_library(oss INTERFACE)
 target_include_directories(oss
@@ -64,6 +66,14 @@ target_link_libraries(s3
 )
 target_link_libraries(s3 PUBLIC oblib_base_without_pass)
 
-target_link_libraries(restore PUBLIC oss cos_sdk oblib_base s3)
+oblib_add_library(obdal ob_storage_obdal_base.cpp)
+target_link_directories(obdal PUBLIC ${DEP_3RD_DIR}/usr/local/oceanbase/deps/devel/lib)
+target_link_libraries(obdal
+  PUBLIC
+  libopendal_c.a
+  oblib_base_without_pass
+)
+
+target_link_libraries(restore PUBLIC oss cos_sdk oblib_base s3 obdal)
 
 add_subdirectory(cos)

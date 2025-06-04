@@ -16,6 +16,8 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_index_builder_util.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
+#include "rootserver/ob_split_partition_helper.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 
 namespace oceanbase
@@ -264,6 +266,51 @@ int ObPartitionPreSplit::get_exist_table_size(
   return ret;
 }
 
+int ObPartitionPreSplit::get_exist_table_size(
+    const ObTableSchema &table_schema,
+    int64_t &table_size)
+{
+  int ret = OB_SUCCESS;
+  table_size = 0;
+  if (OB_UNLIKELY(!table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(table_schema));
+  } else {
+    uint64_t tenant_id = table_schema.get_tenant_id();
+    uint64_t table_id = table_schema.get_table_id();
+    int64_t part_id = -1;
+    if (!table_schema.is_partitioned_table()) {
+      part_id = table_id;
+    } else {
+      part_id = -1;
+    }
+    ObDbmsSpace::OptStats opt_stats;
+    ObSEArray<int64_t, 1> part_ids;
+    bool is_valid = false;
+    if (OB_FAIL(part_ids.push_back(part_id))) {
+      LOG_WARN("failed to push back into part ids", K(ret), K(table_schema));
+    } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(tenant_id,
+                                                                       table_id,
+                                                                       part_ids,
+                                                                       opt_stats.table_stats_))) {
+      SQL_ENG_LOG(WARN, "fail to get table stat", K(ret));
+    } else if (OB_FAIL(ObDbmsSpace::check_stats_valid(opt_stats, is_valid))) {
+      LOG_WARN("failed to check stats valid", K(ret), K(opt_stats));
+    } else if (!is_valid) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported to get the size of the table without stats", K(ret), K(table_schema), K(is_valid));
+    } else if (OB_UNLIKELY(opt_stats.table_stats_.count() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected stats number", K(ret), K(opt_stats), K(table_schema));
+    } else {
+      ObOptTableStat &stat = opt_stats.table_stats_.at(0);
+      double compression_ratio = 0.5;
+      table_size = stat.get_row_count() * stat.get_avg_row_size() * compression_ratio;
+    }
+  }
+  return ret;
+}
+
 int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
     const int64_t tenant_id,
     const int64_t session_id,
@@ -276,6 +323,8 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   schema::ObSchemaGetterGuard schema_guard;
   schema_guard.set_session_id(session_id);
   uint64_t current_data_version = 0;
+  bool enable_auto_split = false;
+  int64_t auto_part_size = -1;
   if (tenant_id == OB_INVALID_TENANT_ID || database_name.empty() || table_name.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PRE_SPLIT] unexpected database name or table name", K(tenant_id), K(database_name), K(table_name));
@@ -291,10 +340,9 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("[PRE_SPLIT] table not exist", K(ret), KP(data_table_schema));
-  } else if (!data_table_schema->is_auto_partitioned_table() ||
-              data_table_schema->is_mysql_tmp_table()) {
-    LOG_INFO("[PRE_SPLIT] not support auto split table type", K(ret), K(data_table_schema));
-  } else {
+  } else if (OB_FAIL(ObSplitPartitionHelper::check_enable_global_index_auto_split(*data_table_schema, enable_auto_split, auto_part_size))) {
+    LOG_WARN("failed to check enable auto split global index", K(ret));
+  } else if (enable_auto_split) {
     // alter table add global index
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
       ObIndexArg *index_arg = index_arg_list.at(i);
@@ -308,9 +356,9 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
           } else if (index_schema.get_column_count() == 0 &&
               OB_FAIL(ObIndexBuilderUtil::set_index_table_columns(*create_index_arg, *data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret));
-          } else if (OB_FAIL(check_table_can_do_pre_split(index_schema))) {
+          } else if (OB_FAIL(check_table_can_do_pre_split(*data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
-          } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, index_schema))) {
+          } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to get new index table split range", K(ret), K(tenant_id), K(database_name));
           } else {
             LOG_DEBUG("[PRE_SPLIT] success pre split index schema", K(index_schema));
@@ -350,14 +398,14 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
   } else if (current_data_version < DATA_VERSION_4_3_4_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("current data version less than 4.4.0.0 is not support", K(ret), K(current_data_version));
-  } else if (!data_table_schema.is_auto_partitioned_table()) {
+  } else if (!ori_table_schema.is_auto_partitioned_table()) {
     // skip // not auto split partition table
     ret = OB_NOT_SUPPORTED;
     LOG_DEBUG("[PRE_SPLIT] table is not auto part table, no need to pre split", K(ret));
   } else if (OB_UNLIKELY(db_name.empty() || OB_INVALID_ID == tenant_id || ddl_type > ObDDLType::DDL_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[PRE_SPLIT] invalid argument", K(ret), K(db_name), K(tenant_id), K(ddl_type));
-  } else if (OB_FAIL(check_table_can_do_pre_split(new_table_schema))) {
+  } else if (OB_FAIL(check_table_can_do_pre_split(data_table_schema, new_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(new_table_schema));
   }
   if (OB_FAIL(ret)) {
@@ -371,7 +419,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
     ObTableSchema ori_index_table_schema;
     if (OB_FAIL(ori_index_table_schema.assign(new_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret), K(new_table_schema));
-    } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema))) {
+    } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema.get_part_option().get_auto_part_size(), new_table_schema))) {
       LOG_WARN("fail to do pre split global index", K(ret),
         K(db_name), K(data_table_schema), K(ori_index_table_schema), K(new_table_schema));
     }
@@ -405,36 +453,27 @@ int ObPartitionPreSplit::do_pre_split_global_index(
     const ObString &db_name,
     const ObTableSchema &data_table_schema,
     const ObTableSchema &ori_index_schema,
+    const int64_t auto_part_size,
     ObTableSchema &new_index_schema)
 {
   int ret = OB_SUCCESS;
   ObTableSchema inc_partition_schema;
   ObArray<TabletIDSize> tablets_size_array;
-  ObTabletID source_tablet_id(OB_INVALID_ID);
+  ObTabletID source_tablet_id;
   int64_t physical_size = 0;
   int64_t data_table_physical_size = 0;
   int64_t split_num = 0;
-  int64_t split_size = new_index_schema.get_part_option().get_auto_part_size();
+  int64_t split_size = auto_part_size;
   const int64_t tenant_id = new_index_schema.get_tenant_id();
   const bool need_generate_part_name = true;
-#ifdef ERRSIM
-  split_size = 30;
-#endif
   DEBUG_SYNC(START_DDL_PRE_SPLIT_PARTITION);
   if (OB_FAIL(get_estimated_table_size(data_table_schema, new_index_schema, physical_size))) { // estimate global index table size
     LOG_WARN("[PRE_SPLIT] fail to get create table size", K(ret), K(new_index_schema));
-  } else if (OB_FAIL(get_exist_table_size(data_table_schema, tablets_size_array))) {  // get data table size
+  } else if (OB_FAIL(get_exist_table_size(data_table_schema, data_table_physical_size))) {  // get data table size
     LOG_WARN("[PRE_SPLIT] fail to get data table size", K(ret), K(data_table_schema));
-  }
-  if (OB_SUCC(ret)) {
-    // calculate data table size.
-    for (int64_t i = 0; i < tablets_size_array.count(); ++i) {
-      data_table_physical_size += tablets_size_array[i].second;
-    }
   }
   LOG_DEBUG("[PRE_SPLIT] size for create global index",
     K(ret), K(split_size), K(data_table_physical_size), K(physical_size), K(tablets_size_array));
-
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(get_split_num(physical_size, split_size, split_num))) {
   } else if (split_num < 2) {
@@ -450,6 +489,8 @@ int ObPartitionPreSplit::do_pre_split_global_index(
       data_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",
       K(ret), K(source_tablet_id), K(tenant_id), K(physical_size));
+  }
+  if(OB_FAIL(ret)) {
   } else if (OB_FAIL(build_split_tablet_partition_schema(
       tenant_id,
       source_tablet_id,
@@ -503,13 +544,14 @@ int ObPartitionPreSplit::do_pre_split_main_table(
     4. partition key is prefix of rowkey
 */
 int ObPartitionPreSplit::check_table_can_do_pre_split(
+    const ObTableSchema &data_table_schema,
     const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   const ObPartitionOption &part_option = table_schema.get_part_option();
   const bool is_user_table = table_schema.is_user_table();
   const bool is_global_index_table =
-    table_schema.is_global_local_index_table() || table_schema.is_global_index_table();
+    table_schema.is_global_normal_index_table() || table_schema.is_global_unique_index_table();
 
   if (OB_UNLIKELY(table_schema.is_table_without_pk())) {
     ret = OB_NOT_SUPPORTED;
@@ -517,6 +559,10 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   } else if (OB_UNLIKELY(!is_user_table && !is_global_index_table)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support none user table/global index", K(ret), K(is_user_table), K(is_global_index_table));
+  } else if (OB_UNLIKELY(is_global_index_table && !data_table_schema.is_partitioned_table() && !data_table_schema.is_auto_partitioned_table()
+        && !table_schema.is_partitioned_table() && !table_schema.is_auto_partitioned_table())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("[PRE_SPLIT] not support global local storage index", K(ret), K(data_table_schema.is_auto_partitioned_table()), K(data_table_schema.is_partitioned_table()));
   } else if (table_schema.get_part_level() > PARTITION_LEVEL_ONE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support part level > 1 currently", K(ret), K(table_schema.get_part_level()));
@@ -524,7 +570,8 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support interval partition", K(ret), K(part_option));
   } else if (!part_option.is_range_part()) { // partiton by range/range columns type
-    if (is_global_index_table && part_option.is_hash_part()) {
+    // part_option.get_part_func_expr_str().empty() makes sure the user doesn't specify the part func expr
+    if (is_global_index_table && part_option.is_hash_part() && part_option.get_part_func_expr_str().empty()) {
       /* case: create index idx1 on t1(c1), default partition type is hash */
       LOG_INFO("[pre_split] support global index table without partition by", K(part_option));
     } else {
@@ -601,7 +648,7 @@ int ObPartitionPreSplit::build_table_pre_split_schema(
     } else if (has_modify_partition_rule) {
       const bool need_generate_part_name = true;
       int64_t data_table_phycical_size = 0;
-      ObTabletID split_source_id(OB_INVALID_ID);
+      ObTabletID split_source_id;
       for (int64_t i = 0; i < tablet_size_array.count(); ++i) {
         data_table_phycical_size += tablet_size_array[i].second;
       }
@@ -1130,7 +1177,12 @@ int ObPartitionPreSplit::get_partition_columns_range(
       ObRowkey high_key_bound;
       if (ori_part_range_cnt > 0) {
         ObNewRange &last_part_range = orig_part_range.at(ori_part_range_cnt - 1);
-        high_key_bound.assign(&last_part_range.end_key_.get_obj_ptr()[i], part_key_length);
+        if (OB_ISNULL(&last_part_range.end_key_.get_obj_ptr()[i])) {
+          ret = OB_NULL_CHECK_ERROR;
+          LOG_WARN("failed to do null ptr check", K(ret), KP(&last_part_range.end_key_.get_obj_ptr()[i]));
+        } else {
+          high_key_bound.assign(&last_part_range.end_key_.get_obj_ptr()[i], part_key_length);
+        }
       } else {
         high_key_bound.set_max_row();
         high_key_bound.set_length(part_key_length);

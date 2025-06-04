@@ -12,6 +12,11 @@
 
 #include "ob_mvcc_ctx.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#endif
+
 namespace oceanbase
 {
 using namespace common;
@@ -85,7 +90,16 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
               is_non_unique_local_index);
       cb->set_is_link();
 
-      if (OB_FAIL(append_callback(cb))) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
+        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+          TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
+        }
+      }
+#endif
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append_callback(cb))) {
         TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
       }
 
@@ -160,6 +174,14 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
           tail = cb;
         }
         length++;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
+        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+          TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
+        }
+      }
+#endif
       }
     }
   }
@@ -224,7 +246,17 @@ int ObIMvccCtx::register_row_replay_cb(
     }
 
     cb->set_scn(scn);
-    if (OB_FAIL(append_callback(cb))) {
+
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
+      if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+        TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
+      }
+    }
+#endif
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append_callback(cb))) {
       {
         ObRowLatchGuard guard(value->latch_);
         cb->unlink_trans_node();

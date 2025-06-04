@@ -126,14 +126,17 @@ protected:
   int get_domain_id(
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
+      common::ObIAllocator &allocator,
       share::ObDomainIdUtils::DomainIds &domain_id);
   int get_and_fill_domain_id_in_data_table(
       const ObDASScanCtDef *ctdef,
-      ObDASScanRtDef *rtdef);
+      ObDASScanRtDef *rtdef,
+      common::ObIAllocator &allocator);
   int get_domain_ids(
       const int64_t size,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
+      common::ObIAllocator &allocator,
       common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids);
   int fill_domain_ids_in_data_table(
       uint64_t domain_tid,

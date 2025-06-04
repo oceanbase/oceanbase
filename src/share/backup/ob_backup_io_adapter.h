@@ -61,6 +61,8 @@ public:
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int adaptively_del_file(
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
+  static int get_file_modify_time(const common::ObString &uri,
+      const common::ObObjectStorageInfo *storage_info, int64_t &modify_time_s);
   /**
    * Deletes a list of specified objects (files_to_delete).
    * If some objects are deleted successfully and others fail, the function
@@ -146,6 +148,11 @@ public:
       int64_t &write_size,
       const bool is_can_seal,
       const common::ObStorageIdMod &storage_id_mod);
+
+  static int seal_file(
+      const common::ObString &uri,
+      const common::ObObjectStorageInfo *storage_info,
+      const common::ObStorageIdMod &storage_id_mod);
   static int pwrite(
       common::ObIODevice &device_handle, common::ObIOFd &fd,
       const char *buf, const int64_t offset, const int64_t size,
@@ -222,6 +229,19 @@ public:
       const common::ObObjectStorageInfo *storage_info);
 
   static uint64_t get_tenant_id();
+
+  static int basic_init_read_info(
+      common::ObIODevice &device_handle,
+      common::ObIOFd &fd,
+      char *buf,
+      const int64_t offset,
+      const int64_t size,
+      const uint64_t sys_module_id,
+      common::ObIOInfo &io_info);
+
+  static int async_pread_with_io_info(
+      const common::ObIOInfo &io_info,
+      common::ObIOHandle &io_handle);
 
 private:
   static int async_io_manager_read(

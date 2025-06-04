@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
 #include <sstream>
 #define private public
 #define protected public
@@ -483,7 +484,7 @@ bool ObMockIterator::equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t 
 }
 
 bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
-    const bool cmp_multi_version_row_flag, const bool cmp_is_get_and_scan_index)
+    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -493,6 +494,9 @@ bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
     bool_ret = true;
   } else if (cmp_multi_version_row_flag && r1.row_type_flag_.flag_ != r2.row_type_flag_.flag_) {
     STORAGE_LOG(WARN, "row_type_flag not equals", K(r1), K(r2));
+    bool_ret = false;
+  } else if (cmp_row_flag && reinterpret_cast<const uint8_t &>(r1.flag_) != reinterpret_cast<const uint8_t &>(r2.flag_)) {
+    STORAGE_LOG(WARN, "row_dml_flag not equals", K(r1), K(r2));
     bool_ret = false;
   } else if (cmp_is_get_and_scan_index
       && (r1.is_get_ != r2.is_get_ || r1.scan_index_ != r2.scan_index_)) {
@@ -564,6 +568,7 @@ ObMockIteratorBuilder::str_to_datum_info_parse_func_;
 ObHashMap<ObString, ObObjMeta*>
 ObMockIteratorBuilder::str_to_obj_type_;
 ObHashMap<ObString, int64_t> ObMockIteratorBuilder::str_to_flag_;
+ObHashMap<ObString, int64_t> ObMockIteratorBuilder::str_to_flag_type_;
 ObHashMap<ObString, ObDmlFlag> ObMockIteratorBuilder::str_to_dml_;
 ObHashMap<ObString, bool> ObMockIteratorBuilder::str_to_base_;
 ObHashMap<ObString, bool> ObMockIteratorBuilder::str_to_is_get_;
@@ -574,8 +579,10 @@ const char *ObMockIteratorBuilder::STR_NOP = "nop";
 const char *ObMockIteratorBuilder::STR_NULL = "null";
 const char *ObMockIteratorBuilder::STR_MAX = "max";
 const char *ObMockIteratorBuilder::STR_MIN = "min";
+const char *ObMockIteratorBuilder::STR_INT32_MIN = "int32_min";
 const char *ObMockIteratorBuilder::STR_MIN_2_TRANS = "min2";
 const char *ObMockIteratorBuilder::STR_MAGIC = "magic";
+const char *ObMockIteratorBuilder::STR_DELETE_INSERT_VERSION = "di_version";
 ObObjMeta ObMockIteratorBuilder::INT_TYPE;
 ObObjMeta ObMockIteratorBuilder::BIGINT_TYPE;
 ObObjMeta ObMockIteratorBuilder::VAR_TYPE;
@@ -1000,13 +1007,27 @@ int ObMockIteratorBuilder::parse_datum_dml(ObIAllocator *allocator,
   return OB_SUCCESS;
 }
 
-int ObMockIteratorBuilder::parse_first_dml(ObIAllocator *allocator,
+int ObMockIteratorBuilder::parse_flag_type(ObIAllocator *allocator,
                                            const ObString &word,
                                            storage::ObStoreRow &row,
                                            int64_t &idx)
 {
-  UNUSEDx(allocator, word, row, idx);
-  return OB_SUCCESS;
+  UNUSEDx(allocator, idx);
+  OB_ASSERT(NULL != word.ptr() && 0 <= word.length());
+
+  int ret = OB_SUCCESS;
+  int64_t flag_type = 0;
+  if (OB_SUCCESS != str_to_flag_type_.get_refactored(word, flag_type)) {
+    STORAGE_LOG(WARN, "failed to parse flag type", K(word));
+    ret = OB_HASH_NOT_EXIST;
+  } else {
+    if (0 == flag_type) {
+      row.flag_.flag_type_ = ObDmlRowFlagType::DF_TYPE_NORMAL;
+    } else if (1 == flag_type) {
+      row.flag_.flag_type_ = ObDmlRowFlagType::DF_TYPE_INSERT_DELETE;
+    }
+  }
+  return ret;
 }
 
 int ObMockIteratorBuilder::prepare_parse_flag(ObIAllocator *allocator,
@@ -1393,8 +1414,8 @@ int ObMockIteratorBuilder::static_init()
                  ObString::make_string("dml"),
                  ObMockIteratorBuilder::parse_dml)
              || OB_SUCCESS != str_to_info_parse_func_.set_refactored(
-                 ObString::make_string("first_dml"),
-                 ObMockIteratorBuilder::parse_first_dml)
+                 ObString::make_string("flag_type"),
+                 ObMockIteratorBuilder::parse_flag_type)
              || OB_SUCCESS != str_to_info_parse_func_.set_refactored(
                  ObString::make_string("multi_version_row_flag"),
                  ObMockIteratorBuilder::parse_obj_multi_version_row_flag)
@@ -1446,18 +1467,33 @@ int ObMockIteratorBuilder::static_init()
   }
 
   if (ret == OB_SUCCESS
+      && OB_SUCCESS != (ret = str_to_flag_type_.create(
+                                  cal_next_prime(FLAG_NUM * 2),
+                                  ObModIds::OB_HASH_BUCKET))) {
+    STORAGE_LOG(WARN, "out of memory");
+  } else if (OB_SUCCESS != str_to_flag_type_.set_refactored(
+                 ObString::make_string("NORMAL"), 0)
+             || OB_SUCCESS != str_to_flag_type_.set_refactored(
+                 ObString::make_string("INSERT_DELETE"), 1)) {
+    ret = OB_INIT_FAIL;
+    STORAGE_LOG(WARN, "flag type hashtable insert failed");
+  } else {
+    STORAGE_LOG(DEBUG, "init flag type hashtable");
+  }
+
+  if (ret == OB_SUCCESS
       && OB_SUCCESS != (ret = str_to_dml_.create(
                                   cal_next_prime(DML_NUM * 2),
                                   ObModIds::OB_HASH_BUCKET))) {
     STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_dml_.set_refactored(
-                 ObString::make_string("INSERT"), DF_INSERT)
+                 ObString::make_string("INSERT"), ObDmlFlag::DF_INSERT)
              || OB_SUCCESS != str_to_dml_.set_refactored(
-                 ObString::make_string("UPDATE"), DF_UPDATE)
+                 ObString::make_string("UPDATE"), ObDmlFlag::DF_UPDATE)
              || OB_SUCCESS != str_to_dml_.set_refactored(
-                 ObString::make_string("DELETE"), DF_DELETE)
+                 ObString::make_string("DELETE"), ObDmlFlag::DF_DELETE)
              || OB_SUCCESS != str_to_dml_.set_refactored(
-                 ObString::make_string("LOCK"), DF_LOCK)) {
+                 ObString::make_string("LOCK"), ObDmlFlag::DF_LOCK)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "dml hashtable insert failed");
   } else {
@@ -1523,6 +1559,10 @@ int ObMockIteratorBuilder::static_init()
       || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("SCF"), 13)
       || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("SC"), 12)
       || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("SF"), 5)
+      || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("UC"), 10)
+      || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("UCF"), 11)
+      || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("UCL"), 42)
+      || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("UCFL"), 43)
       ) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "multi version row flag hashtable insert failed");
@@ -1531,7 +1571,8 @@ int ObMockIteratorBuilder::static_init()
   }
 
   // for sstable row
-  if (OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+  if (ret == OB_SUCCESS
+      && (OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                  ObString::make_string("table_type"),
                  ObMockIteratorBuilder::parse_obj_bigint)
              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
@@ -1548,14 +1589,15 @@ int ObMockIteratorBuilder::static_init()
                  ObMockIteratorBuilder::parse_obj_bigint)
              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                  ObString::make_string("row_cnt"),
-                 ObMockIteratorBuilder::parse_obj_bigint)) {
+                 ObMockIteratorBuilder::parse_obj_bigint))) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "obj parse func hashtable insert failed");
   } else {
     STORAGE_LOG(DEBUG, "init obj parse func hashtable");
   }
 
-  if (OB_SUCCESS != str_to_obj_type_.set_refactored(
+  if (ret == OB_SUCCESS
+      && (OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("table_type"), &BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("start_scn"), &BIGINT_TYPE)
@@ -1566,7 +1608,40 @@ int ObMockIteratorBuilder::static_init()
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("upper_ver"), &BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
-                  ObString::make_string("row_cnt"), &BIGINT_TYPE)) {
+                  ObString::make_string("row_cnt"), &BIGINT_TYPE))) {
+    ret = OB_INIT_FAIL;
+    STORAGE_LOG(WARN, "obj type hashtable insert failed");
+  } else {
+    STORAGE_LOG(DEBUG, "init obj type hashtable");
+  }
+
+    if (ret == OB_SUCCESS
+      && (OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("tx_id"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("commit_ver"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("schema_ver"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("lower_bound"), ObMockIteratorBuilder::parse_obj_bigint)
+              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                  ObString::make_string("upper_bound"), ObMockIteratorBuilder::parse_obj_bigint))) {
+    ret = OB_INIT_FAIL;
+    STORAGE_LOG(WARN, "obj type hashtable insert failed");
+  } else {
+    STORAGE_LOG(DEBUG, "init obj type hashtable");
+  }
+  if (ret == OB_SUCCESS
+      && (OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("tx_id"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("commit_ver"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("schema_ver"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("lower_bound"),&BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("upper_bound"),&BIGINT_TYPE))) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "obj type hashtable insert failed");
   } else {
@@ -2112,6 +2187,20 @@ int ObMockIteratorBuilder::parse_row(const ObString &str,
             row.row_val_.cells_[idx++].set_int(-INT64_MAX);
           }
           break;
+        case EXT_INT32_MIN:
+          if (ObMockIteratorBuilder::parse_obj_int != fp && ObMockIteratorBuilder::parse_obj_bigint != fp) {
+            row.row_val_.cells_[idx++].set_min_value();
+          } else {
+            row.row_val_.cells_[idx++].set_int(INT32_MIN);
+          }
+          break;
+        case EXT_DELETE_INSERT_VERSION:
+          if (ObMockIteratorBuilder::parse_obj_int != fp && ObMockIteratorBuilder::parse_obj_bigint != fp) {
+            row.row_val_.cells_[idx++].set_min_value();
+          } else {
+            row.row_val_.cells_[idx++].set_int(-common::DELETE_INSERT_TRANS_SEQUENCE);
+          }
+          break;
         case EXT_MIN_2_TRANS:
           if (ObMockIteratorBuilder::parse_obj_int != fp && ObMockIteratorBuilder::parse_obj_bigint != fp) {
             row.row_val_.cells_[idx++].set_min_value();
@@ -2224,6 +2313,10 @@ int ObMockIteratorBuilder::get_ext(const common::ObString &word)
     ext = EXT_MIN_2_TRANS;
   } else if (0 == word.case_compare(STR_MAGIC)) {
     ext = EXT_GHOST;
+  } else if (0 == word.case_compare(STR_INT32_MIN)) {
+    ext = EXT_INT32_MIN;
+  } else if (0 == word.case_compare(STR_DELETE_INSERT_VERSION)) {
+    ext = EXT_DELETE_INSERT_VERSION;
   } else {
     ext = NOT_EXT;
   }

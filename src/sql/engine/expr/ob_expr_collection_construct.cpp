@@ -64,7 +64,15 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
     if ((ObExtendType == elem_type_.get_obj_type()
           && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType)
         ||(ObExtendType == types[i].get_type() && elem_type_.get_obj_type() != ObExtendType)) {
-      ret = OB_ERR_CALL_WRONG_ARG;
+      ObSchemaGetterGuard schema_guard;
+      int64_t tenant_id = type_ctx.get_session()->get_effective_tenant_id();
+      const ObUDTTypeInfo *udt_info = NULL;
+      OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+      OZ (schema_guard.get_udt_info(tenant_id, udt_id_, udt_info));
+      if (OB_SUCC(ret)) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+      }
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
     } else {
       types[i].set_calc_accuracy(elem_type_.get_accuracy());
@@ -193,6 +201,14 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         coll = new(coll)pl::ObPLVArray(info->udt_id_);
         static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
       }
+    } else if (pl::PL_ASSOCIATIVE_ARRAY_TYPE == info->type_) {
+       if (NULL == (coll =
+        static_cast<pl::ObPLAssocArray*>(alloc.alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
+        } else {
+          coll = new(coll)pl::ObPLAssocArray(info->udt_id_);
+        }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
@@ -260,9 +276,12 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     // recursive construction is not needed
     OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                          ns,
-                                         alloc,
                                          *coll,
                                          expr.arg_cnt_));
+    if (OB_SUCC(ret) && coll->is_associative_array() && expr.arg_cnt_ > 0) {
+      OX (coll->set_first(1));
+      OX (coll->set_last(coll->get_count()));
+    }
     if (OB_SUCC(ret)) {
       if (info->elem_type_.get_meta_type().is_ext()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
@@ -276,12 +295,27 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                       || pl::PL_CURSOR_TYPE == v.get_meta().get_extend_type()
                       || pl::PL_REF_CURSOR_TYPE == v.get_meta().get_extend_type()) {
               if (v.get_meta().get_extend_type() != coll->get_element_desc().get_pl_type()) {
-                ret = OB_ERR_CALL_WRONG_ARG;
+                const ObUDTTypeInfo *udt_info = NULL;
+                OZ (schema_guard->get_udt_info(session->get_effective_tenant_id(), info->udt_id_, udt_info));
+                if (OB_SUCC(ret)) {
+                  ret = OB_ERR_CALL_WRONG_ARG;
+                  LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                }
                 LOG_WARN("invalid argument. unexpected composite value", K(ret), K(v), KPC(coll));
               }
             } else {
               TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
               OZ (check_match(v, coll->get_element_desc(), *ns));
+              if (OB_ERR_CALL_WRONG_ARG == ret) {
+                int tmp_ret = ret;
+                ret = OB_SUCCESS;
+                const ObUDTTypeInfo *udt_info = NULL;
+                OZ (schema_guard->get_udt_info(session->get_effective_tenant_id(), info->udt_id_, udt_info));
+                if (OB_SUCC(ret)) {
+                  LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                  ret = tmp_ret;
+                }
+              }
             }
           }
           if (OB_SUCC(ret) && info->not_null_ && !v.is_null()) {

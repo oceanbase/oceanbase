@@ -12,9 +12,10 @@
 
 #pragma once
 
-#include "oceanbase/ob_plugin.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_print_utils.h"
+#include "oceanbase/ob_plugin.h"
 
 namespace oceanbase {
 namespace plugin {

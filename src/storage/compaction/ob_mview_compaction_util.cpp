@@ -219,39 +219,40 @@ int ObMviewCompactionHelper::generate_mview_refresh_sql(
     ObArenaAllocator allocator("MVCompaction", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
     ObNewRange sql_range;
     sql_range.table_id_ = mview_param.mview_id_;
+    ObMviewMergeSQL *refresh_sqls = mview_param.refresh_sqls_;
+    const common::ObIArray<ObString> *mv_ops = NULL;
     if (merge_range.is_whole_range()) {
       sql_range.set_whole_range();
     } else if (OB_FAIL(convert_datum_range(allocator, rowkey_read_info, merge_range, sql_range))) {
       LOG_WARN("Failed to convert datum range", K(ret), K(mview_param));
     }
-    if (FAILEDx(mv_provider.init_mv_provider(mview_param.refresh_scn_range_.start_scn_,
-                                             mview_param.refresh_scn_range_.end_scn_,
-                                             &schema_guard,
-                                             session,
-                                             part_idx,
-                                             sub_part_idx,
-                                             sql_range))) {
-      LOG_WARN("Failed to init mv provider", K(ret), K(tenant_id), K(mview_param));
+    if (FAILEDx(mv_provider.get_major_refresh_operators(session,
+                                                        &schema_guard,
+                                                        mview_param.refresh_scn_range_.start_scn_,
+                                                        mview_param.refresh_scn_range_.end_scn_,
+                                                        part_idx,
+                                                        sub_part_idx,
+                                                        sql_range,
+                                                        mv_ops))) {
+      LOG_WARN("Failed to get major refresh operators", K(ret), K(tenant_id), K(mview_param));
+    } else if (OB_ISNULL(mv_ops)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null", K(ret), K(mv_ops));
+    } else if (OB_UNLIKELY(mview_param.refresh_sql_count_ + 1 != mv_ops->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected number of refresh sql", K(ret), K(mv_ops->count()));
     } else {
       LOG_INFO("[MVIEW COMPACTION] yuanzhe debug", K(part_idx), K(sub_part_idx), K(sql_range), K(merge_range));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObMviewMergeSQL *refresh_sqls = mview_param.refresh_sqls_;
-    const common::ObIArray<ObString> &mv_ops = mv_provider.get_operators();
-    if (OB_UNLIKELY(mview_param.refresh_sql_count_ + 1 != mv_ops.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected number of refresh sql", K(ret), K(mv_ops.count()));
     }
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < mview_param.refresh_sql_count_; ++i) {
       refresh_sqls[i].type_ = ObMviewMergeIterType::MVIEW_REPLACE;
-      if (OB_FAIL(refresh_sqls[i].sql_.append(mv_ops.at(i)))) {
+      if (OB_FAIL(refresh_sqls[i].sql_.append(mv_ops->at(i)))) {
         LOG_WARN("Failed to append mv sql", K(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(mview_param.validation_sql_.append(mv_ops.at(i)))) {
+      if (OB_FAIL(mview_param.validation_sql_.append(mv_ops->at(i)))) {
         LOG_WARN("Failed to append mv validation sql", K(ret), K(i));
       }
     }
@@ -471,6 +472,8 @@ int ObMviewCompactionHelper::convert_datum_range(
         if (i < merge_range.get_start_key().get_datum_cnt()) {
           if (OB_FAIL(merge_range.get_start_key().get_datum(i).to_obj_enhance(start_key[i], col_descs.at(i).col_type_))) {
             LOG_WARN("Failed to convert to obj", K(ret), K(i));
+          } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+            start_key[i].set_has_lob_header();
           }
         } else {
           start_key[i].set_min_value();
@@ -479,6 +482,8 @@ int ObMviewCompactionHelper::convert_datum_range(
         } else if (i < merge_range.get_end_key().get_datum_cnt()) {
           if (OB_FAIL(merge_range.get_end_key().get_datum(i).to_obj_enhance(end_key[i], col_descs.at(i).col_type_))) {
             LOG_WARN("Failed to convert to obj", K(ret), K(i));
+          } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+            end_key[i].set_has_lob_header();
           }
         } else {
           end_key[i].set_max_value();

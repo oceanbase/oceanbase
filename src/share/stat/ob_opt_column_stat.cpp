@@ -195,7 +195,7 @@ ObOptColumnStat::ObOptColumnStat()
       allocator_(inner_allocator_),
       cg_macro_blk_cnt_(0),
       cg_micro_blk_cnt_(0),
-      cg_skip_rate_(1.0)
+      cg_skip_rate_(0.0)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -223,7 +223,7 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       allocator_(allocator),
       cg_macro_blk_cnt_(0),
       cg_micro_blk_cnt_(0),
-      cg_skip_rate_(1.0)
+      cg_skip_rate_(0.0)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -254,7 +254,7 @@ void ObOptColumnStat::reset()
   histogram_.reset();
   cg_macro_blk_cnt_ = 0;
   cg_micro_blk_cnt_ = 0;
-  cg_skip_rate_ = 1.0;
+  cg_skip_rate_ = 0.0;
 }
 
 int64_t ObOptColumnStat::size() const

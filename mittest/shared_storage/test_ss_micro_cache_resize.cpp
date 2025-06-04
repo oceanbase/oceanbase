@@ -36,45 +36,11 @@ public:
   static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
-public:
-  struct TestSSMicroCacheResizeCtx
-  {
-  public:
-    TestSSMicroCacheResizeCtx()
-        : micro_block_info_arr_(), thread_num_(0) {}
-    ~TestSSMicroCacheResizeCtx() { reset(); }
-    void reset()
-    {
-      micro_block_info_arr_.destroy();
-      thread_num_ = 0;
-    }
-  public:
-    ObArray<TestSSCommonUtil::MicroBlockInfo> micro_block_info_arr_;
-    int64_t thread_num_;
-  };
+  int resize_micro_cache_file(
+      int idx, int thread_num, ObArray<TestSSCommonUtil::MicroBlockInfo> &micro_block_info_arr);
 
-public:
-  class TestSSMicroCacheResizeThread : public Threads
-  {
-  public:
-    enum class TestParallelType
-    {
-      GET_MICRO_BLOCK_AND_RESIZE_LARGER,
-    };
-  public:
-    TestSSMicroCacheResizeThread(ObTenantBase *tenant_base, TestSSMicroCacheResizeCtx &ctx, TestParallelType type)
-        : tenant_base_(tenant_base), ctx_(ctx), type_(type), fail_cnt_(0) {}
-    void run(int64_t idx) final;
-    int64_t get_fail_cnt() { return ATOMIC_LOAD(&fail_cnt_); }
-  private:
-    int parallel_get_micro_block_and_resize_larger(int64_t idx);
-
-  private:
-    ObTenantBase *tenant_base_;
-    TestSSMicroCacheResizeCtx &ctx_;
-    TestParallelType type_;
-    int64_t fail_cnt_;
-  };
+private:
+  ObSSMicroCache *micro_cache_;
 };
 
 void TestSSMicroCacheResize::SetUpTestCase()
@@ -101,6 +67,7 @@ void TestSSMicroCacheResize::SetUp()
   micro_cache->destroy();
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27))); // 128MB
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  micro_cache_ = micro_cache;
 }
 
 void TestSSMicroCacheResize::TearDown()
@@ -110,20 +77,15 @@ void TestSSMicroCacheResize::TearDown()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
+  micro_cache_ = nullptr;
 }
 
-void TestSSMicroCacheResize::TestSSMicroCacheResizeThread::run(int64_t idx)
-{
-  ObTenantEnv::set_tenant(tenant_base_);
-  if (type_ == TestParallelType::GET_MICRO_BLOCK_AND_RESIZE_LARGER) {
-    parallel_get_micro_block_and_resize_larger(idx);
-  }
-}
-
-int TestSSMicroCacheResize::TestSSMicroCacheResizeThread::parallel_get_micro_block_and_resize_larger(int64_t idx)
+int TestSSMicroCacheResize::resize_micro_cache_file(
+      int idx,
+      int thread_num,
+      ObArray<TestSSCommonUtil::MicroBlockInfo> &micro_block_info_arr)
 {
   int ret = OB_SUCCESS;
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObArenaAllocator allocator;
   char *read_buf = nullptr;
   if (OB_ISNULL(read_buf = static_cast<char*>(allocator.alloc(DEFAULT_BLOCK_SIZE)))) {
@@ -132,20 +94,17 @@ int TestSSMicroCacheResize::TestSSMicroCacheResizeThread::parallel_get_micro_blo
   } else {
     for (int64_t epoch = 0; OB_SUCC(ret) && epoch < 3; epoch++) {
       if (idx == 1 && epoch == 1) {
-        if (OB_FAIL(micro_cache->resize_micro_cache_file_size(micro_cache->cache_file_size_ * 2))) {
+        if (OB_FAIL(micro_cache_->resize_micro_cache_file_size(micro_cache_->cache_file_size_ * 2))) {
           LOG_WARN("fail to resize file size", KR(ret));
         }
       }
-      for (int64_t i = idx; OB_SUCC(ret) && i < ctx_.micro_block_info_arr_.count(); i += ctx_.thread_num_) {
-        TestSSCommonUtil::MicroBlockInfo micro_info = ctx_.micro_block_info_arr_[i];
+      for (int64_t i = idx; OB_SUCC(ret) && i < micro_block_info_arr.count(); i += thread_num) {
+        TestSSCommonUtil::MicroBlockInfo micro_info = micro_block_info_arr[i];
         if (OB_FAIL(TestSSCommonUtil::get_micro_block(micro_info, read_buf))) {
           LOG_WARN("fail to get micro_block", KR(ret), K(micro_info));
         }
       }
     }
-  }
-  if (OB_FAIL(ret)) {
-    ATOMIC_INC(&fail_cnt_);
   }
   return ret;
 }
@@ -162,7 +121,7 @@ TEST_F(TestSSMicroCacheResize, test_basic_resize_cache_file)
   const int64_t new_cache_file_size = micro_cache->cache_file_size_ * 2;
   ASSERT_EQ(OB_SUCCESS, micro_cache->resize_micro_cache_file_size(new_cache_file_size));
   ASSERT_EQ(new_cache_file_size, micro_cache->cache_file_size_);
-  ASSERT_EQ(new_cache_file_size, phy_blk_mgr.super_block_.cache_file_size_);
+  ASSERT_EQ(new_cache_file_size, phy_blk_mgr.super_blk_.cache_file_size_);
   ASSERT_LT(ori_total_phy_blk_cnt, phy_blk_mgr.blk_cnt_info_.total_blk_cnt_);
   ASSERT_LT(ori_arc_limit, micro_meta_mgr.arc_info_.limit_);
 }
@@ -179,10 +138,10 @@ TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)
 
   const int64_t old_limit = arc_info.limit_;
   micro_cache->begin_free_space_for_prewarm();
-  const int64_t prewarm_work_limit = static_cast<int64_t>((static_cast<double>(old_limit * SS_ARC_LIMIT_SHRINK_PCT) / 100.0));
+  const int64_t prewarm_work_limit = static_cast<int64_t>((static_cast<double>(old_limit * SS_LIMIT_PREWARM_SHRINK_PCT) / 100.0));
   ASSERT_EQ(prewarm_work_limit, arc_info.work_limit_);
 
-  const int64_t new_cache_file_size = micro_cache->phy_blk_mgr_.total_file_size_ * 2;
+  const int64_t new_cache_file_size = micro_cache->phy_blk_mgr_.cache_file_size_ * 2;
   ASSERT_EQ(OB_SUCCESS, micro_cache->resize_micro_cache_file_size(new_cache_file_size));
   const int64_t new_limit = arc_info.limit_;
   ASSERT_LE(old_limit * 2, new_limit);
@@ -209,24 +168,36 @@ TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
   LOG_INFO("TEST_CASE: start test_get_micro_block_and_resize_larger");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
-  const int64_t origin_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t origin_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
   const int64_t total_macro_blk_cnt = origin_data_blk_cnt * 2;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  TestSSMicroCacheResizeCtx ctx;
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(total_macro_blk_cnt, block_size, ctx.micro_block_info_arr_, 1, true, 100 * 1024, 160 * 1024));
+  ObArray<TestSSCommonUtil::MicroBlockInfo> micro_block_info_arr;
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(total_macro_blk_cnt, block_size, micro_block_info_arr, 1, true, 100 * 1024, 160 * 1024));
 
   ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
   arc_task.is_inited_ = false;
 
-  ctx.thread_num_ = 4;
-  TestSSMicroCacheResize::TestSSMicroCacheResizeThread threads(
-    ObTenantEnv::get_tenant(), ctx, TestSSMicroCacheResizeThread::TestParallelType::GET_MICRO_BLOCK_AND_RESIZE_LARGER);
-  ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
-  threads.set_thread_count(ctx.thread_num_);
-  threads.start();
-  threads.wait();
-  ASSERT_EQ(0, threads.get_fail_cnt());
-  ASSERT_LT(origin_data_blk_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  {
+    const int64_t thread_num = 4;
+    ObTenantBase *tenant_base = MTL_CTX();
+
+    auto test_func = [&](const int64_t idx) {
+      ObTenantEnv::set_tenant(tenant_base);
+      ASSERT_EQ(OB_SUCCESS, resize_micro_cache_file(idx, thread_num, micro_block_info_arr));
+    };
+
+    std::vector<std::thread> ths;
+    for (int64_t i = 0; i < thread_num; ++i) {
+      std::thread th(test_func, i);
+      ths.push_back(std::move(th));
+    }
+    for (int64_t i = 0; i < thread_num; ++i) {
+      ths[i].join();
+    }
+
+    ASSERT_LT(origin_data_blk_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  }
+
 }
 
 } // namespace storage

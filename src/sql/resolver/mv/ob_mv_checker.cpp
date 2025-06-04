@@ -311,22 +311,6 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
   return ret;
 }
 
-int ObMVChecker::get_mlog_table_schema(const TableItem *table,
-                                       const share::schema::ObTableSchema *&mlog_schema) const
-{
-  int ret = OB_SUCCESS;
-  mlog_schema = NULL;
-  for (int64_t i = 0; NULL == mlog_schema && OB_SUCC(ret) && i < mlog_tables_.count(); ++i) {
-    if (table != mlog_tables_.at(i).first) {
-      /* do nothing */
-    } else if (OB_ISNULL(mlog_schema = mlog_tables_.at(i).second)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    }
-  }
-  return ret;
-}
-
 // get mlog table schema, check columns exists in mlog table
 bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
                                          const ObIArray<ColumnItem> &columns,

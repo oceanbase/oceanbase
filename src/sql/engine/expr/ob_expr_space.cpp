@@ -51,7 +51,7 @@ inline int ObExprSpace::calc_result_type1(
     LOG_WARN("get child expr fail", K(ret), KPC(raw_expr), K(type_ctx));
   } else if (T_FUN_SYS_CAST == child_raw_expr->get_expr_type()
         && child_raw_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
-        && child_raw_expr->get_param_expr(0)->get_result_type().is_literal()) {
+        && child_raw_expr->get_param_expr(0)->is_const_raw_expr()) {
     // some scenarios may have multiple type inferences
     // if the input is a string literal, the first inference will add an implicit cast to convert a string to an integer
     // this makes the input type not literal in the second type inference, resulting in an inference to longtext
@@ -60,9 +60,11 @@ inline int ObExprSpace::calc_result_type1(
     // eg :
     //      create table space_t1(c1 char(181) default (space( '1')));
     //      select c1 from space_t1;
+    const ObConstRawExpr *const_expr =
+              static_cast<const ObConstRawExpr*>(child_raw_expr->get_param_expr(0));
     if (child_raw_expr->get_param_expr(0)->get_result_type().is_null()) {
       res_type = ObVarcharType;
-    } else if (OB_FAIL(calc_result_type(type_ctx, child_raw_expr->get_param_expr(0)->get_result_type().get_param(), res_type))) {
+    } else if (OB_FAIL(calc_result_type(type_ctx, const_expr->get_param(), res_type))) {
       LOG_WARN("calc_result_type fail", K(ret), K(type1), K(type_ctx));
     }
   } else {

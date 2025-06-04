@@ -212,6 +212,7 @@ private:
   int64_t get_not_allow_alloc_percent_(const int64_t target_wbp_size);
   uint32_t cal_max_allow_alloc_page_id_(int64_t lower_bound, int64_t upper_bound);
   int cal_target_shrink_range_(const bool is_auto, int64_t &lower_page_id, int64_t &upper_page_id);
+  void update_current_max_used_percent_();
 private:
   static double MAX_DATA_PAGE_USAGE_RATIO; // control data pages ratio, can be preempted by meta pages
   // only for unittest

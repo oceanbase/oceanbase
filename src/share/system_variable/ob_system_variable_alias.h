@@ -492,6 +492,7 @@ namespace share
   static const char* const OB_SV_INNODB_AUTOINC_LOCK_MODE = "innodb_autoinc_lock_mode";
   static const char* const OB_SV_SKIP_EXTERNAL_LOCKING = "skip_external_locking";
   static const char* const OB_SV_SUPER_READ_ONLY = "super_read_only";
+  static const char* const OB_SV_EVENT_SCHEDULER = "event_scheduler";
   static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
   static const char* const OB_SV_LOW_PRIORITY_UPDATES = "low_priority_updates";
   static const char* const OB_SV_MAX_ERROR_COUNT = "max_error_count";
@@ -848,8 +849,11 @@ namespace share
   static const char* const OB_SV_MVIEW_REFRESH_DOP = "mview_refresh_dop";
   static const char* const OB_SV_ENABLE_OPTIMIZER_ROWGOAL = "enable_optimizer_rowgoal";
   static const char* const OB_SV_IVF_NPROBES = "ob_ivf_nprobes";
+  static const char* const OB_SV__CURRENT_DEFAULT_CATALOG = "_current_default_catalog";
+  static const char* const OB_SV_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK = "ob_enable_ps_parameter_anonymous_block";
   static const char* const OB_SV_HNSW_EXTRA_INFO_MAX_SIZE = "ob_hnsw_extra_info_max_size";
   static const char* const OB_SV__PUSH_JOIN_PREDICATE = "_push_join_predicate";
+  static const char* const OB_SV_SPARSE_DROP_RATIO_SEARCH = "ob_sparse_drop_ratio_search";
 
 }
 }

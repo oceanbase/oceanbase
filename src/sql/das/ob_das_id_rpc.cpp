@@ -85,9 +85,13 @@ int ObDASIDRequestRpc::fetch_new_range(const ObDASIDRequest &msg,
 {
   int ret = OB_SUCCESS;
   ObAddr server;
+  ObLSID ls_id = DAS_ID_LS;
   uint64_t tenant_id = msg.get_tenant_id();
   if (is_user_tenant(tenant_id)) {
     tenant_id = gen_meta_tenant_id(tenant_id);
+  }
+  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id)) {
+    ls_id = SSLOG_LS;
   }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -97,7 +101,7 @@ int ObDASIDRequestRpc::fetch_new_range(const ObDASIDRequest &msg,
     LOG_WARN("invalid request", KR(ret), K(msg));
   } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
                                                         tenant_id,
-                                                        DAS_ID_LS,
+                                                        ls_id,
                                                         force_renew,
                                                         server))) {
     TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(GTI_LS));

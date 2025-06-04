@@ -37,9 +37,6 @@ public:
   ObIStoreRowIterator() {}
   virtual ~ObIStoreRowIterator() {}
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) = 0;
-  //TODO removed by hanhui
-  virtual int get_next_row(const ObStoreRow *&row)
-  { return OB_NOT_SUPPORTED; }
 };
 
 class ObStoreRowIterator : public ObIStoreRowIterator
@@ -119,6 +116,15 @@ public:
         IteratorCOMultiScan == iter_type;
   }
   OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
+  virtual int get_next_rowkey(const bool need_set_border_rowkey,
+                              int64_t &curr_scan_index,
+                              blocksstable::ObDatumRowkey& rowkey,
+                              blocksstable::ObDatumRowkey &border_rowkey,
+                              common::ObIAllocator &allocator)
+  {
+    UNUSEDx(need_set_border_rowkey, curr_scan_index, rowkey, border_rowkey, allocator);
+    return OB_NOT_IMPLEMENT;
+  }
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), K_(is_reclaimed), KP_(block_row_store), KP_(long_life_allocator));
 

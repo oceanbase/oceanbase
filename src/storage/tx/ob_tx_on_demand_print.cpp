@@ -102,8 +102,6 @@ IMPL_ON_DEMAND_PRINT_FUNC(ObPartTransCtx)
 
   TX_KV_PRINT_WITH_ERR(!busy_cbs_.is_empty(), busy_cbs_cnt, busy_cbs_.get_size(), ", ");
   TX_KV_PRINT_WITH_ERR(!busy_cbs_.is_empty(), oldest_busy_cb, busy_cbs_.get_first(), ", ");
-  TX_KV_PRINT_WITH_ERR(final_log_cb_.is_valid() && !final_log_cb_.is_callbacked(), final_log_cb,
-                       final_log_cb_, ", ");
 
   TX_PRINT_FUNC_WITH_ERR(sub_state_.is_valid(), sub_state_.on_demand_print_, ", ");
 

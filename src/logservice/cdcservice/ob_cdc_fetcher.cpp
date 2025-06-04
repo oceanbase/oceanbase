@@ -1427,7 +1427,7 @@ int ObCdcFetcher::fetch_raw_log_in_palf_(const ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   PalfHandleGuard palf_guard;
-  PalfHandle *palf_handle = nullptr;
+  ipalf::IPalfHandle *palf_handle = nullptr;
   int64_t read_size = 0;
   const int64_t buffer_len = resp.get_buffer_len();
   fetch_log_succ = false;

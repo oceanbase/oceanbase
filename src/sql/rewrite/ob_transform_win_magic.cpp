@@ -13,7 +13,12 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_win_magic.h"
 #include "ob_transform_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/schema/ob_table_schema.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/ob_sql_context.h"
+#include "sql/rewrite/ob_stmt_comparer.h"
+#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_equal_analysis.h"
 
 using namespace oceanbase::sql;
@@ -202,6 +207,7 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObSEArray<ObSEArray<TableItem *, 4>, 4> trans_basic_tables;
   ObTryTransHelper try_trans_helper;
   const ObWinMagicHint *myhint = static_cast<const ObWinMagicHint*>(stmt->get_stmt_hint().get_normal_hint(T_WIN_MAGIC));
+  bool partial_cost_check = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -222,12 +228,17 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_WARN("win magic do transform from type failed", K(ret));
   } else if (OB_FAIL(try_to_push_down_join(trans_stmt))) {
     LOG_WARN("try to push down join failed.", K(*trans_stmt));
+  } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts,
+                                                                        stmt, false,
+                                                                        partial_cost_check))) {
+    LOG_WARN("failed to check partial cost eval validity", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts,
                                       stmt,
                                       trans_stmt,
                                       NULL != myhint && myhint->is_enable_hint(),
                                       false,
-                                      accepted))) {
+                                      accepted,
+                                      partial_cost_check))) {
     LOG_WARN("accept transform failed", K(ret));
   } else if (OB_FAIL(try_trans_helper.finish(accepted, stmt->get_query_ctx(), ctx_))) {
     LOG_WARN("failed to finish try trans helper", K(ret));
@@ -320,7 +331,7 @@ int ObTransformWinMagic::do_transform_from_type(ObDMLStmt *&stmt,
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(drill_down_stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item relation id", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt info", K(ret));
     }
   }
@@ -1510,6 +1521,13 @@ int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt,
       LOG_WARN("failed to replace table info in semi infos", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(main_stmt, transed_view_table, drill_down_table))) {
+    LOG_WARN("failed to replace table info in semi infos", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(main_stmt, transed_view_table, roll_up_table))) {
+    LOG_WARN("failed to replace table info in semi infos", K(ret));
+  }
 
   if (OB_FAIL(ret)) {
     //do nothing
@@ -2037,7 +2055,7 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
     LOG_WARN("failed to rebuild table hash", K(ret));
   } else if (OB_FAIL(view_stmt->update_column_item_rel_id())) {
     LOG_WARN("failed to update column item relation id", K(ret));
-  } else if (OB_FAIL(main_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(main_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt info", K(ret));
   } else {
     LOG_DEBUG("push down join", K(*main_stmt));

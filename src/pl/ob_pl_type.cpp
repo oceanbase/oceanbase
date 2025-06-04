@@ -655,6 +655,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   ObSEArray<jit::ObLLVMValue, 4> args;
   jit::ObLLVMValue llvm_value;
   jit::ObLLVMValue dest_type;
+  jit::ObLLVMValue type_info_id_value;
   ObPLCGBufferGuard buffer_guard(generator);
 
   OZ (args.push_back(generator.get_vars()[generator.CTX_IDX]));
@@ -675,6 +676,8 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   OZ (args.push_back(dest_type));
   OZ (generator.get_helper().get_int64(package_id, llvm_value));
   OZ (args.push_back(llvm_value));
+  OZ (generator.get_helper().get_int64(get_type_info_id(), type_info_id_value));
+  OZ (args.push_back(type_info_id_value));
   if (OB_SUCC(ret)) {
     jit::ObLLVMValue ret_err;
     if (OB_FAIL(generator.get_helper().create_call(ObString("spi_copy_datum"), generator.get_spi_service().spi_copy_datum_, args, ret_err))) {
@@ -1071,6 +1074,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
 
 int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
                               common::ObIAllocator &allocator,
+                              sql::ObSQLSessionInfo *session,
                               const ObCharsetType charset,
                               const ObCollationType cs_type,
                               const ObCollationType ncs_type,
@@ -1096,7 +1100,8 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
     } else if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
-        local_allocator, (uint8_t)mysql_type, charset, ObCharsetType::CHARSET_INVALID, cs_type, ncs_type, src, tz_info, param, true, NULL,
+        local_allocator, (uint8_t)mysql_type, session, charset, ObCharsetType::CHARSET_INVALID,
+        cs_type, ncs_type, src, tz_info, param, true, NULL,
         NULL == get_data_type() ? false : get_data_type()->get_meta_type().is_unsigned_integer()))) {
       // get_data_type() is null, its a extend type, unsigned need false.
       LOG_WARN("failed to parse basic param value", K(ret));
@@ -1131,7 +1136,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("user type is null", K(ret), K(user_type));
     } else if (OB_FAIL(user_type->init_obj(schema_guard, allocator, *obj, new_dst_len))) {
       LOG_WARN("failed to init obj", K(ret));
-    } else if (OB_FAIL(user_type->deserialize(schema_guard, allocator,
+    } else if (OB_FAIL(user_type->deserialize(schema_guard, allocator, session,
                   charset, cs_type, ncs_type, tz_info, src,
                   reinterpret_cast<char *>(obj->get_ext()), new_dst_len, new_dst_pos))) {
       LOG_WARN("failed to deserialize user type", K(ret));
@@ -1149,7 +1154,7 @@ int ObPLDataType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
   CK (OB_NOT_NULL(dst));
   if (is_obj_type()) {
     ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObExprResType result_type;
+    ObRawExprResType result_type;
     ObObj tmp;
     result_type.reset();
     CK (OB_NOT_NULL(get_data_type()));
@@ -1575,6 +1580,39 @@ int ObPLEnumSetCtx::get_enum_type_info(uint16_t type_info_id, ObIArray<common::O
   int ret = OB_SUCCESS;
   CK (type_info_id < enum_type_info_array_.count());
   OX (type_info = enum_type_info_array_.at(type_info_id));
+  return ret;
+}
+
+int ObPLEnumSetCtx::assgin(const ObPLEnumSetCtx &other)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<common::ObString>* src_type_info = NULL;
+  ObIArray<common::ObString>* dst_type_info = NULL;
+  if (!other.is_inited() || other.enum_type_info_array_.count() == 0) {
+    // no cached type info, do nothing
+  } else {
+    if (is_inited() && enum_type_info_array_.count() > 0) {
+      reset();
+    }
+    if (!is_inited() && OB_FAIL(init())) {
+      LOG_WARN("fail to init pl enum set ctx", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.enum_type_info_array_.count(); ++i) {
+        uint16_t type_info_id = i;
+        src_type_info = other.get_enum_type_info(type_info_id);
+        CK (OB_NOT_NULL(src_type_info));
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(deep_copy_type_info(get_allocator(),
+                                               dst_type_info,
+                                               *src_type_info))) {
+          LOG_WARN("failed to deep copy type info");
+        } else if (OB_FAIL(set_enum_type_info(type_info_id, dst_type_info))) {
+          LOG_WARN("failed to set new type info", K(ret));
+        }
+      }
+      OX (used_type_info_id_ = other.used_type_info_id_);
+    }
+  }
   return ret;
 }
 
@@ -2052,22 +2090,22 @@ bool ObObjAccessIdx::has_same_collection_access(const ObRawExpr *expr, const ObO
   return ret;
 }
 
-bool ObObjAccessIdx::has_collection_access(const ObRawExpr *expr)
+int ObObjAccessIdx::has_collection_access(const ObRawExpr *expr, bool &collection_access)
 {
-  bool ret = false;
+  int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr)) {
     if (expr->is_obj_access_expr()) {
       const ObObjAccessRawExpr *access_expr = static_cast<const ObObjAccessRawExpr*>(expr);
       for (int64_t i = access_expr->get_access_idxs().count() - 1; i >= 0; --i) {
         if (access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
-          ret = true;
+          collection_access = true;
           break;
         }
       }
     } else {
-      for (int64_t i = 0; i < expr->get_param_count(); ++i) {
-        if (has_collection_access(expr->get_param_expr(i))) {
-          ret = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        OZ (SMART_CALL(has_collection_access(expr->get_param_expr(i), collection_access)));
+        if (OB_SUCC(ret) && collection_access) {
           break;
         }
       }
@@ -2105,17 +2143,23 @@ int ObObjAccessIdx::datum_need_copy(const ObRawExpr *into, const ObRawExpr *valu
     //如果源数据来源于NestedTable，那么一定要重新copy
     if (OB_SUCC(ret)
         && IS_INVALID == alloc_scop
-        && OB_NOT_NULL(value)
-        && has_collection_access(value)) {
-      alloc_scop = IS_LOCAL;
+        && OB_NOT_NULL(value)) {
+      bool collection_access = false;
+      OZ (has_collection_access(value, collection_access));
+      if (OB_SUCC(ret) && collection_access) {
+        alloc_scop = IS_LOCAL;
+      }
     }
 
     //如果目的端是NestedTable，那么一定要重新copy
     if (OB_SUCC(ret)
         && IS_INVALID == alloc_scop
-        && into->is_obj_access_expr()
-        && has_collection_access(into)) {
-      alloc_scop = IS_LOCAL;
+        && into->is_obj_access_expr()) {
+      bool collection_access = false;
+      OZ (has_collection_access(into, collection_access));
+      if (OB_SUCC(ret) && collection_access) {
+          alloc_scop = IS_LOCAL;
+      }
     }
 
     //如果源数据和目的端不同属于一个Allocator Scope，那么也要copy
@@ -2216,6 +2260,8 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
       forall_rollback_ = src.forall_rollback_;
       trans_id_ = src.trans_id_;
       is_scrollable_ = src.is_scrollable_;
+      ref_count_ = src.ref_count_;
+      cursor_flag_ = src.cursor_flag_;
       OZ (snapshot_.assign(src.snapshot_));
       is_need_check_snapshot_ = src.is_need_check_snapshot_;
       last_execute_time_ = src.last_execute_time_;
@@ -2304,13 +2350,16 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
   return ret;
 }
 
-int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
+int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool close_by_open_thread)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_sessid()));
+  UNUSED(close_by_open_thread);
+  LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_server_sid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
-    if (!is_server_cursor()) {
-      session.del_non_session_cursor(this);  // delete cursor from cursor map first, then release resource
+    if (!is_server_cursor()) {   // delete cursor from cursor map first, then release resource
+      session.del_non_session_cursor(this);
+    } else {
+      session.dec_session_cursor();
     }
     if (is_streaming()) {
       ObSPIResultSet *spi_result = get_cursor_handler();
@@ -2595,6 +2644,175 @@ int ObPLCursorInfo::set_current_position(int64_t position) {
   current_position_ = position;
   return ret;
 }
+
+int ObPsCursorInfo::init_params(ParamStore &exec_params)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *alloc = NULL;
+  if (OB_ISNULL(entity_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("entity is null", K(ret));
+  } else if (OB_ISNULL(alloc = &entity_->get_arena_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc is null", K(ret));
+  } else {
+    exec_params_.~Ob2DArray();
+    new (&exec_params_) ParamStore(ObWrapperAllocator(alloc));
+    if (OB_FAIL(exec_params_.assign(exec_params))) {
+      LOG_WARN("assign exec_params failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session,
+                                         const common::ColumnsFieldIArray &fields)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *allocator = NULL;
+  if (OB_ISNULL(allocator = get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(cursor_store_)) {
+    cursor_store_ = static_cast<ObSPICursor *>(allocator->alloc(sizeof(ObSPICursor)));
+    if (OB_ISNULL(cursor_store_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc cursor store", K(ret));
+    }
+  } else {
+    cursor_store_->~ObSPICursor();
+  }
+  if (OB_SUCC(ret)) {
+    cursor_store_ = new(cursor_store_) ObSPICursor(*allocator, &session);
+    uint64_t mem_limit = OB_INVALID_SIZE;
+    if (OB_FAIL(session.get_tmp_table_size(mem_limit))) {
+      LOG_WARN("fail to get tmp table size", K(ret), K(session.get_server_sid()));
+    } else if (OB_INVALID_SIZE == mem_limit) {
+      mem_limit = GCONF._chunk_row_store_mem_limit;
+    }
+    if (FAILEDx(cursor_store_->row_store_.init(mem_limit,
+                                               session.get_effective_tenant_id(),
+                                               common::ObCtxIds::DEFAULT_CTX_ID,
+                                               "PSCursorRowStore"))) {
+      LOG_WARN("row store init failed", K(ret));
+    } else if (OB_FAIL(ObDbmsInfo::deep_copy_field_columns(*allocator,
+                                                           &fields,
+                                                           cursor_store_->fields_))) {
+      LOG_WARN("deeo copy field columns failed", K(ret));
+    } else if (OB_FAIL(cursor_store_->init_row_desc(fields))) {
+      LOG_WARN("init row desc failed", K(ret), K(fields));
+    }
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
+                          bool is_reuse,
+                          bool close_by_open_thread)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("close ps cursor start", K(ret), K(session.get_server_sid()), K(is_reuse), K(close_by_open_thread), K(lbt()));
+  if (!close_by_open_thread && is_async()) {
+    while (OB_SUCCESS == get_store_ret() && !is_client_close()) {
+      ObSpinLockGuard guard(spin_lock_);
+      set_client_close(true);
+    }
+  } else if (close_by_open_thread && NULL != spi_cursor_) {
+    ObSPIResultSet *spi_result = get_cursor_handler();
+    if (OB_NOT_NULL(spi_result)) {
+      if (OB_NOT_NULL(spi_result->get_result_set())) {
+        int close_ret = spi_result->close_result_set();
+        if (OB_SUCCESS != close_ret) {
+          LOG_WARN("close mysql result failed", K(close_ret));
+        }
+        spi_result->destruct_exec_params(session);
+        spi_result->~ObSPIResultSet();
+      }
+    } else {
+      LOG_WARN("get cursor handler failed, may be lead to memory leak", K(ret));
+    }
+    spi_cursor_ = NULL;
+    if (is_async()) {
+      ObPsCursorInfo::reduce_async_cursor_count();
+    }
+  }
+
+  while (NULL != spi_cursor_) {
+    // do nothing
+  }
+
+  ObSpinLockGuard guard(spin_lock_);
+  exec_params_.reset();
+  fetch_size_ = 0;
+  store_ret_ = OB_SUCCESS;
+  client_close_ = false;
+  ps_sql_.reset();
+  if (OB_ISNULL(get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_NOT_NULL(cursor_store_)) {
+    cursor_store_->~ObSPICursor();
+    get_allocator()->free(cursor_store_);
+    cursor_store_ = NULL;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(exec_ctx_)) {
+    exec_ctx_->~ObPLExecCtx();
+    get_allocator()->free(exec_ctx_);
+    exec_ctx_ = NULL;
+  }
+  if (FAILEDx(ObPLCursorInfo::close(session, is_reuse))) {
+    LOG_WARN("pl cursor info close failed", K(ret));
+  }
+  LOG_INFO("close ps cursor end", K(ret), K(session.get_server_sid()), K(lbt()));
+  return ret;
+}
+
+int ObPsCursorInfo::get_field_columns(const common::ColumnsFieldArray *&fields)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cursor_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor store is null", K(ret));
+  } else {
+    fields = &cursor_store_->fields_;
+  }
+  return ret;
+}
+
+int ObPsCursorInfo::get_field_count(int64_t &field_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cursor_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor store is null", K(ret));
+  } else {
+    field_count = cursor_store_->fields_.count();
+  }
+  return ret;
+}
+
+// if return true, need to reduce async ps cursor count after detory cursor
+// if return false, do nothing
+bool ObPsCursorInfo::can_open_async_cursor()
+{
+  bool can_open = false;
+  int32_t v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, 1);
+  LOG_INFO("not the actual aysnc ps cursor count, the tmp values is ", K(v));
+  if (v <= GCONF.async_ps_cursor_max_count) {
+    can_open = true;
+  } else {
+    v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, -1);
+  }
+  return can_open;
+}
+
+void ObPsCursorInfo::reduce_async_cursor_count()
+{
+  int32_t v = ATOMIC_AAF(&ASYNC_PS_CURSOR_COUNT, -1);
+  LOG_INFO("reduce ps cursor count", K(v));
+}
+
+int32_t ObPsCursorInfo::ASYNC_PS_CURSOR_COUNT = 0;
 
 }  // namespace pl
 }  // namespace oceanbase

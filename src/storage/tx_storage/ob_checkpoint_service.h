@@ -29,13 +29,25 @@ class ObCheckPointService
 {
 public:
   ObCheckPointService()
-    : is_inited_(false),
-      checkpoint_timer_(),
-      traversal_flush_timer_(),
-      check_clog_disk_usage_timer_(),
-      checkpoint_task_(),
-      traversal_flush_task_(),
-      check_clog_disk_usage_task_(*this)
+      : is_inited_(false),
+        checkpoint_timer_(),
+        traversal_flush_timer_(),
+        check_clog_disk_usage_timer_(),
+        checkpoint_task_(),
+        traversal_flush_task_(),
+#ifdef OB_BUILD_SHARED_STORAGE
+        check_clog_disk_usage_task_(*this),
+        ss_update_ckpt_scn_timer_(),
+        ss_update_ckpt_lsn_timer_(),
+        ss_advance_ckpt_timer_(),
+        ss_schedule_upload_timer_(),
+        ss_update_ckpt_scn_task_(),
+        ss_update_ckpt_lsn_task_(),
+        ss_advance_ckpt_task_(),
+        ss_schedule_upload_task_()
+#else
+        check_clog_disk_usage_task_(*this)
+#endif
   {}
 
   static const int64_t NEED_FLUSH_CLOG_DISK_PERCENT = 30;
@@ -53,55 +65,88 @@ public:
       ObDataCheckpoint *data_checkpoint,
       share::SCN rec_scn);
 private:
-  bool is_inited_;
-
-  // the thread which is used to deal with checkpoint task.
-  ObLSFreezeThread freeze_thread_;
-
-  int flush_to_recycle_clog_();
   // reduce the risk of clog full due to checkpoint long interval
   static int64_t CHECK_CLOG_USAGE_INTERVAL;
   static int64_t CHECKPOINT_INTERVAL;
   static int64_t TRAVERSAL_FLUSH_INTERVAL;
   class ObCheckpointTask : public common::ObTimerTask
   {
-  public:
-    ObCheckpointTask() {}
-    virtual ~ObCheckpointTask() {}
-
     virtual void runTimerTask();
   };
 
   class ObTraversalFlushTask : public common::ObTimerTask
   {
-  public:
-    ObTraversalFlushTask() {}
-    virtual ~ObTraversalFlushTask() {}
     virtual void runTimerTask();
   };
 
   class ObCheckClogDiskUsageTask : public common::ObTimerTask
   {
   public:
-    ObCheckClogDiskUsageTask(ObCheckPointService &checkpoint_service)
-      : checkpoint_service_(checkpoint_service)
-    {}
-    virtual ~ObCheckClogDiskUsageTask() {}
+    ObCheckClogDiskUsageTask(ObCheckPointService &checkpoint_service) : checkpoint_service_(checkpoint_service) {}
     virtual void runTimerTask();
-    private:
-      ObCheckPointService &checkpoint_service_;
+
+  private:
+    ObCheckPointService &checkpoint_service_;
   };
 
+private:
+  int flush_to_recycle_clog_();
+  int update_ss_checkpoint_scn_();
+  int update_ss_checkpoint_lsn_();
+
+private:
+  bool is_inited_;
+
+  // the thread which is used to deal with checkpoint task.
+  ObLSFreezeThread freeze_thread_;
   common::ObTimer checkpoint_timer_;
   common::ObTimer traversal_flush_timer_;
   common::ObTimer check_clog_disk_usage_timer_;
   ObCheckpointTask checkpoint_task_;
   ObTraversalFlushTask traversal_flush_task_;
   ObCheckClogDiskUsageTask check_clog_disk_usage_task_;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+public:
+  static int64_t SS_UPDATE_CKPT_INTERVAL;
+  static int64_t SS_ADVANCE_CKPT_INTERVAL;
+  static int64_t SS_TRY_SCHEDULE_UPLOAD_INTERVAL;
+private:
+  class ObSSUpdateCkptSCNTask : public common::ObTimerTask {
+  public:
+    virtual void runTimerTask() override;
+  };
+
+  class ObSSUpdateCkptLSNTask : public common::ObTimerTask {
+  public:
+    virtual void runTimerTask() override;
+  };
+
+  class ObSSAdvanceCkptTask : public common::ObTimerTask {
+  public:
+    virtual void runTimerTask() override;
+  };
+
+  struct ObSSScheduleIncUploadTask : public common::ObTimerTask
+  {
+  public:
+    virtual void runTimerTask() override;
+  };
+
+private:
+  common::ObTimer ss_update_ckpt_scn_timer_;
+  common::ObTimer ss_update_ckpt_lsn_timer_;
+  common::ObTimer ss_advance_ckpt_timer_;
+  common::ObTimer ss_schedule_upload_timer_;
+  ObSSUpdateCkptSCNTask ss_update_ckpt_scn_task_;
+  ObSSUpdateCkptLSNTask ss_update_ckpt_lsn_task_;
+  ObSSAdvanceCkptTask ss_advance_ckpt_task_;
+  ObSSScheduleIncUploadTask ss_schedule_upload_task_;
+#endif  // OB_BUILD_SHARED_STORAGE
 };
 
-} // checkpoint
-} // storage
-} // oceanbase
+}  // namespace checkpoint
+}  // namespace storage
+}  // namespace oceanbase
 
 #endif

@@ -264,29 +264,30 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
   return ret;
 }
 
-int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
+int ObCgroupCtrl::remove_dir_(const char *curr_dir)
 {
   int ret = OB_SUCCESS;
-  char group_task_path[PATH_BUFSIZE];
-  char target_task_path[PATH_BUFSIZE];
-  snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
-  if (is_delete_group) {
-    snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
-    FILE *group_task_file = nullptr;
-    if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
-    } else {
-      char tid_buf[VALUE_BUFSIZE];
-      int tmp_ret = OB_SUCCESS;
-      while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-        if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
-          LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
-        }
-      }
-      fclose(group_task_file);
-    }
-  }
+  /* Do not move thread */
+  // char group_task_path[PATH_BUFSIZE];
+  // char target_task_path[PATH_BUFSIZE];
+  // snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
+  // if (is_delete_group) {
+  //   snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
+  //   FILE *group_task_file = nullptr;
+  //   if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
+  //     ret = OB_IO_ERROR;
+  //     LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
+  //   } else {
+  //     char tid_buf[VALUE_BUFSIZE];
+  //     int tmp_ret = OB_SUCCESS;
+  //     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
+  //       if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
+  //         LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
+  //       }
+  //     }
+  //     fclose(group_task_file);
+  //   }
+  // }
   if (OB_SUCCESS != ret) {
   } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
@@ -362,7 +363,7 @@ int ObCgroupCtrl::remove_cgroup_(const uint64_t tenant_id, uint64_t group_id, co
   if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, is_background))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
   } else if (is_valid_group(group_id)) {
-    ret = remove_dir_(group_path, true /* is_delete_group */);
+    ret = remove_dir_(group_path);
   } else {
     ret = recursion_remove_group_(group_path);
   }
@@ -1031,10 +1032,10 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
   int64_t write_size = -1;
   if ((fd = ::open(filename, O_WRONLY)) < 0) {
     ret = OB_IO_ERROR;
-    LOG_ERROR("open file error", K(filename), K(errno), KERRMSG, K(ret));
+    LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
-    LOG_WARN("write file error",
+    LOG_ERROR("write file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing

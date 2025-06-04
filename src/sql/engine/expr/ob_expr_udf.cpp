@@ -927,11 +927,21 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       // memory of ref cursor on session, do not copy it.
       if (tmp_result.is_pl_extend()
           && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+        int tmp_ret = OB_SUCCESS;
+        CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
         OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
-        OZ (pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session()));
-        if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+        if (OB_SUCC(ret)) {
           ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
           OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
+          if (OB_FAIL(ret)) {
+            if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+              LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+            }
+          }
+        }
+        if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
       } else {
         result = tmp_result;
@@ -1057,7 +1067,9 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1075,7 +1087,9 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1093,7 +1107,9 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_result_cache_,
+              is_deterministic_);
   return len;
 }
 
@@ -1124,8 +1140,12 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr &udf_expr = const_cast<ObUDFRawExpr &> (static_cast<const ObUDFRawExpr&>(raw_expr));
+  ObIArray<ObRawExprResType> &params_type = udf_expr.get_params_type();
   OZ(subprogram_path_.assign(udf_expr.get_subprogram_path()));
-  OZ(params_type_.assign(udf_expr.get_params_type()));
+  OZ(params_type_.init(params_type.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < params_type.count(); ++i) {
+    OZ(params_type_.push_back(params_type.at(i)));
+  }
   OZ(params_desc_.assign(udf_expr.get_params_desc()));
   OZ(nocopy_params_.assign(udf_expr.get_nocopy_params()));
   udf_id_ = udf_expr.get_udf_id();

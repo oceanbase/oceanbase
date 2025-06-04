@@ -86,7 +86,8 @@ public:
                  const ParamStore *param_list = NULL,
                  sql::ExternalParams *extern_param_info = NULL,
                  TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID,
-                 bool is_sync_package_var = false) :
+                 bool is_sync_package_var = false,
+                 bool need_add_pl_cache = true) :
         allocator_(allocator),
         session_info_(session_info),
         schema_guard_(schema_guard),
@@ -98,7 +99,8 @@ public:
         is_sql_scope_(is_sql_scope_),
         extern_param_info_(extern_param_info),
         is_udt_udf_ctx_(false),
-        is_sync_package_var_(is_sync_package_var)
+        is_sync_package_var_(is_sync_package_var),
+        need_add_pl_cache_(need_add_pl_cache)
   {
     params_.param_list_ = param_list;
     params_.tg_timing_event_ = tg_timing_event;
@@ -122,6 +124,7 @@ public:
   sql::ExternalParams *extern_param_info_;
   bool is_udt_udf_ctx_; // indicate this context is belong to a udt udf
   bool is_sync_package_var_;
+  bool need_add_pl_cache_; // indicate if this pl object need add into pl cache when re_compile
   ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
   ObPLEnumSetCtx *enum_set_ctx_;
 };
@@ -328,7 +331,7 @@ public:
   static int resolve_sp_scalar_type(common::ObIAllocator &allocator,
                                     const ParseNode *sp_data_type_node,
                                     const ObString &ident_name,
-                                    const sql::ObSQLSessionInfo &session_info,
+                                    sql::ObSQLSessionInfo &session_info,
                                     ObPLDataType &data_type,
                                     bool is_for_param_type = false,
                                     uint64_t package_id = OB_INVALID_ID);
@@ -398,12 +401,14 @@ public:
                                 common::ObIArray<ObObjAccessIdent> &obj_access_idents,
                                 ObSQLSessionInfo &session_info);
   static
-  int record_error_line(const ObStmtNodeTree *parse_tree, ObSQLSessionInfo &session_info);
+  int record_error_line(const ObStmtNodeTree *parse_tree, ObSQLSessionInfo &session_info, const ObString &db_name, const ObString &package_name, const ObString &name);
   static
-  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col);
+  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name);
   static
-  int resolve_access_ident(const ObObjAccessIdent &access_ident, ObPLExternalNS &external_ns,
-                           common::ObIArray<ObObjAccessIdx> &access_idexs);
+  int resolve_access_ident(const ObObjAccessIdent &access_ident,
+                           ObPLExternalNS &external_ns,
+                           common::ObIArray<ObObjAccessIdx> &access_idexs,
+                           bool full_schema = false);
 
   static
   int get_view_select_stmt(
@@ -412,6 +417,7 @@ public:
     sql::ObSelectStmt *&select_stmt);
   static
   int fill_record_type(share::schema::ObSchemaGetterGuard &schema_guard,
+                       const ObSQLSessionInfo &session_info,
                        common::ObIAllocator &allocator,
                        sql::ObSelectStmt *select_stmt,
                        ObRecordType *&record_type);
@@ -477,7 +483,12 @@ public:
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
   static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
-  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type, bool need_check = false);
+  static int set_question_mark_type(ObSchemaGetterGuard &schema_guard,
+                                    ObRawExpr *into_expr,
+                                    ObPLBlockNS *ns,
+                                    const ObPLDataType *type,
+                                    ObPLDependencyTable &deps,
+                                    bool need_check = false);
 
   static
   int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
@@ -842,8 +853,8 @@ private:
                    common::ObIArray<ObObjAccessIdx> &access_idxs,
                    ObPLCompileUnitAST &func);
   int convert_pltype_to_restype(ObIAllocator &alloc,
-                                              const ObPLDataType &pl_type,
-                                              ObExprResType *&result_type);
+                                const ObPLDataType &pl_type,
+                                ObRawExprResType *&result_type);
   int resolve_access_ident(ObObjAccessIdent &access_ident, const ObPLBlockNS &ns,
                            ObRawExprFactory &expr_factory, const ObSQLSessionInfo *session_info,
                            ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func,
@@ -1109,7 +1120,8 @@ private:
                            uint64_t seq_id);
   int calc_subtype_range_bound(const ObStmtNodeTree *bound_node,
                                ObPLCompileUnitAST &unit_ast,
-                               int32_t &bound);
+                               int32_t &bound,
+                               ObString &subtype_name);
   int resolve_external_types_from_expr(ObRawExpr &expr);
   int add_external_cursor(ObPLBlockNS &ns,
                           const ObPLBlockNS *external_ns,

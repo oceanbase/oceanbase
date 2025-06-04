@@ -205,6 +205,7 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask *task)
 void ObArchiveSender::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSender thread start", K_(tenant_id));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSender");
   lib::set_thread_name("ArcSender");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -772,9 +773,17 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
   } else if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code) {
     // backup permission denied
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
-      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED, "msg", "archive dest permission denied", "ret", ret_code,
+      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED,
+          "msg", "archive dest permission denied, retrying after reset backup_dest", "ret", ret_code,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
+      // reset round_mgr backup_dest
+      if (OB_ISNULL(round_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        ARCHIVE_LOG(WARN, "round_mgr is null", K(ret));
+      } else if (OB_FAIL(round_mgr_->reset_backup_dest(key))) {
+        ARCHIVE_LOG(WARN, "reset backup dest failed", K(ret), K(key));
+      }
     }
   } else if (OB_ERR_AES_ENCRYPT == ret_code) {
     // archive dest encrypt failed

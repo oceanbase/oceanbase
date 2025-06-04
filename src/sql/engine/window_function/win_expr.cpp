@@ -2288,8 +2288,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
           group_concat_whole_frame = true;
         }
 
-        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
-          int32_t batch_idx = row_idx - row_start;
+        for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
+          int64_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
             continue;
           }
@@ -2356,8 +2356,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
           MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
           ctx.extra_ = extra;
         }
-        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
-          int32_t batch_idx = row_idx - row_start;
+        for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
+          int64_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
             continue;
           }

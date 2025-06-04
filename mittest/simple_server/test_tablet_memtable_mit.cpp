@@ -163,7 +163,9 @@ void TestTabletMemtable::basic_test() {
   ASSERT_NE(nullptr, tablet = tablet_handle.get_obj());
 
   // *********** CREATE DATA METMABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), false /*for_direct_load*/, false /*for_replay*/));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 1;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ObProtectedMemtableMgrHandle *protected_handle = nullptr;
   ASSERT_EQ(OB_SUCCESS, tablet->get_protected_memtable_mgr_handle(protected_handle));
   ASSERT_NE(nullptr, protected_handle);
@@ -190,7 +192,10 @@ void TestTabletMemtable::basic_test() {
   STORAGE_LOG(INFO, "finish freeze data memtable", KPC(memtable));
 
   // *********** CREATE DIRECT LOAD MEMTABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), true /*for_direct_load*/, false /*for_replay*/));
+  arg.reset();
+  arg.schema_version_ = 1;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
   ASSERT_EQ(ObITable::TableType::DIRECT_LOAD_MEMTABLE, memtable->get_table_type());
@@ -227,7 +232,10 @@ void TestTabletMemtable::basic_test() {
   ASSERT_EQ(true, memtable->is_in_prepare_list_of_data_checkpoint());
 
   // *********** CREATE ANOTHER DIRECT LOAD MEMTABLE ************
-  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(1, SCN::min_scn(), true /*for_direct_load*/, false /*for_replay*/));
+  arg.reset();
+  arg.schema_version_ = 1;
+  arg.for_inc_direct_load_ = true;
+  ASSERT_EQ(OB_SUCCESS, tablet->create_memtable(arg));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
   STORAGE_LOG(INFO, "create a new direct load memtable", KPC(memtable));

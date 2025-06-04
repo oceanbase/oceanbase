@@ -35,10 +35,10 @@ ObTenantStorageMetaService::ObTenantStorageMetaService()
     is_shared_storage_(false),
     ckpt_slog_handler_(),
     slogger_(),
-    persister_(),
-    replayer_(),
     shared_object_rwriter_(),
-    shared_object_raw_rwriter_()
+    shared_object_raw_rwriter_(),
+    wait_gc_map_lock_(),
+    wait_gc_tablet_arr_map_()
 {}
 
 int ObTenantStorageMetaService::mtl_init(ObTenantStorageMetaService *&meta_service)
@@ -53,24 +53,22 @@ int ObTenantStorageMetaService::mtl_init(ObTenantStorageMetaService *&meta_servi
 int ObTenantStorageMetaService::init()
 {
   int ret = OB_SUCCESS;
+  const int64_t MAP_BUCKET_CNT = 1024;
   const bool is_shared_storage = GCTX.is_shared_storage_mode();
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("has inited", K(ret));
-  } else if (!is_shared_storage &&
-      OB_FAIL(slogger_.init(SERVER_STORAGE_META_SERVICE.get_slogger_manager(), MTL_ID()))) {
+  } else if (OB_FAIL(slogger_.init(SERVER_STORAGE_META_SERVICE.get_slogger_manager(), MTL_ID(), MTL_EPOCH_ID()))) {
     LOG_WARN("failed to init slogger", K(ret));
-  } else if (!is_shared_storage && OB_FAIL(ckpt_slog_handler_.init(slogger_))) {
+  } else if (OB_FAIL(ckpt_slog_handler_.init(slogger_))) {
     LOG_WARN("fail to init tenant checkpoint slog hander", K(ret));
-  } else if (OB_FAIL(persister_.init(is_shared_storage, slogger_, ckpt_slog_handler_))) {
-    LOG_WARN("fail to init persister", K(ret));
-  } else if (OB_FAIL(replayer_.init(is_shared_storage, persister_, ckpt_slog_handler_))) {
-    LOG_WARN("fail to init replayer", K(ret));
   } else if (OB_FAIL(shared_object_rwriter_.init())) {
     LOG_WARN("fail to init shared block rwriter", K(ret));
   } else if (OB_FAIL(shared_object_raw_rwriter_.init())) {
     LOG_WARN("fail to init shared block raw rwriter", K(ret));
+  } else if (OB_FAIL(wait_gc_tablet_arr_map_.create(MAP_BUCKET_CNT, lib::ObMemAttr(MTL_ID(), "WaitGCTabMap")))) {
+    LOG_WARN("fail to create wait gc tablet array map", K(ret));
   } else {
     is_shared_storage_ = is_shared_storage;
     is_inited_ = true;
@@ -88,13 +86,11 @@ int ObTenantStorageMetaService::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_shared_storage_ && OB_FAIL(slogger_.start())) {
+  } else if (OB_FAIL(slogger_.start())) {
     LOG_WARN("fail to start slogger", K(ret));
-  } else if (!is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.start())) {
+  } else if (OB_FAIL(ckpt_slog_handler_.start())) {
     LOG_WARN("fail to start tenant checkpoint slog handler", K(ret));
-  } else if (OB_FAIL(replayer_.start_replay(super_block))) {
-    LOG_WARN("fail to start replayer", K(ret));
-  } else if (OB_FAIL(seq_generator_.init(is_shared_storage_, persister_))) {
+  } else if (OB_FAIL(seq_generator_.init(is_shared_storage_, ckpt_slog_handler_))) {
     LOG_WARN("fail to seq generator", K(ret));
   } else if (OB_FAIL(seq_generator_.start())) {
     LOG_WARN("fail to seq generator", K(ret));
@@ -116,10 +112,8 @@ int ObTenantStorageMetaService::start()
 void ObTenantStorageMetaService::stop()
 {
   if (IS_INIT) {
-    if (!is_shared_storage_) {
-      slogger_.stop();
-      ckpt_slog_handler_.stop();
-    }
+    slogger_.stop();
+    ckpt_slog_handler_.stop();
     seq_generator_.stop();
   }
 }
@@ -127,38 +121,37 @@ void ObTenantStorageMetaService::stop()
 void ObTenantStorageMetaService::wait()
 {
   if (IS_INIT) {
-    if (!is_shared_storage_) {
-      slogger_.wait();
-      ckpt_slog_handler_.wait();
-    }
+    slogger_.wait();
+    ckpt_slog_handler_.wait();
     seq_generator_.stop();
   }
 }
 
 void ObTenantStorageMetaService::destroy()
 {
+  if (IS_INIT) {
+    int ret = OB_SUCCESS;
+    const lib::ObMemAttr attr(MTL_ID(), "WaitGCTabArr");
+    for (WaitGCTabletArrayMap::iterator iter = wait_gc_tablet_arr_map_.begin();
+         iter !=  wait_gc_tablet_arr_map_.end();
+         iter++) {
+      if (OB_ISNULL(iter->second)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("WaitGCTabletArrayInfo is null", K(ret), K(iter->first));
+      } else {
+        OB_DELETE(WaitGCTabletArray, attr, iter->second);
+      }
+    }
+    wait_gc_tablet_arr_map_.destroy();
+  }
   slogger_.destroy();
   ckpt_slog_handler_.destroy();
-  persister_.destroy();
-  replayer_.destroy();
   seq_generator_.destroy();
   shared_object_rwriter_.reset();
   shared_object_raw_rwriter_.reset();
   is_shared_storage_ = false;
   is_started_ = false;
   is_inited_ = false;
-}
-
-int ObTenantStorageMetaService::get_active_cursor(common::ObLogCursor &log_cursor)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(slogger_.get_active_cursor(log_cursor))) {
-    LOG_WARN("fail to get active cursor", K(ret));
-  }
-  return ret;
 }
 
 int ObTenantStorageMetaService::get_meta_block_list(
@@ -182,10 +175,338 @@ int ObTenantStorageMetaService::write_checkpoint(bool is_force)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (is_shared_storage_) {
-    // do nothing
   } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(is_force))) {
     LOG_WARN("fail to write checkpoint", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::prepare_create_ls(const ObLSMeta &meta, int64_t &ls_epoch)
+{
+  int ret = OB_SUCCESS;
+  ls_epoch = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.create_tenant_ls_item(meta.ls_id_, ls_epoch))) {
+    LOG_WARN("fail to create tenant super block ls item", K(ret), K(meta));
+#endif
+  } else {
+    HEAP_VAR(ObLSMeta, tmp_meta) {
+      tmp_meta = meta;
+      tmp_meta.set_ls_epoch(ls_epoch);
+      ObCreateLSPrepareSlog slog_entry(tmp_meta);
+      ObStorageLogParam log_param;
+      log_param.data_ = &slog_entry;
+      log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                              ObRedoLogSubType::OB_REDO_LOG_CREATE_LS);
+      if (OB_FAIL(slogger_.write_log(log_param))) {
+        LOG_WARN("fail to write remove ls slog", K(log_param));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::commit_create_ls(const share::ObLSID &ls_id, const int64_t ls_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.update_tenant_ls_item(ls_id, ls_epoch, ObLSItemStatus::CREATED))) {
+    LOG_WARN("fail to update tenant super block ls item", K(ret), K(ls_id), K(ls_epoch));
+#endif
+  } else {
+    share::ObLSID tmp_ls_id = ls_id;
+    ObCreateLSCommitSLog slog_entry(tmp_ls_id);
+    ObStorageLogParam log_param;
+    log_param.data_ = &slog_entry;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                            ObRedoLogSubType::OB_REDO_LOG_CREATE_LS_COMMIT);
+    if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write create ls commit slog", K(log_param));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::abort_create_ls(const share::ObLSID &ls_id, const int64_t ls_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.update_tenant_ls_item(ls_id, ls_epoch, ObLSItemStatus::CREATE_ABORT))) {
+    LOG_WARN("fail to update tenant super block ls item", K(ret), K(ls_id), K(ls_epoch));
+#endif
+  } else {
+    share::ObLSID tmp_ls_id = ls_id;
+    ObCreateLSAbortSLog slog_entry(tmp_ls_id);
+    ObStorageLogParam log_param;
+    log_param.data_ = &slog_entry;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                            ObRedoLogSubType::OB_REDO_LOG_CREATE_LS_ABORT);
+    if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write create ls abort slog", K(log_param));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::delete_ls(const share::ObLSID &ls_id, const int64_t ls_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_ && OB_FAIL(ckpt_slog_handler_.update_tenant_ls_item(ls_id, ls_epoch, ObLSItemStatus::DELETED))) {
+    LOG_WARN("fail to update tenant super block ls item", K(ret), K(ls_id), K(ls_epoch));
+#endif
+  } else {
+    share::ObLSID tmp_ls_id = ls_id;
+    ObDeleteLSLog slog_entry(tmp_ls_id);
+    ObStorageLogParam log_param;
+    log_param.data_ = &slog_entry;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                            ObRedoLogSubType::OB_REDO_LOG_DELETE_LS);
+    if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write remove ls slog", K(log_param));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::delete_ls_item(const share::ObLSID ls_id, const int64_t ls_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ckpt_slog_handler_.delete_tenant_ls_item(ls_id, ls_epoch))) {
+    LOG_WARN("fail to delete tenant super block ls item", K(ret), K(ls_id), K(ls_epoch));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::update_ls_meta(const ObLSMeta &ls_meta)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObLSMetaLog slog_entry(ls_meta);
+    ObStorageLogParam log_param;
+    log_param.data_ = &slog_entry;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                            ObRedoLogSubType::OB_REDO_LOG_UPDATE_LS);
+    if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write update ls slog", K(log_param), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::update_dup_table_meta(
+    const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_table_meta)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObDupTableCkptLog slog_entry;
+    ObStorageLogParam log_param;
+    log_param.data_ = &slog_entry;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                            ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS);
+    if (OB_FAIL(slog_entry.init(dup_table_meta))) {
+      LOG_WARN("init slog entry failed", K(ret),K(dup_table_meta));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write dup table meta slog", K(ret), K(log_param));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::batch_update_tablet(const ObIArray<ObUpdateTabletLog> &slog_arr)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(is_shared_storage_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("not support for shared-storage", K(ret));
+  } else {
+    ObSArray<ObStorageLogParam> param_arr;
+    param_arr.set_attr(ObMemAttr(MTL_ID(), "BatchUpdateTab"));
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(
+        ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
+    if (OB_FAIL(param_arr.reserve(slog_arr.count()))) {
+      LOG_WARN("fail to reserve memory for slog param arr", K(ret), K(slog_arr.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < slog_arr.count(); i++) {
+      log_param.data_ =(ObIBaseStorageLogEntry*)(&(slog_arr.at(i)));
+      if (OB_FAIL(param_arr.push_back(log_param))) {
+        LOG_WARN("fail to push back slog param", K(ret), K(log_param));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(slogger_.write_log(param_arr))) {
+      LOG_WARN("fail to batch write slog", K(ret), K(param_arr.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_arr.count(); i++) {
+        const ObStorageLogParam &log_param = param_arr.at(i);
+        const ObUpdateTabletLog *slog = reinterpret_cast<const ObUpdateTabletLog*>(log_param.data_);
+        const ObTabletMapKey tablet_key(slog->ls_id_, slog->tablet_id_);
+        do {
+          if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
+            if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+              LOG_WARN("fail to report slog", K(ret), K(tablet_key), K(log_param));
+            } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
+              LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key), K(log_param));
+            }
+          }
+        } while (OB_ALLOCATE_MEMORY_FAILED == ret);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTenantStorageMetaService::update_tablet(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObTabletID &tablet_id,
+    const ObUpdateTabletPointerParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(param));
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) { // make sure that all data or meta written on the macro block is flushed
+    LOG_WARN("fail to fsync_block", K(ret));
+  } else {
+    const ObTabletMapKey tablet_key(ls_id, tablet_id);
+    ObUpdateTabletLog slog_entry(ls_id, tablet_id, param, ls_epoch);
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
+    log_param.data_ = &slog_entry;
+    if (OB_UNLIKELY(!slog_entry.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), K(ls_id), K(tablet_id), K(param));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
+    } else {
+      do {
+        if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
+          if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+            LOG_WARN("fail to report slog", K(ret), K(tablet_key));
+          } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
+            LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key));
+          }
+        }
+      } while (OB_ALLOCATE_MEMORY_FAILED == ret);
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::remove_tablet(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet", K(ret), K(tablet_handle));
+  } else {
+    const common::ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
+    const ObMetaDiskAddr &tablet_addr = tablet_handle.get_obj()->get_tablet_addr();
+    if (OB_UNLIKELY(!ls_id.is_valid() || ls_epoch < 0|| !tablet_id.is_valid() || !tablet_addr.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(ls_id), K(ls_epoch), K(tablet_id), K(tablet_addr));
+    } else if (!is_shared_storage_ && OB_FAIL(write_remove_tablet_slog_for_sn(ls_id, tablet_id))) {
+      LOG_WARN("fail to write remove tablet slog", K(ret), K(ls_id), K(ls_epoch), K(tablet_id));
+    } else if (is_shared_storage_ && OB_FAIL(write_remove_tablet_slog_for_ss(ls_id, ls_epoch, tablet_id, *tablet_handle.get_obj()))) {
+      LOG_WARN("fail to write remove tablet slog", K(ret), K(ls_id), K(ls_epoch), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::batch_remove_tablet(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObIArray<common::ObTabletID> &tablet_ids,
+    const ObIArray<ObMetaDiskAddr> &tablet_addrs)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || ls_epoch < 0 || tablet_ids.count() != tablet_addrs.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(ls_epoch), K(tablet_ids.count()), K(tablet_addrs.count()));
+  } else if (OB_FAIL(batch_write_remove_tablet_slog(ls_id, ls_epoch, tablet_ids, tablet_addrs))) {
+    LOG_WARN("fail to write remove tablets slog", K(ret), K(ls_id), K(ls_epoch));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::write_empty_shell_tablet(
+    const int64_t ls_epoch,
+    ObTablet *tablet,
+    ObMetaDiskAddr &tablet_addr)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(is_shared_storage_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support for shared-storage", K(ret), K(tablet_addr));
+  } else if (OB_UNLIKELY(!tablet->is_empty_shell())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("the tablet is not empty shell", K(ret), K(tablet));
+  } else {
+    const ObTabletMapKey tablet_key(tablet->get_tablet_meta().ls_id_, tablet->get_tablet_meta().tablet_id_);
+    ObEmptyShellTabletLog slog_entry(tablet->get_tablet_meta().ls_id_,
+                                     tablet->get_tablet_meta().tablet_id_,
+                                     ls_epoch,
+                                     tablet);
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET);
+    log_param.data_ = &slog_entry;
+    if (OB_UNLIKELY(!slog_entry.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), KPC(tablet));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write slog for empty shell tablet", K(ret), K(log_param));
+    } else if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
+      LOG_WARN("fail to report slog", K(ret), K(tablet_key));
+    } else {
+      tablet_addr = log_param.disk_addr_;
+    }
   }
   return ret;
 }
@@ -502,6 +823,7 @@ int ObTenantStorageMetaService::inner_get_gc_tablet_scn_arr_(
   }
   return ret;
 }
+
 int ObTenantStorageMetaService::get_gc_tablet_scn_arr(
     const ObTabletID &tablet_id,
     const blocksstable::ObStorageObjectType obj_type,
@@ -528,6 +850,161 @@ int ObTenantStorageMetaService::get_gc_tablet_scn_arr(
   }
   return ret;
 }
+#endif
+
+int ObTenantStorageMetaService::get_wait_gc_tablet_items(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    common::ObIArray<ObPendingFreeTabletItem> &items)
+{
+  int ret = OB_SUCCESS;
+  const WaitGCTabletArrayKey key(ls_id, ls_epoch);
+  WaitGCTabletArray *tablet_array = nullptr;
+  items.reuse();
+  {
+    lib::ObMutexGuard guard(wait_gc_map_lock_);
+    if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array)) && OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("fail to get wait gc tablet array from map", K(ret), K(key));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      tablet_array = nullptr;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get wait gc tablet array from map", K(ret), K(key));
+    }
+  } else if (OB_ISNULL(tablet_array)) {
+    ret = OB_ERR_UNEXPECTED; // get_refactored successfully, but array_info = nullptr
+    LOG_WARN("tablet array is nullptr", K(ret), K(key));
+  } else {
+    lib::ObMutexGuard guard(tablet_array->lock_);
+    if (OB_FAIL(items.assign(tablet_array->wait_gc_tablet_arr_.items_))) {
+      LOG_WARN("fail to assign array", K(ret), K(tablet_array->wait_gc_tablet_arr_.items_));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::delete_wait_gc_tablet_items(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObIArray<ObPendingFreeTabletItem> &items)
+{
+  int ret = OB_SUCCESS;
+  const WaitGCTabletArrayKey key(ls_id, ls_epoch);
+  // We can split the tablet_ids array due to following reasons:
+  // 1. batch delete tablet items doesn't need atomic semantic, they can be written in different log items
+  // 2. log item batch header count is int16_t type, we can't over the limit
+  const int64_t MAX_ARRAY_SIZE = 32000;
+  const int64_t total_cnt = items.count();
+  ObSEArray<ObPendingFreeTabletItem, 16> cur_items;
+  int64_t finish_cnt = 0;
+  int64_t cur_cnt = 0;
+  WaitGCTabletArray *tablet_array = nullptr;
+  {
+    lib::ObMutexGuard guard(wait_gc_map_lock_);
+    if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array))) {
+      LOG_WARN("fail to wait gc tablet array", K(ret), K(key));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      tablet_array = nullptr;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get wait gc tablet array", K(ret), K(key));
+    }
+  } else if (OB_ISNULL(tablet_array)) {
+    ret = OB_ERR_UNEXPECTED; // get_refactored successfully, but tablet array = nullptr
+    LOG_WARN("array info is nullptr", K(ret), K(key));
+  }
+  while (OB_SUCC(ret) && finish_cnt < total_cnt) {
+    cur_items.reset();
+    cur_cnt = MIN(MAX_ARRAY_SIZE, total_cnt - finish_cnt);
+    if (OB_FAIL(cur_items.reserve(cur_cnt))) {
+      STORAGE_REDO_LOG(WARN, "reserve array fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
+    }
+    for (int64_t i = finish_cnt; OB_SUCC(ret) && i < finish_cnt + cur_cnt; ++i) {
+      const ObPendingFreeTabletItem &item = items.at(i);
+      if (OB_FAIL(cur_items.push_back(item))) {
+        STORAGE_REDO_LOG(WARN, "push back tablet item fail", K(ret), K(cur_cnt), K(total_cnt),
+            K(finish_cnt), K(i), K(item));
+      }
+    }
+    if (FAILEDx(safe_batch_write_gc_tablet_slog(ls_id, ls_epoch, cur_items, *tablet_array))) {
+      STORAGE_REDO_LOG(WARN, "inner write log fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
+    } else {
+      finish_cnt += cur_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::safe_batch_write_gc_tablet_slog(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObIArray<ObPendingFreeTabletItem> &items,
+    WaitGCTabletArray &tablet_array)
+{
+  int ret = OB_SUCCESS;
+  const int64_t item_count = items.count();
+  const int32_t cmd = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                             ObRedoLogSubType::OB_REDO_LOG_GC_TABLET);
+  ObSArray<ObGCTabletLog> slog_array;
+  ObSArray<ObStorageLogParam> param_array;
+  const ObIArray<ObPendingFreeTabletItem> &arr = tablet_array.wait_gc_tablet_arr_.items_;
+  common::ObSArray<ObPendingFreeTabletItem> tmp;
+  if (OB_FAIL(slog_array.reserve(item_count))) {
+    LOG_WARN("failed to reserve for slog array", K(ret), K(item_count));
+  } else if (OB_FAIL(param_array.reserve(item_count))) {
+    LOG_WARN("failed to reserve for param array", K(ret), K(item_count));
+  } else if (OB_FAIL(tmp.reserve(arr.count()))) {
+    LOG_WARN("failed to reserve for tmp array", K(ret), K(arr.count()));
+  } else {
+    lib::ObMutexGuard guard(tablet_array.lock_);
+    int64_t delete_cnt = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < item_count; ++i) {
+      const ObPendingFreeTabletItem &item = arr.at(i);
+      if (OB_UNLIKELY(!item.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid tablet item", K(ret), K(ls_id), K(ls_epoch), K(item));
+      } else if (has_exist_in_array(items, item)) {
+        delete_cnt++;
+        ObGCTabletLog slog_entry(ls_id,
+                                 ls_epoch,
+                                 item.tablet_id_,
+                                 item.tablet_meta_version_,
+                                 item.status_,
+                                 item.tablet_transfer_seq_);
+        if (OB_FAIL(slog_array.push_back(slog_entry))) {
+          LOG_WARN("fail to push slog entry into slog array", K(ret), K(slog_entry), K(i));
+        }
+      } else if (OB_FAIL(tmp.push_back(item))) {
+        LOG_WARN("failed to push_back", K(ret), K(tmp), K(arr), K(items));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < delete_cnt; i++) {
+      ObStorageLogParam log_param(cmd, &slog_array[i]);
+      if (OB_FAIL(param_array.push_back(log_param))) {
+        LOG_WARN("fail to push log param into param array", K(ret), K(log_param), K(i));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // error occurred
+    } else if (items.count() != delete_cnt) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("deleting item(s) do not all exist in pending_free_arr", K(ret), K(items), K(arr), K(tmp));
+    } else if (OB_FAIL(slogger_.write_log(param_array))) {
+      LOG_WARN("fail to write slog for batch deleting tablet", K(ret), K(param_array));
+    } else if (OB_FAIL(tablet_array.wait_gc_tablet_arr_.items_.assign(tmp))) {
+      LOG_WARN("fail to sync delete tablet item", K(ret), K(tmp));
+    }
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_SHARED_STORAGE
 int ObTenantStorageMetaService::write_gc_tablet_scn_arr(
     const ObTabletID &tablet_id,
     const blocksstable::ObStorageObjectType obj_type,
@@ -631,6 +1108,7 @@ int ObTenantStorageMetaService::update_shared_tablet_meta_list(
   FLOG_INFO("finish update_shared_tablet_meta_list", K(ret), K(tablet_id), K(new_tablet_meta_scn), K(new_tablet_meta_version_list));
   return ret;
 }
+
 int ObTenantStorageMetaService::ss_write_gc_info_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &gc_info_scn_arr)
 {
@@ -644,6 +1122,7 @@ int ObTenantStorageMetaService::ss_write_gc_info_(
   }
   return ret;
 }
+
 int ObTenantStorageMetaService::ss_write_meta_list_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &meta_list_scn_arr)
 {
@@ -657,6 +1136,7 @@ int ObTenantStorageMetaService::ss_write_meta_list_(
   }
   return ret;
 }
+
 int ObTenantStorageMetaService::ss_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
@@ -667,8 +1147,8 @@ int ObTenantStorageMetaService::ss_is_meta_list_exist(const ObTabletID tablet_id
   }
   return ret;
 }
-
 #endif
+
 int ObTenantStorageMetaService::get_ls_items_by_status(
     const storage::ObLSItemStatus status,
     ObIArray<storage::ObLSItem> &ls_items)
@@ -695,6 +1175,454 @@ int ObTenantStorageMetaService::get_ls_items_by_status(
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get tenant items by status", K(ret), K(ls_item), K(ls_items), K(ls_item_iter));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::write_remove_tablet_slog_for_sn(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObDeleteTabletLog slog_entry(ls_id, tablet_id);
+  ObStorageLogParam log_param;
+  log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+      ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
+  log_param.data_ = &slog_entry;
+  if (OB_FAIL(slogger_.write_log(log_param))) {
+    LOG_WARN("fail to write remove tablet slog", K(ret), K(log_param));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::write_remove_tablet_slog_for_ss(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObTabletID &tablet_id,
+    const ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  ObTabletCreateDeleteMdsUserData data;
+  const ObMetaDiskAddr &tablet_addr = tablet.get_tablet_addr();
+  GCTabletType gc_type = GCTabletType::TransferOut;
+  WaitGCTabletArray *tablet_array = nullptr;
+  if (OB_FAIL(tablet.get_tablet_status(share::SCN::max_scn(), data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      gc_type = GCTabletType::CreateAbort;
+      LOG_INFO("tablet_status is not commit", KR(ret), K(ls_id), K(tablet_id));
+    } else {
+      LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (ObTabletStatus::DELETED == data.tablet_status_) {
+    gc_type = GCTabletType::DropTablet;
+  }
+  if (OB_SUCC(ret)) {
+    const WaitGCTabletArrayKey key(ls_id, ls_epoch);
+    lib::ObMutexGuard guard(wait_gc_map_lock_);
+    if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        // overwrite return code
+        const lib::ObMemAttr attr(MTL_ID(), "WaitGCTabArr");
+        if (OB_ISNULL(tablet_array = OB_NEW(WaitGCTabletArray, attr))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc mem", K(ret), K(key));
+        } else if (OB_FAIL(wait_gc_tablet_arr_map_.set_refactored(key, tablet_array))) {
+          LOG_WARN("fail to set wait gc tablet array info", K(ret), K(key));
+          OB_DELETE(WaitGCTabletArray, attr, tablet_array);
+        }
+      } else {
+        LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ObMutexGuard guard(tablet_array->lock_);
+    const ObPendingFreeTabletItem tablet_item(tablet_id,
+                                              tablet_addr.block_id().meta_version_id(),
+                                              ObPendingFreeTabletStatus::WAIT_GC,
+                                              ObTimeUtility::fast_current_time(),
+                                              gc_type,
+                                              tablet_addr.block_id().meta_transfer_seq());
+    ObDeleteTabletLog slog_entry(ls_id,
+                                 tablet_id,
+                                 ls_epoch,
+                                 tablet_item.tablet_meta_version_,
+                                 tablet_item.status_,
+                                 tablet_item.free_time_,
+                                 tablet_item.gc_type_,
+                                 tablet_item.tablet_transfer_seq_);
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
+    log_param.data_ = &slog_entry;
+    if (has_exist_in_array(tablet_array->wait_gc_tablet_arr_.items_, tablet_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet_item has existed in wait gc tablet arr", K(ret), K(tablet_array), K(tablet_item));
+    } else if (OB_FAIL(slogger_.write_log(log_param))) {
+      LOG_WARN("fail to write remove tablet slog", K(ret), K(log_param));
+    } else if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.items_.push_back(tablet_item))) {
+      LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
+    } else {
+      FLOG_INFO("succeed to remove tablet", K(ret), K(tablet_item));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::batch_write_remove_tablet_slog(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObIArray<ObTabletID> &tablet_ids,
+    const common::ObIArray<ObMetaDiskAddr> &tablet_addrs)
+{
+  int ret = OB_SUCCESS;
+  // We can split the tablet_ids array due to following reasons:
+  // 1. batch remove tablets doesn't need atomic semantic, they can be written in different log items
+  // 2. log item batch header count is int16_t type, we can't over the limit
+  const int64_t MAX_ARRAY_SIZE = 32000;
+  const int64_t total_cnt = tablet_ids.count();
+  ObSEArray<TabletInfo, 16> current_tablet_arr;
+  int64_t finish_cnt = 0;
+  int64_t cur_cnt = 0;
+  while (OB_SUCC(ret) && finish_cnt < total_cnt) {
+    current_tablet_arr.reset();
+    cur_cnt = MIN(MAX_ARRAY_SIZE, total_cnt - finish_cnt);
+    if (OB_FAIL(current_tablet_arr.reserve(cur_cnt))) {
+      STORAGE_REDO_LOG(WARN, "reserve array fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
+    }
+    for (int64_t i = finish_cnt; OB_SUCC(ret) && i < finish_cnt + cur_cnt; ++i) {
+      TabletInfo info;
+      info.first = tablet_ids.at(i);
+      info.second = tablet_addrs.at(i);
+      if (OB_FAIL(current_tablet_arr.push_back(info))) {
+        STORAGE_REDO_LOG(WARN, "push back tablet info fail", K(ret), K(cur_cnt), K(total_cnt),
+            K(finish_cnt), K(i), K(tablet_ids.at(i)), K(tablet_addrs.at(i)));
+      }
+    }
+    if (OB_FAIL(ret)){
+    } else if (!is_shared_storage_ && OB_FAIL(safe_batch_write_remove_tablet_slog_for_sn(ls_id, current_tablet_arr))) {
+      STORAGE_REDO_LOG(WARN, "inner write log fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
+    } else if (is_shared_storage_ && OB_FAIL(safe_batch_write_remove_tablet_slog_for_ss(ls_id, ls_epoch, current_tablet_arr))) {
+      STORAGE_REDO_LOG(WARN, "inner write log fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
+    } else {
+      finish_cnt += cur_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_sn(
+    const ObLSID &ls_id,
+    const common::ObIArray<TabletInfo> &tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tablet_count = tablet_infos.count();
+  const int32_t cmd = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+      ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
+  ObSArray<ObDeleteTabletLog> slog_array;
+  ObSArray<ObStorageLogParam> param_array;
+  const bool need_write = (tablet_count > 0);
+
+  if (!need_write) {
+  } else if (OB_FAIL(slog_array.reserve(tablet_count))) {
+    LOG_WARN("failed to reserve for slog array", K(ret), K(tablet_count));
+  } else if (OB_FAIL(param_array.reserve(tablet_count))) {
+    LOG_WARN("failed to reserve for param array", K(ret), K(tablet_count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
+      const ObTabletID &tablet_id = tablet_infos.at(i).first;
+      ObDeleteTabletLog slog_entry(ls_id, tablet_id);
+      if (OB_UNLIKELY(!tablet_id.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet id is invalid", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(slog_array.push_back(slog_entry))) {
+        LOG_WARN("fail to push slog entry into slog array", K(ret), K(slog_entry), K(i));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; i++) {
+      ObStorageLogParam log_param(cmd, &slog_array[i]);
+      if (OB_FAIL(param_array.push_back(log_param))) {
+        LOG_WARN("fail to push log param into param array", K(ret), K(log_param), K(i));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!need_write) {
+  } else if (OB_FAIL(slogger_.write_log(param_array))) {
+    LOG_WARN("fail to write slog for batch deleting tablet", K(ret), K(param_array));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObIArray<TabletInfo> &tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tablet_count = tablet_infos.count();
+  if (tablet_count > 0) {
+    WaitGCTabletArray *tablet_array = nullptr;
+    const int32_t cmd = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+                                               ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
+    ObSArray<ObDeleteTabletLog> slog_array;
+    ObSArray<ObStorageLogParam> param_array;
+    const WaitGCTabletArrayKey key(ls_id, ls_epoch);
+    {
+      lib::ObMutexGuard guard(wait_gc_map_lock_);
+      if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // overwrite return code
+          const lib::ObMemAttr attr(MTL_ID(), "WaitGCTabArr");
+          if (OB_ISNULL(tablet_array = OB_NEW(WaitGCTabletArray, attr))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc mem", K(ret), K(key));
+          } else if (OB_FAIL(wait_gc_tablet_arr_map_.set_refactored(key, tablet_array))) {
+            LOG_WARN("fail to set wait gc tablet array info", K(ret), K(key));
+            OB_DELETE(WaitGCTabletArray, attr, tablet_array);
+          }
+        } else {
+          LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
+        }
+      }
+    }
+    if (FAILEDx(slog_array.reserve(tablet_count))) {
+      LOG_WARN("failed to reserve for slog array", K(ret), K(tablet_count));
+    } else if (OB_FAIL(param_array.reserve(tablet_count))) {
+      LOG_WARN("failed to reserve for param array", K(ret), K(tablet_count));
+    } else {
+      ObLSPendingFreeTabletArray tmp_pending_free_array;
+      lib::ObMutexGuard guard(tablet_array->lock_);
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
+        const ObTabletID &tablet_id = tablet_infos.at(i).first;
+        const ObMetaDiskAddr &tablet_addr = tablet_infos.at(i).second;
+        const ObPendingFreeTabletItem tablet_item(tablet_id,
+                                                  tablet_addr.block_id().meta_version_id(),
+                                                  ObPendingFreeTabletStatus::WAIT_GC,
+                                                  INT64_MAX /* delete_time */,
+                                                  GCTabletType::DropLS,
+                                                  tablet_addr.block_id().meta_transfer_seq());
+        ObDeleteTabletLog slog_entry(ls_id,
+                                     tablet_id,
+                                     ls_epoch,
+                                     tablet_item.tablet_meta_version_,
+                                     tablet_item.status_,
+                                     tablet_item.free_time_,
+                                     tablet_item.gc_type_,
+                                     tablet_item.tablet_transfer_seq_);
+        if (OB_UNLIKELY(!tablet_id.is_valid() || !tablet_addr.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet id or tablet addresss is invalid", K(ret), K(ls_id), K(tablet_id), K(tablet_addr));
+        } else if (has_exist_in_array(tmp_pending_free_array.items_, tablet_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet_item has existed in pending free tablet arr", K(ret), K(tmp_pending_free_array), K(tablet_item));
+        } else if (OB_FAIL(tmp_pending_free_array.items_.push_back(tablet_item))) {
+          LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
+        } else if (OB_FAIL(slog_array.push_back(slog_entry))) {
+          LOG_WARN("fail to push slog entry into slog array", K(ret), K(slog_entry), K(i));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; i++) {
+        ObStorageLogParam log_param(cmd, &slog_array[i]);
+        if (OB_FAIL(param_array.push_back(log_param))) {
+          LOG_WARN("fail to push log param into param array", K(ret), K(log_param), K(i));
+        }
+      }
+      if (FAILEDx(slogger_.write_log(param_array))) {
+        LOG_WARN("fail to write slog for batch deleting tablet", K(ret), K(param_array));
+      } else if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.items_.assign(tmp_pending_free_array.items_))) {
+        LOG_WARN("fail to push back tablet item", K(ret), K(tmp_pending_free_array));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::replay_wait_gc_tablet_array(
+    const ObMetaDiskAddr &addr,
+    const char *buf,
+    const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObLSPendingFreeTabletArray deleting_tablets;
+  int64_t pos = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!is_shared_storage_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported for non-shared storage mode", K(ret));
+  } else if (OB_FAIL(deleting_tablets.deserialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to deserialize delete tablets", K(ret));
+  } else {
+    const lib::ObMemAttr attr(MTL_ID(), "WaitGCTabArr");
+    const WaitGCTabletArrayKey key(deleting_tablets.ls_id_, deleting_tablets.ls_epoch_);
+    WaitGCTabletArray *tablet_array = nullptr;
+    lib::ObMutexGuard guard(wait_gc_map_lock_);
+    if (OB_FAIL(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array)) && OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("fail to get wait gc tablet array", K(ret), K(key));
+    } else if (OB_SUCC(ret) || OB_NOT_NULL(tablet_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("in rebooting, wait gc tablet array should be nullptr", K(key), KPC(tablet_array));
+    } else if (OB_ISNULL(tablet_array = OB_NEW(WaitGCTabletArray, attr))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", K(ret), K(key));
+    } else if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.assign(deleting_tablets))) {
+      LOG_WARN("fail to assign tablet array", K(ret), K(key), K(deleting_tablets), KPC(tablet_array));
+    } else if (OB_FAIL(wait_gc_tablet_arr_map_.set_refactored(key, tablet_array))) {
+      LOG_WARN("fail to set wait gc tablet array", K(ret), K(key));
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(tablet_array)) {
+      OB_DELETE(WaitGCTabletArray, attr, tablet_array);
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::replay_apply_wait_gc_tablet_items(
+    ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+    ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!is_shared_storage_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported for non-shared storage mode", K(ret));
+  } else {
+    const lib::ObMemAttr attr(MTL_ID(), "WaitGCTabArr");
+    omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
+    HEAP_VAR(ObTenantSuperBlock, tenant_super_block, tenant->get_super_block()) {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < tenant_super_block.ls_cnt_; ++idx) {
+        const ObLSItem &ls_item = tenant_super_block.ls_item_arr_[idx];
+        const WaitGCTabletArrayKey key(ls_item.ls_id_, ls_item.epoch_);
+        ObLSPendingFreeTabletArray wait_gc_tablets;
+        WaitGCTabletArray *tmp_tablet_array = nullptr;
+        WaitGCTabletArray *tablet_array = nullptr;
+        wait_gc_tablets.ls_id_ = ls_item.ls_id_;
+        wait_gc_tablets.ls_epoch_ = ls_item.epoch_;
+        if (OB_FAIL(get_wait_gc_tablet_items_except_gc_set(ls_item.ls_id_, ls_item.epoch_, gc_set, wait_gc_set, wait_gc_tablets.items_))) {
+          LOG_WARN("fail to get wait gc tablet items except gc set", K(ret), K(ls_item));
+        } else if (OB_FAIL(add_wait_gc_set_items_except_gc_set(ls_item.ls_id_, ls_item.epoch_, gc_set, wait_gc_set, wait_gc_tablets.items_))) {
+          LOG_WARN("fail to add wait gc set items except gc set", K(ret), K(ls_item));
+        }
+        {
+          lib::ObMutexGuard guard(wait_gc_map_lock_);
+          if (FAILEDx(wait_gc_tablet_arr_map_.get_refactored(key, tablet_array)) && OB_HASH_NOT_EXIST != ret) {
+            LOG_WARN("fail to get wait gc tablet array", K(ret), K(key));
+          } else if (OB_SUCC(ret)) {
+            // nothing to do.
+          } else if (OB_ISNULL(tmp_tablet_array = OB_NEW(WaitGCTabletArray, attr))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc mem", K(ret), K(key));
+          } else {
+            tablet_array = tmp_tablet_array;
+            ret = OB_SUCCESS;
+          }
+          if (FAILEDx(tablet_array->wait_gc_tablet_arr_.assign(wait_gc_tablets))) {
+            LOG_WARN("fail to assign tablet array", K(ret), K(key), K(wait_gc_tablets), KPC(tablet_array));
+          } else if (OB_NOT_NULL(tmp_tablet_array) && OB_FAIL(wait_gc_tablet_arr_map_.set_refactored(key, tablet_array))) {
+            LOG_WARN("fail to set wait gc tablet array", K(ret), K(key));
+          }
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(tmp_tablet_array)) {
+          OB_DELETE(WaitGCTabletArray, attr, tmp_tablet_array);
+        }
+      }
+    } // HEAP_VAR
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::get_wait_gc_tablet_items_except_gc_set(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set,
+    ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+    common::ObIArray<ObPendingFreeTabletItem> &final_items)
+{
+  int ret = OB_SUCCESS;
+  common::ObSArray<ObPendingFreeTabletItem> items;
+  if (OB_FAIL(get_wait_gc_tablet_items(ls_id, ls_epoch, items))) {
+    LOG_WARN("fail to get wait gc tablet items", K(ret));
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < items.count(); ++j) {
+      const ObPendingFreeTabletItem &tablet_item = items.at(j);
+      const ObGCTabletLog gc_log(ls_id,
+                                 ls_epoch,
+                                 tablet_item.tablet_id_,
+                                 tablet_item.tablet_meta_version_,
+                                 tablet_item.status_,
+                                 tablet_item.tablet_transfer_seq_);
+      const ObDeleteTabletLog del_log(ls_id,
+                                      tablet_item.tablet_id_,
+                                      ls_epoch,
+                                      tablet_item.tablet_meta_version_,
+                                      tablet_item.status_,
+                                      tablet_item.free_time_,
+                                      tablet_item.gc_type_,
+                                      tablet_item.tablet_transfer_seq_);
+      if (OB_FAIL(gc_set.exist_refactored(gc_log)) && OB_HASH_NOT_EXIST != ret) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS; // just skip, nothing to do.
+        } else {
+          LOG_WARN("fail to check exist in gc set", K(ret), K(gc_log));
+        }
+      } else if (OB_FAIL(final_items.push_back(tablet_item))) {
+        LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
+      } else if (OB_FAIL(wait_gc_set.exist_refactored(del_log)) && OB_HASH_EXIST != ret) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // just skip, nothing to do.
+        } else {
+          LOG_WARN("fail to check exist in wait gc set", K(ret), K(del_log));
+        }
+      } else if (OB_FAIL(wait_gc_set.erase_refactored(del_log))) {
+        LOG_WARN("fail to erase from wait gc set", K(ret), K(del_log));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::add_wait_gc_set_items_except_gc_set(
+    const share::ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set,
+    const ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+    common::ObIArray<ObPendingFreeTabletItem> &final_items)
+{
+  int ret = OB_SUCCESS;
+  for (ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet::const_iterator iter = wait_gc_set.begin();
+       iter != wait_gc_set.end();
+       ++iter) {
+    const ObDeleteTabletLog &log = iter->first;
+    if (log.ls_id_ == ls_id && log.ls_epoch_ == ls_epoch) {
+      const ObPendingFreeTabletItem tablet_item(log.tablet_id_,
+                                                log.tablet_meta_version_,
+                                                log.status_,
+                                                log.free_time_,
+                                                log.gc_type_,
+                                                log.tablet_transfer_seq_);
+      const ObGCTabletLog gc_log(ls_id,
+                                 ls_epoch,
+                                 tablet_item.tablet_id_,
+                                 tablet_item.tablet_meta_version_,
+                                 tablet_item.status_,
+                                 tablet_item.tablet_transfer_seq_);
+      if (OB_FAIL(gc_set.exist_refactored(gc_log)) && OB_HASH_NOT_EXIST != ret) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS; // just skip, nothing to do.
+        } else {
+          LOG_WARN("fail to check exist in gc set", K(ret), K(gc_log));
+        }
+      } else if (OB_FAIL(final_items.push_back(tablet_item))) {
+        LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
       }
     }
   }

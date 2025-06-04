@@ -34,8 +34,11 @@ public:
   ObLinkedMacroBlockWriter(const ObLinkedMacroBlockWriter &) = delete;
   ObLinkedMacroBlockWriter &operator=(const ObLinkedMacroBlockWriter &) = delete;
 
-  int init();
-  int init_for_object(
+  int init_for_slog_ckpt(
+      const uint64_t tenant_id,
+      const int64_t tenant_epoch_id,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
+  int init_for_macro_info(
     const uint64_t tablet_id,
     const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
@@ -55,13 +58,22 @@ public:
   void reuse_for_next_round();
 
 private:
+  enum WriteType : int8_t {
+    PRIV_SLOG_CKPT    = 0,
+    PRIV_MACRO_INFO   = 1,
+    SHARED_MACRO_INFO = 2,
+    MAX_TYPE          = 3,
+  };
   bool is_inited_;
+  WriteType type_;
   blocksstable::ObMacroBlocksWriteCtx write_ctx_;
   blocksstable::ObStorageObjectHandle handle_;
   blocksstable::MacroBlockId entry_block_id_;
+  uint64_t tenant_id_;
+  int64_t tenant_epoch_id_;
+  ObSlogCheckpointFdDispenser *fd_dispenser_;
   uint64_t tablet_id_;
   int64_t tablet_transfer_seq_;
-  int64_t snapshot_version_;
   int64_t cur_macro_seq_;
 };
 
@@ -73,14 +85,18 @@ public:
   ObLinkedMacroBlockItemWriter(const ObLinkedMacroBlockItemWriter &) = delete;
   ObLinkedMacroBlockItemWriter &operator=(const ObLinkedMacroBlockItemWriter &) = delete;
   // used for writing macro_info both in shared_nothing and shared_storage
-  int init_for_object(
+  int init_for_macro_info(
     const uint64_t tablet_id,
     const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     const int64_t start_macro_seq,
     blocksstable::ObIMacroBlockFlushCallback *write_callback = nullptr);
-  // only used for ckpt_slog in shared_nothing
-  int init(const bool need_disk_addr, const ObMemAttr &mem_attr);
+  // only used for slog checkpoint in shared nothing and shared storage
+  int init_for_slog_ckpt(
+      const uint64_t tenant_id,
+      const int64_t tenant_epoch_id,
+      const ObMemAttr &mem_attr,
+      ObSlogCheckpointFdDispenser *fd_dispenser);
   int write_item(const char *item_buf, const int64_t item_buf_len, int64_t *item_idx = nullptr);
   int close();
   inline bool is_closed() const { return is_closed_; };
@@ -89,7 +105,6 @@ public:
 
   int get_entry_block(blocksstable::MacroBlockId &entry_block) const;
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
-  int64_t get_item_disk_addr(const int64_t item_idx, ObMetaDiskAddr &addr) const;
   int64_t get_last_macro_seq() const { return block_writer_.get_last_macro_seq(); }
   int64_t get_written_macro_cnt() const { return block_writer_.get_meta_block_cnt(); }
 private:
@@ -97,25 +112,14 @@ private:
   int write_block();
   int write_item_header(const char *item_buf, const int64_t item_buf_len);
   int write_item_content(const char *item_buf, const int64_t item_buf_len, int64_t &item_pos);
-  int record_inflight_item(const int64_t item_buf_len, int64_t *item_idx);
-  int set_pre_block_inflight_items_addr(const blocksstable::MacroBlockId &pre_block_id);
 
 private:
   bool is_inited_;
   bool is_closed_;
   int64_t written_items_cnt_;
 
-  bool need_disk_addr_;
-  int64_t first_inflight_item_idx_;        // first item idx which still in the iobuf
-  int64_t pre_block_inflight_items_cnt_;   // item count of pre block
-  int64_t curr_block_inflight_items_cnt_;  // item count of current block
-
   common::ObArenaAllocator allocator_;
   ObLinkedMacroBlockWriter block_writer_;
-
-  // the arr index represent item_idx
-  common::ObArray<int64_t> item_size_arr_;
-  common::ObArray<ObMetaDiskAddr> item_disk_addr_arr_;
 
   // buf for write io
   char *io_buf_;

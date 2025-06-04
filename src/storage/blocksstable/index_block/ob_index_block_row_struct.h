@@ -39,6 +39,7 @@ namespace blocksstable
 {
 
 class ObIndexBlockRowParser;
+struct ObSkipIndexAggResult;
 
 struct ObIndexBlockRowDesc
 {
@@ -83,7 +84,7 @@ private:
 
 public:
   union {
-    const ObDatumRow *aggregated_row_;
+    const ObSkipIndexAggResult *aggregated_row_;
     const char *serialized_agg_row_buf_;
   };
   ObDatumRowkey row_key_;
@@ -669,21 +670,13 @@ public:
     OB_ASSERT(nullptr != range_);
     return *range_;
   }
-  OB_INLINE bool can_blockscan(const bool has_lob_out) const
+  OB_INLINE bool can_blockscan() const
   {
-    return can_blockscan_ && !has_string_out_row() && (!has_lob_out || !has_lob_out_row());
+    return can_blockscan_;
   }
   OB_INLINE void set_blockscan()
   {
     can_blockscan_ = true;
-  }
-  OB_INLINE bool is_filter_applied() const
-  {
-    return is_filter_applied_;
-  }
-  OB_INLINE void set_filter_applied()
-  {
-    is_filter_applied_ = true;
   }
   OB_INLINE bool is_filter_always_true() const
   {
@@ -709,10 +702,6 @@ public:
   OB_INLINE sql::ObBoolMaskType get_filter_constant_type() const
   {
     return static_cast<sql::ObBoolMaskType>(filter_constant_type_);
-  }
-  OB_INLINE bool can_be_aggregated()
-  {
-    return is_filter_applied_ && !is_left_border_ && !is_right_border_;
   }
   OB_INLINE const ObCSRange &get_row_range() const
   {
@@ -802,7 +791,7 @@ public:
   };
   const char *agg_row_buf_;
   int64_t agg_buf_size_;
-  union {
+  union { //FARM COMPAT WHITELIST
     uint16_t flag_;
     struct {
       uint16_t is_root_ : 1;
@@ -810,13 +799,12 @@ public:
       uint16_t is_left_border_ : 1;
       uint16_t is_right_border_ : 1;
       uint16_t can_blockscan_ : 1;
-      uint16_t is_filter_applied_ : 1;
       // row_header_ may have already been released by ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::prefetch,
       // so we deep copy has_lob_out_row_. If the ObIndexTreeMultiPassPrefetcher can guarantee the validity of row_header_ in the future,
       // has_lob_out_row_ variable can be removed.
       mutable uint16_t has_lob_out_row_ : 1;
       uint16_t filter_constant_type_ : 2;
-      uint16_t reserved_ : 7;
+      uint16_t reserved_ : 8;
     };
   };
   int64_t range_idx_;

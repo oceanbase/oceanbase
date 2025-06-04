@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ddl_retry_task.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "share/ob_ddl_sim_point.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 
@@ -304,13 +305,13 @@ int ObDDLRetryTask::check_schema_change_done()
     LOG_WARN("not init", K(ret));
   } else if (is_schema_change_done_) {
     // do nothing.
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, RETRY_TASK_CHECK_SCHEMA_CHANGED_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
-    common::ObMySQLProxy &proxy = root_service_->get_sql_proxy();
+    common::ObMySQLProxy &proxy = *GCTX.sql_proxy_;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObSqlString query_string;
       sqlclient::ObMySQLResult *result = NULL;
@@ -347,9 +348,9 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRetryTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
   } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
@@ -363,7 +364,7 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
   } else {
     lib::Worker::CompatMode save_compat_mode = THIS_WORKER.get_compatibility_mode();
     THIS_WORKER.set_compatibility_mode(compat_mode_);
-    obrpc::ObCommonRpcProxy common_rpc_proxy = root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout);
+    obrpc::ObCommonRpcProxy common_rpc_proxy = GCTX.rs_rpc_proxy_->to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout);
     switch(task_type_) {
       case ObDDLType::DDL_DROP_DATABASE: {
         int64_t timeout_us = 0;
@@ -447,9 +448,6 @@ int ObDDLRetryTask::wait_alter_table(const ObDDLTaskStatus new_status)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRetryTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
@@ -512,12 +510,12 @@ int ObDDLRetryTask::cleanup_impl()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service is nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(report_error_code(forward_user_message_, affected_rows_))) {
     LOG_WARN("fail to report error code", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service_->get_sql_proxy(), tenant_id_, task_id_))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_, tenant_id_, task_id_))) {
     LOG_WARN("fail to delete record", K(ret), K(task_id_));
   } else {
     need_retry_ = false;
@@ -539,16 +537,12 @@ int ObDDLRetryTask::fail()
 int ObDDLRetryTask::check_health()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
-  } else if (!root_service->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("RS not in service, do not retry", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) {
     LOG_WARN("refresh status failed", K(ret));
@@ -709,12 +703,14 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
   int64_t execution_id = -1; /*unused*/
   int64_t ret_code = 0;
   const int64_t new_task_status = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
+  int64_t unused_snapshot_ver = OB_INVALID_VERSION;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, RETRY_TASK_UPDATE_BY_CHILD_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id, ret_code))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status,
+      execution_id, ret_code, unused_snapshot_ver))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_UNLIKELY(ObDDLTaskStatus::DROP_SCHEMA != curr_task_status)) {
     ret = OB_STATE_NOT_MATCH;

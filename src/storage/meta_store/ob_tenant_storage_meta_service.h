@@ -13,8 +13,6 @@
 #define OCEANBASE_STORAGE_META_STORE_TENANT_STORAGE_META_SERVICE_
 
 #include <stdint.h>
-#include "storage/meta_store/ob_tenant_storage_meta_persister.h"
-#include "storage/meta_store/ob_tenant_storage_meta_replayer.h"
 #include "storage/blockstore/ob_shared_object_reader_writer.h"
 #include "storage/meta_store/ob_tenant_seq_generator.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
@@ -25,13 +23,12 @@ namespace oceanbase
 namespace storage
 {
 struct ObGCTabletMetaInfoList;
-class ObTenantStorageMetaService
+struct ObUpdateTabletPointerParam;
+class ObTenantStorageMetaService final
 {
 public:
   ObTenantStorageMetaService();
   ~ObTenantStorageMetaService() = default;
-  ObTenantStorageMetaService(const ObTenantStorageMetaService &) = delete;
-  ObTenantStorageMetaService &operator=(const ObTenantStorageMetaService &) = delete;
 
   static int mtl_init(ObTenantStorageMetaService *&meta_service);
   int init();
@@ -40,33 +37,82 @@ public:
   void wait();
   void destroy();
   bool is_started() { return is_started_; }
-  ObTenantStorageMetaPersister &get_persister() { return persister_; }
-  ObTenantStorageMetaReplayer &get_replayer() { return replayer_; }
+
   ObTenantSeqGenerator &get_seq_generator() { return seq_generator_; }
-  int get_active_cursor(common::ObLogCursor &log_cursor);
+
+  // for slog & checkpoint operation
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int write_checkpoint(bool is_force);
+  storage::ObStorageLogger &get_slogger() { return slogger_; }
+  const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
+
+  // for ls operation
+  int prepare_create_ls(const ObLSMeta &meta, int64_t &ls_epoch);
+  int commit_create_ls(const share::ObLSID &ls_id, const int64_t ls_epoch);
+  int abort_create_ls(const share::ObLSID &ls_id, const int64_t ls_epoch);
+  int delete_ls(const share::ObLSID &ls_id, const int64_t ls_epoch);
+  int delete_ls_item(const share::ObLSID ls_id, const int64_t ls_epoch);
+  int update_ls_meta(const ObLSMeta &ls_meta);
+  int update_dup_table_meta(const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_table_meta);
+  int get_ls_items_by_status(const storage::ObLSItemStatus status, common::ObIArray<storage::ObLSItem> &ls_items);
+
+  // for tablet operation
+  int batch_update_tablet(const ObIArray<ObUpdateTabletLog> &slog_arr);
+  int update_tablet(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObTabletID &tablet_id,
+      const ObUpdateTabletPointerParam &update_tablet_pointer_param);
+  int remove_tablet(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObTabletHandle &tablet_handle);
+  int batch_remove_tablet(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObIArray<common::ObTabletID> &tablet_id_arr,
+      const ObIArray<ObMetaDiskAddr> &tablet_addr_arr);
+  int write_empty_shell_tablet(
+      const int64_t ls_epoch,
+      ObTablet *tablet,
+      ObMetaDiskAddr &tablet_addr);
+  int replay_wait_gc_tablet_array(
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len);
+  int get_wait_gc_tablet_items(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      common::ObIArray<ObPendingFreeTabletItem> &items);
+  int delete_wait_gc_tablet_items(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObIArray<ObPendingFreeTabletItem> &items);
+  int replay_apply_wait_gc_tablet_items(
+      ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+      ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set);
+
+  // for tenant clone & snapshot operation
   int add_snapshot(const ObTenantSnapshotMeta &tenant_snapshot);
   int delete_snapshot(const share::ObTenantSnapshotID &snapshot_id);
   int swap_snapshot(const ObTenantSnapshotMeta &tenant_snapshot);
   int clone_ls(
       observer::ObStartupAccelTaskHandler* startup_accel_handler,
       const blocksstable::MacroBlockId &tablet_meta_entry);
+
+  // for share meta object read/write operation
   int read_from_disk(
       const ObMetaDiskAddr &addr,
       const int64_t ls_epoch,
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-  int read_from_share_blk(
-      const ObMetaDiskAddr &addr,
-      const int64_t ls_epoch,
-      common::ObArenaAllocator &allocator,
-      char *&buf,
-      int64_t &buf_len);
-  const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
+  int update_tenant_preallocated_seqs(const ObTenantMonotonicIncSeqs &preallocated_seqs);
+  ObSharedObjectReaderWriter &get_shared_object_reader_writer() { return shared_object_rwriter_; }
+  ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
 
 #ifdef OB_BUILD_SHARED_STORAGE
+  // for shared storage gc operation
   int get_private_blocks_for_tablet(
       const share::ObLSID &id,
       const int64_t ls_epoch,
@@ -94,12 +140,9 @@ public:
   int update_shared_tablet_meta_list(
     const ObTabletID &tablet_id,
     const int64_t tablet_meta_version);
-
 #endif
-  ObSharedObjectReaderWriter &get_shared_object_reader_writer() { return shared_object_rwriter_; }
-  ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
-  storage::ObStorageLogger &get_slogger() { return slogger_; }
 
+private:
   class ObLSItemIterator final
   {
   public:
@@ -115,9 +158,100 @@ public:
     const storage::ObTenantSuperBlock tenant_super_block_;
     DISALLOW_COPY_AND_ASSIGN(ObLSItemIterator);
   };
-  int get_ls_items_by_status(
-    const storage::ObLSItemStatus status,
-    ObIArray<storage::ObLSItem> &ls_items);
+private:
+  class WaitGCTabletArrayKey final
+  {
+  public:
+    WaitGCTabletArrayKey() : ls_id_(), ls_epoch_(0) {}
+    WaitGCTabletArrayKey(const share::ObLSID &ls_id, const int64_t ls_epoch)
+      : ls_id_(ls_id), ls_epoch_(ls_epoch)
+    {}
+    uint64_t hash() const { return ls_id_.hash() ^ ls_epoch_;}
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
+    bool operator ==(const WaitGCTabletArrayKey &other) const
+    {
+      return other.ls_id_ == ls_id_ && other.ls_epoch_ == ls_epoch_;
+    }
+    bool operator !=(const WaitGCTabletArrayKey &other) const { return !(other == *this); }
+    bool operator <(const WaitGCTabletArrayKey &other) const
+    {
+      bool bool_ret = false;
+      if (ls_id_ < other.ls_id_) {
+        bool_ret = true;
+      } else if (ls_id_ == other.ls_id_) {
+        bool_ret = (ls_epoch_ < other.ls_epoch_);
+      }
+      return bool_ret;
+    }
+    TO_STRING_KV(K_(ls_id), K_(ls_epoch));
+  public:
+    share::ObLSID ls_id_;
+    int64_t ls_epoch_;
+  };
+private:
+  class WaitGCTabletArray final
+  {
+  public:
+    WaitGCTabletArray() : lock_(), wait_gc_tablet_arr_() {}
+    ~WaitGCTabletArray() = default;
+    TO_STRING_KV(K_(wait_gc_tablet_arr));
+  public:
+    lib::ObMutex lock_;
+    ObLSPendingFreeTabletArray wait_gc_tablet_arr_;
+  };
+
+  typedef common::hash::ObHashMap<WaitGCTabletArrayKey, WaitGCTabletArray*, common::hash::NoPthreadDefendMode> WaitGCTabletArrayMap;
+  typedef hash::HashMapPair<ObTabletID, ObMetaDiskAddr> TabletInfo;
+
+private:
+  int read_from_share_blk(
+      const ObMetaDiskAddr &addr,
+      const int64_t ls_epoch,
+      common::ObArenaAllocator &allocator,
+      char *&buf,
+      int64_t &buf_len);
+  int write_remove_tablet_slog_for_sn(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id);
+  int write_remove_tablet_slog_for_ss(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObTabletID &tablet_id,
+      const ObTablet &tablet);
+  int batch_write_remove_tablet_slog(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObIArray<ObTabletID> &tablet_ids,
+      const common::ObIArray<ObMetaDiskAddr> &tablet_addrs);
+  int safe_batch_write_remove_tablet_slog_for_sn(
+      const ObLSID &ls_id,
+      const common::ObIArray<TabletInfo> &tablet_infos);
+  int safe_batch_write_remove_tablet_slog_for_ss(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObIArray<TabletInfo> &tablet_infos);
+  int safe_batch_write_gc_tablet_slog(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObIArray<ObPendingFreeTabletItem> &items,
+      WaitGCTabletArray &wait_gc_tablet_array);
+  int get_wait_gc_tablet_items_except_gc_set(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set,
+      ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+      common::ObIArray<ObPendingFreeTabletItem> &items);
+  int add_wait_gc_set_items_except_gc_set(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set,
+      const ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
+      common::ObIArray<ObPendingFreeTabletItem> &items);
+
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int inner_get_blocks_for_tablet_(
@@ -137,6 +271,7 @@ private:
     const blocksstable::ObStorageObjectType obj_type,
     const ObGCTabletMetaInfoList &tablet_scn_arr);
 #endif
+
 private:
   bool is_inited_;
   bool is_started_;
@@ -144,16 +279,17 @@ private:
   ObTenantCheckpointSlogHandler ckpt_slog_handler_;
   storage::ObStorageLogger slogger_;
   ObTenantSeqGenerator seq_generator_;
-  ObTenantStorageMetaPersister persister_;
-  ObTenantStorageMetaReplayer replayer_;
   ObSharedObjectReaderWriter shared_object_rwriter_;
   ObSharedObjectReaderWriter shared_object_raw_rwriter_;
+  lib::ObMutex wait_gc_map_lock_; // wait_gc_tablet_arr_map_
+  WaitGCTabletArrayMap wait_gc_tablet_arr_map_;
 
+  DISALLOW_COPY_AND_ASSIGN(ObTenantStorageMetaService);
 };
 
-#define TENANT_STORAGE_META_PERSISTER (MTL(ObTenantStorageMetaService*)->get_persister())
+#define TENANT_STORAGE_META_SERVICE (*MTL(ObTenantStorageMetaService *))
 #define TENANT_SEQ_GENERATOR (MTL(ObTenantStorageMetaService*)->get_seq_generator())
-
+#define TENANT_SLOGGER (MTL(ObTenantStorageMetaService*)->get_slogger())
 
 } // namespace storage
 } // namespace oceanbase

@@ -409,12 +409,9 @@ private:
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
   int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal, bool &is_split_dst);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
-  int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);
   int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, int64_t &retry_id);
-  int check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type);
   int push_item_to_queue_(const ObBackupProviderItem &item);
   int pop_item_from_queue_(ObBackupProviderItem &item);
   void free_queue_item_();

@@ -61,6 +61,8 @@ private:
   // function members
   int try_negate_const(ObRawExpr *&expr, const int64_t neg_cnt, int64_t &remain_reg_cnt);
   int do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
+  int mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
+  int mock_set_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
   int process_datatype_or_questionmark(const ParseNode &node, ObRawExpr *&expr);
   int process_system_variable_node(const ParseNode *node, ObRawExpr *&expr);
   int process_char_charset_node(const ParseNode *node, ObRawExpr *&expr);
@@ -168,6 +170,7 @@ private:
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);
   int process_multiset_node(const ParseNode *node, ObRawExpr *&expr);
   int process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr);
+  int get_current_of_base_table_id(ObDMLStmt *stmt, uint64_t &base_table_id);
   int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr);
   int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int check_pl_variable(ObQualifiedName &q_name, bool &is_pl_var);
@@ -263,6 +266,8 @@ int ObRawExprResolverImpl::process_node_with_children(const ParseNode *node,
     SQL_RESV_LOG(WARN, "invalid argument", K(node), K(children_num));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, raw_expr))) {
     SQL_RESV_LOG(WARN, "fail to create raw expr", K(ret));
+  } else if (OB_FAIL(raw_expr->init_param_exprs(children_num))) {
+    SQL_RESV_LOG(WARN, "fail to init param exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < children_num; i++) {
       ObRawExpr *sub_expr = NULL;

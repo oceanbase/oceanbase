@@ -263,7 +263,7 @@ int ObDDLSimPointMgr::try_sim(const uint64_t tenant_id, const uint64_t task_id, 
       ObDDLSimPointID point_id = *it;
       bool need_execute = false;
       TaskSimPoint sim_key(tenant_id, task_id, point_id);
-      if (point_id <= MIN_DDL_SIM_POINT_ID || point_id > MAX_DDL_SIM_POINT_ID || !all_points_[point_id].is_valid()) {
+      if (point_id <= MIN_DDL_SIM_POINT_ID || point_id >= MAX_DDL_SIM_POINT_ID || !all_points_[point_id].is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid point id", K(ret), K(point_id));
       } else if (nullptr != tenant_context.fixed_points_ && tenant_context.fixed_points_[point_id]) {

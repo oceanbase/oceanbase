@@ -108,7 +108,7 @@ public:
 public:
   explicit ListCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
   {
-    model_ = ObRedisModel::LIST;
+    model_ = ObRedisDataModel::LIST;
   }
   virtual ~ListCommandOperator() = default;
   int do_push(

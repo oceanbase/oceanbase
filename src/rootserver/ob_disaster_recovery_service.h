@@ -58,23 +58,30 @@ private:
   int do_dr_service_work_();
 
   bool is_dr_worker_thread_(const uint64_t thread_idx) { return 0 == thread_idx; }
+  bool is_dr_manager_thread_(const uint64_t thread_idx) { return 1 == thread_idx; }
 
   int adjust_idle_time_(
       int64_t &idle_time_us);
+
+  int try_common_dr_task_(
+      const int64_t service_epoch);
+
+  int try_single_replica_dr_task_(
+      const int64_t service_epoch);
 
   // use dr_worker_ check dr task
   // @params[in] tenant_id, target tenant_id
   int try_tenant_disaster_recovery_(
       const uint64_t tenant_id,
-      const int64_t service_epoch_to_check);
+      const int64_t service_epoch,
+      const bool handle_single_replica_task);
 
   // use dr_mgr_ manage dr task
   // @params[in] tenant_id,       target tenant_id
   // @params[in] need_clean_task, whether need to clean task
-  int manage_dr_tasks_(
-      const uint64_t tenant_id,
+  int schedule_and_manage_tasks_(
       const bool need_clean_task,
-      const int64_t service_epoch_to_check);
+      const int64_t service_epoch);
 
   // check whether the current thread can provide services
   int check_and_update_service_epoch_(
@@ -90,14 +97,13 @@ private:
       common::ObRole &role,
       int64_t &proposal_id);
 
-  // set service_epoch value to check of worker and mgr
-  int get_service_epoch_to_check_(
-      const uint64_t execute_task_tenant,
-      const int64_t epoch_of_service_thread,
-      int64_t &service_epoch_to_check);
+  int get_tenant_for_schedule_task_(
+      ObIArray<uint64_t> &table_tenant_ids);
+  int get_tenant_for_single_replica_task_(
+      ObIArray<uint64_t> &tenant_ids);
 
   // get tenant_id array to execute task
-  int get_tenant_ids_(
+  int get_tenant_for_common_task_(
       ObIArray<uint64_t> &tenant_ids);
 
   // according to last_check_ts, check whether need to clean task

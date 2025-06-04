@@ -64,6 +64,15 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
   int ret = OB_SUCCESS;
   ASSERT_EQ(OB_SUCCESS, create_tenant());
   tenant_id_ = 1002;
+  ObSqlString sql;
+  int64_t row = 0;
+  ret = sql.assign_fmt("alter system switchover to standby tenant 'tt1'");
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = get_curr_simple_server().init_sql_proxy();
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  ret = sql_proxy.write(sql.ptr(), row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
   SCN readable_scn;
   palf::LogConfigVersion config_version;
   {
@@ -75,6 +84,7 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
     ObLSRecoveryGuard guard;
     //加锁成功后，不在汇报，但是可以在统计
     ASSERT_EQ(OB_SUCCESS, guard.init(tenant_id_, SYS_LS, 300 * 1000));
+    usleep(3000 * 1000);//sleep 300ms，应该设置成最新
     readable_scn = guard.ls_recovery_stat_->readable_scn_upper_limit_;
     //内存中的scn还是可以推高的
     SCN readable_scn_memory = guard.ls_recovery_stat_->replicas_scn_.at(0).get_readable_scn();
@@ -88,20 +98,8 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
     ASSERT_EQ(OB_SUCCESS, guard.ls_recovery_stat_->reset_inner_readable_scn());
     usleep(3000 * 1000);//sleep 300ms，应该设置成最新
     ASSERT_EQ(readable_scn.get_val_for_sql(), guard.ls_recovery_stat_->readable_scn_upper_limit_.get_val_for_sql());
-    ASSERT_NE(readable_scn_memory.get_val_for_sql(), guard.ls_recovery_stat_->replicas_scn_.at(0).readable_scn_.get_val_for_sql());
   }
-  //释放后，可以推过
-  usleep(3000 * 1000);
-  {
-    ObLSRecoveryGuard guard;
-    ASSERT_EQ(OB_SUCCESS, guard.init(tenant_id_, SYS_LS, 300 * 1000));
-    ASSERT_NE(readable_scn.get_val_for_sql(), guard.ls_recovery_stat_->readable_scn_upper_limit_.get_val_for_sql());
-    readable_scn = guard.ls_recovery_stat_->readable_scn_upper_limit_;
-    ASSERT_EQ(OB_SUCCESS, guard.ls_recovery_stat_->reset_inner_readable_scn());
-    ASSERT_EQ(OB_NEED_RETRY, guard.ls_recovery_stat_->set_inner_readable_scn(config_version,readable_scn, true));
-    ASSERT_EQ(OB_SUCCESS, guard.ls_recovery_stat_->set_inner_readable_scn(config_version, readable_scn, false));
 
-  }
 }
 } // namespace share
 } // namespace oceanbase

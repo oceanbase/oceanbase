@@ -1027,6 +1027,7 @@ class SqlKeywords:
          LOCKS
          LOGFILE
          LOGS
+         MAP
          MASTER
          MASTER_AUTO_POSITION
          MASTER_CONNECT_RETRY
@@ -1100,6 +1101,7 @@ class SqlKeywords:
          PARTITIONS
          PASSWORD
          PHASE
+         PHRASE
          PLUGIN
          PLUGINS
          PLUGIN_DIR
@@ -1169,6 +1171,7 @@ class SqlKeywords:
          SONAME
          SOUNDS
          SOURCE
+         SPARSEVECTOR
          SQL_AFTER_GTIDS
          SQL_AFTER_MTS_GAPS
          SQL_BEFORE_GTIDS
@@ -1502,6 +1505,7 @@ class SqlKeywords:
          AVG_ROW_LENGTH
          BACKUP
          BEGIN
+         BIGINT_PRECISION
          BINLOG
          BIT
          BLOCK
@@ -1572,6 +1576,7 @@ class SqlKeywords:
          DEFINER
          DELAY
          DELAY_KEY_WRITE
+         DELETE_INSERT
          DES_KEY_FILE
          DESTINATION
          DIAGNOSTICS
@@ -1584,6 +1589,7 @@ class SqlKeywords:
          DUMPFILE
          DUPLICATE
          DYNAMIC
+         DYNAMIC_PARTITION_POLICY
          EFFECTIVE
          ENABLE
          END
@@ -1605,6 +1611,7 @@ class SqlKeywords:
          EXPANSION
          EXPIRE
          EXPIRE_INFO
+         EXPIRE_TIME
          EXPORT
          EXTENDED
          EXTENT_SIZE
@@ -1708,6 +1715,7 @@ class SqlKeywords:
          MEMORY
          MEMTABLE
          MERGE
+         MERGE_ENGINE
          MESSAGE_TEXT
          META
          MICROSECOND
@@ -1759,6 +1767,7 @@ class SqlKeywords:
          PARAMETERS
          PARSER
          PARTIAL
+         PARTIAL_UPDATE
          PARTITION_ID
          PARTITIONING
          PARTITIONS
@@ -1773,6 +1782,7 @@ class SqlKeywords:
          POLYGON
          POOL
          PORT
+         PRECREATE_TIME
          PREPARE
          PRESERVE
          PREV
@@ -1917,6 +1927,8 @@ class SqlKeywords:
          TIMESTAMP
          TIMESTAMPADD
          TIMESTAMPDIFF
+         TIME_UNIT
+         TIME_ZONE
          TINYINT
          TP_NAME
          TRADITIONAL

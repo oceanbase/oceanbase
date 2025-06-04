@@ -116,7 +116,7 @@ struct ObTableColumnInfo
     } part_pos_;//partition key
     int64_t tbl_part_key_pos_;
   };//greater than zero if this column is used to calc part expr
-  sql::ObExprResType type_;
+  sql::ObRawExprResType type_;
   common::ObString generated_expr_str_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> cascaded_column_ids_;
 };
@@ -148,7 +148,8 @@ union ObTableSchemaFlags{
     bool has_lob_column_        : 1;
     bool has_fts_index_         : 1;
     bool has_hbase_ttl_column_  : 1;
-    uint64_t reserved_          : 55;
+    bool is_secondary_part_     : 1;
+    uint64_t reserved_          : 54;
   };
 };
 
@@ -199,7 +200,8 @@ public:
         column_info_array_(allocator_),
         rowkey_info_array_(allocator_),
         local_index_tids_(allocator_),
-        global_index_tids_(allocator_)
+        global_index_tids_(allocator_),
+        hbase_mode_type_(ObHbaseModeType::OB_INVALID_MODE_TYPE)
 	{
     flags_.value_ = 0;
     column_cnt_ = 0;
@@ -224,6 +226,7 @@ public:
   OB_INLINE void set_has_auto_inc(bool has_auto_inc) { flags_.has_auto_inc_ = has_auto_inc; }
   OB_INLINE void set_has_generated_column(bool has_generated_column) { flags_.has_generated_column_ = has_generated_column; }
   OB_INLINE void set_is_ttl_table(bool is_ttl_table) { flags_.is_ttl_table_ = is_ttl_table; }
+  OB_INLINE void set_is_secondary_part(bool is_secondary_part) { flags_.is_secondary_part_ = is_secondary_part; }
   OB_INLINE void set_is_partitioned_table(bool is_partitioned_table) { flags_.is_partitioned_table_ = is_partitioned_table; }
   OB_INLINE void set_has_lob_column(bool has_lob_column) { flags_.has_lob_column_ = has_lob_column; }
   OB_INLINE int64_t get_column_count() { return column_cnt_; }
@@ -231,6 +234,7 @@ public:
   OB_INLINE const ObKVAttr& get_kv_attributes() { return kv_attributes_; }
   OB_INLINE const ObString& get_ttl_definition() { return ttl_definition_; }
   OB_INLINE int64_t get_auto_inc_cache_size() { return auto_inc_cache_size_; }
+  OB_INLINE ObHbaseModeType get_hbase_mode_type() { return hbase_mode_type_; }
 private:
   int build_index_map();
 private:
@@ -251,6 +255,7 @@ private:
   int64_t rowkey_cnt_;
   int64_t auto_inc_cache_size_;
   ObKVAttr kv_attributes_;
+  ObHbaseModeType hbase_mode_type_;
 };
 
 class ObKvSchemaCacheGuard
@@ -291,6 +296,7 @@ public:
   int get_or_create_cache_obj(ObSchemaGetterGuard &schema_guard);
   int create_schema_cache_obj(ObSchemaGetterGuard &schema_guard);
   int is_redis_ttl_table(bool &is_redis_ttl_table);
+  int get_all_column_name(common::ObIArray<common::ObString> &col_names);
   void reset();
   OB_INLINE bool is_use_cache() { return is_use_cache_; }
   OB_INLINE bool is_inited() { return is_init_; }
@@ -317,6 +323,10 @@ public:
   OB_INLINE int64_t get_auto_inc_cache_size()
   {
     return static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj())->get_auto_inc_cache_size();
+  }
+  OB_INLINE ObHbaseModeType get_hbase_mode_type()
+  {
+    return static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj())->get_hbase_mode_type();
   }
 private:
   bool is_init_;

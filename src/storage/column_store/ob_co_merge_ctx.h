@@ -63,6 +63,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int prepare_schema() override;
   virtual int init_tablet_merge_info() override;
   virtual int cal_merge_param() override;
+  virtual int prepare_compaction_filter() override
+  { return alloc_mds_info_compaction_filter(); }
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
   int collect_running_info_in_batch(
@@ -150,8 +152,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
-  int prepare_cs_replica_param();
-  int check_and_set_build_redundant_row_merge();
+  int prepare_cs_replica_param(const ObMediumCompactionInfo *medium_info);
+  int handle_alter_cg_delayed_in_cs_replica();
   int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_redundant_row_store_from_rowkey_cg() const { return static_param_.is_build_redundent_row_store_from_rowkey_cg(); }

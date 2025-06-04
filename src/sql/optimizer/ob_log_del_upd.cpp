@@ -1024,6 +1024,21 @@ int ObLogDelUpd::assign_dml_infos(const ObIArray<IndexDMLInfo *> &index_dml_info
   return ret;
 }
 
+int ObLogDelUpd::add_index_dml_info(IndexDMLInfo *index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_dml_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index dml info is null", K(ret));
+  } else if (OB_FAIL(index_dml_infos_.push_back(index_dml_info))) {
+    LOG_WARN("push back failed", K(ret));
+  } else if (index_dml_info->is_primary_index_ &&
+               OB_FAIL(loc_table_list_.push_back(index_dml_info->loc_table_id_))) {
+    LOG_WARN("failed to add loc table id", K(ret));
+  }
+  return ret;
+}
+
 int ObLogDelUpd::get_index_dml_infos(uint64_t loc_table_id,
                                      ObIArray<const IndexDMLInfo *> &index_infos) const
 {
@@ -1667,6 +1682,11 @@ int ObLogDelUpd::replace_dml_info_exprs(
     const ObIArray<IndexDMLInfo *> &index_dml_infos)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); i++) {
     IndexDMLInfo *index_dml_info = index_dml_infos.at(i);
     if (OB_ISNULL(index_dml_info)) {
@@ -1703,6 +1723,19 @@ int ObLogDelUpd::replace_dml_info_exprs(
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()) {
         // just skip, nothing to do.
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()) {
+        const ObTableSchema *table_schema = NULL;
+        if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_dml_info->ref_table_id_, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_NOT_NULL(table_schema)) {
+          uint64_t rowkey_cid_tid = OB_INVALID_ID;
+          if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, *table_schema, static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(), rowkey_cid_tid))) {
+            LOG_WARN("failed to check_rowkey_cid_table_readable", K(ret));
+          } else if (OB_INVALID_ID == rowkey_cid_tid) {
+            if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
+              LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
+            }
+          }
+        }
         // just skip, nothing to do.
       } else if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
         LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));

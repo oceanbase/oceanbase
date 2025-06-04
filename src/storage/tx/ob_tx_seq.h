@@ -95,6 +95,10 @@ public:
     int64_t s = n_format_ ? seq_ + n : seq_v0_ + n;
     return n_format_ ? ObTxSEQ(s, branch_) : ObTxSEQ::mk_v0(s);
   }
+  ObTxSEQ operator-(int n) const {
+    int64_t s = n_format_ ? seq_ - n : seq_v0_ - n;
+    return n_format_ ? ObTxSEQ(s, branch_) : ObTxSEQ::mk_v0(s);
+  }
   uint64_t hash() const { return murmurhash(&raw_val_, sizeof(raw_val_), 0); }
   // atomic incremental update
   int64_t inc_update(const ObTxSEQ &b) { return common::inc_update(&raw_val_, b.raw_val_); }

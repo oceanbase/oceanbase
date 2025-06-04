@@ -349,6 +349,8 @@ public:
   common::hash::ObHashMap<common::ObTabletID, share::SCN> mview_dep_tablet_map_;
   int64_t wait_reuse_across_sstable_time_;
   mutable lib::ObMutex mv_mutex_;
+  share::SCN ls_clog_checkpoint_scn_;
+  bool is_newly_created_ls_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 

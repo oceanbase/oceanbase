@@ -65,6 +65,26 @@ void ObLSChangeMemberType::reset()
   type_ = MAX;
 }
 
+int ObLSChangeMemberType::convert_to_dr_type(
+    const bool is_paxos_member,
+    obrpc::ObDRTaskType &dr_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(type));
+  } else if (is_modify_replica_number()) {
+    dr_type = obrpc::ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER;
+  } else if (is_remove_member()) {
+    dr_type = is_paxos_member ? obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA : obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
+  } else if (is_transform_member()) {
+    dr_type = obrpc::ObDRTaskType::LS_TYPE_TRANSFORM;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no valid task type", KR(ret), K(is_paxos_member), K_(type));
+  }
+  return ret;
+}
 
 ObLSRemoveMemberArg::ObLSRemoveMemberArg()
   : task_id_(),

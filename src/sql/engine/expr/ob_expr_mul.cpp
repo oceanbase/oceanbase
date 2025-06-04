@@ -52,7 +52,7 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
   } else if (type.is_collection_sql_type()) {
     // only support vector/array/varchar * vector/array/varchar now // array and varchar need cast to array(float)
     uint16_t res_subschema_id = UINT16_MAX;
-    if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type1, type2, type_ctx, res_subschema_id))) {
+    if (OB_FAIL(ObArrayExprUtils::calc_cast_type2(type_, type1, type2, type_ctx, res_subschema_id))) {
       LOG_WARN("failed to calc cast type", K(ret), K(type1));
     } else if (UINT16_MAX == res_subschema_id) {
       ret = OB_ERR_UNEXPECTED;
@@ -1500,8 +1500,6 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
   const ObObjTypeClass left_tc = ob_obj_type_class(left);
   const ObObjTypeClass right_tc = ob_obj_type_class(right);
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   rt_expr.may_not_need_raw_check_ = false;

@@ -62,30 +62,8 @@ private:
                        storage::ObLSHandle &ls_handle,
                        logservice::ObLogHandler *&log_handler) const;
   int change_access_mode_(const LogChangeAccessModeCmd &req);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int handle_acquire_log_rebuild_info_msg_(const LogAcquireRebuildInfoMsg &req);
-#endif
 };
 
-class ConfigChangeCmdHandler{
-public:
-  explicit ConfigChangeCmdHandler(palf::PalfHandle *palf_handle)
-  {
-    if (NULL != palf_handle) {
-      palf_handle_ = palf_handle;
-    }
-  }
-  ~ConfigChangeCmdHandler()
-  {
-    palf_handle_ = NULL;
-  }
-  int handle_config_change_cmd(const LogConfigChangeCmd &req,
-                               LogConfigChangeCmdResp &resp) const;
-private:
-  int get_reporter_(ObLogReporterAdapter *&reporter) const;
-private:
-  palf::PalfHandle *palf_handle_;
-};
 } // end namespace logservice
 } // end namespace oceanbase
 

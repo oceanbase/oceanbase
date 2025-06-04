@@ -109,7 +109,7 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
   ObLSID src_ls(1001);
   ObLSID dest_ls(1);
   ObTableLockOwnerID owner_id;
-  owner_id.convert_from_value(999);
+  owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 999);
   share::SCN start_scn;
   share::SCN finish_scn;
   start_scn.convert_for_inner_table_field(1666844202200632);
@@ -445,6 +445,56 @@ TEST_F(TestTenantTransferService, test_offline_ddl_hidden_table)
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
+}
+
+TEST_F(TestTenantTransferService, test_transfer_retry_limit)
+{
+  int ret = OB_SUCCESS;
+  ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(g_tenant_id));
+  ObTenantTransferService *tenant_transfer = MTL(ObTenantTransferService*);
+  ASSERT_TRUE(OB_NOT_NULL(tenant_transfer));
+
+  const int64_t BUSY_IDLE_TIME_US = 100 * 1000L;
+  ObTransferTaskID current_failed_task_id;
+  ObTransferTaskID last_failed_task_id;
+  int64_t retry_count = 0;
+  // an error occurred before the task execution started
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(0 == retry_count);
+  // an error occurred during the first attempt to execute the task
+  current_failed_task_id = 1;
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(0 == retry_count);
+  // an error occurred during the execution of the same task
+  current_failed_task_id = 1;
+  ASSERT_TRUE(BUSY_IDLE_TIME_US * (1 << 1) == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(1 == retry_count);
+  // the error occurred repeatedly, reaching the maximum limit of 10 times
+  for (int i = 2; i <= 9; i++) {
+    current_failed_task_id = 1;
+    ASSERT_TRUE(BUSY_IDLE_TIME_US * (1 << i) == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+    ASSERT_TRUE(i == retry_count);
+  }
+  ASSERT_TRUE(tenant_transfer->get_transfer_config_retry_interval_() == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(10 == retry_count);
+  ASSERT_TRUE(tenant_transfer->get_transfer_config_retry_interval_() == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(11 == retry_count);
+  // an error occurred once in another task
+  current_failed_task_id = -1;
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(0 == retry_count);
+  current_failed_task_id = 1;
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
+  ASSERT_TRUE(0 == retry_count);
+
+  // ensure that retry_interval is not less than the lower limit (BUSY_IDLE_TIME_US)
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set _transfer_task_retry_interval = '0' tenant='tt1'");
+  ASSERT_TRUE(BUSY_IDLE_TIME_US == tenant_transfer->calc_transfer_retry_interval_(current_failed_task_id, retry_count, last_failed_task_id));
 }
 
 } // namespace rootserver

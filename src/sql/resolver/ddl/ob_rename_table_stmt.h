@@ -32,6 +32,9 @@ public:
   int get_rename_table_table_ids(common::ObIArray<share::schema::ObObjectStruct> &object_ids) const;
   int add_rename_table_item(const obrpc::ObRenameTableItem &rename_table_item);
   inline void set_tenant_id(const uint64_t tenant_id);
+  inline void set_client_session_info(const uint32_t client_sessid,
+                                      const int64_t create_ts);
+  int set_lock_priority(sql::ObSQLSessionInfo *session);
   uint64_t get_tenant_id() const { return rename_table_arg_.tenant_id_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return rename_table_arg_; }
   TO_STRING_KV(K_(stmt_type), K_(rename_table_arg));
@@ -45,6 +48,12 @@ inline void ObRenameTableStmt::set_tenant_id(const uint64_t tenant_id)
   rename_table_arg_.tenant_id_ = tenant_id;
 }
 
+inline void ObRenameTableStmt::set_client_session_info(const uint32_t client_sessid,
+                                                       const int64_t create_ts)
+{
+  rename_table_arg_.client_session_id_ = client_sessid;
+  rename_table_arg_.client_session_create_ts_ = create_ts;
+}
 
 } // namespace sql
 } // namespace oceanbase

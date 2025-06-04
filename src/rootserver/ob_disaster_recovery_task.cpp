@@ -15,7 +15,9 @@
 #include "ob_disaster_recovery_task.h"
 #include "ob_disaster_recovery_task_utils.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h" //for OTTZ_MGR
+#include "rootserver/ob_disaster_recovery_task_utils.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h" // for OTTZ_MGR
+#include "share/ls/ob_ls_i_life_manager.h" // for ObLSStatus
 
 namespace oceanbase
 {
@@ -52,6 +54,7 @@ namespace rootserver
   int64_t data_source_port = 0;                                                                                             \
   common::ObString data_source_ip;                                                                                          \
   bool is_manual = false;                                                                                                   \
+  ObString config_version_val;                                                                                              \
   (void)GET_COL_IGNORE_NULL(res.get_int, "ls_id", ls_id);                                                                   \
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);                                                           \
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_type", task_type_str);                                                   \
@@ -82,10 +85,12 @@ namespace rootserver
   EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_ip", data_source_ip,                                 \
     true/*skip null error*/, true/*skip column error*/, "0.0.0.0");                                                         \
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);                                                           \
+  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "bconfig_version", config_version_val,                                \
+    true/*skip_null_error*/, true/*skip_column_error*/, "");                                                                \
   ObDRTaskKey task_key;                                                                                                     \
   common::ObAddr execute_server_key;                                                                                        \
   common::ObZone execute_zone;                                                                                              \
-  rootserver::ObDRTaskType task_type = rootserver::ObDRTaskType::MAX_TYPE;                                                  \
+  ObDRTaskType task_type = ObDRTaskType::MAX_TYPE;                                                                          \
   ObSqlString comment_to_set;                                                                                               \
   ObSqlString task_id_sqlstring_format;                                                                                     \
   share::ObTaskId task_id_to_set;                                                                                           \
@@ -193,6 +198,9 @@ static const char* disaster_recovery_task_ret_comment_strs[] = {
   "[rs] task can not execute because replica is not in service",
   "[rs] task can not execute because server is permanent offline",
   "[rs] task can not persist because conflict with clone operation",
+  "[rs] task can not execute because destination has no sslog LS replica",
+  "[rs] task can not execute because config version not match",
+  "[rs] task can not execute because need generate replace replica task",
   ""/*default max*/
 };
 
@@ -241,12 +249,12 @@ static const char* disaster_recovery_task_type_strs[] = {
   "MAX_TYPE"
 };
 
-const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType type)
+const char *ob_disaster_recovery_task_type_strs(const ObDRTaskType type)
 {
-  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)rootserver::ObDRTaskType::MAX_TYPE + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)ObDRTaskType::MAX_TYPE + 1,
                 "type string array size mismatch with enum ObDRTaskType count");
   const char *str = NULL;
-  if (type >= rootserver::ObDRTaskType::LS_MIGRATE_REPLICA && type < rootserver::ObDRTaskType::MAX_TYPE) {
+  if (type >= ObDRTaskType::LS_MIGRATE_REPLICA && type < ObDRTaskType::MAX_TYPE) {
     str = disaster_recovery_task_type_strs[static_cast<int64_t>(type)];
   } else {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTask type", K(type));
@@ -256,15 +264,15 @@ const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType t
 
 int parse_disaster_recovery_task_type_from_string(
     const ObString &task_type_str,
-    rootserver::ObDRTaskType& task_type)
+    ObDRTaskType& task_type)
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)rootserver::ObDRTaskType::MAX_TYPE + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(disaster_recovery_task_type_strs) == (int64_t)ObDRTaskType::MAX_TYPE + 1,
                 "disaster_recovery_task_type_strs string array size mismatch enum ObDRTaskType count");
   for (int64_t i = 0; i < ARRAYSIZEOF(disaster_recovery_task_type_strs) && !found; i++) {
     if (0 == task_type_str.case_compare(disaster_recovery_task_type_strs[i])) {
-      task_type = static_cast<rootserver::ObDRTaskType>(i);
+      task_type = static_cast<ObDRTaskType>(i);
       found = true;
     }
   }
@@ -303,7 +311,7 @@ int ObDRTaskKey::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const common::ObZone &task_execute_zone,
-    const ObDRTaskType &task_type)
+    const obrpc::ObDRTaskType &task_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
@@ -367,6 +375,7 @@ int ObDRTaskKey::build_task_key_from_sql_result(
   }
   return ret;
 }
+
 
 int ObDRTask::fill_dml_splicer(
     share::ObDMLSqlSplicer &dml_splicer,
@@ -517,6 +526,243 @@ int ObDRTask::build(
     invoked_source_ = invoked_source;
     priority_ = priority;
     task_status_ = task_status;
+  }
+  return ret;
+}
+
+// ===================== ObReplaceLSReplicaTask ========================
+
+int ObReplaceLSReplicaTask::build(
+    const ObDRTaskKey &task_key,
+    const share::ObTaskId &task_id,
+    const ObString &comment,
+    const common::ObReplicaMember &dst_member,
+    const palf::LogConfigVersion &config_version,
+    const ObDRTaskPriority priority, // default
+    const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
+    const ObDRLSReplicaTaskStatus task_status,
+    const int64_t schedule_time_us,
+    const int64_t generate_time_us,
+    const int64_t cluster_id,
+    const int64_t transmit_data_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!dst_member.is_valid() || !config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(dst_member), K(config_version));
+  } else if (OB_FAIL(ObDRTask::build(task_key, task_id, comment, invoked_source, priority,
+                      task_status, schedule_time_us, generate_time_us, cluster_id, transmit_data_size))) {
+    LOG_WARN("fail to build ObDRTask", KR(ret), K(task_key), K(task_id), K(comment), K(invoked_source),
+      K(priority), K(task_status), K(schedule_time_us), K(generate_time_us), K(cluster_id), K(transmit_data_size));
+  } else {
+    set_dst_member(dst_member);
+    set_config_version(config_version);
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::build_task_from_sql_result(
+    const sqlclient::ObMySQLResult &res)
+{
+  int ret = OB_SUCCESS;
+  READ_TASK_FROM_SQL_RES_FOR_DISASTER_RECOVERY
+  common::ObAddr dest_server;
+  palf::LogConfigVersion config_version;
+  if (OB_FAIL(ret)) {
+  } else if (false == dest_server.set_ip_addr(dest_ip, static_cast<uint32_t>(dest_port))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
+  } else if (OB_UNLIKELY(config_version_val.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid config version", KR(ret), K(config_version_val));
+  } else if (OB_FAIL(ObLSTemplateOperator::hex_str_to_type(config_version_val, config_version))) {
+    LOG_WARN("failed to get config version", KR(ret), K(config_version_val));
+  } else if (OB_FAIL(build(task_key,
+                           task_id_to_set,
+                           comment_to_set.ptr(),
+                           ObReplicaMember(dest_server, common::ObTimeUtility::current_time(), dest_type_to_set),
+                           config_version,
+                           priority_to_set,
+                           is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
+                           task_status,
+                           schedule_time_us,
+                           generate_time_us))) {
+    LOG_WARN("fail to build a ObReplaceLSReplicaTask", KR(ret), K(task_key),
+              K(task_id_to_set), K(comment_to_set), K(dest_server));
+  } else {
+    LOG_INFO("success to build a ObReplaceLSReplicaTask", KPC(this), K(task_id));
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::add_config_version_column_(
+    share::ObDMLSqlSplicer &dml_splicer) const
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("VersionStr");
+  const int64_t CONFIG_LEN = palf::LogConfigVersion::CONFIG_VERSION_LEN + 1; //128 + \0
+  char config_version_str[CONFIG_LEN] = {0};
+  ObString config_version_hex;
+  common::ObSqlString config_version_sql_hex;
+  if (0 > get_config_version().to_string(config_version_str, CONFIG_LEN)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("config_version to string failed", KR(ret), K(get_config_version()));
+  } else if (OB_FAIL(ObLSTemplateOperator::type_to_hex_str(get_config_version(), allocator, config_version_hex))) {
+    LOG_WARN("failed to type to hex", KR(ret), K(get_config_version()));
+  } else if (OB_FAIL(config_version_sql_hex.assign_fmt("%.*s", static_cast<int>(config_version_hex.length()), config_version_hex.ptr()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(config_version_hex));
+  } else if (OB_FAIL(dml_splicer.add_column("config_version", config_version_str))) {
+    LOG_WARN("add column failed", KR(ret), K(config_version_str));
+  } else if (OB_FAIL(dml_splicer.add_column("bconfig_version", config_version_sql_hex.ptr()))) {
+    LOG_WARN("add column failed", KR(ret), K(config_version_sql_hex));
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::fill_dml_splicer(
+    ObDMLSqlSplicer &dml_splicer,
+    const bool record_history) const
+{
+  int ret = OB_SUCCESS;
+  char dest_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid task", KR(ret));
+  } else if (false == get_dst_server().ip_to_string(dest_ip, sizeof(dest_ip))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("convert dest_server ip to string failed", KR(ret), "dest_server", get_dst_server());
+  } else if (OB_FAIL(ObDRTask::fill_dml_splicer(dml_splicer, record_history))) {
+    LOG_WARN("ObDRTask fill dml splicer failed", KR(ret));
+  } else if (OB_FAIL(dml_splicer.add_pk_column("task_type", ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REPLACE_REPLICA)))
+          || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", dest_ip))
+          || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_dst_server().get_port()))
+          || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", 0))
+          || OB_FAIL(dml_splicer.add_column("target_replica_type", ObShareUtil::replica_type_to_string(REPLICA_TYPE_FULL)))
+          || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", 0))
+          || OB_FAIL(dml_splicer.add_column("source_replica_type", ObShareUtil::replica_type_to_string(REPLICA_TYPE_FULL)))
+          || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
+          || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))
+          || OB_FAIL(dml_splicer.add_column("is_manual", is_manual_task()))) {
+    LOG_WARN("add column failed", KR(ret));
+  } else if (ObRootUtils::if_deployment_mode_match() && OB_FAIL(add_config_version_column_(dml_splicer))) {
+    LOG_WARN("add config version column failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::log_execute_start() const
+{
+  int ret = OB_SUCCESS;
+  ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
+                        "tenant_id", get_tenant_id(),
+                        "ls_id", get_ls_id().id(),
+                        "task_id", get_task_id(),
+                        "config_version", config_version_,
+                        "destination", dst_member_.get_server(),
+                        "comment", get_comment().ptr());
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::log_execute_result() const
+{
+  int ret = OB_SUCCESS;
+  ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
+                          "tenant_id", get_tenant_id(),
+                          "ls_id", get_ls_id().id(),
+                          "task_id", get_task_id(),
+                          "config_version", config_version_,
+                          "destination", dst_member_.get_server(),
+                          "execute_result", get_execute_result().ptr(),
+                          get_comment().ptr());
+  return ret;
+}
+
+int64_t ObReplaceLSReplicaTask::get_clone_size() const
+{
+  return sizeof(*this);
+}
+
+int ObReplaceLSReplicaTask::clone(
+  void *input_ptr,
+  ObDRTask *&output_task) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == input_ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else {
+    ObReplaceLSReplicaTask *my_task = new (input_ptr) ObReplaceLSReplicaTask();
+    if (OB_UNLIKELY(nullptr == my_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to construct", KR(ret));
+    } else if (OB_FAIL(my_task->deep_copy(*this))) {
+      LOG_WARN("fail to deep copy", KR(ret));
+    } else {
+      my_task->set_dst_member(get_dst_member());
+      my_task->set_config_version(get_config_version());
+      output_task = my_task;
+    }
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::check_before_execute(
+    share::ObLSTableOperator &lst_operator,
+    ObDRTaskRetComment &ret_comment) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(lst_operator);
+
+  palf::LogConfigVersion config_version;
+  common::ObMemberList member_list; // not used
+  if (OB_FAIL(DisasterRecoveryUtils::get_member_info(get_tenant_id(), get_ls_id(), config_version, member_list))) {
+    LOG_WARN("failed to get member info", KR(ret));
+  } else if (config_version != get_config_version()) {
+    ret = OB_STATE_NOT_MATCH;
+    ret_comment = ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_CONFIG_VERSION_NOT_MATCH;
+    LOG_WARN("config version not math", KR(ret), K(config_version), K(get_config_version()));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // in ss, replace replica task need check destination has sslog replica.
+    bool has_sslog = false;
+    const uint64_t tenant_id = get_tenant_id();
+    const share::ObLSID &ls_id = get_ls_id();
+    if (is_sys_tenant(tenant_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys tenant has no replace replica task", KR(ret));
+    } else if (is_tenant_sslog_ls(tenant_id, ls_id)) {
+      LOG_INFO("sslog skip check", K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(DisasterRecoveryUtils::check_dest_has_sslog(gen_meta_tenant_id(tenant_id),
+                                                                   SSLOG_LS,
+                                                                   get_dst_server(),
+                                                                   has_sslog))) {
+      LOG_WARN("failed to check dest has sslog", KR(ret), K(tenant_id), K(get_dst_server()));
+    } else if (!has_sslog) {
+      ret = OB_REBALANCE_TASK_CANT_EXEC;
+      ret_comment = ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_HAS_NO_SSLOG_LS_IN_DESTINATION;
+      LOG_WARN("dest server has no sslog ls", KR(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObReplaceLSReplicaTask::execute(
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    ObDRTaskRetComment &ret_comment) const
+{
+  int ret = OB_SUCCESS;
+  ObLSReplaceReplicaArg arg;
+  int64_t rpc_timeout = DisasterRecoveryUtils::DR_TASK_RPC_REQUEST_TIMEOUT + GCONF.rpc_timeout;
+  if (OB_FAIL(arg.init(get_task_id(),
+                       get_tenant_id(),
+                       get_ls_id(),
+                       get_dst_member(),
+                       get_config_version()))) {
+    LOG_WARN("fail to init arg", KR(ret), KPC(this));
+  } else if (OB_FAIL(rpc_proxy.to(get_dst_server()).by(get_tenant_id()).timeout(rpc_timeout).ls_replace_replica(arg))) {
+    ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
+    LOG_WARN("fail to send ls replace replica rpc", KR(ret), K(arg));
+  } else {
+    FLOG_INFO("start to execute ls replace replica", K(arg), K(rpc_timeout), KPC(this));
   }
   return ret;
 }
@@ -1822,9 +2068,6 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(execute_ip), K(execute_port));
   } else if (OB_FAIL(member_list.add_member(ObMember(execute_server, 0)))) {
-    // this field is not accurate and will not be used by tasks that are reloaded into memory.
-    // it just ensures that the task build is valid.
-    // while execute task, get member_list from meta_table
     LOG_WARN("fail to add server to member list", KR(ret), K(execute_server));
   } else if (OB_FAIL(build(
                     task_key,

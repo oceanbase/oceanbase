@@ -60,19 +60,14 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
   } else {
     const char *payload = NULL;
     ObLength len = 0;
-    ObEvalCtx::TempAllocGuard alloc_guard(eval_ctx);
+    src_vec->get_payload(batch_idx, payload, len);
     ObDatum res;
-    if (src_->is_nested_expr() && !is_uniform_format(src_vec->get_format())) {
-      ObIAllocator *allocator = (0 == dst_->res_buf_off_) ? &eval_ctx.get_expr_res_alloc() : &alloc_guard.get_allocator();
-      if (OB_FAIL(ObArrayExprUtils::get_collection_payload(*allocator, eval_ctx, *src_, batch_idx, payload, len))) {
-        LOG_WARN("get nested collection payload failed", K(ret));
-      }
-    } else {
-      src_vec->get_payload(batch_idx, payload, len);
-    }
-    if (OB_FAIL(ret)) {
-    } else if (src_vec->is_null(batch_idx)) {
+    if (src_vec->is_null(batch_idx)) {
       res.set_null();
+    } else if (src_->is_nested_expr() && !ObCollectionExprUtil::is_compact_fmt_cell(payload)) {
+      // vector_fmt not supported yet
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected data format", K(ret));
     } else {
       res.ptr_ = payload;
       res.len_ = len;
@@ -161,7 +156,14 @@ int ObDynamicParamSetter::update_dynamic_param(ObEvalCtx &eval_ctx, ObDatum &dat
       LOG_WARN("convert datum to obj failed", K(ret), "datum",
                DATUM2STR(*dst_, param_datum));
     } else {
-      param_store.at(param_idx_).set_param_meta();
+      // if exec param is decimal int, accuracy must be properly set
+      if (dst_->obj_meta_.is_decimal_int()) {
+        ObAccuracy acc(dst_->datum_meta_.precision_, dst_->datum_meta_.scale_);
+        param_store.at(param_idx_).set_param_meta(dst_->obj_meta_);
+        param_store.at(param_idx_).set_accuracy(acc);
+      } else {
+        param_store.at(param_idx_).set_param_meta();
+      }
     }
   }
 
@@ -741,10 +743,9 @@ int ObOperator::output_expr_sanity_check_batch()
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
     } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
       LOG_WARN("eval vector failed", K(ret));
-    } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
-      if (OB_FAIL(output_nested_expr_sanity_check_batch(*expr))) {
-        LOG_WARN("check nested expr sanity failed", K(ret));
-      }
+    } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
+              OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+      LOG_WARN("fail to do diagnosis", K(ret));
     } else if (OB_FAIL(output_expr_sanity_check_batch_inner(*expr))) {
       LOG_WARN("expr sanity check batch failed", K(ret));
     }
@@ -795,6 +796,9 @@ int ObOperator::output_expr_decint_datum_len_check_batch()
         LOG_WARN("the precision of decimal int expr is unknown", K(ret), K(precision), K(*expr));
       } else if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
         LOG_WARN("evaluate expression failed", K(ret));
+      } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&
+                OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+        LOG_WARN("fail to do diagnosis", K(ret));
       } else if (!expr->is_batch_result()) {
         const ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
         if (!datum.is_null() && datum.len_ != 0) {
@@ -820,6 +824,7 @@ int ObOperator::open()
   if (OB_FAIL(check_stack_overflow())) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else {
+    ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
     OperatorOpenOrder open_order = get_operator_open_order();
     if (!spec_.is_vectorized()) {
     /*
@@ -922,7 +927,9 @@ void ObOperator::reset_output_format()
 {
   if (spec_.plan_->get_use_rich_format() && !spec_.use_rich_format_) {
     FOREACH_CNT(e, spec_.output_) {
-      (*e)->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+      if (!is_uniform_format((*e)->get_format(eval_ctx_))) {
+        (*e)->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+      }
     }
   }
 }
@@ -974,6 +981,7 @@ int ObOperator::rescan()
   //for the general terminal operator, function rescan() does nothing
   //you can rewrite it to complete special function
   int ret = OB_SUCCESS;
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; ++i) {
     if (OB_FAIL(children_[i]->rescan())) {
       LOG_WARN("rescan child operator failed",
@@ -1143,6 +1151,7 @@ int ObOperator::close()
 {
   int ret = OB_SUCCESS;
   OperatorOpenOrder open_order = get_operator_open_order();
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   if (OPEN_SELF_ONLY != open_order) {
     //first call close of children
     for (int64_t i = 0; i < child_cnt_; ++i) {
@@ -1251,7 +1260,7 @@ int ObOperator::get_next_row()
 {
   int ret = OB_SUCCESS;
   begin_cpu_time_counting();
-  begin_ash_line_id_reg();
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
   }
@@ -1417,7 +1426,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
 {
   int ret = OB_SUCCESS;
   begin_cpu_time_counting();
-  begin_ash_line_id_reg();
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
 
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
@@ -1525,6 +1534,12 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
 
+      if (OB_SUCC(ret) && GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled()) {
+        if (OB_FAIL(do_diagnosis(eval_ctx_.exec_ctx_, *brs_.skip_))) {
+          LOG_WARN("fail to do diagnosis", K(ret));
+        }
+      }
+
       if (OB_SUCC(ret) && OB_FAIL(try_push_stash_rows(op_max_row_cnt))) {
         LOG_WARN("try push stash rows failed", K(ret));
       }
@@ -1532,6 +1547,14 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
       if (brs_.end_ && 0 == brs_.size_) {
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
           if (UINT32_MAX != (*e)->vector_header_off_) {
+            // op's parent may not support vectoriation format, we need reset vector to VEC_UNIFORM/VEC_UNIFORM_CONST
+            // for op's parent to read data correctly.
+
+            // for static const expr (not question mark or calculable expr), its vector header will always be VEC_UNIFORM_CONST
+            // and not changed since plan generation.
+            // for other exprs, if its vec format is already VEC_UNIFROM/VEC_UNIFORM_CONST, nothing should be done.
+            VectorFormat expr_fmt = (*e)->get_format(eval_ctx_);
+            if (expr_fmt == VEC_UNIFORM || expr_fmt == VEC_UNIFORM_CONST) { continue; }
             if (OB_FAIL((*e)->init_vector(eval_ctx_, (*e)->is_batch_result()
                                           ? VEC_UNIFORM : VEC_UNIFORM_CONST, brs_.size_))) {
               LOG_WARN("failed to init vector", K(ret));
@@ -1620,6 +1643,7 @@ int ObOperator::convert_vector_format()
 
 int ObOperator::filter_row(ObEvalCtx &eval_ctx, const ObIArray<ObExpr *> &exprs, bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   ObDatum *datum = NULL;
   int ret = OB_SUCCESS;
   filtered = false;
@@ -1644,6 +1668,7 @@ int ObOperator::filter_row_vector(ObEvalCtx &eval_ctx,
                                   const sql::ObBitVector &skip_bit,
                                   bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   filtered = false;
   const int64_t batch_idx = eval_ctx.get_batch_idx();
@@ -1748,6 +1773,7 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
                                   bool &all_filtered,
                                   bool &all_active)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   all_filtered = false;
   bool tmp_all_active = true;

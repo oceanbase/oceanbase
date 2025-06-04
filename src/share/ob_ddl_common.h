@@ -89,6 +89,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFSQ8_INDEX = 22,
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
+  DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -143,8 +144,7 @@ enum ObDDLType
 };
 const char *get_ddl_type(ObDDLType ddl_type);
 
-enum ObDDLTaskType
-{
+enum ObDDLTaskType {
   INVALID_TASK = 0,
   REBUILD_INDEX_TASK = 1,
   REBUILD_CONSTRAINT_TASK = 2,
@@ -154,7 +154,8 @@ enum ObDDLTaskType
   MODIFY_FOREIGN_KEY_STATE_TASK = 6,
   // used in rollback_failed_add_not_null_columns() in ob_constraint_task.cpp.
   DELETE_COLUMN_FROM_SCHEMA = 7,
-  // remap all index tables to hidden table and take effect through one rpc, applied in drop column for 4.0.
+  // remap all index tables to hidden table and take effect through one rpc, applied in drop column
+  // for 4.0.
   REMAP_INDEXES_AND_TAKE_EFFECT_TASK = 8,
   UPDATE_AUTOINC_SCHEMA = 9,
   CANCEL_DDL_TASK = 10,
@@ -163,6 +164,7 @@ enum ObDDLTaskType
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
+  SWITCH_MLOG_NAME_TASK = 16
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -213,6 +215,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
+  PURGE_OLD_MLOG = 47,
 
   FAIL = 99,
   SUCCESS = 100
@@ -387,6 +390,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
       str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
       break;
+    case ObDDLTaskStatus::PURGE_OLD_MLOG:
+      str = "PURGE_OLD_MLOG";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -498,6 +504,13 @@ static inline bool is_supported_pre_split_ddl_type(const ObDDLType type)
       || DDL_CONVERT_TO_CHARACTER == type
       || DDL_TABLE_REDEFINITION == type
       || DDL_ALTER_PARTITION_BY == type;
+}
+
+static inline bool is_column_redifinition_like_ddl_type(const ObDDLType type)
+{
+  return ObDDLType::DDL_DROP_COLUMN == type
+          || ObDDLType::DDL_ADD_COLUMN_OFFLINE == type
+          || ObDDLType::DDL_COLUMN_REDEFINITION == type;
 }
 
 static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_status)
@@ -1018,6 +1031,11 @@ public:
     common::ObAddr addr_;
   };
 
+  static int check_local_is_sys_leader();
+  static int get_sys_log_handler_role_and_proposal_id(
+      common::ObRole &role,
+      int64_t &proposal_id);
+
   // get all tablets of a table by table_id
   static int get_tablets(
       const uint64_t tenant_id,
@@ -1124,10 +1142,10 @@ public:
 
   static bool need_remote_write(const int ret_code);
 
-  static int check_can_convert_character(const ObObjMeta &obj_meta)
+  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index)
   {
     return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
-              && CS_TYPE_BINARY != obj_meta.get_collation_type();
+              && CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index;
   }
 
   static int get_sys_ls_leader_addr(
@@ -1366,6 +1384,7 @@ public:
   static bool need_fill_column_group(const bool is_row_store, const bool need_process_cs_replica, const int64_t data_format_version);
   static bool need_rescan_column_store(const int64_t data_format_version); // for compat old logic for fill column store
   static int init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq);
+  static int64_t get_parallel_idx(const blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
   static int obtain_snapshot(
@@ -1414,6 +1433,16 @@ public:
       const int64_t ddl_task_id = 0,
       const int64_t trans_end_snapshot = 0,
       const int64_t index_snapshot_version_diff = 0);
+  static int check_is_table_restore_task(const uint64_t tenant_id, const int64_t task_id, bool &is_table_restore_task);
+  static int construct_domain_index_arg(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    rootserver::ObDDLTask &task,
+    obrpc::ObCreateIndexArg &create_index_arg,
+    ObDDLType &ddl_type);
+  static int get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    int64_t &fts_snapshot_version);
   static int write_defensive_and_obtain_snapshot(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -1421,6 +1450,8 @@ public:
       const ObTableSchema &index_table_schema,
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
+
+  static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
 
 private:
   static int hold_snapshot(
@@ -1471,6 +1502,10 @@ public:
       const storage::ObCOSSTableV2 *co_sstable,
       const storage::ObStorageSchema *storage_schema,
       bool &is_rowkey_based);
+  static int get_co_column_checksums_if_need(
+      const ObTabletHandle &tablet_handle,
+      const blocksstable::ObSSTable *sstable,
+      ObIArray<int64_t> &column_checksum_array);
 };
 
 
@@ -1585,10 +1620,13 @@ private:
     struct {
       uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
       uint32_t can_reuse_macro_block_: 1;
-      uint32_t reserved: 30;
+      uint32_t cant_execute_ss_minor_: 1; // can not execute ss minor compaction? default = 0(can execute ss minor).
+      uint32_t cant_gc_macro_blks_: 1; // can not gc macro blocks when gc tablet? default = 0(can gc them).
+      uint32_t reserved: 28;
     };
   };
   ObTabletID split_src_tablet_id_;
+  share::SCN split_start_scn_; // clog/mds_ckpt_scn of the split dest tablet when created.
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

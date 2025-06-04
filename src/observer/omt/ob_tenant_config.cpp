@@ -368,6 +368,7 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
   char *buf = NULL;
   char *saveptr = NULL;
   char *token = NULL;
+  const char *delimiter = "|\n";
   if (OB_ISNULL(config_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("config str is null", K(ret));
@@ -380,7 +381,11 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    token = STRTOK_R(buf, ",\n", &saveptr);
+    token = STRTOK_R(buf, delimiter, &saveptr);
+    if (0 == STRLEN(saveptr)) {
+      delimiter = ",\n";
+      token = STRTOK_R(buf, delimiter, &saveptr);
+    }
     const ObString compatible_cfg(COMPATIBLE);
     const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
@@ -486,7 +491,7 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
             }
           }
         }
-        token = STRTOK_R(NULL, ",\n", &saveptr);
+        token = STRTOK_R(NULL, delimiter, &saveptr);
       }
     }
   }

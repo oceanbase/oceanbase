@@ -732,7 +732,7 @@ int ObAllVirtualProxyPartitionInfo::build_check_str_to_raw_expr_(
         ObString scope_name = "constraint column function";
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
                        scope_name.length(), scope_name.ptr());
-      } else if (OB_FAIL(sql::ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+      } else if (OB_FAIL(sql::ObRawExprUtils::init_column_expr(*col_schema, NULL, *q_name.ref_expr_))) {
         LOG_WARN("init column expr failed", KR(ret));
       }
     }

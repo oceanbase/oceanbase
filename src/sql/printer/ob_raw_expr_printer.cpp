@@ -661,7 +661,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
           DATA_PRINTF("(");
           PRINT_EXPR(expr->get_param_expr(0));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
             // any, all
             if (T_WITH_ANY == expr->get_subquery_key()) {
               DATA_PRINTF("any ");
@@ -1315,6 +1315,28 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
       } else {
         DATA_PRINTF("rb_and_agg(");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG: {
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF("rb_or_cardinality_agg(");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF("rb_and_cardinality_agg(");
         PRINT_EXPR(expr->get_param_expr(0));
         DATA_PRINTF(")");
       }
@@ -2188,9 +2210,14 @@ int ObRawExprPrinter::print_dot_notation(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
   const ObString db_str(0, "");
-  ObColumnRefRawExpr *bin_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-  bin_expr->set_database_name(db_str);
-  PRINT_EXPR(bin_expr); // table_name.col_name  not print db_name
+  ObRawExpr* col_ref = expr->get_param_expr(0);
+  if (col_ref->is_column_ref_expr()) {
+    ObColumnRefRawExpr *bin_expr = static_cast<ObColumnRefRawExpr*>(col_ref);
+    bin_expr->set_database_name(db_str);
+    // original column has not dependant expr
+    bin_expr->set_dependant_expr(nullptr);
+  }
+  PRINT_EXPR(col_ref); // table_name.col_name  not print db_name
   ObObj path_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value();
   ObItemType expr_type = expr->get_param_expr(1)->get_expr_type();
   if (T_VARCHAR != expr_type && T_CHAR != expr_type) {
@@ -3207,6 +3234,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_PL_SEQ_NEXT_VALUE:
       case T_FUN_SYS_SEQ_NEXTVAL: {
         ObSequenceRawExpr *seq_expr= static_cast<ObSequenceRawExpr*>(expr);
         if (1 != seq_expr->get_param_count()) {
@@ -3393,7 +3421,11 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_CALC_UROWID: {
         ObColumnRefRawExpr *sub_pk_expr = NULL;
-        if (OB_UNLIKELY(expr->get_param_count() < 2)
+        if (expr->get_param_count() == 1 && OB_NOT_NULL(expr->get_param_expr(0)) &&
+            expr->get_param_expr(0)->is_column_ref_expr()) {
+          // CALC_UROWID(sub_pk_expr)
+          sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+        } else if (OB_UNLIKELY(expr->get_param_count() < 2)
             || OB_ISNULL(expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param of expr to type", K(ret), KPC(expr));
@@ -3748,7 +3780,7 @@ do { \
     }
     DATA_PRINTF("(");
 
-    ObIArray<ObExprResType> &params_type = expr->get_params_type();
+    ObIArray<ObRawExprResType> &params_type = expr->get_params_type();
     ObIArray<ObString> &params_name = expr->get_params_name();
     bool last_is_comma = false;
     CK (params_type.count() == expr->get_param_count());
@@ -4323,6 +4355,10 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
             DATA_PRINTF(" WITH QUERY EXPANSION)");
             break;
           }
+          case MATCH_PHRASE_MODE: {
+            DATA_PRINTF(" IN MATCH PHRASE MODE)");
+            break;
+          }
           default: {
             DATA_PRINTF(")");
           }
@@ -4560,7 +4596,7 @@ int ObRawExprPrinter::pre_check_treat_opt(ObRawExpr *expr, bool &is_treat)
   return ret;
 }
 
-int ObRawExprPrinter::print_type(const ObExprResType &dst_type)
+int ObRawExprPrinter::print_type(const ObRawExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *type_expr = NULL;

@@ -57,7 +57,7 @@ int ObExprVecIVFCenterID::cg_expr(
     ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 4 && rt_expr.arg_cnt_ != 1)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 4 && rt_expr.arg_cnt_ != 1 && rt_expr.arg_cnt_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
   } else if (OB_UNLIKELY(rt_expr.arg_cnt_ == 4 && OB_ISNULL(rt_expr.args_))) {
@@ -78,6 +78,16 @@ int ObExprVecIVFCenterID::calc_center_id(
   if (expr.arg_cnt_ == 1) {
     expr_datum.set_null();
     LOG_DEBUG("[vec index debug]succeed to genearte empty center id", KP(&expr), K(expr), K(expr_datum), K(eval_ctx));
+  } else if (expr.arg_cnt_ == 2) {
+    int64_t buf_len = OB_DOC_ID_COLUMN_BYTE_LENGTH;
+    char *buf = expr.get_str_res_mem(eval_ctx, buf_len);
+    ObString str(buf_len, 0, buf);
+    ObCenterId center_id(1, 0);
+    if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, str))) {
+      LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(str));
+    } else {
+      expr_datum.set_string(str);
+    }
   } else if (OB_UNLIKELY(4 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));

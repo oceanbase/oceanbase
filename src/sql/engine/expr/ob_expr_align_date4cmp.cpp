@@ -100,7 +100,7 @@ int ObExprAlignDate4Cmp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_
     LOG_WARN("the arg of expr_align_date4cmp is null.", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = eval_align_date4cmp;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_cast_mode();
   }
   return ret;
 }

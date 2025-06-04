@@ -220,7 +220,9 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
           OB_FAIL(table_schema.set_comment(comment_)) ||
           OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_)) ||
           OB_FAIL(table_schema.set_ttl_definition(ttl_definition_)) ||
-          OB_FAIL(table_schema.set_kv_attributes(kv_attributes_))) {
+          OB_FAIL(table_schema.set_kv_attributes(kv_attributes_)) ||
+          OB_FAIL(table_schema.set_storage_cache_policy(storage_cache_policy_)) ||
+          OB_FAIL(table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
     }
@@ -271,6 +273,16 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
     }
     if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {
       table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
+    }
+    if (OB_SUCC(ret)) {
+      if (table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE
+          && semistruct_encoding_type_.is_enable_semistruct_encoding()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret), K(table_schema.get_row_store_type()), K(semistruct_encoding_type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding is not support if cs encoding is not set");
+      } else {
+        table_schema.set_semistruct_encoding_type(semistruct_encoding_type_);
+      }
     }
   }
   return ret;
@@ -355,10 +367,7 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
     table_schema.set_column_store(true);
     bool is_each_cg_exist = false;
     if (OB_NOT_NULL(cg_node)) {
-      if (!is_column_group_supported()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("column group is not enabled", KR(ret));
-      } else if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
+      if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
         LOG_WARN("fail to parse column group", K(ret));
       }
     }

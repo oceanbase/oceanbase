@@ -14,6 +14,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -116,7 +117,10 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
   if (profile_id == OB_INVALID_ID) {
     profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
   }
-  if (OB_ISNULL(schema_checker_) ||
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Session info is not inited", K(ret));
+  } else if (OB_ISNULL(schema_checker_) ||
       OB_ISNULL(schema_checker_->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema checker is null", K(ret));
@@ -138,7 +142,14 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         sqlclient::ObMySQLResult *sql_result = NULL;
         ObISQLConnection *conn = NULL;
         ObInnerSQLConnectionPool *pool = NULL;
-        if (OB_FAIL(sql.append_fmt("SELECT  %.*s('%.*s', '%.*s', %.*s) AS RES FROM DUAL",
+        share::ObSwitchCatalogHelper switch_catalog_helper;
+        int tmp_ret = OB_SUCCESS;
+        if (session_info_->is_in_external_catalog()
+            && OB_FAIL(session_info_->set_internal_catalog_db(&switch_catalog_helper))) {
+          LOG_WARN("failed to set catalog", K(ret));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql.append_fmt("SELECT  %.*s('%.*s', '%.*s', %.*s) AS RES FROM DUAL",
             function_name.length(), function_name.ptr(), 
             user_name.length(), user_name.ptr(),
             password.length(), password.ptr(),
@@ -172,6 +183,12 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         }
         if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy)) {
           sql_proxy->close(conn, true);
+        }
+        if (switch_catalog_helper.is_set()) {
+          if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+            ret = OB_SUCCESS == ret ? tmp_ret : ret;
+            LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
+          }
         }
       }
     }
@@ -489,7 +506,7 @@ int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
       if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
                                                   default_auth_plugin))) {
         LOG_WARN("fail to get block encryption variable", K(ret));
-      } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+      } else if (OB_UNLIKELY(0 != auth_plugin.case_compare(default_auth_plugin))) {
         ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
         LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
       } else {/* do nothing */}

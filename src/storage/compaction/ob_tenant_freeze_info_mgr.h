@@ -16,7 +16,6 @@
 #include <stdint.h>
 
 #include "lib/allocator/ob_slice_alloc.h"
-#include "lib/hash/ob_hashset.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/task/ob_timer.h"
 #include "share/ob_freeze_info_manager.h"
@@ -48,6 +47,7 @@ struct ObStorageSnapshotInfo
     SNAPSHOT_FOR_LS_RESERVED,
     SNAPSHOT_FOR_MIN_MEDIUM,
     SNAPSHOT_FOR_SPLIT,
+    SNAPSHOT_FOR_SS_GC,
     SNAPSHOT_MAX,
   };
   ObStorageSnapshotInfo();
@@ -106,10 +106,8 @@ public:
 
   int64_t get_latest_frozen_version();
 
-  int get_freeze_info_behind_major_snapshot(const int64_t major_snapshot, common::ObIArray<share::ObFreezeInfo> &freeze_infos);
+  int get_freeze_info_behind_major_snapshot(const int64_t major_snapshot, const bool include_equal, common::ObIArray<share::ObFreezeInfo> &freeze_infos);
   int get_freeze_info_by_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
-  // get first freeze info larger than snapshot
-  int get_freeze_info_behind_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
   int get_lower_bound_freeze_info_before_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
 
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);

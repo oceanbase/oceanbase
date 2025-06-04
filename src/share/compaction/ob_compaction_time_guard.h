@@ -81,6 +81,7 @@ public:
        int64_t &pos,
        const char *lvalue,
        const int64_t ts) const;
+  virtual bool need_print() const { return true; }
 public:
   template <typename E>
   static constexpr uint16_t event_idx(E e) { return static_cast<uint16_t>(e); }
@@ -168,12 +169,14 @@ public:
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  virtual bool need_print() const override;
 private:
   const static char *CompactionEventStr[];
   static const char *get_comp_event_str(const enum CompactionEvent event);
   static const int64_t COMPACTION_WARN_THRESHOLD_RATIO = 60 * 1000L * 1000L; // 1 min
-  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.1;
-  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
+  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.3;
+  static constexpr float EXECUTE_PERCENT_THRESHOLD = 0.95;
+  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 60 * 1000L * 1000L; // 30s
 };
 
 struct ObSSCompactionTimeGuard : public ObCompactionTimeGuard

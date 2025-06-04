@@ -61,7 +61,7 @@ struct ObTabletSliceParam final
 {
 public:
   static const int64_t MAX_TABLET_SLICE_COUNT = 1 << 12; // < must < 2^16 - 1, because major compaction reserved 16 bit for parallel task
-  static const int64_t MACRO_BLOCK_SEQ_INTERVAL = 1 << 32; // max 8T for each tablet piece
+  static const int64_t MACRO_BLOCK_SEQ_INTERVAL = 1LL << 32; // max 8T for each tablet piece
   static const int64_t LOB_ID_SEQ_INTERVAL = 10L * 10000L; // must bigger than max column count(4096)
   ObTabletSliceParam() : slice_id_(0) {}
   ObTabletSliceParam(const ObTabletSliceParam &other) { slice_id_ = other.slice_id_; }

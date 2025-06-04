@@ -52,6 +52,7 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "share/backup/ob_backup_config.h"
 
 namespace oceanbase
 {
@@ -1607,7 +1608,7 @@ int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
           if (OB_RS_NOT_MASTER == ret) {
             BOOTSTRAP_LOG(INFO, "master root service not ready",
                           K(master_rs), "retry_count", i, K(rpc_timeout), K(ret));
-            USLEEP(200 * 1000);
+            ob_throttle_usleep(200 * 1000, OB_RS_NOT_MASTER);
           } else {
             const ObAddr rpc_svr = rpc_proxy.get_server();
             BOOTSTRAP_LOG(ERROR, "execute bootstrap fail", KR(ret), K(rpc_svr), K(master_rs), K(rpc_timeout));
@@ -1898,6 +1899,8 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
       resource_info.data_disk_total_ = OB_SERVER_DISK_SPACE_MGR.get_disk_size_capacity();
       resource_info.data_disk_in_use_ = shared_storage_data_disk_in_use;
       resource_info.report_data_disk_assigned_ = svr_res_assigned.data_disk_size_;
+      resource_info.report_data_disk_suggested_size_ = 0;
+      resource_info.report_data_disk_suggested_operation_ = DataDiskSuggestedOperationType::TYPE::NONE;
     } else
     // shared-nothing mode
 #endif
@@ -1936,6 +1939,14 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
   // } else if (OB_FAIL(gctx_.par_ser_->get_partition_count(result.partition_count_))) {
   //   LOG_WARN("failed to get partition count", K(ret));
   // }
+  return ret;
+}
+
+int ObService::do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start do replace ls replica", K(arg));
+  // TODO: @wangxiaohui.wxh
   return ret;
 }
 
@@ -2417,9 +2428,9 @@ int ObService::batch_broadcast_schema(
   int ret = OB_SUCCESS;
   ObMultiVersionSchemaService *schema_service = gctx_.schema_service_;
   const int64_t sys_schema_version = arg.get_sys_schema_version();
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObSArray<ObTableSchema> generated_tables;
   const ObIArray<ObTableSchema> *tables_to_broadcast = NULL;
-  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -3173,9 +3184,9 @@ int ObService::inner_fill_tablet_info_(
     ret = OB_EAGAIN;
     LOG_WARN("need wait report for cs replica", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet->get_tablet_report_info(
-     gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum))) {
+     gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum, ls->is_cs_replica()))) {
     LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id),
-      "ls_id", ls->get_ls_id(), K(tablet_id));
+      "ls_id", ls->get_ls_id(), "is_cs_replica", ls->is_cs_replica(), K(tablet_id));
   }
   return ret;
 }
@@ -3451,6 +3462,21 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
   }
   return ret;
 }
+
+int ObService::estimate_skip_rate(const obrpc::ObEstSkipRateArg &arg,
+                                  obrpc::ObEstSkipRateRes &res) const
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("receive estimate tablet skip rate request", K(arg));
+  if (!inited_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("service is not inited", K(ret));
+  } else if (OB_FAIL(sql::ObStorageEstimator::estimate_skip_rate(arg, res))) {
+    LOG_WARN("failed to estimate skip rate", K(ret));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_SYNC_SCN_ERROR);
 ERRSIM_POINT_DEF(ERRSIM_GET_SYS_LS_SYNC_SCN_ERROR);
 int ObService::get_ls_sync_scn(
@@ -3971,25 +3997,35 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    const uint64_t tenant_id = arg.items_.at(0).exec_tenant_id_;
+    const uint64_t tenant_id = gen_user_tenant_id(arg.items_.at(0).exec_tenant_id_);
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path = arg.items_.at(0).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
 
+    ChangeExternalStorageDestMgr change_mgr;
     const bool has_access_info = !access_info.is_empty();
     const bool has_attribute = !attribute.is_empty();
-
-    share::ObBackupDest backup_dest;
+    ObBackupPathString backup_path;
     ObBackupDestAttribute access_info_option;
     ObBackupDestAttribute attribute_option;
     ObMySQLTransaction trans;
-    if (OB_FAIL(backup_dest.set(path.str()))) {
-      LOG_WARN("failed to set backup dest", K(ret));
+
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret), K(tenant_id));
+    } else if (!is_user_tenant(tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("The instruction is only supported by user tenant.", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, " using the syntax under sys tenant or meta tenant is");
+    } else if (OB_FAIL(change_mgr.init(tenant_id, path, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init change_external_storage_dest_mgr", K(ret));
     }
+
     if (OB_SUCC(ret) && has_access_info) {
       if (OB_FAIL(ObBackupDestAttributeParser::parse(access_info.str(), access_info_option))) {
         LOG_WARN("failed to parse attribute", K(ret), K(access_info));
-      } else if (OB_FAIL(backup_dest.reset_access_id_and_access_key(access_info_option.access_id_, access_info_option.access_key_))) {
+      } else if (OB_FAIL(change_mgr.update_and_validate_authorization(
+                            access_info_option.access_id_, access_info_option.access_key_))) {
         LOG_WARN("failed to reset access id and access key", K(ret), K(access_info_option));
       }
     }
@@ -4002,15 +4038,14 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     if (FAILEDx(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
       LOG_WARN("failed to start trans", K(ret), K(tenant_id));
     } else {
-      if (ObStorageType::OB_STORAGE_FILE != backup_dest.get_device_type()) {
-        if (has_access_info && OB_FAIL(ObBackupStorageInfoOperator::update_backup_authorization(trans, tenant_id, backup_dest))) {
-          LOG_WARN("failed to update backup authorization", K(ret), K(tenant_id), K(backup_dest));
-        }
+      if (has_access_info && OB_FAIL(change_mgr.update_inner_table_authorization(trans))) {
+        LOG_WARN("failed to update backup authorization", K(ret), K(tenant_id));
       }
+
       if (OB_SUCC(ret) && has_attribute) {
         if (FAILEDx(ObBackupStorageInfoOperator::update_backup_dest_attribute(
-            trans, tenant_id, backup_dest, attribute_option.max_iops_, attribute_option.max_bandwidth_))) {
-          LOG_WARN("failed to update backup dest attribute", K(ret), K(tenant_id), K(backup_dest));
+            trans, tenant_id, change_mgr.backup_dest_, attribute_option.max_iops_, attribute_option.max_bandwidth_))) {
+          LOG_WARN("failed to update backup dest attribute", K(ret), K(tenant_id));
         } else {
           LOG_INFO("admin change external storage dest", K(arg));
         }

@@ -67,10 +67,10 @@ namespace sql {
   class ObPsCache;
   class ObAuditLogger;
   class ObAuditLogUpdater;
+  class ObExternalDataAccessMgr;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
-  class ObDecodeResourcePool;
 }
 namespace tmp_file {
   class ObTenantTmpFileManager;
@@ -109,13 +109,21 @@ class ObTenantMdsService;
 #ifdef OB_BUILD_SHARED_STORAGE
   class ObTenantDiskSpaceManager;
   class ObTenantFileManager;
+  class ObSSMacroCacheMgr;
   class ObSSMicroCachePrewarmService;
   class ObSSMicroCache;
+  class ObSSLocalCacheService;
   class ObPublicBlockGCService;
+  class ObSSWriterService;
+  class ObAtomicFileMgr;
+  class ObSSMetaService;
+  class ObSSGarbageCollectorService;
+  class ObStorageCachePolicyService;
 #else
 #endif
-
   class ObGlobalIteratorPool;
+  class ObInnerTabletAccessService;
+  class ObMemberTableService;
 } // namespace storage
 
 namespace transaction {
@@ -140,7 +148,7 @@ namespace table
 {
   class ObTTLService;
   class ObHTableLockMgr;
-  class ObTableApiSessPoolMgr;
+  class ObTableObjectPoolMgr;
   class ObTableGroupCommitMgr;
   class ObHTableRowkeyMgr;
   class ObTableClientInfoMgr;
@@ -206,6 +214,8 @@ namespace rootserver
   class ObTenantSnapshotScheduler;
   class ObCloneScheduler;
   class ObMViewMaintenanceService;
+  class ObDDLScheduler;
+  class ObDDLServiceLauncher;
 }
 namespace observer
 {
@@ -233,6 +243,12 @@ namespace storage {
   class MockTenantModuleEnv;
   class ObStorageHADiagMgr;
 }
+#ifdef OB_BUILD_SHARED_STORAGE
+namespace sslog
+{
+  class ObSSLogNotifyService;
+}
+#endif
 
 namespace share
 {
@@ -277,21 +293,38 @@ namespace detector
 #ifdef OB_BUILD_SHARED_STORAGE
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
+#define SSMacroCacheMgr storage::ObSSMacroCacheMgr*,
 #define SSMicroCachePrewarmService storage::ObSSMicroCachePrewarmService*,
 #define SSMicroCache storage::ObSSMicroCache*,
+#define SSLocalCacheService storage::ObSSLocalCacheService*,
 #define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
 #define PublicBlockGCService storage::ObPublicBlockGCService*,
+#define SSWriterService storage::ObSSWriterService*,
+#define AtomicFileMgr storage::ObAtomicFileMgr*,
+#define SSMetaService storage::ObSSMetaService*,
+#define SSGarbageCollectorService storage::ObSSGarbageCollectorService*,
+#define OBSSLOGNOTIFYSERVICE sslog::ObSSLogNotifyService*,
+#define StorageCachePolicyService storage::ObStorageCachePolicyService*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
+#define SSMacroCacheMgr
 #define SSMicroCachePrewarmService
 #define SSMicroCache
+#define SSLocalCacheService
 #define TenantCompactionObjMgr
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
 #define PublicBlockGCService
+#define SSWriterService
+#define AtomicFileMgr
+#define SharedSSTableService
+#define SSMetaService
+#define SSGarbageCollectorService
+#define OBSSLOGNOTIFYSERVICE
+#define StorageCachePolicyService
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -303,7 +336,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
   MTL_LIST(                                          \
       common::ObDiagnosticInfoContainer*,            \
       ObTimerService*,                               \
-      blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \
@@ -319,10 +351,13 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       logservice::coordinator::ObFailureDetector*,   \
       logservice::ObLogService*,                     \
       logservice::ObGarbageCollector*,               \
-      TenantDiskSpaceManager                         \
+      TenantDiskSpaceManager                        \
       TenantFileManager                              \
+      SSMacroCacheMgr                                \
       SSMicroCache                                   \
       SSMicroCachePrewarmService                     \
+      SSLocalCacheService                            \
+      StorageCachePolicyService                      \
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
       tmp_file::ObTenantTmpFileManager*,             \
@@ -389,6 +424,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
+      storage::ObTenantDirectLoadMgr*,              \
       share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
@@ -414,12 +450,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
-      storage::ObTenantDirectLoadMgr*,              \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
-      table::ObTableApiSessPoolMgr*,                \
+      table::ObTableObjectPoolMgr*,                \
       rootserver::ObTenantSnapshotScheduler*,       \
       storage::ObTenantSnapshotService*,            \
       rootserver::ObCloneScheduler*,                \
@@ -427,6 +462,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTabletMemtableMgrPool*,            \
       rootserver::ObMViewMaintenanceService*,       \
       PublicBlockGCService                          \
+      SSWriterService                               \
+      AtomicFileMgr                                 \
+      SSMetaService                                 \
+      SSGarbageCollectorService                     \
+      OBSSLOGNOTIFYSERVICE                          \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
@@ -439,12 +479,17 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
+      sql::ObExternalDataAccessMgr*,                 \
       share::ObWorkloadRepositoryContext*,           \
       observer::ObTenantQueryRespTimeCollector*,     \
       table::ObTableGroupCommitMgr*,                 \
       observer::ObTableQueryASyncMgr*,               \
       table::ObTableClientInfoMgr*,                  \
-      table::ObHTableRowkeyMgr*                      \
+      table::ObHTableRowkeyMgr*,                     \
+      rootserver::ObDDLServiceLauncher*,             \
+      rootserver::ObDDLScheduler*,                   \
+      storage::ObInnerTabletAccessService*,          \
+      storage::ObMemberTableService*                 \
   )
 
 
@@ -484,7 +529,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
 #define MTL_CPU_COUNT() share::ObTenantEnv::get_tenant()->unit_max_cpu()
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
-#define MTL_DATA_DISK_SIZE() share::ObTenantEnv::get_tenant()->unit_data_disk_size()
 // 设置租户prepare gc状态
 #define MTL_SET_TENANT_PREPARE_GC_STATE() share::ObTenantEnv::get_tenant()->set_prepare_unit_gc()
 // 获取租户prepare gc状态
@@ -614,11 +658,6 @@ public:
     return orig_size;
   }
   int64_t unit_memory_size() const { return unit_memory_size_; }
-  void set_unit_data_disk_size(int64_t data_disk_size)
-  {
-    unit_data_disk_size_ = data_disk_size;
-  }
-  int64_t unit_data_disk_size() const { return unit_data_disk_size_; }
   bool update_mini_mode(bool mini_mode)
   {
     bool orig_mode = mini_mode_;

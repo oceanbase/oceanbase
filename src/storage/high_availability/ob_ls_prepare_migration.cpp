@@ -261,8 +261,6 @@ int ObLSPrepareMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) c
   } else if (OB_UNLIKELY(0 > ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_.arg_);
-  } else if (OB_FAIL(ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
-    LOG_WARN("failed to trace task id to string", K(ret), K(ctx_));
   } else {
     int64_t pos = 0;
     ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationPrepareDagNet: tenant_id=%ld, ls_id=",
@@ -320,8 +318,8 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
     if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_SUCCESS != (tmp_ret = ls_migration_handler->switch_next_stage(result))) {
-      LOG_WARN("failed to report result", K(ret), K(tmp_ret), K(ctx_));
+    } else if (OB_TMP_FAIL(ls_migration_handler->set_result(result))) {
+      LOG_WARN("failed to set result", K(ret), K(tmp_ret), K(ctx_));
     }
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();

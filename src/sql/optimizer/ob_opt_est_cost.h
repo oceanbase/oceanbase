@@ -26,6 +26,7 @@ struct JoinFilterInfo;
 class OptTableMetas;
 class OptSelectivityCtx;
 class ObOptimizerContext;
+class AccessPath;
 
 class ObOptEstCost
 {
@@ -170,7 +171,7 @@ public:
                              double &index_back_cost,
                              const ObOptimizerContext &opt_ctx);
 
-  static int get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+  static int get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types,
                                double &cmp_cost,
                                const ObOptimizerContext &opt_ctx);
 
@@ -242,14 +243,13 @@ public:
                                                     const ObIArray<ObNewRange> &scan_ranges,
                                                     double &row_count);
 
-  static int calculate_filter_selectivity(ObCostTableScanInfo &est_cost_info,
-                                          common::ObIArray<ObExprSelPair> &all_predicate_sel);
+  static int calculate_filter_selectivity(AccessPath &path);
 
   static int stat_estimate_single_range_rc(const ObCostTableScanInfo &est_cost_info,
                                            const ObNewRange &range,
                                            double &count);
 
-  static double get_estimate_width_from_type(const ObExprResType &type);
+  static double get_estimate_width_from_type(const ObRawExprResType &type);
   static double calc_pred_cost_per_row(const ObRawExpr *expr,
                                       double card,
                                       double &cost,

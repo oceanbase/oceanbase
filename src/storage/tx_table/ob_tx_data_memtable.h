@@ -308,7 +308,7 @@ public: /* derived from ObIMemtable */
   virtual ObTabletID get_tablet_id() const { return LS_TX_DATA_TABLET; }
 
 public:  // checkpoint
-  share::SCN get_rec_scn()
+  share::SCN get_rec_scn() override
   {
     return get_min_tx_scn();
   }

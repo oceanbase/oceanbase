@@ -39,7 +39,7 @@ struct ObStorageAppender
   virtual ~ObStorageAppender();
   void reset();
 
-  int open(const share::ObBackupStorageInfo *storage_info,
+  int open(const common::ObObjectStorageInfo *storage_info,
            const common::ObString &uri,
            const common::ObStorageAccessType &access_type);
   int append(const char *buf, const int64_t size, int64_t &write_size);

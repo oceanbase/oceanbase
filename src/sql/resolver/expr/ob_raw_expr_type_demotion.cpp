@@ -136,6 +136,8 @@ bool ObRawExprTypeDemotion::expr_can_demote(const ObConstRawExpr &from,
       can_demote = false;
     } else if (!ob_is_temporal_type(to.get_result_type().get_type())) {
       can_demote = false;
+    } else if (T_FUN_SYS_CAST == from.get_expr_type() && from.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+      can_demote = false;
     } else if (ob_is_year_tc(to.get_result_type().get_type())) {
       // MySQL does not demote type for conditions such as year = now()
       can_demote = !from.has_flag(IS_CUR_TIME);

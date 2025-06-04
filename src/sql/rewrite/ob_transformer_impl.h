@@ -67,7 +67,7 @@ public:
   int transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
                                           uint64_t needed_types,
                                           bool &trans_happened);
-  int do_after_transform(ObDMLStmt *stmt);
+  int do_after_transform(ObDMLStmt *stmt, const ObSQLSessionInfo *session);
   int get_all_stmts(ObDMLStmt *stmt,
                     ObIArray<ObDMLStmt*> &all_stmts);
   int add_param_and_expr_constraints(ObExecContext &exec_ctx,
@@ -174,6 +174,7 @@ private:
   int adjust_global_dependency_tables(ObDMLStmt *stmt);
   int verify_all_stmt_exprs(ObDMLStmt *stmt);
   int verify_stmt_exprs(ObDMLStmt *stmt);
+  int verify_all_expr_types(ObDMLStmt *stmt, const ObSQLSessionInfo *session);
 
   template<typename T>
   int transform_one_rule(ObDMLStmt *&stmt,

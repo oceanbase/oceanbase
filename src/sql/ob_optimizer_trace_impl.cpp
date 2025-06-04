@@ -565,8 +565,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append_ptr(path);
     new_line();
     append("tables:", path->parent_);
-    new_line();
     if (path->is_access_path()) {
+      new_line();
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
       if (ap.is_index_merge_path()) {
@@ -591,6 +591,14 @@ int ObOptimizerTraceImpl::append(const Path *path)
       append("postfix filters:", ap.est_cost_info_.postfix_filters_, ",selectivity:", ap.est_cost_info_.postfix_filter_sel_);
       new_line();
       append("table filters:", ap.est_cost_info_.table_filters_, ",selectivity:", ap.est_cost_info_.table_filter_sel_);
+      if (!ap.est_cost_info_.real_range_exprs_.empty()) {
+        new_line();
+        append("precise range filters:", ap.est_cost_info_.precise_range_filters_);
+        new_line();
+        append("unprecise range filters:", ap.est_cost_info_.unprecise_range_filters_);
+      }
+      new_line();
+      append("output row count before revising:", ap.get_output_row_count());
     }
     new_line();
     append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),
@@ -598,6 +606,7 @@ int ObOptimizerTraceImpl::append(const Path *path)
     new_line();
     append("parallel:", path->parallel_, ", parallel rule:", path->op_parallel_rule_);
     append(", server count:", path->server_cnt_);
+    new_line();
     append(path->get_sharding());
     decrease_section();
   }
@@ -649,20 +658,26 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
     new_line();
     append("right path:");
     if (OB_NOT_NULL(join_path->right_path_) && OB_NOT_NULL(join_path->right_path_->parent_)) {
-      increase_section();
-      new_line();
-      append("tables:", join_path->right_path_->parent_);
-      new_line();
-      append_ptr(join_path->right_path_);
-      new_line();
-      append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
-            ",width:", join_path->right_path_->parent_->get_output_row_size());
-      new_line();
-      append("parallel:", join_path->right_path_->parallel_, ",server count:", join_path->right_path_->server_cnt_);
-      if (NULL != join_path->right_path_->get_sharding()) {
-        append(",part count:", join_path->right_path_->get_sharding()->get_part_cnt());
+      if (NESTED_LOOP_JOIN == join_path->join_algo_ &&
+          join_path->right_path_->is_access_path() &&
+          join_path->right_path_->is_inner_path()) {
+        append(join_path->right_path_);
+      } else {
+        increase_section();
+        new_line();
+        append("tables:", join_path->right_path_->parent_);
+        new_line();
+        append_ptr(join_path->right_path_);
+        new_line();
+        append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
+              ",width:", join_path->right_path_->parent_->get_output_row_size());
+        new_line();
+        append("parallel:", join_path->right_path_->parallel_, ",server count:", join_path->right_path_->server_cnt_);
+        if (NULL != join_path->right_path_->get_sharding()) {
+          append(",part count:", join_path->right_path_->get_sharding()->get_part_cnt());
+        }
+        decrease_section();
       }
-      decrease_section();
     }
     decrease_section();
   }
@@ -711,8 +726,8 @@ int ObOptimizerTraceImpl::append(const ObShardingInfo *info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
+    append("null sharding info");
   } else {
-    new_line();
     append("location type:", info->get_location_type());
     append(", partition count:", info->get_part_cnt());
   }
@@ -736,6 +751,7 @@ int ObOptimizerTraceImpl::append(const CandidatePlan &plan)
     new_line();
     append("parallel:", plan.plan_tree_->get_parallel(), ", parallel rule:", plan.plan_tree_->get_op_parallel_rule());
     append(", server count:", plan.plan_tree_->get_server_cnt());
+    new_line();
     append(plan.plan_tree_->get_sharding());
     decrease_section();
   }
@@ -797,12 +813,12 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_FAIL(append("ds_degree:",
                             stat->get_ds_degree()))) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < stat->get_ds_col_stats().count(); ++j) {
       const ObOptDSColStat &col_stat = stat->get_ds_col_stats().at(j);
-      if (OB_FAIL(append("column id:", col_stat.column_id_, ":"))) {
+      if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("column id", col_stat.column_id_, ":"))) {
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FALSE_IT(increase_section())) {
       } else if (OB_FAIL(new_line())) {
@@ -817,13 +833,14 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(append("degree:", col_stat.degree_))) {
         LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(new_line())) {
-        LOG_WARN("failed to append msg", K(ret));
       } else {
         decrease_section();
       }
     }
     decrease_section();
+    if (FAILEDx(new_line())) {
+      LOG_WARN("failed to append msg", K(ret));
+    }
   }
   return ret;
 }
@@ -850,6 +867,16 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
       const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
       append("[query range dim] contain false range:", range_dim.contain_always_false_);
       append(", rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
+      break;
+    }
+    case ObSkylineDim::UNIQUE_RANGE: {
+      const ObUniqueRangeDim &unique_dim = static_cast<const ObUniqueRangeDim &>(dim);
+      append("[unique query range dim] range count:", unique_dim.range_cnt_);
+      break;
+    }
+    case ObSkylineDim::SHARDING_INFO: {
+      const ObShardingInfoDim &sharding_dim = static_cast<const ObShardingInfoDim &>(dim);
+      append("[sharding info dim]:", sharding_dim.sharding_info_, sharding_dim.is_single_get_ ? "(TABLE GET)" : "");
       break;
     }
     default: {

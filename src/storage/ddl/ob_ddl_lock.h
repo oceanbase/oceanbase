@@ -93,6 +93,11 @@ public:
       const ObIArray<uint64_t> &global_index_table_ids,
       ObMySQLTransaction &trans);
 
+  static int lock_for_modify_truncate_info_in_trans(
+      const uint64_t tenant_id,
+      const uint64_t global_index_table_id,
+      ObMySQLTransaction &trans);
+
   static int lock_for_add_lob_in_trans(
       const share::schema::ObTableSchema &data_table_schema,
       ObMySQLTransaction &trans);

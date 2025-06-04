@@ -30,6 +30,7 @@ TEST(ObDiagnosticInfo, obj)
   ObWaitEventPool wait_event_pool(1, true, lib::is_mini_mode(), get_cpu_count());
   wait_event_pool.init();
   ObDiagnosticInfo test;
+  test.set_aggregated();
   ASSERT_EQ(test.init(1, 1, 1, wait_event_pool), OB_SUCCESS);
 
   ObWaitEventStat *cur = nullptr;
@@ -96,6 +97,7 @@ TEST(ObDiagnosticInfo, summary)
       ++slot_cnt;
       for (int i = 0; i < 10; i++) {
         ObDiagnosticInfo cur;
+        cur.set_aggregated();
         ASSERT_EQ(cur.init(tenant_id, group_id, session_id++, wait_event_pool), OB_SUCCESS);
 
         for (int i = 1; i <= tenant_id; i++) {
@@ -164,6 +166,7 @@ TEST(ObDiagnosticInfo, container)
       for (int i = 0; i < 20; i++) {
         ASSERT_EQ(
             OB_SUCCESS, container.acquire_diagnostic_info(cpu_cnt, group_id, session_id++, cur));
+        cur->set_aggregated();
         ASSERT_EQ(arr.push_back(cur), OB_SUCCESS);
       }
     }

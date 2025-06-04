@@ -30,6 +30,7 @@ namespace storage
 class ObAggCell;
 class ObGroupByCell;
 class ObAggCellBase;
+struct ObPushdownRowIdCtx;
 }
 namespace blocksstable
 {
@@ -39,7 +40,6 @@ public:
   ObIColumnCSDecoder() {}
   virtual ~ObIColumnCSDecoder() {}
   OB_INLINE void reuse() {}
-
   VIRTUAL_TO_STRING_KV(K(this));
   virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const = 0;
 
@@ -94,11 +94,10 @@ public:
 
   virtual int get_aggregate_result(
       const ObColumnCSDecoderCtx &ctx,
-      const int32_t *row_ids,
-      const int64_t row_cap,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       storage::ObAggCellBase &agg_cell) const
   {
-    UNUSEDx(ctx, row_ids, row_cap, agg_cell);
+    UNUSEDx(ctx, pd_row_id_ctx, agg_cell);
     return common::OB_NOT_SUPPORTED;
   }
 

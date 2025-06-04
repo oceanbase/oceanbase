@@ -64,16 +64,17 @@ public:
   static int refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                            const common::ObIArray<sql::ObExpr *> &ins_new_row,
                                            const ObTableEntity &entity);
+  static int refresh_rowkey_exprs_frame(ObTableCtx &ctx,
+                                        const common::ObIArray<sql::ObExpr *> &exprs,
+                                        const common::ObIArray<ObObj> &rowkey);
 private:
   static int refresh_exprs_frame(ObTableCtx &ctx,
                                  const common::ObIArray<sql::ObExpr *> &exprs,
                                  const ObTableEntity &entity);
-  static int refresh_rowkey_exprs_frame(ObTableCtx &ctx,
-                                        const common::ObIArray<sql::ObExpr *> &exprs,
-                                        const common::ObIArray<ObObj> &rowkey);
   static int refresh_properties_exprs_frame(ObTableCtx &ctx,
                                             const common::ObIArray<sql::ObExpr *> &exprs,
-                                            const ObTableEntity &entity);
+                                            const ObTableEntity &entity,
+                                            bool need_all_prop = false);
   static int refresh_assign_exprs_frame(ObTableCtx &ctx,
                                         const common::ObIArray<sql::ObExpr *> &new_row,
                                         const ObTableEntity &entity);

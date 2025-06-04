@@ -685,7 +685,7 @@ int TriggerHandle::do_handle_before_row(
           need_fire = true;
         }
         LOG_DEBUG("TRIGGER handle before row", K(need_fire), K(i), K(lbt()));
-        if (need_fire) {
+        if (OB_SUCC(ret) && need_fire) {
           if (OB_ISNULL(trig_rtdef.tg_row_point_params_)) {
             ret = OB_NOT_INIT;
             LOG_WARN("trigger row point params is not init", K(ret));
@@ -1261,7 +1261,7 @@ int TriggerHandle::set_logoff_mark(ObSQLSessionInfo &session)
     OZ (is_enabled_system_trigger(is_enable));
     if (OB_SUCC(ret) && is_enable) {
       ObSessionVariable log_mark;
-      log_mark.value_.set_uint32(session.get_sessid());
+      log_mark.value_.set_uint32(session.get_server_sid());
       log_mark.meta_.set_meta(log_mark.value_.meta_);
       OZ (session.replace_user_variable(OB_LOGOFF_TRIGGER_MARK, log_mark));
     }
@@ -1300,7 +1300,7 @@ int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
     do_trigger = need_fire;
   } else if (need_fire && SYS_TRIGGER_LOGOFF == trigger_event) {
     const ObObj *log_mark = session.get_user_variable_value(OB_LOGOFF_TRIGGER_MARK);
-    if (log_mark != NULL && log_mark->get_uint32() == session.get_sessid()) {
+    if (log_mark != NULL && log_mark->get_uint32() == session.get_server_sid()) {
       do_trigger = true;
     }
   } else if (need_fire && SYS_TRIGGER_LOGON == trigger_event) {
@@ -1332,12 +1332,25 @@ int TriggerHandle::is_enabled_system_trigger(bool &is_enable)
 {
   int ret = OB_SUCCESS;
   is_enable = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (OB_UNLIKELY(!tenant_config.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tenant config", K(ret));
-  } else {
-    is_enable = tenant_config->_system_trig_enabled;
+  } else if (tenant_config->_system_trig_enabled) {
+    share::ObTenantRole tenant_role;
+    ObMySQLProxy *sql_proxy = nullptr;
+    if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(sql_proxy, tenant_id, tenant_role))) {
+      LOG_WARN("fail to get tenant role", K(ret));
+    } else if (!tenant_role.is_valid()) {
+      ret = OB_NEED_WAIT;
+      LOG_WARN("tenant role is not ready", K(ret));
+    } else if (!tenant_role.is_standby()) {
+      is_enable = tenant_config->_system_trig_enabled;
+    }
   }
   return ret;
 }

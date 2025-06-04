@@ -598,6 +598,7 @@ int ObCGPrefetcher::can_agg_micro_index(const blocksstable::ObMicroIndexInfo &in
 {
   int ret = OB_SUCCESS;
   const ObCSRange &index_range = index_info.get_row_range();
+  // pre agg info will not be generated for lob out row
   can_agg = nullptr != agg_group_ &&
             index_range.start_row_id_ >= query_index_range_.start_row_id_ &&
             index_range.end_row_id_ <= query_index_range_.end_row_id_ &&
@@ -635,9 +636,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
       int8_t prefetch_idx = (prefetch_idx_ + 1) % INDEX_TREE_PREFETCH_DEPTH;
       ObMicroIndexInfo &index_info = index_block_read_handles_[prefetch_idx].index_info_;
       bool can_agg = false;
-      if (OB_FAIL(parent.get_next_index_row(prefetcher.iter_param_->has_lob_column_out(),
-                                            index_info,
-                                            prefetcher))) {
+      if (OB_FAIL(parent.get_next_index_row(index_info, prefetcher))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next", K(ret), KPC(this));
         } else {
@@ -689,11 +688,9 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
 }
 
 int ObCGPrefetcher::ObCSIndexTreeLevelHandle::forward(
-    ObIndexTreeMultiPassPrefetcher &prefetcher,
-    const bool has_lob_out)
+    ObIndexTreeMultiPassPrefetcher &prefetcher)
 {
   int ret = OB_SUCCESS;
-  UNUSED(has_lob_out);
   if (fetch_idx_ >= prefetch_idx_) {
     ret = OB_ITER_END;
   } else {

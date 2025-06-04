@@ -28,13 +28,31 @@ namespace oceanbase
 namespace storage
 {
 class ObLSCompleteMigrationParam;
-enum class ObLSMigrationHandlerStatus : int8_t
+
+/*
+ * Migration Handler State Machine:
+ *
+ *                                                              ret!=OB_SUCCESS
+ *    ┌────────────────────────────────────────────────────────────────────────┐
+ *    │                                                                        │
+ * ┌──┴─┐  ┌──────────┐  ┌───────────────┐  ┌────────┐  ┌─────────────┐  ┌─────▼───────┐  ┌────────────────┐  ┌──────┐
+ * │INIT├─►│PREPARE_LS├─►│WAIT_PREPARE_LS├─►│BUILD_LS├─►│WAIT_BUILD_LS├─►│ COMPLETE_LS ├─►│WAIT_COMPLETE_LS├─►│FINISH│
+ * └────┘  └──────────┘  └──┬─┬──────▲───┘  └────────┘  └─┬─┬──────▲──┘  └─▲─┬──────▲──┘  └────┬──────▲────┘  └──────┘
+ *                          │ │      │                    │ │      │       │ │      │          │      │
+ *                          │ └─wait─┘                    │ └─wait─┘       │ └──────┘          └─wait─┘
+ *                          └─────────────────────────────┴────────────────┘  ret!=OB_SUCCESS
+ *                             ret!=OB_SUCCESS || result_!=OB_SUCCESS         && !is_complete_
+ */
+enum class ObLSMigrationHandlerStatus : int8_t // FARM COMPAT WHITELIST
 {
   INIT = 0,
   PREPARE_LS = 1,
-  BUILD_LS = 2,
-  COMPLETE_LS = 3,
-  FINISH = 4,
+  WAIT_PREPARE_LS = 2,
+  BUILD_LS = 3,
+  WAIT_BUILD_LS = 4,
+  COMPLETE_LS = 5,
+  WAIT_COMPLETE_LS = 6,
+  FINISH = 7,
   MAX_STATUS,
 };
 
@@ -87,23 +105,24 @@ public:
   int set_ha_src_info(const ObStorageHASrcInfo &src_info);
   int cancel_task(const share::ObTaskId &task_id, bool &is_exist);
   bool is_cancel() const;
-
+  bool is_complete() const;
+  int set_result(const int32_t result);
 private:
   void reuse_();
   void wakeup_();
   int get_ls_migration_handler_status_(ObLSMigrationHandlerStatus &status);
   int check_task_list_empty_(bool &is_empty);
   int change_status_(const ObLSMigrationHandlerStatus &new_status);
-  int set_result_(const int32_t result);
   int get_result_(int32_t &result);
   bool is_migration_failed_() const;
   int get_ls_migration_task_(ObLSMigrationTask &task);
-  int check_task_exist_(
-      const ObLSMigrationHandlerStatus &status,
-      bool &is_exist);
+  int check_task_exist_(bool &is_exist);
   int handle_failed_task_(
       const ObLSMigrationHandlerStatus &status,
       bool &need_generate_dag_net);
+  int handle_current_task_(
+      bool &need_wait,
+      int32_t &task_result);
   // only use this function when task exist
   int cancel_current_task_();
 
@@ -112,7 +131,7 @@ private:
   int do_build_ls_status_();
   int do_complete_ls_status_();
   int do_finish_status_();
-
+  int do_wait_status_();
   int generate_build_ls_dag_net_();
   int schedule_build_ls_dag_net_(
       const ObLSMigrationTask &task);
@@ -140,7 +159,7 @@ private:
   int generate_build_tablet_dag_net_();
   int schedule_build_tablet_dag_net_(
       const ObLSMigrationTask &task);
-
+  int check_need_to_abort_(bool &need_to_abort);
 private:
   bool is_inited_;
   ObLS *ls_;
@@ -158,6 +177,7 @@ private:
   bool is_stop_;
   bool is_cancel_;
   ObStorageHASrcInfo chosen_src_;
+  bool is_complete_; // true when ObLSCompleteMigrationDagNet has been generated
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 

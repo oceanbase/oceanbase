@@ -1364,6 +1364,8 @@ int ObSysTabletsRestoreTask::process()
     //do nothing
   } else if (OB_FAIL(create_or_update_tablets_())) {
     LOG_WARN("failed to create or update tablets", K(ret), K(*ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::deal_compat_with_ls_inner_tablet(ctx_->arg_.ls_id_))) {
+    LOG_WARN("failed to deal compcat with ls inner tablet", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_tablets_sstable_info_())) {
     LOG_WARN("failed to build tablets sstable info", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_sys_tablet_restore_dag_())) {

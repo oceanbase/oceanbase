@@ -9,6 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "lib/time/ob_time_utility.h"
+#include "share/io/ob_io_define.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_micro_block_handle_mgr.h"
@@ -149,6 +151,7 @@ int ObMicroBlockDataHandle::get_micro_block_data(
     const bool is_data_block)
 {
   int ret = OB_SUCCESS;
+
   if (ObSSTableMicroBlockState::NEED_SYNC_IO == block_state_ || OB_FAIL(get_loaded_block_data(block_data))) {
     if (is_loaded_block_ && loaded_block_data_.is_valid()) {
       LOG_DEBUG("Use sync loaded index block data", K(is_data_block), K_(macro_block_id),
@@ -231,8 +234,14 @@ int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)
       block_data = *pblock;
     }
   } else if (ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_) {
+    int64_t start_time_us = ObTimeUtility::current_time_us();
     if (OB_FAIL(io_handle_.wait())) {
       LOG_WARN("Fail to wait micro block io", K(ret));
+    } else if (OB_NOT_NULL(handle_mgr_)) {
+      int64_t finish_time_us = ObTimeUtility::current_time_us();
+      handle_mgr_->add_block_io_wait_time_us(get_io_interval(finish_time_us, start_time_us));
+    }
+    if (OB_FAIL(ret)) {
     } else if (NULL == (io_buf = io_handle_.get_buffer())) {
       ret = OB_INVALID_IO_BUFFER;
       LOG_WARN("Fail to get block data, io may be failed", K(ret));
@@ -383,6 +392,7 @@ ObMicroBlockHandleMgr::ObMicroBlockHandleMgr()
   : data_block_cache_(nullptr),
     index_block_cache_(nullptr),
     table_store_stat_(nullptr),
+    table_scan_stat_(nullptr),
     query_flag_(nullptr),
     block_io_allocator_(),
     cache_mem_ctrl_(),
@@ -405,10 +415,12 @@ void ObMicroBlockHandleMgr::reset()
   data_block_cache_ = nullptr;
   index_block_cache_ = nullptr;
   table_store_stat_ = nullptr;
+  table_scan_stat_ = nullptr;
   query_flag_ = nullptr;
 }
 
-int ObMicroBlockHandleMgr::init(const bool enable_prefetch_limiting, ObTableScanStoreStat &stat, ObQueryFlag &query_flag)
+int ObMicroBlockHandleMgr::init(const bool enable_prefetch_limiting, ObTableScanStoreStat& store_stat, ObTableScanStatistic* scan_stat,
+      ObQueryFlag& query_flag)
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(MTL_ID(), "MicroBlockIO");
@@ -420,7 +432,8 @@ int ObMicroBlockHandleMgr::init(const bool enable_prefetch_limiting, ObTableScan
   } else {
     data_block_cache_ = &(OB_STORE_CACHE.get_block_cache());
     index_block_cache_ = &(OB_STORE_CACHE.get_index_block_cache());
-    table_store_stat_ = &stat;
+    table_store_stat_ = &store_stat;
+    table_scan_stat_ = scan_stat;
     query_flag_ = &query_flag;
     cache_mem_ctrl_.init(enable_prefetch_limiting);
     is_inited_ = true;
@@ -602,6 +615,13 @@ void ObMicroBlockHandleMgr::dec_hold_size(ObMicroBlockDataHandle &handle)
 bool ObMicroBlockHandleMgr::reach_hold_limit() const
 {
   return cache_mem_ctrl_.reach_hold_limit();
+}
+
+void ObMicroBlockHandleMgr::add_block_io_wait_time_us(const uint64_t block_io_wait_time_us)
+{
+  if (OB_NOT_NULL(table_scan_stat_) && OB_NOT_NULL(table_scan_stat_->tsc_monitor_info_)) {
+    table_scan_stat_->tsc_monitor_info_->add_block_io_wait_time_us(block_io_wait_time_us);
+  }
 }
 
 }

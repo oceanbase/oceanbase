@@ -26,48 +26,69 @@ namespace storage
 //errsim def
 ERRSIM_POINT_DEF(EN_RELEASE_MDS_NODE_FAILED);
 
+template <typename T, std::size_t expected_size, std::size_t real_size = sizeof(T)>
+void check_size()
+{
+  static_assert(expected_size == real_size,
+      "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+}
+
 ObTabletPointer::ObTabletPointer()
-  : phy_addr_(),
-    obj_(),
+  : ObTabletBasePointer(),
     ls_handle_(),
     ddl_kv_mgr_handle_(),
     protected_memtable_mgr_handle_(),
     ddl_info_(),
-    initial_state_(true),
     flying_(false),
     ddl_kv_mgr_lock_(),
-    mds_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_(),
-    auto_part_size_(OB_INVALID_SIZE)
+    attr_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 360, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  check_size<ObTabletPointer, 408>();
+#endif
+}
+
+ObTabletBasePointer::ObTabletBasePointer()
+  : phy_addr_(),
+    obj_(),
+    mds_lock_()
+{
+#if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
+  check_size<ObTabletBasePointer, 104>();
 #endif
 }
 
 ObTabletPointer::ObTabletPointer(
     const ObLSHandle &ls_handle,
     const ObMemtableMgrHandle &memtable_mgr_handle)
-  : phy_addr_(),
-    obj_(),
+  : ObTabletBasePointer(),
     ls_handle_(ls_handle),
     protected_memtable_mgr_handle_(memtable_mgr_handle),
     ddl_info_(),
-    initial_state_(true),
     flying_(false),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_(),
-    auto_part_size_(OB_INVALID_SIZE)
+    attr_()
 {
+}
+
+ObTabletBasePointer::~ObTabletBasePointer()
+{
+  reset();
 }
 
 ObTabletPointer::~ObTabletPointer()
 {
   reset();
+}
+
+void ObTabletBasePointer::reset()
+{
+  reset_obj();
+  phy_addr_.reset();
 }
 
 void ObTabletPointer::reset()
@@ -79,13 +100,23 @@ void ObTabletPointer::reset()
   mds_table_handler_.reset();
   protected_memtable_mgr_handle_.reset();
   ddl_info_.reset();
-  ATOMIC_STORE(&initial_state_, true);
   old_version_chain_ = nullptr;
   reset_obj();
   phy_addr_.reset();
   ls_handle_.reset();
-  auto_part_size_ = OB_INVALID_SIZE;
   flying_ = false;
+  attr_.reset();
+}
+
+void ObTabletBasePointer::reset_obj()
+{
+  if (nullptr != obj_.ptr_) {
+    const int64_t ref_cnt = obj_.ptr_->dec_ref();
+  }
+  obj_.ptr_ = nullptr;
+  obj_.allocator_ = nullptr;
+  obj_.t3m_ = nullptr;
+  obj_.pool_ = nullptr;
 }
 
 void ObTabletPointer::reset_obj()
@@ -159,7 +190,7 @@ int ObTabletPointer::read_from_disk(
   return ret;
 }
 
-int ObTabletPointer::hook_obj(const ObTabletAttr &attr, ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointer::hook_obj(ObTablet *&t,  ObTabletHandle &guard)
 {
   int ret = OB_SUCCESS;
   guard.reset();
@@ -177,11 +208,9 @@ int ObTabletPointer::hook_obj(const ObTabletAttr &attr, ObTablet *&t,  ObMetaObj
     t->inc_ref();
     t->set_tablet_addr(phy_addr_);
     obj_.ptr_ = t;
-    guard.set_obj(obj_);
+    guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
+    guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
     ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
-    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(attr))) { // only set tablet attr when first hook obj
-      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(guard));
-    }
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(t)) {
@@ -193,7 +222,7 @@ int ObTabletPointer::hook_obj(const ObTabletAttr &attr, ObTablet *&t,  ObMetaObj
   return ret;
 }
 
-int ObTabletPointer::get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointer::get_in_memory_obj(ObTabletHandle &guard)
 {
   int ret = OB_SUCCESS;
   guard.reset();
@@ -205,17 +234,24 @@ int ObTabletPointer::get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard)
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(ERROR, "object isn't in memory, not support", K(ret), K(phy_addr_));
   } else {
-    guard.set_obj(obj_);
+    guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
+    guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
   }
   return ret;
 }
 
-void ObTabletPointer::get_obj(ObMetaObjGuard<ObTablet> &guard)
+void ObTabletPointer::get_obj(ObTabletHandle &guard)
 {
-  guard.set_obj(obj_);
+  guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
+  guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
 }
 
-bool ObTabletPointer::is_in_memory() const
+void ObTabletBasePointer::get_obj(ObTabletHandle &guard)
+{
+  guard.reset();
+}
+
+bool ObTabletBasePointer::is_in_memory() const
 {
   return nullptr != obj_.ptr_;
 }
@@ -225,18 +261,27 @@ void ObTabletPointer::set_obj_pool(ObITenantMetaObjPool &obj_pool)
   obj_.pool_ = &obj_pool;
 }
 
-void ObTabletPointer::set_addr_without_reset_obj(const ObMetaDiskAddr &addr)
+void ObTabletBasePointer::set_addr_without_reset_obj(const ObMetaDiskAddr &addr)
 {
   phy_addr_ = addr;
 }
 
-void ObTabletPointer::set_addr_with_reset_obj(const ObMetaDiskAddr &addr)
+void ObTabletBasePointer::set_addr_with_reset_obj(const ObMetaDiskAddr &addr)
 {
   reset_obj();
   phy_addr_ = addr;
 }
 
-void ObTabletPointer::set_obj(const ObMetaObjGuard<ObTablet> &guard)
+void ObTabletBasePointer::set_obj(const ObTabletHandle &guard)
+{
+  reset_obj();
+  guard.get_obj(obj_);
+  if (nullptr != obj_.ptr_) {
+    obj_.ptr_->inc_ref();
+  }
+}
+
+void ObTabletPointer::set_obj(const ObTabletHandle &guard)
 {
   reset_obj();
   guard.get_obj(obj_);
@@ -309,7 +354,7 @@ int ObTabletPointer::get_attr_for_obj(ObTablet *tablet)
   return ret;
 }
 
-int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_obj)
+int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
 {
   int ret = OB_SUCCESS;
   ObMetaObj<ObTablet> meta_obj;
@@ -398,9 +443,9 @@ int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer
       pvalue->ddl_kv_mgr_handle_ = ddl_kv_mgr_handle_;
       pvalue->protected_memtable_mgr_handle_ = protected_memtable_mgr_handle_;
       pvalue->ddl_info_ = ddl_info_;
-      pvalue->initial_state_ = initial_state_;
       pvalue->mds_table_handler_ = mds_table_handler_;// src ObTabletPointer will destroy soon
       pvalue->old_version_chain_ = old_version_chain_;
+      pvalue->attr_ = attr_;
       value = pvalue;
       // NOTICE: cond and rw lock cannot be copied
     } else {
@@ -412,17 +457,13 @@ int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer
 
 ObTabletResidentInfo ObTabletPointer::get_tablet_resident_info(const ObTabletMapKey &key) const
 {
-  return ObTabletResidentInfo(attr_, phy_addr_, key.ls_id_, key.tablet_id_);
+  return ObTabletResidentInfo(key, attr_, phy_addr_);
 }
 
 bool ObTabletPointer::get_initial_state() const
 {
-  return ATOMIC_LOAD(&initial_state_);
-}
-
-void ObTabletPointer::set_initial_state(const bool initial_state)
-{
-  ATOMIC_STORE(&initial_state_, initial_state);
+  ObTabletFastIterAttr attr(ATOMIC_LOAD(&attr_.iter_attr_.v_));
+  return attr.initial_state_;
 }
 
 int ObTabletPointer::create_ddl_kv_mgr(
@@ -492,6 +533,17 @@ int ObTabletPointer::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle
   } else {
     ddl_kv_mgr_handle_.reset();
   }
+  return ret;
+}
+
+int ObTabletBasePointer::get_mds_table(const ObTabletID &tablet_id,
+    mds::MdsTableHandle &handle,
+    bool not_exist_create)
+{
+  int ret = OB_SUCCESS;
+  handle.reset();
+  ret = OB_ENTRY_NOT_EXIST;
+  LOG_WARN("get mds_table by base_pointer", K(ret), K(lbt()));
   return ret;
 }
 
@@ -728,12 +780,12 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
 
 int64_t ObTabletPointer::get_auto_part_size() const
 {
-  return ATOMIC_LOAD(&auto_part_size_);
+  return ATOMIC_LOAD(&attr_.auto_part_size_);
 }
 
 void ObTabletPointer::set_auto_part_size(const int64_t auto_part_size)
 {
-  ATOMIC_STORE(&auto_part_size_, auto_part_size);
+  ATOMIC_STORE(&attr_.auto_part_size_, auto_part_size);
 }
 
 int64_t ObITabletFilterOp::total_skip_cnt_ = 0;

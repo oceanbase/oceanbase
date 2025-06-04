@@ -326,7 +326,10 @@ int ObIndexBlockRowBuilder::build_row(const ObIndexBlockRowDesc &desc, const ObD
   } else if (OB_FAIL(set_rowkey(desc))) {
     LOG_WARN("Fail to set rowkey", K(ret));
   } else if (nullptr != desc.aggregated_row_ && !desc.is_serialized_agg_row_
-      && OB_FAIL(agg_writer.init(data_desc_->get_agg_meta_array(), *desc.aggregated_row_, index_data_allocator_))) {
+      && OB_FAIL(agg_writer.init(data_desc_->get_agg_meta_array(),
+                                 *desc.aggregated_row_,
+                                 data_desc_->get_major_working_cluster_version(),
+                                 index_data_allocator_))) {
     LOG_WARN("Fail to init aggregate row writer", K(ret), K(desc), KPC(row));
   } else if (OB_FAIL(calc_data_size(desc, agg_writer, data_size))) {
     LOG_WARN("Fail to calculate row data size", K(ret));

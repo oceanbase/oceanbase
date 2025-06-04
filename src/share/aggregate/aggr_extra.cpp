@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "share/aggregate/aggr_extra.h"
+#include "share/stat/ob_hybrid_hist_estimator.h"
 
 namespace oceanbase
 {
@@ -310,6 +311,17 @@ int DataStoreVecExtraResult::add_batch(const common::ObIArray<ObExpr *> &exprs, 
     ObBatchRows brs =
       ObBatchRows(const_cast<ObBitVector &>(skip), size, bound.get_all_rows_active());
     ret = sort_->add_batch(brs, selector, size);
+    if (OB_SUCC(ret) && need_count_) {
+      int64_t diff = size;
+      if (!bound.get_all_rows_active()) {
+        for (int64_t i = 0; i < size; ++i) {
+          if (skip.at(selector[i])) {
+            --diff;
+          }
+        }
+      }
+      sort_count_ += diff;
+    }
   } else {
     if (OB_SUCC(ret)) {
       ret = store_->add_batch(exprs, eval_ctx, selector, bound, skip, size);
@@ -347,6 +359,13 @@ int DataStoreVecExtraResult::add_batch(const common::ObIArray<ObExpr *> &exprs, 
     if (need_sort_) {
       bool need_dump = true;
       ret = sort_->add_batch(brs, need_dump);
+      if (OB_SUCC(ret) && need_count_) {
+        int64_t diff = bound.range_size();
+        if (!bound.get_all_rows_active()) {
+          diff -= skip.accumulate_bit_cnt(bound);
+        }
+        sort_count_ += diff;
+      }
     } else {
       int64_t size = bound.range_size();
       ret = store_->add_batch(exprs, eval_ctx, brs, size);
@@ -490,11 +509,15 @@ int DataStoreVecExtraResult::init_data_set(ObAggrInfo &aggr_info, ObEvalCtx &eva
       }
     }
   } else {
+    void *store_buf = nullptr;
     ObMemAttr attr(eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
                    ObModIds::OB_SQL_AGGR_FUN_GROUP_CONCAT, ObCtxIds::WORK_AREA);
-
-    if (OB_FAIL(store_->init(aggr_info.param_exprs_, eval_ctx.max_batch_size_, attr, INT64_MAX,
-                             true, 0, ObCompressorType::NONE_COMPRESSOR))) {
+    if (OB_ISNULL(store_buf = allocator.alloc(sizeof(ObTempRowStore)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else if (OB_FALSE_IT(store_ = new (store_buf) ObTempRowStore()))  {
+    } else if (OB_FAIL(store_->init(aggr_info.param_exprs_, eval_ctx.max_batch_size_, attr, INT64_MAX,
+                                    true, 0, ObCompressorType::NONE_COMPRESSOR))) {
       LOG_WARN("init temp row store failed", K(ret));
     }
   }
@@ -530,6 +553,421 @@ DataStoreVecExtraResult::~DataStoreVecExtraResult()
     alloc_.free(pvt_skip);
     pvt_skip = nullptr;
   }
+}
+
+TopFreHistVecExtraResult::~TopFreHistVecExtraResult()
+{
+
+}
+
+static int get_param_int_val(ObExpr *expr, ObDatum *datum, int64_t &val)
+{
+  int ret = OB_SUCCESS;
+  if (expr->obj_meta_.is_integer_type()) {
+    val = datum->get_int();
+  } else if (expr->obj_meta_.is_decimal_int()) {
+    ret = ObExprUtil::trunc_decint2int64(datum->get_decimal_int(), datum->get_int_bytes(),
+                                         expr->datum_meta_.scale_, val);
+  } else if (expr->obj_meta_.is_number()) {
+    ret = ObExprUtil::trunc_num2int64(*datum, val);
+  }
+  return ret;
+}
+
+int TopFreHistVecExtraResult::init_topk_fre_histogram_item(ObIAllocator &allocator,
+                                                           ObAggrInfo &aggr_info,
+                                                           ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  constexpr int64_t MAX_BATCH_SIZE = 256;
+  if (OB_UNLIKELY(T_FUN_TOP_FRE_HIST != aggr_info.get_expr_type()) ||
+      OB_ISNULL(aggr_info.window_size_param_expr_) ||
+      OB_ISNULL(aggr_info.item_size_param_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(aggr_info));
+  } else {
+    ObDatum *window_size_result = NULL;
+    ObDatum *item_size_result = NULL;
+    ObDatum *max_disuse_cnt_result = NULL;
+    if (OB_UNLIKELY(!aggr_info.window_size_param_expr_->obj_meta_.is_numeric_type() ||
+                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type() ||
+                    (aggr_info.max_disuse_param_expr_ != NULL &&
+                     !aggr_info.max_disuse_param_expr_->obj_meta_.is_numeric_type()))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("expr node is null", K(ret), KPC(aggr_info.window_size_param_expr_),
+                                    KPC(aggr_info.item_size_param_expr_),
+                                    KPC(aggr_info.max_disuse_param_expr_));
+    } else if (OB_FAIL(aggr_info.window_size_param_expr_->eval(eval_ctx, window_size_result)) ||
+               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx, item_size_result)) ||
+               (aggr_info.max_disuse_param_expr_ != NULL &&
+                OB_FAIL(aggr_info.max_disuse_param_expr_->eval(eval_ctx, max_disuse_cnt_result)))) {
+      LOG_WARN("eval failed", K(ret));
+    } else if (OB_ISNULL(window_size_result) ||
+               OB_ISNULL(item_size_result)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
+    } else if (OB_FAIL(get_param_int_val(aggr_info.window_size_param_expr_, window_size_result,
+                                         window_size_))
+               || OB_FAIL(get_param_int_val(aggr_info.item_size_param_expr_,
+                                            item_size_result, item_size_))
+               || (aggr_info.max_disuse_param_expr_ != NULL
+                   && OB_FAIL(get_param_int_val(aggr_info.max_disuse_param_expr_,
+                                                max_disuse_cnt_result, max_disuse_cnt_)))) {
+      LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size_),
+                                              K(*item_size_result), K(item_size_),
+                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt_), K(ret));
+    } else if (OB_FALSE_IT(tmp_batch_cap_ = MAX_BATCH_SIZE)) {
+    } else if (OB_ISNULL(tmp_batch_payloads_ = (const char**)allocator.alloc(sizeof(const char*) * tmp_batch_cap_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_ISNULL(tmp_batch_payload_lens_ = (int32_t*) allocator.alloc(sizeof(int32_t) * tmp_batch_cap_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_ISNULL(tmp_batch_hash_vals_ = (uint64_t*) allocator.alloc(sizeof(uint64_t) * tmp_batch_cap_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      tmp_batch_idx_ = 0;
+      is_topk_hist_need_des_row_ = aggr_info.is_need_deserialize_row_;
+      set_topk_fre_histogram_item();
+      LOG_TRACE("succeed to init topk fre histogram item", K(window_size_), K(item_size_),
+                                          K(aggr_info.is_need_deserialize_row_), K(max_disuse_cnt_));
+    }
+  }
+  return ret;
+}
+
+void TopFreHistVecExtraResult::reuse()
+{
+  topk_fre_hist_.~ObTopKFrequencyHistograms();
+  new (&topk_fre_hist_) ObTopKFrequencyHistograms();
+  set_topk_fre_histogram_item();
+  tmp_batch_idx_ = 0;
+}
+
+int TopFreHistVecExtraResult::rewind()
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("unsupported top fre hist in window function", K(ret));
+  return ret;
+}
+
+void TopFreHistVecExtraResult::set_topk_fre_histogram_item()
+{
+  topk_fre_hist_.set_window_size(window_size_);
+  topk_fre_hist_.set_item_size(item_size_);
+  topk_fre_hist_.set_is_topk_hist_need_des_row(is_topk_hist_need_des_row_);
+  topk_fre_hist_.set_max_disuse_cnt(max_disuse_cnt_);
+}
+
+int HybridHistVecExtraResult::init_data_set(ObIAllocator &allocator,
+                                            ObAggrInfo &aggr_info,
+                                            ObEvalCtx &eval_ctx,
+                                            ObIOEventObserver *io_event_observer)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *bucket_num_result = NULL;
+  void *row_store_buf = nullptr;
+  int64_t tenant_id = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
+  ObMemAttr attr(tenant_id, "HybirdHist", ObCtxIds::WORK_AREA);
+  lib::ContextParam param;
+  param.set_mem_attr(tenant_id, "HybirdHist", ObCtxIds::WORK_AREA)
+       .set_properties(lib::USE_TL_PAGE_OPTIONAL);
+
+  if (OB_ISNULL(aggr_info.bucket_num_param_expr_) ||
+     OB_UNLIKELY(!aggr_info.bucket_num_param_expr_->obj_meta_.is_numeric_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(aggr_info.param_exprs_.count()),
+                                     K(aggr_info.bucket_num_param_expr_));
+  } else if (OB_FAIL(aggr_info.bucket_num_param_expr_->eval(eval_ctx, bucket_num_result))) {
+    LOG_WARN("eval failed", K(ret));
+  } else if (OB_ISNULL(bucket_num_result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(bucket_num_result));
+  } else if (OB_FAIL(get_param_int_val(aggr_info.bucket_num_param_expr_,
+                                       bucket_num_result,
+                                       bucket_num_))) {
+    LOG_WARN("failed to get int param val", K(ret), K(bucket_num_result));
+  } else if (OB_FAIL(init_batch_vector(allocator, eval_ctx.max_batch_size_))) {
+    LOG_WARN("failed to init batch vector", K(ret));
+  } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+    LOG_WARN("create entity failed");
+  } else if (OB_ISNULL(mem_context_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null memory entity returned");
+  } else if (OB_FAIL(store_.init(aggr_info.param_exprs_,
+                                 eval_ctx.max_batch_size_,
+                                 attr,
+                                 0,
+                                 true,
+                                 sizeof(BucketDesc),
+                                 ObCompressorType::NONE_COMPRESSOR))) {
+    LOG_WARN("init temp row store failed", K(ret));
+  } else if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
+                                             tenant_id, 0,
+                                             op_monitor_info_.get_operator_type(),
+                                             0, &eval_ctx.exec_ctx_))) {
+    LOG_WARN("failed to init sql memory manager processor", K(ret));
+  } else {
+    store_.set_allocator(mem_context_->get_malloc_allocator());
+    store_.set_callback(&sql_mem_processor_);
+    store_.set_io_event_observer(io_event_observer);
+    store_.set_dir_id(sql_mem_processor_.get_dir_id());
+    data_store_inited_ = true;
+    LOG_TRACE("succeed to init hybrid histogram item", K(bucket_num_));
+  }
+  return ret;
+}
+
+int HybridHistVecExtraResult::prepare_for_eval()
+{
+  int ret = OB_SUCCESS;
+  if (prev_row_ != NULL) {
+    fill_row_desc();
+    BucketDesc *desc = reinterpret_cast<BucketDesc*>(
+                  prev_row_->get_extra_payload(store_.get_row_meta()));
+    *desc = batch_bucket_desc_[0];
+    prev_row_ = NULL;
+  }
+  return ret;
+}
+
+int HybridHistVecExtraResult::compute_hybrid_hist_result(
+                                 int64_t max_batch_size,
+                                 const ObObjMeta &obj_meta,
+                                 ObIAllocator &allocator,
+                                 ObHybridHistograms &histogram)
+{
+  int ret = OB_SUCCESS;
+  ObTempRowStore::Iterator vec_result_iter;
+  int64_t bucket_size = -1;
+  bool dynamic_size = false;
+  int64_t dynamic_step = 0;
+  int64_t bucket_rows = 0;
+  int64_t ep_num = 0;
+  int64_t un_pop_count = 0;
+  int64_t un_pop_bucket = 0;
+  if (num_distinct_ == 0) {
+    // do nothing
+  } else if (OB_FAIL(store_.begin(vec_result_iter))) {
+    LOG_WARN("failed to read temp store", K(ret));
+  } else {
+    int64_t row_index = 0;
+    constexpr int64_t MAX_BATCH_SIZE = 256;
+    max_batch_size = min(MAX_BATCH_SIZE, max_batch_size);
+    const ObCompactRow *rows[MAX_BATCH_SIZE];
+    BucketDesc *desc = NULL;
+    int64_t ep_count = 0;
+    bool is_pop = false;
+    while (OB_SUCC(ret)) {
+      int64_t read_rows = 0;
+      if (OB_FAIL(vec_result_iter.get_next_batch(max_batch_size, read_rows, rows))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          SQL_LOG(WARN, "get row from temp store failed", K(ret));
+        }
+        break;
+      } else if (read_rows <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "read unexpected zero rows", K(ret));
+      } else {
+        for (int i = 0; OB_SUCC(ret) && i < read_rows; ++i) {
+          if (OB_UNLIKELY(row_index == 0)) {
+            if (num_distinct_ <= bucket_num_ + 2) {
+              bucket_size = 1;
+            } else if (bucket_num_ <= pop_count_) {
+              bucket_size = total_count_ / bucket_num_;
+            } else {
+              dynamic_size = true;
+              // first bucket always contain only one values. following code will handle first value is
+              // popular value or not.
+              desc = reinterpret_cast<BucketDesc*>(rows[i]->get_extra_payload(store_.get_row_meta()));
+              if (desc->is_pop_ || bucket_num_ == pop_count_ + 1) {
+                bucket_size = (total_count_ - pop_freq_) / (bucket_num_ - pop_count_);
+              } else {
+                bucket_size = (total_count_ - pop_freq_ - desc->ep_count_) / (bucket_num_ - pop_count_ - 1);
+              }
+            }
+          }
+
+          desc = reinterpret_cast<BucketDesc*>(rows[i]->get_extra_payload(store_.get_row_meta()));
+          ep_count = desc->ep_count_;
+          is_pop = desc->is_pop_;
+          bucket_rows += ep_count;
+          ep_num += ep_count;
+          if (!is_pop) {
+            un_pop_count += ep_count;
+          }
+
+          if (bucket_rows > bucket_size ||
+              0 == row_index ||
+              num_distinct_ - 1 == row_index) {
+            bucket_rows = 0;
+            ObObj ep_val;
+            ObDatum datum = rows[i]->get_datum(store_.get_row_meta(), 0);
+            if (OB_FAIL(datum.to_obj(ep_val, obj_meta))) {
+              LOG_WARN("failed to obj", K(ret));
+            } else if (OB_FAIL(ob_write_obj(allocator, ep_val, ep_val))) {
+              LOG_WARN("failed to write obj", K(ret), K(ep_val));
+            } else {
+              ObHistBucket bkt(ep_val, ep_count, ep_num);
+              if (!is_pop) {
+                ++un_pop_bucket;
+              }
+              if (OB_FAIL(histogram.add_hist_bucket(bkt))) {
+                LOG_WARN("failed add hist bucket", K(ret));
+              }
+            }
+            if (dynamic_size && bucket_num_ > pop_count_ + un_pop_bucket) {
+              bucket_size = (total_count_ - pop_freq_ - un_pop_count)
+                            / (bucket_num_ - pop_count_ - un_pop_bucket);
+            }
+          }
+          ++row_index;
+        }
+      }
+    }
+    vec_result_iter.reset();
+    if (OB_SUCC(ret)) {
+      histogram.set_total_count(total_count_);
+      histogram.set_num_distinct(num_distinct_);
+      histogram.set_pop_count(pop_count_);
+      histogram.set_pop_freq(pop_freq_);
+    }
+  }
+  return ret;
+}
+
+int HybridHistVecExtraResult::process_dump()
+{
+  int ret = OB_SUCCESS;
+  bool updated = false;
+  bool dumped = false;
+  HybridHistVecAvailableMemChecker max_available_rowcnt_checker(store_.get_row_cnt_in_memory());
+  HybridHistVecAvailableMemChecker max_available_mem_checker(sql_mem_processor_.get_data_size());
+  if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
+      &mem_context_->get_malloc_allocator(),
+      max_available_rowcnt_checker,
+      updated))) {
+    LOG_WARN("failed to update max available memory size periodically", K(ret));
+  } else if (need_dump() && GCONF.is_sql_operator_dump_enabled()
+          && OB_FAIL(sql_mem_processor_.extend_max_memory_size(
+            &mem_context_->get_malloc_allocator(),
+            max_available_mem_checker,
+            dumped, sql_mem_processor_.get_data_size()))) {
+    LOG_WARN("failed to extend max memory size", K(ret));
+  } else if (dumped) {
+    if (OB_FAIL(store_.dump(false))) {
+      LOG_WARN("failed to dump row store", K(ret));
+    } else {
+      sql_mem_processor_.reset();
+      sql_mem_processor_.set_number_pass(1);
+      LOG_TRACE("trace material dump", K(sql_mem_processor_.get_data_size()),
+        K(store_.get_row_cnt_in_memory()),
+        K(sql_mem_processor_.get_mem_bound()));
+    }
+  }
+  return ret;
+}
+
+int HybridHistVecExtraResult::init_batch_vector(ObIAllocator &allocator, int max_batch_size)
+{
+  int ret = OB_SUCCESS;
+  void *vector_buf = NULL;
+  max_batch_size = min(max_batch_size, MAX_BATCH_SIZE);
+  const int64_t nulls_size = ObBitVector::memory_size(max_batch_size);
+  const int64_t lens_size = sizeof(int32_t) * max_batch_size;
+  const int64_t ptrs_size = sizeof(char *) * max_batch_size;
+  const int64_t bucket_desc_size = sizeof(BucketDesc) * max_batch_size;
+  ObBitVector *nulls = nullptr;
+  int32_t *lens = nullptr;
+  char **ptrs = nullptr;
+  if (OB_ISNULL(nulls = to_bit_vector(allocator.alloc(nulls_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(nulls_size));
+  } else if (OB_ISNULL(lens = static_cast<int32_t *>(allocator.alloc(lens_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(lens_size));
+  } else if (OB_ISNULL(ptrs = static_cast<char **>(allocator.alloc(ptrs_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
+  } else if (OB_ISNULL(batch_bucket_desc_ =
+                        static_cast<BucketDesc*>(allocator.alloc(bucket_desc_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
+  } else if (OB_ISNULL(vector_buf = allocator.alloc(sizeof(RTVectorType<VEC_DISCRETE, VEC_TC_STRING>)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
+  } else {
+    nulls->reset(max_batch_size);
+    MEMSET(ptrs, 0, ptrs_size);
+    MEMSET(lens, 0, lens_size);
+    batch_vector_ = new(vector_buf) RTVectorType<VEC_DISCRETE, VEC_TC_STRING>(lens, ptrs, nulls);
+    batch_idx_ = 0;
+    max_batch_size_ = max_batch_size;
+  }
+  return ret;
+}
+
+int HybridHistVecExtraResult::flush_batch_rows(bool need_dump)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(batch_idx_ > 0)) {
+    if (OB_NOT_NULL(prev_row_)) {
+        BucketDesc *desc = reinterpret_cast<BucketDesc*>(
+           prev_row_->get_extra_payload(store_.get_row_meta()));
+        *desc = batch_bucket_desc_[0];
+    }
+    if (need_dump) {
+      if (OB_FAIL(process_dump())) {
+        SQL_LOG(WARN, "failed to process dump", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(batch_idx_ > MAX_BATCH_SIZE)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected batch idx", K(ret));
+      } else {
+        SMART_VARS_2((uint16_t[MAX_BATCH_SIZE], selector),
+                     (ObCompactRow*[MAX_BATCH_SIZE], rows)) {
+          ObSEArray<ObIVector*, 1> vecs;
+          for (uint16_t i = 0; i < batch_idx_; ++i) {
+            selector[i] = i;
+          }
+          MEMSET(rows, 0, batch_idx_);
+          if (OB_FAIL(vecs.push_back(batch_vector_))) {
+            LOG_WARN("failed to push back batch vector", K(ret));
+          } else if (OB_FAIL(store_.add_batch(vecs, selector, batch_idx_, rows))) {
+            LOG_WARN("failed to add batch to store", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < batch_idx_ - 1; ++i) {
+              if (OB_ISNULL(rows[i])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected null", K(ret));
+              } else {
+                BucketDesc *desc = reinterpret_cast<BucketDesc*>(
+                  rows[i]->get_extra_payload(store_.get_row_meta()));
+                *desc = batch_bucket_desc_[i + 1];
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_ISNULL(rows[batch_idx_ - 1])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected null", K(ret));
+              } else {
+                prev_row_ = rows[batch_idx_ - 1];
+                prev_row_->get_cell_payload(store_.get_row_meta(), 0, prev_payload_, prev_len_);
+                batch_idx_ = 0;
+              }
+            }
+          }
+        }
+      }
+
+    }
+  }
+  return ret;
 }
 
 } // namespace aggregate

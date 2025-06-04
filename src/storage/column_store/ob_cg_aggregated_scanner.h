@@ -37,9 +37,19 @@ public:
   INHERIT_TO_STRING_KV("ObCGRowScanner", ObCGRowScanner,
       K_(need_access_data), K_(need_get_row_ids), K_(is_agg_finished), K_(agg_group), K_(cur_processed_row_count));
 private:
-  virtual int inner_fetch_rows(const int64_t row_cap, const int64_t datum_offset) override final;
+  virtual int inner_fetch_rows(const int64_t batch_size, uint64_t &count, const int64_t datum_offset) override final;
   int check_need_access_data(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   bool check_agg_finished();
+  OB_INLINE int64_t get_bound_row_id() const
+  {
+    int64_t bound_row_id  = 0;
+    if (is_reverse_scan_) {
+      bound_row_id = OB_INVALID_CS_ROW_ID == current_ ? query_index_range_.start_row_id_ : current_ + 1;
+    } else {
+      bound_row_id = OB_INVALID_CS_ROW_ID == current_ ? query_index_range_.end_row_id_ : current_ - 1;
+    }
+    return bound_row_id;
+  }
   ObAggGroupBase *agg_group_;
   int64_t cur_processed_row_count_;
   bool need_access_data_;

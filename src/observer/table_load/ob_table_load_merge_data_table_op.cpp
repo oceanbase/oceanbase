@@ -43,7 +43,7 @@ int ObTableLoadMergeDataTableOp::inner_init()
                   nullptr != store_ctx_->data_store_table_ctx_->lob_table_ctx_ &&
                   !store_table_ctx->schema_->is_table_without_pk_;
   need_rescan_ =
-    ObDirectLoadMethod::is_full(ctx_->param_.method_) && store_table_ctx->schema_->is_column_store_;
+    ObDirectLoadMethod::is_full(ctx_->param_.method_) && store_table_ctx->schema_->is_column_store();
   if (!store_ctx_->write_ctx_.is_fast_heap_table_) {
     if (OB_FAIL(store_table_ctx->init_insert_table_ctx(merge_phase_ctx_->trans_param_,
                                                        true /*online_opt_stat_gather*/,
@@ -133,7 +133,7 @@ int ObTableLoadMergeDataTableOp::inner_init()
   }
   // use_batch_mode_
   inner_ctx_.use_batch_mode_ = (ObDirectLoadMethod::is_full(ctx_->param_.method_) &&
-                                store_table_ctx->schema_->is_column_store_);
+                                store_table_ctx->schema_->is_column_store());
   // need_calc_range_
   inner_ctx_.need_calc_range_ = need_rescan_;
   // need_close_insert_tablet_ctx_
@@ -297,7 +297,7 @@ int ObTableLoadMergeAckPhaseDataTableOp::inner_init()
   inner_ctx_.merge_mode_ = ObDirectLoadMergeMode::MERGE_WITH_ORIGIN_QUERY_FOR_DATA;
   // use_batch_mode_
   inner_ctx_.use_batch_mode_ = (ObDirectLoadMethod::is_full(ctx_->param_.method_) &&
-                                store_table_ctx->schema_->is_column_store_);
+                                store_table_ctx->schema_->is_column_store());
   // need_calc_range_
   inner_ctx_.need_calc_range_ = need_rescan_;
   // need_close_insert_tablet_ctx_

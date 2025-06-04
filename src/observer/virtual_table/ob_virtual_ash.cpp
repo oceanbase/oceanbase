@@ -22,8 +22,8 @@ using namespace oceanbase::share;
 
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
-    forward_iterator_(),
     reverse_iterator_(),
+    forward_iterator_(),
     iterator_(&forward_iterator_),
     addr_(),
     ipstr_(),
@@ -77,8 +77,8 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   if (is_first_get_) {
     is_first_get_ = false;
-    forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
-    iterator_ = &forward_iterator_;
+    reverse_iterator_ = ObActiveSessHistList::get_instance().create_reverse_iterator();
+    iterator_ = &reverse_iterator_;
   }
 
   do {
@@ -138,7 +138,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case SESSION_ID: {
-        cells[cell_idx].set_int(node.session_id_);
+        if (node.session_type_ == 0) {
+          cells[cell_idx].set_int(node.client_sid_);
+        } else {
+          cells[cell_idx].set_int(node.session_id_);
+        }
         break;
       }
       case SESSION_TYPE: {
@@ -449,19 +453,19 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case DELTA_READ_IO_REQUESTS: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_read_.count_);
         break;
       }
       case DELTA_READ_IO_BYTES: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_read_.size_);
         break;
       }
       case DELTA_WRITE_IO_REQUESTS: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_write_.count_);
         break;
       }
       case DELTA_WRITE_IO_BYTES: {
-        cells[cell_idx].set_null();
+        cells[cell_idx].set_int(node.delta_write_.size_);
         break;
       }
       default: {
@@ -537,7 +541,7 @@ int ObVirtualASHI1::init_next_query_range()
         iterator_ = &reverse_iterator_;
       } else {
         // we treat every thing else as forward order.
-        forward_iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+        forward_iterator_ = ObActiveSessHistList::get_instance().create_forward_iterator();
         iterator_ = &forward_iterator_;
       }
       iterator_->init_with_sample_time_index(left, right);

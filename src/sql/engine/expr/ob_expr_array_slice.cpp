@@ -53,6 +53,7 @@ int ObExprArraySlice::calc_result_typeN(ObExprResType &type,
   ObExprResType *offset_type = &types[1];
   bool is_null = false;
   uint16_t subschema_id = arr_type->get_subschema_id();
+  ObCollectionTypeBase *coll_type = NULL;
 
   if (OB_ISNULL(session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -65,6 +66,11 @@ int ObExprArraySlice::calc_result_typeN(ObExprResType &type,
   } else if (!ob_is_collection_sql_type(arr_type->get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(arr_type->get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, arr_type->get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else if (ob_is_null(offset_type->get_type())) {
     is_null = true;
   } else if (param_num == 3) {
@@ -279,7 +285,7 @@ int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
                                               res_arr,
                                               false))) {
         LOG_WARN("construct array obj failed", K(ret));
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_string = arr_vec->get_string(j);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator,
                                             ctx,
@@ -288,9 +294,6 @@ int ObExprArraySlice::eval_array_slice_vector(const ObExpr &expr,
                                             src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, j, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
 
       if (OB_FAIL(ret)) {

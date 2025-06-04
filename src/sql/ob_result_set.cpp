@@ -48,6 +48,9 @@ ObResultSet::~ObResultSet()
   if (OB_NOT_NULL(pc)) {
     cache_obj_guard_.force_early_release(pc);
   }
+  if (OB_NOT_NULL(pc)) {
+    temp_cache_obj_guard_.force_early_release(pc);
+  }
   // Always called at the end of the ObResultSet destructor
   update_end_time();
   is_init_ = false;
@@ -101,10 +104,17 @@ OB_INLINE int ObResultSet::open_plan()
                  "start_time", my_session_.get_query_start_time());
       } else if (stmt::T_PREPARE != stmt_type_) {
         int64_t retry = 0;
-        if (OB_SUCC(ret)) {
-          do {
-            ret = do_open_plan(get_exec_context());
-          } while (transaction_set_violation_and_retry(ret, retry));
+        if (OB_UNLIKELY(my_session_.is_zombie())) {
+          //session has been killed some moment ago
+          ret = OB_ERR_SESSION_INTERRUPTED;
+          LOG_WARN("session has been killed", K(ret), K(my_session_.get_session_state()),
+                  K(my_session_.get_server_sid()), "proxy_sessid", my_session_.get_proxy_sessid());
+        } else {
+          if (OB_SUCC(ret)) {
+            do {
+              ret = do_open_plan(get_exec_context());
+            } while (transaction_set_violation_and_retry(ret, retry));
+          }
         }
       }
     }
@@ -624,8 +634,14 @@ int ObResultSet::set_mysql_info()
       }
     }
   } else if (stmt::T_LOAD_DATA == get_stmt_type()) {
-    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT, plan_ctx->get_row_matched_count(),
-                              plan_ctx->get_row_deleted_count(), plan_ctx->get_row_duplicated_count(), warning_count_);
+    int64_t warning_cnt = warning_count_;
+    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+    if (OB_NOT_NULL(buffer)) {
+      warning_cnt = buffer->get_total_warning_count();
+    }
+    int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_LOAD_DATA_MSG_FMT,
+                              plan_ctx->get_row_matched_count(), plan_ctx->get_row_deleted_count(),
+                              plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));
@@ -1338,6 +1354,7 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
     }
     is_select_for_update_ = (static_cast<ObSelectStmt&>(stmt)).has_for_update();
     has_hidden_rowid_ = (static_cast<ObSelectStmt&>(stmt)).has_hidden_rowid();
+    rowid_table_id_ = (static_cast<ObSelectStmt&>(stmt)).get_for_update_table_id();
     is_skip_locked_ = (static_cast<ObSelectStmt&>(stmt)).is_skip_locked();
   } else if (stmt.is_insert_stmt() || stmt.is_update_stmt() || stmt.is_delete_stmt()) {
     ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(stmt);

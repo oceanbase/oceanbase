@@ -14,10 +14,11 @@
 #ifndef OB_STORAGE_SLOG_CKPT_TBALET_REPLAY_CREATE_HANDLER_H
 #define OB_STORAGE_SLOG_CKPT_TBALET_REPLAY_CREATE_HANDLER_H
 
-#include "storage/meta_mem/ob_tablet_map_key.h"
 #include "observer/ob_startup_accel_task_handler.h"
+#include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-
+#include "storage/meta_mem/ob_tablet_attr.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -47,19 +48,28 @@ enum class ObTabletRepalyOperationType
   INVALID_MODULE
 };
 
-struct ObTabletReplayItem
+struct ObTabletReplayItem final
 {
 public:
-  ObTabletReplayItem(const ObTabletMapKey &key, const ObMetaDiskAddr &addr)
-    : key_(key), addr_(addr) {}
+  ObTabletReplayItem(
+      const ObTabletMapKey &key,
+      const ObReplayTabletValue &value)
+    : ls_epoch_(value.ls_epoch_),
+      info_(key, value.tablet_attr_, value.addr_),
+      accelerate_info_(value.accelerate_info_)
+  {}
   ObTabletReplayItem()
-    : key_(), addr_() {}
+    : ls_epoch_(0),
+      info_(),
+      accelerate_info_()
+  {}
   ~ObTabletReplayItem() {}
   bool operator<(const ObTabletReplayItem &r) const;
-  TO_STRING_KV(K_(key), K_(addr));
+  TO_STRING_KV(K_(ls_epoch), K_(info), K_(accelerate_info));
 
-  ObTabletMapKey key_;
-  ObMetaDiskAddr addr_;
+  int64_t ls_epoch_;
+  ObTabletResidentInfo info_;
+  ObStartupTabletAccelerateInfo accelerate_info_;
 };
 
 using ObTabletReplayItemRange = std::pair<int64_t, int64_t>; // record the start_item_idx and end_item_idx in total_tablet_item_arr
@@ -121,7 +131,7 @@ public:
   ~ObTabletReplayCreateHandler() {}
 
   int init(
-      const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map,
+      const common::hash::ObHashMap<ObTabletMapKey, ObReplayTabletValue> &tablet_item_map,
       const ObTabletRepalyOperationType replay_type);
   int concurrent_replay(observer::ObStartupAccelTaskHandler* startup_accel_handler);
 

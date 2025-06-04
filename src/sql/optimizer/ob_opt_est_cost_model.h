@@ -179,7 +179,7 @@ struct ObCostColumnGroupInfo {
   ObCostColumnGroupInfo()
   :micro_block_count_(0.0),
   filter_sel_(1.0),
-  skip_rate_(1.0),
+  skip_rate_(0.0),
   skip_filter_sel_(1.0)
   {
   }
@@ -248,7 +248,8 @@ struct ObCostTableScanInfo
      index_back_with_column_store_(false),
      rescan_left_server_list_(NULL),
      rescan_server_list_(NULL),
-     limit_rows_(-1.0)
+     limit_rows_(-1.0),
+     unique_range_rowcnt_(-1)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -265,7 +266,7 @@ struct ObCostTableScanInfo
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
-               K_(limit_rows), K_(total_range_cnt),
+               K_(limit_rows), K_(total_range_cnt), K_(unique_range_rowcnt),
                K_(use_column_store),
                K_(index_back_with_column_store),
                K_(index_scan_column_group_infos),
@@ -289,12 +290,15 @@ struct ObCostTableScanInfo
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
 
-  //这几个filter的分类参考OptimizerUtil::classify_filters()
+  //这几个filter的分类参考ObJoinOrder::fill_filters()
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> precise_range_filters_; // precise range filters in origin filters
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> unprecise_range_filters_; // unprecise range filters in origin filters
 
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> access_columns_;
 
@@ -324,6 +328,7 @@ struct ObCostTableScanInfo
   const common::ObIArray<common::ObAddr> *rescan_server_list_;
 
   double limit_rows_;
+  int64_t unique_range_rowcnt_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -779,8 +784,11 @@ public:
                                    double &cost);
 
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
+  int cost_one_qual(const ObRawExpr *qual, double &cost);
+  double cost_comparisions(double rows, const ObIArray<ObRawExpr *> &exprs, bool need_scale = true);
 
   double cost_hash(double rows, const ObIArray<ObRawExpr *> &hash_exprs);
+  double cost_hash_quals(double rows, const ObIArray<ObRawExpr *> &quals);
 
   double cost_late_materialization_table_get(int64_t column_cnt);
 
@@ -795,7 +803,7 @@ public:
 																int64_t column_count,
 																double &cost);
 
-  int get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types, double &cost);
+  int get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types, double &cost);
 
   int cost_window_function(double rows, double width, double win_func_cnt, double &cost);
 
@@ -836,16 +844,16 @@ public:
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,
-								const common::ObIArray<ObExprResType> &order_col_types,
+								const common::ObIArray<ObRawExprResType> &order_col_types,
 								double &cost);
 
   int cost_part_sort(const ObSortCostInfo &cost_info,
 											const ObIArray<ObRawExpr *> &order_exprs,
-											const ObIArray<ObExprResType> &order_col_types,
+											const ObIArray<ObRawExprResType> &order_col_types,
 											double &cost);
   int cost_part_topn_sort(const ObSortCostInfo &cost_info,
                           const ObIArray<ObRawExpr *> &order_exprs,
-                          const ObIArray<ObExprResType> &order_col_types,
+                          const ObIArray<ObRawExprResType> &order_col_types,
                           double &cost);
 
   int cost_prefix_sort(const ObSortCostInfo &cost_info,
@@ -854,24 +862,24 @@ protected:
 											double &cost);
 
   int cost_topn_sort(const ObSortCostInfo &cost_info,
-										const ObIArray<ObExprResType> &types,
+										const ObIArray<ObRawExprResType> &types,
 										double &cost);
 
   int cost_local_order_sort(const ObSortCostInfo &cost_info,
-														const ObIArray<ObExprResType> &types,
+														const ObIArray<ObRawExprResType> &types,
 														double &cost);
 
-  int cost_topn_sort_inner(const ObIArray<ObExprResType> &types,
+  int cost_topn_sort_inner(const ObIArray<ObRawExprResType> &types,
 													double rows,
 													double n,
 													double &cost);
 
   //calculate real sort cost (std::sort)
-  int cost_sort_inner(const common::ObIArray<sql::ObExprResType> &types,
+  int cost_sort_inner(const common::ObIArray<sql::ObRawExprResType> &types,
 											double row_count,
 											double &cost);
 
-  int cost_local_order_sort_inner(const common::ObIArray<sql::ObExprResType> &types,
+  int cost_local_order_sort_inner(const common::ObIArray<sql::ObRawExprResType> &types,
 																	double row_count,
 																	double &cost);
 
@@ -936,6 +944,7 @@ protected:
                           double row_count,
                           bool is_get,
                           double &cost);
+  int get_qual_cmp_tc(const ObRawExpr *qual, ObObjTypeClass &cmp_tc);
 
 protected:
   const ObOptCostModelParameter &cost_params_;

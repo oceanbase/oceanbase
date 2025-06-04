@@ -51,13 +51,15 @@ public:
   int add_drop_tablets_of_table_arg(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas);
   int get_ls_from_table(const share::schema::ObTableSchema &table_schema,
+                        const bool is_include_hidden,
                         common::ObIArray<share::ObLSID> &assign_ls_id_array);
 private:
   int drop_tablet_(
       const common::ObIArray<const share::schema::ObTableSchema *> &table_schema_ptr_array,
       const share::ObLSID &ls_key,
       const int64_t i, 
-      const int64_t j);
+      const int64_t j,
+      const bool is_hidden);
 private:
   const uint64_t tenant_id_;
   ObMySQLTransaction &trans_;

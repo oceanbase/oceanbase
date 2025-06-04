@@ -1708,14 +1708,6 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
         STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
-#ifdef ERRSIM
-        int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
-        int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
-        if (-errsim_data_version == error_code && is_lob_storage(col->get_data_type())) {
-          col_schema.default_checksum_ = 0;
-          STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set zero default checksum", K(error_code), K(col_schema));
-        }
-#endif
       }
       if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));

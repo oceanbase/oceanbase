@@ -31,7 +31,7 @@ int HashCommandOperator::do_hset_inner(int64_t db, const ObString &key,
   int ret = OB_SUCCESS;
   bool is_insup = false;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisModel::HASH, is_insup, meta))) {
+  if (OB_FAIL(check_and_insup_meta(db, key, ObRedisDataModel::HASH, is_insup, meta))) {
     LOG_WARN("fail to check and insup meta", K(ret), K(key), K(db));
   }
 
@@ -125,7 +125,7 @@ int HashCommandOperator::put_value_and_meta(int64_t db, const ObString &key, con
     ObTableBatchOperation ops;
     ObArenaAllocator tmp_alloc("RedisHash", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ResultFixedArray results(tmp_alloc);
-    if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::HASH, *meta, put_meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::HASH, *meta, put_meta_entity))) {
       LOG_WARN("fail to generate meta entity", K(ret), K(db), K(key), KPC(meta));
     } else if (OB_FAIL(ops.insert_or_update(*put_meta_entity))) {
       LOG_WARN("fail to put meta entity", K(ret));
@@ -152,7 +152,7 @@ int HashCommandOperator::do_hsetnx(int64_t db, const ObString &key, const ObStri
   bool is_meta_exists = true;
   bool is_data_exists = true;
   ObRedisMeta *meta = nullptr;  // unused
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::HASH, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::HASH, meta))) {
     if (ret == OB_ITER_END) {
       is_meta_exists = false;
       ret = OB_SUCCESS;
@@ -384,7 +384,7 @@ int HashCommandOperator::do_hmget(int64_t db, const ObString &key, const ObIArra
   ObRedisMeta *meta_info = nullptr;
   bool is_meta_exists = true;
   ObFixedArray<ObString, ObIAllocator> res_arr(redis_ctx_.allocator_, fields.count());
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::HASH, meta_info))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::HASH, meta_info))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to check hash expire", K(ret), K(db), K(key));
     } else {
@@ -434,7 +434,7 @@ int HashCommandOperator::do_hdel(int64_t db, const ObString &key,
   ObRedisMeta *meta_info = nullptr;
   bool is_meta_exists = true;
   int64_t del_num = 0;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::HASH, meta_info))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::HASH, meta_info))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to check hash expire", K(ret), K(db), K(key));
     } else {
@@ -471,7 +471,7 @@ int HashCommandOperator::do_hdel(int64_t db, const ObString &key,
       LOG_WARN("fail to process table batch op", K(ret));
     } else if (OB_FAIL(delete_results(results, rowkeys, del_num))) {
       LOG_WARN("fail to delete results", K(ret), K(results));
-    } else if (OB_FAIL(fake_del_empty_key_meta(ObRedisModel::HASH, db, key, meta_info))) {
+    } else if (OB_FAIL(fake_del_empty_key_meta(ObRedisDataModel::HASH, db, key, meta_info))) {
       LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
     }
   }
@@ -492,7 +492,7 @@ int HashCommandOperator::do_hincrby(int64_t db, const ObString &key, const ObStr
   bool is_meta_exists = true;
   ObRedisMeta *meta = nullptr;  // unused
   int64_t new_val = increment;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::HASH, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::HASH, meta))) {
     if (ret == OB_ITER_END) {
       is_meta_exists = false;
       ret = OB_SUCCESS;
@@ -561,7 +561,7 @@ int HashCommandOperator::do_hincrbyfloat(int64_t db, const ObString &key, const 
   ObRedisMeta *meta = nullptr;  // unused
   long double new_val = increment;
   ObString new_value;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::HASH, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::HASH, meta))) {
     if (ret == OB_ITER_END) {
       is_meta_exists = false;
       ret = OB_SUCCESS;

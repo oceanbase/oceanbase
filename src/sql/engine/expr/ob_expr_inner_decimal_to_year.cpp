@@ -110,7 +110,7 @@ int ObExprInnerDecimalToYear::cg_expr(ObExprCGCtx &expr_cg_ctx,
     LOG_WARN("the arg of inner double to int is null.", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = ObExprInnerDecimalToYear::eval_inner_decimal_to_year;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_range_flag();
   }
   return ret;
 }

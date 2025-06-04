@@ -44,9 +44,10 @@ protected:
 private:
   int init_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
   int query_and_result(table::ObTableApiScanExecutor *executor);
-
+  int old_try_process();
+  int new_try_process();
+  virtual bool is_new_try_process() override;
 private:
-  common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   int64_t result_row_count_;
 private:

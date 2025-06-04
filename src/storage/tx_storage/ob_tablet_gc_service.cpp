@@ -15,6 +15,9 @@
 #include "ob_tablet_gc_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "logservice/ob_log_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -205,6 +208,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           } else if (!decided_scn.is_valid()
                      || SCN::min_scn() == decided_scn
                      || decided_scn < ls->get_tablet_change_checkpoint_scn()) {
+            need_retry = true;
             STORAGE_LOG(INFO, "no any log callback and no need to update clog checkpoint",
               K(freezer->get_ls_id()), K(decided_scn), KPC(ls), K(ls->get_ls_meta()));
           }
@@ -234,23 +238,18 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             need_retry = true;
             STORAGE_LOG(WARN, "fail to wait unpersist tablet ids flushed", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
           }
-          // 6. write ls active tablet array
-          else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.write_active_tablet_array(ls))) {
-            need_retry = true;
-            STORAGE_LOG(WARN, "fail to write active tablet array", KR(ret), KPC(ls));
-          }
-          // 7. update tablet_change_checkpoint in log meta
+          // 6. update tablet_change_checkpoint in log meta
           else if (decided_scn > ls->get_tablet_change_checkpoint_scn()
                   && OB_FAIL(tablet_gc_handler->set_tablet_change_checkpoint_scn(decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 8. set ls transfer scn
+          // 7. set ls transfer scn
           else if (!only_persist && OB_FAIL(tablet_gc_handler->set_ls_transfer_scn(deleted_tablets))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 9. check and gc deleted_tablets
+          // 8. check and gc deleted_tablets
           else if (!only_persist && !deleted_tablets.empty()
                    && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablets))) {
             need_retry = true;
@@ -637,12 +636,18 @@ int ObTabletGCHandler::freeze_unpersist_tablet_ids(const common::ObTabletIDArray
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_GC_WAIT_FLUSH_RETRY_TIMES);
 int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                                          const SCN &decided_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::fast_current_time();
   int64_t retry_times = FLUSH_CHECK_MAX_TIMES;
+
+#ifdef ERRSIM
+  retry_times = EN_GC_WAIT_FLUSH_RETRY_TIMES ? 10 : FLUSH_CHECK_MAX_TIMES;
+#endif
+
   int64_t i = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -699,6 +704,7 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
 int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &deleted_tablets)
 {
   int ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls_->get_ls_id();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -709,9 +715,19 @@ int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &delete
     bool need_retry = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablets.count(); ++i) {
       const ObTabletHandle &tablet_handle = deleted_tablets.at(i);
+      const ObTabletID tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
       if (check_stop()) {
         ret = OB_EAGAIN;
         STORAGE_LOG(INFO, "tablet gc handler stop", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()) {
+        share::SCN transfer_scn = tablet_handle.get_obj()->get_reorganization_scn();
+        if (OB_FAIL(MTL(ObSSMetaService*)->update_tablet_to_empty_shell(ls_id, tablet_id, transfer_scn))) {
+          STORAGE_LOG(INFO, "failed to update_tablet_to_empty_shell", KR(ret), KPC(this), KPC(ls_), K(tablet_id), K(transfer_scn));
+        }
+      }
+      if (OB_FAIL(ret)) {
+#endif
       } else if (OB_FAIL(ls_->get_tablet_svr()->remove_tablet(tablet_handle))) {
         if (OB_EAGAIN == ret) {
           need_retry = true;
@@ -722,13 +738,11 @@ int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &delete
       } else {
 #ifdef ERRSIM
         SERVER_EVENT_SYNC_ADD("tablet_gc", "gc_tablet_finish",
-                              "ls_id", tablet_handle.get_obj()->get_tablet_meta().ls_id_.id(),
-                              "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_.id(),
+                              "ls_id", ls_id.id(),
+                              "tablet_id", tablet_id.id(),
                               "transfer_seq", tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_);
 #endif
-        STORAGE_LOG(INFO, "gc tablet finish", K(ret),
-                          "ls_id", tablet_handle.get_obj()->get_tablet_meta().ls_id_,
-                          "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_);
+        STORAGE_LOG(INFO, "gc tablet finish", K(ret), K(ls_id), K(tablet_id));
       }
     }
 

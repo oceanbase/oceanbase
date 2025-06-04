@@ -1072,7 +1072,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     LOG_ERROR("get unexpected null", K(schema_guard), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_FAIL(check_need_domain_id_merge_iter(op, ref_table_id, domain_types, domain_tids))) {
+  } else if (OB_FAIL(check_need_domain_id_merge_iter(index_dml_info.column_exprs_, op, ref_table_id, domain_types, domain_tids))) {
     LOG_WARN("fail to check need domain id merge iter", K(ret), K(ref_table_id));
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
       TABLE_SCHEMA, tenant_id, ref_table_id, scan_ctdef.schema_version_))) {
@@ -1704,6 +1704,9 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_mlog_table()) {
     need_all_columns = true;
     LOG_TRACE("update materialized view log, need all columns", K(table_schema->is_mlog_table()));
+  } else if (table_schema->is_delete_insert_merge_engine()) {
+    need_all_columns = true;
+    LOG_TRACE("update delete insert table log, need all columns", K(table_schema->get_merge_engine_type()));
   } else if (!is_primary_index) {
     // index_table if update PK, also need record all_columns
     if (OB_FAIL(check_has_upd_rowkey(op, table_schema, upd_cids, is_update_pk))) {
@@ -1861,6 +1864,9 @@ int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_mlog_table()) {
     need_all_columns = true;
     LOG_TRACE("delete from materialized view log, need all columns", K(table_schema->is_mlog_table()));
+  } else if (table_schema->is_delete_insert_merge_engine()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from delete insert table log, need all columns", K(table_schema->get_merge_engine_type()));
   } else if (table_schema->is_multivalue_index_aux()) {
     // as multivalue need calc is need save rowkey, the save-rowkey policy is dynamic made, need project all columns
     need_all_columns = true;
@@ -3648,7 +3654,11 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else {
       fk_column.obj_meta_ = column_schema->get_meta_type();
-      if (fk_column.obj_meta_.is_decimal_int()) {
+      if (fk_column.obj_meta_.is_lob_storage()) {
+        if (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+          fk_column.obj_meta_.set_has_lob_header();
+        }
+      } else if (fk_column.obj_meta_.is_decimal_int()) {
         fk_column.obj_meta_.set_stored_precision(column_schema->get_accuracy().get_precision());
         fk_column.obj_meta_.set_scale(column_schema->get_accuracy().get_scale());
       } else if (ob_is_double_tc(fk_column.obj_meta_.get_type())) {
@@ -4126,6 +4136,7 @@ int ObDmlCgService::init_encrypt_table_meta_(
 #endif
 
 int ObDmlCgService::check_need_domain_id_merge_iter(
+    const common::ObIArray<ObColumnRefRawExpr*> &columns,
     ObLogicalOperator &op,
     const uint64_t ref_table_id,
     ObIArray<int64_t> &domain_types,
@@ -4134,14 +4145,18 @@ int ObDmlCgService::check_need_domain_id_merge_iter(
   int ret = OB_SUCCESS;
   ObLogPlan *log_plan = op.get_plan();
   ObSchemaGetterGuard *schema_guard = nullptr;
+  ObSqlSchemaGuard *sql_schema_guard = nullptr;
   const ObTableSchema *table_schema = nullptr;
   const ObDelUpdStmt *dml_stmt = nullptr;
   domain_types.reset();
   domain_tids.reset();
-  if (OB_ISNULL(log_plan) ||
-      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard()) ||
+      OB_ISNULL(sql_schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status", K(ret));
+    LOG_WARN("unexpected status", K(ret), KP(log_plan), KP(schema_guard), KP(sql_schema_guard));
   } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), ref_table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
@@ -4154,7 +4169,28 @@ int ObDmlCgService::check_need_domain_id_merge_iter(
     LOG_WARN("unexpected domain types and tids", K(ret), K(domain_types), K(domain_tids));
   } else if (domain_types.count() > 0) {
     LOG_TRACE("has domain index, need domain id merge iter", K(ret), K(ref_table_id), K(domain_types), K(domain_tids));
-   }
+    ObSEArray<uint64_t, 16> base_col_ids;
+    ARRAY_FOREACH(columns, i) {
+      ObColumnRefRawExpr *item = columns.at(i);
+      uint64_t base_cid = OB_INVALID_ID;
+      if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column item", K(i), K(item));
+      } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
+        LOG_WARN("get base column id failed", K(ret), K(item));
+      } else if (OB_FAIL(base_col_ids.push_back(base_cid))) {
+        LOG_WARN("fail to push back column id", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)
+        && OB_FAIL(ObDomainIdUtils::resort_domain_info_by_base_cols(
+            *sql_schema_guard, *table_schema, base_col_ids, domain_types, domain_tids))) {
+      LOG_WARN("fail to resort domain info by base cols",
+               K(ret),
+               KPC(table_schema),
+               K(base_col_ids));
+    }
+  }
   return ret;
 }
 
@@ -4245,7 +4281,7 @@ int ObDmlCgService::generate_scan_with_domain_id_ctdef_if_need(
   ObDASDomainIdMergeCtDef *domain_id_merge_ctdef = nullptr;
   uint64_t tenant_data_version = 0;
   int64_t child_cnt = 0;
-  if (OB_FAIL(check_need_domain_id_merge_iter(op, index_dml_info.ref_table_id_, domain_types, domain_tids))) {
+  if (OB_FAIL(check_need_domain_id_merge_iter(index_dml_info.column_exprs_, op, index_dml_info.ref_table_id_, domain_types, domain_tids))) {
     LOG_WARN("fail to check need domain id merge iter", K(ret));
   } else if (domain_types.count() == 0) {
     // just skip, nothing to do

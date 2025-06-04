@@ -110,6 +110,18 @@ public:
     MDS_MINI_SSTABLE = 26,
     MDS_MINOR_SSTABLE = 27,
     MICRO_MINI_SSTABLE = 28,
+    INC_MAJOR_SSTABLE = 29,
+    INC_COLUMN_ORIENTED_SSTABLE = 30,
+    INC_NORMAL_COLUMN_GROUP_SSTABLE = 31,
+    INC_ROWKEY_COLUMN_GROUP_SSTABLE = 32,
+    INC_MAJOR_DDL_DUMP_SSTABLE = 33,
+    INC_MAJOR_DDL_MERGE_CO_SSTABLE = 34,
+    INC_MAJOR_DDL_MERGE_CG_SSTABLE = 35,
+    INC_MAJOR_DDL_MEM_CO_SSTABLE = 36,
+    INC_MAJOR_DDL_MEM_CG_SSTABLE = 37,
+    INC_MAJOR_DDL_MEM_SSTABLE = 38,
+    INC_MAJOR_DDL_AGGREGATE_CO_SSTABLE = 39,
+    INC_MAJOR_DDL_AGGREGATE_CG_SSTABLE = 40,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
@@ -221,25 +233,6 @@ public:
   void set_snapshot_version(int64_t version) { key_.version_range_.snapshot_version_ = version; }
   ObITable::TableType get_table_type() { return key_.table_type_; }
 
-  virtual int exist(
-      ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObITableReadInfo &read_info,
-      const blocksstable::ObDatumRowkey &rowkey,
-      bool &is_exist,
-      bool &has_found);
-  virtual int exist(
-      const ObTableIterParam &param,
-	  ObTableAccessContext &context,
-	  const blocksstable::ObDatumRowkey &rowkey,
-	  bool &is_exist,
-	  bool &has_found);
-
-  virtual int exist(
-      ObRowsInfo &rowsInfo,
-      bool &is_exist,
-      bool &has_found);
-
   virtual int scan(
       const ObTableIterParam &param,
       ObTableAccessContext &context,
@@ -266,6 +259,8 @@ public:
 
   virtual OB_INLINE share::SCN get_start_scn() const;
   virtual OB_INLINE share::SCN get_end_scn() const;
+  // TODO: yanyuan.cxf make it const
+  virtual OB_INLINE share::SCN get_rec_scn() { return share::SCN::invalid_scn(); }
   virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
   virtual OB_INLINE bool is_trans_state_deterministic() { return get_upper_trans_version() < INT64_MAX; }
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
@@ -281,6 +276,7 @@ public:
 
   // TODO @hanhui so many table type judgement
   virtual bool is_sstable() const { return is_sstable(key_.table_type_); }
+  virtual bool is_row_store_major_sstable() const { return is_row_store_major_sstable(key_.table_type_); }
   virtual bool is_co_sstable() const { return is_co_sstable(key_.table_type_); }
   virtual bool is_rowkey_cg_sstable() const { return is_rowkey_cg_sstable(key_.table_type_); }
   virtual bool is_normal_cg_sstable() const { return is_normal_cg_sstable(key_.table_type_); }

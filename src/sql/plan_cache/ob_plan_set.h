@@ -326,7 +326,7 @@ public:
       is_all_non_partition_(true),
       table_locations_(alloc_),
       array_binding_plan_(),
-      local_plan_(NULL),
+      local_plans_(),
       remote_plan_(NULL),
       direct_local_plan_(NULL),
       dist_plans_(),
@@ -434,6 +434,11 @@ private:
                     ObPlanCacheCtx &pc_ctx,
                     ObIArray<ObCandiTableLoc> &candi_table_locs,
                     ObPhyPlanType &plan_type);
+  ObPhysicalPlan* get_local_plan(ObPlanCacheCtx &pc_ctx);
+  bool is_exist_local_plan();
+  int add_local_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan);
+  void remove_all_local_plan();
+  int64_t get_local_plan_mem_size();
 
   static int is_partition_in_same_server(const ObIArray<ObCandiTableLoc> &candi_table_locs,
                                          bool &is_same,
@@ -449,7 +454,7 @@ private:
   TableLocationFixedArray table_locations_;
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
-  ObPhysicalPlan *local_plan_;
+  common::ObSEArray<ObPhysicalPlan *, 4> local_plans_;
 #ifdef OB_BUILD_SPM
   ObEvolutionPlan local_evolution_plan_;
   ObEvolutionPlan dist_evolution_plan_;

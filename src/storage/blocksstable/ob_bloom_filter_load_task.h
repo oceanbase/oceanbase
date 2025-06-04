@@ -38,11 +38,13 @@ class ObDataMacroBlockMeta;
 struct ObBloomFilterLoadKey
 {
 public:
-  ObBloomFilterLoadKey() : ls_id_(), table_key_()
+  ObBloomFilterLoadKey() : ls_id_(share::ObLSID::INVALID_LS_ID), tenant_id_(OB_INVALID_TENANT_ID), table_key_()
   {
   }
-  ObBloomFilterLoadKey(const share::ObLSID &ls_id, const storage::ObITable::TableKey &table_key)
-      : ls_id_(ls_id), table_key_(table_key)
+  ObBloomFilterLoadKey(const share::ObLSID &ls_id,
+                       const uint64_t tenant_id,
+                       const storage::ObITable::TableKey &table_key)
+      : ls_id_(ls_id), tenant_id_(tenant_id), table_key_(table_key)
   {
   }
   ~ObBloomFilterLoadKey() {}
@@ -50,10 +52,11 @@ public:
   int hash(uint64_t &hash_val) const;
   bool operator == (const ObBloomFilterLoadKey &other) const;
   bool is_valid() const;
-  TO_STRING_KV(K(ls_id_), K(table_key_));
+  TO_STRING_KV(K(ls_id_), K(tenant_id_), K(table_key_));
 
 public:
   share::ObLSID ls_id_;
+  uint64_t tenant_id_;
   storage::ObITable::TableKey table_key_;
 };
 
@@ -121,6 +124,7 @@ public:
   void reset();
   int push_task(const storage::ObITable::TableKey &sstable_key,
                 const share::ObLSID &ls_id,
+                const uint64_t tenant_id,
                 const MacroBlockId &macro_id,
                 const ObDatumRowkey &rowkey);
   int pop_task(ObBloomFilterLoadKey &key, ObArray<ValuePair> *&array);
@@ -142,9 +146,6 @@ private:
 
 class ObMacroBlockBloomFilterLoadTG : public lib::TGRunnable
 {
-private:
-  using ValuePair = ObBloomFilterLoadTaskQueue::ValuePair;
-
 public:
   ObMacroBlockBloomFilterLoadTG();
   ~ObMacroBlockBloomFilterLoadTG();
@@ -160,7 +161,12 @@ public:
                     const ObDatumRowkey &rowkey);
 
 private:
-  int do_multi_load(const ObBloomFilterLoadKey &key, ObArray<ValuePair> *array);
+  using ValuePair = ObBloomFilterLoadTaskQueue::ValuePair;
+  const int64_t MACRO_BF_GET_LOAD_THRESHOLD = 10;
+
+private:
+  int do_multi_load(const ObBloomFilterLoadKey &key, ObArray<ValuePair> &array);
+  int do_multi_get(const ObBloomFilterLoadKey &key, ObArray<ValuePair> &array);
   int load_macro_block_bloom_filter(const ObDataMacroBlockMeta &macro_meta);
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockBloomFilterLoadTG);
 

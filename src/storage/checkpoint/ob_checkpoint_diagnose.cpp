@@ -29,7 +29,7 @@ void ObTraceInfo::init(const int64_t trace_id,
   reset_without_lock_();
   trace_id_ = trace_id;
   ls_id_ = ls_id;
-  strncpy(thread_name_, ob_get_tname(), oceanbase::OB_THREAD_NAME_BUF_LEN);
+  strncpy(thread_name_, ob_get_tname(), oceanbase::OB_THREAD_NAME_BUF_LEN - 1);
   checkpoint_start_time_ = checkpoint_start_time;
 }
 

@@ -492,6 +492,10 @@ public:
 
   bool is_operator_end() { return batch_reach_end_ ||  row_reach_end_ ; }
   TO_STRING_KV(K(spec_));
+
+  virtual int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
+  { return OB_SUCCESS; };
+
 protected:
   virtual int do_drain_exch();
   int init_skip_vector();
@@ -537,6 +541,25 @@ protected:
         ret = OB_SUCCESS;
       } else {
         SQL_ENG_LOG(WARN, "Failed to get_next_row", K(ret));
+      }
+      /*
+        SORT (output: cast_expr, order_by: cast_expr)
+          TSC (output: cast_expr, filter: like(cast_expr, pattern_expr), access virtual table)
+      */
+      // output expr may have non-uniform format, and is shared and outputed in parent operator
+      // if parent is a vectorized operator which doesn't enable rich format
+      // cast_to_uniform is called when parent projecting expr and corresponding `datum.ptr_` becomes dangling pointer
+      // thus here we reset format to VEC_INVALID
+      if (OB_SUCC(ret)) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          ObExpr *expr = *e;
+          // only non-uniform format need to set to vec_invalid
+          // if expr is a literal const expr, we can't set format_ to vec_invalid
+          // otherwise another thread using the same plan may read unexpected format
+          if (expr->enable_rich_format() && !is_uniform_format(expr->get_format(eval_ctx_))) {
+            expr->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+          }
+        }
       }
     } else {
       brs_.size_ = 1;
@@ -644,23 +667,10 @@ protected:
       total_time_ += (rdtsc() - cpu_begin_time_);
     }
   }
-  inline void begin_ash_line_id_reg()
-  {
-    // begin with current operator
-    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
-  }
   inline void end_ash_line_id_reg(int ret)
   {
     ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
     if (OB_NOT_NULL(di)) {
-      // move back to parent operator
-      // known issue: when switch from batch to row in same op,
-      // we shift line id to parent op un-intently. but we tolerate this inaccuracy
-      if (OB_LIKELY(spec_.get_parent())) {
-        di->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
-      } else {
-        di->get_ash_stat().plan_line_id_ = -1;
-      }
       if (OB_FAIL(ret) && -1 == di->get_ash_stat().retry_plan_line_id_) {
         di->get_ash_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
       }

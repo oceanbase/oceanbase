@@ -33,7 +33,7 @@ class SCN;
 }
 namespace storage
 {
-class ObTabletPointer;
+class ObTabletBasePointer;
 namespace mds
 {
 extern TLOCAL(MdsTLocalInfo, TLOCAL_MDS_INFO);
@@ -116,7 +116,7 @@ public:
   int init(const ObTabletID tablet_id,
            const share::ObLSID ls_id,
            const share::SCN mds_ckpt_scn_from_tablet,// this is used to filter replayed nodes after removed action
-           ObTabletPointer *pointer,
+           ObTabletBasePointer *pointer,
            ObMdsTableMgr *p_mgr);
   virtual int set(int64_t unit_id,
                   void *key,
@@ -182,7 +182,7 @@ public:
   virtual bool is_flushing() const;
   virtual int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const = 0;
   virtual int forcely_remove_nodes(const char *reason, share::SCN redo_scn_limit) = 0;
-  void mark_removed_from_t3m(ObTabletPointer *pointer);// need called in del tablet phase
+  void mark_removed_from_t3m(ObTabletBasePointer *pointer);// need called in del tablet phase
   void mark_switched_to_empty_shell();
   bool is_switched_to_empty_shell() const;
   bool is_removed_from_t3m() const;
@@ -335,8 +335,8 @@ public:
     remove_trace_id_() {}
     TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(last_remove_ts),
                  KTIME_(remove_ts), KTIME_(last_flush_ts), KTIME_(switch_to_empty_shell_ts), K_(init_trace_id), K_(remove_trace_id));
-    ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, just record it to debug
-    ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, just record it to debug
+    ObTabletBasePointer *do_init_tablet_pointer_;// can not be accessed, just record it to debug
+    ObTabletBasePointer *do_remove_tablet_pointer_;// can not be accessed, just record it to debug
     int64_t init_ts_;
     int64_t last_remove_ts_;
     int64_t remove_ts_;

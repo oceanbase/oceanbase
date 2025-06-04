@@ -330,8 +330,9 @@ void TestSSTableIndexFilter::init_micro_index_info(
     ObMicroIndexInfo &index_info)
 {
   ObArray<ObSkipIndexColMeta> agg_cols;
-  ObDatumRow agg_row;
-  agg_row.init(3);
+  ObSkipIndexAggResult agg_result;
+  ASSERT_EQ(OB_SUCCESS, agg_result.init(3, allocator_));
+  ObDatumRow &agg_row = agg_result.agg_row_;
 
   ObSkipIndexColMeta skip_col_meta;
   skip_col_meta.col_idx_ = TEST_COLUMN_ID;
@@ -350,7 +351,7 @@ void TestSSTableIndexFilter::init_micro_index_info(
   agg_row.storage_datums_[2].from_obj_enhance(null_count_obj);
 
   ObAggRowWriter row_writer;
-  row_writer.init(agg_cols, agg_row, allocator_);
+  ASSERT_EQ(OB_SUCCESS, row_writer.init(agg_cols, agg_result, DATA_CURRENT_VERSION, allocator_));
   int64_t buf_size = row_writer.get_serialize_data_size();
   char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
   EXPECT_TRUE(buf != nullptr);

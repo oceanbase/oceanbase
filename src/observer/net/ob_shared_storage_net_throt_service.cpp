@@ -259,7 +259,6 @@ int ObSharedStorageNetThrotManager::collect_predict_resource(const int64_t &expi
   const int64_t current_time = ObTimeUtility::current_time();
   // RPC2.1: RS asks observer for the required quotas of all storages
   {
-    ObSpinLockGuard guard(lock_);
     obrpc::ObEndpointRegMap::iterator it = endpoint_infos_map_.begin();
     for (; OB_SUCC(ret) && it != endpoint_infos_map_.end(); ++it) {
       ObSSNTEndpointArg arg(it->first, it->second.storage_keys_, it->second.expire_time_);
@@ -286,7 +285,6 @@ int ObSharedStorageNetThrotManager::collect_predict_resource(const int64_t &expi
     LOG_WARN(
         "cnt not match", KR(ret), "return_cnt", return_code_array.count(), "server_cnt", endpoint_infos_map_.size());
   } else {
-    ObSpinLockGuard guard(lock_);
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.size(); ++i) {
       const ObAddr &addr = proxy_batch.get_dests().at(i);
       if (OB_SUCCESS != return_code_array.at(i)) {
@@ -395,7 +393,6 @@ int ObSharedStorageNetThrotManager::assign_type_value(
 int ObSharedStorageNetThrotManager::update_quota_plan()
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
   obrpc::ObBucketThrotMap::iterator it = bucket_throt_map_.begin();
   int tmp_ret = OB_SUCCESS;
   for (; it != bucket_throt_map_.end(); ++it) {
@@ -622,7 +619,6 @@ int ObSharedStorageNetThrotManager::commit_quota_plan()
   const int64_t timeout_ts = GCONF.rpc_timeout;
   ObArray<int> return_code_array;
   ObSEArray<std::pair<ObAddr, obrpc::ObSharedDeviceResourceArray>, 7> send_rpc_arr;
-  ObSpinLockGuard guard(lock_);
   {
     obrpc::ObEndpointRegMap::iterator iter = endpoint_infos_map_.begin();
     for (; iter != endpoint_infos_map_.end(); ++iter) {  // commit to each observer

@@ -333,5 +333,73 @@ OB_SERIALIZE_MEMBER(ObAlterMLogArg,
                     is_alter_lob_threshold_,
                     lob_threshold_);
 
+OB_SERIALIZE_MEMBER(ObCreateMLogArg::PurgeOptions,
+                    purge_mode_,
+                    start_datetime_expr_,
+                    next_datetime_expr_,
+                    exec_env_);
+
+bool ObCreateMLogArg::is_valid() const
+{
+  return (OB_INVALID_TENANT_ID != tenant_id_)
+         && !database_name_.empty()
+         && !table_name_.empty()
+         && purge_options_.is_valid();
+}
+
+DEF_TO_STRING(ObCreateMLogArg)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  pos += ObDDLArg::to_string(buf + pos, buf_len - pos);
+  J_KV(K_(database_name),
+       K_(table_name),
+       K_(mlog_name),
+       K_(tenant_id),
+       K_(base_table_id),
+       K_(mlog_table_id),
+       K_(session_id),
+       K_(with_rowid),
+       K_(with_primary_key),
+       K_(with_sequence),
+       K_(include_new_values),
+       K_(purge_options),
+       K_(mlog_schema),
+       K_(store_columns),
+       K_(nls_date_format),
+       K_(nls_timestamp_format),
+       K_(nls_timestamp_tz_format),
+       K_(sql_mode),
+       K_(replace_if_exists));
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER((ObCreateMLogArg, ObDDLArg),
+                    database_name_,
+                    table_name_,
+                    mlog_name_,
+                    tenant_id_,
+                    base_table_id_,
+                    mlog_table_id_,
+                    session_id_,
+                    with_rowid_,
+                    with_primary_key_,
+                    with_sequence_,
+                    include_new_values_,
+                    purge_options_,
+                    mlog_schema_,
+                    store_columns_,
+                    nls_date_format_,
+                    nls_timestamp_format_,
+                    nls_timestamp_tz_format_,
+                    sql_mode_,
+                    replace_if_exists_,
+                    create_tmp_mlog_);
+
+OB_SERIALIZE_MEMBER(ObCreateMLogRes,
+                    mlog_table_id_,
+                    schema_version_,
+                    task_id_);
 } // namespace obrpc
 } // namespace oceanbase

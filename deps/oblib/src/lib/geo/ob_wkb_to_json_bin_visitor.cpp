@@ -240,7 +240,7 @@ int ObWkbToJsonBinVisitor::to_jsonbin(ObGeometry *geo, ObString &geojsonbin)
     LOG_WARN("fail to add doc header", K(ret));
   } else if (OB_FAIL(geo->do_visit(*this))) {
     LOG_WARN("fail to geo->do_visit", K(ret));
-  } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(json_buf_, json_buf_.length()))) {
+  } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(json_buf_, json_buf_.length(), false/*use_lexicographical_order*/))) {
     LOG_WARN("fail to set doc header", K(ret));
   } else if (OB_FAIL(json_buf_.get_result_string(geojsonbin))) {
     LOG_WARN("fail to get_result_string", K(ret));

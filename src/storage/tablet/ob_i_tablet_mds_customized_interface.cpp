@@ -55,15 +55,11 @@ int ObITabletMdsCustomizedInterface::get_latest_split_data(
     ret = OB_NOT_INIT;
     MDS_LOG_GET(WARN, "not inited");
   } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -81,6 +77,7 @@ int ObITabletMdsCustomizedInterface::get_latest_split_data(
     }
   }
   return ret;
+  #undef PRINT_WRAPPER
 }
 
 int ObITabletMdsCustomizedInterface::get_latest_autoinc_seq(
@@ -98,15 +95,11 @@ int ObITabletMdsCustomizedInterface::get_latest_autoinc_seq(
     ret = OB_NOT_INIT;
     MDS_LOG_GET(WARN, "not inited");
   } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -124,6 +117,7 @@ int ObITabletMdsCustomizedInterface::get_latest_autoinc_seq(
     }
   }
   return ret;
+  #undef PRINT_WRAPPER
 }
 }
 }

@@ -15,7 +15,6 @@
 
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
-#include "lib/allocator/page_arena.h"
 #include "lib/lock/ob_spin_rwlock.h"
 #include "ob_i_storage.h"
 #include "cos/ob_cos_wrapper_handle.h"

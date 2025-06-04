@@ -361,7 +361,7 @@ int ObLoadDataUtils::check_session_status(ObSQLSessionInfo &session, int64_t res
     LOG_WARN("session's state is not OB_SUCCESS", K(ret));
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("LOAD DATA timeout", K(ret), K(session.get_sessid()), K(worker_query_timeout), K(current_time), K(reserved_us));
+    LOG_WARN("LOAD DATA timeout", K(ret), K(session.get_server_sid()), K(worker_query_timeout), K(current_time), K(reserved_us));
   }
   return ret;
 }

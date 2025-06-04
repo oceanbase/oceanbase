@@ -166,6 +166,11 @@ public:
     }
     return bret;
   }
+  OB_INLINE bool is_compacted_row() const
+  {
+    return is_compact_completed_row() ||
+        (is_delete_insert_merge_ && nullptr != curr_row_ && !curr_row_->is_uncommitted_row());
+  }
   int check_merge_range_cross(ObDatumRange &data_range, bool &range_cross);
   virtual int64_t to_string(char *buf, const int64_t len) const override;
 protected:
@@ -200,6 +205,7 @@ protected:
   bool is_rowkey_first_row_already_output_;
   bool is_rowkey_shadow_row_reused_;
   bool is_reserve_mode_;
+  bool is_delete_insert_merge_;
 };
 
 class ObPartitionRowMergeIter : public ObPartitionMergeIter
@@ -319,19 +325,13 @@ public:
   INHERIT_TO_STRING_KV("ObPartitionMinorRowMergeIter", ObPartitionMergeIter, K_(ghost_row_count),
                        K_(check_committing_trans_compacted), K_(row_queue));
 protected:
-  enum CompactRowIndex {
-    CRI_FIRST_ROW = 0,
-    CRI_LAST_ROW = 1,
-    CRI_MAX,
-  };
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
   virtual int common_minor_inner_init(const ObMergeParameter &merge_param);
 
   virtual int inner_next(const bool open_macro);
   virtual int try_make_committing_trans_compacted();
-  virtual int compact_border_row(const bool last_row);
-  virtual int check_meet_another_trans();
+  virtual int check_meet_another_trans(bool &skip_cur_row);
   virtual int check_compact_finish(bool &finish);
   virtual int compare_multi_version_col(const ObPartitionMergeIter &other,
                                         const int64_t multi_version_col,
@@ -344,12 +344,15 @@ protected:
   }
   int skip_ghost_row();
   int compact_old_row();
+private:
+  int compact_old_row_for_delete_insert();
 protected:
   common::ObArenaAllocator obj_copy_allocator_;
-  storage::ObNopPos *nop_pos_[CRI_MAX];
+  storage::ObNopPos *nop_pos_[ObRowQueue::QI_MAX];
   blocksstable::ObRowQueue row_queue_;
   bool check_committing_trans_compacted_;
   int64_t ghost_row_count_;
+  blocksstable::ObDatumRow tmp_compaction_row_;
 };
 
 

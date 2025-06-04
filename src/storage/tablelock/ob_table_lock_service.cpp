@@ -17,6 +17,7 @@
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_table_lock_live_detector.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 namespace oceanbase
 {
@@ -51,8 +52,21 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx() :
   schema_version_(-1),
   tx_is_killed_(false),
   is_from_sql_(false),
+  ret_code_before_end_stmt_or_tx_(OB_SUCCESS),
+  lock_priority_(ObTableLockPriority::NORMAL),
+  stmt_savepoint_(),
   is_for_replace_(false)
-{}
+{
+  is_enable_lock_priority_ = false;
+  uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    // if tenant config is invalid, this config will be set as false
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "tenant config is invalid", K(tenant_id));
+  } else {
+    is_enable_lock_priority_ = tenant_config->enable_lock_priority;
+  }
+}
 
 void ObTableLockService::ObRetryCtx::reuse()
 {
@@ -182,6 +196,7 @@ int ObTableLockService::ObTableLockCtx::set_by_lock_req_common_part(const ObLock
     is_from_sql_ = arg.is_from_sql_;
     lock_mode_ = arg.lock_mode_;
     lock_owner_ = arg.owner_id_;
+    lock_priority_ = arg.lock_priority_;
   }
   return ret;
 }
@@ -245,6 +260,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::start()
   } else if (OB_FAIL(timer_.schedule_task_repeat(
                  timer_handle_, GARBAGE_COLLECT_EXEC_INTERVAL,
                  [this]() mutable {
+                   common::ObDIActionGuard ag("TableLockService", "OBJLockGC", "GCTimer");
                    int ret = OB_SUCCESS;
                    if (OB_FAIL(garbage_collect_for_all_ls_())) {
                      check_and_report_timeout_();
@@ -804,6 +820,7 @@ int ObTableLockService::lock(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx;
     if (OB_FAIL(ctx.set_by_lock_req(arg))) {
       LOG_WARN("set ObTableLockCtx failed", K(ret), K(arg));
@@ -855,6 +872,7 @@ int ObTableLockService::replace_lock(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_3_4_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(replace_req));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObReplaceTableLockCtx ctx;
     if (OB_FAIL(ctx.set_by_lock_req(*replace_req.unlock_req_, true))) {
       LOG_WARN("fail to set unlock_ctx", K(ret), K(replace_req));
@@ -939,13 +957,18 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx)
     LOG_WARN("failed to start trans", K(ret));
   } else if (ctx.is_in_trans_ && OB_FAIL(start_stmt_(ctx))) {
     LOG_WARN("start stmt failed", K(ret), K(ctx));
-  } else if (is_obj_lock_task(ctx.task_type_)) {
+  } else if (!ctx.is_enable_lock_priority_ && ObTableLockPriority::NORMAL != ctx.lock_priority_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("priority should be NORMAL when disable lock_priority", K(ret), K(ctx));
+  } else if (ctx.is_enable_lock_priority_ && OB_FAIL(check_lock_priority_data_version_())) {
+    LOG_WARN("cluster not support lock_priority", K(ret), K(ctx));
+  } else if (ctx.is_obj_lock_task()) {
     if (OB_FAIL(process_obj_lock_task_(ctx))) {
       LOG_WARN("lock obj failed", K(ret), K(ctx));
     }
-  } else if (LOCK_ALONE_TABLET == ctx.task_type_ || UNLOCK_ALONE_TABLET == ctx.task_type_ || REPLACE_LOCK_ALONE_TABLET == ctx.task_type_) {
+  } else if (ctx.is_alone_tablet_lock_task()) {
     // only alone tablet should do like this.
-    if (OB_FAIL(process_tablet_lock_task_(ctx, nullptr/* schema ptr */))) {
+    if (OB_FAIL(process_alone_tablet_lock_task_(ctx))) {
       LOG_WARN("process tablet lock task failed", K(ret), K(ctx));
     }
   } else {
@@ -979,23 +1002,17 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx)
 int ObTableLockService::process_obj_lock_task_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  ObLSLockMap ls_lock_map;
+
   if (ctx.obj_list_.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("obj list is empty when lock obj", K(ret), K(ctx));
-  } else {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
-      ObLockID lock_id;
-      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.obj_list_.count(); ++i) {
-        lock_id = ctx.obj_list_.at(i);
-        if (OB_FAIL(process_obj_lock_(ctx, LOCK_SERVICE_LS, lock_id))) {
-            LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS), K(lock_id));
-        }
-      }
-    } else {
-      if (OB_FAIL(process_obj_lock_(ctx, LOCK_SERVICE_LS, ctx.obj_list_))) {
-        LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS), K(ctx.obj_list_));
-      }
-    }
+  } else if (OB_FAIL(get_ls_lock_map_(ctx, LOCK_SERVICE_LS, ctx.obj_list_, ls_lock_map))) {
+    LOG_WARN("get ls_lock_map failed", K(ret), K(ctx));
+  } else if (ctx.is_enable_lock_priority_ && !ctx.is_unlock_task() && OB_FAIL(process_obj_lock_with_prio_(ctx, ls_lock_map))) {
+    LOG_WARN("add obj lock into queue failed", K(ret), K(ctx));
+  } else if (OB_FAIL(process_obj_lock_(ctx, ls_lock_map))) {
+    LOG_WARN("lock obj failed", K(ret), K(ctx));
   }
   return ret;
 }
@@ -1003,64 +1020,56 @@ int ObTableLockService::process_obj_lock_task_(ObTableLockCtx &ctx)
 int ObTableLockService::process_table_lock_task_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  ObSimpleTableSchemaV2 *table_schema = nullptr;
-  bool is_allowed = false;
-  ObArenaAllocator allocator("TableSchema");
+  ObLSLockMap table_ls_lock_map;
+  ObLockID table_lock_id;
+  ObTableLockMode table_lock_mode = ctx.lock_mode_;
 
-  ctx.schema_version_ = 0;
-
-  if (OB_FAIL(process_table_lock_(ctx))) {
-    LOG_WARN("lock table failed", K(ret), K(ctx));
-  } else if (OB_FAIL(ObSchemaUtils::get_latest_table_schema(
-      *sql_proxy_,
-      allocator,
-      tenant_id,
-      ctx.table_id_,
-      table_schema))) {
-    if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_INFO("table not exist, check whether it meets expectations", K(ret), K(ctx));
-    } else {
-      LOG_WARN("get table schema failed", K(ret), K(ctx));
-    }
-  } else if (OB_FAIL(check_op_allowed_(ctx.table_id_, table_schema, is_allowed))) {
-    LOG_WARN("failed to check op allowed", K(ret), K(ctx));
-  } else if (!is_allowed) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("lock table not allowed now", K(ret), K(ctx));
-  } else if (OB_FAIL(process_tablet_lock_task_(ctx,
-                                               table_schema))) {
-    LOG_WARN("failed to lock table tablet", K(ret), K(ctx));
+  if (OB_FAIL(get_lock_id(ctx.table_id_, table_lock_id))) {
+    LOG_WARN("get lock id failed", K(ret), K(ctx));
+  } else if (is_part_table_lock_(ctx.task_type_)
+             && OB_FAIL(get_table_lock_mode_(ctx.task_type_, ctx.lock_mode_, table_lock_mode))) {
+    LOG_WARN("get table lock mode failed", K(ret), K(ctx), K(ctx.task_type_), K(ctx.lock_mode_));
+  } else if (OB_FAIL(get_ls_lock_map_(ctx, LOCK_SERVICE_LS, table_lock_id, table_ls_lock_map))) {
+    LOG_WARN("get ls_lock_map failed", K(ret), K(ctx));
+    // NOTICE:
+    // When lock_priority is enabled, we need to obtain the table's schema and tablets to enqueue the corresponding
+    // tablets into the locking queue for prioritized locking. However, at this point, the table is not yet locked.
+    // Consequently, by the time the table is being locked, the schema and tablets might have undergone changes. In
+    // response, we reacquire the schema and tablets and proceed to lock them. For newly added tablets, the requirement
+    // of prioritized locking might not be fulfilled. As for deleted tablets, they are removed from the
+    // locking queue upon transaction commitment.
+  } else if (ctx.is_enable_lock_priority_
+             && !ctx.is_unlock_task()
+             && OB_FAIL(
+               process_table_tablet_lock_with_prio_(ctx,
+                                                    ctx.lock_mode_,
+                                                    table_lock_mode,
+                                                    table_ls_lock_map))) {
+    LOG_WARN("add table and tablet lock into queue failed", K(ret), K(ctx));
+  } else if (OB_FAIL(process_table_tablet_lock_(ctx,
+                                                ctx.lock_mode_,
+                                                table_lock_mode,
+                                                table_ls_lock_map))) {
+    LOG_WARN("lock table and tablet failed", K(ret), K(table_lock_mode), K(ctx));
   }
   return ret;
 }
 
-int ObTableLockService::process_tablet_lock_task_(ObTableLockCtx &ctx,
-                                                  const ObSimpleTableSchemaV2 *table_schema)
+int ObTableLockService::process_alone_tablet_lock_task_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  LockMap lock_map;
   ObLSLockMap ls_lock_map;
 
   // TODO: yanyuan.cxf we may need the right schema_version while lock/unlock alone tablet.
-  if (OB_ISNULL(table_schema)) {
-    ctx.schema_version_ = 0;
-  } else {
-    ctx.schema_version_ = table_schema->get_schema_version();
-  }
+  ctx.schema_version_ = 0;
 
-  if (OB_FAIL(get_process_tablets_(table_schema, ctx))) {
-    LOG_WARN("failed to get parts", K(ret), K(ctx));
-  // lock_map and ls_lock_map are the map of lock which is generated with tablet_id
-  } else if (OB_FAIL(get_ls_lock_map_(ctx, ctx.tablet_list_, lock_map, ls_lock_map))) {
+  if (OB_FAIL(get_ls_lock_map_(ctx, ctx.tablet_list_, ls_lock_map))) {
     LOG_WARN("fail to get ls lock map", K(ret), K(ctx.get_tablet_cnt()));
-  } else if (OB_FAIL(pre_check_lock_(ctx,
-                                     ls_lock_map))) {
-    LOG_WARN("failed to pre_check_lock_", K(ret), K(ctx));
-  } else if (OB_FAIL(process_table_tablet_lock_(ctx,
-                                                lock_map,
-                                                ls_lock_map))) {
-    LOG_WARN("failed to lock table tablet", K(ret), K(ctx));
+  } else if (ctx.is_enable_lock_priority_ && !ctx.is_unlock_task()
+             && OB_FAIL(process_obj_lock_with_prio_(ctx, ls_lock_map))) {
+    LOG_WARN("add alone tablet lock into queue failed", K(ret), K(ctx));
+  } else if (OB_FAIL(process_obj_lock_(ctx, ls_lock_map))) {
+    LOG_WARN("lock alone tablet failed", K(ret), K(ctx));
   }
   return ret;
 }
@@ -1139,6 +1148,7 @@ int ObTableLockService::collect_rollback_info_(const share::ObLSID &ls_id,
   if (OB_FAIL(ctx.add_touched_ls(ls_id))) {
     LOG_ERROR("add touched ls failed.", K(ret), K(ls_id));
   }
+  LOG_DEBUG("ObTableLockService::collect_rollback_info_", K(ret), K(ctx));
   return ret;
 }
 
@@ -1152,6 +1162,7 @@ int ObTableLockService::collect_rollback_info_(const ObArray<share::ObLSID> &ls_
       LOG_ERROR("add touched ls failed.", K(ret), K(ls_array.at(i)));
     }
   }
+  LOG_DEBUG("ObTableLockService::collect_rollback_info_", K(ret), K(ctx));
   return ret;
 }
 
@@ -1274,6 +1285,7 @@ int ObTableLockService::handle_parallel_rpc_response_(RpcProxy &proxy_batch,
       }
     }
   }
+  LOG_DEBUG("ObTableLockService::handle_parallel_rpc_response_", K(ret), K(ctx));
 
   return ret;
 }
@@ -1281,11 +1293,7 @@ int ObTableLockService::handle_parallel_rpc_response_(RpcProxy &proxy_batch,
 int ObTableLockService::pre_check_lock_(ObTableLockCtx &ctx, const ObLSLockMap &ls_lock_map)
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ret = batch_pre_check_lock_(ctx, ls_lock_map);
-  } else {
-    ret = pre_check_lock_old_version_(ctx, ls_lock_map);
-  }
+  ret = batch_pre_check_lock_(ctx, ls_lock_map);
   return ret;
 }
 
@@ -1416,6 +1424,8 @@ int ObTableLockService::parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
       can_retry = false;
     }
   }
+
+  LOG_DEBUG("ObTableLockService::parallel_batch_rpc_handle_", K(ret), K(ctx));
   return ret;
 }
 
@@ -1512,101 +1522,6 @@ int ObTableLockService::rpc_call_(RpcProxy &proxy_batch,
   return ret;
 }
 
-int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
-                                                    const ObLSLockMap &ls_lock_map)
-{
-  int ret = OB_SUCCESS;
-  int last_ret = OB_SUCCESS;
-  int64_t USLEEP_TIME = 100; // 0.1 ms
-  bool need_retry = false;
-  int64_t timeout_us = 0;
-  bool unused = false;
-  share::ObLSID ls_id;
-  ObLockID lock_id;
-  ObRetryCtx retry_ctx;
-  ObAddr addr;
-  ObTableLockTaskRequest request;
-  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
-  rpc_proxy.set_detect_session_killed(true);
-  ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
-  // only used in LOCK_TABLE/LOCK_PARTITION
-  if (LOCK_TABLE == ctx.task_type_ ||
-      LOCK_PARTITION == ctx.task_type_) {
-    do {
-      need_retry = false;
-      timeout_us = 0;
-      proxy_batch.reuse();
-      retry_ctx.reuse();
-      // send async rpc parallel
-      for (int64_t i = 0; i < ctx.get_tablet_cnt() && OB_SUCC(ret); ++i) {
-        const ObTabletID &tablet_id = ctx.tablet_list_.at(i);
-        if (OB_FAIL(get_tablet_ls_(ctx, tablet_id, ls_id))) {
-          LOG_WARN("failed to get tablet ls", K(ret), K(tablet_id));
-        } else if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
-          LOG_WARN("get lock id failed", K(ret), K(ctx));
-        } else {
-          addr.reset();
-          request.reset();
-          // can not reused because of allocator reset
-          ObTableLockTaskResult result;
-
-          if (OB_FAIL(retry_ctx.rpc_ls_array_.push_back(ls_id))) {
-            LOG_WARN("push_back lsid failed", K(ret), K(ls_id));
-          } else if (OB_FAIL(pack_request_(ctx, PRE_CHECK_TABLET, lock_id, ls_id, addr, request))) {
-            LOG_WARN("pack_request_ failed", K(ret), K(ls_id), K(lock_id));
-            // the rpc timeout must larger than stmt timeout.
-          } else if (FALSE_IT(timeout_us = ctx.get_rpc_timeoutus())) {
-          } else if (ctx.is_timeout()) {
-            ret = (last_ret == OB_TRY_LOCK_ROW_CONFLICT) ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT;
-            LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-          } else if (OB_FAIL(rpc_call_(proxy_batch,
-                                       addr,
-                                       timeout_us,
-                                       request))) {
-            LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(request));
-          } else {
-            retry_ctx.send_rpc_count_++;
-            ALLOW_NEXT_LOG();
-            LOG_INFO("send table pre_check rpc", KR(ret), K(addr), "request", request);
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-        (void)collect_rollback_info_(retry_ctx.rpc_ls_array_, proxy_batch, ctx);
-      } else {
-        ret = handle_parallel_rpc_response_(proxy_batch, ctx, ls_lock_map, unused, retry_ctx);
-      }
-
-      if (is_timeout_ret_code_(ret)) {
-        ret = (last_ret == OB_TRY_LOCK_ROW_CONFLICT) ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT;
-        LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-      }
-
-      if (!ctx.is_try_lock() &&
-          ctx.is_deadlock_avoid_enabled() &&
-          OB_TRY_LOCK_ROW_CONFLICT == ret) {
-        ret = OB_TRANS_KILLED;
-        ctx.tx_is_killed_ = true;
-      }
-      if (ret == OB_TRY_LOCK_ROW_CONFLICT) {
-        if (ctx.is_try_lock()) {
-          // do nothing
-        } else if (OB_UNLIKELY(ctx.is_timeout())) {
-          ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-          LOG_WARN("lock table timeout", K(ret), K(ctx));
-        } else {
-          need_retry = true;
-          last_ret = ret;
-          ret = OB_SUCCESS;
-          ob_usleep(USLEEP_TIME);
-        }
-      }
-    } while (need_retry);
-    LOG_DEBUG("ObTableLockService::pre_check_lock_", K(ret), K(ctx));
-  }
-  return ret;
-}
-
 int ObTableLockService::deal_with_deadlock_(ObTableLockCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1660,11 +1575,16 @@ int ObTableLockService::pack_batch_request_(ObTableLockCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObLockParam lock_param;
+
   if (OB_FAIL(request.init(task_type, ls_id, ctx.tx_desc_))) {
     LOG_WARN("request init failed", K(ret), K(ctx), K(ls_id), KP(ctx.tx_desc_), K(lock_ids), K(task_type));
   } else {
     for (int i = 0; i < lock_ids.count() && OB_SUCC(ret); ++i) {
       lock_param.reset();
+      if (ctx.is_enable_lock_priority_) {
+        lock_param.is_two_phase_lock_ = true;
+        lock_param.lock_priority_ = ctx.lock_priority_;
+      }
       if (OB_FAIL(lock_param.set(lock_ids[i],
                                  ctx.lock_mode_,
                                  ctx.lock_owner_,
@@ -1962,7 +1882,33 @@ int ObTableLockService::inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
     ObBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_lock_obj);
     ret = batch_rpc_handle_(proxy_batch, ctx, lock_map);
   }
+  return ret;
+}
 
+int ObTableLockService::process_table_tablet_lock_with_prio_(ObTableLockCtx &ctx,
+                                                             const ObTableLockMode lock_mode,
+                                                             const ObTableLockMode table_lock_mode,
+                                                             const ObLSLockMap &table_ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  ObLSLockMap tablet_ls_lock_map;
+
+  ctx.schema_version_ = 0;
+  ctx.lock_mode_ = table_lock_mode;
+
+  if (OB_FAIL(process_obj_lock_with_prio_(ctx, table_ls_lock_map))) {
+    LOG_WARN("lock table failed", K(ret), K(ctx), K(lock_mode));
+  } else if (OB_FAIL(get_tablet_ls_lock_map_(lock_mode, ctx, tablet_ls_lock_map))) {
+    LOG_WARN("failed to get_tablet_ls_lock_map_", K(ret), K(ctx), K(lock_mode));
+  } else if (FALSE_IT(ctx.lock_mode_ = lock_mode)) {
+  } else if (OB_FAIL(process_obj_lock_with_prio_(ctx, tablet_ls_lock_map))) {
+    LOG_WARN("lock tablet failed", K(ret), K(ctx));
+  }
+  LOG_DEBUG("ObTableLockService::process_table_tablet_lock_with_prio_",
+            K(ret),
+            K(ctx),
+            K(lock_mode),
+            K(table_lock_mode));
   return ret;
 }
 
@@ -1975,146 +1921,58 @@ int ObTableLockService::inner_process_obj_lock_(ObTableLockCtx &ctx,
   return ret;
 }
 
-int ObTableLockService::process_obj_lock_(ObTableLockCtx &ctx,
-                                          const ObLSID &ls_id,
-                                          const ObLockID &lock_id)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  bool need_retry = false;
-  LockMap lock_map;
-  ObLSLockMap ls_lock_map;
-  ObLockIDArray lock_array;
-  ObLockIDArray *p = nullptr;
-  if (OB_FAIL(lock_map.create(1, lib::ObLabel("TableLockMap")))) {
-    LOG_WARN("lock_map create failed");
-  } else if (OB_FAIL(lock_map.set_refactored(lock_id, ls_id))) {
-    LOG_WARN("fail to set lock_map", K(ret), K(lock_id), K(ls_id));
-  } else if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
-    LOG_WARN("ls_lock_map create failed");
-  } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
-             OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
-    LOG_WARN("fail to set tablet_map", K(ret), K(ls_id));
-  } else if (OB_ISNULL(p = const_cast<ObLockIDArray *>(ls_lock_map.get(ls_id)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the ls not exist at tablet map", K(ret), K(ls_id));
-  } else if (OB_FAIL(p->push_back(lock_id))) {
-    LOG_WARN("push_back tablet_id failed", K(ret), K(ls_id), K(lock_id));
-  } else {
-    do {
-      need_retry = false;
-
-      if (ctx.is_timeout()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("lock table timeout", K(ret), K(ctx));
-      } else if (OB_FAIL(start_sub_tx_(ctx))) {
-        LOG_WARN("failed to start sub tx", K(ret), K(ctx));
-      } else {
-        if (OB_FAIL(inner_process_obj_lock_(ctx,
-                                            lock_map,
-                                            ls_lock_map))) {
-          LOG_WARN("process object lock failed", K(ret), K(lock_id), K(ls_id));
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(end_sub_tx_(ctx, false/*not rollback*/))) {
-            LOG_WARN("failed to end sub tx", K(ret), K(ctx));
-          }
-        } else {
-          // rollback the sub tx.
-          need_retry = need_retry_single_task_(ctx, ret);
-          // overwrite the ret code.
-          if (need_retry &&
-              OB_FAIL(end_sub_tx_(ctx, true/*rollback*/))) {
-            LOG_WARN("failed to rollback sub tx", K(ret), K(ctx));
-          }
-        }
-      }
-    } while (need_retry && OB_SUCC(ret));
-  }
-  LOG_DEBUG("ObTableLockService::process_obj_lock_", K(ret), K(ctx), K(ls_id), K(lock_id));
-
-  return ret;
-}
-
-int ObTableLockService::process_obj_lock_(ObTableLockCtx &ctx,
-                                          const ObLSID &ls_id,
-                                          const common::ObIArray<ObLockID> &lock_ids)
-{
-  int ret = OB_SUCCESS;
-  bool need_retry = false;
-  ObLSLockMap ls_lock_map;
-  ObLockIDArray lock_array;
-  ObLockIDArray *p = nullptr;
-  if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
-    LOG_WARN("ls_lock_map create failed");
-  } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
-             OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
-    LOG_WARN("fail to set tablet_map", K(ret), K(ls_id));
-  } else if (OB_ISNULL(p = const_cast<ObLockIDArray *>(ls_lock_map.get(ls_id)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the ls not exist at tablet map", K(ret), K(ls_id));
-  } else if (OB_FAIL(p->assign(lock_ids))) {
-    LOG_WARN("push_back tablet_id failed", K(ret), K(ls_id), K(lock_ids));
-  } else {
-    do {
-      need_retry = false;
-
-      if (ctx.is_timeout()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("lock table timeout", K(ret), K(ctx));
-      } else if (OB_FAIL(start_sub_tx_(ctx))) {
-        LOG_WARN("failed to start sub tx", K(ret), K(ctx));
-      } else {
-        if (OB_FAIL(inner_process_obj_lock_batch_(ctx, ls_lock_map))) {
-          LOG_WARN("process object locks failed", K(ret), K(lock_ids), K(ls_id));
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(end_sub_tx_(ctx, false/*not rollback*/))) {
-            LOG_WARN("failed to end sub tx", K(ret), K(ctx));
-          }
-        } else {
-          // rollback the sub tx.
-          need_retry = need_retry_single_task_(ctx, ret);
-          // overwrite the ret code.
-          if (need_retry &&
-              OB_FAIL(end_sub_tx_(ctx, true/*rollback*/))) {
-            LOG_WARN("failed to rollback sub tx", K(ret), K(ctx));
-          }
-        }
-      }
-    } while (need_retry && OB_SUCC(ret));
-  }
-  LOG_DEBUG("ObTableLockService::process_obj_lock_", K(ret), K(ctx), K(ls_id), K(lock_ids));
-
-  return ret;
-}
-
-int ObTableLockService::process_table_lock_(ObTableLockCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLockID lock_id;
-  // lock_mode may be changed in get_table_lock_mode_, so we record it here,
-  // and reset it after process_obj_lock_
-  const ObTableLockMode orig_lock_mode = ctx.lock_mode_;
-  if (OB_FAIL(get_lock_id(ctx.table_id_, lock_id))) {
-    LOG_WARN("get lock id failed", K(ret), K(ctx));
-  } else if (is_part_table_lock_(ctx.task_type_)
-             && OB_FAIL(get_table_lock_mode_(ctx.task_type_, orig_lock_mode, ctx.lock_mode_))) {
-    LOG_WARN("get table lock mode failed", K(ret), K(ctx));
-  } else if (OB_FAIL(process_obj_lock_(ctx, LOCK_SERVICE_LS, lock_id))) {
-    LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS), K(lock_id));
-  }
-
-  // no matter it's success or not, set lock_mode back
-  ctx.lock_mode_ = orig_lock_mode;
-
-  LOG_DEBUG("ObTableLockService::process_table_lock_", K(ret), K(ctx));
-  return ret;
-}
-
 int ObTableLockService::process_table_tablet_lock_(ObTableLockCtx &ctx,
-                                                   const LockMap &lock_map,
-                                                   const ObLSLockMap &ls_lock_map)
+                                                   const ObTableLockMode lock_mode,
+                                                   const ObTableLockMode table_lock_mode,
+                                                   const ObLSLockMap &table_ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  ObLSLockMap tablet_ls_lock_map;
+
+  ctx.schema_version_ = 0;
+  ctx.lock_mode_ = table_lock_mode;
+
+  if (OB_FAIL(process_obj_lock_(ctx, table_ls_lock_map))) {
+    LOG_WARN("lock table failed", K(ret), K(ctx), K(table_lock_mode));
+  } else if (OB_FAIL(get_tablet_ls_lock_map_(lock_mode, ctx, tablet_ls_lock_map))) {
+    LOG_WARN("get tablet ls_lock_map failed", K(ret), K(ctx), K(lock_mode));
+  } else if (FALSE_IT(ctx.lock_mode_ = lock_mode)) {
+  } else  if (!ctx.is_enable_lock_priority_ && OB_FAIL(pre_check_lock_(ctx, tablet_ls_lock_map))) {
+    LOG_WARN("failed to pre_check_lock_", K(ret), K(ctx), K(lock_mode));
+  } else if (OB_FAIL(process_obj_lock_(ctx, tablet_ls_lock_map))) {
+    LOG_WARN("lock tablet failed", K(ret), K(ctx), K(lock_mode));
+  }
+  return ret;
+}
+
+int ObTableLockService::process_obj_lock_with_prio_(ObTableLockCtx &ctx,
+                                                    const ObLSLockMap &ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  const ObTableLockTaskType ori_task_type = ctx.task_type_;
+
+  if (OB_UNLIKELY(!ctx.can_execute_push_lock_task())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can not push lock", K(ret), K(ctx));
+  } else {
+    if (ctx.task_type_ == ObTableLockTaskType::LOCK_ALONE_TABLET) {
+      ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE_WITHOUT_CHECK;
+    } else {
+      ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE;
+    }
+    if (OB_FAIL(process_obj_lock_(ctx, ls_lock_map))) {
+      LOG_WARN("process_obj_lock_ failed", K(ret), K(ctx));
+    }
+    ctx.task_type_ = ori_task_type;
+  }
+  LOG_DEBUG("ObTableLockService::process_obj_lock_with_prio_", K(ret), K(ctx));
+
+  return ret;
+}
+
+int ObTableLockService::process_obj_lock_(ObTableLockCtx &ctx,
+                                          const ObLSLockMap &ls_lock_map)
+
 {
   int ret = OB_SUCCESS;
   bool need_retry = false;
@@ -2126,23 +1984,19 @@ int ObTableLockService::process_table_tablet_lock_(ObTableLockCtx &ctx,
       LOG_WARN("lock table timeout", K(ret), K(ctx));
     } else if (OB_FAIL(start_sub_tx_(ctx))) {
       LOG_WARN("failed to start sub tx", K(ret), K(ctx));
-    } else if (OB_FAIL(inner_process_obj_lock_(ctx,
-                                               lock_map,
-                                               ls_lock_map))) {
+    } else if (OB_FAIL(inner_process_obj_lock_batch_(ctx,
+                                                     ls_lock_map))) {
       LOG_WARN("fail to lock tablets", K(ret));
-      // rollback the sub tx.
       need_retry = need_retry_single_task_(ctx, ret);
-      // overwrite the ret code.
-      if (need_retry &&
-          OB_FAIL(end_sub_tx_(ctx, true/*rollback*/))) {
+      // rollback the sub tx and overwrite the ret code.
+      if (need_retry && OB_FAIL(end_sub_tx_(ctx, true /*rollback*/))) {
         LOG_WARN("failed to rollback sub tx", K(ret), K(ctx));
       }
-    } else if (OB_FAIL(end_sub_tx_(ctx, false/*not rollback*/))) {
+    } else if (OB_FAIL(end_sub_tx_(ctx, false /*not rollback*/))) {
       LOG_WARN("failed to end sub tx", K(ret), K(ctx));
     }
   } while (need_retry && OB_SUCC(ret));
-  LOG_DEBUG("ObTableLockService::process_table_tablet_lock_", K(ret), K(ctx));
-
+  LOG_DEBUG("ObTableLockService::process_obj_lock_", K(ret), K(ctx));
   return ret;
 }
 
@@ -2241,10 +2095,7 @@ int ObTableLockService::get_process_tablets_(const ObSimpleTableSchemaV2 *table_
 
   if (ctx.is_tablet_lock_task()) {
     // case 1: lock/unlock tablet
-    // just push the specified tablet into the tablet list.
-    // if (OB_FAIL(ctx.tablet_list_.push_back(ctx.tablet_id_))) {
-    //   LOG_WARN("failed to push back tablet id", K(ret));
-    // }
+    // do nothing
   } else {
     ctx.tablet_list_.reuse();
     if (LOCK_PARTITION == ctx.task_type_ || UNLOCK_PARTITION == ctx.task_type_ || REPLACE_LOCK_PARTITION == ctx.task_type_) {
@@ -2252,7 +2103,7 @@ int ObTableLockService::get_process_tablets_(const ObSimpleTableSchemaV2 *table_
       // get all the tablet of this partition.
       ObObjectID part_id(ctx.partition_id_);
       if (OB_FAIL(table_schema->get_tablet_ids_by_part_object_id(part_id,
-                                                                 ctx.tablet_list_))) {
+                                                                  ctx.tablet_list_))) {
         LOG_WARN("failed to get tablet ids", K(ret), K(part_id));
       }
     } else if (LOCK_SUBPARTITION == ctx.task_type_ || UNLOCK_SUBPARTITION == ctx.task_type_ || REPLACE_LOCK_SUBPARTITION == ctx.task_type_) {
@@ -2261,7 +2112,7 @@ int ObTableLockService::get_process_tablets_(const ObSimpleTableSchemaV2 *table_
       ObObjectID part_id(ctx.partition_id_);
       ObTabletID tablet_id;
       if (OB_FAIL(table_schema->get_tablet_id_by_object_id(part_id,
-                                                           tablet_id))) {
+                                                            tablet_id))) {
         LOG_WARN("failed to get tablet id", K(ret), K(part_id));
       } else if (OB_FAIL(ctx.tablet_list_.push_back(tablet_id))) {
         LOG_WARN("failed to push back tablet id", K(ret));
@@ -2329,7 +2180,6 @@ int ObTableLockService::fill_ls_lock_map_(ObTableLockCtx &ctx,
 
 int ObTableLockService::fill_ls_lock_map_(ObTableLockCtx &ctx,
                                          const common::ObTabletIDArray &tablets,
-                                         LockMap &lock_map,
                                          ObLSLockMap &ls_lock_map)
 {
   int ret = OB_SUCCESS;
@@ -2337,9 +2187,7 @@ int ObTableLockService::fill_ls_lock_map_(ObTableLockCtx &ctx,
   ObLockIDArray lock_array;
   ObLockIDArray *p = nullptr;
   ObLockID lock_id;
-  if (OB_FAIL(lock_map.reuse())) {
-    LOG_WARN("fail to reuse lock_map", KR(ret));
-  } else if (OB_FAIL(ls_lock_map.reuse())) {
+  if (OB_FAIL(ls_lock_map.reuse())) {
     LOG_WARN("fail to reuse ls_lock_map", KR(ret));
   } else {
     for (int64_t i = 0; i < tablets.count() && OB_SUCC(ret); ++i) {
@@ -2353,9 +2201,6 @@ int ObTableLockService::fill_ls_lock_map_(ObTableLockCtx &ctx,
       } else if (OB_FAIL(get_lock_id(tablet_id,
                                      lock_id))) {
         LOG_WARN("get lock id failed", K(ret), K(ctx));
-      } else if (OB_FAIL(lock_map.set_refactored(lock_id, ls_id))) {
-        LOG_WARN("fail to set lock_map", K(ret), K(lock_id),
-                 K(ls_id), K(tablet_id));
       } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
                  OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
         LOG_WARN("fail to set ls_lock_map", K(ret), K(ls_id));
@@ -2372,18 +2217,85 @@ int ObTableLockService::fill_ls_lock_map_(ObTableLockCtx &ctx,
   return ret;
 }
 
+int ObTableLockService::get_tablet_ls_lock_map_(const ObTableLockMode lock_mode,
+                                                ObTableLockCtx &ctx,
+                                                ObLSLockMap &tablet_ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  ObSimpleTableSchemaV2 *table_schema = nullptr;
+  ObArenaAllocator allocator("TableSchema");
+  bool is_allowed = false;
+
+  if (OB_FAIL(get_table_schema_(ctx, allocator, table_schema))) {
+    LOG_WARN("failed to get table_schema", K(ret), K(ctx));
+  } else if (OB_FAIL(check_op_allowed_(ctx.table_id_, table_schema, is_allowed))) {
+    LOG_WARN("failed to check op allowed", K(ret), K(ctx));
+  } else if (!is_allowed) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("lock table not allowed now", K(ret), K(ctx));
+  } else if (FALSE_IT(ctx.schema_version_ = table_schema->get_schema_version())) {
+  } else if (OB_FAIL(get_process_tablets_(table_schema, ctx))) {
+    LOG_WARN("failed to get parts", K(ret), K(ctx));
+  } else if (OB_FAIL(get_ls_lock_map_(ctx, ctx.tablet_list_, tablet_ls_lock_map))) {
+    LOG_WARN("fail to get ls lock map", K(ret), K(ctx.get_tablet_cnt()));
+  }
+  return ret;
+}
+
 int ObTableLockService::get_ls_lock_map_(ObTableLockCtx &ctx,
-                                         const common::ObTabletIDArray &tablets,
-                                         LockMap &lock_map,
+                                         const share::ObLSID &ls_id,
+                                         const ObLockID &lock_id,
                                          ObLSLockMap &ls_lock_map)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lock_map.create(tablets.count() > 0 ? tablets.count() : 1,
-                              lib::ObLabel("TableLockMap")))) {
-    LOG_WARN("fail to create lock_map", K(ret), K(tablets.count()));
-  } else if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
+  ObLockIDArray lock_array;
+  ObLockIDArray *p = nullptr;
+
+  if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
+    LOG_WARN("ls_lock_map create failed");
+  } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
+             OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
+    LOG_WARN("fail to set tablet_map", K(ret), K(ls_id));
+  } else if (OB_ISNULL(p = const_cast<ObLockIDArray *>(ls_lock_map.get(ls_id)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the ls not exist at tablet map", K(ret), K(ls_id));
+  } else if (OB_FAIL(p->push_back(lock_id))) {
+    LOG_WARN("push_back lock_id failed", K(ret), K(ls_id), K(lock_id));
+  }
+  return ret;
+}
+
+int ObTableLockService::get_ls_lock_map_(ObTableLockCtx &ctx,
+                                         const share::ObLSID &ls_id,
+                                         const common::ObIArray<ObLockID> &lock_ids,
+                                         ObLSLockMap &ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  ObLockIDArray lock_array;
+  ObLockIDArray *p = nullptr;
+
+  if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
+    LOG_WARN("ls_lock_map create failed");
+  } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
+             OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
+    LOG_WARN("fail to set tablet_map", K(ret), K(ls_id));
+  } else if (OB_ISNULL(p = const_cast<ObLockIDArray *>(ls_lock_map.get(ls_id)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the ls not exist at tablet map", K(ret), K(ls_id));
+  } else if (OB_FAIL(p->assign(lock_ids))) {
+    LOG_WARN("assign lock_ids failed", K(ret), K(ls_id), K(lock_ids));
+  }
+  return ret;
+}
+
+int ObTableLockService::get_ls_lock_map_(ObTableLockCtx &ctx,
+                                         const common::ObTabletIDArray &tablets,
+                                         ObLSLockMap &ls_lock_map)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
     LOG_WARN("ls_lock_map create failed", KR(ret));
-  } else if (OB_FAIL(fill_ls_lock_map_(ctx, tablets, lock_map, ls_lock_map))) {
+  } else if (OB_FAIL(fill_ls_lock_map_(ctx, tablets, ls_lock_map))) {
     LOG_WARN("fill ls lock map failed", KR(ret));
   }
 
@@ -2410,6 +2322,19 @@ int ObTableLockService::check_data_version_after_(const uint64_t version)
   } else if (compat_version < version) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version check failed, not supported now", K(ret), K(compat_version), K(version));
+  }
+  return ret;
+}
+
+int ObTableLockService::check_lock_priority_data_version_()
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  } else if (!is_mysql_lock_table_data_version(compat_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version check failed, not supported now", K(ret), K(compat_version));
   }
   return ret;
 }
@@ -2699,14 +2624,38 @@ int ObTableLockService::end_stmt_(ObTableLockCtx &ctx, const bool is_rollback)
       LOG_WARN("fail to rollback stmt", K(ret), K(ctx.tx_desc_),
                K(ctx.need_rollback_ls_));
     }
-
+    LOG_DEBUG("ObTableLockService::end_stmt_", K(ret), K(ctx), K(is_rollback));
     ctx.clean_touched_ls();
     ctx.reset_stmt_savepoint();
   }
-  LOG_DEBUG("ObTableLockService::end_stmt_", K(ret), K(ctx));
 
   return ret;
 }
+
+int ObTableLockService::get_table_schema_(const ObTableLockCtx &ctx,
+                                          common::ObIAllocator &allocator,
+                                          ObSimpleTableSchemaV2 *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+
+  if (OB_UNLIKELY(ctx.is_alone_tablet_lock_task() || ctx.is_obj_lock_task())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only get schema_version for LOCK TABLE and UNLOCK TABLE request", K(ret), K(ctx));
+  } else if (OB_FAIL(ObSchemaUtils::get_latest_table_schema(
+               *sql_proxy_, allocator, tenant_id, ctx.table_id_, table_schema))) {
+    if (OB_TABLE_NOT_EXIST == ret) {
+      LOG_INFO("table not exist, check whether it meets expectations", K(ret), K(ctx));
+    } else {
+      LOG_WARN("get table schema failed", K(ret), K(ctx));
+    }
+  } else if (OB_UNLIKELY(OB_ISNULL(table_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table_schema is null", K(ret), K(ctx));
+  }
+  return ret;
+}
+
 } // tablelock
 } // transaction
 } // oceanbase

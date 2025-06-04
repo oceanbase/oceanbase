@@ -92,6 +92,7 @@ public:
   OB_INLINE bool is_vector_index_snapshot() const { return share::schema::is_vec_index_snapshot_data_type(index_type_); }
   OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
   OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
+  OB_INLINE bool is_sparse_vector_index() const { return share::schema::is_vec_spiv_index(index_type_); }
   OB_INLINE bool is_ivf_vector_index() const { return share::schema::is_vec_ivf_index(index_type_); }
   OB_INLINE bool is_no_need_update_vector_index() const
   {
@@ -106,6 +107,7 @@ public:
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
+  OB_INLINE bool is_delete_insert() const { return is_delete_insert_; }
   OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
@@ -161,6 +163,7 @@ private:
   int64_t vec_dim_;
   uint64_t vec_vector_col_id_;
   ObMvMode mv_mode_;
+  bool is_delete_insert_;
 };
 
 class ObTableDMLParam

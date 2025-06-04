@@ -127,8 +127,7 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   return ret;
 }
 
-int ObExprNullif::set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObObjType cmp_type,
-                                 const ObCollationType cmp_cs_type,
+int ObExprNullif::set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                  ObSQLMode sql_mode, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
@@ -143,14 +142,15 @@ int ObExprNullif::set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObObjType cmp_t
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx.session is null", K(ret));
   } else {
+    const ObObjMeta &cmp_meta = raw_expr.get_extra_calc_meta();
     ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
                                       expr_cg_ctx.session_->get_stmt_type(),
                                       expr_cg_ctx.session_->is_ignore_stmt(),
                                       sql_mode, cm);
-    info->cmp_meta_.type_ = cmp_type;
-    info->cmp_meta_.cs_type_ = cmp_cs_type;
-    info->cmp_meta_.scale_ = result_type_.get_calc_accuracy().get_scale();
-    info->cmp_meta_.precision_ = result_type_.get_calc_accuracy().get_precision();
+    info->cmp_meta_.type_ = cmp_meta.get_type();
+    info->cmp_meta_.cs_type_ = cmp_meta.get_collation_type();
+    info->cmp_meta_.scale_ = raw_expr.get_extra_calc_scale();
+    info->cmp_meta_.precision_ = raw_expr.get_extra_calc_precision();
     info->cm_ = cm;
     rt_expr.extra_info_ = info;
   }
@@ -164,17 +164,16 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   int ret = OB_SUCCESS;
   CK(2 == rt_expr.arg_cnt_);
   const uint32_t param_num = rt_expr.arg_cnt_;
-  const ObObjMeta &cmp_meta = result_type_.get_calc_meta();
-  const ObAccuracy &calc_acc = result_type_.get_calc_accuracy();
+  const ObObjMeta &cmp_meta = raw_expr.get_extra_calc_meta();
   ObSQLMode sql_mode = expr_cg_ctx.session_->get_sql_mode();
+  const ObLocalSessionVar *local_vars = NULL;
   if (ObNullType == rt_expr.args_[0]->datum_meta_.type_) {
     OX(rt_expr.eval_func_ = eval_nullif);
-  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(&raw_expr.get_local_session_var(),
-                                                                    sql_mode))) {
+  } else if (OB_FAIL(ObSQLUtils::get_solidified_vars_from_ctx(raw_expr, local_vars))) {
+    LOG_WARN("failed to get local session var", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_vars, sql_mode))) {
     LOG_WARN("try get local sql mode failed", K(ret));
-  } else if (OB_FAIL(set_extra_info(expr_cg_ctx, cmp_meta.get_type(), cmp_meta.get_collation_type(),
-                                    sql_mode,
-                                    rt_expr))) {
+  } else if (OB_FAIL(set_extra_info(expr_cg_ctx, raw_expr, sql_mode, rt_expr))) {
     LOG_WARN("set extra info failed", K(ret));
   } else if (ob_is_enumset_inner_tc(rt_expr.args_[0]->datum_meta_.type_)) {
     if (OB_UNLIKELY(!ob_is_uint_tc(rt_expr.args_[1]->datum_meta_.type_))) {
@@ -227,8 +226,8 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                                             cmp_meta.get_type(),
                                                             cmp_meta.get_scale(),
                                                             cmp_meta.get_scale(),
-                                                            calc_acc.get_precision(),
-                                                            calc_acc.get_precision(),
+                                                            raw_expr.get_extra_calc_precision(),
+                                                            raw_expr.get_extra_calc_precision(),
                                                             lib::is_oracle_mode(),
                                                             cmp_meta.get_collation_type(),
                                                             has_lob_header))){

@@ -40,6 +40,8 @@ int ObValuesTableAccessOp::inner_open()
   int ret = OB_SUCCESS;
   row_idx_ = 0;
   const int32_t result_flag = 0;
+  uint64_t compat_version = 0;
+  bool implicit_first_century_year = false;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(ctx_.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -51,7 +53,16 @@ int ObValuesTableAccessOp::inner_open()
     LOG_WARN("fail to init datum_caster", K(ret));
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, GET_MY_SESSION(ctx_), cm_))) {
     LOG_WARN("fail to get_default_cast_mode", K(ret));
+  } else if (OB_FAIL((ctx_.get_my_session()->get_compatibility_version(compat_version)))) {
+    LOG_WARN("failed to get compatibility version", K(ret));
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+               compat_version, ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
+               implicit_first_century_year))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
+    if (implicit_first_century_year) {
+      cm_ = cm_ | CM_IMPLICIT_FIRST_CENTURY_YEAR;
+    }
     cm_ = cm_ | CM_COLUMN_CONVERT;
     if (OB_SUCC(ret)) {
       if (ObValuesTableDef::FOLD_ACCESS_EXPR == MY_SPEC.access_type_) {

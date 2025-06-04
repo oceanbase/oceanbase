@@ -13,7 +13,7 @@
 #ifndef _OB_MACRO_UTILS_H_
 #define _OB_MACRO_UTILS_H_
 
-#define SELECT150_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
+#define SELECT160_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
                    _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
                    _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, \
                    _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, \
@@ -28,15 +28,17 @@
                    _120, _121, _122, _123, _124, _125, _126, _127, _128, _129, \
                    _130, _131, _132, _133, _134, _135, _136, _137, _138, _139, \
                    _140, _141, _142, _143, _144, _145, _146, _147, _148, _149, \
-                   _150, ...) _150
+                   _150, _151, _152, _153, _154, _155, _156, _157, _158, _159, \
+                   _160, ...) _160
 
 // These two macros do same work that select the 120th argument from
 // argument list.
-#define SELECT150(...) SELECT150_(__VA_ARGS__)
+#define SELECT160(...) SELECT160_(__VA_ARGS__)
 
 // Expand to the number of arguments
 #define ARGS_NUM(args...)                               \
-  SELECT150(, ##args,                                   \
+  SELECT160(, ##args,                                   \
+            159, 158, 157, 156, 155, 154, 153, 152, 151, 150, \
             149, 148, 147, 146, 145, 144, 143, 142, 141, 140, \
             139, 138, 137, 136, 135, 134, 133, 132, 131, 130, \
             129, 128, 127, 126, 125, 124, 123, 122, 121, 120, \
@@ -225,6 +227,16 @@
 #define APPLY148(f, ...) APPLY_VARGS(f, APPLY147(f, ##__VA_ARGS__))
 #define APPLY149(f, ...) APPLY_VARGS(f, APPLY148(f, ##__VA_ARGS__))
 #define APPLY150(f, ...) APPLY_VARGS(f, APPLY149(f, ##__VA_ARGS__))
+#define APPLY151(f, ...) APPLY_VARGS(f, APPLY150(f, ##__VA_ARGS__))
+#define APPLY152(f, ...) APPLY_VARGS(f, APPLY151(f, ##__VA_ARGS__))
+#define APPLY153(f, ...) APPLY_VARGS(f, APPLY152(f, ##__VA_ARGS__))
+#define APPLY154(f, ...) APPLY_VARGS(f, APPLY153(f, ##__VA_ARGS__))
+#define APPLY155(f, ...) APPLY_VARGS(f, APPLY154(f, ##__VA_ARGS__))
+#define APPLY156(f, ...) APPLY_VARGS(f, APPLY155(f, ##__VA_ARGS__))
+#define APPLY157(f, ...) APPLY_VARGS(f, APPLY156(f, ##__VA_ARGS__))
+#define APPLY158(f, ...) APPLY_VARGS(f, APPLY157(f, ##__VA_ARGS__))
+#define APPLY159(f, ...) APPLY_VARGS(f, APPLY158(f, ##__VA_ARGS__))
+#define APPLY160(f, ...) APPLY_VARGS(f, APPLY159(f, ##__VA_ARGS__))
 #define APPLY(n, f, ...) APPLY ## n (f, ##__VA_ARGS__)
 
 // select nth argument
@@ -386,6 +398,16 @@
 #define LST_DO_148(M, s, P, ...) LST_DO_147(M, s, P, ##__VA_ARGS__)SELF s P(M, 148, ##__VA_ARGS__)
 #define LST_DO_149(M, s, P, ...) LST_DO_148(M, s, P, ##__VA_ARGS__)SELF s P(M, 149, ##__VA_ARGS__)
 #define LST_DO_150(M, s, P, ...) LST_DO_149(M, s, P, ##__VA_ARGS__)SELF s P(M, 150, ##__VA_ARGS__)
+#define LST_DO_151(M, s, P, ...) LST_DO_150(M, s, P, ##__VA_ARGS__)SELF s P(M, 151, ##__VA_ARGS__)
+#define LST_DO_152(M, s, P, ...) LST_DO_151(M, s, P, ##__VA_ARGS__)SELF s P(M, 152, ##__VA_ARGS__)
+#define LST_DO_153(M, s, P, ...) LST_DO_152(M, s, P, ##__VA_ARGS__)SELF s P(M, 153, ##__VA_ARGS__)
+#define LST_DO_154(M, s, P, ...) LST_DO_153(M, s, P, ##__VA_ARGS__)SELF s P(M, 154, ##__VA_ARGS__)
+#define LST_DO_155(M, s, P, ...) LST_DO_154(M, s, P, ##__VA_ARGS__)SELF s P(M, 155, ##__VA_ARGS__)
+#define LST_DO_156(M, s, P, ...) LST_DO_155(M, s, P, ##__VA_ARGS__)SELF s P(M, 156, ##__VA_ARGS__)
+#define LST_DO_157(M, s, P, ...) LST_DO_156(M, s, P, ##__VA_ARGS__)SELF s P(M, 157, ##__VA_ARGS__)
+#define LST_DO_158(M, s, P, ...) LST_DO_157(M, s, P, ##__VA_ARGS__)SELF s P(M, 158, ##__VA_ARGS__)
+#define LST_DO_159(M, s, P, ...) LST_DO_158(M, s, P, ##__VA_ARGS__)SELF s P(M, 159, ##__VA_ARGS__)
+#define LST_DO_160(M, s, P, ...) LST_DO_159(M, s, P, ##__VA_ARGS__)SELF s P(M, 160, ##__VA_ARGS__)
 
 #define LST_DO__(N, M, s, P, ...) LST_DO_ ## N(M, s, P, ##__VA_ARGS__)
 #define LST_DO_(...) LST_DO__(__VA_ARGS__)
@@ -432,7 +454,8 @@
     110, 111, 112, 113, 114, 115, 116, 117, 118, 119,   \
     120, 121, 122, 123, 124, 125, 126, 127, 128, 129,   \
     130, 131, 132, 133, 134, 135, 136, 137, 138, 139,   \
-    140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150
+    140, 141, 142, 143, 144, 145, 146, 147, 148, 149, \
+    150, 151
 
 #define MSTR(X) #X
 

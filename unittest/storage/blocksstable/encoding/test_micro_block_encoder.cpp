@@ -40,10 +40,7 @@ public:
   TestIColumnEncoder(const bool is_multi_version_row = false)
     : tenant_ctx_(OB_SERVER_TENANT_ID), is_multi_version_row_(is_multi_version_row)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
-    decode_res_pool_->init();
   }
   virtual ~TestIColumnEncoder() {}
   virtual void SetUp();
@@ -59,7 +56,6 @@ protected:
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   bool is_multi_version_row_;
 };
 
@@ -363,7 +359,7 @@ TEST_F(TestStringDiffNullLength, test_string_diff_null_length)
        ObColumnHeader::Type::STRING_DIFF};
   ctx_.column_encodings_ = column_encoding_array;
   ctx_.micro_block_size_ = 1 << 20; // 1M
-  ctx_.major_working_cluster_version_ = DATA_VERSION_4_3_5_1;
+  ctx_.major_working_cluster_version_ = DATA_VERSION_4_3_5_2;
   ObMicroBlockEncoder encoder;
   encoder.data_buffer_.allocator_.set_tenant_id(500);
   encoder.row_buf_holder_.allocator_.set_tenant_id(500);

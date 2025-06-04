@@ -641,6 +641,32 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
   return ret;
 }
 
+int ObExprMysqlProcInfo::get_sys_package_name_info(const ObExpr &expr,
+                                                   ObEvalCtx &ctx,
+                                                   ObDatum &expr_datum,
+                                                   uint64_t package_id)
+{
+  int ret = OB_SUCCESS;
+  const ObPackageInfo *package_info = NULL;
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSchemaGetterGuard *schema_guard = NULL;
+
+  CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
+  CK (OB_NOT_NULL(schema_guard = ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
+  CK (OB_NOT_NULL(session));
+  OZ (schema_guard->get_package_info(OB_SYS_TENANT_ID, package_id, package_info));
+
+  if (OB_SUCC(ret)) {
+    if (NULL == package_info) {
+      expr_datum.set_null();
+    } else {
+      ObString value_str = package_info->get_package_name();
+      OZ (set_return_result(expr, ctx, expr_datum, value_str));
+    }
+  }
+  return ret;
+}
+
 int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
                                                     ObEvalCtx &ctx,
                                                     ObDatum &expr_datum,
@@ -749,6 +775,10 @@ int ObExprMysqlProcInfo::calc_mysql_proc_info_arg_cnt_2(const ObExpr &expr,
   } else if (0 == info_name.case_compare("DB_COLLATION")) {
     if (OB_FAIL(get_info_by_field_id(expr, ctx, expr_datum, routine_id, DB_COLLATION))) {
       LOG_WARN("get db_collation info failed", K(ret), K(routine_id));
+    }
+  } else if (0 == info_name.case_compare("NAME")) {
+    if (OB_FAIL(get_sys_package_name_info(expr, ctx, expr_datum, routine_id))) {
+      LOG_WARN("get name info failed", K(ret), K(routine_id));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;

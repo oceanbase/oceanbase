@@ -108,29 +108,92 @@ int ObBootstrapResolver::resolve(const ParseNode &parse_tree)
     }
   }
   if (OB_SUCC(ret)) {
-    ParseNode *shared_storage_node = parse_tree.children_[1];
-    ObString shared_storage_info;
-    if (OB_ISNULL(shared_storage_node)) {
-      LOG_INFO("shared_storage_node is NULL", KR(ret));
-    } else if (T_SHARED_STORAGE_INFO != shared_storage_node->type_) {
+    const ParseNode *bootstrap_info_node = parse_tree.children_[1];
+    if (NULL == bootstrap_info_node) {
+      LOG_INFO("bootstrap_info_node is NULL", KR(ret));
+    } else if (0 > bootstrap_info_node->num_child_ || 2 < bootstrap_info_node->num_child_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("shared_storage_node type is not T_SHARED_STORAGE_INFO", KR(ret), K(shared_storage_node->type_));
-    } else if (OB_ISNULL(allocator_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("allocator_ is NULL", KR(ret));
+      LOG_WARN("invalid number of children", K(bootstrap_info_node->num_child_), K(ret));
     } else {
-      ObString shared_storage_str;
-      shared_storage_str.assign_ptr(shared_storage_node->str_value_,
-          static_cast<int32_t>(shared_storage_node->str_len_));
-      if (OB_FAIL(ob_write_string(*allocator_, shared_storage_str, shared_storage_info))) {
-        LOG_WARN("write shared storage info failed", KR(ret), K(shared_storage_str));
-      } else {
-        bootstrap_stmt->set_shared_storage_info(shared_storage_info);
+      for (int64_t i = 0; OB_SUCC(ret) && i < bootstrap_info_node->num_child_; ++i) {
+        ParseNode *iter_node = bootstrap_info_node->children_[i];
+        if (OB_ISNULL(iter_node)) { // do nothing
+        } else if (OB_FAIL(do_resolve_bootstrap_info_(*iter_node, bootstrap_stmt))) {
+          LOG_WARN("resolve bootstrap info failed", K(ret));
+        } else { } // do nothing
       }
     }
   }
-
   return ret;
 }
+
+int ObBootstrapResolver::do_resolve_bootstrap_info_(
+  const ParseNode &parse_tree,
+  ObBootstrapStmt* bootstrap_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (parse_tree.type_ == T_LOGSERVICE_ACCESS_POINT) {
+    ret = do_resolve_logservice_access_point_(parse_tree, bootstrap_stmt);
+  } else if (parse_tree.type_ == T_SHARED_STORAGE_INFO) {
+    ret = do_resolve_shared_storage_info_(parse_tree, bootstrap_stmt);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.type_ is invalid", K(parse_tree.type_));
+  }
+  return ret;
+}
+
+int ObBootstrapResolver::do_resolve_logservice_access_point_(
+  const ParseNode &parse_tree,
+  ObBootstrapStmt* bootstrap_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (parse_tree.type_ != T_LOGSERVICE_ACCESS_POINT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.type_ is not T_LOGSERVICE_ACCESS_POINT", K(parse_tree.type_));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator_ is NULL", KR(ret));
+  } else {
+    ObString logservice_access_point;
+    ObString logservice_access_point_str;
+    logservice_access_point_str.assign_ptr(parse_tree.str_value_,
+        static_cast<int32_t>(parse_tree.str_len_));
+    if (OB_FAIL(ob_write_string(*allocator_, logservice_access_point_str,
+                                logservice_access_point))) {
+      LOG_WARN("write logservice access point failed", KR(ret), K(logservice_access_point_str));
+    } else {
+      bootstrap_stmt->set_logservice_access_point(logservice_access_point);
+    }
+  }
+  return ret;
+}
+
+int ObBootstrapResolver::do_resolve_shared_storage_info_(
+  const ParseNode &parse_tree,
+  ObBootstrapStmt* bootstrap_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (parse_tree.type_ != T_SHARED_STORAGE_INFO) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.type_ is not T_SHARED_STORAGE_INFO", K(parse_tree.type_));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator_ is NULL", KR(ret));
+  } else {
+    ObString shared_storage_info;
+    ObString shared_storage_str;
+    shared_storage_str.assign_ptr(parse_tree.str_value_,
+        static_cast<int32_t>(parse_tree.str_len_));
+    if (OB_FAIL(ob_write_string(*allocator_, shared_storage_str, shared_storage_info))) {
+      LOG_WARN("write shared storage info failed", KR(ret), K(shared_storage_str));
+    } else {
+      bootstrap_stmt->set_shared_storage_info(shared_storage_info);
+    }
+  }
+  return ret;
+}
+
+
 }// namespace sql
 }// namespace oceanbase

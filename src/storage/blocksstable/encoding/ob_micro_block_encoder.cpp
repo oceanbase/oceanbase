@@ -993,7 +993,7 @@ int ObMicroBlockEncoder::copy_and_append_row(const ObDatumRow &src, int64_t &sto
   bool is_large_row = false;
   const int64_t datum_row_offset = length_;
   ObDatum *datum_arr = nullptr;
-  if (datum_rows_.count() > 0
+  if ((datum_rows_.count() >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
       && (length_ + datums_len >= estimate_size_limit_ || estimate_size_ >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   } else if (0 == datum_rows_.count() && length_ + datums_len >= estimate_size_limit_) {
@@ -1101,7 +1101,8 @@ int ObMicroBlockEncoder::copy_cell(
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(store_size += datum_size)) {
-  } else if (datum_rows_.count() > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
+  } else if ((datum_rows_.count() >= ctx_.minimum_rows_) /* FORCE APPEND if rows count is less than minimum rows */
+             && (estimate_size_ + store_size >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
     // for large row whose size larger than a micro block default size,
     // we still use micro block to store it, but its size is unknown, need special treat

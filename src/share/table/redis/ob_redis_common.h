@@ -189,13 +189,13 @@ enum RedisCommandType {
   REDIS_COMMAND_MAX
 };
 
-enum ObRedisModel {
+enum ObRedisDataModel {
   STRING,
   HASH,
   LIST,
   ZSET,
   SET,
-  INVALID
+  MODEL_MAX
 };
 
 class ObRedisInfoV1

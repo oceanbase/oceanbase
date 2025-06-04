@@ -221,6 +221,7 @@ int ObTransferTaskOperator::fill_dml_splicer_(
   ObString lock_conflict_part_list_str;
   ObString table_lock_tablet_list_str;
   ObString tablet_list_str;
+  int64_t owner_id = 0;
 
   if (OB_ISNULL(trace_id = static_cast<char *>(allocator.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -247,6 +248,8 @@ int ObTransferTaskOperator::fill_dml_splicer_(
   } else if (OB_FAIL(task.get_tablet_list().to_display_str(allocator, tablet_list_str))) {
     LOG_WARN("transfer list to str failed", KR(ret), "tablet_list",
         task.get_tablet_list(), K(tablet_list_str));
+  } else if (OB_FAIL(task.get_table_lock_owner_id().get_ddl_owner_id(owner_id))) {
+    LOG_WARN("get lock owner id failed", K(ret), K(task.get_table_lock_owner_id()));
   }
 
   if (FAILEDx(dml_splicer.add_pk_column("task_id", task.get_task_id().id()))
@@ -266,10 +269,8 @@ int ObTransferTaskOperator::fill_dml_splicer_(
       || OB_FAIL(dml_splicer.add_column("result", task.get_result()))
       || OB_FAIL(dml_splicer.add_column("comment", transfer_task_comment_to_str(task.get_comment())))
       || OB_FAIL(dml_splicer.add_column("balance_task_id", task.get_balance_task_id().id()))
-      || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", task.get_table_lock_owner_id().raw_value()))) {
+      || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", owner_id))) {
     LOG_WARN("fail to add column", KR(ret), K(task));
-  }
-  if (OB_FAIL(ret)) {
   } else if (task.get_data_version() < MOCK_DATA_VERSION_4_2_3_0
       || (task.get_data_version() >= DATA_VERSION_4_3_0_0 && task.get_data_version() < DATA_VERSION_4_3_2_0)) {
     // do nothing
@@ -359,7 +360,7 @@ int ObTransferTaskOperator::update_to_start_status(
     ObString table_lock_tablet_list_str;
     ObString tablet_list_str;
     ObArenaAllocator allocator;
-
+    int64_t owner_id = 0;
     if (OB_FAIL(new_part_list.to_display_str(allocator, part_list_str))) {
       LOG_WARN("transfer list to str failed", KR(ret), K(new_part_list), K(part_list_str));
     } else if (OB_FAIL(new_tablet_list.to_display_str(allocator, tablet_list_str))) {
@@ -379,6 +380,8 @@ int ObTransferTaskOperator::update_to_start_status(
         table_lock_tablet_list_str))) {
       LOG_WARN("transfer list to str failed", KR(ret),
           K(new_table_lock_tablet_list), K(table_lock_tablet_list_str));
+    } else if (OB_FAIL(table_lock_owner_id.get_ddl_owner_id(owner_id))) {
+      LOG_WARN("get lock owner id failed", K(ret), K(table_lock_owner_id));
     }
 
     if (FAILEDx(dml_splicer.add_pk_column("task_id", task_id.id()))
@@ -391,7 +394,7 @@ int ObTransferTaskOperator::update_to_start_status(
         || OB_FAIL(dml_splicer.add_column("tablet_count", new_tablet_list.count()))
         || OB_FAIL(dml_splicer.add_column("status", new_status.str()))
         || OB_FAIL(dml_splicer.add_column("comment", transfer_task_comment_to_str(ObTransferTaskComment::EMPTY_COMMENT))) // reset comment
-        || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", table_lock_owner_id.raw_value()))) {
+        || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", owner_id))) {
       LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(task_id), K(part_list_str),
           K(not_exist_part_list_str), K(lock_conflict_part_list_str), K(table_lock_tablet_list_str),
           K(tablet_list_str), K(new_status), K(table_lock_owner_id));
@@ -879,6 +882,7 @@ int ObTransferTaskOperator::parse_sql_result_(
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
   (void)GET_COL_IGNORE_NULL(res.get_int, "balance_task_id", balance_task_id);
   (void)GET_COL_IGNORE_NULL(res.get_int, "table_lock_owner_id", lock_owner_val);
+
   EXTRACT_STRBUF_FIELD_MYSQL(res, "trace_id", trace_id_buf, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET_WITH_COLUMN_INFO(res, "data_version", data_version_str,
       data_version_is_null, data_version_not_exist);
@@ -903,8 +907,8 @@ int ObTransferTaskOperator::parse_sql_result_(
   } else if (finish_scn_val != OB_INVALID_SCN_VAL
       && OB_FAIL(finish_scn.convert_for_inner_table_field(finish_scn_val))) {
     LOG_WARN("fail to convert for inner table field", KR(ret), K(finish_scn_val));
-  } else if (OB_FAIL(owner_id.convert_from_value(lock_owner_val))) {
-    LOG_WARN("fail to convert to owner id", K(ret), K(lock_owner_val));
+  } else if (FALSE_IT(owner_id.convert_from_value_ignore_ret(static_cast<unsigned char>(ObLockOwnerType::DEFAULT_OWNER_TYPE),
+                                                             lock_owner_val))) {
   } else if (OB_FAIL(trace_id.parse_from_buf(trace_id_buf))) {
     LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_buf));
   } else if (OB_FAIL(status.parse_from_str(status_str))) {

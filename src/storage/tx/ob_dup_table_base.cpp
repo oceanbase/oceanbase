@@ -447,15 +447,8 @@ int ObDupTableLSCheckpoint::flush()
   int ret = OB_SUCCESS;
 
   SpinWLockGuard w_guard(ckpt_rw_lock_);
-  ObLSHandle ls_handle;
 
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(dup_ls_meta_.ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
-    DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(dup_ls_meta_));
-  } else if (OB_ISNULL(ls_handle.get_ls())) {
-    ret = OB_ERR_NULL_VALUE;
-    DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.update_dup_table_meta(
-      ls_handle.get_ls()->get_ls_epoch(), dup_ls_meta_))) {
+  if (OB_FAIL(TENANT_STORAGE_META_SERVICE.update_dup_table_meta(dup_ls_meta_))) {
     DUP_TABLE_LOG(WARN, "fail to update dup table meta", K(ret));
   } else {
     lease_log_rec_scn_.reset();

@@ -71,6 +71,7 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObFinishBackupTabletGroupFuseTask"), KP(this), KPC(group_ctx_));
 private:
   int close_extern_writer_();
+  int abort_extern_writer_();
   int generate_init_dag_();
   int record_server_event_();
   int report_task_result_();

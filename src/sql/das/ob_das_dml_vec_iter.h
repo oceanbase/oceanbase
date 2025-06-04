@@ -64,6 +64,44 @@ private:
   bool is_old_row_;
 };
 
+class ObSparseVecIndexDMLIterator final : public ObDomainDMLIterator
+{
+public:
+  ObSparseVecIndexDMLIterator(
+      common::ObIAllocator &allocator,
+      const IntFixedArray *row_projector,
+      ObDASWriteBuffer::Iterator &write_iter,
+      const ObDASDMLBaseCtDef *das_ctdef,
+      const ObDASDMLBaseCtDef *main_ctdef)
+    : ObDomainDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef) {}
+
+  virtual ~ObSparseVecIndexDMLIterator() = default;
+private:
+  virtual int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) override;
+  int get_sparse_vector_index_column_idxs(int64_t &sparse_vec_idx, int64_t &dim_idx, int64_t &docid_idx, int64_t &value_idx);
+
+  int get_sparse_vec_data(
+    const ObChunkDatumStore::StoredRow *store_row,
+    const int64_t docid_idx,
+    const int64_t sparse_vec_idx,
+    ObString &docid,
+    ObString &sparse_vec);
+  int get_sparse_vec_data_for_update(
+    const ObChunkDatumStore::StoredRow *store_row,
+    const int64_t docid_idx,
+    const int64_t sparse_vec_idx,
+    ObString &docid,
+    ObString &sparse_vec);
+  int generate_sparse_vec_index_row(common::ObIAllocator &allocator,
+    const ObChunkDatumStore::StoredRow *store_row,
+    const int64_t dim_idx,
+    const int64_t docid_idx,
+    const int64_t value_idx,
+    const int64_t vec_idx,
+    const ObString &docid,
+    ObString &sparse_vec,
+    ObDomainIndexRow &rows);
+};
 
 } // end namespace sql
 } // end namespace oceanbase

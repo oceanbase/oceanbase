@@ -37,8 +37,10 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
   for (int64_t i = 0; i < ids.size() && !is_break; ++i) {
     uint64_t tenant_id = ids[i];
     if (!is_virtual_tenant_id(tenant_id)) {
+      int save_ret = ret;
       MTL_SWITCH(tenant_id)
       {
+        ret = save_ret;  // MTL_SWITCH would change the error code. So we change it back.
         if (OB_FAIL(
                 MTL(ObDiagnosticInfoContainer *)->get_session_diag_info(session_id, diag_info))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
@@ -53,6 +55,10 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
           // until success.
           break;
         }
+      } else {
+        LOG_WARN("switch tenant failed", K(ret));
+        is_break = true;
+        break;
       }
     }
   }
@@ -83,6 +89,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
           if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
             pair.first = di->get_session_id();
             pair.second.session_id_ = di->get_session_id();
+            pair.second.client_sid_ = di->get_client_sid();
             pair.second.base_value_.set_tenant_id(di->get_tenant_id());
             pair.second.base_value_.set_curr_wait(di->get_curr_wait());
             pair.second.base_value_.get_add_stat_stats().add(di->get_add_stat_stats());
@@ -100,7 +107,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
       if (!is_virtual_tenant_id(cur_tenant_id)) {
         MTL_SWITCH(cur_tenant_id)
         {
-          if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_running_di(fn))) {
+          if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn))) {
             LOG_WARN("failed to get all diag info", K(ret));
           }
         }
@@ -109,7 +116,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get all diag info from global di", K(ret), K(tenant_id));
     }
   }
@@ -132,7 +139,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -150,7 +157,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
 
@@ -235,7 +242,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
@@ -246,7 +253,7 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
-    if (OB_FAIL(c->for_each_running_di(fn))) {
+    if (OB_FAIL(c->for_each_and_delay_release_ref(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {

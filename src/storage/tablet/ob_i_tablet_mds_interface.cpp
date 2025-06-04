@@ -11,23 +11,22 @@
  */
 
 
-#include "ob_i_tablet_mds_interface.h"
+#include "storage/tablet/ob_i_tablet_mds_interface.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/tablet/ob_tablet_medium_info_mds_node_filter.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-int ObITabletMdsInterface::get_tablet_handle_and_base_ptr(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
+int ObITabletMdsInterface::get_src_tablet_handle_and_base_ptr_(
     ObTabletHandle &tablet_handle,
-    ObITabletMdsInterface *&base_ptr)
+    ObITabletMdsInterface *&base_ptr) const
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = get_tablet_meta_().transfer_info_.ls_id_;
+  const common::ObTabletID &tablet_id = get_tablet_meta_().tablet_id_;
   ObLSService *ls_service = MTL(ObLSService*);
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
@@ -118,15 +117,11 @@ int ObITabletMdsInterface::get_latest_ddl_data(
     ret = OB_NOT_INIT;
     MDS_LOG_GET(WARN, "not inited");
   } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -165,15 +160,11 @@ int ObITabletMdsInterface::get_ddl_data(
     ret = OB_NOT_SUPPORTED;
     MDS_LOG_GET(WARN, "only support read latest data currently");
   } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -208,15 +199,11 @@ int ObITabletMdsInterface::get_autoinc_seq(
     ret = OB_NOT_SUPPORTED;
     MDS_LOG_GET(WARN, "only support read latest data currently");
   } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -249,15 +236,11 @@ int ObITabletMdsInterface::get_split_data(
   } else {
     // TODO(lihongqin.lhq): use get_latest_committed and block during 2pc
     const share::SCN snapshot = share::SCN::max_scn();
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -292,15 +275,11 @@ int ObITabletMdsInterface::split_partkey_compare(const blocksstable::ObDatumRowk
   } else {
     // TODO(lihongqin.lhq): use get_latest_committed and block during 2pc
     const share::SCN snapshot = share::SCN::max_scn();
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
     ObITabletMdsInterface *src = nullptr;
     ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
       }
     }
 
@@ -329,7 +308,7 @@ int ObITabletMdsInterface::read_raw_data(
   const share::ObLSID &ls_id = get_tablet_meta_().ls_id_;
   const common::ObTabletID &tablet_id = get_tablet_meta_().tablet_id_;
   const int64_t abs_timeout = timeout_us + ObClockGenerator::getClock();
-
+  ObMdsReadInfoCollector placeholder_collector;
   SMART_VARS_3((ObTableScanParam, scan_param), (ObStoreCtx, store_ctx), (ObMdsRowIterator, iter)) {
     if (OB_FAIL(ObMdsScanParamHelper::build_scan_param(
         allocator,
@@ -340,7 +319,8 @@ int ObITabletMdsInterface::read_raw_data(
         udf_key,
         true/*is_get*/,
         abs_timeout,
-        snapshot,
+        ObVersionRange(0/*base_version*/, snapshot.get_val_for_tx()/*snapshot_version*/),
+        placeholder_collector,
         scan_param))) {
       MDS_LOG(WARN, "fail to build scan param", K(ret));
     } else if (OB_FAIL(mds_table_scan(scan_param, store_ctx, iter))) {
@@ -371,41 +351,30 @@ int ObITabletMdsInterface::mds_table_scan(
     ObMdsRowIterator &iter) const
 {
   int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = get_tablet_meta_().ls_id_;
-  const common::ObTabletID &tablet_id = get_tablet_meta_().tablet_id_;
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  const ObTablet *tablet = static_cast<const ObTablet*>(this);
   ObTabletHandle tablet_handle;
 
-  if (OB_FAIL(t3m->build_tablet_handle_for_mds_scan(const_cast<ObTablet*>(tablet), tablet_handle))) {
-    MDS_LOG(WARN, "fail to build tablet handle", K(ret), K(ls_id), K(tablet_id));
+  if (OB_FAIL(get_tablet_handle_from_this(tablet_handle))) {
+    MDS_LOG(WARN, "fail to build tablet handle", K(ret));
   } else if (OB_FAIL(iter.init(scan_param, tablet_handle, store_ctx))) {
-    MDS_LOG(WARN, "fail to init mds row iter", K(ret), K(ls_id), K(tablet_id), K(scan_param));
+    MDS_LOG(WARN, "fail to init mds row iter", K(ret), KPC(tablet_handle.get_obj()), K(scan_param));
   }
 
   return ret;
 }
 
-template <>
-int ObITabletMdsInterface::mds_range_query<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>(
-    ObTableScanParam &scan_param,
-    ObStoreCtx &store_ctx,
-    ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> &iter) const
+int ObITabletMdsInterface::get_tablet_handle_from_this(
+  ObTabletHandle &tablet_handle) const
 {
   int ret = OB_SUCCESS;
+  const ObTablet *tablet = static_cast<const ObTablet*>(this);
   const share::ObLSID &ls_id = get_tablet_meta_().ls_id_;
   const common::ObTabletID &tablet_id = get_tablet_meta_().tablet_id_;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  const ObTablet *tablet = static_cast<const ObTablet*>(this);
-  ObTabletHandle tablet_handle;
-
   if (OB_FAIL(t3m->build_tablet_handle_for_mds_scan(const_cast<ObTablet*>(tablet), tablet_handle))) {
     MDS_LOG(WARN, "fail to build tablet handle", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(iter.init(scan_param, tablet_handle, store_ctx, ObTabletMediumInfoMdsNodeFilter()))) {
-    MDS_LOG(WARN, "fail to init range scan iter", K(ret), K(scan_param));
   }
-
   return ret;
 }
+
 } // namespace storage
 } // namespace oceanbase

@@ -74,7 +74,8 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     uint64_t col_idx = column_infos.at(i).projector_index_;
     if (OB_FAIL(row.at(col_idx)->eval(eval_ctx, datum))) {
       common::ObString column_name = column_infos.at(i).column_name_;
-      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx(),
+                                               row.at(col_idx)->datum_meta_.type_);
     } else if (OB_ISNULL(datum)) {
       // impossible
     } else if (OB_FAIL(check_column_null(dml_op.get_eval_ctx(),
@@ -160,6 +161,8 @@ int ObDMLService::check_column_null(
         const ObString &column_name = column_info.column_name_;
         LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
       }
+    } else if (ob_is_user_defined_type(expr->obj_meta_.get_type())) {
+      // do nothing for xml column
     } else {
       //output warning msg
       const ObString &column_name = column_info.column_name_;
@@ -187,7 +190,8 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObExpr *expr = dml_row.at(column_info.projector_index_);
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx(),
+                                               expr->datum_meta_.type_);
     } else if (OB_ISNULL(datum)) {
       // impossible
     } else if (OB_FAIL(check_geometry_type(dml_op.get_eval_ctx(),
@@ -813,11 +817,11 @@ int ObDMLService::check_column_type_batch(
         }
       }
       if (OB_FAIL(ret)) {
-        ret = log_user_error_inner(ret, row_num, column_name, exec_ctx);
+        ret = log_user_error_inner(ret, row_num, column_name, exec_ctx, expr->datum_meta_.type_);
       } else if (!ins_ctdef.has_instead_of_trigger_) {
         if (OB_UNLIKELY(expr->obj_meta_.is_geometry())
-            && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info))) {
-          LOG_WARN("failed to check geometry column batch", KR(ret), K(column_info));
+            && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info, use_rich_format))) {
+          LOG_WARN("failed to check geometry column batch", KR(ret), K(column_info), K(use_rich_format));
         } else if (!column_info.is_nullable_) {
           bool need_check_null = use_rich_format ? expr->get_vector(eval_ctx)->has_null() : true;
           if (need_check_null && OB_FAIL(check_column_null_batch(
@@ -834,7 +838,8 @@ int ObDMLService::check_column_type_batch(
 int ObDMLService::check_geometry_column_batch(
     const ObInsCtDef &ins_ctdef,
     ObTableModifyOp &dml_op,
-    const ColumnContent &column_info)
+    const ColumnContent &column_info,
+    const bool use_rich_format)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
@@ -850,8 +855,27 @@ int ObDMLService::check_geometry_column_batch(
     bool is_skipped = batch_rows.skip_->at(i);
     batch_info_guard.set_batch_idx(i);
     if (!is_skipped) {
-      ObDatum &datum = expr->locate_expr_datum(eval_ctx);
-      if (OB_FAIL(check_geometry_type(eval_ctx, dml_expr_array, column_info, tmp_allocator, datum))) {
+      ObDatum gis_datum;
+      ObDatum *ptr_datum = &gis_datum;
+      if (use_rich_format) {
+        ObIVector *vec = expr->get_vector(eval_ctx);
+        if (OB_ISNULL(vec)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null vec", KR(ret), KP(vec));
+        } else if (vec->is_null(i)) {
+          gis_datum.set_null();
+        } else {
+          const char *payload = nullptr;
+          int32_t len = 0;
+          vec->get_payload(i, payload, len);
+          gis_datum.ptr_ = payload;
+          gis_datum.len_ = len;
+        }
+      } else {
+        ptr_datum = &expr->locate_expr_datum(eval_ctx);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_geometry_type(eval_ctx, dml_expr_array, column_info, tmp_allocator, *ptr_datum))) {
         LOG_WARN("failed to check geometry type", KR(ret), K(column_info));
         if (OB_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
           LOG_WARN("failed to check error ret by row", KR(ret));
@@ -900,7 +924,8 @@ int ObDMLService::check_column_null_batch(
           } else {
             if (OB_FAIL(expr->eval(eval_ctx, expr_datum))) {
               common::ObString column_name = column_info.column_name_;
-              ret = ObDMLService::log_user_error_inner(ret, 0/*row_num*/, column_name, dml_op.get_exec_ctx());
+              ret = ObDMLService::log_user_error_inner(ret, 0/*row_num*/, column_name, dml_op.get_exec_ctx(),
+                                                       expr->datum_meta_.type_);
             } else if (OB_ISNULL(expr_datum)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null expr datum", KR(ret), KP(expr_datum));
@@ -1231,7 +1256,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!is_skipped && (upd_rtdef.has_table_cycle_ || upd_ctdef.self_ref_update_)) {
+  } else if (!is_skipped && upd_rtdef.has_table_cycle_) {
     ret = OB_ERR_ROW_IS_REFERENCED;
     LOG_WARN("A cycle reference is detected in foreign key cascade update.", K(ret));
   }
@@ -1600,33 +1625,42 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   }
   dml_param.branch_id_ = write_branch_id;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
+  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_);
+  return ret;
+}
+
+void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
+                                       ObDASDMLBaseRtDef &base_rtdef,
+                                       concurrent_control::ObWriteFlag &write_flag)
+{
   if (base_ctdef.is_batch_stmt_) {
-    dml_param.write_flag_.set_is_dml_batch_opt();
+    write_flag.set_is_dml_batch_opt();
   }
   if (base_ctdef.is_insert_up_) {
-    dml_param.write_flag_.set_is_insert_up();
+    write_flag.set_is_insert_up();
   }
   if (base_ctdef.is_table_api_) {
-    dml_param.write_flag_.set_is_table_api();
+    write_flag.set_is_table_api();
   }
-  if (dml_param.table_param_->get_data_table().is_storage_index_table()
-      && !dml_param.table_param_->get_data_table().can_read_index()) {
-    dml_param.write_flag_.set_is_write_only_index();
+  if (base_ctdef.table_param_.get_data_table().is_storage_index_table()
+      && !base_ctdef.table_param_.get_data_table().can_read_index()) {
+    write_flag.set_is_write_only_index();
   }
   if (base_rtdef.is_for_foreign_key_check_) {
-    dml_param.write_flag_.set_check_row_locked();
+    write_flag.set_check_row_locked();
   }
   if (base_ctdef.is_update_uk_) {
-    dml_param.write_flag_.set_update_uk();
+    write_flag.set_update_uk();
   }
   if (base_ctdef.is_update_pk_with_dop_) {
-    dml_param.write_flag_.set_update_pk_dop();
+    write_flag.set_update_pk_dop();
   }
-
+  if (base_ctdef.table_param_.get_data_table().is_delete_insert()) {
+    write_flag.set_is_delete_insert();
+  }
   if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
-    dml_param.write_flag_.set_immediate_row_check();
+    write_flag.set_immediate_row_check();
   }
-  return ret;
 }
 
 int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
@@ -2762,6 +2796,7 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
         } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
           LOG_WARN("failed to covert stored new row to expr", K(ret));
         } else if (op.need_foreign_key_checks()) {
+          ACTIVE_SESSION_FLAG_SETTER_GUARD(in_foreign_key_cascading);
           if (t_update == dml_event && !reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_) {
             LOG_DEBUG("update operation don't change any value, no need to perform foreign key check");
           } else {
@@ -2914,7 +2949,8 @@ int ObDMLService::log_user_error_inner(
     int ret,
     int64_t row_num,
     common::ObString &column_name,
-    ObExecContext &ctx)
+    ObExecContext &ctx,
+    const ObObjType column_type)
 {
   if (OB_DATA_OUT_OF_RANGE == ret) {
     ObSQLUtils::copy_and_convert_string_charset(
@@ -2956,8 +2992,14 @@ int ObDMLService::log_user_error_inner(
         column_name,
         CS_TYPE_UTF8MB4_BIN,
         ctx.get_my_session()->get_local_collation_connection());
+    ObString decimal_type_str("decimal");
+    ObString default_type_str("integer");
+    ObString &type_str = ob_is_number_or_decimal_int_tc(column_type) ?
+      decimal_type_str : default_type_str;
     LOG_USER_ERROR(
         OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+        type_str.length(),
+        type_str.ptr(),
         column_name.length(),
         column_name.ptr(),
         row_num);

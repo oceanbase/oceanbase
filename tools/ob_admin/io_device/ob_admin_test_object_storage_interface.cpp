@@ -73,7 +73,9 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_()
     STORAGE_LOG_FILTER(ERROR, "failed to test object storage interface get file length", K(ret));
   } else if (OB_FAIL(test_object_storage_interface_read_(ctx))) {
     STORAGE_LOG_FILTER(ERROR, "failed to test object storage interface read", K(ret));
-  } else if (OB_FAIL(test_object_storage_interface_del_(ctx))) {
+  } else if (!(ctx.storage_info_.is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == ctx.storage_info_.get_delete_mode())
+                && OB_FAIL(test_object_storage_interface_del_(ctx))) {
     STORAGE_LOG_FILTER(ERROR, "failed to test object storage interface del", K(ret));
   }
   return ret;
@@ -157,6 +159,15 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_async_upload_(Tes
   return ret;
 }
 
+bool adaptive_append_mode(const ObObjectStorageInfo &storage_info)
+{
+  const ObStorageType type = storage_info.get_type();
+  const bool enable_worm = storage_info.is_enable_worm();
+  return ObStorageType::OB_STORAGE_S3 == type
+      || (ObStorageType::OB_STORAGE_COS == type && is_use_obdal())
+      || (ObStorageType::OB_STORAGE_OSS == type && enable_worm);
+}
+
 int ObAdminTestIODeviceExecutor::test_object_storage_interface_is_exist_(TestObjectStorageInterfaceContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -168,15 +179,15 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_is_exist_(TestObj
   } else if (OB_FAIL(ctx.util_.is_exist(ctx.appendable_file_path_, &ctx.storage_info_, ctx.appendable_file_is_exist_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to check if appendable file is exist",
         K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3
+  } else if (adaptive_append_mode(ctx.storage_info_)
              && OB_UNLIKELY(ctx.appendable_file_is_exist_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "appendable file should not be detected when storage type is S3",
+    STORAGE_LOG_FILTER(ERROR, "when in adaptive append mode, appendable files should not be detected.",
         K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() != ObStorageType::OB_STORAGE_S3
+  } else if (!adaptive_append_mode(ctx.storage_info_)
              && OB_UNLIKELY(!ctx.appendable_file_is_exist_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "appendable file should be detected when storage type is not S3",
+    STORAGE_LOG_FILTER(ERROR, "When not in adaptive append mode, appendable file should be detected",
         K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
   } else if (FALSE_IT(ctx.single_file_is_exist_ = false)) {
   } else if (FALSE_IT(ctx.appendable_file_is_exist_ = false)) {
@@ -207,15 +218,15 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_list_file_(TestOb
 
   if (OB_FAIL(ctx.util_.list_files(ctx.test_dir_path_, &ctx.storage_info_, file_list_array_op))) {
     STORAGE_LOG_FILTER(ERROR, "failed to list test dir path", K(ret), K(ctx.test_dir_path_), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3
+  } else if (adaptive_append_mode(ctx.storage_info_)
              && OB_UNLIKELY(file_names.size() != ctx.S3_FILE_COUNT)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "when the storage type is set to OB_STORAGE_S3, there should be 10 files present here",
+    STORAGE_LOG_FILTER(ERROR, "when in adaptive append mode, there should be 10 files present here",
         K(ret), K(ctx.test_dir_path_), K(file_names.size()), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() != ObStorageType::OB_STORAGE_S3
+  } else if (!adaptive_append_mode(ctx.storage_info_)
              && OB_UNLIKELY(file_names.size() != ctx.OTHER_FILE_COUNT)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "when the storage type is not set to OB_STORAGE_S3, there should be 3 files present here",
+    STORAGE_LOG_FILTER(ERROR, "when not in adaptive append mode, there should be 3 files present here",
         K(ret), K(ctx.test_dir_path_), K(file_names.size()), K(ctx.storage_info_));
   } else if (FALSE_IT(file_names.reuse())) {
   } else if (OB_FAIL(ctx.util_.adaptively_list_files(ctx.test_dir_path_, &ctx.storage_info_, file_list_array_op))) {
@@ -236,15 +247,15 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_list_directories_
 
   if (OB_FAIL(ctx.util_.list_directories(ctx.test_dir_path_, &ctx.storage_info_, dir_list_array_op))) {
     STORAGE_LOG_FILTER(ERROR, "failed to list directories", K(ret), K(ctx.test_dir_path_), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3
+  } else if (adaptive_append_mode(ctx.storage_info_)
              && (OB_UNLIKELY(dir_names.size() != 1) || OB_UNLIKELY(dir_names[0] != ObString(ctx.appendable_file_name_)))) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "appendable dir not find when storage type is s3",
+    STORAGE_LOG_FILTER(ERROR, "in adaptive append mode, appendable dir not find",
         K(ret), K(ctx.test_dir_path_), K(ctx.appendable_file_name_), K(dir_names.size()), K(ctx.storage_info_));
-  } else if (ctx.storage_info_.get_type() != ObStorageType::OB_STORAGE_S3
+  } else if (!adaptive_append_mode(ctx.storage_info_)
              && OB_UNLIKELY(dir_names.size() != 0)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG_FILTER(ERROR, "length of the list directories result should be 0 when storage type is not s3",
+    STORAGE_LOG_FILTER(ERROR, "when not in adaptive append mode, length of the list directories result should be 0",
         K(ret), K(ctx.test_dir_path_), K(ctx.appendable_file_name_), K(dir_names.size()), K(ctx.storage_info_));
   }
 
@@ -265,13 +276,13 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_get_file_length_(
     STORAGE_LOG_FILTER(ERROR, "get single file length not equal to real length",
         K(ret), K(ctx.single_file_path_), K(ctx.SINGLE_FILE_LENGTH), K(single_file_length_query), K(ctx.storage_info_));
   } else if (FALSE_IT(single_file_length_query = 0)) {
-  } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3) {
+  } else if (adaptive_append_mode(ctx.storage_info_)) {
     if (OB_SUCC(ctx.util_.get_file_length(ctx.appendable_file_path_, &ctx.storage_info_, appendable_file_length_query))) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG_FILTER(ERROR, "when the storage type is set to OB_STORAGE_S3, the get_file_length interface should fail to be invoked.",
+      STORAGE_LOG_FILTER(ERROR, "when in adaptive append mode, the get_file_length interface should fail to be invoked.",
           K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
     } else if (OB_UNLIKELY(ret != OB_OBJECT_NOT_EXIST)) {
-      STORAGE_LOG_FILTER(ERROR, "the get_file_length interface should return OB_OBJECT_NOT_EXIST when storage type is set to OB_STORAGE_S3",
+      STORAGE_LOG_FILTER(ERROR, " when not in adaptive append mode, the get_file_length interface should return OB_OBJECT_NOT_EXIST",
           K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
     } else {
       ret = OB_SUCCESS;
@@ -279,7 +290,7 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_get_file_length_(
   } else {
     if (OB_FAIL(ctx.util_.get_file_length(ctx.appendable_file_path_, &ctx.storage_info_, appendable_file_length_query))) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG_FILTER(ERROR, "failed to get file length when the storage type is not S3",
+      STORAGE_LOG_FILTER(ERROR, "failed to get file length when appending is not simulated by writing fragments",
           K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
     } else if (OB_UNLIKELY(appendable_file_length_query != ctx.APPENDABLE_FILE_LENGTH)) {
       ret = OB_ERR_UNEXPECTED;
@@ -530,15 +541,15 @@ int ObAdminTestIODeviceExecutor::test_multi_step_write_appendable_file_(TestObje
       // test list_files, adaptively_list_files and list_directories before seal
       if (OB_FAIL(ctx.util_.list_files(ctx.test_dir_path_, &ctx.storage_info_, file_list_array_op))) {
         STORAGE_LOG_FILTER(ERROR, "failed to list test dir path", K(ret), K(ctx.test_dir_path_), K(ctx.storage_info_));
-      } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3
+      } else if (adaptive_append_mode(ctx.storage_info_)
                  && OB_UNLIKELY(file_names.size() != 7)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG_FILTER(ERROR, "when the storage type is set to OB_STORAGE_S3, there should be 7 files present here",
+        STORAGE_LOG_FILTER(ERROR, "when in adaptive append mode, there should be 7 files present here",
             K(ret), K(ctx.test_dir_path_), K(file_names.size()), K(ctx.storage_info_));
-      } else if (ctx.storage_info_.get_type() != ObStorageType::OB_STORAGE_S3
+      } else if (!adaptive_append_mode(ctx.storage_info_)
                  && OB_UNLIKELY(file_names.size() != 2)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG_FILTER(ERROR, "when the storage type is not set to OB_STORAGE_S3, there should be 2 files present here",
+        STORAGE_LOG_FILTER(ERROR, "when not in adaptive append mode, there should be 2 files present here",
             K(ret), K(ctx.test_dir_path_), K(file_names.size()), K(ctx.storage_info_));
       } else if (FALSE_IT(file_names.reuse())){
       } else if (OB_FAIL(ctx.util_.adaptively_list_files(ctx.test_dir_path_, &ctx.storage_info_, file_list_array_op))) {
@@ -548,15 +559,15 @@ int ObAdminTestIODeviceExecutor::test_multi_step_write_appendable_file_(TestObje
         STORAGE_LOG_FILTER(ERROR, "the length of file_names does not equal to 2", K(ret), K(file_names.size()), K(ctx.storage_info_));
       } else if (OB_FAIL(ctx.util_.list_directories(ctx.test_dir_path_, &ctx.storage_info_, dir_list_array_op))) {
         STORAGE_LOG_FILTER(ERROR, "failed to list directories", K(ret), K(ctx.test_dir_path_), K(ctx.storage_info_));
-      } else if (ctx.storage_info_.get_type() == ObStorageType::OB_STORAGE_S3
+      } else if (adaptive_append_mode(ctx.storage_info_)
                  && OB_UNLIKELY(dir_names.size() != 1 || dir_names[0] != ObString(ctx.appendable_file_name_))) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG_FILTER(ERROR, "appendable dir not find when storage type is s3",
+        STORAGE_LOG_FILTER(ERROR, "when in adaptive append mode, appendable dir not find",
             K(ret), K(ctx.test_dir_path_), K(ctx.appendable_file_path_), K(ctx.storage_info_));
-      } else if (ctx.storage_info_.get_type() != ObStorageType::OB_STORAGE_S3
+      } else if (!adaptive_append_mode(ctx.storage_info_)
                  && OB_UNLIKELY(dir_names.size() != 0)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG_FILTER(ERROR, "length of the list directories result should be 0 when storage type is not s3",
+        STORAGE_LOG_FILTER(ERROR, "when not in adaptive append mode, length of the list directories result should be 0",
             K(ret), K(ctx.test_dir_path_), K(ctx.appendable_file_path_), K(ctx.storage_info_));
       } else if (FALSE_IT(remain_len = ctx.APPENDABLE_FILE_LENGTH - writed_len)) {
       } else if (OB_UNLIKELY(remain_len <= 0)) {
@@ -626,7 +637,9 @@ int ObAdminTestIODeviceExecutor::test_list_before_complete_multipart_write_()
   } else if (OB_UNLIKELY(std::find(file_names.begin(), file_names.end(), file_name) == file_names.end())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "completed multipart file are visible!", K(ret), K(file_path), K(storage_info));
-  } else if (OB_FAIL(util.del_file(file_path, &storage_info))) {
+  } else if (!(storage_info.is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info.get_delete_mode())
+                && OB_FAIL(util.del_file(file_path, &storage_info)) ) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG_FILTER(ERROR, "failed to del file", K(ret), K(file_path), K(storage_info));
   }

@@ -19,6 +19,7 @@
 #include "observer/table/ob_htable_utils.h"
 
 using namespace oceanbase::share;
+using namespace oceanbase::table;
 
 namespace oceanbase
 {
@@ -761,7 +762,7 @@ int ObTTLUtil::parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions
 // "Redis": {"is_ttl": true, "model": "hash"}
 int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
                                          bool &is_redis_ttl,
-                                         table::ObRedisModel &redis_model)
+                                         table::ObRedisDataModel &redis_model)
 {
   int ret = OB_SUCCESS;
   if (NULL == ast) {
@@ -778,15 +779,15 @@ int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
         if (NULL != model_val && model_val->get_type() == json::JT_STRING) {
           ObString model_str = model_val->get_string();
           if (model_str.case_compare("HASH") == 0) {
-            redis_model = table::ObRedisModel::HASH;
+            redis_model = table::ObRedisDataModel::HASH;
           } else if (model_str.case_compare("LIST") == 0) {
-            redis_model = table::ObRedisModel::LIST;
+            redis_model = table::ObRedisDataModel::LIST;
           } else if (model_str.case_compare("SET") == 0) {
-            redis_model = table::ObRedisModel::SET;
+            redis_model = table::ObRedisDataModel::SET;
           } else if (model_str.case_compare("ZSET") == 0) {
-            redis_model = table::ObRedisModel::ZSET;
+            redis_model = table::ObRedisDataModel::ZSET;
           } else if (model_str.case_compare("STRING") == 0) {
-            redis_model = table::ObRedisModel::STRING;
+            redis_model = table::ObRedisDataModel::STRING;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not supported kv attribute", K(ret), K(model_str));
@@ -902,7 +903,12 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
           is_end = true;
         }
         ObTableTTLExpr ttl_expr;
+        // example: "`column` INTERVAL 40 MINUTE" or "column INTERVAL 40 MINUTE"
         ObString column_str = left.split_on('+').trim();
+        if (column_str.length() > 2 && column_str[column_str.length() - 1] == '`' && column_str[0] == '`') {
+          ++column_str;
+          column_str.assign(column_str.ptr(), column_str.length() - 1);
+        }
         // example: "  INTERVAL 40 MINUTE"
         left = left.trim();
         // example: "INTERVAL 40 MINUTE"
@@ -993,6 +999,10 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
                 }
               }
             }
+            if (OB_SUCC(ret) && row_cell_ids_.count() != ttl_definition_.count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("row cell ids count not match ttl definition count", K(ret), K(row_cell_ids_), K(ttl_definition_));
+            }
           }
         }
       }
@@ -1028,7 +1038,7 @@ int ObTableTTLChecker::check_row_expired(const common::ObNewRow &row, bool &is_e
 {
   int ret = OB_SUCCESS;
   is_expired = false;
-  for (int i = 0; OB_SUCC(ret) && !is_expired && i < ttl_definition_.count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && !is_expired && i < ttl_definition_.count() && i < row_cell_ids_.count(); i++) {
     ObTableTTLExpr ttl_expr = ttl_definition_.at(i);
     ObObj column = row.get_cell(row_cell_ids_.at(i));
     int64_t column_ts = column.get_timestamp();
@@ -1174,7 +1184,7 @@ int ObTTLUtil::dispatch_one_tenant_ttl(obrpc::ObTTLRequestArg::TTLRequestType ty
             if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
               LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(ttl_info),
                 "ori_leader", leader, K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
-              USLEEP(static_cast<int>(idle_time_us));
+              ob_throttle_usleep((const useconds_t)idle_time_us, ret, (int64_t)tenant_id);
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("leader may switch or ddl confilict, will not retry cuz timeout_remain is "
@@ -1236,15 +1246,17 @@ int ObTTLUtil::get_tenant_table_ids(const uint64_t tenant_id, ObIArray<uint64_t>
   return ret;
 }
 
-int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
     if (!table_schema.get_ttl_definition().empty()) {
       is_ttl_table = true;
-    } else if (!table_schema.get_kv_attributes().empty()) {
-      ObKVAttr kv_attr; // for check validity
+    } else if (OB_FAIL(check_is_htable_ttl_(table_schema, true/*allow_timeseries_table*/, is_ttl_table))) {
+      LOG_WARN("fail to check is htable ttl", K(ret));
+    } else if (!is_ttl_table && !table_schema.get_kv_attributes().empty()) {
+      ObKVAttr kv_attr;  // for check validity
       if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
         LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
       } else if (kv_attr.is_ttl_table()) {
@@ -1255,23 +1267,33 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   return ret;
 }
 
-int ObTTLUtil::check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
-    if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
+    if (OB_FAIL(check_is_htable_ttl_(table_schema, false/*allow_timeseries_table*/, is_ttl_table))) {
       LOG_WARN("fail to check is htable ttl", K(ret));
     }
   }
   return ret;
 }
 
-int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table)
+int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
-  if (!table_schema.get_kv_attributes().empty()) {
+  const ObColumnSchemaV2 *ttl_column = nullptr;
+  table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  if (OB_FAIL(table::ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+    LOG_WARN("fail to get mode type", KR(ret));
+  } else if (mode_type == table::ObHbaseModeType::OB_INVALID_MODE_TYPE ||
+            (!allow_timeseries_table && mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE)) {
+    // do nothing
+  } else if (OB_NOT_NULL(ttl_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL)) &&
+             table::ObHTableConstants::TTL_CNAME_STR.case_compare(ttl_column->get_column_name()) == 0) {
+    is_ttl_table = true;
+  } else if (!table_schema.get_kv_attributes().empty()) {
     // htable ttl table should have at least one of max_version and time_to_live
     ObKVAttr kv_attr;
     if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
@@ -1409,6 +1431,40 @@ bool ObTTLUtil::is_ttl_column(const ObString &orig_column_name, const ObIArray<O
     }
   }
   return bret;
+}
+
+int ObTTLUtil::check_kv_attributes(const schema::ObTableSchema &table_schema)
+{
+  return ObTTLUtil::check_kv_attributes(table_schema.get_kv_attributes(), table_schema,
+    table_schema.ObPartitionSchema::get_part_level());
+}
+
+int ObTTLUtil::check_kv_attributes(const ObString &kv_attributes,
+                                   const schema::ObTableSchema &table_schema,
+                                   ObPartitionLevel part_level)
+{
+  int ret = OB_SUCCESS;
+  ObKVAttr attr;
+  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, attr))) {
+    LOG_WARN("fail to parse kv attributes", K(ret));
+  } else if (attr.is_max_versions_valid()) {
+    ObHbaseModeType mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
+    if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+      LOG_WARN("fail to get hbase mode type", K(ret));
+    } else if (mode_type == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("timeseries hbase table with max versions is not supported",
+                  K(ret), K(kv_attributes));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with max versions");
+    } else if (mode_type== ObHbaseModeType::OB_HBASE_NORMAL_TYPE &&
+        PARTITION_LEVEL_TWO == part_level) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("secondary partitioned hbase table with max versions is not supported",
+                  K(ret), K(kv_attributes));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "secondary partitioned hbase table with max versions");
+    }
+  }
+  return ret;
 }
 
 } // end namespace rootserver

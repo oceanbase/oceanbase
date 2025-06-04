@@ -18,6 +18,8 @@
 #include "lib/container/ob_array_array.h"
 #include "observer/ob_server_struct.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/multi_data_source/mds_key_serialize_util.h"
+#include "storage/compaction/ob_mds_filter_info.h"
 
 namespace oceanbase
 {
@@ -35,12 +37,11 @@ public:
      list_size_(0),
      reserved_(0),
      parallel_store_rowkey_list_(nullptr),
-     parallel_datum_rowkey_list_(nullptr),
-     allocator_(nullptr)
+     parallel_datum_rowkey_list_(nullptr)
   {}
-  ~ObParallelMergeInfo() { destroy(); } // attention!!! use destroy to free memory
+  ~ObParallelMergeInfo();
   int init(common::ObIAllocator &allocator, const ObParallelMergeInfo &other);
-  void destroy();
+  void destroy(common::ObIAllocator &allocator);
   void clear()
   {
     list_size_ = 0;
@@ -58,7 +59,7 @@ public:
   template<typename T>
   int deep_copy_list(common::ObIAllocator &allocator, const T *src, T *&dst);
   template<typename T>
-  void destroy(T *&array);
+  void destroy(common::ObIAllocator &allocator, T *&array);
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -100,7 +101,6 @@ private:
   ObStoreRowkey *parallel_store_rowkey_list_;
   // concurrent_cnt - 1; valid when compat_ = PARALLEL_INFO_VERSION_V1
   blocksstable::ObDatumRowkey *parallel_datum_rowkey_list_;
-  ObIAllocator *allocator_;
 };
 
 struct ObMediumCompactionInfoKey final
@@ -137,18 +137,11 @@ public:
 
   int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
     int ret = OB_SUCCESS;
-    int64_t tmp = medium_snapshot_;
     if (pos >= buf_len) {
       ret = OB_BUF_NOT_ENOUGH;
     } else {
       buf[pos++] = MAGIC_NUMBER;
-      for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
-        if (pos >= buf_len) {
-          ret = OB_BUF_NOT_ENOUGH;
-        } else {
-          buf[pos++] = ((tmp >> (56 - 8 * idx)) & 0x00000000000000FF);
-        }
-      }
+      ret = mds::ObMdsSerializeUtil::mds_key_serialize(medium_snapshot_, buf, buf_len, pos);
     }
     return ret;
   }
@@ -162,14 +155,8 @@ public:
       magic_number = buf[pos++];
       if (magic_number != MAGIC_NUMBER) {
         ob_abort();// compat case, just abort for fast fail
-      }
-      for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
-        if (pos >= buf_len) {
-          ret = OB_BUF_NOT_ENOUGH;
-        } else {
-          tmp <<= 8;
-          tmp |= (0x00000000000000FF & buf[pos++]);
-        }
+      } else {
+        ret = mds::ObMdsSerializeUtil::mds_key_deserialize(buf, buf_len, pos, tmp);
       }
     }
     if (OB_SUCC(ret)) {
@@ -177,7 +164,7 @@ public:
     }
     return ret;
   }
-  int64_t mds_get_serialize_size() const { return sizeof(MAGIC_NUMBER) + sizeof(medium_snapshot_); }
+  int64_t mds_get_serialize_size() const { return sizeof(MAGIC_NUMBER) + mds::ObMdsSerializeUtil::mds_key_get_serialize_size(medium_snapshot_); }
 
   TO_STRING_KV(K_(medium_snapshot));
 private:
@@ -197,6 +184,7 @@ public:
   static const char *get_compaction_type_str(enum ObCompactionType type);
 public:
   ObMediumCompactionInfo();
+  ObMediumCompactionInfo(ObIAllocator &allocator);
   ~ObMediumCompactionInfo();
 
   int assign(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
@@ -212,7 +200,6 @@ public:
     medium_snapshot_ = medium_snapshot;
   }
   int gene_parallel_info(
-      ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);
   static inline bool is_valid_compaction_type(const ObCompactionType type) { return MEDIUM_COMPACTION <= type && type < COMPACTION_TYPE_MAX; }
   static inline bool is_medium_compaction(const ObCompactionType type) { return MEDIUM_COMPACTION == type; }
@@ -252,7 +239,7 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V5;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 27;
+  static const int32_t SCS_RESERVED_BITS = 26;
 
 public:
   union {
@@ -266,6 +253,7 @@ public:
       uint64_t tenant_id_                       : 16; // record tenant_id of ls primary_leader, just for throw medium
       uint64_t co_major_merge_type_             : 4;
       uint64_t is_skip_tenant_major_            : SCS_ONE_BIT;
+      uint64_t contain_mds_filter_info_         : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };
@@ -277,6 +265,8 @@ public:
   storage::ObStorageSchema storage_schema_;
   ObParallelMergeInfo parallel_merge_info_;
   uint64_t encoding_granularity_;
+  ObMdsFilterInfo mds_filter_info_;
+  ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);
 };

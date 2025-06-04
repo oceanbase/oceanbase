@@ -25,7 +25,6 @@ enum ObKVFeatureType {
   TTL,
   REROUTING,
   HOTKEY,
-  DISTRIBUTED_EXECUTE,
   MAXTYPE
 };
 
@@ -49,11 +48,10 @@ private:
 	union {
     uint16_t value_; //FARM COMPAT WHITELIST
     struct {
-        uint8_t ttl_mode_ : 2;
-        uint8_t rerouting_mode_ : 2;
-        uint8_t hotkey_mode_ : 2;
-        uint8_t distributed_execute_mode_ : 2;
-        uint8_t reserver_mode_ :8;
+        uint16_t ttl_mode_ : 2;
+        uint16_t rerouting_mode_ : 2;
+        uint16_t hotkey_mode_ : 2;
+        uint16_t reserver_mode_ : 10;
       };
     };
 private:

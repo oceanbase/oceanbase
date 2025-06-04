@@ -103,6 +103,7 @@ private:
   int test_list_before_complete_multipart_write_();
   int generate_random_str_(char *&buf, const int64_t size);
   int print_usage_();
+  bool is_simulate_append_(TestObjectStorageInterfaceContext &ctx) const;
 
 private:
   char backup_path_[common::OB_MAX_URI_LENGTH];

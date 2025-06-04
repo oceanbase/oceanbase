@@ -133,11 +133,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     bool can_expand_star = true;
     uint64_t tenant_data_version = 0;
     if (is_materialized_view) {
-      if (GCTX.is_shared_storage_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "in share storage mode, create materialized view is");
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", KR(ret));
       } else if (tenant_data_version < DATA_VERSION_4_3_0_0){
         ret = OB_NOT_SUPPORTED;
@@ -262,7 +258,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
           ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-          LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+          LOG_WARN("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
         } else {
           session_info_->set_database_id(old_database_id);
         }
@@ -1062,6 +1058,7 @@ int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
       pos = 0;
       ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
       obj_print_params.print_origin_stmt_ = true;
+      obj_print_params.not_print_internal_catalog_ = true;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
                                       params_.schema_checker_->get_schema_guard(),
                                       obj_print_params, true);
@@ -1792,10 +1789,7 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
     column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
   }
   if (OB_FAIL(ret)) {
-  } else if (column.is_collection()
-             && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
-    LOG_WARN("set enum or set info failed", K(ret), K(expr));
-  } else if (OB_FAIL(adjust_enum_set_column_meta_info(expr, session_info, column))) {
+  } else if (OB_FAIL(fill_column_with_subschema(expr, session_info, column))) {
     LOG_WARN("fail to adjust enum set colum meta info", K(ret), K(expr));
   } else if (OB_FAIL(adjust_string_column_length_within_max(column, lib::is_oracle_mode()))) {
     LOG_WARN("failed to adjust string column length within max", K(ret), K(expr));
@@ -1829,10 +1823,13 @@ int ObCreateViewResolver::resolve_column_default_value(const sql::ObSelectStmt *
     LOG_WARN("failed to resolve default value", K(ret));
   } else if (OB_FAIL(ob_write_obj(alloc, column_item.default_value_, res_obj))) {
     LOG_WARN("failed to write obj", K(ret));
+  } else if (OB_ISNULL(select_item.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select item expr is null", K(ret));
   } else if (ob_is_enum_or_set_type(column_item.default_value_.get_type())
              || ob_is_collection_sql_type(column_item.default_value_.get_type())) {
-    if (OB_FAIL(column_schema.set_extended_type_info(select_item.expr_->get_enum_set_values()))) {
-      LOG_WARN("failed to set extended type info", K(ret));
+    if (OB_FAIL(fill_column_with_subschema(*select_item.expr_, session_info, column_schema))) {
+      LOG_WARN("failed to fill column with subschema", K(ret));
     }
   }
   return ret;

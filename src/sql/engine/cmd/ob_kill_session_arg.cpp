@@ -124,5 +124,15 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
   return ret;
 }
 
+int ObKillSessionArg::check_auth_for_kill(uint64_t kill_tid, uint64_t kill_uid) const {
+  int ret = OB_SUCCESS;
+  if (!((OB_SYS_TENANT_ID == tenant_id_)
+             || ((tenant_id_ == kill_tid)
+                 && (has_user_super_privilege_ || user_id_ == kill_uid)))) {
+    ret = OB_ERR_KILL_DENIED;
+ }
+  return ret;
+}
+
 }
 }

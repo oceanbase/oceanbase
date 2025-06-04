@@ -111,6 +111,7 @@ public:
               const int64_t flags,
               const int64_t timeout_seconds,
               const uint32_t session_id,
+              const uint32_t client_sid,
               const ObTxParam &tx_param,
               ObTxDesc *&tx_desc,
               const uint64_t data_version);
@@ -144,6 +145,7 @@ public:
   int xa_start_for_mysql(const ObXATransID &xid,
                          const int64_t flags,
                          const uint32_t session_id,
+                         const uint32_t client_sid,
                          const ObTxParam &tx_param,
                          ObTxDesc *&tx_desc);
   int xa_end_for_mysql(const ObXATransID &xid,
@@ -183,6 +185,7 @@ public:
   int xa_start_for_tm(const int64_t flags,
                       const int64_t timeout_seconds,
                       const uint32_t session_id,
+                      const uint32_t client_sid,
                       const ObTxParam &tx_param,
                       ObTxDesc *&tx_desc,
                       ObXATransID &xid,
@@ -295,6 +298,7 @@ private:
                 const int64_t flags,
                 const int64_t timeout_seconds,
                 const uint32_t session_id,
+                const uint32_t client_sid,
                 const ObTxParam &tx_param,
                 ObTxDesc *&tx_desc,
                 const uint64_t data_version);
@@ -361,6 +365,7 @@ private:
   // for mysql
   int xa_start_for_mysql_(const ObXATransID &xid,
                           const uint32_t session_id,
+                          const uint32_t client_sid,
                           const ObTxParam &tx_param,
                           ObTxDesc *&tx_desc);
 private:
@@ -372,6 +377,7 @@ private:
   int xa_start_for_tm_(const int64_t flags,
                        const int64_t timeout_seconds,
                        const uint32_t session_id,
+                       const uint32_t client_sid,
                        const ObTxParam &tx_param,
                        ObTxDesc *&tx_desc,
                        ObXATransID &xid,

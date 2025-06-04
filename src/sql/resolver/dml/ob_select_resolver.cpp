@@ -23,7 +23,7 @@
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/parser/ob_parser_utils.h"
-#include "sql/resolver/mv/ob_mv_printer.h"
+#include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -31,7 +31,6 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace share::schema;
-using namespace jit::expr;
 namespace sql
 {
 
@@ -296,7 +295,7 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
                                                                session_info_, params_.expr_factory_,
                                                                select_stmt->is_set_distinct(),
                                                                select_stmt->get_set_query(),
-                                                               child_stmt, NULL, is_set_recursive_union && !is_oracle_mode,
+                                                               child_stmt, is_set_recursive_union && !is_oracle_mode,
                                                                &cte_ctx_.cte_col_names_))) {
             LOG_WARN("failed to try add cast to set child list", K(ret));
           } else if (OB_FAIL(select_stmt->add_set_query(child_stmt))) {
@@ -440,7 +439,7 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
         if (0 != i && OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(allocator_,
                                                session_info_, params_.expr_factory_,
                                                select_stmt->is_set_distinct(),
-                                               select_stmt->get_set_query(), child_stmt, NULL))) {
+                                               select_stmt->get_set_query(), child_stmt))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(select_stmt->get_set_query().push_back(child_stmt))) {
           LOG_WARN("failed to push back child_stmt", K(ret));
@@ -450,7 +449,7 @@ int ObSelectResolver::do_resolve_set_query_in_normal(const ParseNode &parse_tree
                                                session_info_, params_.expr_factory_,
                                                select_stmt->is_set_distinct(),
                                                select_stmt->get_set_query(),
-                                               child_stmt->get_set_query(), NULL))) {
+                                               child_stmt->get_set_query()))) {
           LOG_WARN("failed to try add cast to set child list", K(ret));
         } else if (OB_FAIL(append(select_stmt->get_set_query(), child_stmt->get_set_query()))) {
           LOG_WARN("failed set child stmts", K(ret));
@@ -682,7 +681,7 @@ int ObSelectResolver::check_recursive_cte_limited()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < right_stmt->get_select_items().count(); ++i) {
       SelectItem& item = right_stmt->get_select_items().at(i);
-      if (OB_UNLIKELY(jit::expr::ObIRawExpr::EXPR_AGGR == item.expr_->get_expr_class())) {
+      if (OB_UNLIKELY(item.expr_->is_aggr_expr())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggregation in recursive with clause");
       }
@@ -694,7 +693,6 @@ int ObSelectResolver::check_recursive_cte_limited()
 int ObSelectResolver::check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt)
 {
   int ret = OB_SUCCESS;
-  ObExprResType res_type;
   int64_t num = left_stmt.get_select_item_size();
   ObSelectStmt *select_stmt = get_select_stmt();
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(select_stmt)) {
@@ -707,8 +705,8 @@ int ObSelectResolver::check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt 
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
     SelectItem &left_select_item = left_stmt.get_select_item(i);
     SelectItem &right_select_item = right_stmt.get_select_item(i);
-    ObExprResType l_type = left_select_item.expr_->get_result_type();
-    ObExprResType r_type = right_select_item.expr_->get_result_type();
+    ObRawExprResType l_type = left_select_item.expr_->get_result_type();
+    ObRawExprResType r_type = right_select_item.expr_->get_result_type();
     if (l_type != r_type) {
       if (((ObObjMeta)l_type) == ((ObObjMeta)r_type)) {
         //类型相等，不考虑精度
@@ -1445,17 +1443,19 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       bool has_flashback_query = false;
       if (OB_FAIL(check_stmt_has_flashback_query(select_stmt, false, has_flashback_query))) {
         LOG_WARN("failed to check stmt has flashback query", K(ret));
-      } else if (has_flashback_query) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn used with flashback query");
-        LOG_WARN("rowscn can't use with flashback query", K(ret));
       }
+      // TODO(handora.qc): understand and resolve the unsupported cases
+      // else if (has_flashback_query) {
+      //   ret = OB_NOT_SUPPORTED;
+      //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn used with flashback query");
+      //   LOG_WARN("rowscn can't use with flashback query", K(ret));
+      // }
     }
   }
 
   if (OB_SUCC(ret) && session_info_->get_ddl_info().is_major_refreshing_mview()
       && !is_substmt() && !is_in_set_query() && !is_in_exists_subquery()
-      && OB_FAIL(ObMVPrinter::set_refresh_table_scan_flag_for_mr_mv(*select_stmt))) {
+      && OB_FAIL(ObMajorRefreshMJVPrinter::set_refresh_table_scan_flag_for_mr_mv(*select_stmt))) {
     LOG_WARN("failed to set refresh table scan flag for mr mv", K(ret));
   }
 
@@ -1480,7 +1480,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to create select stmt");
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("check stack overflow failed", K(ret), K(is_stack_overflow));
-  } else if (is_stack_overflow) {
+  } else if (OB_UNLIKELY(is_stack_overflow)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else {
@@ -1646,6 +1646,32 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
   return ret;
 }
 
+int ObSelectResolver::get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  CK (OB_NOT_NULL(select_stmt));
+  for (int64_t i = 0; OB_SUCC(ret) && for_update_cnt <= 1 && i < select_stmt->get_table_size(); i++) {
+    CK (OB_NOT_NULL(table_item = select_stmt->get_table_item(i)));
+    if (OB_SUCC(ret) && table_item->for_update_) {
+      if (table_item->is_generated_table()) { //generated_table need to find the base table id
+        OX (add_rowid_table_item = (for_update_cnt > 1) ? NULL : table_item);
+        CK (OB_NOT_NULL(table_item->ref_query_));
+        OZ (get_cursor_for_update_table(table_item->ref_query_, for_update_cnt, add_rowid_table_item, base_table_id));
+      } else {
+        for_update_cnt++;
+        if (for_update_cnt > 1) {
+          add_rowid_table_item = NULL;
+        } else {
+          add_rowid_table_item = (add_rowid_table_item == NULL) ? table_item : add_rowid_table_item;
+          base_table_id = table_item->ref_id_;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -1735,6 +1761,12 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
       }
     }
   }
+  if (OB_SUCC(ret) && NULL == of_node) {
+    // lock all tables
+    if (OB_FAIL(set_for_update_oracle(*stmt, wait_us, skip_locked))) {
+      LOG_WARN("failed to set for update", K(ret));
+    }
+  }
 
   //如果是PL里的可更新游标，增加rowid属性
   if (OB_SUCC(ret) && ((NULL != params_.secondary_namespace_ && params_.is_cursor_)
@@ -1743,46 +1775,31 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
                            && NULL == session_info_->get_pl_context()))) {
     SelectItem rowid_item;
     ObSelectStmt *select_stmt = stmt;
-    TableItem *table_item = NULL;
     TableItem *add_rowid_table_item = NULL;
+    uint64_t base_table_id = OB_INVALID_ID;
     const ObTableSchema *table_schema = NULL;
     int64_t for_update_cnt = 0;
     CK (OB_NOT_NULL(params_.schema_checker_));
-    for (int64_t i = 0; OB_SUCC(ret) && for_update_cnt <= 1 && i < select_stmt->get_table_size(); i++) {
-      // 1. 单表的for update, 需要把表的rowid加入到 select_item中
-      // 2. 多表join for update, 不能加入rowid,因为不确定要加哪个表的rowid
-      // 3. 多表join for update of t1.c1, of 后面指定更新的表时,需要把指定的表的rowid加入到select_item中
-      CK (OB_NOT_NULL(table_item = select_stmt->get_table_item(i)));
-      if (OB_SUCC(ret) && (table_item->for_update_ || 1 == select_stmt->get_table_size())) {
-        for_update_cnt++;
-        if (for_update_cnt > 1) {
-          add_rowid_table_item = NULL;
-        } else if (table_item->is_basic_table()) {
-          OX (add_rowid_table_item = table_item);
-        }
-      }
-    }
+    OZ (get_cursor_for_update_table(select_stmt, for_update_cnt, add_rowid_table_item, base_table_id));
     if (OB_SUCC(ret) && add_rowid_table_item != NULL) {
       ObRawExpr *rowid_expr = NULL;
       OZ (params_.schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), 
                                                     add_rowid_table_item->ref_id_,
                                                     table_schema,
                                                     add_rowid_table_item->is_link_table()));
-      if (OB_FAIL(resolve_rowid_expr(select_stmt, *add_rowid_table_item, rowid_expr))) {
-        LOG_WARN("resolve rowid expr failed", K(ret));
-      } else {
+      if (OB_SUCC(ret)) {
+        if (add_rowid_table_item->is_generated_table()) {
+          OZ (ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_, *add_rowid_table_item, rowid_expr));
+        } else {
+          OZ (resolve_rowid_expr(select_stmt, *add_rowid_table_item, rowid_expr));
+        }
         OX (rowid_item.expr_name_ = ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
         OX (rowid_item.alias_name_ = ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
         OX (rowid_item.expr_ = rowid_expr);
         OX (rowid_item.is_hidden_rowid_ = true);
         OZ (set_select_item(rowid_item, false/* is_auto_gen*/));
+        OX (select_stmt->set_for_update_cursor_table_id(base_table_id));
       }
-    }
-  }
-  if (OB_SUCC(ret) && NULL == of_node) {
-    // lock all tables
-    if (OB_FAIL(set_for_update_oracle(*stmt, wait_us, skip_locked))) {
-      LOG_WARN("failed to set for update", K(ret));
     }
   }
 
@@ -2050,6 +2067,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info_),
         K(select_stmt), K(ret));
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                         enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     exec_ctx = session_info_->get_cur_exec_ctx();
   }
@@ -2084,11 +2104,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           LOG_WARN("Can not malloc space for alias name", K(ret));
         }
       }
-    } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
-                                                           enable_modify_null_name))) {
-      LOG_WARN("failed to check feature enable", K(ret));
-    } else if (is_mysql_mode() && node.children_[i]->children_[0]->type_ == T_NULL &&
-               enable_modify_null_name) {
+    } else if (is_mysql_mode()
+               && node.children_[i]->children_[0]->type_ == T_NULL
+               && enable_modify_null_name) {
       // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
       // Note: when null value is in a composite expression, its alias is not modified.
       ObString alias_name = ObString::make_string("NULL");
@@ -2408,12 +2426,13 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
           if (params_.is_prepare_protocol_
-              || !session_info_->get_local_ob_enable_plan_cache()
+              || (!session_info_->get_local_ob_enable_plan_cache()
+                  && !session_info_->force_enable_plan_tracing())
               || 0 == node.children_[i]->is_val_paramed_item_idx_) {
             // ps 不参数化列; plan cache关闭后不参数化列
             // do nothing
-          } else if (OB_ISNULL(params_.select_item_param_infos_) ||
-                     node.children_[i]->value_ >= params_.select_item_param_infos_->count()) {
+          } else if (OB_ISNULL(params_.select_item_param_infos_)
+                     || node.children_[i]->value_ >= params_.select_item_param_infos_->count()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid argument", K(params_.select_item_param_infos_));
           } else {
@@ -2541,9 +2560,6 @@ int ObSelectResolver::transfer_rb_iterate_items()
       } else {
         // get and push_back rb_expr
         rb_expr = rb_iterate_expr->get_param_expr(0);
-        uint64_t extra = rb_expr->get_extra();
-        extra |= CM_ERROR_ON_SCALE_OVER;
-        rb_expr->set_extra(extra);
         if (OB_FAIL(rb_expr->deduce_type(session_info_))) {
           LOG_WARN("failed to deduce type", K(ret));
         } else if (OB_FAIL(table_item->json_table_def_->doc_exprs_.push_back(rb_expr))) {
@@ -2920,7 +2936,7 @@ int ObSelectResolver::is_need_check_col_dup(const ObRawExpr *expr, bool &need_ch
   } else if (T_QUESTIONMARK == expr->get_expr_type()) {
     need_check = false;
   } else {
-    for (int64_t j = 0; OB_SUCC(ret) && need_check && j < expr->get_children_count(); ++j) {
+    for (int64_t j = 0; OB_SUCC(ret) && need_check && j < expr->get_param_count(); ++j) {
       const ObRawExpr *child = expr->get_param_expr(j);
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3025,7 +3041,7 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           LOG_WARN("fail to create const string c_expr", K(ret));
         } else {
           ObSysFunRawExpr *cast_expr = NULL;
-          ObExprResType res_type;
+          ObRawExprResType res_type;
           res_type.set_type(ObVarcharType);
           res_type.set_length(1);
           res_type.set_length_semantics(LS_BYTE);
@@ -3942,7 +3958,7 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
       bool is_table_hidden = false;
       const ObSessionDDLInfo &ddl_info = session_info_->get_ddl_info();
       // add foreign key will use select xx from t1 minus select xx from t2, here t1 is source table, t2 is dest table
-      if (ddl_info.is_ddl()) {
+      if (ddl_info.is_ddl() || ddl_info.is_dummy_ddl_for_inner_visibility()) {
         if (in_set_query_) {
           is_table_hidden = is_left_child_ ? ddl_info.is_source_table_hidden() : ddl_info.is_dest_table_hidden();
         } else {
@@ -4024,7 +4040,7 @@ int ObSelectResolver::check_rollup_clause(const ParseNode *node, bool &has_rollu
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(node));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_rollup && i < node->num_child_; ++i) {
       const ParseNode *child_node = node->children_[i];
       if (OB_ISNULL(child_node)) {
         ret = OB_ERR_UNEXPECTED;
@@ -5237,19 +5253,9 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
         LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
       }
     }
-    if (OB_SUCC(ret)) {
-      do {
-        buf_len *= 2;
-        if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
-        } else {
-          pos = external_format.to_string(buf, buf_len, true);
-        }
-      } while (OB_SUCC(ret) && pos >= buf_len);
-      if (OB_SUCC(ret)) {
-        into_item.external_properties_.assign_ptr(buf, pos);
-      }
+    if (OB_SUCC(ret)
+        && OB_FAIL(external_format.to_string_with_alloc(into_item.external_properties_, *allocator_, true))) {
+      LOG_WARN("failed to convert external format to string", K(ret));
     }
   }
   // file: single, max_file_size, buffer_size
@@ -6963,7 +6969,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
         LOG_WARN("get unexpected null", K(ret), K(limit_offset));
       } else {
         floor_offset_expr->set_func_name(ObString::make_string("FLOOR"));
-        ObExprResType dst_type;
+        ObRawExprResType dst_type;
         dst_type.set_int();
         ObSysFunRawExpr *cast_expr = NULL;
         OZ(ObRawExprUtils::create_cast_expr(
@@ -6999,7 +7005,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
           LOG_WARN("get unexpected null", K(ret), K(limit_count));
         } else {
           floor_count_expr->set_func_name(ObString::make_string("FLOOR"));
-          ObExprResType dst_type;
+          ObRawExprResType dst_type;
           dst_type.set_int();
           ObSysFunRawExpr *cast_expr = NULL;
           OZ(ObRawExprUtils::create_cast_expr(
@@ -7023,7 +7029,7 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode *node)
           ret = OB_ERR_INVALID_SQL_ROW_LIMITING;
           LOG_WARN("Invalid SQL ROW LIMITING expression was specified", K(ret));
         } else {
-          ObExprResType dst_type;
+          ObRawExprResType dst_type;
           dst_type.set_double();
           ObSysFunRawExpr *cast_expr = NULL;
           OZ(ObRawExprUtils::create_cast_expr(

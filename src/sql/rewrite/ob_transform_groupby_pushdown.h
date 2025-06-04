@@ -48,17 +48,21 @@ private:
     ObSqlBitSet<> table_bit_index_;
     ObSEArray<ObRawExpr *, 4> group_exprs_;
     ObSEArray<ObRawExpr *, 4> aggr_exprs_;
-    ObSEArray<ObRawExpr *, 4> join_columns_;   /// filter processed 'when or after' join
-    ObSEArray<ObRawExpr *, 4> filter_exprs_; /// filter processed 'before' join
+    ObSEArray<ObRawExpr *, 4> join_columns_;   // filter processed 'when or after' join
+    ObSEArray<ObRawExpr *, 4> filter_exprs_; // filter processed 'before' join
     ObSEArray<JoinedTable *, 4> correlated_joined_tables_; // filter exprs correlated joined tables
+    ObSEArray<ObRawExpr *, 4> having_exprs_; // filter after 'group by', for cross join case
     TO_STRING_KV(K_(table_bit_index),
                  K_(group_exprs),
                  K_(aggr_exprs),
                  K_(join_columns),
                  K_(filter_exprs),
-                 K_(correlated_joined_tables));
+                 K_(correlated_joined_tables),
+                 K_(having_exprs));
 
     int merge(PushDownParam &other);
+
+    int assign(PushDownParam &other);
 
     void reset() {
       table_bit_index_.reset();
@@ -67,6 +71,7 @@ private:
       join_columns_.reset();
       filter_exprs_.reset();
       correlated_joined_tables_.reset();
+      having_exprs_.reset();
     }
   };
 
@@ -114,6 +119,19 @@ private:
 
   int get_union_pushdown_param(ObSelectStmt &stmt,
                                ObIArray<UnionPushdownParam> &param);
+
+  int is_push_through_cross_join_enabled(ObDMLStmt *stmt, bool &support_cross_join)
+  {
+    int ret = OB_SUCCESS;
+    support_cross_join = false;
+    if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      support_cross_join = stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
+    }
+    return ret;
+  }
 
   int get_col_id_of_child(ObSelectStmt &union_stmt,
                           uint64_t union_col_id,
@@ -188,6 +206,8 @@ private:
                                  ObIArray<PushDownParam> &params,
                                  const ObGroupByPlacementHint *hint,
                                  bool &is_valid);
+  int merge_cross_join_tables_by_joined_tables(ObSelectStmt *stmt,
+                                  ObIArray<PushDownParam> &cross_join_params);
   int merge_tables_by_joined_tables(ObSelectStmt *stmt,
                                     ObIArray<PushDownParam> &params,
                                     const ObGroupByPlacementHint *hint,
@@ -220,10 +240,26 @@ private:
 
   int do_groupby_push_down_into_join(ObSelectStmt *stmt,
                            ObIArray<PushDownParam> &params,
+                           ObIArray<PushDownParam> &cross_join_params,
+                           ObSqlBitSet<> &outer_table_set,
                            ObIArray<uint64_t> &flatten_joined_tables,
                            ObSelectStmt *&trans_stmt,
                            ObCostBasedPushDownCtx &push_down_ctx,
+                           bool has_cross_join,
                            bool &trans_happened);
+  int distribute_stmt_context_to_params(ObSelectStmt *stmt,
+                                        ObIArray<PushDownParam> &params,
+                                        ObSqlBitSet<> &outer_table_set,
+                                        ObIArray<uint64_t> &flatten_joined_tables,
+                                        ObSelectStmt *&trans_stmt,
+                                        bool &is_valid);
+  int merge_params_by_cross_joins(ObSelectStmt *stmt,
+                                  ObIArray<PushDownParam> &params,
+                                  ObIArray<PushDownParam> &cross_join_params,
+                                  ObSelectStmt *&trans_stmt,
+                                  bool &is_valid,
+                                  bool &force_rewrite);
+  int distribute_group_aggr_to_cross_joins(ObIArray<PushDownParam> &cross_join_params);
 
   int distribute_group_aggr(ObSelectStmt *stmt,
                             ObIArray<PushDownParam> &params);
@@ -237,11 +273,16 @@ private:
                                  ObIArray<PushDownParam> &params,
                                  JoinedTable *joined_table);
 
-  int transform_groupby_push_down(ObSelectStmt *stmt,
+  int do_double_eager_rewrite(ObSelectStmt *stmt,
                                   ObIArray<uint64_t> &flatten_joined_tables,
                                   ObSqlBitSet<> &outer_join_tables,
                                   ObCostBasedPushDownCtx &push_down_ctx,
                                   ObIArray<PushDownParam> &params);
+  int push_down_groupby_into_cross_join(ObSelectStmt *stmt,
+                                        ObIArray<uint64_t> &flatten_joined_tables,
+                                        ObSqlBitSet<> &outer_join_tables,
+                                        ObCostBasedPushDownCtx &push_down_ctx,
+                                        ObIArray<PushDownParam> &cross_join_params);
 
   int push_down_group_by_into_view(ObSelectStmt *stmt,
                                    const ObIArray<TableItem*> &table_items,
@@ -270,8 +311,8 @@ private:
                    bool &is_unique);
 
   int add_exprs(const ObIArray<ObRawExpr *> &exprs,
-                     ObSqlBitSet<> &table_set,
-                     ObIArray<ObRawExpr *> &dest);
+                ObSqlBitSet<> &table_set,
+                ObIArray<ObRawExpr *> &dest);
 
   int merge_tables(ObIArray<PushDownParam> &params, const ObSqlBitSet<> &table_set);
 
@@ -298,10 +339,17 @@ private:
 
   int get_transed_table(ObIArray<PushDownParam> &params, ObIArray<TableItem *> &tables);
 
+  int get_tables_from_params(ObDMLStmt &stmt,
+                             ObIArray<PushDownParam> &params,
+                             ObIArray<PushDownParam> &cross_join_params,
+                             ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
+                             const bool force_rewrite,
+                             bool disassemble_join = true);
+
   int get_tables_from_params(ObDMLStmt &stmt, 
                              ObIArray<PushDownParam> &params,
                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
-                              bool disassemble_join = true);
+                             bool disassemble_join = true);
   int check_hint_valid(ObDMLStmt &stmt,
                        ObIArray<PushDownParam> &params,
                        bool &hint_force_pushdown,

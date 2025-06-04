@@ -85,10 +85,10 @@ ObLogRestoreHandler::~ObLogRestoreHandler()
   destroy();
 }
 
-int ObLogRestoreHandler::init(const int64_t id, PalfEnv *palf_env)
+int ObLogRestoreHandler::init(const int64_t id, ipalf::IPalfEnv *palf_env)
 {
   int ret = OB_SUCCESS;
-  palf::PalfHandle palf_handle;
+  ipalf::IPalfHandle *palf_handle = NULL;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
   } else if (NULL == palf_env) {
@@ -101,14 +101,15 @@ int ObLogRestoreHandler::init(const int64_t id, PalfEnv *palf_env)
     palf_handle_ = palf_handle;
     palf_env_ = palf_env;
     role_ = FOLLOWER;
+    enable_logservice_ = GCONF.enable_logservice;
     is_in_stop_state_ = false;
     is_inited_ = true;
     CLOG_LOG(INFO, "ObLogRestoreHandler init success", K(id), K(role_), K(palf_handle));
   }
 
   if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid() && false == is_valid()) {
-      palf_env_->close(palf_handle);
+    if (OB_NOT_NULL(palf_env) && OB_NOT_NULL(palf_handle) && true == palf_handle->is_valid() && false == is_valid()) {
+      palf_env->close(palf_handle);
     }
   }
   return ret;
@@ -120,7 +121,7 @@ int ObLogRestoreHandler::stop()
   WLockGuard guard(lock_);
   if (IS_INIT) {
     is_in_stop_state_ = true;
-    if (palf_handle_.is_valid()) {
+    if (OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
     }
   }
@@ -134,7 +135,7 @@ void ObLogRestoreHandler::destroy()
   if (IS_INIT) {
     is_in_stop_state_ = true;
     is_inited_ = false;
-    if (palf_handle_.is_valid()) {
+    if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
     }
     palf_env_ = NULL;
@@ -189,7 +190,8 @@ bool ObLogRestoreHandler::is_valid() const
 {
   return true == is_inited_
          && false == is_in_stop_state_
-         && true == palf_handle_.is_valid()
+         && OB_NOT_NULL(palf_handle_)
+         && true == palf_handle_->is_valid()
          && NULL != palf_env_;
 }
 
@@ -365,9 +367,9 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
           ret = ERRSIM_SUBMIT_LOG_ERROR;
           CLOG_LOG(TRACE, "errsim submit log error");
         } else {
-          ret = palf_handle_.raw_write(opts, lsn, buf, buf_size);
+          ret = palf_handle_->raw_write(opts, lsn, buf, buf_size);
           if (OB_SUCC(ret)) {
-            uint64_t tenant_id = palf_env_->get_palf_env_impl()->get_tenant_id();
+            uint64_t tenant_id = palf_env_->get_tenant_id();
             EVENT_TENANT_ADD(ObStatEventIds::RESTORE_WRITE_LOG_SIZE, buf_size, tenant_id);
           }
         }
@@ -515,9 +517,11 @@ void ObLogRestoreHandler::mark_error(share::ObTaskId &trace_id,
   WLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
   } else if (! is_strong_leader(role_)) {
     CLOG_LOG(INFO, "not leader, no need record error", K(id_), K(ret_code));
-  } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
+  } else if (OB_FAIL(palf_handle_->get_end_lsn(end_lsn))) {
     CLOG_LOG(WARN, "get end_lsn failed", K(id_));
   } else if (end_lsn < lsn) {
     CLOG_LOG(WARN, "end_lsn smaller than error lsn, just skip", K(id_), K(end_lsn), K(lsn), KPC(parent_), KPC(this));
@@ -614,6 +618,9 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
+    } else if (is_in_stop_state_) {
+      ret = OB_IN_STOP_STATE;
+      CLOG_LOG(WARN, "ObLogRestoreHandler is stopped", K(ret), KPC(this));
     } else if (OB_UNLIKELY(!recovery_end_scn.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       CLOG_LOG(WARN, "invalid argument", K(ret), K(recovery_end_scn));
@@ -622,7 +629,7 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
       CLOG_LOG(WARN, "unexpected error, ObLogService must not be NULL", K(ret), K(recovery_end_scn));
     } else if (restore_context_.seek_done_) {
       end_lsn = restore_context_.lsn_;
-    } else if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
+    } else if (OB_FAIL(palf_handle_->get_end_scn(end_scn))) {
       CLOG_LOG(WARN, "get end scn failed", K(ret), K_(id));
     } else if (end_scn < recovery_end_scn) {
       ret = OB_EAGAIN;
@@ -688,12 +695,15 @@ int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
+    } else if (is_in_stop_state_) {
+      ret = OB_IN_STOP_STATE;
+      CLOG_LOG(WARN, "ObLogRestoreHandler is in stop state", K(ret), KPC(this));
     } else if (! is_strong_leader(role_)) {
       ret = OB_NOT_MASTER;
       CLOG_LOG(WARN, "not leader", K(ret), KPC(this));
-    } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
+    } else if (OB_FAIL(palf_handle_->get_end_lsn(end_lsn))) {
       CLOG_LOG(WARN, "get end lsn failed", K(id_));
-    } else if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
+    } else if (OB_FAIL(palf_handle_->get_end_scn(end_scn))) {
       CLOG_LOG(WARN, "get end scn failed", K(id_));
     } else if (FALSE_IT(deep_copy_source_(guard))) {
     } else if (OB_ISNULL(source = guard.get_source())) {
@@ -758,13 +768,15 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
   WLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
   } else if (! is_strong_leader(role_)) {
     ret = OB_NOT_MASTER;
   } else if (context_.submit_array_.empty()) {
     // sorted_array is empty, do nothing
   } else if (FALSE_IT(first = context_.submit_array_.at(0))) {
     // get the first one
-  } else if (OB_FAIL(palf_handle_.get_max_lsn(max_lsn))) {
+  } else if (OB_FAIL(palf_handle_->get_max_lsn(max_lsn))) {
     CLOG_LOG(WARN, "get max lsn failed", K(ret), K_(id));
   } else if (max_lsn < first->start_lsn_) {
     // check the first task if is in turn, skip it if not
@@ -825,9 +837,11 @@ int ObLogRestoreHandler::refresh_error_context()
   WLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
   } else if (! is_strong_leader(role_)) {
     CLOG_LOG(TRACE, "not leader, no need refresh error context", K(id_));
-  } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
+  } else if (OB_FAIL(palf_handle_->get_end_lsn(end_lsn))) {
     CLOG_LOG(WARN, "get end_lsn failed", K(id_));
   } else if (end_lsn > context_.error_context_.err_lsn_ && OB_SUCCESS != context_.error_context_.ret_code_) {
     context_.error_context_.reset();
@@ -1118,8 +1132,8 @@ bool ObLogRestoreHandler::restore_to_end_unlock_() const
     bret = false;
   } else if (parent_->to_end()) {
     bret = true;
-  } else if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
-    CLOG_LOG(WARN, "get end scn failed", K(id_));
+  } else if (OB_ISNULL(palf_handle_) || OB_FAIL(palf_handle_->get_end_scn(scn))) {
+    CLOG_LOG(WARN, "get end scn failed", K(ret), K(id_), KP(palf_handle_));
   } else {
     parent_->get_upper_limit_scn(recovery_end_scn);
     bret = scn >= recovery_end_scn;
@@ -1142,8 +1156,11 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
   ObRole palf_role = FOLLOWER;
   int64_t palf_proposal_id = -1;
   bool is_pending_state = true;
-
-  if (OB_FAIL(palf_handle_.get_role(palf_role, palf_proposal_id, is_pending_state))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
+  } else if (OB_FAIL(palf_handle_->get_role(palf_role, palf_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "fail to get palf role", K(ret), K_(id));
   } else if (LEADER != palf_role || true == is_pending_state) {
     CLOG_LOG(TRACE, "palf is not leader when get ls restore status info", K_(id), K(palf_role), K(is_pending_state));
@@ -1162,9 +1179,9 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     } else {
       CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
     }
-  } else if (OB_FAIL(palf_handle_.get_end_lsn(lsn))) {
+  } else if (OB_FAIL(palf_handle_->get_end_lsn(lsn))) {
     CLOG_LOG(WARN, "fail to get end lsn when get ls restore status info");
-  } else if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
+  } else if (OB_FAIL(palf_handle_->get_end_scn(scn))) {
     CLOG_LOG(WARN, "fail to get end scn");
   } else if (OB_FAIL(get_restore_error_unlock_(trace_id, ret_code, error_exist))) {
     CLOG_LOG(WARN, "fail to get restore error");

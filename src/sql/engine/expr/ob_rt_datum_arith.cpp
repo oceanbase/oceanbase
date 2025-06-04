@@ -65,7 +65,7 @@ int ObRTDatumArith::inner_setup_datum_metas(const ObDatumMeta *metas, int64_t cn
     OZ(factory_.create_raw_expr(T_REF_COLUMN, col));
     CK(NULL != col);
     if (OB_SUCC(ret)) {
-      ObExprResType &res_type = const_cast<ObExprResType &>(col->get_result_type());
+      ObRawExprResType &res_type = const_cast<ObRawExprResType &>(col->get_result_type());
       res_type.set_type(metas[i].type_);
       res_type.set_collation_type(metas[i].cs_type_);
       res_type.set_scale(metas[i].scale_);
@@ -99,8 +99,7 @@ ObRTDatumArith::Item ObRTDatumArith::build_arith_expr(const Item &l, const Item 
     ObOpRawExpr *expr = NULL;
     OZ(factory_.create_raw_expr(op, expr));
     CK(NULL != expr);
-    OZ(expr->add_param_expr(l.expr_));
-    OZ(expr->add_param_expr(r.expr_));
+    OZ(expr->set_param_exprs(l.expr_, r.expr_));
 
     item.arith_ = this;
     item.expr_ = expr;

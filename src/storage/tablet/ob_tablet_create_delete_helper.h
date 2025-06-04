@@ -154,6 +154,10 @@ public:
       const ObTabletPoolType &type,
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
+  static int acquire_tablet_from_pool_for_ss(
+    const ObTabletPoolType &type,
+    const ObTabletMapKey &key,
+    ObTabletHandle &handle);
   // Attention !!! only used when first creating tablet
   static int create_empty_sstable(
       common::ObArenaAllocator &allocator,
@@ -188,10 +192,6 @@ public:
              const char *buf,
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
-private:
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int try_get_current_version_tablet_(const ObTabletMapKey &key, ObLS *ls, ObTabletHandle &handle);
-#endif
 
 private:
   class ReadMdsFunctor

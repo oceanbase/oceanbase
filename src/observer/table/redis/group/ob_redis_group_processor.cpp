@@ -181,7 +181,7 @@ int ObRedisGroupOpProcessor::process()
         }
         case RedisCommandType::REDIS_COMMAND_HEXISTS: {
           CommandOperator op(batch_ctx);
-          ret = op.do_group_complex_type_subkey_exists(ObRedisModel::HASH);
+          ret = op.do_group_complex_type_subkey_exists(ObRedisDataModel::HASH);
           break;
         }
         // string
@@ -256,7 +256,7 @@ int ObRedisGroupOpProcessor::process()
         // set
         case RedisCommandType::REDIS_COMMAND_SISMEMBER: {
           CommandOperator op(batch_ctx);
-          ret = op.do_group_complex_type_subkey_exists(ObRedisModel::SET);
+          ret = op.do_group_complex_type_subkey_exists(ObRedisDataModel::SET);
           break;
         }
         case RedisCommandType::REDIS_COMMAND_SADD: {

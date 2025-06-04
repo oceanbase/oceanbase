@@ -34,6 +34,7 @@ public:
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
+  virtual int check_rule_bypass(const ObDMLStmt &stmt, bool &reject) override;
 
 protected:
   int adjust_transform_types(uint64_t &transform_types);

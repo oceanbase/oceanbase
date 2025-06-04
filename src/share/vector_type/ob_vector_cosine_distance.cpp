@@ -53,6 +53,10 @@ int ObVectorCosineDistance<float>::cosine_similarity_func(const float *a, const 
       ret = common::specific::avx512::cosine_similarity(a, b, len, similarity);
     } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
       ret = common::specific::avx2::cosine_similarity(a, b, len, similarity);
+    } else if (common::is_arch_supported(ObTargetArch::AVX)) {
+      ret = common::specific::avx2::cosine_similarity(a, b, len, similarity);
+    } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+      ret = common::specific::sse42::cosine_similarity(a, b, len, similarity);
     } else {
       ret = common::specific::normal::cosine_similarity(a, b, len, similarity);
     }

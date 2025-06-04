@@ -61,8 +61,8 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 void init_log_handler(PalfHandleImplGuard &leader, ObLogHandler &log_handler)
 {
-  PalfHandle palf_handle;
-  palf_handle.palf_handle_impl_ = leader.palf_handle_impl_;
+  PalfHandle *palf_handle = new PalfHandle{};
+  palf_handle->palf_handle_impl_ = leader.palf_handle_impl_;
   log_handler.palf_handle_ = palf_handle;
   log_handler.id_ = leader.palf_id_;
   log_handler.is_inited_ = true;
@@ -313,7 +313,7 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_shared_log_interface)
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_lsn(base_lsn));
     EXPECT_EQ(LSN(PALF_BLOCK_SIZE), begin_lsn);
     EXPECT_EQ(begin_lsn, base_lsn);
-    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_handler.palf_handle_.locate_by_scn_coarsely(tmp_scn, result_lsn));
+    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_handler.palf_handle_->locate_by_scn_coarsely(tmp_scn, result_lsn));
     EXPECT_EQ(OB_SUCCESS, log_handler.locate_by_scn_coarsely(tmp_scn, result_lsn));
     EXPECT_EQ(local_result_lsn, result_lsn);
 
@@ -354,6 +354,12 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_shared_log_interface)
   CLOG_LOG(INFO, "TEST_CASE-interface for restore tenant or migrate");
   {
     int64_t id = ATOMIC_AAF(&palf_id_, 1);
+    if (GCONF.enable_logservice)
+    {
+      CLOG_LOG(INFO, "logservice is not compatible with shared storage");
+      EXPECT_EQ(0, 1);
+    }
+    else
     {
     int64_t leader_idx = 0;
     PalfHandleImplGuard leader;
@@ -411,7 +417,7 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_shared_log_interface)
       sleep(1);
       CLOG_LOG(INFO, "wait for upload", K(ctx));
     }
-    EXPECT_EQ(OB_SUCCESS, log_handler.palf_handle_.palf_handle_impl_->set_base_lsn(LSN(12 * PALF_BLOCK_SIZE)));
+    EXPECT_EQ(OB_SUCCESS, static_cast<palf::PalfHandle*>(log_handler.palf_handle_)->palf_handle_impl_->set_base_lsn(LSN(12 * PALF_BLOCK_SIZE)));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1024));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_lsn(base_lsn));

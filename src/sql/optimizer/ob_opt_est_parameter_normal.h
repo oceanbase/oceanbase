@@ -62,24 +62,42 @@ const static double NORMAL_RANGE_COST = 2.1 * DEFAULT_CPU_SPEED;
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST = 0.04392826667 * DEFAULT_CPU_SPEED;
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST = 0.04187649999657894736842105263 * DEFAULT_CPU_SPEED;
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST = 0.001149576877742598684210526316 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_LOB_COST = 6.5 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_JSON_COST = 9.7 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_GIS_COST = 8.9 * DEFAULT_CPU_SPEED;
 
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST = 0.04392826667 * DEFAULT_CPU_SPEED;
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST = 0.04187649999657894736842105263 * DEFAULT_CPU_SPEED;
 const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST = 0.001149576877742598684210526316 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_LOB_COST = 24.3 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_JSON_COST = 36.7 * DEFAULT_CPU_SPEED;
+const static double NORMAL_ROW_STORE_PROJECT_COLUMN_RND_GIS_COST = 32.4 * DEFAULT_CPU_SPEED;
 //column store
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST = 0.08879689693065789473684210526 * DEFAULT_CPU_SPEED;
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST = 0.07463286534828947368421052632 * DEFAULT_CPU_SPEED;
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST = 0.002145698273026315789473684210 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_LOB_COST = 6.5 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_JSON_COST = 9.7 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_GIS_COST = 8.9 * DEFAULT_CPU_SPEED;
 
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST = 0.08879689693065789473684210526 * DEFAULT_CPU_SPEED;
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST = 0.07463286534828947368421052632 * DEFAULT_CPU_SPEED;
 const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST = 0.002145698273026315789473684210 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_LOB_COST = 24.3 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_JSON_COST = 36.7 * DEFAULT_CPU_SPEED;
+const static double NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_GIS_COST = 32.4 * DEFAULT_CPU_SPEED;
 
 //compare cost params
 const static double NORMAL_CMP_INT_COST = 0.0100087103407539 * DEFAULT_CPU_SPEED;
 const static double NORMAL_CMP_NUMBER_COST = 0.0227412012152380952380952381 * DEFAULT_CPU_SPEED;
 const static double NORMAL_CMP_CHAR_COST = 0.09707028746051587301587301588 * DEFAULT_CPU_SPEED;
+//mock complex expr cost
 const static double NORMAL_CMP_SPATIAL_COST = 19.311884382850465 * DEFAULT_CPU_SPEED;
+const static double NORMAL_CMP_UDF_COST = 100.0 * DEFAULT_CPU_SPEED;
+const static double NORMAL_CMP_LOB_COST = 9.707028746051587301587301588 * DEFAULT_CPU_SPEED; //NORMAL_CMP_CHAR_COST * 100
+const static double NORMAL_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539 * DEFAULT_CPU_SPEED; //NORMAL_CMP_INT_COST * 100
+// jinmao TODO: 系数要测算后再填
+const static double NORMAL_FUNCTIONAL_LOOKUP_PER_ROW_COST = 100.0 * DEFAULT_CPU_SPEED;
 const static double NORMAL_INVALID_CMP_COST = -1;
 
 //hash cost params
@@ -88,12 +106,6 @@ const static double NORMAL_HASH_NUMBER_COST = 0.02702563229230158730158730158 * 
 const static double NORMAL_HASH_CHAR_COST = 0.2306996323278174603174603175 * DEFAULT_CPU_SPEED;
 const static double NORMAL_INVALID_HASH_COST = -1;
 
-//mock complex expr cost
-const static double NORMAL_CMP_UDF_COST = 100.0 * DEFAULT_CPU_SPEED;
-const static double NORMAL_CMP_LOB_COST = 9.707028746051587301587301588 * DEFAULT_CPU_SPEED; //NORMAL_CMP_CHAR_COST * 100
-const static double NORMAL_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539 * DEFAULT_CPU_SPEED; //NORMAL_CMP_INT_COST * 100
-// jinmao TODO: 系数要测算后再填
-const static double NORMAL_FUNCTIONAL_LOOKUP_PER_ROW_COST = 100.0 * DEFAULT_CPU_SPEED;
 
 const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_INT_COST,            // null
@@ -109,7 +121,7 @@ const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_CHAR_COST,           // varchar, char, varbinary, binary.
   NORMAL_CMP_INT_COST,            // extend
   NORMAL_INVALID_CMP_COST,        // unknown
-  NORMAL_CMP_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  NORMAL_CMP_LOB_COST,            // TinyText,MediumText, Text ,LongText
   // TODO:@zhenling.zzg check the new type cost plz
   NORMAL_CMP_INT_COST,            // Bit
   NORMAL_CMP_CHAR_COST,           // enum, set
@@ -118,12 +130,12 @@ const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_CHAR_COST,           // raw
   NORMAL_CMP_INT_COST,            // interval
   NORMAL_CMP_INT_COST,            // rowid
-  NORMAL_CMP_CHAR_COST,           // lob
-  NORMAL_CMP_CHAR_COST,           // json
-  NORMAL_CMP_CHAR_COST,           // geometry
-  NORMAL_CMP_CHAR_COST,           // user defined type
+  NORMAL_CMP_LOB_COST,            // lob
+  NORMAL_CMP_LOB_COST,            // json
+  NORMAL_CMP_SPATIAL_COST,        // geometry
+  NORMAL_CMP_UDF_COST,            // user defined type
   NORMAL_CMP_NUMBER_COST,         // ObDecimalIntTC
-  NORMAL_CMP_CHAR_COST,           // collection sql type
+  NORMAL_CMP_LOB_COST,           // collection sql type
   NORMAL_CMP_INT_COST,            // mysql date
   NORMAL_CMP_INT_COST,            // mysql datetime
   NORMAL_CMP_CHAR_COST,           // roaringbitmap
@@ -162,29 +174,125 @@ const static double hash_params_normal[ObMaxTC+1] = {
   NORMAL_HASH_CHAR_COST,           // roaringbitmap
 };
 
-const static double project_params_normal[2][2][MAX_PROJECT_TYPE] = {
+const static double project_params_normal[2][2][ObMaxTC+1] = {
   {
     {// row store sequence access
-      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,     // int
-      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,  // number or decimal
-      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST     // char
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // null
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // int8, int16, int24, int32, int64.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // uint8, uint16, uint24, uint32, uint64.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // float, ufloat.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // double, udouble.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // number, unumber.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // datetime, timestamp.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // date
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // time
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // year
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // varchar, char, varbinary, binary.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // extend
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // unknown
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // TinyText,MediumText, Text ,LongText
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // Bit
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // enum, set
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // ObEnumSetInnerTC
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // timestamp with time zone
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // raw
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // interval
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // rowid
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // lob
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_JSON_COST,           // json
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_GIS_COST,            // geometry
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // user defined type
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // ObDecimalIntTC
+      NORMAL_ROW_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // collection sql type
     },
     {// row store random access
-      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,     // int
-      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,  // number or decimal
-      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST     // char
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // null
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // int8, int16, int24, int32, int64.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // uint8, uint16, uint24, uint32, uint64.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // float, ufloat.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // double, udouble.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // number, unumber.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // datetime, timestamp.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // date
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // time
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // year
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // varchar, char, varbinary, binary.
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // extend
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // unknown
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_LOB_COST,            // TinyText,MediumText, Text ,LongText
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // Bit
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // enum, set
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // ObEnumSetInnerTC
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // timestamp with time zone
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // raw
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // interval
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // rowid
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_LOB_COST,            // lob
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_JSON_COST,           // json
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_GIS_COST,            // geometry
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,            // user defined type
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // ObDecimalIntTC
+      NORMAL_ROW_STORE_PROJECT_COLUMN_RND_LOB_COST,            // collection sql type
     }
   },
   {
     {// column store sequence access
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,    // int
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST, // number or decimal
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST    // char
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // null
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // int8, int16, int24, int32, int64.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // uint8, uint16, uint24, uint32, uint64.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // float, ufloat.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // double, udouble.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // number, unumber.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // datetime, timestamp.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // date
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // time
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // year
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // varchar, char, varbinary, binary.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // extend
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST,           // unknown
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // TinyText,MediumText, Text ,LongText
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // Bit
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // enum, set
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // ObEnumSetInnerTC
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // timestamp with time zone
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // raw
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // interval
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // rowid
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // lob
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_JSON_COST,           // json
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_GIS_COST,            // geometry
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,            // user defined type
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,         // ObDecimalIntTC
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_SEQ_LOB_COST,            // collection sql type
     },
     {// column store random access
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,    // int
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST, // number or decimal
-      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST    // char
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // null
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // int8, int16, int24, int32, int64.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // uint8, uint16, uint24, uint32, uint64.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // float, ufloat.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // double, udouble.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // number, unumber.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // datetime, timestamp.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // date
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // time
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // year
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // varchar, char, varbinary, binary.
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // extend
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST,           // unknown
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_LOB_COST,            // TinyText,MediumText, Text ,LongText
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // Bit
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // enum, set
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // ObEnumSetInnerTC
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // timestamp with time zone
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // raw
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // interval
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // rowid
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_LOB_COST,            // lob
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_JSON_COST,           // json
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_GIS_COST,            // geometry
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,            // user defined type
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST,         // ObDecimalIntTC
+      NORMAL_COLUMN_STORE_PROJECT_COLUMN_RND_LOB_COST,            // collection sql type
     }
   }
 };

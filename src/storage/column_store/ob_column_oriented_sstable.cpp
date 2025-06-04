@@ -761,8 +761,32 @@ int ObCOSSTableV2::cg_scan(
     ObTableAccessContext &context,
     ObICGIterator *&cg_iter,
     const bool is_projector,
-    const bool project_single_row)
+    const bool project_single_row,
+    ObIAllocator* iter_alloc)
 {
+#define ALLOCATE_CG_ITER(ctx, cg_idx, class, ptr)                \
+  do {                                                           \
+    if (OB_LIKELY(nullptr == iter_alloc)) {                      \
+      ALLOCATE_TABLE_STORE_CG_IETRATOR(ctx, cg_idx, class, ptr); \
+    } else {                                                     \
+      void* buf = nullptr;                                       \
+      if (NULL == (buf = iter_alloc->alloc(sizeof(class)))) {    \
+        ret = OB_ALLOCATE_MEMORY_FAILED;                         \
+        STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));    \
+      } else {                                                   \
+        ptr = new (buf) class();                                 \
+      }                                                          \
+    }                                                            \
+  } while (false)
+#define FREE_CG_ITER(ctx, iter)                \
+  do {                                         \
+    if (OB_LIKELY(nullptr == iter_alloc)) {    \
+      FREE_TABLE_STORE_CG_IETRATOR(ctx, iter); \
+    } else {                                   \
+      iter_alloc->free(iter);                  \
+    }                                          \
+  } while (false)
+
   int ret = OB_SUCCESS;
   cg_iter = nullptr;
   ObICGIterator *cg_scanner = nullptr;
@@ -775,29 +799,29 @@ int ObCOSSTableV2::cg_scan(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(context));
   } else if (is_virtual_cg(param.cg_idx_)) {
-    ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObVirtualCGScanner, cg_scanner);
+    ALLOCATE_CG_ITER(context, param.cg_idx_, ObVirtualCGScanner, cg_scanner);
   } else if (OB_FAIL(fetch_cg_sstable(param.cg_idx_, table_wrapper))) {
     LOG_WARN("failed to fetch cg table wrapper", K(ret), K(param), KPC(this));
   } else if (project_single_row) {
     if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
-      ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
     } else {
-      ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObCGSingleRowScanner, cg_scanner);
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGSingleRowScanner, cg_scanner);
     }
   } else if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
     if (param.enable_pd_group_by() && is_projector) {
-      ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObDefaultCGGroupByScanner, cg_scanner);
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGGroupByScanner, cg_scanner);
     } else {
-      ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
     }
   } else if (param.enable_pd_group_by() && is_projector) {
-    ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObCGGroupByScanner, cg_scanner);
+    ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGGroupByScanner, cg_scanner);
   } else if (param.enable_pd_aggregate()) {
-    ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObCGAggregatedScanner, cg_scanner);
+    ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGAggregatedScanner, cg_scanner);
   } else if (is_projector) {
-    ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObCGRowScanner, cg_scanner);
+    ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGRowScanner, cg_scanner);
   } else {
-    ALLOCATE_TABLE_STORE_CG_IETRATOR(context, param.cg_idx_, ObCGScanner, cg_scanner);
+    ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGScanner, cg_scanner);
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(cg_scanner)) {
@@ -818,7 +842,7 @@ int ObCOSSTableV2::cg_scan(
     } else {
       if (nullptr != cg_scanner) {
         cg_scanner->~ObICGIterator();
-        FREE_TABLE_STORE_CG_IETRATOR(context, cg_scanner);
+        FREE_CG_ITER(context, cg_scanner);
       }
     }
   }

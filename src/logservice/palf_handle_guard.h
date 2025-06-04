@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_LOGSERVICE_PALF_HANDLE_GUARD_
 #define OCEANBASE_LOGSERVICE_PALF_HANDLE_GUARD_
 #include "share/ob_delegate.h"
+#include "ipalf/ipalf_handle.h"
+#include "ipalf/ipalf_env.h"
 #include "palf/palf_handle.h"
 #include "palf/palf_env.h"
 namespace oceanbase
@@ -22,7 +24,7 @@ namespace palf
 class PalfHandleGuard
 {
 public:
-  PalfHandleGuard() : palf_handle_(), palf_env_(nullptr)
+  PalfHandleGuard() : palf_handle_(nullptr), palf_env_(nullptr)
   {
   }
   ~PalfHandleGuard()
@@ -31,25 +33,25 @@ public:
   }
   void reset()
   {
-    if (nullptr != palf_env_)
+    if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_))
     {
       palf_env_->close(palf_handle_);
-      palf_env_ = nullptr;
     }
+    palf_env_ = nullptr;
+    palf_handle_ = nullptr;
   }
 
   bool is_valid() const
   {
-    return palf_handle_.is_valid();
+    return OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid();
   }
 
-  PalfHandle *get_palf_handle() { return &palf_handle_; }
+  ipalf::IPalfHandle *get_palf_handle() { return palf_handle_; }
 
-  void set(PalfHandle &palf_handle, PalfEnv *palf_env)
+  void set(ipalf::IPalfHandle *palf_handle, ipalf::IPalfEnv *palf_env)
   {
     palf_handle_ = palf_handle;
     palf_env_ = palf_env;
-    palf_handle.palf_handle_impl_ = NULL;
   }
   // @brief set the initial member list of paxos group
   // @param[in] ObMemberList, the initial member list
@@ -59,7 +61,7 @@ public:
   //    else return other errno
   // int set_initial_member_list(const common::ObMemberList &member_list,
   //                             const int64_t paxos_replica_num);
-  DELEGATE_WITH_RET(palf_handle_, set_initial_member_list, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, set_initial_member_list, int);
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] cost PalfAppendOptions&, decide this append option whether need block thread.
   // @param[in] const void *, the data buffer.
@@ -74,9 +76,9 @@ public:
   //            const int64_t ref_scn,
   //            LSN &lsn,
   //            int64_t &scn);
-  DELEGATE_WITH_RET(palf_handle_, append, int);
-  DELEGATE_WITH_RET(palf_handle_, raw_write, int);
-  DELEGATE_WITH_RET(palf_handle_, raw_read, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, append, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, raw_write, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, raw_read, int);
 
   // @breif, query lsn by timestamp, note that this function may be time-consuming
   // @param[in] const int64_t, specified timestamp(ns).
@@ -85,48 +87,48 @@ public:
   // @param[in] const int64_t, specified timestamp(ns).
   // @param[out] LSN&, the lower bound lsn which include timestamp.
   // int locate_by_scn_coarsely(const int64_t scn, LSN &lsn, int64_t &ts);
-  DELEGATE_WITH_RET(palf_handle_, locate_by_scn_coarsely, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, locate_by_scn_coarsely, int);
 
-  DELEGATE_WITH_RET(palf_handle_, locate_by_lsn_coarsely, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, locate_by_lsn_coarsely, int);
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
   // @param[in] const LSN&, recycable lsn.
   // int advance_base_lsn(const LSN &lsn);
-  DELEGATE_WITH_RET(palf_handle_, advance_base_lsn, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, advance_base_lsn, int);
 
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_base_lsn, int);
-  DELEGATE_WITH_RET(palf_handle_, change_leader_to, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_base_lsn, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, change_leader_to, int);
   // @breif, get begin lsn, begin lsn maybe smaller than recycable lsn, because palf will not delete data before
   //         recycable lsn immediately.
   // @param[out] int64_t&, begin lsn.
   // int get_base_scn(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_scn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_begin_scn, int);
   // int get_begin_lsn(palf::LSN &lsn) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_lsn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_begin_lsn, int);
   // @brief, get timestamp of begin lsn.
   // @param[out] int64_t&, timestmap.
   // int get_begin_scn(int64_t &ts) const;
-  // CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_scn, int);
+  // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_begin_scn, int);
   // @brief, get end lsn.
   // @param[out] LSN&, end lsn.
   // int get_end_lsn(LSN &lsn) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_lsn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_end_lsn, int);
   // @brief, get timestamp of end lsn.
   // @param[out] int64_t, timestamp.
   // int get_end_scn(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_scn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_end_scn, int);
   // @brief, get max timestamp.
   // @param[out] int64_t, timestamp.
   // int get_max_scn(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_scn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_max_scn, int);
   // @brief, get max lsn.
   // @param[out] int64_t, LSN.
   // int get_max_lsn(LSN &lsn) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_lsn, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_max_lsn, int);
   // @brief get readable end lsn for this replica, all logs before it can be readable.
   // @param[out] lsn, readable end lsn.
   // -- OB_NOT_INIT           not_init
   // -- OB_SUCCESS
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_readable_end_lsn, int);
+  // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_readable_end_lsn, int);
 
   // @brief, get role of this replica
   // @param[out] common::ObRole&
@@ -136,21 +138,27 @@ public:
   int get_role(common::ObRole &role, int64_t &proposal_id)
   {
     bool unused_state;
-    return palf_handle_.get_role(role, proposal_id, unused_state);
+    return palf_handle_->get_role(role, proposal_id, unused_state);
   }
 
   int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state)
   {
-    return palf_handle_.get_role(role, proposal_id, is_pending_state);
+    return palf_handle_->get_role(role, proposal_id, is_pending_state);
   }
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_paxos_member_list, int);
+  // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_paxos_member_list, int);
   // @brief, get paxos member list and learner_list of this paxos group
   // @param[out] common::ObMemberList&
-  // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_paxos_member_list_and_learner_list, int);
+  // // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
+  // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_paxos_member_list_and_learner_list, int);
+
+#ifdef OB_BUILD_ARBITRATION
+  // @brief: get arbitration member of log stram
+  // @params[out] ObMember arbitration_member
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_arbitration_member, int);
+#endif
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
@@ -163,7 +171,7 @@ public:
   // - OB_TIMEOUT: change_replica_num timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   // - other: bug
-  DELEGATE_WITH_RET(palf_handle_, change_replica_num, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, change_replica_num, int);
 
 // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
@@ -178,13 +186,13 @@ public:
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   // - OB_STATE_NOT_MATCH: leader has switched
   // - other: bug
-  DELEGATE_WITH_RET(palf_handle_, add_member, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, add_member, int);
 
   // @brief, get config_version
   // @return
   // - OB_SUCCESS: get_config_version successfully
   // - OB_NOT_INIT
-  DELEGATE_WITH_RET(palf_handle_, get_config_version, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, get_config_version, int);
 
   // @brief, remove a member from paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be removed
@@ -199,7 +207,7 @@ public:
   // int remove_member(const common::ObMember &member,
   //                const int64_t paxos_replica_num,
   //                const int64_t timeout_us)
-  DELEGATE_WITH_RET(palf_handle_, remove_member, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, remove_member, int);
 
   // @brief, replace old_member with new_member, can be called only in leader
   // @param[in] const common::ObMember &removed_member: member will be removed
@@ -211,32 +219,32 @@ public:
   // - OB_TIMEOUT: replace member timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   // - other: bug
-  DELEGATE_WITH_RET(palf_handle_, replace_member, int);
-  DELEGATE_WITH_RET(palf_handle_, add_learner, int);
-  DELEGATE_WITH_RET(palf_handle_, remove_learner, int);
-  DELEGATE_WITH_RET(palf_handle_, switch_learner_to_acceptor, int);
-  DELEGATE_WITH_RET(palf_handle_, switch_acceptor_to_learner, int);
-  DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
-  DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
-  DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
-  DELEGATE_WITH_RET(palf_handle_, flashback, int);
-  CONST_DELEGATE_WITH_RET(palf_handle_, stat, int);
-  DELEGATE_WITH_RET(palf_handle_, try_lock_config_change, int);
-  DELEGATE_WITH_RET(palf_handle_, unlock_config_change, int);
-  DELEGATE_WITH_RET(palf_handle_, get_config_change_lock_stat, int);
-  DELEGATE_WITH_RET(palf_handle_, disable_sync, int);
-  DELEGATE_WITH_RET(palf_handle_, enable_sync, int);
-  DELEGATE_WITH_RET(palf_handle_, advance_base_info, int);
-  DELEGATE_WITH_RET(palf_handle_, is_vote_enabled, bool);
-  DELEGATE_WITH_RET(palf_handle_, get_election_leader, int);
-  DELEGATE_WITH_RET(palf_handle_, is_sync_enabled, bool);
-  DELEGATE_WITH_RET(palf_handle_, get_access_mode_version, int);
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_election_leader, int);
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_palf_epoch, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, replace_member, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, add_learner, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, remove_learner, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, switch_learner_to_acceptor, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, switch_acceptor_to_learner, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, set_location_cache_cb, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, change_access_mode, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, get_access_mode, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, flashback, int);
+  // CONST_DELEGATE_PTR_WITH_RET(palf_handle_, stat, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, try_lock_config_change, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, unlock_config_change, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, get_config_change_lock_stat, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, disable_sync, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, enable_sync, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, advance_base_info, int);
+  // DELEGATE_PTR_WITH_RET(palf_handle_, is_vote_enabled, bool);
+  DELEGATE_PTR_WITH_RET(palf_handle_, get_election_leader, int);
+  DELEGATE_PTR_WITH_RET(palf_handle_, is_sync_enabled, bool);
+  DELEGATE_PTR_WITH_RET(palf_handle_, get_access_mode_version, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_election_leader, int);
+  CONST_DELEGATE_PTR_WITH_RET(palf_handle_, get_palf_epoch, int);
   TO_STRING_KV(K(palf_handle_));
 private:
-  PalfHandle palf_handle_;
-  PalfEnv *palf_env_;
+  ipalf::IPalfHandle *palf_handle_;
+  ipalf::IPalfEnv *palf_env_;
 };
 }
 }

@@ -60,7 +60,7 @@ public:
   ObTabletComplexAddr<mds::MdsDumpKV> uncommitted_kv_;
   ObTabletComplexAddr<mds::MdsDumpKV> committed_kv_;
 };
-
+// not used after 4.3
 class ObTabletMdsData
 {
   friend class ObTablet;
@@ -76,9 +76,6 @@ public:
       common::ObIAllocator &allocator,
       const ObTabletStatus::Status &tablet_status,
       const ObTabletMdsUserDataType &data_type);
-  int init_by_full_memory_mds_data(
-      common::ObIAllocator &allocator,
-      const ObTabletFullMemoryMdsData &full_memory_mds_data);
   int init_for_mds_table_dump(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &mds_table_data,
@@ -89,11 +86,6 @@ public:
       const ObTabletMdsData &other,
       const int64_t finish_medium_scn,
       const compaction::ObMergeType merge_type = compaction::ObMergeType::MERGE_TYPE_MAX);
-  int init_for_merge_with_full_mds_data(
-      common::ObIAllocator &allocator,
-      const ObTabletMdsData &other,
-      const ObTabletFullMediumInfo &full_memory_medium_info_list,
-      const int64_t finish_medium_scn);
   int init_with_update_medium_info(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other,
@@ -122,10 +114,11 @@ public:
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
       mds::MdsDumpKV *&kv);
-  static int load_medium_info_list(
+  template<typename ARRAY_STRUCT>
+  static int load_array(
       common::ObIAllocator &allocator,
-      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      ObTabletDumpedMediumInfo *&medium_info_list);
+      const ObTabletComplexAddr<ARRAY_STRUCT> &complex_addr,
+      ARRAY_STRUCT *&list);
   static int load_auto_inc_seq(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
@@ -210,10 +203,11 @@ private:
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &base_data,
       const int64_t finish_medium_scn,
       ObTabletComplexAddr<ObTabletDumpedMediumInfo> &fused_data);
-  static int read_medium_info(
-      common::ObIAllocator &allocator,
+  template<typename ARRAY_STRUCT, typename ITEM>
+  static int read_items(
       const ObMetaDiskAddr &addr,
-      common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> &array);
+      ARRAY_STRUCT &input_array_struct,
+      common::ObIArray<ITEM*> &array);
   static int copy_medium_info_list(
       const int64_t finish_medium_scn,
       const ObTabletDumpedMediumInfo &input_medium_info_list,

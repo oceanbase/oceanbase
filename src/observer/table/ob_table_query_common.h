@@ -49,6 +49,12 @@ public:
                                 uint64_t arg_tenant_id,
                                 uint64_t arg_database_id,
                                 common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
+  static int get_table_schemas(ObSchemaGetterGuard& schema_guard,
+                               const ObString &arg_table_name,
+                               bool is_tablegroup_name,
+                               uint64_t arg_tenant_id,
+                               uint64_t arg_database_id,
+                               common::ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
 
 private:
   static int check_htable_query_args(const ObTableQuery &query, const ObTableCtx &tb_ctx);

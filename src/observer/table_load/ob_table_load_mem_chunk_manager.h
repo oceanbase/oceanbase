@@ -50,8 +50,6 @@ public:
   int close_chunk(int64_t chunk_node_id);
   int close_and_acquire_chunk(int64_t chunk_node_id, ChunkType *&chunk);
 private:
-  int acquire_chunk(ChunkType *&chunk);
-private:
   ObTableLoadStoreCtx *store_ctx_;
   storage::ObDirectLoadMemContext *mem_ctx_;
   ObArray<ObTableLoadChunkNode> chunk_nodes_;

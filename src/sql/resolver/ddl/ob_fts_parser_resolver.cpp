@@ -44,13 +44,7 @@ int ObFTParserResolverHelper::resolve_parser_properties(
         LOG_WARN("fail to resolve fts index parser properties", K(ret));
       }
     }
-    bool has_conflict = false;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(property.check_conflict_config_for_resolve(has_conflict))) {
-      LOG_WARN("invalid argument", K(ret), K(property));
-    } else if (has_conflict) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "the parser properties has conflict config");
     } else if (OB_FAIL(property.to_format_json(allocator, parser_property))) {
       LOG_WARN("fail to serialize parser properties", K(ret), K(property));
     }
@@ -191,6 +185,39 @@ int ObFTParserResolverHelper::resolve_fts_index_parser_properties(
             LOG_WARN("invalid fts index parser properties option", K(ret), K(ik_mode_str));
             LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::IK_MODE_SCOPE_STR);
           }
+        }
+        break;
+      }
+      case T_PARSER_MIN_NGRAM_SIZE: {
+        if (OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("option_node child is nullptr", K(ret));
+        } else if (OB_UNLIKELY(!property.is_valid_min_ngram_token_size(node->children_[0]->value_))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR);
+          LOG_WARN("invalid min ngram token size",
+                   K(ObString(ObFTSLiteral::MIN_NGRAM_SIZE_SCOPE_STR)),
+                   K(ret),
+                   K(node->children_[0]->value_));
+        } else if (OB_FAIL(property.config_set_min_ngram_token_size(node->children_[0]->value_))) {
+          LOG_WARN("fail to set min ngram token size", K(ret));
+        }
+        break;
+      }
+      case T_PARSER_MAX_NGRAM_SIZE: {
+        if (OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("option_node child is nullptr", K(ret));
+        } else if (OB_UNLIKELY(
+                       !property.is_valid_max_ngram_token_size(node->children_[0]->value_))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::MAX_NGRAM_SIZE_SCOPE_STR);
+          LOG_WARN("invalid max ngram token size",
+                   K(ObString(ObFTSLiteral::MAX_NGRAM_SIZE_SCOPE_STR)),
+                   K(ret),
+                   K(node->children_[0]->value_));
+        } else if (OB_FAIL(property.config_set_max_ngram_token_size(node->children_[0]->value_))) {
+          LOG_WARN("fail to set max ngram token size", K(ret));
         }
         break;
       }

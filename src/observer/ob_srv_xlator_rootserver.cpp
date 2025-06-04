@@ -170,6 +170,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcGrantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeUserP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcLockUserP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRevokeCatalogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeDBP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeRoutineP, *gctx_.root_service_);
@@ -287,5 +288,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 #endif
     RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
+    RPC_PROCESSOR(rootserver::ObRpcHandleCatalogDDLP, *gctx_.root_service_);
+
     RPC_PROCESSOR(rootserver::ObRpcRebuildTabletP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObForceDropLonelyLobAuxTableP, *gctx_.root_service_);
 }

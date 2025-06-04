@@ -50,32 +50,36 @@ void TestDiskSpaceManager::TearDownTestCase()
     MockTenantModuleEnv::get_instance().destroy();
 }
 
-TEST_F(TestDiskSpaceManager, basic_test)
+TEST_F(TestDiskSpaceManager, macro_block_test)
 {
   int ret = OB_SUCCESS;
-  ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
-  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB - reserved_size
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size));
 
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // 1.alloc disk_size
   int64_t disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_DATA_MACRO, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_private_macro_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::MACRO_BLOCK));
+  ObSSMacroCacheStat cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, cache_stat));
+  ASSERT_EQ(disk_size, cache_stat.used_);
   disk_size = 100L * 1024L * 1024L * 1024L; // 100GB
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_DATA_MACRO, false/*is_tmp_file_read_cache*/));
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::MACRO_BLOCK));
 
   // 2.free disk_size
   disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::PRIVATE_DATA_MACRO, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_private_macro_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObSSMacroCacheType::MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
   disk_size = 100L * 1024L * 1024L * 1024L; // 100GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::PRIVATE_DATA_MACRO, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_private_macro_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObSSMacroCacheType::MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
 
-  // 3.resize tenant_disk_ size
-  disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
+  // 3.resize tenant_disk_size
+  disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(disk_size));
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
   disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
@@ -85,86 +89,63 @@ TEST_F(TestDiskSpaceManager, basic_test)
 TEST_F(TestDiskSpaceManager, test_tmp_file_space_manager)
 {
   int ret = OB_SUCCESS;
-  ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
-  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
   // 1.alloc tmp_file_size
-  int64_t tmp_file_write_cache_reserved_size = 1024L * 1024L * 1024L; // 1GB
-  // ASSERT_EQ(tmp_file_write_cache_reserved_size, tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size());
-  int64_t preread_cache_reserved_size = 2L * 1024L * 1024L * 1024L; // 2GB
-  // ASSERT_EQ(preread_cache_reserved_size, tenant_disk_space_mgr->get_preread_cache_reserved_size());
-
   int64_t disk_size = 1L * 1024L * 1024L; // 1MB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_tmp_file_write_cache_alloc_size());
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, true/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_tmp_file_read_cache_alloc_size());
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_major_macro_read_cache_alloc_size());
-  const int64_t tmp_file_reserved_disk_size = tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size();
-  int64_t tmp_file_free_disk_size = tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size() +
-                                    tenant_disk_space_mgr->get_preread_cache_reserved_size() -
-                                    tenant_disk_space_mgr->get_reserved_disk_size(tmp_file_reserved_disk_size) - 3 * disk_size;
-  ASSERT_EQ(tmp_file_free_disk_size, tenant_disk_space_mgr->get_tmp_file_write_free_disk_size());
-  tmp_file_free_disk_size = tenant_disk_space_mgr->get_preread_cache_reserved_size() - 2 * disk_size;
-  ASSERT_EQ(tmp_file_free_disk_size, tenant_disk_space_mgr->get_preread_free_disk_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
+  ObSSMacroCacheStat cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(disk_size, cache_stat.used_);
 
   // 2.free tmp_file_size
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::TMP_FILE, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_tmp_file_write_cache_alloc_size());
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::TMP_FILE, true/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_tmp_file_read_cache_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
 
   // 3.alloc tmp_file_size fail
-  disk_size = 2L * 1024L * 1024L * 1024L; // 2GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, true/*is_tmp_file_read_cache*/));
+  disk_size = 18L * 1024L * 1024L * 1024L; // 18GB
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
 
   // 4.alloc max_available_disk_size
-  disk_size = tenant_disk_space_mgr->get_tmp_file_write_free_disk_size();
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, false/*is_tmp_file_read_cache*/));
+  const int64_t macro_cache_size = tenant_disk_space_mgr->get_macro_cache_size();
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  disk_size = macro_cache_size * cache_stat.get_max() / 100 - cache_stat.used_;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
   disk_size = 1L * 1024L * 1024L; // 1MB
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::TMP_FILE, false/*is_tmp_file_read_cache*/));
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE));
 
   // 5.resize tenant_disk_size
-  disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
+  disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(disk_size));
   ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_total_disk_size());
-  disk_size = 1024L * 1024L * 1024L; // 1GB
-  // ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_tmp_file_write_cache_reserved_size());
-  disk_size = 2L * 1024L * 1024L * 1024L; // 2GB
-  // ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_preread_cache_reserved_size());
 }
 
 TEST_F(TestDiskSpaceManager, test_meta_file_space_manager)
 {
   int ret = OB_SUCCESS;
-  ObTenantDiskSpaceManager* tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager*);
-  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L; // 20GB
+  ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
   // 1.alloc meta_file_size
   int64_t disk_size = 1L * 1024L * 1024L; // 1MB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_META, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_meta_file_alloc_size());
-  const int64_t meta_file_reserved_disk_size = tenant_disk_space_mgr->get_meta_reserved_disk_size();
-  int64_t meta_file_free_disk_size = meta_file_reserved_disk_size - tenant_disk_space_mgr->get_reserved_disk_size(meta_file_reserved_disk_size) - disk_size;
-  ASSERT_EQ(meta_file_free_disk_size, tenant_disk_space_mgr->get_meta_file_free_disk_size());
-  // alloc_file_size PRIVATE_TABLET_CURRENT_VERSION do nothing, because create tablet_id dir has been alloced size
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(meta_file_free_disk_size, tenant_disk_space_mgr->get_meta_file_free_disk_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::META_FILE));
+  ObSSMacroCacheStat cache_stat;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::META_FILE, cache_stat));
+  ASSERT_EQ(disk_size, cache_stat.used_);
 
   // 2.free meta_file_size
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_META, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_meta_file_alloc_size());
-  // free_file_size PRIVATE_TABLET_CURRENT_VERSION
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_META, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(disk_size, tenant_disk_space_mgr->get_meta_file_alloc_size());
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION, false/*is_tmp_file_read_cache*/));
-  ASSERT_EQ(0, tenant_disk_space_mgr->get_meta_file_alloc_size());
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->free_file_size(disk_size, ObSSMacroCacheType::META_FILE));
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::META_FILE, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
 
   // 3.alloc meta_file_size not fail
-  disk_size = 1L * 1024L * 1024L * 1024L; // 1GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObStorageObjectType::PRIVATE_TABLET_META, false/*is_tmp_file_read_cache*/));
+  disk_size = 1L * 1024L * 1024L * 1024L; // 18GB
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::META_FILE));
 }
 
 } // namespace storage

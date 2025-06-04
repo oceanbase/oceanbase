@@ -41,19 +41,17 @@ int QSchedCallback::handle(TCRequest* tc_req)
     LOG_WARN("io result is null", K(ret), K(req));
   } else if (OB_UNLIKELY(req.is_canceled())) {
     ret = OB_CANCELED;
-  } else if (OB_FAIL(req.prepare())) {
-    LOG_WARN("prepare io request failed", K(ret), K(req));
-  } else if (FALSE_IT(time_guard.click("prepare_req"))) {
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req, device_channel))) {
-    LOG_WARN("get device channel failed", K(ret), K(req));
-  } else if (FALSE_IT(result->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time())) {
   } else {
     // lock request condition to prevent canceling halfway
     ObThreadCondGuard guard(result->get_cond());
     if (OB_FAIL(guard.get_ret())) {
       LOG_ERROR("fail to guard master condition", K(ret));
-    } else if (req.is_canceled()) {
-      ret = OB_CANCELED;
+    } else if (OB_FAIL(req.prepare())) {
+      LOG_WARN("prepare io request failed", K(ret), K(req));
+    } else if (FALSE_IT(time_guard.click("prepare_req"))) {
+    } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req, device_channel))) {
+      LOG_WARN("get device channel failed", K(ret), K(req));
+    } else if (FALSE_IT(result->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time())) {
     } else if (OB_FAIL(device_channel->submit(req))) {
       LOG_WARN("submit io to device failed");
     } else {
@@ -112,7 +110,7 @@ int ObIOManagerV2::init()
 int ObIOManagerV2::start()
 {
   int ret = OB_SUCCESS;
-  if (0 != qsched_start(root_qid_, 2)) {
+  if (0 != qsched_start(root_qid_, GCONF.io_scheduler_thread_count)) {
     ret = OB_ERR_SYS;
   } else if (OB_FAIL(io_submitter_.start())) {
   }
@@ -314,7 +312,9 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
 int ObTenantIOSchedulerV2::get_qid(int64_t index, ObIORequest& req, bool& is_default_q)
 {
   int qid = -1;
-  if (index >= 0 && index < qid_.count()) {
+  if (req.is_local_clog_not_isolated()) {
+    qid = OB_IO_MANAGER_V2.get_root_qid();
+  }  else if (index >= 0 && index < qid_.count()) {
     qid = qid_.at(index);
   }
   if (qid < 0) {

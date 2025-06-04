@@ -61,6 +61,7 @@ public:
       obrpc::ObFreezeSplitSrcTabletRes &res,
       const int64_t abs_timeout_us);
   static int get_split_src_tablet_id_if_any(const share::schema::ObTableSchema &table_schema, ObTabletID &tablet_id);
+  static int check_enable_global_index_auto_split(const share::schema::ObTableSchema &data_table_schema, bool &enable_auto_split, int64_t &auto_part_size);
 
 private:
   static int prepare_start_args_(
@@ -107,6 +108,8 @@ private:
       const share::ObDDLType split_type,
       const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
       const int64_t parallelism,
+      const share::ObLSID &ls_id,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
       ObMySQLTransaction &trans);

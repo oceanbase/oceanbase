@@ -53,8 +53,8 @@ struct ToNumberCastImpl
       };
 
       NumberToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -80,7 +80,8 @@ struct ToNumberCastImpl
             number::ObNumber nmb;
             ObNumStackOnceAlloc tmp_alloc;
             ObString in_str(in_len, arg_vec_->get_payload(idx));
-            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                ctx_.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
               SQL_LOG(WARN, "common_string_number_wrap failed", K(ret), K(in_str), K(tmp_alloc), K(nmb));
             } else {
               res_vec_->set_number(idx, nmb);
@@ -94,8 +95,8 @@ struct ToNumberCastImpl
       };
 
       StringToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -150,8 +151,8 @@ struct ToNumberCastImpl
       };
 
       FloatDoubleToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -191,8 +192,8 @@ struct ToNumberCastImpl
       };
 
       IntUIntToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -232,8 +233,8 @@ struct ToNumberCastImpl
       };
 
       DateToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -291,8 +292,8 @@ struct ToNumberCastImpl
         const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
                                           tz_info_local : NULL;
         DatetimeToNumberFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tz_info);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }

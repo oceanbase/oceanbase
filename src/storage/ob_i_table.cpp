@@ -75,7 +75,19 @@ const char* ObITable::table_type_name_[] =
   "DDL_MEM_MINI_SSTABLE",
   "MDS_MINI",
   "MDS_MINOR",
-  "MICRO_MINI_SSTABLE"
+  "MICRO_MINI_SSTABLE",
+  "INC_MAJOR_SSTABLE",
+  "INC_COLUMN_ORIENTED_SSTABLE",
+  "INC_NORMAL_COLUMN_GROUP_SSTABLE",
+  "INC_ROWKEY_COLUMN_GROUP_SSTABLE",
+  "INC_MAJOR_DDL_DUMP",
+  "INC_MAJOR_DDL_MERGE_CO",
+  "INC_MAJOR_DDL_MERGE_CG",
+  "INC_MAJOR_DDL_MEM_CO",
+  "INC_MAJOR_DDL_MEM_CG",
+  "INC_MAJOR_DDL_MEM",
+  "INC_MAJOR_DDL_AGGREGATE_CO",
+  "INC_MAJOR_DDL_AGGREGATE_CG"
 };
 
 uint64_t ObITable::TableKey::hash() const
@@ -141,49 +153,6 @@ int ObITable::safe_to_destroy(bool &is_safe)
 {
   is_safe = true;
   return OB_SUCCESS;
-}
-
-int ObITable::exist(
-    ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObITableReadInfo &read_info,
-    const blocksstable::ObDatumRowkey &rowkey,
-    bool &is_exist,
-    bool &has_found)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(rowkey);
-  is_exist = false;
-  has_found = false;
-  return common::OB_NOT_SUPPORTED;
-}
-
-int ObITable::exist(
-    const ObTableIterParam &param,
-    ObTableAccessContext &context,
-    const blocksstable::ObDatumRowkey &rowkey,
-    bool &is_exist,
-    bool &has_found)
-{
-  UNUSED(param);
-  UNUSED(context);
-  UNUSED(rowkey);
-  is_exist = false;
-  has_found = false;
-  return common::OB_NOT_SUPPORTED;
-}
-
-int ObITable::exist(
-    ObRowsInfo &rows_info,
-    bool &is_exist,
-    bool &has_found)
-{
-  UNUSED(rows_info);
-  is_exist = false;
-  has_found = false;
-  return common::OB_NOT_SUPPORTED;
 }
 
 int64_t ObITable::to_string(char *buf, const int64_t buf_len) const

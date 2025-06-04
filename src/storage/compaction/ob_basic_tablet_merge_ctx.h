@@ -28,10 +28,7 @@ struct ObStaticMergeParam final
   ~ObStaticMergeParam() { reset(); }
   bool is_valid() const;
   void reset();
-  int init_static_info(
-    const int64_t concurrent_cnt,
-    ObTabletHandle &tablet_handle);
-  int init_co_major_merge_params();
+  int init_static_info(ObTabletHandle &tablet_handle);
   int init_sstable_logic_seq();
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int64_t get_compaction_scn() const {
@@ -67,7 +64,7 @@ public:
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
       K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version), K_(for_unittest),
-      K_(is_cs_replica_force_full_merge));
+      K_(is_cs_replica_force_full_merge), K_(is_delete_insert_merge));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -77,6 +74,7 @@ public:
   bool is_tenant_major_merge_;
   bool is_cs_replica_;
   bool is_backfill_;
+  bool is_delete_insert_merge_;
   bool for_unittest_;
   bool is_cs_replica_force_full_merge_;
   ObMergeLevel merge_level_;
@@ -105,25 +103,49 @@ public:
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
   int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
   int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
+  share::SCN rec_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
 struct ObBasicTabletMergeCtx;
 struct ObCtxMergeInfoCollector final
 {
+  ObCtxMergeInfoCollector()
+    : merge_progress_(nullptr),
+      time_guard_(),
+      tnode_stat_(),
+      error_location_()
+  {}
   void prepare(ObBasicTabletMergeCtx &ctx);
   void finish(ObTabletMergeInfo &merge_info);
   void destroy(ObCompactionMemoryContext &merge_ctx);
   TO_STRING_KV(KP_(merge_progress), K_(time_guard), K_(error_location));
 public:
   ObPartitionMergeProgress *merge_progress_;
-  ObICompactionFilter *compaction_filter_;
   // for row_store, record all event
   // for columnar_store, record event in prepare/finish stage
   // time_guard on exeDag will record event in execute stage
   ObStorageCompactionTimeGuard time_guard_;
   ObTransNodeDMLStat tnode_stat_; // collect trans node dml stat on memtable, only worked in mini compaction.
   share::ObDiagnoseLocation error_location_;
+};
+
+struct ObMergeFilterCtx final
+{
+public:
+  ObMergeFilterCtx()
+    : compaction_filter_(nullptr),
+      mds_filter_info_(),
+      lock_(),
+      filter_statistics_()
+  {}
+  void destroy(ObCompactionMemoryContext &merge_ctx);
+  void collect_filter_statistics(const ObICompactionFilter::ObFilterStatistics &filter_statistics);
+  TO_STRING_KV(KPC_(compaction_filter), K_(mds_filter_info), K_(filter_statistics));
+  ObICompactionFilter *compaction_filter_;
+  ObMdsFilterInfo mds_filter_info_;
+  lib::ObMutex lock_;
+  ObICompactionFilter::ObFilterStatistics filter_statistics_;
 };
 
 struct ObBasicTabletMergeCtx
@@ -163,7 +185,13 @@ public:
     info_collector_.time_guard_.click(event);
   }
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
-  bool has_filter() const { return nullptr != info_collector_.compaction_filter_; }
+  bool has_filter() const { return nullptr != filter_ctx_.compaction_filter_; }
+  void collect_filter_statistics(const ObICompactionFilter::ObFilterStatistics &filter_statistics)
+  {
+    if (has_filter()) {
+      filter_ctx_.collect_filter_statistics(filter_statistics);
+    }
+  }
   int64_t get_result_progressive_merge_step(const int64_t column_group_idx) const
   {
     return progressive_merge_mgr_.is_inited()
@@ -173,8 +201,8 @@ public:
   OB_INLINE int filter(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret)
   {
     int ret = OB_SUCCESS;
-    if (OB_NOT_NULL(info_collector_.compaction_filter_)) {
-      ret = info_collector_.compaction_filter_->filter(row, filter_ret);
+    if (has_filter()) {
+      ret = filter_ctx_.compaction_filter_->filter(row, filter_ret);
     }
     return ret;
   }
@@ -211,6 +239,7 @@ public:
                               const int64_t batch_exec_dag_cnt = 0);
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
+  void generator_mds_filter_info(ObMergeStaticInfo &static_info) const;
   /* GET FUNC */
   #define CTX_DEFINE_FUNC(var_type, param, var_name) \
     OB_INLINE var_type get_##var_name() const { return param. var_name##_; }
@@ -236,6 +265,7 @@ public:
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
   STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
+  STATIC_PARAM_FUNC(const SCN &, rec_scn);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);
   PROGRESSIVE_FUNC(progressive_merge_step);
@@ -269,6 +299,7 @@ public:
     const ObMergeBlockInfo &block_info,
     const int64_t cost_time)
   { return OB_NOT_SUPPORTED; }
+  virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const;
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:
@@ -284,7 +315,7 @@ protected:
   virtual void free_schema();
   virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(false/*has_compaction_filter*/); }
   int init_parallel_merge_ctx();
-  int init_static_param_and_desc();
+  int init_static_desc();
   int init_read_info();
   virtual int init_tablet_merge_info() = 0;
   virtual int prepare_index_tree() = 0;
@@ -303,7 +334,7 @@ protected:
   virtual void after_update_tablet_for_major();
   virtual int collect_running_info() = 0;
   int swap_tablet();
-  int get_medium_compaction_info(); // for major
+  int prepare_from_medium_compaction_info(const ObMediumCompactionInfo *medium_info); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
   int get_meta_compaction_info(); // for meta major
   virtual int check_medium_info(
@@ -311,6 +342,8 @@ protected:
     const int64_t last_major_snapshot);
   int init_sstable_merge_history();
   int get_convert_compaction_info(); // for convert co major merge
+  virtual int prepare_compaction_filter() { return OB_SUCCESS; }
+  int alloc_mds_info_compaction_filter();
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:
@@ -321,6 +354,7 @@ public:
   ObParallelMergeCtx parallel_merge_ctx_;
   ObTabletMergeDag *merge_dag_;
   ObCtxMergeInfoCollector info_collector_;
+  ObMergeFilterCtx filter_ctx_;
   ObRowkeyReadInfo read_info_; // moved from ObCOMerger, avoid constructing each time
   ObMergeStaticInfo static_history_;
   ObProgressiveMergeMgr progressive_merge_mgr_;

@@ -39,13 +39,13 @@ public:
   OB_INLINE void set_datums(ObDatum *datums) { datums_ = datums; }
   inline sql::ObEvalInfo *get_eval_info() { return eval_info_; }
   inline const sql::ObEvalInfo *get_eval_info() const { return eval_info_; }
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int to_rows(const sql::RowMeta &row_meta,
                        sql::ObCompactRow **stored_rows,
                        const uint16_t selector[],
                        const int64_t size,
                        const int64_t col_idx) const override final;
 
-  virtual void to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+  virtual int to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
                        const int64_t size, const int64_t col_idx) const override final;
 
 protected:

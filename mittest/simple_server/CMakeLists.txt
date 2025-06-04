@@ -22,7 +22,7 @@ endfunction()
 
 function(ob_ha_unittest_observer case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
+  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock observer_test oceanbase)
 endfunction()
 
 function(errsim_ha_unittest_observer case)
@@ -62,6 +62,11 @@ function(ob_offline_observer case case_file)
     gmock)
 endfunction()
 
+function(ob_truncate_case case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test truncate_info_helper oceanbase)
+endfunction()
+
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
@@ -81,6 +86,7 @@ ob_unittest_observer(test_replay_from_middle test_replay_from_middle.cpp)
 ob_unittest_observer(test_special_tablet_flush test_special_tablet_flush.cpp)
 ob_unittest_observer(test_table_lock_split test_table_lock_split.cpp)
 ob_unittest_observer(test_tx_data_table_mit test_tx_data_table_mit.cpp)
+ob_unittest_observer(test_tx_data_minor test_tx_data_minor.cpp)
 ob_unittest_observer(test_tx_ctx_table_mit test_tx_ctx_table_mit.cpp)
 ob_unittest_observer(test_lock_table_persistence test_lock_table_persistence.cpp)
 ob_unittest_observer(test_tx_recover test_tx_recovery.cpp)
@@ -128,6 +134,8 @@ ob_ha_unittest_observer(test_transfer_doing_stage_restart_with_mds_flush storage
 ob_ha_unittest_observer(test_transfer_complete_restart_with_mds_flush storage_ha/test_transfer_complete_restart_with_mds_flush.cpp)
 ob_ha_unittest_observer(test_transfer_with_empty_shell storage_ha/test_transfer_with_empty_shell.cpp)
 ob_ha_unittest_observer(test_mds_transaction test_mds_transaction.cpp)
+ob_ha_unittest_observer(test_member_table_basic storage_ha/test_member_table_basic.cpp)
+ob_ha_unittest_observer(test_member_table_mini_and_minor storage_ha/test_member_table_mini_and_minor.cpp)
 errsim_ha_unittest_observer(errsim_test_transfer_handler errsim/storage_ha/errsim_test_transfer_handler.cpp)
 
 ob_farm_observer(test_collect_mv_farm mv/test_collect_mv.cpp)
@@ -157,3 +165,9 @@ ob_unittest_observer(test_transfer_task_operator rootservice/test_transfer_task_
 ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_parallel_migration_mode.cpp)
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
 ####### rootservice case #########
+
+
+####### truncate case #########
+ob_truncate_case(test_truncate_partition_filter test_truncate_partition_filter.cpp)
+ob_truncate_case(test_truncate_info_service test_truncate_info_service.cpp)
+####### truncate case #########

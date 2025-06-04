@@ -15,6 +15,7 @@
 
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_table_lock_compat_versions.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -960,6 +961,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
   ParseNode *priv_level_node = node->children_[1];
   ParseNode *users_node = node->children_[2];
   bool is_directory = false;
+  bool is_catalog = false;
   bool is_owner = false;
   bool explicit_db = false;
   ObPrivLevel grant_level = OB_PRIV_INVALID_LEVEL;
@@ -989,11 +991,12 @@ int ObGrantResolver::resolve_grant_obj_privileges(
     ObString table = ObString::make_string("");
     if (OB_FAIL(resolve_obj_ora(priv_level_node,
                                 params_.session_info_->get_database_name(),
-                                db, 
-                                table, 
+                                db,
+                                table,
                                 grant_level,
                                 is_directory,
-                                explicit_db))) {
+                                explicit_db,
+                                is_catalog))) {
       LOG_WARN("Resolve priv_level_node error", K(ret));
     } else if (OB_FAIL(check_and_convert_name(db, table))) {
       LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -1015,7 +1018,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           ObSynonymChecker synonym_checker;
           OZ (params_.schema_checker_->get_object_type_with_view_info(allocator_, 
               &params_, tenant_id, db, table, object_type, object_id, view_query, 
-              is_directory, obj_db_name, explicit_db, ObString(""), synonym_checker));
+              is_directory, obj_db_name, explicit_db, ObString(""), synonym_checker,
+              is_catalog));
           OX (grant_stmt->set_ref_query(static_cast<ObSelectStmt*>(view_query)));
           OX (grant_stmt->set_object_type(object_type));
           OX (grant_stmt->set_object_id(object_id));
@@ -1259,93 +1263,45 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
         if (OB_SUCC(ret)) {
           ObString db = ObString::make_string("");
           ObString table = ObString::make_string("");
-          if (OB_FAIL(resolve_priv_level(params_.schema_checker_->get_schema_guard(),
-                                         session_info_,
-                                         priv_level_node,
-                                         params_.session_info_->get_database_name(),
-                                         db, 
-                                         table, 
-                                         grant_level,
-                                         *allocator_))) {
+          ObString catalog = ObString::make_string("");
+          if (priv_object_node != NULL
+              && OB_FAIL(resolve_priv_level_with_object_type(session_info_,
+                                                             priv_object_node,
+                                                             grant_level))) {
+            LOG_WARN("failed to resolve priv level with object", K(ret));
+          } else if (OB_FAIL(resolve_priv_level(params_.schema_checker_->get_schema_guard(),
+                                                session_info_,
+                                                priv_level_node,
+                                                params_.session_info_->get_database_name(),
+                                                db,
+                                                table,
+                                                grant_level,
+                                                *allocator_,
+                                                catalog))) {
             LOG_WARN("Resolve priv_level node error", K(ret));
-          } else if (priv_object_node != NULL) {
-            const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-            uint64_t compat_version = 0;
-            if (grant_level != OB_PRIV_TABLE_LEVEL) {
-              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-              LOG_WARN("illegal grant", K(ret));
-            } else if (priv_object_node->value_ == 1) {
-              grant_level = OB_PRIV_TABLE_LEVEL;
-            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-              LOG_WARN("fail to get data version", K(tenant_id));
-            } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
-            } else if (priv_object_node->value_ == 2) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-            } else if (priv_object_node->value_ == 3) {
-              grant_level = OB_PRIV_ROUTINE_LEVEL;
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+          } else {
+            grant_stmt->set_grant_level(grant_level);
+          }
+
+          if (OB_SUCC(ret) && grant_level != OB_PRIV_CATALOG_LEVEL) {
+            if (OB_FAIL(check_and_convert_name(db, table))) {
+              LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
+            } else if (OB_FAIL(grant_stmt->set_database_name(db))) {
+              LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
+            } else if (OB_FAIL(grant_stmt->set_table_name(table))) {
+              LOG_WARN("Failed to set table_name to grant_stmt", K(ret));
             }
           }
 
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(check_and_convert_name(db, table))) {
-            LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
-          } else {
-            share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
-            uint64_t object_id = OB_INVALID_ID;
-            grant_stmt->set_grant_level(grant_level);
-            if (OB_FAIL(grant_stmt->set_database_name(db))) {
-            LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
-            } else if (OB_FAIL(grant_stmt->set_table_name(table))) {
-              LOG_WARN("Failed to set table_name to grant_stmt", K(ret));
-            } else if (priv_object_node != NULL) {
-              if (priv_object_node->value_ == 1) {
-                const share::schema::ObTableSchema *table_schema = NULL;
-                if (OB_FAIL(params_.schema_checker_->get_table_schema(tenant_id, db, table, false, table_schema))) {
-                  LOG_WARN("get table schema failed", K(ret));
-                } else if (table_schema != NULL) {
-                  if (table_schema->is_index_table()) {
-                    object_type = ObObjectType::INDEX;
-                  } else {
-                    object_type = ObObjectType::TABLE;
-                  }
-                  object_id = table_schema->get_table_id();
-                }
-              } else {
-                uint64_t routine_id = 0;
-                bool is_proc = false;
-                if (OB_FAIL(params_.schema_checker_->get_routine_id(tenant_id, db, table, routine_id, is_proc))) {
-                  if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
-                    ret = OB_ERR_SP_DOES_NOT_EXIST;
-                  }
-                } else {
-                  if (is_proc) {
-                    object_type = ObObjectType::PROCEDURE;
-                  } else {
-                    object_type = ObObjectType::FUNCTION;
-                  }
-                  object_id = routine_id;
-                }
-              }
-            } else {
-              ObString object_db_name;
-              if (db.empty() || table.empty()) {
-                object_type = share::schema::ObObjectType::MAX_TYPE;
-              } else {
-                ObSynonymChecker synonym_checker;
-                (void)params_.schema_checker_->get_object_type(tenant_id, db, table,
-                                                               object_type, object_id,
-                                                               object_db_name, false, 
-                                                               false, ObString(""),
-                                                               synonym_checker);
-              }
-            }
-            grant_stmt->set_object_type(object_type);
-            grant_stmt->set_object_id(object_id);
+          if (OB_SUCC(ret) && OB_FAIL(resolve_priv_object(priv_object_node,
+                                                          grant_stmt,
+                                                          params_.schema_checker_,
+                                                          db,
+                                                          table,
+                                                          catalog,
+                                                          tenant_id,
+                                                          allocator_))) {
+            LOG_WARN("failed to resolve priv object", K(ret));
           }
         }
 
@@ -1385,11 +1341,27 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or 4_3_3_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant references/create role/drop role/trigger");
+          } else if (!transaction::tablelock::is_mysql_lock_table_data_version(compat_version)
+                     && (priv_set & OB_PRIV_LOCK_TABLE)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support this data version", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant lock tables privilege");
           } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
                      && ((priv_set & OB_PRIV_ENCRYPT) != 0 || (priv_set & OB_PRIV_DECRYPT) != 0)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1 or 4_3_5_1", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant encrypt/decrypt privilege");
+          } else if (!((MOCK_DATA_VERSION_4_2_5_2 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_2)
+                     &&((priv_set & OB_PRIV_EVENT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2 or 4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant event");
+          } else if (compat_version < DATA_VERSION_4_3_5_2
+                     && ((priv_set & OB_PRIV_CREATE_CATALOG) != 0 ||
+                         (priv_set & OB_PRIV_USE_CATALOG) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create catalog/use catalog privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -1539,8 +1511,48 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObGrantResolver::resolve_priv_level_with_object_type(const ObSQLSessionInfo *session_info,
+                                                         const ParseNode *priv_object_node,
+                                                         ObPrivLevel &grant_level)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session_info not inited", K(ret));
+  } else if (OB_ISNULL(priv_object_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parse node", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (priv_object_node->value_ == 1) {
+      // do nothing, compat with mysql
+    } else if (priv_object_node->value_ == 2 || priv_object_node->value_ == 3) {
+      if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
+      } else {
+        grant_level = OB_PRIV_ROUTINE_LEVEL;
+      }
+    } else if (priv_object_node->value_ == 4) {
+      if (compat_version < DATA_VERSION_4_3_5_2) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on catalog is not support below DATA_VERSION_4_3_5_2", K(ret));
+      } else {
+        grant_level = OB_PRIV_CATALOG_LEVEL;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+    }
+  }
+  return ret;
+}
+
 //0 == priv_level_node->num_child_ -> grant priv on * to user
-//1 == priv_level_node->num_child_ -> grant priv on table to user
+//0 == priv_level_node->num_child_ -> grant priv on table to user
 //2 == priv_level_node->num_child_ -> grant priv on db.table to user
 int ObGrantResolver::resolve_priv_level(
     ObSchemaGetterGuard *guard,
@@ -1550,12 +1562,21 @@ int ObGrantResolver::resolve_priv_level(
     ObString &db,
     ObString &table,
     ObPrivLevel &grant_level,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    ObString &catalog)
 {
   int ret = OB_SUCCESS;
+  bool is_grant_routine = (grant_level == OB_PRIV_ROUTINE_LEVEL);
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(node), K(ret));
+  } else if (grant_level == OB_PRIV_CATALOG_LEVEL) {
+    if (0 != node->num_child_ || T_IDENT != node->type_) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("sql_parser error", K(ret));
+    } else {
+      catalog.assign_ptr(node->str_value_, static_cast<const int32_t>(node->str_len_));
+    }
   } else {
     CK (guard != NULL);
     db = ObString::make_string("");
@@ -1592,14 +1613,14 @@ int ObGrantResolver::resolve_priv_level(
         grant_level = OB_PRIV_DB_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else if (T_IDENT == node->children_[0]->type_ && T_IDENT == node->children_[1]->type_) {
         grant_level = OB_PRIV_TABLE_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
         table.assign_ptr(node->children_[1]->str_value_,
                          static_cast<const int32_t>(node->children_[1]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("sql_parser error", K(ret));
@@ -1620,12 +1641,24 @@ int ObGrantResolver::resolve_priv_level(
         //do nothing
       }
     }
+    if (OB_SUCC(ret) && is_grant_routine) {
+      if (grant_level != OB_PRIV_TABLE_LEVEL) {
+        // tmp_grant_level == OB_PRIV_TABLE_LEVEL means sql is like:
+        // grant priv on [object type] ident to user
+        // or
+        // grant priv on [object type] ident1.ident2 to user
+        ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+        LOG_WARN("illegal grant", K(ret));
+      } else {
+        grant_level = OB_PRIV_ROUTINE_LEVEL;
+      }
+    }
   }
   return ret;
 }
 
 //0 == priv_level_node->num_child_ -> grant priv on * to user
-//1 == priv_level_node->num_child_ -> grant priv on table to user
+//0 == priv_level_node->num_child_ -> grant priv on table to user
 //2 == priv_level_node->num_child_ -> grant priv on db.table to user
 /* 解析oracle grant objauth里面的obj 部分
    暂时保持对mysql功能的支持。*/
@@ -1636,10 +1669,12 @@ int ObGrantResolver::resolve_obj_ora(
     ObString &table,
     ObPrivLevel &grant_level,
     bool &is_directory,
-    bool &explicit_db)
+    bool &explicit_db,
+    bool &is_catalog)
 {
   int ret = OB_SUCCESS;
   is_directory = false;
+  is_catalog = false;
   explicit_db = false;
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1693,7 +1728,11 @@ int ObGrantResolver::resolve_obj_ora(
         db = ObString::make_string("SYS");
         table.assign_ptr(node->children_[1]->str_value_,
                          static_cast<const int32_t>(node->children_[1]->str_len_));
-        is_directory = true;
+        if (node->children_[0]->value_ == 1) {
+          is_directory = true;
+        } else {
+          is_catalog = true;
+        }
       } else {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("sql_parser error", K(ret));
@@ -1768,6 +1807,9 @@ int ObGrantResolver::map_mysql_priv_type_to_ora_type(
     case OB_PRIV_WRITE:
       ora_obj_priv = OBJ_PRIV_ID_WRITE;
       break;
+    case OB_PRIV_USE_CATALOG:
+      ora_obj_priv = OBJ_PRIV_ID_USE_CATALOG;
+      break;
     case OB_PRIV_COMMENT:
     case OB_PRIV_AUDIT:
     case OB_PRIV_RENAME:
@@ -1823,7 +1865,11 @@ int ObGrantResolver::check_obj_priv_valid(
         ret = OB_ERR_ALTER_INDEX_AND_EXECUTE_NOT_ALLOWED_FOR_VIEWS;
       }
       break;
-
+    case (ObObjectType::CATALOG):
+      if (ora_obj_priv != OBJ_PRIV_ID_USE_CATALOG) {
+        ret = OB_ERR_PRIVILEGE_NOT_ALLOWED_FOR_CATALOGS;
+      }
+      break;
     case (ObObjectType::SEQUENCE):
       if (ora_obj_priv != OBJ_PRIV_ID_ALTER
           && ora_obj_priv != OBJ_PRIV_ID_SELECT) {
@@ -1878,7 +1924,8 @@ bool ObGrantResolver::is_ora_obj_priv_type(
      || priv_type == OB_PRIV_FLASHBACK
      || priv_type == OB_PRIV_READ
      || priv_type == OB_PRIV_WRITE
-     || priv_type == OB_PRIV_DEBUG) {
+     || priv_type == OB_PRIV_DEBUG
+     || priv_type == OB_PRIV_USE_CATALOG) {
     return true;
   } else {
     return false;
@@ -1974,6 +2021,11 @@ int ObGrantResolver::build_table_priv_arary_for_all(
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_READ));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_WRITE));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_EXECUTE));
+              break;
+            }
+          case share::schema::ObObjectType::CATALOG:
+            {
+              OZ (table_priv_array.push_back(OBJ_PRIV_ID_USE_CATALOG));
               break;
             }
           default:

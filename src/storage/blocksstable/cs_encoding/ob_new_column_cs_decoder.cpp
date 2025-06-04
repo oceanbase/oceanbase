@@ -23,11 +23,10 @@ using namespace common;
 
 int ObNewColumnCSDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &ctx,
-    const int32_t *row_ids,
-    const int64_t row_cap,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
     storage::ObAggCellBase &agg_cell) const
 {
-  UNUSEDx(row_ids, row_cap);
+  UNUSED(pd_row_id_ctx);
   int ret = OB_SUCCESS;
   ObStorageDatum datum;
   if (OB_FAIL(common_decoder_.decode(ctx.get_col_param(), ctx.get_allocator(), datum))) {

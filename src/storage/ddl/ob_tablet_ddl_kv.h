@@ -245,18 +245,6 @@ public:  // derived from ObITable
   virtual bool is_frozen_memtable() override;
   virtual int get_frozen_schema_version(int64_t &schema_version) const;
 
-  virtual int exist(
-    const ObTableIterParam &param,
-    ObTableAccessContext &context,
-    const blocksstable::ObDatumRowkey &rowkey,
-    bool &is_exist,
-    bool &has_found);
-
-  virtual int exist(
-      ObRowsInfo &rowsInfo,
-      bool &is_exist,
-      bool &has_found);
-
   virtual int scan(
       const ObTableIterParam &param,
       ObTableAccessContext &context,

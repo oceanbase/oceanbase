@@ -31,6 +31,7 @@ class ObTableReadInfo;
 }
 namespace share
 {
+class ObAggrParamProperty;
 namespace schema
 {
 // A customized hash map to store schema information in plan
@@ -334,6 +335,8 @@ public:
   inline int64_t get_rowid_version() const { return rowid_version_; }
   inline bool is_column_replica_table() const { return is_column_replica_table_; }
   inline bool is_normal_cgs_at_the_end() const { return is_normal_cgs_at_the_end_; }
+  inline bool is_enable_semistruct_encoding() const { return is_enable_semistruct_encoding_; }
+  inline void set_is_enable_semistruct_encoding(const bool v) { is_enable_semistruct_encoding_ = v; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
@@ -346,7 +349,8 @@ public:
   inline const ObString &get_parser_property() const { return parser_properties_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
-
+  inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
+  inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
   DECLARE_TO_STRING;
 
   static int convert_column_schema_to_param(const ObColumnSchemaV2 &column_schema,
@@ -357,6 +361,7 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
+  int check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters);
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
@@ -388,7 +393,6 @@ private:
                                   Projector &rowid_projector,
                                   bool is_use_lob_locator_v2);
   int convert_fulltext_index_info(const ObTableSchema &table_schema);
-
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator &allocator_;
@@ -433,6 +437,9 @@ private:
   // for read time query check of mview
   bool is_mlog_table_;
   bool is_enable_semistruct_encoding_;
+  bool is_safe_filter_with_di_;
+  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+  int8_t access_virtual_col_cnt_;
 };
 } //namespace schema
 } //namespace share

@@ -14,6 +14,7 @@
 #define _OB_TRANSFORM_LEFT_JOIN_TO_ANTI_H
 
 #include "sql/rewrite/ob_transform_rule.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 namespace oceanbase
 {
@@ -63,6 +64,9 @@ private:
                                     ObIArray<ObRawExpr *> &constraints,
                                     bool &is_valid);
   int clear_for_update(TableItem *table);
+  int fill_not_null_context(ObIArray<JoinedTable*> &joined_tables,
+                            const JoinedTable *target_joined_table,
+                            ObNotNullContext &not_null_context);
 };
 } /* namespace sql */
 } /* namespace oceanbase */

@@ -26,6 +26,7 @@
 #include "sql/parser/parse_malloc.h"
 #include "sql/parser/ob_non_reserved_keywords.h"
 #include "sql/parser/parse_define.h"
+#include "lib/ob_date_unit_type.h"
 
 extern int64_t ob_strntoll(const char *ptr, size_t len, int base, char **end, int *err);
 extern int64_t ob_strntoull(const char *ptr, size_t len, int base, char **end, int *err);

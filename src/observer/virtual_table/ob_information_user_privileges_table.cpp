@@ -71,6 +71,8 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "SHUTDOWN";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
                                                    "RELOAD";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_LOCK_TABLE_SHIFT] =
+                                                   "LOCK TABLES";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REFERENCES_SHIFT] =
                                                    "REFERENCES";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROLE_SHIFT] =
@@ -81,6 +83,12 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "ENCRYPT";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] =
                                                    "DECRYPT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EVENT_SHIFT] =
+                                                   "EVENT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_CATALOG_SHIFT] =
+                                                   "CREATE CATALOG";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] =
+                                                   "USE CATALOG";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

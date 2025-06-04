@@ -139,6 +139,10 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         column.add_column_flag(GENERATED_VEC_KEY_COLUMN_FLAG);
       } else if (T_FUN_SYS_VEC_DATA == root_expr_type) {
         column.add_column_flag(GENERATED_VEC_DATA_COLUMN_FLAG);
+      } else if (T_FUN_SYS_SPIV_DIM == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_SPIV_DIM_COLUMN_FLAG);
+      } else if (T_FUN_SYS_SPIV_VALUE == root_expr_type) {
+        column.add_column_flag(GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG);
       } else if (T_FUN_SYS_WORD_COUNT == root_expr_type) {
@@ -256,7 +260,24 @@ bool ObSchemaUtils::is_vec_index_column(const uint64_t flag)
       || is_vec_ivf_pq_center_id_column(flag)
       || is_vec_ivf_pq_center_ids_column(flag)
       || is_vec_ivf_meta_id_column(flag)
-      || is_vec_ivf_meta_vector_column(flag);
+      || is_vec_ivf_meta_vector_column(flag)
+      || is_vec_spiv_dim_column(flag)
+      || is_vec_spiv_value_column(flag);
+}
+
+bool ObSchemaUtils::is_vec_spiv_dim_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_DIM_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_spiv_value_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_vec_spiv_vec_column(const uint64_t flag)
+{
+  return flag & GENERATED_VEC_SPIV_VEC_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_vec_ivf_center_id_column(const uint64_t flag)
@@ -525,7 +546,7 @@ int ObSchemaUtils::construct_tenant_space_full_table(
     if (OB_SUCC(ret) && is_system_table(table_id)) {
       uint64_t lob_meta_table_id = 0;
       uint64_t lob_piece_table_id = 0;
-      if (OB_ALL_CORE_TABLE_TID == table_id) {
+      if (is_hardcode_schema_table(table_id)) {
         // do nothing
       } else if (!get_sys_table_lob_aux_table_id(table_id, lob_meta_table_id, lob_piece_table_id)) {
         ret = OB_ENTRY_NOT_EXIST;
@@ -562,7 +583,7 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
   int ret = OB_SUCCESS;
   if (is_system_table(data_table_id)) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-      if (OB_ALL_CORE_TABLE_TID == data_table_id) {
+      if (is_hardcode_schema_table(data_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_sys_table_lob_aux_schema(data_table_id, lob_meta_schema, lob_piece_schema))) {
         LOG_WARN("fail to get sys table lob aux schema", KR(ret), K(data_table_id));
@@ -695,7 +716,7 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
         LOG_WARN("schema version not sync", K(tenant_id), K(consensus_timeout),
                  K(refreshed_schema_version), K(consensus_schema_version), K(schema_version));
       }
-      ob_usleep(10 * 1000L); // 10ms
+      ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(10 * 1000L, schema_version, refreshed_schema_version, consensus_schema_version);
     }
   }
   return ret;
@@ -877,7 +898,7 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
     } else {
       /*other situation, rowkey column group should not exist*/
       if (OB_NOT_NULL(rowkey_cg)) {
-        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_id()))){
+        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_name()))){
           LOG_WARN("fail to remove rowkey cg", K(ret));
         }
       }

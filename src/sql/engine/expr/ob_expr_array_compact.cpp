@@ -49,11 +49,22 @@ int ObExprArrayCompact::calc_result_type1(ObExprResType &type,
                                           ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (ob_is_null(type1.get_type())) {
+  ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+  ObCollectionTypeBase *coll_type = NULL;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (ob_is_null(type1.get_type())) {
     type.set_null();
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else {
     type.set_collection(type1.get_subschema_id());
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType]).get_length());
@@ -186,14 +197,11 @@ int ObExprArrayCompact::eval_array_compact_vector(const ObExpr &expr, ObEvalCtx 
       }
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_vec->get_format() == VEC_UNIFORM || arr_vec->get_format() == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {
@@ -225,7 +233,7 @@ int ObExprArrayCompact::eval_compact(ObIAllocator &tmp_allocator, ObEvalCtx &ctx
                                      ObIArrayType *src_arr, ObIArrayType *res_arr)
 {
   int ret = OB_SUCCESS;
-  if (src_arr->is_nested_array()) {
+  if (src_arr->get_format() == Nested_Array) {
     ObArrayNested *nest_array = static_cast<ObArrayNested *>(src_arr);
     ObIArrayType *child_type = NULL;
     ObIArrayType *last_child = NULL;
@@ -269,7 +277,7 @@ int ObExprArrayCompact::eval_compact(ObIAllocator &tmp_allocator, ObEvalCtx &ctx
       }
     } // end for
   } else {
-    const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(src_arr->get_array_type()->element_type_);
+    const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(src_arr->get_array_type())->element_type_);
     ObObj last_elem;
     ObObj this_elem;
     bool is_last_null = false;

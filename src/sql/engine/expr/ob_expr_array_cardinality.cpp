@@ -41,12 +41,24 @@ int ObExprArrayCardinality::calc_result_type1(ObExprResType &type,
                                      ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (type1.is_null()) {
-    type.set_null();
+  ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+  ObCollectionTypeBase *coll_type = NULL;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (type1.is_null()){
+    // do nothing
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
-  } else {
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
+  }
+  if (OB_SUCC(ret)) {
     type.set_uint32();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt32Type].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt32Type].precision_);
@@ -128,14 +140,11 @@ int ObExprArrayCardinality::eval_array_cardinality_vector(const ObExpr &expr, Ob
         continue;
       } else if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {

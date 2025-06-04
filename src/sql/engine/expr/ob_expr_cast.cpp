@@ -234,7 +234,7 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
 {
   int ret = OB_SUCCESS;
   cast_mode = CM_NONE;
-  const bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr.get_extra());
+  const bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr.get_cast_mode());
   const int32_t result_flag = src_type.get_result_flag();
   const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
   const ObObjTypeClass src_tc = ob_obj_type_class(src_type.get_type());
@@ -266,7 +266,7 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
           && (ob_is_number_tc(dst_type.get_type()) || ob_is_decimal_int_tc(dst_type.get_type()))) {
         cast_mode |= CM_SET_MIN_IF_OVERFLOW;
       }
-      if (!is_called_in_sql() && CM_IS_WARN_ON_FAIL(cast_raw_expr.get_extra())) {
+      if (!is_called_in_sql() && CM_IS_WARN_ON_FAIL(cast_raw_expr.get_cast_mode())) {
         cast_mode |= CM_WARN_ON_FAIL;
       }
     }
@@ -326,11 +326,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObExprResType dst_type;
   ObRawExpr *cast_raw_expr = NULL;
-  const sql::ObSQLSessionInfo *session = NULL;
+  sql::ObSQLSessionInfo *session = NULL;
+  ObExecContext *exec_ctx = NULL;
   bool is_explicit_cast = false;
   ObCollationLevel cs_level = CS_LEVEL_INVALID;
   bool enable_decimalint = false;
-  if (OB_ISNULL(session = type_ctx.get_session()) ||
+  if (OB_ISNULL(session = const_cast<sql::ObSQLSessionInfo*>(type_ctx.get_session())) ||
+      OB_ISNULL(exec_ctx = session->get_cur_exec_ctx()) ||
       OB_ISNULL(cast_raw_expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is NULL", K(ret), KP(session), KP(cast_raw_expr));
@@ -340,9 +342,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
     LOG_WARN("fail to check_enable_decimalint", K(ret), K(session->get_effective_tenant_id()));
   } else if (OB_FAIL(get_cast_type(enable_decimalint,
-                                   type2, cast_raw_expr->get_extra(), type_ctx, dst_type))) {
+                                   type2, cast_raw_expr->get_cast_mode(), type_ctx, dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
+  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_cast_mode(),
                                                              type1.get_collation_level(),
                                                              cs_level))) {
     LOG_WARN("failed to get collation level", K(ret));
@@ -365,7 +367,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
                 "dst", ob_obj_type_str(dst_type.get_type()));
     }
-  } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
+  } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_cast_mode()))) {
   // check cast supported in cast_map but not support here.
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
@@ -413,6 +415,10 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     } else if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
       type.set_type(dst_type.get_type());
       type.set_subschema_id(dst_type.get_subschema_id());
+    } else if (dst_type.is_enum_set_with_subschema()) {
+      type.set_type(dst_type.get_type());
+      type.set_subschema_id(dst_type.get_subschema_id());
+      type.set_accuracy(dst_type.get_accuracy());
     } else {
       type.set_type(dst_type.get_type());
       type.set_collation_type(dst_type.get_collation_type());
@@ -432,9 +438,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
-                                         || ob_is_json(dst_type.get_type())
-                                         || ob_is_geometry(dst_type.get_type())) {
+      if (ob_is_string_or_lob_type(dst_type.get_type())
+          || ob_is_raw(dst_type.get_type())
+          || ob_is_json(dst_type.get_type())
+          || ob_is_geometry(dst_type.get_type())
+          || ob_is_roaringbitmap(dst_type.get_type())) {
         type.set_collation_level(dst_type.get_collation_level());
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
@@ -446,7 +454,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
                                                collation_connection,
-                                               cast_raw_expr->get_extra()))) { // cast (1 as char)
+                                               cast_raw_expr->get_cast_mode()))) { // cast (1 as char)
           LOG_WARN("fail to get cast string length", K(ret));
         } else if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
           if (dst_type.is_char() || dst_type.is_nchar()) {
@@ -482,7 +490,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           int32_t len = 0;
           int16_t length_semantics = LS_BYTE;//unused
           if (OB_FAIL(get_cast_inttc_len(type1, dst_type, type_ctx, len, length_semantics,
-                                         collation_connection, cast_raw_expr->get_extra()))) {
+                                         collation_connection, cast_raw_expr->get_cast_mode()))) {
             LOG_WARN("fail to get cast inttc length", K(ret));
           } else {
             len = len > OB_LITERAL_MAX_INT_LEN ? OB_LITERAL_MAX_INT_LEN : len;
@@ -513,7 +521,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // interval expr need NOT_NULL_FLAG
       // bug:
       calc_result_flag2(type, type1, type2);
-      if (CM_IS_ADD_ZEROFILL(cast_raw_expr->get_extra())) {
+      if (CM_IS_ADD_ZEROFILL(cast_raw_expr->get_cast_mode())) {
         type.set_result_flag(ZEROFILL_FLAG);
       }
     }
@@ -527,7 +535,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       LOG_WARN("set cast mode failed", K(ret));
     } else if (CM_IS_EXPLICIT_CAST(explicit_cast_cm)) {
       // cast_raw_expr.extra_ store explicit cast's cast mode
-      cast_raw_expr->set_extra(explicit_cast_cm);
+      cast_raw_expr->set_cast_mode(explicit_cast_cm);
       // type_ctx.cast_mode_ sotre implicit cast's cast mode.
       // cannot use def cm, because it may change explicit cast behavior.
       // eg: select cast(18446744073709551615 as signed) -> -1
@@ -557,7 +565,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         if (ob_is_enumset_tc(type1.get_type())) {
           // For enum/set type, need to check whether warp to string is required.
           if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1, type1.get_calc_type(),
-                                                          false, need_wrap))) {
+                                          false, need_wrap,
+                                          exec_ctx->support_enum_set_type_subschema(*session)))) {
             LOG_WARN("need_wrap_to_string failed", K(ret), K(type1));
           } else if (!need_wrap) {
             // need_wrap is false, set calc_type to type1 itself.
@@ -569,7 +578,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
         } else {
           if (ob_is_geometry_tc(dst_type.get_type())) {
-            ObCastMode cast_mode = cast_raw_expr->get_extra();
+            ObCastMode cast_mode = cast_raw_expr->get_cast_mode();
             const ObObj &param = type2.get_param();
             ParseNode parse_node;
             parse_node.value_ = param.get_int();
@@ -577,7 +586,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
               LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
             } else {
-              cast_raw_expr->set_extra(cast_mode);
+              cast_raw_expr->set_cast_mode(cast_mode);
             }
           }
           if (OB_SUCC(ret)) {
@@ -608,16 +617,27 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       type1.set_calc_accuracy(type.get_accuracy());
     }
   }
+  bool implicit_first_century_year = false;
+  ObCastMode cast_mode = cast_raw_expr->get_cast_mode();
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+               type_ctx.get_compat_version(), ObCompatFeatureType::IMPLICIT_FIRST_CENTURY_YEAR,
+               implicit_first_century_year))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (implicit_first_century_year) {
+    cast_mode |= CM_IMPLICIT_FIRST_CENTURY_YEAR;
+  }
+  cast_raw_expr->set_cast_mode(cast_mode);
   LOG_DEBUG("calc result type", K(type1), K(type2), K(type), K(dst_type),
             K(type1.get_calc_accuracy()));
   return ret;
 }
 
 int ObExprCast::get_cast_type(const bool enable_decimal_int,
-                              const ObExprResType param_type2,
+                              const ObExprResType &param_type2,
                               const ObCastMode cast_mode,
                               const ObExprTypeCtx &type_ctx,
-                              ObExprResType &dst_type)
+                              ObRawExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
   if (!param_type2.is_int() && !param_type2.get_param().is_int()) {
@@ -662,7 +682,7 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    } else if (ob_is_geometry(obj_type)) {
+    } else if (ob_is_geometry(obj_type) || ob_is_roaringbitmap(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_BINARY);
       dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
     } else if (ob_is_interval_tc(obj_type)) {
@@ -699,6 +719,9 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
           }
         }
       }
+    } else if (is_explicit_cast && lib::is_oracle_mode() && dst_type.is_number_float()) {
+      dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
+      dst_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
@@ -1066,7 +1089,6 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                                       ns,
-                                                      alloc,
                                                       *coll,
                                                       data_arr.count()))) {
     LOG_WARN("failed to set collection", K(ret));
@@ -1184,7 +1206,7 @@ int ObExprCast::cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
   if (OB_ISNULL(op_cg_ctx.schema_guard_) || OB_ISNULL(op_cg_ctx.session_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(op_cg_ctx.schema_guard_), K(op_cg_ctx.session_));
-  } else if (OB_FAIL(schema_checker.init(*op_cg_ctx.schema_guard_, op_cg_ctx.session_->get_sessid()))) {
+  } else if (OB_FAIL(schema_checker.init(*op_cg_ctx.schema_guard_, op_cg_ctx.session_->get_server_sid()))) {
     LOG_WARN("init schema checker failed", K(ret));
   } else if (OB_FAIL(schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info))) {
     LOG_WARN("failed to get udt info", K(ret));
@@ -1262,7 +1284,7 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
   // suppose we have (P1, S1) -> (P2, S2)
   // if S2 > S1 && P1 + S2 - S1 <= P2, sizeof(result_type) is wide enough to store result value
   // if S2 <= S1 && width_of_prec(P2) >= width_of_prec(P1), result type is wide enough
-  if (ob_is_decimal_int_tc(out_type) && !CM_IS_CONST_TO_DECIMAL_INT(raw_expr.get_extra())
+  if (ob_is_decimal_int_tc(out_type) && !CM_IS_CONST_TO_DECIMAL_INT(raw_expr.get_cast_mode())
       && (ob_is_int_tc(in_type) || ob_is_uint_tc(in_type) || ob_is_decimal_int_tc(in_type))) {
     if ((out_scale > in_scale && (in_prec + out_scale - in_scale <= out_prec))
         || (out_scale <= in_scale
@@ -1280,14 +1302,14 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
              K(in_type), K(out_type), KP(op_cg_ctx.allocator_));
   } else {
     // setup cast mode for explicit cast.
-    // 隐式cast的cast mode在创建cast expr时已经被设置好了，直接从raw_expr.get_extra()里拿
-    ObCastMode cast_mode = raw_expr.get_extra();
+    // 隐式cast的cast mode在创建cast expr时已经被设置好了，直接从raw_expr.get_cast_mode()里拿
+    ObCastMode cast_mode = raw_expr.get_cast_mode();
     if (cast_mode & CM_ZERO_FILL) {
       // 将zerofill信息放在scale里面
       const ObRawExpr *src_raw_expr = NULL;
       CK(OB_NOT_NULL(src_raw_expr = raw_expr.get_param_expr(0)));
       if (OB_SUCC(ret)) {
-        const ObExprResType &src_res_type = src_raw_expr->get_result_type();
+        const ObRawExprResType &src_res_type = src_raw_expr->get_result_type();
         if (ob_is_string_or_lob_type(in_type)) {
           // do nothing, setting the zerofill length only makes sense when in_type is a numeric type
         } else if (OB_UNLIKELY(UINT_MAX8 < src_res_type.get_length())) {
@@ -1392,8 +1414,9 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprCast, raw_expr) {
     ObObjType src = raw_expr->get_param_expr(0)->get_result_type().get_type();
     ObObjType dst = raw_expr->get_result_type().get_type();
     if (is_mysql_mode()) {
-      SET_LOCAL_SYSVAR_CAPACITY(3);
+      SET_LOCAL_SYSVAR_CAPACITY(4);
       EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_OB_COMPATIBILITY_VERSION);
     } else {
       SET_LOCAL_SYSVAR_CAPACITY(5);
     }

@@ -32,6 +32,7 @@
 #include "share/vector_type/ob_vector_cosine_distance.h"
 #include "share/vector_type/ob_vector_ip_distance.h"
 #include "share/vector_type/ob_vector_l1_distance.h"
+#include "share/vector_type/ob_sparse_vector_ip_distance.h"
 
 
 namespace oceanbase
@@ -90,6 +91,10 @@ public:
   struct DisFunc {
     using FuncPtrType = int (*)(const T* a, const T* b, const int64_t len, double& distance);
     static FuncPtrType distance_funcs[];
+  };
+  struct SparseVectorDisFunc {
+    using FuncPtrType = int (*)(const ObMapType* a, const ObMapType* b, double& distance);
+    static FuncPtrType spiv_distance_funcs[];
   };
 public:
   explicit ObExprVectorDistance(common::ObIAllocator &alloc);
@@ -229,6 +234,7 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorNorm);
 };
+
 } // sql
 } // oceanbase
 #endif // OCEANBASE_SQL_OB_EXPR_VECTOR

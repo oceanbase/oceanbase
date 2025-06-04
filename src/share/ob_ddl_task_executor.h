@@ -185,14 +185,18 @@ class ObDDLReplicaBuilder
 public:
   ObDDLReplicaBuilder();
   ~ObDDLReplicaBuilder();
+  int init();
   int start();
   void stop();
+  void mtl_thread_stop();
+  void mtl_thread_wait();
   void destroy();
   int push_task(ObAsyncTask &task);
 
 private:
   bool is_thread_started_;
   bool is_stopped_;
+  int tg_id_;
 };
 
 }  // end namespace share

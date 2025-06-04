@@ -119,6 +119,7 @@ public:
   static int get_each_tablet_size(ObMySQLProxy *sql_proxy,
                                   const ObTableSchema *table_schema,
                                   ObIArray<std::pair<ObTabletID, uint64_t>> &tablet_size);
+  static int check_stats_valid(const OptStats &opt_stats, bool &is_valid);
 private:
 
   static int parse_ddl_sql(ObExecContext &ctx,
@@ -199,9 +200,6 @@ private:
   static int get_default_index_column_len(const ObTableSchema *table_schema,
                                           const TabletInfoList &table_infos,
                                           IndexCostInfo &info);
-
-  static int check_stats_valid(const OptStats &opt_stats, bool &is_valid);
-
   static int get_svr_info_from_schema(const ObTableSchema *table_schema,
                                       ObIArray<ObAddr> &addr_list,
                                       ObIArray<ObTabletID> &tablet_list,

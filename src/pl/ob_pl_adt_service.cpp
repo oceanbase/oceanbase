@@ -660,6 +660,38 @@ int ObPLADTService::get_obstring(ObLLVMType &type)
   return ret;
 }
 
+int ObPLADTService::get_se_array_local_data_buf(jit::ObLLVMType &type)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(se_array_local_data_buf_.get_v())) {
+    ObLLVMType int64_type;
+    ObLLVMType local_data_buf;
+
+    if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else if (OB_FAIL(ObLLVMHelper::get_array_type(int64_type,
+                                                    // typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE,
+                                                    //                           ObWrapperAllocator,false,
+                                                    //                           ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
+                                                    //                           > ParamStore;
+                                                    // whose BlockPointerArrayT = ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
+                                                    // so LOCAL_ARRAY_SIZE is 1
+                                                    1,
+                                                    local_data_buf))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else {
+      se_array_local_data_buf_.set_v(local_data_buf.get_v());
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    type = se_array_local_data_buf_;
+  }
+
+  return ret;
+}
+
 int ObPLADTService::get_seg_pointer_array(jit::ObLLVMType &type)
 {
   int ret = OB_SUCCESS;
@@ -682,16 +714,8 @@ int ObPLADTService::get_seg_pointer_array(jit::ObLLVMType &type)
       LOG_WARN("failed to get wrapper_allocator", K(ret));
     } else if (OB_FAIL(get_memory_context(memory_context))) {
       LOG_WARN("failed to get memory_context", K(ret));
-    } else if (OB_FAIL(ObLLVMHelper::get_array_type(int64_type,
-                                                    // typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE,
-                                                    //                           ObWrapperAllocator,false,
-                                                    //                           ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
-                                                    //                           > ParamStore;
-                                                    // whose BlockPointerArrayT = ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
-                                                    // so LOCAL_ARRAY_SIZE is 1
-                                                    1,
-                                                    local_data_buf))) {
-      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else if (OB_FAIL(get_se_array_local_data_buf(local_data_buf))) {
+      LOG_WARN("failed to get_se_array_local_data_buf", K(ret));
     } else if (OB_FAIL(local_data_buf.get_pointer_to(pointer_carray_pointer))) {
       LOG_WARN("failed to get_pointer_to", K(ret));
     } else {

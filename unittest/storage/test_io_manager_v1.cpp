@@ -125,8 +125,8 @@ static void get_random_io_info(ObIOInfo &io_info)
 static ObTenantIOConfig default_tenant_io_config()
 {
   ObTenantIOConfig tenant_config;
-  tenant_config.callback_thread_count_ = 2;
-  tenant_config.memory_limit_ = 1024L * 1024L * 1024L;
+  tenant_config.param_config_.callback_thread_count_ = 2;
+  tenant_config.param_config_.memory_limit_ = 1024L * 1024L * 1024L;
   tenant_config.unit_config_.min_iops_ = 1000;
   tenant_config.unit_config_.max_iops_ = 1000;
   tenant_config.unit_config_.weight_ = 1000;
@@ -154,6 +154,7 @@ public:
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual ObIAllocator *get_allocator() override { return allocator_; }
+  const char *get_cb_name() const override { return "TestIOCallback"; }
   TO_STRING_KV(KP(number_), KP(allocator_), KP(help_buf_));
 
 public:
@@ -608,8 +609,8 @@ TEST_F(TestIOStruct, MClockQueue)
   ObIOAllocator io_allocator;
   ASSERT_SUCC(io_allocator.init(TEST_TENANT_ID, IO_MEMORY_LIMIT));
   ObTenantIOConfig io_config;
-  io_config.callback_thread_count_ = 2;
-  io_config.memory_limit_ = 1024L * 1024L * 1024L;
+  io_config.param_config_.callback_thread_count_ = 2;
+  io_config.param_config_.memory_limit_ = 1024L * 1024L * 1024L;
   io_config.unit_config_.min_iops_ = 100;
   io_config.unit_config_.max_iops_ = 10000L;
   io_config.unit_config_.weight_ = 1000;
@@ -1434,7 +1435,7 @@ TEST_F(TestIOStruct, alloc_memory)
   // prepare tenant io manager
   for (int64_t i = 0; i < perf_tenants.count(); ++i) {
     IOPerfTenant &curr_config = perf_tenants.at(i);
-    curr_config.config_.memory_limit_ = 16L* 1024L * 1024L; //16MB
+    curr_config.config_.param_config_.memory_limit_ = 16L* 1024L * 1024L; //16MB
     ObRefHolder<ObTenantIOManager> tenant_holder;
     ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(curr_config.tenant_id_, tenant_holder));
     ASSERT_SUCC(tenant_holder.get_ptr()->refresh_group_io_config());
@@ -1943,8 +1944,8 @@ int parse_group_perf_config(const char *config_file_path,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("scan config file failed", K(ret), K(scan_ret));
         } else {
-          item.config_.memory_limit_ = IO_MEMORY_LIMIT;
-          item.config_.callback_thread_count_ = 0;
+          item.config_.param_config_.memory_limit_ = IO_MEMORY_LIMIT;
+          item.config_.param_config_.callback_thread_count_ = 0;
           // parse group config
           if (OB_FAIL(item.config_.parse_group_config(group_config))) {
             LOG_WARN("parse group config failed", K(ret), K(group_config));
@@ -2406,7 +2407,7 @@ int IOConfModify::modify_tenant_io( const int64_t min_iops,
   curr_tenant.config_.unit_config_.max_iops_ = max_iops;
   curr_tenant.config_.unit_config_.weight_ = weight;
 
-  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(curr_tenant.tenant_id_, curr_tenant.config_))) {
+  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_unit_config(curr_tenant.tenant_id_, curr_tenant.config_.unit_config_))) {
     LOG_WARN("refresh tenant io config failed", K(ret), K(curr_tenant.tenant_id_), K(curr_tenant.config_));
   }
   return ret;
@@ -2521,8 +2522,8 @@ void IOTracerSwitch::run1()
 int IOTracerSwitch::modify_tenant_io(IOPerfTenant &curr_tenant)
 {
   int ret = OB_SUCCESS;
-  ATOMIC_SET(&curr_tenant.config_.enable_io_tracer_, true);
-  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(curr_tenant.tenant_id_, curr_tenant.config_))) {
+  ATOMIC_SET(&curr_tenant.config_.param_config_.enable_io_tracer_, true);
+  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_param_config(curr_tenant.tenant_id_, curr_tenant.config_.param_config_))) {
     LOG_WARN("refresh tenant io config failed", K(ret), K(curr_tenant.tenant_id_), K(curr_tenant.config_));
   }
   return ret;
@@ -2581,9 +2582,9 @@ int IOCallbackModifier::modify_callback_num(const int64_t thread_num,
                                             IOPerfTenant &curr_tenant)
 {
   int ret = OB_SUCCESS;
-  curr_tenant.config_.callback_thread_count_ = thread_num;
+  curr_tenant.config_.param_config_.callback_thread_count_ = thread_num;
 
-  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(curr_tenant.tenant_id_, curr_tenant.config_))) {
+  if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_param_config(curr_tenant.tenant_id_, curr_tenant.config_.param_config_))) {
     LOG_WARN("refresh tenant io config failed", K(ret), K(curr_tenant.tenant_id_), K(curr_tenant.config_));
   }
   return ret;

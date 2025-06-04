@@ -75,7 +75,9 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     pre_query_range_,
                     pre_range_graph_,
                     external_file_pattern_,
-                    external_object_ctx_);
+                    external_object_ctx_,
+                    external_pushdown_filters_,
+                    aggregate_param_props_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -297,6 +299,8 @@ int ObDASScanOp::init_scan_param()
   scan_param_.force_refresh_lc_ = scan_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(scan_ctdef_->pd_expr_spec_.access_exprs_);
   scan_param_.ext_file_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_);
+  scan_param_.ext_mapping_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_exprs_);
+  scan_param_.ext_mapping_column_ids_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_ids_);
   scan_param_.ext_column_convert_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
   scan_param_.calc_exprs_ = &(scan_ctdef_->pd_expr_spec_.calc_exprs_);
   scan_param_.aggregate_exprs_ = &(scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_);
@@ -318,6 +322,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.is_mds_query_ = false;
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
   scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
+  scan_param_.external_object_ctx_ = &scan_ctdef_->external_object_ctx_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -367,6 +372,7 @@ int ObDASScanOp::init_scan_param()
       }
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
       scan_param_.external_file_format_.csv_format_.ignore_extra_fields_ = true;
+      scan_param_.ext_tbl_filter_pd_level_ = scan_ctdef_->pd_expr_spec_.ext_tbl_filter_pd_level_;
     }
   }
   LOG_DEBUG("init scan param", K(ret), K(scan_param_));
@@ -1176,27 +1182,33 @@ int ObDASScanOp::get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids)
 {
   int ret = OB_SUCCESS;
   bool is_ivf = ObDASIterUtils::is_vec_ivf_scan(attach_ctdef_, attach_rtdef_);
-  if (!is_ivf) {
-    if (OB_FAIL(get_hnsw_ir_tablet_ids(
-            related_tablet_ids.inv_idx_tablet_id_,
-            related_tablet_ids.delta_buf_tablet_id_,
-            related_tablet_ids.index_id_tablet_id_,
-            related_tablet_ids.snapshot_tablet_id_,
-            related_tablet_ids.lookup_tablet_id_,
-            related_tablet_ids.rowkey_vid_tablet_id_))) {
-      LOG_WARN("failed to get hnsw ir tablet ids", K(ret));
+  bool is_spiv = ObDASIterUtils::is_vec_spiv_scan(attach_ctdef_, attach_rtdef_);
+  if (is_spiv) {
+    if (OB_FAIL(get_spiv_ir_tablet_ids(related_tablet_ids.inv_idx_tablet_id_,
+                                       related_tablet_ids.dim_docid_value_tablet_id_,
+                                       related_tablet_ids.rowkey_doc_tablet_id_))) {
+      LOG_WARN("failed to get spiv ir tablet ids", K(ret));
     }
-  } else {
-    if (OB_FAIL(get_ivf_ir_tablet_ids(
-            related_tablet_ids.inv_idx_tablet_id_,
-            related_tablet_ids.centroid_tablet_id_,
-            related_tablet_ids.cid_vec_tablet_id_,
-            related_tablet_ids.rowkey_cid_tablet_id_,
-            related_tablet_ids.special_aux_tablet_id_,
-            related_tablet_ids.lookup_tablet_id_))) {
+  } else if (is_ivf) {
+    if (OB_FAIL(get_ivf_ir_tablet_ids(related_tablet_ids.inv_idx_tablet_id_,
+                                      related_tablet_ids.centroid_tablet_id_,
+                                      related_tablet_ids.cid_vec_tablet_id_,
+                                      related_tablet_ids.rowkey_cid_tablet_id_,
+                                      related_tablet_ids.special_aux_tablet_id_,
+                                      related_tablet_ids.lookup_tablet_id_))) {
       LOG_WARN("failed to get ivf ir tablet ids", K(ret));
     }
+  } else {
+    if (OB_FAIL(get_hnsw_ir_tablet_ids(related_tablet_ids.inv_idx_tablet_id_,
+                                       related_tablet_ids.delta_buf_tablet_id_,
+                                       related_tablet_ids.index_id_tablet_id_,
+                                       related_tablet_ids.snapshot_tablet_id_,
+                                       related_tablet_ids.lookup_tablet_id_,
+                                       related_tablet_ids.rowkey_vid_tablet_id_))) {
+      LOG_WARN("failed to get hnsw ir tablet ids", K(ret));
+    }
   }
+
   return ret;
 }
 
@@ -1308,6 +1320,47 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
       }
       case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
         rowkey_vid_tid = related_tablet_ids_.at(i);
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASScanOp::get_spiv_ir_tablet_ids(
+    common::ObTabletID &vec_row_tid,
+    common::ObTabletID &dim_docid_value_tid,
+    common::ObTabletID &rowkey_doc_tid)
+{
+  int ret = OB_SUCCESS;
+  vec_row_tid.reset();
+  dim_docid_value_tid.reset();
+  rowkey_doc_tid.reset();
+
+  if (OB_UNLIKELY(related_ctdefs_.count() != related_tablet_ids_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected related scan array not match", K(ret), K_(related_ctdefs), K_(related_tablet_ids));
+  }
+  for (int64_t i= 0; OB_SUCC(ret) && i < related_ctdefs_.count(); ++i) {
+    const ObDASScanCtDef *ctdef = static_cast<const ObDASScanCtDef *>(related_ctdefs_.at(i));
+    switch (ctdef->ir_scan_type_) {
+      case ObTSCIRScanType::OB_NOT_A_SPEC_SCAN: {
+        break;
+      }
+      case ObTSCIRScanType::OB_IR_INV_IDX_SCAN:
+      case ObTSCIRScanType::OB_VEC_FILTER_SCAN: {
+        vec_row_tid = related_tablet_ids_.at(i);
+        break;
+      }
+      case ObTSCIRScanType::OB_VEC_SPIV_INDEX_SCAN: {
+        dim_docid_value_tid = related_tablet_ids_.at(i);
+        break;
+      }
+      case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
+        rowkey_doc_tid = related_tablet_ids_.at(i);
         break;
       }
       default: {

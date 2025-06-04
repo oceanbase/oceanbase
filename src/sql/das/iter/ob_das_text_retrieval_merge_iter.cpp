@@ -172,12 +172,24 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
   } else if (BOOLEAN_MODE == ir_ctdef->mode_flag_) {
     const ObString &search_text_string = search_text_datum->get_string();
     const ObCollationType &cs_type = search_text->datum_meta_.cs_type_;
+    const ObCollationType dst_type = ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI;
+
     ObString str_dest;
-    ObCharset::tolower(cs_type, search_text_string, str_dest, alloc);
+    if (cs_type != dst_type) {
+      ObString tmp_out;
+      if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, tmp_out, alloc))) {
+        LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
+      } else if (OB_FAIL(common::ObCharset::charset_convert(alloc, tmp_out, cs_type, dst_type, str_dest))) {
+        LOG_WARN("failed to convert string", K(ret), K(cs_type), K(search_text_string));
+      }
+    } else if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, str_dest, alloc))){
+      LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
+    }
 
     void *buf = nullptr;
     FtsParserResult *fts_parser;
-    if (OB_ISNULL(buf = (&alloc)->alloc(sizeof(FtsParserResult)))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = (&alloc)->alloc(sizeof(FtsParserResult)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
     } else {
@@ -194,7 +206,7 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
     }
 
     if (OB_FAIL(ret)) {
-    } else if (FALSE_IT(fts_parse_docment(static_cast<char *>(buf), &alloc, fts_parser))) {
+    } else if (FALSE_IT(fts_parse_docment(static_cast<char *>(buf), str_dest.length(), &alloc, fts_parser))) {
     } else if (FTS_OK != fts_parser->ret_) {
       if (FTS_ERROR_MEMORY == fts_parser->ret_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -213,7 +225,7 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
       const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
       if (OB_FAIL(tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
         LOG_WARN("failed to create token map", K(ret));
-      } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_node_create(parant_node, node, alloc, query_tokens, tokens_map))) {
+      } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_node_create(parant_node, node, cs_type, alloc, query_tokens, tokens_map))) {
         LOG_WARN("failed to get query tokens", K(ret));
       } else {
         root_node = parant_node;

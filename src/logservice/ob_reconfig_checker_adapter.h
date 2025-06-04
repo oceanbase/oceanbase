@@ -32,9 +32,11 @@ public:
 public:
   virtual int check_can_add_member(const ObAddr &server,
                                    const int64_t timeout_us) override final;
-  virtual int check_can_change_memberlist(const ObMemberList &new_member_list,
-                                          const int64_t paxos_replica_num,
-                                          const int64_t timeout_us) override final;
+  virtual int check_can_change_memberlist(
+      const ObMemberList &new_member_list,
+      const int64_t paxos_replica_num,
+      const palf::LogConfigVersion &config_version,
+      const int64_t timeout_us) override final;
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;

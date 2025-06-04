@@ -75,6 +75,10 @@ int ObPredicateDeduce::check_deduce_validity(ObRawExpr *cond, bool &is_valid)
     is_valid = false;
   } else if (left_expr == right_expr || left_expr->same_as(*right_expr)) {
     is_valid = false;
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(left_expr->get_result_type(),
+                                                                   right_expr->get_result_type(),
+                                                                   is_valid))) {
+    LOG_WARN("failed to check equal transitive", K(ret));
   }
   return ret;
 }
@@ -1070,13 +1074,9 @@ int ObPredicateDeduce::check_lossless_cast_table_filter(ObRawExpr *expr,
     bool is_lossless = false;
     if (check_expr->get_expr_type() != T_FUN_SYS_CAST) {
       is_valid = false;
-    } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(check_expr, column_expr))) {
-      LOG_WARN("failed to get real expr without cast", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(check_expr, column_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
     } else if (!column_expr->is_column_ref_expr()) {
-      is_valid = false;
-    } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(check_expr, is_lossless))) {
-      LOG_WARN("failed to check expr is lossless column cast", K(ret));
-    } else if (!is_lossless) {
       is_valid = false;
     } else {
       cast_expr = check_expr;

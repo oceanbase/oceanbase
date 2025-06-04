@@ -169,17 +169,6 @@ public:
                                   int64_t &index_row_count,
                                   int64_t &data_row_count) = 0;
   //todo @hanling :refactor these OB_NOT_SUPPORTED interface
-  virtual int get_idx_row_header_in_target_idx(const int64_t idx,
-                                               const ObIndexBlockRowHeader *&idx_row_header) { return OB_NOT_SUPPORTED; }
-  virtual int find_out_rows(const int32_t range_idx,
-                            const int64_t scanner_range_idx,
-                            int64_t &found_idx) { return OB_NOT_SUPPORTED; }
-  virtual int find_out_rows_from_start_to_end(const int32_t range_idx,
-                                              const int64_t scanner_range_idx,
-                                              const ObCSRowId start_row_id,
-                                              const ObCSRange &parent_row_range,
-                                              bool &is_certain,
-                                              int64_t &found_idx) { return OB_NOT_SUPPORTED; }
   virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) { return OB_NOT_SUPPORTED; }
   virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
   virtual int find_rowkeys_belong_to_curr_idx_row(ObMicroIndexInfo &idx_block_row, const int64_t rowkey_end_idx, const ObRowKeysInfo *rowkeys_info) { return OB_NOT_SUPPORTED; }
@@ -294,20 +283,9 @@ public:
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual void reset() override;
   virtual void reuse() override;
-  virtual int find_out_rows(const int32_t range_idx,
-                            const int64_t scanner_range_idx,
-                            int64_t &found_idx) override;
-  virtual int find_out_rows_from_start_to_end(const int32_t range_idx,
-                                              const int64_t scanner_range_idx,
-                                              const ObCSRowId start_row_id,
-                                              const ObCSRange &parent_row_range,
-                                              bool &is_certain,
-                                              int64_t &found_idx) override;
   virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
   virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
   virtual int find_rowkeys_belong_to_curr_idx_row(ObMicroIndexInfo &idx_block_row, const int64_t rowkey_end_idx, const ObRowKeysInfo *rowkeys_info) override;
-  virtual int get_idx_row_header_in_target_idx(const int64_t idx,
-                                               const ObIndexBlockRowHeader *&idx_row_header) override;
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
                                 const bool is_left_border,
                                 const bool is_right_border,
@@ -402,14 +380,6 @@ public:
       const ObDatumRowkey &rowkey,
       const int32_t range_idx,
       ObCSRange &cs_range);
-  int find_out_rows(
-      const int32_t range_idx,
-      int64_t &found_idx);
-  int find_out_rows_from_start_to_end(
-      const int32_t range_idx,
-      const ObCSRowId start_row_id,
-      bool &is_certain,
-      int64_t &found_idx);
   bool is_in_border();
   int get_end_key(ObCommonDatumRowkey &endkey) const;
   OB_INLINE bool is_valid() const { return is_inited_; }
@@ -429,9 +399,6 @@ private:
   int locate_key(const ObDatumRowkey &rowkey);
   int init_datum_row();
   int get_cur_row_id_range(ObCSRange &cs_range);
-  int get_idx_row_header_in_target_idx(
-      const ObIndexBlockRowHeader *&idx_row_header,
-      const int64_t idx);
   int advance_to_border(
       const ObDatumRowkey &rowkey,
       const int64_t limit_idx,

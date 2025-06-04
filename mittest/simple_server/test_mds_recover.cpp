@@ -147,7 +147,7 @@ void do_flush_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   // 3. 从tablet handle拿到tablet pointer
   const ObTabletPointerHandle &pointer_handle = tablet_handle.get_obj()->get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletBasePointer *tablet_pointer = pointer_handle.get_resource_ptr();
   // 4. 做flush动作
   mds::MdsTableHandle handle;
   share::SCN max_decided_scn;

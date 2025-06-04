@@ -260,8 +260,6 @@ private:
                                ParamStore &param_store);
   int construct_param_store_from_parameterized_params(const ObPlanCacheCtx &phy_ctx,
                                                       ParamStore &param_store);
-  bool is_exist_in_fixed_param_idx(const int64_t idx,
-                                   const ObIArray<int64_t> &fixed_param_idx);
   int do_real_prepare(const ObString &stmt,
                       ObSqlCtx &context,
                       ObResultSet &result,
@@ -449,11 +447,6 @@ private:
   int resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
 
   int resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
-
-  int replace_const_expr(common::ObIArray<ObRawExpr*> &raw_exprs,
-                         ParamStore &param_store);
-  int replace_const_expr(ObRawExpr *raw_expr,
-                         ParamStore &param_store);
   void generate_ps_sql_id(const ObString &raw_sql,
                           ObSqlCtx &context);
   void generate_sql_id(ObPlanCacheCtx &pc_ctx,
@@ -502,12 +495,18 @@ private:
   int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
   int check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &need_switch);
   void rollback_implicit_trans_when_fail(ObResultSet &result, int &ret);
+  int try_get_plan(ObPlanCacheCtx &ctx,
+                   ObResultSet &result,
+                   bool is_enable_pc,
+                   bool &add_plan_to_pc);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 
 public:
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
+  static bool is_exist_in_fixed_param_idx(const int64_t idx,
+                                   const ObIArray<int64_t> &fixed_param_idx);
 private:
   bool inited_;
   // BEGIN 全局单例依赖接口

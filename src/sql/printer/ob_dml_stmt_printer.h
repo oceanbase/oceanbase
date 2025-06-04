@@ -17,6 +17,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/printer/ob_raw_expr_printer.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
+    ObString catalog_name = table_item->catalog_name_;                      \
     ObString database_name = table_item->synonym_name_.empty() ?         \
                             ( table_item->is_link_table() ?                 \
                               table_item->link_database_name_ :             \
@@ -41,6 +43,10 @@ namespace sql
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
+      if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
+        PRINT_IDENT_WITH_QUOT(catalog_name);                               \
+        DATA_PRINTF(".");                                                   \
+      }                                                                     \
       if (!database_name.empty()) {                                         \
         PRINT_IDENT_WITH_QUOT(database_name);                               \
         DATA_PRINTF(".");                                                   \
@@ -144,6 +150,7 @@ public:
   int print_search_and_cycle(const ObSelectStmt *sub_select_stmt);
   bool is_root_stmt() const { return is_root_; }
   int print_with();
+  bool need_print_catalog_name(const ObString& catalog_name);
 private:
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);

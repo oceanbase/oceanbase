@@ -14,7 +14,7 @@
 
 #include "achunk_mgr.h"
 #include "lib/utility/utility.h"
-
+#include "lib/resource/ob_affinity_ctrl.h"
 using namespace oceanbase::lib;
 int ObLargePageHelper::large_page_type_ = INVALID_LARGE_PAGE_TYPE;
 
@@ -52,20 +52,19 @@ AChunkMgr::AChunkMgr()
     total_hold_(0), cache_hold_(0), large_cache_hold_(0),
     max_chunk_cache_size_(limit_)
 {
-  // only cache normal_chunk or large_chunk
-  for (int i = 0; i < ARRAYSIZEOF(slots_); ++i) {
-    new (slots_ + i) Slot();
+  // not to cache huge_chunk
+  for (int i = 0; i < OB_MAX_NUMA_NUM; ++i) {
+    slots_[i][HUGE_ACHUNK_INDEX]->set_max_chunk_cache_size(0);
   }
-  slots_[HUGE_ACHUNK_INDEX]->set_max_chunk_cache_size(0);
 }
 
-void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
+void *AChunkMgr::direct_alloc(const uint64_t size, const int32_t numa_id, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
 
   void *ptr = nullptr;
-  ptr = low_alloc(size, can_use_huge_page, huge_page_used, alloc_shadow);
+  ptr = low_alloc(size, numa_id, can_use_huge_page, huge_page_used, alloc_shadow);
   if (nullptr != ptr) {
     if (((uint64_t)ptr & (ACHUNK_ALIGN_SIZE - 1)) != 0) {
       // not aligned
@@ -73,7 +72,7 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 
       uint64_t new_size = size + ACHUNK_ALIGN_SIZE;
       /* alloc_shadow should be set to false since partitial sanity_munmap is not supported */
-      ptr = low_alloc(new_size, can_use_huge_page, huge_page_used, false/*alloc_shadow*/);
+      ptr = low_alloc(new_size, numa_id, can_use_huge_page, huge_page_used, false/*alloc_shadow*/);
       if (nullptr != ptr) {
         const uint64_t addr = align_up2((uint64_t)ptr, ACHUNK_ALIGN_SIZE);
         if (addr - (uint64_t)ptr > 0) {
@@ -89,7 +88,8 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
     }
   }
   if (ptr != nullptr) {
-    inc_maps(size);
+    AFFINITY_CTRL.memory_bind_to_node(ptr, size, numa_id);
+    inc_maps(size, numa_id);
     IGNORE_RETURN ATOMIC_FAA(&total_hold_, size);
   } else {
     LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "low alloc fail", K(size), K(orig_errno), K(errno));
@@ -105,13 +105,14 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 void AChunkMgr::direct_free(const void *ptr, const uint64_t size)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
-
-  inc_unmaps(size);
+  int32_t numa_id = ((AChunk*)ptr)->numa_id_;
+  inc_unmaps(size, numa_id);
   IGNORE_RETURN ATOMIC_FAA(&total_hold_, -size);
   low_free(ptr, size);
 }
 
-void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
+
+void *AChunkMgr::low_alloc(const uint64_t size, const int32_t numa_id, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
 {
   void *ptr = nullptr;
   huge_page_used = false;
@@ -168,14 +169,14 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
   }
 }
 
-AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
+AChunk *AChunkMgr::alloc_chunk(const uint64_t size, const int32_t numa_id, bool high_prio)
 {
   const int64_t hold_size = hold(size);
   const int64_t all_size = aligned(size);
 
   AChunk *chunk = nullptr;
   // Reuse chunk from self-cache
-  if (OB_NOT_NULL(chunk = pop_chunk_with_size(all_size))) {
+  if (OB_NOT_NULL(chunk = pop_chunk_with_size(all_size, numa_id))) {
     int64_t orig_hold_size = chunk->hold();
     bool need_free = false;
     if (hold_size == orig_hold_size) {
@@ -201,19 +202,22 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
   }
   if (OB_ISNULL(chunk)) {
     bool updated = false;
-    for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
-      while (!(updated = update_hold(hold_size, high_prio)) &&
-          OB_NOT_NULL(chunk = pop_chunk_with_index(i))) {
-        int64_t orig_all_size = chunk->aligned();
-        int64_t orig_hold_size = chunk->hold();
-        direct_free(chunk, orig_all_size);
-        IGNORE_RETURN update_hold(-orig_hold_size, false);
-        chunk = nullptr;
+    for (int i = 0; !updated && i < OB_MAX_NUMA_NUM; ++i) {
+      int32_t free_numa_id = (i + numa_id) % OB_MAX_NUMA_NUM;
+      for (int chunk_idx = MAX_LARGE_ACHUNK_INDEX; !updated && chunk_idx >= 0; --chunk_idx) {
+        while (!(updated = update_hold(hold_size, high_prio)) &&
+            OB_NOT_NULL(chunk = pop_chunk_with_index(chunk_idx, free_numa_id))) {
+          int64_t orig_all_size = chunk->aligned();
+          int64_t orig_hold_size = chunk->hold();
+          direct_free(chunk, orig_all_size);
+          IGNORE_RETURN update_hold(-orig_hold_size, false);
+          chunk = nullptr;
+        }
       }
     }
     if (updated) {
       bool hugetlb_used = false;
-      void *ptr = direct_alloc(all_size, true, hugetlb_used, SANITY_BOOL_EXPR(true));
+      void *ptr = direct_alloc(all_size, numa_id, true, hugetlb_used, SANITY_BOOL_EXPR(true));
       if (ptr != nullptr) {
 #ifdef ENABLE_SANITY
         void *ref = *(void**)ptr;
@@ -223,6 +227,7 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
         chunk = new (ptr) AChunk();
 #endif
         chunk->is_hugetlb_ = hugetlb_used;
+        chunk->numa_id_ = numa_id;
       } else {
         IGNORE_RETURN update_hold(-hold_size, false);
       }
@@ -260,31 +265,34 @@ void AChunkMgr::free_chunk(AChunk *chunk)
   }
 }
 
-AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
+AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size, const int32_t numa_id)
 {
   const int64_t hold_size = hold(size);
   const int64_t all_size = aligned(size);
 
   AChunk *chunk = nullptr;
   bool updated = false;
-  for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
-    while (!(updated = update_hold(hold_size, true)) &&
-      OB_NOT_NULL(chunk = pop_chunk_with_index(i))) {
-      // Wash chunk from all-cache when observer's hold reaches limit
-      int64_t all_size = chunk->aligned();
-      int64_t hold_size = chunk->hold();
-      direct_free(chunk, all_size);
-      IGNORE_RETURN update_hold(-hold_size, false);
-      chunk = nullptr;
+  for (int i = 0; !updated && i < OB_MAX_NUMA_NUM; ++i) {
+    int32_t free_numa_id = (i + numa_id) % OB_MAX_NUMA_NUM;
+    for (int chunk_idx = MAX_LARGE_ACHUNK_INDEX; !updated && chunk_idx >= 0; --chunk_idx) {
+      while (!(updated = update_hold(hold_size, true)) &&
+        OB_NOT_NULL(chunk = pop_chunk_with_index(chunk_idx, free_numa_id))) {
+        int64_t all_size = chunk->aligned();
+        int64_t hold_size = chunk->hold();
+        direct_free(chunk, all_size);
+        IGNORE_RETURN update_hold(-hold_size, false);
+        chunk = nullptr;
+      }
     }
   }
   if (updated) {
     // there is performance drop when thread stack on huge_page memory.
     bool hugetlb_used = false;
-    void *ptr = direct_alloc(all_size, false, hugetlb_used, SANITY_BOOL_EXPR(false));
+    void *ptr = direct_alloc(all_size, numa_id, false, hugetlb_used, SANITY_BOOL_EXPR(false));
     if (ptr != nullptr) {
       chunk = new (ptr) AChunk();
       chunk->is_hugetlb_ = hugetlb_used;
+      chunk->numa_id_ = numa_id;
     } else {
       IGNORE_RETURN update_hold(-hold_size, true);
     }
@@ -365,16 +373,25 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int64_t normal_unmaps = 0;
   int64_t large_maps = 0;
   int64_t large_unmaps = 0;
+  int64_t huge_maps = 0;
+  int64_t huge_unmaps = 0;
+
   for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
-    normal_maps += get_maps(i);
-    normal_unmaps += get_unmaps(i);
+    for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
+      normal_maps += get_maps(i, j);
+      normal_unmaps += get_unmaps(i, j);
+    }
   }
   for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
-    large_maps += get_maps(i);
-    large_unmaps += get_unmaps(i);
+    for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
+      large_maps += get_maps(i, j);
+      large_unmaps += get_unmaps(i, j);
+    }
   }
-  int64_t huge_maps = get_maps(HUGE_ACHUNK_INDEX);
-  int64_t huge_unmaps = get_unmaps(HUGE_ACHUNK_INDEX);
+  for (int i = 0; i < OB_MAX_NUMA_NUM; ++i) {
+    huge_maps += get_maps(HUGE_ACHUNK_INDEX, i);
+    huge_unmaps += get_unmaps(HUGE_ACHUNK_INDEX, i);
+  }
   int64_t total_maps = normal_maps + large_maps + huge_maps;
   int64_t total_unmaps = normal_unmaps + large_unmaps + huge_unmaps;
   int64_t virtual_memory_used = get_virtual_memory_used(&resident_size);
@@ -407,11 +424,13 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   if (OB_SUCC(ret)) {
     int64_t hold = 0, count = 0, pushes = 0, pops = 0;
     for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
-      const AChunkList &free_list = get_freelist(i);
-      hold += free_list.hold();
-      count += free_list.count();
-      pushes += free_list.get_pushes();
-      pops += free_list.get_pops();
+      for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
+        const AChunkList &free_list = get_freelist(i, j);
+        hold += free_list.hold();
+        count += free_list.count();
+        pushes += free_list.get_pushes();
+        pops += free_list.get_pops();
+      }
     }
     ret = databuff_printf(buf, buf_len, pos,
         "\n[CHUNK_MGR] %'2d MB_CACHE: hold=%'15ld count=%'15ld pushes=%'15ld pops=%'15ld maps=%'15ld unmaps=%'15ld\n",
@@ -419,12 +438,20 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   }
 
   for (int i = MIN_LARGE_ACHUNK_INDEX; OB_SUCC(ret) && i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
-    const AChunkList &free_list = get_freelist(i);
+    int64_t hold = 0, count = 0, pushes = 0, pops = 0;
+    int64_t maps = 0, unmaps = 0;
+    for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
+      const AChunkList &free_list = get_freelist(i, j);
+      hold += free_list.hold();
+      count += free_list.count();
+      pushes += free_list.get_pushes();
+      pops += free_list.get_pops();
+      maps += get_maps(i, j);
+      unmaps += get_unmaps(i, j);
+    }
     ret = databuff_printf(buf, buf_len, pos,
         "[CHUNK_MGR] %'2d MB_CACHE: hold=%'15ld count=%'15ld pushes=%'15ld pops=%'15ld maps=%'15ld unmaps=%'15ld\n",
-        LARGE_ACHUNK_SIZE_MAP[i - MIN_LARGE_ACHUNK_INDEX], free_list.hold(), free_list.count(),
-        free_list.get_pushes(), free_list.get_pops(),
-        get_maps(i), get_unmaps(i));
+        LARGE_ACHUNK_SIZE_MAP[i - MIN_LARGE_ACHUNK_INDEX], hold, count, pushes, pops, maps, unmaps);
   }
   return pos;
 }
@@ -433,18 +460,20 @@ int64_t AChunkMgr::sync_wash()
 {
   int64_t washed_size = 0;
   for (int i = 0; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
-    int64_t cache_hold = 0;
-    AChunk *head = popall_with_index(i, cache_hold);
-    if (OB_NOT_NULL(head)) {
-      AChunk *chunk = head;
-      do {
-        const int64_t all_size = chunk->aligned();
-        AChunk *next_chunk = chunk->next_;
-        direct_free(chunk, all_size);
-        chunk = next_chunk;
-      } while (chunk != head);
-      IGNORE_RETURN update_hold(-cache_hold, false);
-      washed_size += cache_hold;
+    for (int j = 0; j < OB_MAX_NUMA_NUM; ++j) {
+      int64_t cache_hold = 0;
+      AChunk *head = popall_with_index(i, j, cache_hold);
+      if (OB_NOT_NULL(head)) {
+        AChunk *chunk = head;
+        do {
+          const int64_t all_size = chunk->aligned();
+          AChunk *next_chunk = chunk->next_;
+          direct_free(chunk, all_size);
+          chunk = next_chunk;
+        } while (chunk != head);
+        IGNORE_RETURN update_hold(-cache_hold, false);
+        washed_size += cache_hold;
+      }
     }
   }
   return washed_size;

@@ -1107,7 +1107,6 @@ private:
                     const ObRawExpr *r_expr,
                     const uint64_t column_id,
                     const ObRawExpr *partition_expr,
-                    const ObExprResType &res_type,
                     bool &cnt_func_expr,
                     bool &always_true,
                     ObPartLocCalcNode *&calc_node);

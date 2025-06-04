@@ -143,10 +143,12 @@ if (BUILD_CDC_ONLY)
   set_target_properties(ob_sql_proxy_parser_objects PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
+
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT
   ${ob_inner_sql_parser_object_list}
   ${ob_extra_sql_parser_object_list})
+
 
 target_link_libraries(ob_sql_proxy_parser_objects PUBLIC ob_base ob_sql_parser_base)
 target_link_libraries(ob_sql_server_parser_objects PUBLIC ob_base)
@@ -163,9 +165,11 @@ add_library(ob_sql_proxy_parser_static
   STATIC
   EXCLUDE_FROM_ALL)
 
+
 add_library(ob_sql_server_parser_static
   STATIC
   EXCLUDE_FROM_ALL)
+
 
 target_link_libraries(ob_sql_proxy_parser_static
   PUBLIC

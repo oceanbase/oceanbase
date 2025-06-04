@@ -112,10 +112,18 @@ bool ObPackageStateVersion::operator ==(const ObPackageStateVersion &other) cons
 
 void ObPackageStateVersion::set_merge_version_and_public_syn_cnt(const ObPLPackage &head, const ObPLPackage *body)
 {
-  header_merge_version_ = head.get_tenant_schema_version();
+  if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(head.get_id())) {
+    header_merge_version_ = head.get_sys_schema_version();
+  } else {
+    header_merge_version_ = head.get_tenant_schema_version();
+  }
   header_public_syn_count_ = head.get_public_syn_count();
   if (OB_NOT_NULL(body)) {
-    body_merge_version_ = body->get_tenant_schema_version();
+    if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(body->get_id())) {
+      body_merge_version_ = body->get_sys_schema_version();
+    } else {
+      body_merge_version_ = body->get_tenant_schema_version();
+    }
     body_public_syn_count_ = body->get_public_syn_count();
   }
 }
@@ -864,6 +872,9 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
     match = true;
   } else if (cur_state_version.header_public_syn_count_ != state_version.header_public_syn_count_ ||
              cur_state_version.body_public_syn_count_ != state_version.body_public_syn_count_) {
+    match = false;
+  } else if (cur_state_version.package_version_ != state_version.package_version_ ||
+             cur_state_version.package_body_version_ != state_version.package_body_version_) {
     match = false;
   } else {
     if (cur_state_version.header_merge_version_ != state_version.header_merge_version_) {

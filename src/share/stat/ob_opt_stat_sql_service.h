@@ -110,7 +110,7 @@ public:
                        common::sqlclient::ObMySQLResult &result,
                        hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                       bool need_cg_info);
+                       const uint64_t tenant_id);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats,
@@ -251,10 +251,13 @@ private:
                                             const ObIArray<ObOptColumnStat*> &column_stats,
                                             ObSqlString &delete_histogram_sql);
 
+  int check_column_histogram_valid(const uint64_t tenant_id,
+                                   const ObIArray<ObOptColumnStat *> &column_stats,
+                                   sqlclient::ObISQLConnection *conn);
   int construct_histogram_insert_sql(share::schema::ObSchemaGetterGuard *schema_guard,
                                      const uint64_t tenant_id,
                                      ObIAllocator &allocator,
-                                     const ObIArray<ObOptColumnStat*> &column_stats,
+                                     const ObIArray<ObOptColumnStat *> &column_stats,
                                      const int64_t current_time,
                                      ObSqlString &insert_histogram_sql,
                                      bool &need_histogram,

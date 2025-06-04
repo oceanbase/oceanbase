@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_recover_restore_table_task.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 
 using namespace oceanbase::lib;
@@ -87,14 +88,13 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
   int ret = OB_SUCCESS;
   int64_t new_fetched_snapshot = 0;
   int64_t persisted_snapshot = 0;
-  ObRootService *root_service = GCTX.root_service_;
   ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRecoverRestoreTableTask has not been inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (snapshot_version_ > 0) {
     new_status = next_task_status; // to switch to the next status.
   } else if (OB_FAIL(ObDDLUtil::calc_snapshot_with_gts(new_fetched_snapshot,
@@ -108,7 +108,7 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
     // the snapshot version obtained here must be valid.
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service->get_sql_proxy(),
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(*GCTX.sql_proxy_,
                                                                       dst_tenant_id_,
                                                                       task_id_,
                                                                       new_fetched_snapshot,
@@ -182,7 +182,6 @@ int ObRecoverRestoreTableTask::fail()
   obrpc::ObTableItem table_item;
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObDDLRes drop_table_res;
-  ObRootService *root_service = GCTX.root_service_;
   {
     bool is_oracle_mode = false;
     int64_t all_indexes_tablets_count = 0;
@@ -192,9 +191,9 @@ int ObRecoverRestoreTableTask::fail()
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
-    } else if (OB_ISNULL(root_service)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("error sys, root service must not be nullptr", K(ret));
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, dst_tenant_schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret), K(dst_tenant_id_));
     } else if (OB_FAIL(dst_tenant_schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
@@ -243,7 +242,7 @@ int ObRecoverRestoreTableTask::fail()
       }
     } else if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
       LOG_WARN("push back failed", K(ret), K(drop_table_arg));
-    } else if (OB_FAIL(root_service->get_common_rpc_proxy().to(GCTX.self_addr())
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr())
         .timeout(rpc_timeout).drop_table(drop_table_arg, drop_table_res))) {
       LOG_WARN("drop table failed", K(ret), K(rpc_timeout), K(drop_table_arg));
     } else {
@@ -261,18 +260,17 @@ int ObRecoverRestoreTableTask::fail()
 int ObRecoverRestoreTableTask::check_health()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys", K(ret));
-  } else if (!root_service->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, do not need retry", K(ret), K(object_id_), K(target_object_id_));
+    LOG_WARN("ddl service not started", KR(ret));
     need_retry_ = false;
-  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, tenant_id_))) {
     // switch to build failed if the source tenant is been dropped,
     // in order to remove the destination tenant's persistent task record.
     if (OB_TENANT_HAS_BEEN_DROPPED == ret) {

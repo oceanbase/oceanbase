@@ -63,6 +63,7 @@ public:
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
     const uint64_t encoding_granularity = 0);
   bool is_valid() const;
@@ -90,7 +91,10 @@ public:
       K_(enable_macro_block_bloom_filter),
       K_(progressive_merge_round),
       K_(need_submit_io),
-      K_(encoding_granularity));
+      K_(is_delete_insert_table),
+      K_(encoding_granularity),
+      K_(reorganization_scn),
+      K_(semistruct_encoding_type));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -121,12 +125,14 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   compaction::ObExecMode exec_mode_;
   bool micro_index_clustered_;
-  // TODO(baichangmin): 需要对比 micro_index_clustered 来检查是否有遗漏，已知 mds 和 ddl 的入口都还没改
   bool enable_macro_block_bloom_filter_;
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
+  bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
+  share::SCN reorganization_scn_;
+  share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -264,6 +270,8 @@ public:
     return use_old_version_macro_header() ? col_desc_->row_column_count_ : col_desc_->rowkey_column_count_;
   }
   bool micro_index_clustered() const;
+  bool is_delete_insert_merge() const
+  { return get_is_delete_insert_table() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
   int update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta);
   /* GET FUNC */
@@ -292,6 +300,8 @@ public:
   STATIC_DESC_FUNC(const char *, encrypt_key);
   STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
+  STATIC_DESC_FUNC(share::SCN, reorganization_scn);
+  STATIC_DESC_FUNC(bool, is_delete_insert_table);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);
@@ -309,6 +319,7 @@ public:
   OB_INLINE int64_t get_encrypt_key_size() const { return sizeof(static_desc_->encrypt_key_); }
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
+  OB_INLINE const share::schema::ObSemiStructEncodingType& get_semistruct_encoding_type() const { return static_desc_->semistruct_encoding_type_; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
@@ -379,6 +390,7 @@ struct ObWholeDataStoreDesc
     const int64_t cluster_version,
     const bool micro_index_clustered,
     const int64_t tablet_transfer_seq,
+    const share::SCN &reorganization_scn,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,

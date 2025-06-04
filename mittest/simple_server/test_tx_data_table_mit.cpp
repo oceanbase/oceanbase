@@ -29,7 +29,7 @@ static const char *TEST_FILE_NAME = "test_tx_data_table_mit";
 static const char *BORN_CASE_NAME = "ObTxDataTableTest";
 static const char *RESTART_CASE_NAME = "ObTxDataTableRestartTest";
 
-int INSERT_THREAD_NUM = 1;
+int INSERT_THREAD_NUM = 2;
 
 
 namespace oceanbase

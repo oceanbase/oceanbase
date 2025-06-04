@@ -25,6 +25,7 @@ public:
   static constexpr const char *PARSER_NAME_BENG = "beng";
   static constexpr const char *PARSER_NAME_SPACE = "space";
   static constexpr const char *PARSER_NAME_NGRAM = "ngram";
+  static constexpr const char *PARSER_NAME_NGRAM2 = "ngram2";
 
   static constexpr const char *CONFIG_NAME_MIN_TOKEN_SIZE = "min_token_size";
   static constexpr const char *CONFIG_NAME_MAX_TOKEN_SIZE = "max_token_size";
@@ -33,6 +34,8 @@ public:
   static constexpr const char *CONFIG_NAME_DICT_TABLE = "dict_table";
   static constexpr const char *CONFIG_NAME_QUANTIFIER_TABLE = "quanitfier_table";
   static constexpr const char *CONFIG_NAME_IK_MODE = "ik_mode";
+  static constexpr const char *CONFIG_NAME_MIN_NGRAM_SIZE = "min_ngram_size";
+  static constexpr const char *CONFIG_NAME_MAX_NGRAM_SIZE = "max_ngram_size";
 
   // config bound
   static constexpr int64_t FT_MIN_TOKEN_SIZE_LOWER_BOUND = 1;
@@ -44,6 +47,12 @@ public:
   static constexpr int64_t FT_NGRAM_TOKEN_SIZE_LOWER_BOUND = 1;
   static constexpr int64_t FT_NGRAM_TOKEN_SIZE_UPPER_BOUND = 10;
 
+  static constexpr int64_t FT_NGRAM_MIN_TOKEN_SIZE_LOWER_BOUND = 1;
+  static constexpr int64_t FT_NGRAM_MIN_TOKEN_SIZE_UPPER_BOUND = 16;
+
+  static constexpr int64_t FT_NGRAM_MAX_TOKEN_SIZE_LOWER_BOUND = 1;
+  static constexpr int64_t FT_NGRAM_MAX_TOKEN_SIZE_UPPER_BOUND = 16;
+
   static constexpr const char *FT_IK_MODE_SMART = "smart";
   static constexpr const char *FT_IK_MODE_MAX_WORD = "max_word";
 
@@ -51,6 +60,9 @@ public:
   static constexpr int64_t FT_DEFAULT_MIN_TOKEN_SIZE = 3;
   static constexpr int64_t FT_DEFAULT_MAX_TOKEN_SIZE = 84;
   static constexpr int64_t FT_DEFAULT_NGRAM_TOKEN_SIZE = 2;
+
+  static constexpr int64_t FT_DEFAULT_MIN_NGRAM_SIZE = 2;
+  static constexpr int64_t FT_DEFAULT_MAX_NGRAM_SIZE = 3;
 
   static constexpr const char *FT_DEFAULT_IK_STOPWORD_UTF8_TABLE
       = "oceanbase.__ft_stopword_ik_utf8";
@@ -67,10 +79,16 @@ public:
   // err msg
   static constexpr const char *MIN_TOKEN_SIZE_SCOPE_STR = "the min_token_size must be in [1, 16]";
   static constexpr const char *MAX_TOKEN_SIZE_SCOPE_STR = "the max_token_size must be in [10, 84]";
+
+  static constexpr const char *MIN_NGRAM_SIZE_SCOPE_STR = "the min_ngram_size must be in [1, 16]";
+  static constexpr const char *MAX_NGRAM_SIZE_SCOPE_STR = "the max_ngram_size must be in [1, 16]";
+
   static constexpr const char *NGRAM_TOKEN_SIZE_SCOPE_STR
       = "the ngram_token_size must be in [1, 10]";
   static constexpr const char *MIN_MAX_TOKEN_SIZE_SCOPE_STR
-      = "the max_token_size must be greater than min_token_size";
+      = "the max_token_size must be equal to or greater than min_token_size";
+  static constexpr const char *NGRAM_MIN_MAX_TOKEN_SIZE_SCOPE_STR
+      = "the max_ngram_size must be equal to or greater than min_ngram_size";
 
   static constexpr const char *IK_MODE_SCOPE_STR = "the ik_mode should be max_word or smart";
 };

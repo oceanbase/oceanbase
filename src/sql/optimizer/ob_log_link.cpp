@@ -57,6 +57,7 @@ int ObLogLink::compute_op_parallel_and_server_info()
     LOG_WARN("failed to assign das path server list", K(ret));
   } else {
     set_parallel(1);
+    set_available_parallel(1);
     set_server_cnt(1);
   }
   return ret;

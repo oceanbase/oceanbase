@@ -19,9 +19,6 @@
 #include "logservice/palf/log_block_header.h"
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "share/io/ob_io_manager.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_shared_log_utils.h"
-#endif
 #include "share/ob_device_manager.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"

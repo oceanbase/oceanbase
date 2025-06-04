@@ -984,7 +984,7 @@ int ObTmpFileFlushManager::handle_fill_block_buf_(ObTmpFileFlushTask &flush_task
     int64_t unused_page_id = used_page_num;
     int64_t unused_page_num = ObTmpFileGlobal::BLOCK_PAGE_NUMS - used_page_num;
     int64_t block_index = flush_task.get_block_index();
-    bool need_release_page = unused_page_num > 0;
+    bool need_release_page = unused_page_num > 0 && unused_page_num < ObTmpFileGlobal::BLOCK_PAGE_NUMS;
 
     if (OB_FAIL(tmp_file_block_mgr_.write_back_start(block_index))) {
       STORAGE_LOG(ERROR, "fail to notify tmp file block write back start", KR(ret), K(block_index));

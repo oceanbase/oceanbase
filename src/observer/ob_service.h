@@ -169,6 +169,8 @@ public:
                               obrpc::ObEstPartRes &res) const;
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
                                   obrpc::ObEstBlockRes &res) const;
+  int estimate_skip_rate(const obrpc::ObEstSkipRateArg &arg,
+                         obrpc::ObEstSkipRateRes &res) const;
   int update_tenant_info_cache(const obrpc::ObUpdateTenantInfoCacheArg &arg,
                                   obrpc::ObUpdateTenantInfoCacheRes &result);
   int refresh_service_name(const obrpc::ObRefreshServiceNameArg &arg,
@@ -230,6 +232,7 @@ public:
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   int check_server_empty_with_result(const obrpc::ObCheckServerEmptyArg &arg, obrpc::ObCheckServerEmptyResult &result);
   static int do_migrate_ls_replica(const obrpc::ObLSMigrateReplicaArg &arg);
+  static int do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg);
   // ObRpcIsEmptyServerP @RS bootstrap
 
   // ObRpcCheckDeploymentModeP

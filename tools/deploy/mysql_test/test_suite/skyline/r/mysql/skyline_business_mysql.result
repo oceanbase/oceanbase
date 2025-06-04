@@ -603,13 +603,15 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([pcb_common_bill_01.CARD_NO], [pcb_common_bill_01.ATTRIBUTE_INST], [pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.OUT_BILL_NO], [pcb_common_bill_01.shadow_pk_0]),
        range(5001,MIN,MIN,MIN,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX,MAX,MAX,
-      MAX)
+      MAX), 
+      range_cond([(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________', '\\')])
   5 - output([VIEW1.b.card_no]), filter(nil), rowset=16
       access([VIEW1.b.card_no])
   6 - output([b.card_no]), filter([(T_OP_LIKE, b.card_no, '5001____________', '\\')]), rowset=16
       access([b.card_no]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([b.card_no], [b.shadow_pk_0]), range(5001,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX)
+      range_key([b.card_no], [b.shadow_pk_0]), range(5001,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX), 
+      range_cond([(T_OP_LIKE, b.card_no, '5001____________', '\\')])
 CREATE TABLE `pcb_installment_00` (
 `BILL_NO` varchar(28) NOT NULL,
 `INSTALL_NUM` decimal(5,0) NOT NULL,

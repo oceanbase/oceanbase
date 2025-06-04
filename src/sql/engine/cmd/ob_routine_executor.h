@@ -55,22 +55,7 @@ class ObCallProcedureStmt;
 class ObAnonymousBlockStmt;
 class ObRawExpr;
 
-class ObCompileRoutineInf
-{
-public:
-  ObCompileRoutineInf() {}
-  virtual ~ObCompileRoutineInf() {}
-  static int compile_routine(ObExecContext &ctx,
-                      uint64_t tenant_id,
-                      uint64_t database_id,
-                      ObString &routine_name,
-                      share::schema::ObRoutineType routine_type,
-                      int64_t schema_version);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObCompileRoutineInf);
-};
-
-class ObCreateRoutineExecutor : ObCompileRoutineInf
+class ObCreateRoutineExecutor
 {
 public:
   ObCreateRoutineExecutor() {}
@@ -80,7 +65,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoutineExecutor);
 };
 
-class ObAlterRoutineExecutor : ObCompileRoutineInf
+class ObAlterRoutineExecutor
 {
 public:
   ObAlterRoutineExecutor() {}

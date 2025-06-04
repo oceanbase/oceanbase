@@ -599,7 +599,7 @@ int ObTransformDecorrelate::do_transform_lateral_inline_view(ObDMLStmt *stmt,
       LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(ref_query->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(ref_query->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(ref_query->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     }
   }
@@ -690,7 +690,7 @@ int ObTransformDecorrelate::decorrelate_aggr_lateral_derived_table(ObDMLStmt *st
       LOG_WARN("failed to reset table_items", K(ret));
     } else if (OB_FAIL(stmt->get_joined_tables().assign(joined_table_list))) {
       LOG_WARN("failed to reset joined table container", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       LOG_TRACE("succ to to do decorrelate aggr lateral inline view");

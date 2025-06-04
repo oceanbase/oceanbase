@@ -184,8 +184,8 @@ int ObDASCacheLookupIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   bool got_next_row = false;
-  bool need_index_proj = index_proj_rows_.index_scan_proj_exprs_.count() > 0;
-  OB_ASSERT(index_proj_rows_.max_size_ == default_batch_row_count_);
+  const bool need_index_proj = index_proj_rows_.index_scan_proj_exprs_.count() > 0;
+  OB_ASSERT(need_index_proj ? index_proj_rows_.max_size_ == default_batch_row_count_ : true);
 
   do {
     switch (state_) {
@@ -270,7 +270,7 @@ int ObDASCacheLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
   bool get_next_rows = false;
-  bool need_index_proj = index_proj_rows_.index_scan_proj_exprs_.count() > 0;
+  const bool need_index_proj = index_proj_rows_.index_scan_proj_exprs_.count() > 0;
 
   do {
     switch (state_) {
@@ -278,8 +278,6 @@ int ObDASCacheLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         reset_lookup_state();
         int64_t storage_count = 0;
         int64_t index_capacity = 0;
-        // TODO: @zyx439997 support the outputs of index scan as the project columns by the deep copy {
-        // }
         while (OB_SUCC(ret) && !index_end_ && lookup_rowkey_cnt_ < default_batch_row_count_) {
           storage_count = 0;
           index_capacity = std::min(capacity, std::min(max_size_, default_batch_row_count_ - lookup_rowkey_cnt_));

@@ -64,8 +64,9 @@ int ObFilePrefetchBuffer::prefetch(const int64_t file_offset, const int64_t size
         buffer_size_ = size;
       }
     }
+    ObExternalReadInfo read_info(file_offset, buffer_, size, ts_timeout_us_);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(file_reader_.pread(buffer_, size, file_offset, read_size))) {
+    } else if (OB_FAIL(file_reader_.pread(read_info, read_size))) {
       LOG_WARN("fail to read file", K(ret), K(size));
     } else if (size != read_size) {
       ret = OB_ERR_UNEXPECTED;
@@ -94,6 +95,11 @@ bool ObFilePrefetchBuffer::in_prebuffer_range(const int64_t position, const int6
 void ObFilePrefetchBuffer::fetch(const int64_t position, const int64_t nbytes, void *out)
 {
   MEMCPY(out, (char *)buffer_ + (position - offset_), nbytes);
+}
+
+void ObFilePrefetchBuffer::set_timeout_timestamp(const int64_t ts_timeout_us)
+{
+  ts_timeout_us_ = ts_timeout_us;
 }
 
 }

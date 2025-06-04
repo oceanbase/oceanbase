@@ -30,7 +30,7 @@ ObTableStoreIterator::ObTableStoreIterator(const bool reverse, const bool need_l
     pos_(INT64_MAX),
     memstore_retired_(nullptr),
     transfer_src_table_store_handle_(nullptr),
-    split_extra_table_store_handles_(nullptr)
+    split_extra_table_store_handles_()
 {
   step_ = reverse ? -1 : 1;
   sstable_handle_array_.set_attr(ObMemAttr(MTL_ID(), "TblHdlArray"));
@@ -82,27 +82,8 @@ int ObTableStoreIterator::assign(const ObTableStoreIterator& other)
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(nullptr != other.split_extra_table_store_handles_)) {
-      if (nullptr == split_extra_table_store_handles_) {
-        void *meta_hdl_buf = ob_malloc(sizeof(ObArray<ObStorageMetaHandle>), ObMemAttr(MTL_ID(), "SplitTblMetaH"));
-        if (OB_ISNULL(meta_hdl_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocator memory for handle", K(ret));
-        } else {
-          split_extra_table_store_handles_ = new (meta_hdl_buf) ObArray<ObStorageMetaHandle>();
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(split_extra_table_store_handles_->assign(*other.split_extra_table_store_handles_))) {
-          LOG_WARN("failed to assign split extra table store handles", K(ret));
-        }
-      }
-    } else {
-      if (OB_UNLIKELY(nullptr != split_extra_table_store_handles_)) {
-        split_extra_table_store_handles_->~ObIArray<ObStorageMetaHandle>();
-        ob_free(split_extra_table_store_handles_);
-        split_extra_table_store_handles_ = nullptr;
-      }
+    } else if (OB_FAIL(split_extra_table_store_handles_.assign(other.split_extra_table_store_handles_))) {
+      LOG_WARN("failed to assign split extra table store handles", K(ret));
     }
   }
   return ret;
@@ -124,11 +105,7 @@ void ObTableStoreIterator::reset()
     ob_free(transfer_src_table_store_handle_);
     transfer_src_table_store_handle_ = nullptr;
   }
-  if (nullptr != split_extra_table_store_handles_) {
-    split_extra_table_store_handles_->~ObIArray<ObStorageMetaHandle>();
-    ob_free(split_extra_table_store_handles_);
-    split_extra_table_store_handles_ = nullptr;
-  }
+  split_extra_table_store_handles_.reset();
   pos_ = INT64_MAX;
   memstore_retired_ = nullptr;
 }
@@ -156,9 +133,9 @@ int ObTableStoreIterator::get_next(ObTableHandleV2 &table_handle)
   int ret = OB_SUCCESS;
   table_handle.reset();
   ObITable *table = nullptr;
-  if (OB_UNLIKELY(nullptr != transfer_src_table_store_handle_ || nullptr != split_extra_table_store_handles_)) {
+  if (OB_UNLIKELY(nullptr != transfer_src_table_store_handle_ || !split_extra_table_store_handles_.empty())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("doesn't support cross tablet get table handl", K(ret), KP(transfer_src_table_store_handle_), KP(split_extra_table_store_handles_));
+    LOG_ERROR("doesn't support cross tablet get table handl", K(ret), KP(transfer_src_table_store_handle_), K(split_extra_table_store_handles_));
   } else if (OB_FAIL(inner_move_idx_to_next())) {
   } else {
     if (OB_FAIL(get_ith_table(pos_, table))) {
@@ -241,18 +218,7 @@ int ObTableStoreIterator::alloc_split_extra_table_store_handle(ObStorageMetaHand
 {
   int ret = OB_SUCCESS;
   meta_handle = nullptr;
-  if (nullptr == split_extra_table_store_handles_) {
-    void *meta_hdl_buf = ob_malloc(sizeof(ObArray<ObStorageMetaHandle>), ObMemAttr(MTL_ID(), "SplitTblMetaH"));
-    if (OB_ISNULL(meta_hdl_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocator memory for handle", K(ret));
-    } else {
-      split_extra_table_store_handles_ = new (meta_hdl_buf) ObArray<ObStorageMetaHandle>();
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(meta_handle = split_extra_table_store_handles_->alloc_place_holder())) {
+  if (OB_ISNULL(meta_handle = split_extra_table_store_handles_.alloc_place_holder())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocator memory for handle", K(ret));
   }

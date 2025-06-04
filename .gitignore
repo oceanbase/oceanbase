@@ -14,6 +14,7 @@
 *.pyc
 *.pyc
 *.reject
+*.reject.iep
 *.run.*
 *.swn
 *.swp
@@ -315,10 +316,12 @@ tools/systemd/profile/post_install.sh
 tools/systemd/profile/pre_uninstall.sh
 tools/systemd/profile/post_uninstall.sh
 tools/systemd/profile/telemetry.sh
+tools/systemd/profile/oceanbase.service
 tools/systemd/profile/preinst
 tools/systemd/profile/postinst
 tools/systemd/profile/prerm
 tools/systemd/profile/postrm
+tools/ocp/software_package
 
 ############# unittest #############
 unittest/**/test_*

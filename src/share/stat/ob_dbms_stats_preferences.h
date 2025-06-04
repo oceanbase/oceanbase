@@ -251,7 +251,7 @@ class ObAsyncGatherStaleRatioPrefs : public ObStatPrefs
       ObStatPrefs(alloc, session_info, pvalue) {}
     virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
     virtual const char* get_stat_pref_name() const { return "ASYNC_GATHER_STALE_RATIO"; }
-    virtual const char* get_stat_pref_default_value() const { return "10"; }
+    virtual const char* get_stat_pref_default_value() const { return "2"; }
 };
 
 class ObAsyncGatherSampleSizePrefs : public ObStatPrefs
@@ -345,6 +345,19 @@ class ObGatherStatBatchSizePrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "0"; }
 };
 
+class ObSkipRateSamplePrefs : public ObStatPrefs
+{
+  public:
+    ObSkipRateSamplePrefs() : ObStatPrefs() {}
+    ObSkipRateSamplePrefs(ObIAllocator *alloc,
+                          ObSQLSessionInfo *session_info,
+                          const ObString &pvalue):
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "SKIP_RATE_SAMPLE_COUNT"; }
+    virtual const char* get_stat_pref_default_value() const { return "0"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)
@@ -384,7 +397,7 @@ public:
                                const ObString &opt_name);
 
   static int get_sys_default_stat_options(ObExecContext &ctx,
-                                          ObIArray<ObStatPrefs*> &stat_prefs,
+                                          ObIArray<ObStatPrefs *> &stat_prefs,
                                           ObTableStatParam &param);
 
   static int gen_init_global_prefs_sql(ObSqlString &init_sql,
@@ -398,6 +411,8 @@ public:
   static int get_extra_stats_perfs_for_upgrade_425(ObSqlString &sql);
 
   static int get_extra_stats_perfs_for_upgrade_4351(ObSqlString &sql);
+
+  static int get_extra_stats_perfs_for_upgrade_4352(ObSqlString &sql);
 
 private:
   static int do_get_prefs(ObMySQLProxy *mysql_proxy,

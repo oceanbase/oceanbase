@@ -72,7 +72,12 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_private_block_gc_task.h"
 #include "storage/shared_storage/prewarm/ob_ls_prewarm_handler.h"
+#include "storage/incremental/ob_ls_inc_sstable_uploader.h"
+#include "storage/incremental/ob_sswriter_lease_mgr.h"
+#include "storage/incremental/ob_ss_checkpoint_executor.h"
+#include "storage/incremental/ob_ss_inc_meta_checkpoint.h"
 #endif
+#include "storage/member_table/ob_member_table.h"
 
 namespace oceanbase
 {
@@ -195,7 +200,7 @@ public:
   friend class checkpoint::ObDataCheckpoint;
   friend class ObLSSwitchChecker;
 public:
-  static constexpr int64_t TOTAL_INNER_TABLET_NUM = 3;
+  static constexpr int64_t TOTAL_INNER_TABLET_NUM = 4;
   static const uint64_t INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM];
   static const share::SCN LS_INNER_TABLET_FROZEN_SCN;
 public:
@@ -290,6 +295,7 @@ public:
   // ObObLogHandler interface:
   // get the log_service pointer
   logservice::ObLogHandler *get_log_handler() { return &log_handler_; }
+  const logservice::ObLogHandler *get_log_handler() const { return &log_handler_; }
   logservice::ObLogRestoreHandler *get_log_restore_handler() { return &restore_handler_; }
   logservice::ObRoleChangeHandler *get_role_change_handler() { return &role_change_handler_;}
   logservice::ObRoleChangeHandler *get_restore_role_change_handler() { return &restore_role_change_handler_;}
@@ -311,6 +317,9 @@ public:
 #ifdef OB_BUILD_SHARED_STORAGE
   ObLSPrivateBlockGCHandler& get_ls_private_block_gc_handler() { return ls_private_block_gc_handler_; }
   ObSSLSPreWarmHandler& get_ls_prewarm_handler() { return ls_prewarm_handler_; }
+  ObSSWriterLSHandler& get_primary_sswriter_ls_handler() { return primary_sswriter_ls_handler_; }
+  ObSSWriterLSHandler& get_restore_sswriter_ls_handler() { return restore_sswriter_ls_handler_; }
+  ObSSCheckpointExecutor &get_ss_checkpoint_executor() { return ss_checkpoint_executor_; }
 #endif
 
   // get ls info
@@ -379,7 +388,7 @@ public:
   // @param[in] ls_meta, which is used to update the ls's meta.
   int set_ls_meta(const ObLSMeta &ls_meta);
 
-  int64_t get_ls_epoch() const { return ls_epoch_; }
+  int64_t get_ls_epoch() const { return ls_meta_.get_ls_epoch(); }
   int set_ls_epoch(const int64_t ls_epoch);
   // for ls gc
   int block_tablet_transfer_in();
@@ -461,7 +470,7 @@ public:
                      const share::SCN &latest_scn,
                      const bool write_slog)
   {
-    return ls_meta_.update_id_meta(ls_epoch_, service_type, limited_id, latest_scn, write_slog);
+    return ls_meta_.update_id_meta(service_type, limited_id, latest_scn, write_slog);
   }
   int set_ls_rebuild();
   // protect in ls lock
@@ -472,29 +481,29 @@ public:
                           const share::SCN &clog_checkpoint_scn,
                           const bool write_slog)
   {
-    return ls_meta_.set_clog_checkpoint(ls_epoch_, clog_checkpoint_lsn, clog_checkpoint_scn, write_slog);
+    return ls_meta_.set_clog_checkpoint(clog_checkpoint_lsn, clog_checkpoint_scn, write_slog);
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, share::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
   int build_saved_info()
   {
-    return ls_meta_.build_saved_info(ls_epoch_);
+    return ls_meta_.build_saved_info();
   }
   int clear_saved_info()
   {
-    return ls_meta_.clear_saved_info(ls_epoch_);
+    return ls_meta_.clear_saved_info();
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, share::SCN);
   DELEGATE_WITH_RET(ls_meta_, set_tablet_change_checkpoint_scn, int);
   int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn)
   {
-    return ls_meta_.set_tablet_change_checkpoint_scn(ls_epoch_, tablet_change_checkpoint_scn);
+    return ls_meta_.set_tablet_change_checkpoint_scn(tablet_change_checkpoint_scn);
   }
-  int set_major_mv_merge_scn(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn(ls_epoch_, scn); }
-  int set_major_mv_merge_scn_safe_calc(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_safe_calc(ls_epoch_, scn); }
-  int set_major_mv_merge_scn_publish(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_publish(ls_epoch_, scn); }
+  int set_major_mv_merge_scn(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn(scn); }
+  int set_major_mv_merge_scn_safe_calc(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_safe_calc(scn); }
+  int set_major_mv_merge_scn_publish(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_publish(scn); }
   int set_restore_status(
       const share::ObLSRestoreStatus &restore_status,
       const int64_t rebuild_seq);
@@ -521,7 +530,7 @@ public:
   // @param [in] replayable point.
   int update_ls_replayable_point(const share::SCN &replayable_point)
   {
-    return ls_meta_.update_ls_replayable_point(ls_epoch_, replayable_point);
+    return ls_meta_.update_ls_replayable_point(replayable_point);
   }
   // update replayable point
   // get replayable point
@@ -541,7 +550,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
   {
-    return ls_meta_.set_rebuild_info(ls_epoch_, rebuild_info);
+    return ls_meta_.set_rebuild_info(rebuild_info);
   }
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);
   DELEGATE_WITH_RET(ls_meta_, get_create_type, int);
@@ -695,6 +704,7 @@ public:
   // no paired lock op.
   // int check_and_clear_obj_lock(const bool force_compact)
   DELEGATE_WITH_RET(lock_table_, check_and_clear_obj_lock, int);
+  DELEGATE_WITH_RET(lock_table_, add_lock_into_queue, int);
 
   // set the member_list of log_service
   // @param [in] member_list, the member list to be set.
@@ -716,6 +726,10 @@ public:
   // @param[in] palf_base_info, the palf meta used to advance base lsn.
   // int advance_base_info(const palf::PalfBaseInfo &palf_base_info);
   DELEGATE_WITH_RET(log_handler_, advance_base_info, int);
+
+  // get the palf base info by base_lsn
+  // int get_palf_base_info(const LSN &base_lsn, PalfBaseInfo &palf_base_info);
+  DELEGATE_WITH_RET(log_handler_, get_palf_base_info, int);
 
   // get ls readable_scn considering readable scn, sync scn and replayable scn.
   // @param[out] readable_scn ls readable_scn
@@ -967,6 +981,8 @@ public:
   DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);
   DELEGATE_WITH_RET(tx_table_, update_min_start_scn_info, void);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
+  DELEGATE_WITH_RET(tx_table_, tx_table_need_re_freeze, bool);
+  DELEGATE_WITH_RET(tx_table_, get_tx_data_sstable_recycle_scn, int);
 
   // ObCheckpointExecutor interface:
   DELEGATE_WITH_RET(checkpoint_executor_, get_checkpoint_info, int);
@@ -1022,13 +1038,13 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
       const uint64_t data_version)
   {
-    return ls_meta_.set_transfer_meta_info(ls_epoch_, replay_scn, src_ls, src_scn, trans_status, tablet_id_array, data_version);
+    return ls_meta_.set_transfer_meta_info(replay_scn, src_ls, src_scn, trans_status, tablet_id_array, data_version);
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta_info, int);
   int cleanup_transfer_meta_info(
       const share::SCN &replay_scn)
   {
-    return ls_meta_.cleanup_transfer_meta_info(ls_epoch_, replay_scn);
+    return ls_meta_.cleanup_transfer_meta_info(replay_scn);
   }
 
   int set_ls_migration_gc(bool &allow_gc);
@@ -1046,14 +1062,18 @@ public:
 
   // write tablet_id_set to pending_free_array when ls replica remove for shared storage
   DELEGATE_WITH_RET(ls_tablet_svr_, write_tablet_id_set_to_pending_free, int);
+  DELEGATE_WITH_RET(inc_sstable_uploader_, prepare_register_sstable_upload, int);
+  ObLSIncSSTableUploader &get_inc_sstable_upload_handler() { return inc_sstable_uploader_; }
 #endif
 
+  // ObMemberTable interface
+  ObMemberTable *get_member_table() { return &member_table_; }
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
-
-
-
+  int inner_build_tablet_with_batch_tables_(
+      const ObTabletID &tablet_id,
+      const ObBatchUpdateTableStoreParam &param);
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.
@@ -1128,6 +1148,8 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage ls replica prewarm
   ObSSLSPreWarmHandler ls_prewarm_handler_;
+  ObPrimarySSWriterLSHandler primary_sswriter_ls_handler_;
+  ObRestoreSSWriterLSHandler restore_sswriter_ls_handler_;
 #endif
 private:
   bool is_inited_;
@@ -1139,7 +1161,6 @@ private:
   int64_t state_seq_;
   uint64_t switch_epoch_;// started from 0, odd means online, even means offline
   ObLSMeta ls_meta_;
-  int64_t ls_epoch_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;
   common::ObMultiModRefMgr<ObLSGetMod> ref_mgr_;
@@ -1155,6 +1176,14 @@ private:
 
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle_;
+  //for member table
+  ObMemberTable member_table_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSIncMetaCheckpoint inc_meta_ckpt_;
+  // upload shared-storage sstable list
+  ObLSIncSSTableUploader inc_sstable_uploader_;
+  ObSSCheckpointExecutor ss_checkpoint_executor_;
+#endif
 };
 
 }

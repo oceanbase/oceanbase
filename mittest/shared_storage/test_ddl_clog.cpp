@@ -184,7 +184,10 @@ void TestDDLClogCase::prepare_ddl_finish_log(ObTabletID &tablet_id, ObDDLFinishL
   ASSERT_EQ(OB_SUCCESS, persister.persist_and_fill_tablet((*tablet_handle.get_obj()), linked_writer, total_write_ctxs,
                                                           new_tablet_handle, space_usage,
                                                           macro_block_info, shared_meta_id_arr));
-  ASSERT_EQ(OB_SUCCESS, persister.fill_tablet_write_info(allocator_, new_tablet_handle.get_obj(), macro_block_info,  write_info));
+  if (OB_ISNULL(new_tablet_handle.get_obj()->macro_info_addr_.get_ptr())) {
+    new_tablet_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  }
+  ASSERT_EQ(OB_SUCCESS, persister.fill_tablet_write_info(allocator_, new_tablet_handle.get_obj(),  write_info));
   blocksstable::ObStorageObjectOpt curr_opt;
   persister.build_async_write_start_opt_(curr_opt);
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(curr_opt, object_handle));

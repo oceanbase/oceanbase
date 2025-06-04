@@ -25,10 +25,10 @@ class ObRedisMeta;
 class ObRedisMetaUtil
 {
 public:
-  static int create_redis_meta_by_model(ObIAllocator &allocator, ObRedisModel model, ObRedisMeta *&meta);
+  static int create_redis_meta_by_model(ObIAllocator &allocator, ObRedisDataModel model, ObRedisMeta *&meta);
   static int build_meta_rowkey_by_model(
       ObIAllocator &allocator,
-      ObRedisModel model,
+      ObRedisDataModel model,
       int64_t db,
       const ObString &key,
       ObRowkey &meta_rowkey);

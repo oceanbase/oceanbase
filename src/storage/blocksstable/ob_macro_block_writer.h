@@ -36,6 +36,7 @@
 #include "ob_micro_block_checksum_helper.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/blocksstable/ob_macro_seq_generator.h"
+#include "storage/blocksstable/ob_macro_block_bloom_filter.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/blocksstable/ob_batch_datum_rows.h"
@@ -157,6 +158,13 @@ public:
       ObIMacroBlockFlushCallback *callback = nullptr,
       ObIMacroBlockValidator *validator = nullptr,
       ObIODevice *device_handle = nullptr);
+  int open_for_ss_ddl(
+      const ObDataStoreDesc &data_store_desc,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObIMacroBlockFlushCallback *callback);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc,
                                  const ObMicroBlockData *micro_block_data);
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
@@ -203,6 +211,17 @@ private:
   int append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *micro_block_data);
   int check_order(const ObDatumRow &row);
   int init_macro_seq_generator(const blocksstable::ObMacroSeqParam &macro_seq_param);
+  int init_hash_index_builder();
+  int inner_init(
+      const ObDataStoreDesc &data_store_desc,
+      const int64_t parallel_idx,
+      const blocksstable::ObMacroSeqParam &macro_seq_param,
+      const share::ObPreWarmerParam &pre_warm_param,
+      const bool cluster_micro_index_on_flush,
+      ObSSTablePrivateObjectCleaner &object_cleaner,
+      ObIMacroBlockFlushCallback *callback,
+      ObIMacroBlockValidator *validator,
+      ObIODevice *device_handle);
   int append_row_and_hash_index(const ObDatumRow &row);
   int append_batch_to_micro_block(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);
@@ -252,6 +271,7 @@ protected:
   compaction::ObMergeBlockInfo merge_block_info_;
 private:
   ObIMicroBlockWriter *micro_writer_;
+  ObMicroBlockBloomFilter micro_block_bf_;
   ObMicroBlockReaderHelper reader_helper_;
   ObMicroBlockBufferHelper micro_helper_;
   ObMacroBlock macro_blocks_[2];
@@ -272,7 +292,6 @@ private:
   blocksstable::ObMacroBlockReader macro_reader_;
   common::ObArray<uint32_t> micro_rowkey_hashs_;
   blocksstable::ObDatumRow datum_row_;
-  blocksstable::ObDatumRow *aggregated_row_;
   ObSkipIndexDataAggregator *data_aggregator_;
   ObIMacroBlockFlushCallback *callback_;
   ObIODevice *device_handle_;

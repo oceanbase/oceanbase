@@ -1930,7 +1930,7 @@ int ObMvccRowCallback::trans_commit()
             TRANS_LOG(INFO, "[FF] trans commit and set hotspot row success", K_(*memtable), K_(value), K_(ctx), K(*this));
           }
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
-          if (value_.need_compact(for_read, ctx_.is_for_replay())) {
+          if (value_.need_compact(for_read, ctx_.is_for_replay(), memtable_->is_delete_insert_table())) {
             if (ctx_.is_for_replay()) {
               if (ctx_.get_replay_compact_version().is_valid_and_not_min()
                   && SCN::max_scn() != ctx_.get_replay_compact_version()) {

@@ -63,7 +63,7 @@ public:
 public:
   static const int64_t MAX_FILE_SIZE = 256 * 1024 * 1024;
   static const int64_t TEST_LS_ID = 101;
-  static const int64_t INNER_TABLET_CNT = 3;
+  static const int64_t INNER_TABLET_CNT = 4;
 public:
   const uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -254,7 +254,7 @@ TEST_F(TestLSTabletService, test_create_tablet_without_index)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_serialize_tablet)
@@ -323,7 +323,8 @@ TEST_F(TestLSTabletService, test_serialize_tablet)
   ob_free(buf);
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 /**
@@ -558,7 +559,7 @@ TEST_F(TestLSTabletService, test_create_tablet_with_index)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, index_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_create_index_tablet)
@@ -606,7 +607,7 @@ TEST_F(TestLSTabletService, test_create_index_tablet)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, index_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
@@ -642,7 +643,8 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_replay_empty_shell)
@@ -676,7 +678,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
   // validate that empty shell can be washed
   ObTabletHandle normal_tablet_hdl;
   void *free_obj = nullptr;
-  ObTabletPointer *tablet_ptr = test_tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr();
+  ObTabletBasePointer *tablet_ptr = test_tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr();
   ObTablet *empty_tablet = test_tablet_handle.get_obj();
   test_tablet_handle.reset(); // release the ref cnt of tablet
   ret = tablet_ptr->dump_meta_obj(normal_tablet_hdl, free_obj);
@@ -736,7 +738,8 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   LOG_INFO("FEIDU seconde success", K(ls_id_), K(tablet_id));
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_cover_empty_shell)
@@ -783,7 +786,8 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   tablet_handle.reset();
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_migrate_empty_shell)
@@ -843,7 +847,8 @@ TEST_F(TestLSTabletService, test_migrate_empty_shell)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_serialize_sstable_full_and_shell)
@@ -879,7 +884,8 @@ TEST_F(TestLSTabletService, test_serialize_sstable_full_and_shell)
   pos = 0;
   ret = sstable.deserialize(allocator_, full_buf, size, pos);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_migrate_param)
@@ -937,7 +943,8 @@ TEST_F(TestLSTabletService, test_migrate_param)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_migrate_param_empty_shell)
@@ -996,7 +1003,8 @@ TEST_F(TestLSTabletService, test_migrate_param_empty_shell)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, test_update_empty_shell)
@@ -1023,7 +1031,8 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  valid_tablet_num(3);
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  valid_tablet_num(inner_tablet_count);
 }
 
 TEST_F(TestLSTabletService, update_tablet_release_memtable_for_offline)
@@ -1050,7 +1059,9 @@ TEST_F(TestLSTabletService, update_tablet_release_memtable_for_offline)
   ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
   ASSERT_EQ(0, tablet_handle.get_obj()->memtable_count_);
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->create_memtable(data_tablet_id, 100, false, false));
+  CreateMemtableArg arg;
+  arg.schema_version_ = 100;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->create_memtable(data_tablet_id, arg));
   ASSERT_EQ(1, tablet_handle.get_obj()->memtable_count_);
 
   LOG_WARN("FEIDU: release memtable 1");
@@ -1140,7 +1151,7 @@ TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
   ObArenaAllocator compat_allocator;
   ObTableHandleV2 empty_mds_sstable_hdl;
   ObTablet upgrade_tablet;
-  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  ret = upgrade_tablet.init_for_compat(compat_allocator, true, empty_shell_tablet, empty_mds_sstable_hdl);
   // mds data is null
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
@@ -1155,7 +1166,7 @@ TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
   // compat to new format
   upgrade_tablet.assign_pointer_handle(empty_shell_tablet.get_pointer_handle());
   upgrade_tablet.log_handler_ = empty_shell_tablet.log_handler_;
-  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  ret = upgrade_tablet.init_for_compat(compat_allocator, true, empty_shell_tablet, empty_mds_sstable_hdl);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(ObTablet::VERSION_V4 == upgrade_tablet.version_);
   ASSERT_TRUE(nullptr == upgrade_tablet.mds_data_);
@@ -1182,12 +1193,15 @@ TEST_F(TestLSTabletService, test_serialize_sstable_with_min_filled_tx_scn)
   //update sstable param table key
   param.table_key_.table_type_ = ObITable::MINOR_SSTABLE;
   param.filled_tx_scn_ = param.table_key_.get_end_scn();
+  param.rec_scn_ = param.table_key_.get_start_scn();
 
   ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));
 
   //modified sstable filled tx scn as min
   sstable.meta_->basic_meta_.filled_tx_scn_.set_min();
+  sstable.meta_->basic_meta_.rec_scn_.set_min();
   sstable.meta_cache_.filled_tx_scn_.set_min();
+  sstable.meta_cache_.rec_scn_.set_min();
 
   const int64_t size = sstable.get_serialize_size();
   char *full_buf = static_cast<char *>(allocator_.alloc(size));
@@ -1234,6 +1248,7 @@ TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
   TestTabletHelper::prepare_sstable_param(tablet_id, schema, param);
   param.table_key_.table_type_ = ObITable::MINOR_SSTABLE;
   param.filled_tx_scn_ = param.table_key_.get_end_scn();
+  param.rec_scn_ = param.table_key_.get_start_scn();
   param.table_backup_flag_.set_has_backup();
   param.table_backup_flag_.set_no_local();
   ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));

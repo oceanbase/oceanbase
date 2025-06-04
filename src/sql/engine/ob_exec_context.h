@@ -111,6 +111,32 @@ struct ObOperatorKit
   ObOpInput *input_;
 };
 
+struct ObDiagnosisManager
+{
+  ObDiagnosisManager() : cur_file_url_(NULL), cur_line_number_(0)
+  {
+    ObMemAttr attr(MTL_ID(), "DiagnosisMgr");
+    idxs_.set_attr(attr);
+    rets_.set_attr(attr);
+    col_names_.set_attr(attr);
+    allocator_.set_attr(attr);
+  }
+
+  void set_cur_file_url(ObString file_url) { cur_file_url_ = file_url; }
+  ObString get_cur_file_url() { return cur_file_url_; }
+  void set_cur_line_number(int64_t line_number) { cur_line_number_  = line_number; }
+  int64_t get_cur_line_number() { return cur_line_number_; }
+  int do_diagnosis(ObBitVector &skip, int64_t limit_num);
+  int add_warning_info(int err_ret, int line_idx);
+
+  common::ObArray<int64_t> idxs_;
+  common::ObArray<int64_t> rets_;
+  common::ObArray<ObString> col_names_;
+  ObString cur_file_url_;
+  int64_t cur_line_number_;
+  ObArenaAllocator allocator_;
+};
+
 // Physical operator kit store
 class ObOpKitStore
 {
@@ -501,8 +527,8 @@ public:
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
   hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
-  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta) const;
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta) const;
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
@@ -510,11 +536,17 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
-  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
+  int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id) const;
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                       bool is_in_pl,
+                                       const ObEnumSetMeta *&meta) const;
   bool support_enum_set_type_subschema(ObSQLSessionInfo &session);
   int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
                                     const ObIArray<common::ObString> &type_info,
                                     uint16_t &subschema_id);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id) const;
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   inline void set_cur_rownum(int64_t cur_rownum) { user_logging_ctx_.row_num_ = cur_rownum; }
   inline int64_t get_cur_rownum() const { return user_logging_ctx_.row_num_; }
@@ -563,6 +595,8 @@ public:
     }
     return query_ctx;
   }
+
+  ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -753,6 +787,7 @@ protected:
   ObLobAccessCtx *lob_access_ctx_;
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
+  ObDiagnosisManager diagnosis_manager_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

@@ -263,6 +263,18 @@ struct RuntimeContext
     return get_extra_stores(agg_col_id, agg_cell)->data_store;
   }
 
+  inline TopFreHistVecExtraResult *&get_extra_top_fre_hist_store(const int64_t agg_col_id,
+                                                                 const char *agg_cell)
+  {
+    return get_extra_stores(agg_col_id, agg_cell)->top_fre_hist_store_;
+  }
+
+  inline HybridHistVecExtraResult *&get_extra_hybrid_hist_store(const int64_t agg_col_id,
+                                                                const char* agg_cell)
+  {
+    return get_extra_stores(agg_col_id, agg_cell)->hybrid_hist_store_;
+  }
+
   ObAggrInfo &locate_aggr_info(const int64_t agg_col_idx)
   {
     OB_ASSERT(agg_col_idx < aggr_infos_.count());

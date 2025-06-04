@@ -903,7 +903,7 @@ int ObTFMIndexBlockRowIterator::locate_range(const ObDatumRange &range,
       LOG_WARN("Failed to locate range by rowkey vector", K(ret));
     }
   } else {
-    LOG_TRACE("Locate range in index block by range", K(ret), K(range), K(begin_idx), K(end_idx),
+    LOG_DEBUG("Locate range in index block by range", K(ret), K(range), K(begin_idx), K(end_idx),
               K(is_left_border), K(is_right_border), K_(current), KPC(idx_data_header_));
     start_ = begin_idx;
     end_ = end_idx;
@@ -1014,101 +1014,6 @@ int ObTFMIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
     is_scan_left_border = current_ == start_;
     is_scan_right_border = current_ == end_;
     current_ += iter_step_;
-  }
-  return ret;
-}
-
-int ObTFMIndexBlockRowIterator::get_idx_row_header_in_target_idx(const int64_t idx,
-                                                                 const ObIndexBlockRowHeader *&idx_row_header)
-{
-  int ret = OB_SUCCESS;
-  idx_row_header = nullptr;
-  idx_row_parser_.reset();
-  const char *idx_data_buf = nullptr;
-  int64_t idx_data_len = 0;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
-  } else if (OB_FAIL(idx_data_header_->get_index_data(idx, idx_data_buf, idx_data_len))) {
-    LOG_WARN("Fail to get index data", K(idx), K_(start), K_(end), K_(current), KPC_(idx_data_header));
-  } else if (OB_FAIL(idx_row_parser_.init(idx_data_buf, idx_data_len))) {
-    LOG_WARN("Fail to parse index block row", K(idx), KPC(idx_data_header_));
-  } else if (OB_FAIL(idx_row_parser_.get_header(idx_row_header))) {
-    LOG_WARN("Fail to get index block row header", KPC(idx_row_header));
-  }
-  return ret;
-}
-
-int ObTFMIndexBlockRowIterator::find_out_rows(const int32_t range_idx,
-                                              const int64_t scanner_range_idx,
-                                              int64_t &found_idx)
-{
-  int ret = OB_SUCCESS;
-  found_idx = -1;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
-  } else if (range_idx == scanner_range_idx && !end_of_block()) {
-    const int64_t start_idx = current_;
-    const int64_t end_idx = is_reverse_scan_ ? start_ : end_;
-    for (int64_t i = start_idx; OB_SUCC(ret) && (i * iter_step_) <= (end_idx * iter_step_); i += iter_step_) {
-      const ObIndexBlockRowHeader *idx_row_header = nullptr;
-      if (OB_FAIL(get_idx_row_header_in_target_idx(i, idx_row_header))) {
-        LOG_WARN("Failed to get idx row header", K(i));
-      } else if (idx_row_header->has_lob_out_row()) {
-        found_idx = i;
-        break;
-      }
-    }
-  }
-  LOG_DEBUG("ObTFMIndexBlockRowIterator::find_out_rows", K(range_idx), KPC(this));
-  return ret;
-}
-
-int ObTFMIndexBlockRowIterator::find_out_rows_from_start_to_end(const int32_t range_idx,
-                                                                const int64_t scanner_range_idx,
-                                                                const ObCSRowId start_row_id,
-                                                                const ObCSRange &parent_row_range,
-                                                                bool &is_certain,
-                                                                int64_t &found_idx)
-{
-  int ret = OB_SUCCESS;
-  found_idx = -1;
-  is_certain = true;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
-  } else if (range_idx == scanner_range_idx) {
-    const int64_t start_idx = is_reverse_scan_ ? end_ : start_;
-    const int64_t end_idx = is_reverse_scan_ ? start_ : end_;
-    bool meet_start_row_id = false;
-    for (int64_t i = start_idx; OB_SUCC(ret) && (i * iter_step_) <= (end_idx * iter_step_); i += iter_step_) {
-      const ObIndexBlockRowHeader *idx_row_header = nullptr;
-      if (OB_FAIL(get_idx_row_header_in_target_idx(i, idx_row_header))) {
-        LOG_WARN("Failed to get idx row header", K(i));
-      }
-      if (OB_SUCC(ret)) {
-        if (!meet_start_row_id) {
-          ObCSRowId cur_start_row_id = idx_row_parser_.get_row_offset() - idx_row_header->get_row_count() + 1;
-          ObCSRowId cur_end_row_id = idx_row_parser_.get_row_offset();
-          if (idx_row_header->is_data_block()) {
-            cur_start_row_id += parent_row_range.start_row_id_;
-            cur_end_row_id += parent_row_range.start_row_id_;
-          }
-          meet_start_row_id = (start_row_id >= cur_start_row_id && start_row_id <= cur_end_row_id);
-        }
-        if (meet_start_row_id && idx_row_header->has_lob_out_row()) {
-          if ((i * iter_step_) >= (current_ * iter_step_)) {
-            found_idx = i;
-          } else {
-            is_certain = false;
-          }
-          break;
-        }
-      }
-    }
-  } else {
-    is_certain = false;
   }
   return ret;
 }
@@ -1906,46 +1811,6 @@ int ObIndexBlockRowScanner::advance_to_border(
     if(OB_FAIL(iter_->advance_to_border(rowkey, is_left_border_, is_right_border_, parent_row_range_, cs_range))) {
       LOG_WARN("Failed to advance to border", K(range_idx));
     }
-  }
-  return ret;
-}
-
-int ObIndexBlockRowScanner::find_out_rows(
-    const int32_t range_idx,
-    int64_t &found_idx)
-{
-  int ret = OB_SUCCESS;
-  found_idx = -1;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not inited", K_(is_inited));
-  } else if (OB_ISNULL(iter_) || OB_UNLIKELY(index_format_ != ObIndexFormat::TRANSFORMED)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("iter is null or wrong format", K(index_format_), K(ret));
-  } else if (OB_FAIL(iter_->find_out_rows(range_idx, range_idx_, found_idx))) {
-    LOG_WARN("fail to find out rows", K(ret), K(range_idx), K(range_idx_), K(found_idx));
-  }
-  LOG_DEBUG("ObIndexBlockRowScanner::find_out_rows", K(range_idx), KPC(iter_), K(found_idx));
-  return ret;
-}
-
-int ObIndexBlockRowScanner::find_out_rows_from_start_to_end(
-    const int32_t range_idx,
-    const ObCSRowId start_row_id,
-    bool &is_certain,
-    int64_t &found_idx)
-{
-  int ret = OB_SUCCESS;
-  found_idx = -1;
-  is_certain = true;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not inited", K_(is_inited));
-  } else if (OB_ISNULL(iter_) || OB_UNLIKELY(index_format_ != ObIndexFormat::TRANSFORMED)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("iter is null or wrong format", KP(iter_), K(index_format_), K(ret));
-  } else if (OB_FAIL(iter_->find_out_rows_from_start_to_end(range_idx, range_idx_, start_row_id, parent_row_range_, is_certain, found_idx))) {
-    LOG_WARN("fail to find out rows from start to end", K(ret), K(range_idx), K(start_row_id), K(parent_row_range_), K(is_certain), K(found_idx));
   }
   return ret;
 }

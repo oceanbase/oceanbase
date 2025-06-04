@@ -138,7 +138,7 @@ public:
   ObTableStoreIterator table_store_iterator_;
   // for rewrite macro block task.
   INDEX_BUILDER_MAP index_builder_map_; // map between source sstable and dest sstables.
-  common::hash::ObHashMap<int64_t/*schema_stored_column_count*/, ObStorageSchema*> clipped_schemas_map_;
+  common::hash::ObHashMap<ObITable::TableKey/*source major sstable*/, ObStorageSchema*> clipped_schemas_map_;
   common::ObArenaAllocator allocator_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
@@ -477,7 +477,7 @@ public:
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
       bool &is_tablet_status_need_to_split);
-  static int build_lost_medium_mds_sstable(
+  static int build_mds_sstable(
       common::ObArenaAllocator &allocator,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
@@ -494,9 +494,10 @@ private:
       const ObLSHandle &ls_handle,
       const ObTabletHandle &dest_tablet_handle,
       compaction::ObTabletMergeCtx &tablet_merge_ctx);
-  static int check_and_determine_mds_end_scn(
+  static int check_and_determine_mds_rec_and_end_scn(
       const ObTabletHandle &dest_tablet_handle,
-      share::SCN &end_scn);
+      share::SCN &end_scn,
+      share::SCN &rec_scn);
   static int check_tablet_ha_status(
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,

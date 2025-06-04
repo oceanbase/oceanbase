@@ -12,11 +12,71 @@
 #include "sql/engine/expr/vector_cast/vector_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/object/ob_obj_cast_util.h"
+#include <fast_float/parse_number.h>
+#include <fast_float/ascii_number.h>
 
 namespace oceanbase
 {
 namespace sql
 {
+
+/*
+  Init info for cast decimalint to double.
+
+  Infos include:
+    1. negative: whether the decimalint is negative.
+    2. exponent: the exponent of the decimalint.
+    3. mantissa: the mantissa of the decimalint.
+  To get the mantissa and exponent, we need to scale the decimalint to [0, 1e19) first.
+  For example, if the decimalint is 15, then the mantissa is 15 and the exponent is 0.
+  If the decimalint is 1234567890123456789000, then the mantissa is 1234567890123456789
+  and the exponent is 3, because 1234567890123456789000 = 1234567890123456789 * 1e3.
+ */
+template <unsigned Bits, typename Signed>
+static void InitDecintInfo(const wide::ObWideInteger<Bits, Signed> &val, ObScale scale,
+                           fast_float::parsed_number_string_t<char> &decint_info)
+{
+  constexpr static double LOG10_2 = 0.30103;
+  constexpr static double EPSILON = 1e-6;
+  decint_info.exponent = -scale;
+  decint_info.negative = val.is_negative();
+  int64_t scale_factor = 0, binary_digits_cnt = 0;
+  wide::ObWideInteger<Bits, signed> quo = 1;
+  wide::ObWideInteger<Bits, signed> num =
+                        wide::ObWideInteger<Bits, Signed>::_impl::make_positive(val);
+  /*
+  To scale the decimalint to [0, 1e19), we need to calculate the scale factor first.
+  If decimalint >= 1e19, the scale should be 10 ^ -(decimal_digits_cnt - 1 - 18).
+  For example, if the decimalint is 1234567890123456789000, then the scale factor
+  should be 10 ^ (22 - 1 - 18) = 10 ^ 3.
+  The decimal digits can be calculated with binary_digits_cnt with error less than 1.
+  For example, when we calculate the decimal_digits_cnt of 1234567890123456789000,
+  the decimal_digits_cnt shoud be 22, but we can only get 21 or 22 with binary_digits_cnt,
+  so we need to compare the scaled result with 1e19 and then do adjustment.
+  */
+  int64_t cnt = wide::ObWideInteger<Bits, Signed>::ITEM_COUNT - 1;
+  while (num.items_[cnt] == 0 && cnt > 0) {
+    cnt--;
+  }
+  binary_digits_cnt = (64 - __builtin_clzl(num.items_[cnt])) + cnt * 64;
+  scale_factor = MAX(0, static_cast<int64_t>(binary_digits_cnt * LOG10_2- EPSILON) - 18);
+  decint_info.exponent += scale_factor;
+  while (scale_factor > 0) {
+    const int16_t step = MIN(scale_factor, MAX_PRECISION_DECIMAL_INT_64);
+    quo = quo * get_scale_factor<int64_t>(step);
+    scale_factor -= step;
+  }
+  num = num / quo;
+  if (0 != num.items_[1]) {
+    num = num / 10;
+    decint_info.exponent++;
+  }
+  if (num.items_[0] >= 10000000000000000000ULL) {
+    num.items_[0] /= 10;
+    decint_info.exponent++;
+  }
+  decint_info.mantissa = num.items_[0];
+}
 
 // Cast func processing logic is a reference to ob_datum_cast.cpp::CAST_FUNC_NAME(IN_TYPE, OUT_TYPE)
 template<typename ArgVec, typename ResVec>
@@ -60,8 +120,8 @@ struct ToFloatCastImpl
       };
 
       FloatDoubleToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -101,8 +161,8 @@ struct ToFloatCastImpl
       };
 
       IntUIntToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -138,8 +198,8 @@ struct ToFloatCastImpl
       };
 
       DateToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -189,8 +249,8 @@ struct ToFloatCastImpl
         const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
                                           tz_info_local : NULL;
         DatetimeToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tz_info);
-        if (OB_FAIL(CastHelperImpl::batch_cast(
-                        cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+        if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
           SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
         }
       }
@@ -210,29 +270,108 @@ struct ToFloatCastImpl
             : CastFnBase(CAST_ARG_DECL), arg_vec_(arg_vec), res_vec_(res_vec),
               double_datum_(double_datum) {}
 
+        static int DecintToDouble(const ObDecimalInt* decint, const ObPrecision precision,
+                                  const ObScale scale, double& out_val)
+        {
+          int ret = OB_SUCCESS;
+          fast_float::parsed_number_string_t<char> decint_info;
+          decint_info.valid = true;
+          decint_info.too_many_digits = false;
+          int32_t int_bytes = wide::ObDecimalIntConstValue::
+                                    get_int_bytes_by_precision(precision);
+          switch (int_bytes) {
+            case sizeof(int32_t): {
+              decint_info.negative = *(decint->int32_v_) < 0;
+              decint_info.mantissa = static_cast<uint64_t>
+                                      (std::abs(*(decint->int32_v_)));
+              decint_info.exponent = -scale;
+              break;
+            }
+            case sizeof(int64_t): {
+              decint_info.negative = *(decint->int64_v_) < 0;
+              decint_info.mantissa = static_cast<uint64_t>
+                                      (std::abs(*(decint->int64_v_)));
+              decint_info.exponent = -scale;
+              break;
+            }
+            case sizeof(int128_t): {
+              const int128_t *val = static_cast<const int128_t *>
+                                      (decint->int128_v_);
+              InitDecintInfo(*val, scale, decint_info);
+              break;
+            }
+            case sizeof(int256_t): {
+              const int256_t *val = static_cast<const int256_t *>
+                                      (decint->int256_v_);
+              InitDecintInfo(*val, scale, decint_info);
+              break;
+            }
+            case sizeof(int512_t): {
+              const int512_t *val = static_cast<const int512_t *>
+                                      (decint->int512_v_);
+              InitDecintInfo(*val, scale, decint_info);
+              break;
+            }
+            default: {
+              std::cout << "Invalid integer width\n";
+              break;
+            }
+          }
+          fast_float::from_chars_result ff_ret =
+                        fast_float::from_chars_advanced(decint_info, out_val);
+          if (ff_ret.ec != std::errc()) {
+            ret = OB_ERR_UNEXPECTED;
+            out_val = 0.0;
+          }
+          return ret;
+        }
+
         OB_INLINE int operator() (const ObExpr &expr, int idx)
         {
           int ret = OB_SUCCESS;
-          int64_t pos = 0;
-          if (OB_FAIL(wide::to_string(arg_vec_->get_decimal_int(idx), sizeof(IN_TYPE), in_scale_,
-                                      buf_, sizeof(buf_), pos))) {
-            SQL_LOG(WARN, "to_string failed", K(ret));
-          } else {
-            ObString num_str(pos, buf_);
+          int warning = OB_SUCCESS;
+          double tmp_out_val = 0.0;
+          if (OB_SUCCESS == DecintToDouble(arg_vec_->get_decimal_int(idx),
+                                           in_prec_, in_scale_, tmp_out_val)) {
             if (std::is_same<OUT_TYPE, float>::value) {
-              float out_val = 0.0;
-              if (OB_FAIL(ObDataTypeCastUtil::common_string_float_wrap(expr, num_str, out_val))) {
-                SQL_LOG(WARN, "common_string_float failed", K(ret), K(num_str));
+              float out_val_float = 0.0;
+              if (OB_FAIL(ObDataTypeCastUtil::common_double_float_wrap(
+                                          expr, tmp_out_val, out_val_float))) {
+                SQL_LOG(WARN, "common_double_float failed", K(ret));
               } else {
-                res_vec_->set_float(idx, out_val);
+                res_vec_->set_float(idx, out_val_float);
+              }
+            } else if (ob_is_unsigned_type(out_type_)) { // unsigned double
+              if (CAST_FAIL(numeric_negative_check(tmp_out_val))) {
+                SQL_LOG(WARN, "numeric_negative_check failed", K(ret));
+              } else {
+                res_vec_->set_double(idx, tmp_out_val);
               }
             } else {  // double
-              if (OB_FAIL(common_string_double(expr, in_type_, in_cs_type_, out_type_,
-                                               num_str, double_datum_))) {
-                SQL_LOG(WARN, "common_string_double failed", K(ret));
-              } else {
-                double out_val = double_datum_.get_double();
-                res_vec_->set_double(idx, out_val);
+              res_vec_->set_double(idx, tmp_out_val);
+            }
+          } else {
+            int64_t pos = 0;
+            if (OB_FAIL(wide::to_string(arg_vec_->get_decimal_int(idx), sizeof(IN_TYPE), in_scale_,
+                                        buf_, sizeof(buf_), pos))) {
+              SQL_LOG(WARN, "to_string failed", K(ret));
+            } else {
+              ObString num_str(pos, buf_);
+              if (std::is_same<OUT_TYPE, float>::value) {
+                float out_val = 0.0;
+                if (OB_FAIL(ObDataTypeCastUtil::common_string_float_wrap(expr, num_str, out_val))) {
+                  SQL_LOG(WARN, "common_string_float failed", K(ret), K(num_str));
+                } else {
+                  res_vec_->set_float(idx, out_val);
+                }
+              } else {  // double
+                if (OB_FAIL(common_string_double(expr, in_type_, in_cs_type_, out_type_,
+                                                num_str, double_datum_))) {
+                  SQL_LOG(WARN, "common_string_double failed", K(ret));
+                } else {
+                  double out_val = double_datum_.get_double();
+                  res_vec_->set_double(idx, out_val);
+                }
               }
             }
           }
@@ -250,8 +389,8 @@ struct ToFloatCastImpl
       tmp_datum.ptr_ = reinterpret_cast<const char *>(&tmp_double);
       tmp_datum.pack_ = sizeof(double);
       DecimalintToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tmp_datum);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
@@ -311,8 +450,8 @@ struct ToFloatCastImpl
       tmp_datum.ptr_ = reinterpret_cast<const char *>(&tmp_double);
       tmp_datum.pack_ = sizeof(double);
       NumberToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, tmp_datum);
-      if (OB_FAIL(CastHelperImpl::batch_cast(
-                      cast_fn, expr, arg_vec, res_vec, eval_flags, skip, bound))) {
+      if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
+                                            skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }

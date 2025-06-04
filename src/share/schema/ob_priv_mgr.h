@@ -18,6 +18,7 @@
 #include "lib/container/ob_vector.h"
 #include "lib/allocator/page_arena.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_catalog_schema_struct.h"
 
 namespace oceanbase
 {
@@ -120,10 +121,12 @@ class ObPrivMgr
   typedef common::ObSortedVector<ObColumnPriv *> ColumnPrivInfos;
   typedef common::ObSortedVector<ObObjPriv *>ObjPrivInfos;
   typedef common::ObSortedVector<ObSysPriv *>SysPrivInfos;
+  typedef common::ObSortedVector<ObCatalogPriv *> CatalogPrivInfos;
   typedef common::hash::ObPointerHashMap<ObTablePrivSortKey, ObTablePriv *, ObGetTablePrivKeyV3, 128> TablePrivMap;
   typedef common::hash::ObPointerHashMap<ObRoutinePrivSortKey, ObRoutinePriv *, ObGetRoutinePrivKeyV3, 128> RoutinePrivMap;
   typedef common::hash::ObPointerHashMap<ObColumnPrivSortKey, ObColumnPriv *, ObGetColumnPrivKeyV3, 128> ColumnPrivMap;
   typedef common::hash::ObPointerHashMap<ObObjPrivSortKey, ObObjPriv *, ObGetObjPrivKey, 128> ObjPrivMap;
+  typedef common::hash::ObPointerHashMap<ObCatalogPrivSortKey, ObCatalogPriv *, ObGetCatalogPrivKey, 128> CatalogPrivMap;
   typedef DBPrivInfos::iterator DBPrivIter;
   typedef DBPrivInfos::const_iterator ConstDBPrivIter;
   typedef TablePrivInfos::iterator TablePrivIter;
@@ -137,6 +140,8 @@ class ObPrivMgr
   typedef SysPrivInfos::const_iterator ConstSysPrivIter;
   typedef ObjPrivInfos::iterator ObjPrivIter;
   typedef ObjPrivInfos::const_iterator ConstObjPrivIter;
+  typedef CatalogPrivInfos::iterator CatalogPrivIter;
+  typedef CatalogPrivInfos::const_iterator ConstCatalogPrivIter;
 public:
   ObPrivMgr();
   explicit ObPrivMgr(common::ObIAllocator &allocator);
@@ -246,7 +251,20 @@ public:
   int get_sys_priv(const ObSysPrivKey &sys_priv_key,
                    const ObSysPriv *&sys_priv) const;
   int get_sys_priv_array(const ObSysPrivKey &sys_priv_key,
-                         const ObPackedPrivArray &packed_priv_array) const;                      
+                         const ObPackedPrivArray &packed_priv_array) const;
+
+  // catalog priv
+  int add_catalog_privs(const common::ObIArray<ObCatalogPriv> &catalog_privs);
+  int del_catalog_privs(const common::ObIArray<ObCatalogPrivSortKey> &catalog_priv_keys);
+  int add_catalog_priv(const ObCatalogPriv &catalog_priv);
+  int del_catalog_priv(const ObCatalogPrivSortKey &catalog_priv_key);
+  int get_catalog_priv(const ObCatalogPrivSortKey &catalog_priv_key,
+                       const ObCatalogPriv *&catalog_priv) const;
+  int get_catalog_priv_set(const ObCatalogPrivSortKey &catalog_priv_key,
+                           ObPrivSet &priv_set) const;
+  int get_catalog_privs_in_user(const uint64_t tenant_id,
+                                const uint64_t user_id,
+                                common::ObIArray<const ObCatalogPriv *> &catalog_privs) const;
   // other
   int get_db_privs_in_tenant(const uint64_t tenant_id,
                              common::ObIArray<const ObDBPriv *> &db_privs) const;
@@ -312,6 +330,8 @@ private:
   ObjPrivInfos obj_privs_;
   ObjPrivMap obj_priv_map_;
   SysPrivInfos sys_privs_;
+  CatalogPrivInfos catalog_privs_;
+  CatalogPrivMap catalog_priv_map_;
   static const char *priv_names_[];
 };
 

@@ -180,11 +180,12 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
   } else {
     ls_id_ = ls_id;
     macro_block_id_ = macro_block_id;
-    tablet_handle_ = tablet_handle;
     snapshot_version_ = redo_info.table_key_.get_snapshot_version();
     data_format_version_ = redo_info.data_format_version_;
     with_cs_replica_ = redo_info.with_cs_replica_;
-    if (OB_FAIL(ddl_macro_block_.block_handle_.set_block_id(macro_block_id_))) {
+    if (OB_FAIL(tablet_handle_.assign(tablet_handle))) {
+      LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
+    } else if (OB_FAIL(ddl_macro_block_.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
     } else if (OB_FAIL(ddl_macro_block_.set_data_macro_meta(macro_block_id_,
                                                             redo_info.data_buffer_.ptr(),

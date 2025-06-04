@@ -47,7 +47,7 @@ struct ObStorageDatum;
 namespace storage
 {
 class ObStoreCtxGuard;
-
+struct ObMdsReadInfoCollector;
 //
 // Project storage output row to expression array, the core project logic is:
 //
@@ -139,8 +139,10 @@ public:
         is_mds_query_(false),
         is_thread_scope_(true),
         tx_seq_base_(-1),
+        read_version_range_(),
         need_update_tablet_param_(false),
-        in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM)
+        in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+        mds_collector_(nullptr)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -156,7 +158,7 @@ public:
   bool need_switch_param_;
   bool is_mds_query_;
   OB_INLINE virtual bool is_valid() const {
-    return  snapshot_.valid_ && ObVTableScanParam::is_valid();
+    return  snapshot_.valid_ && ObVTableScanParam::is_valid() && (!is_mds_query_ || nullptr != mds_collector_);
   }
   OB_INLINE bool use_index_skip_scan() const {
     return (1 == ss_key_ranges_.count()) && (!ss_key_ranges_.at(0).is_whole_range());
@@ -174,8 +176,10 @@ public:
   bool is_thread_scope_;
   ObRangeArray ss_key_ranges_;  // used for index skip scan, use as postfix range for ObVTableScanParam::key_ranges_
   int64_t tx_seq_base_;  // used by lob when main table is read_latest
+  ObVersionRange read_version_range_;
   bool need_update_tablet_param_; // whether need to update tablet-level param, such as split filter param
   int64_t in_row_cache_threshold_;
+  ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

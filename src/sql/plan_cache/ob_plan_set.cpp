@@ -263,6 +263,8 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
       is_same = false;
     } else if (param.get_param_meta().get_type() != param_info.type_) {
       is_same = false;
+    } else if (ob_is_enumset_inner_tc(param.get_param_meta().get_type())) { // since enunset_inner type param will mock expr use current param, can not resue plan
+      is_same = false;
     } else if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
       if (param_info.is_oracle_null_value_) {
         is_same = false;
@@ -1623,10 +1625,8 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
     LOG_WARN("invalid plan type", K(ret), K(plan_type));
 #ifndef OB_BUILD_SPM
   } else if (OB_PHY_PLAN_LOCAL == plan_type) {
-    if (NULL != local_plan_) {
-      ret = OB_SQL_PC_PLAN_DUPLICATE;
-    } else {
-      local_plan_ = &plan;
+    if (OB_FAIL(add_local_plan(pc_ctx, plan))) {
+      LOG_DEBUG("failed to add local plan", K(ret));
     }
   } else if (OB_FAIL(dist_plans_.add_plan(plan, pc_ctx))) {
     LOG_WARN("failed to add dist plan", K(ret), K(plan));
@@ -1638,10 +1638,8 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
       if (local_evolution_plan_.get_is_evolving_flag()) {
         ret = OB_SQL_PC_PLAN_DUPLICATE;
         LOG_WARN("addition of other non-evolving plans is prohibited in local plan evolution");
-      } else if (NULL != local_plan_) {
-        ret = OB_SQL_PC_PLAN_DUPLICATE;
-      } else {
-        local_plan_ = &plan;
+      } else if (OB_FAIL(add_local_plan(pc_ctx, plan))) {
+        LOG_DEBUG("failed to add local plan", K(ret));
       }
     } else {
       if (OB_FAIL(dist_plans_.add_plan(plan, pc_ctx))) {
@@ -1657,9 +1655,8 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
         // evolving plan and baseline plan.
         if (OB_FAIL(local_evolution_plan_.add_plan(pc_ctx, &plan))) {
           LOG_WARN("failed to add local baseline plan");
-        } else if (local_evolution_plan_.get_is_evolving_flag() && NULL != local_plan_) {
-          remove_cache_obj_entry(local_plan_->get_plan_id());
-          local_plan_ = NULL;
+        } else if (local_evolution_plan_.get_is_evolving_flag()) {
+          remove_all_local_plan();
         }
       } else {
         if (OB_FAIL(dist_evolution_plan_.add_plan(pc_ctx, &plan))) {
@@ -1671,7 +1668,7 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
       }
     } else {
       if (OB_PHY_PLAN_LOCAL == plan_type) {
-        if (NULL != local_plan_) {
+        if (is_exist_local_plan()) {
           // if a baseline local plan already exists, no need to evolve
           ret = OB_SQL_PC_PLAN_DUPLICATE;
         } else if (OB_FAIL(local_evolution_plan_.add_plan(pc_ctx, &plan))) {
@@ -1701,7 +1698,7 @@ int ObSqlPlanSet::get_physical_plan(const ObPhyPlanType plan_type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid plan type", K(ret), K(plan_type));
   } else if (OB_PHY_PLAN_LOCAL == plan_type) {
-    plan = local_plan_;
+    plan = get_local_plan(pc_ctx);
   } else if (OB_FAIL(dist_plans_.get_plan(pc_ctx, plan))) {
     LOG_DEBUG("failed to get dist plan", K(ret));
   }
@@ -1713,7 +1710,7 @@ int ObSqlPlanSet::get_physical_plan(const ObPhyPlanType plan_type,
     if (OB_FAIL(try_get_local_evolution_plan(pc_ctx, plan, get_next))) {
       LOG_WARN("failed to try get local evolution plan", K(ret));
     } else if (get_next) {
-      plan = local_plan_;
+      plan = get_local_plan(pc_ctx);
     }
     if (OB_SUCC(ret) && NULL == plan) {
       ret = OB_SQL_PC_NOT_EXIST;
@@ -1750,7 +1747,9 @@ int ObSqlPlanSet::add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCt
     LOG_WARN("not supported type", K(ret), K(plan->get_plan_type()));
   } else if (FALSE_IT(pc = plan_cache_value_->get_pcv_set()->get_plan_cache())) {
   } else if (OB_PHY_PLAN_LOCAL == plan->get_plan_type()) {
-    local_plan_ = plan;
+    if (OB_FAIL(add_local_plan(ctx, *plan))) {
+      LOG_TRACE("failed to add local plan", K(ret));
+    }
   } else if (OB_FAIL(dist_plans_.add_evolution_plan(*plan, ctx))) {
     LOG_WARN("failed to add dist plan", K(ret), K(plan));
   }
@@ -1865,7 +1864,7 @@ int ObSqlPlanSet::try_get_local_evolution_plan(ObPlanCacheCtx &pc_ctx,
   plan = NULL;
   get_next = false;
   if ((local_evolution_plan_.get_is_evolving_flag())
-    || pc_ctx.sql_ctx_.spm_ctx_.force_get_evolution_plan()) {
+      || pc_ctx.sql_ctx_.spm_ctx_.force_get_evolution_plan()) {
     if (OB_FAIL(local_evolution_plan_.get_plan(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -1908,7 +1907,9 @@ int ObSqlPlanSet::try_get_evolution_plan(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   plan = NULL;
   get_next = false;
-  if (OB_FAIL(try_get_local_evolution_plan(pc_ctx, plan, get_next))) {
+  if (pc_ctx.try_get_plan_) {
+    get_next = true;
+  } else if (OB_FAIL(try_get_local_evolution_plan(pc_ctx, plan, get_next))) {
     LOG_WARN("failed to try get local evolution plan", K(ret));
   } else if (get_next && OB_FAIL(try_get_dist_evolution_plan(pc_ctx, plan, get_next))) {
     LOG_WARN("failed to try get dist evolution plan", K(ret));
@@ -1927,12 +1928,13 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
   ObExecContext &exec_ctx = pc_ctx.exec_ctx_;
   ObPhyPlanType real_type = OB_PHY_PLAN_UNINITIALIZED;
   ObSEArray<ObCandiTableLoc, 2> candi_table_locs;
-  if (OB_ISNULL(local_plan_)) {
+  ObPhysicalPlan *local_plan = get_local_plan(pc_ctx);
+  if (OB_ISNULL(local_plan)) {
     LOG_DEBUG("local plan is null");
     get_next = true;
   } else {
     pc_ctx.exist_local_plan_ = true;
-    if (FALSE_IT(plan = local_plan_)) {
+    if (FALSE_IT(plan = local_plan)) {
     } else if (OB_FAIL(get_plan_type(plan->get_table_locations(),
                                      plan->has_uncertain_local_operator(), pc_ctx, candi_table_locs,
                                      real_type))) {
@@ -2081,9 +2083,7 @@ int64_t ObSqlPlanSet::get_mem_size()
   plan_set_mem += local_evolution_plan_.get_mem_size();
   plan_set_mem += dist_evolution_plan_.get_mem_size();
 #endif
-  if (NULL != local_plan_) {
-    plan_set_mem += local_plan_->get_mem_size();
-  }
+  plan_set_mem += get_local_plan_mem_size();
   if (NULL != remote_plan_) {
     plan_set_mem += remote_plan_->get_mem_size();
   }
@@ -2110,9 +2110,10 @@ void ObSqlPlanSet::reset()
   local_evolution_plan_.reset();
   dist_evolution_plan_.reset();
 #endif
-  local_plan_ = NULL;
   array_binding_plan_ = NULL;
   remote_plan_ = NULL;
+  direct_local_plan_ = NULL;
+  local_plans_.reset();
   dist_plans_.reset();
   //local_phy_locations_.reset();
   //partition_key_.reset();
@@ -2126,16 +2127,16 @@ int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locat
                                     ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
-  DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
-  if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations,
-                                                     pc_ctx,
-                                                     candi_table_locs))) {
+  if (!pc_ctx.try_get_plan_) {
+    DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
+  }
+  if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations, pc_ctx, candi_table_locs))) {
     LOG_WARN("failed to get phy locations", K(ret), K(table_locations));
   } else if (candi_table_locs.empty()) {
     // do nothing.
-  } else if (OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
-                                                                 table_locations,
-                                                                 candi_table_locs))) {
+  } else if (!pc_ctx.try_get_plan_
+             && OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(
+                  pc_ctx.exec_ctx_.get_das_ctx(), table_locations, candi_table_locs))) {
     LOG_WARN("fail to init table locs", K(ret));
   }
   return ret;
@@ -2435,6 +2436,90 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
   }
 
   return ret;
+}
+
+ObPhysicalPlan *ObSqlPlanSet::get_local_plan(ObPlanCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlan *plan = nullptr;
+  if (local_plans_.count() < 1) {
+  } else if (pc_ctx.try_get_plan_) {
+    for (int64_t i = 0; i < local_plans_.count(); ++i) {
+      if (pc_ctx.compare_plan_->get_plan_hash_value()
+          == local_plans_.at(i)->get_plan_hash_value()) {
+        plan = local_plans_.at(i);
+        break;
+      }
+    }
+  } else {
+    if (!pc_ctx.enable_adaptive_plan_cache_) {
+      plan = direct_local_plan_;
+    } else {
+      for (int64_t i = 0; i < local_plans_.count(); ++i) {
+        if (local_plans_.at(i)->is_active_status()) {
+          plan = local_plans_.at(i);
+          pc_ctx.has_inactive_plan_ = false;
+          break;
+        } else {
+          pc_ctx.has_inactive_plan_ = true;
+        }
+      }
+    }
+  }
+  return plan;
+}
+
+bool ObSqlPlanSet::is_exist_local_plan()
+{
+  return local_plans_.count() != 0;
+}
+
+int ObSqlPlanSet::add_local_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  if (!pc_ctx.add_with_compare_ && local_plans_.count() != 0) {
+    ret = OB_SQL_PC_PLAN_DUPLICATE;
+  } else {
+    bool exist = false;
+    if (local_plans_.empty()) {
+      direct_local_plan_ = &plan;
+    }
+    if (pc_ctx.add_with_compare_) {
+      for (int64_t i = 0; !exist && i < local_plans_.count(); ++i) {
+        if (plan.get_plan_hash_value() == local_plans_.at(i)->get_plan_hash_value()) {
+          exist = true;
+          ret = OB_SQL_PC_PLAN_DUPLICATE;
+          break;
+        }
+      }
+    }
+    if (!exist && OB_FAIL(local_plans_.push_back(&plan))) {
+      LOG_WARN("failed to add local plan", K(ret));
+    }
+  }
+  return ret;
+}
+
+void ObSqlPlanSet::remove_all_local_plan()
+{
+  for (int64_t i = 0; i < local_plans_.count(); ++i) {
+    if (nullptr != local_plans_.at(i)) {
+      remove_cache_obj_entry(local_plans_.at(i)->get_plan_id());
+    }
+  }
+  direct_local_plan_ = nullptr;
+  local_plans_.reuse();
+}
+
+int64_t ObSqlPlanSet::get_local_plan_mem_size()
+{
+  int64_t mem_size = 0;
+  for (int64_t i = 0; i < local_plans_.count(); ++i) {
+    if (nullptr != local_plans_.at(i)) {
+      mem_size += local_plans_.at(i)->get_mem_size();
+    }
+  }
+  return mem_size;
 }
 
 bool ObSqlPlanSet::is_local_plan_opt_allowed(const int last_retry_err)

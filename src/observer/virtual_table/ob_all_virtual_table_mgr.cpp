@@ -311,19 +311,27 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           break;
         }
         case TABLE_FLAG: {
-          ObTableBackupFlag table_backup_flag;
-          if (OB_ISNULL(table)) {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "table should not be null", K(ret), KP(table));
-          } else if (table->is_sstable()) {
+          int32_t flag = 0;
+          if (table->is_sstable()) {
             blocksstable::ObSSTableMetaHandle sst_meta_hdl;
             if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
               SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
             } else {
-              table_backup_flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag();
+               flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
             }
           }
-          cur_row_.cells_[i].set_int(table_backup_flag.flag_);
+          cur_row_.cells_[i].set_int(flag);
+          break;
+        }
+        case REC_SCN: {
+          uint64_t v = table->get_rec_scn().get_val_for_inner_table_field();
+          cur_row_.cells_[i].set_int(v);
+          break;
+        }
+        // FIXME: the value of SS_TABLET_VERSION is invalid
+        case SS_TABLET_VERSION: {
+          uint64_t v = share::SCN::min_scn().get_val_for_inner_table_field();
+          cur_row_.cells_[i].set_uint64(v);
           break;
         }
         default:

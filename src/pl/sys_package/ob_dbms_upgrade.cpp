@@ -78,7 +78,7 @@ int ObDBMSUpgrade::upgrade_all(
   return ret;
 }
 
-int ObDBMSUpgrade::get_job_action(ObSqlString &job_action)
+int ObDBMSUpgrade::get_job_action(ObSqlString &job_action, ObSqlString &query_sql)
 {
   int ret = OB_SUCCESS;
 
@@ -88,6 +88,7 @@ int ObDBMSUpgrade::get_job_action(ObSqlString &job_action)
   bool need_comma = false;
 
   job_action.reset();
+  query_sql.reset();
 
   OZ (observer_version_set.create((4)));
   OZ (share::ObAllServerTracer::get_instance().get_servers_info(zone, servers_info));
@@ -97,14 +98,17 @@ int ObDBMSUpgrade::get_job_action(ObSqlString &job_action)
 
   //OZ (get_package_and_svn(build_version, sizeof(build_version)));
   //OZ (job_action.assign_fmt("delete FROM %s where build_version != '%s'", OB_ALL_NCOMP_DLL_V2_TNAME, build_version));
-  OZ (job_action.append_fmt("delete FROM %s where build_version not in (", OB_ALL_NCOMP_DLL_V2_TNAME));
+  OZ (job_action.assign_fmt("delete FROM %s where build_version not in (", OB_ALL_NCOMP_DLL_V2_TNAME));
+  OZ (query_sql.assign_fmt("select key_id from %s where build_version not in (", OB_ALL_NCOMP_DLL_V2_TNAME));
   for (common::hash::ObHashSet<ObServerInfoInTable::ObBuildVersion>::const_iterator iter = observer_version_set.begin();
       OB_SUCC(ret) && iter != observer_version_set.end();
       iter++) {
-    OZ(job_action.append_fmt("%s'%s'", need_comma ? ", " : "", iter->first.ptr()));
+    OZ (job_action.append_fmt("%s'%s'", need_comma ? ", " : "", iter->first.ptr()));
+    OZ (query_sql.append_fmt("%s'%s'", need_comma ? ", " : "", iter->first.ptr()));
     OX (need_comma = true);
   }
-  OZ(job_action.append(")"));
+  OZ (job_action.append(")"));
+  OZ (query_sql.append(")"));
 
   if (observer_version_set.created()) {
     observer_version_set.destroy();
@@ -119,14 +123,60 @@ int ObDBMSUpgrade::flush_dll_ncomp(sql::ObExecContext &ctx, sql::ParamStore &par
   UNUSED(params);
   UNUSED(result);
   ObSqlString job_action;
+  ObSqlString query_sql;
   int64_t affected_rows = 0;
+  uint64_t tenant_id = OB_INVALID_ID;
   sql::ObSQLSessionInfo *session = NULL;
+  common::sqlclient::ObMySQLResult *mysql_result = NULL;
+  ObArray<int64_t> key_ids;
 
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
   CK (OB_NOT_NULL(session = ctx.get_my_session()));
-  OZ (get_job_action(job_action));
-  OZ (ctx.get_sql_proxy()->write(session->get_effective_tenant_id(), job_action.ptr(), affected_rows));
-  LOG_INFO("flush dll ncomp", K(ret), K(job_action), K(affected_rows));
+  OZ (get_job_action(job_action, query_sql));
+  OX (tenant_id = session->get_effective_tenant_id());
+  if (OB_SUCC(ret)) {
+    // get deleted pl obj and insert into __all_pl_recompile_objinfo
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      OZ (ctx.get_sql_proxy()->read(res, tenant_id, query_sql.ptr()));
+      CK (OB_NOT_NULL(mysql_result = res.get_result()));
+      if (OB_SUCC(ret)) {
+        int64_t key_id;
+        while (OB_SUCC(mysql_result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*mysql_result, "key_id", key_id, int64_t);
+          OZ (key_ids.push_back(key_id));
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+          LOG_WARN("Unexpected iterate error!", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !key_ids.empty()) {
+      const int iter_num = 100;
+      const int round = key_ids.count() / iter_num + 1;
+      for (int64_t i = 0; OB_SUCC(ret) && i < round; ++i) {
+        const int floor = i * iter_num;
+        const int ceil = i == round - 1 ? key_ids.count() : (i+1)*iter_num;
+        OZ (query_sql.assign_fmt("INSERT INTO %s (recompile_obj_id, ref_obj_name, schema_version, fail_count) VALUES ",
+                  OB_ALL_PL_RECOMPILE_OBJINFO_TNAME));
+        for (int64_t j = floor; OB_SUCC(ret) && j < ceil ; ++j) { // [floor, ceil)
+          OZ (query_sql.append_fmt("( %ld, '', 0 , 0 ) %s ",
+                    key_ids.at(j), j < ceil - 1  ? " , " : " "));
+        }
+        OZ (query_sql.append_fmt("ON DUPLICATE KEY UPDATE"
+                                  " recompile_obj_id = VALUES(recompile_obj_id), "
+                                  " ref_obj_name = VALUES(ref_obj_name), "
+                                  " schema_version = VALUES(schema_version), "
+                                  " fail_count = VALUES(fail_count); "));
+        OZ (ctx.get_sql_proxy()->write(tenant_id, query_sql.ptr(), affected_rows));
+      }
+    }
+  }
+  // delete old version disk cache obj
+  OZ (ctx.get_sql_proxy()->write(tenant_id, job_action.ptr(), affected_rows));
+  LOG_INFO("flush dll ncomp", K(ret), K(job_action), K(query_sql), K(affected_rows));
 
   return ret;
 }

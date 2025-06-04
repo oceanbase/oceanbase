@@ -406,6 +406,7 @@ private:
                                                  bool &trans_happened);
 
   static int create_partial_expr(ObRawExprFactory &expr_factory,
+                                 const ObSQLSessionInfo &session,
                                  ObRawExpr *left_expr,
                                  ObIArray<ObRawExpr*> &same_type_exprs,
                                  const bool is_in_expr,
@@ -426,7 +427,7 @@ private:
                                              const ObSQLSessionInfo &session,
                                              ObRawExpr *arg_expr,
                                              ObRawExpr *when_expr,
-                                             const ObExprResType &case_res_type,
+                                             const ObCollationType cmp_cs_type,
                                              ObOpRawExpr *&equal_expr);
   static int add_row_type_to_array_no_dup(common::ObIArray<ObSEArray<DistinctObjMeta, 4>> &row_type_array,
                                           const ObSEArray<DistinctObjMeta, 4> &row_type);
@@ -451,16 +452,20 @@ private:
                                              bool &trans_happened);
   static ObItemType reverse_cmp_type_of_align_date4cmp(const ObItemType &cmp_type);
   static int replace_cast_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                              const ObSQLSessionInfo &session,
                                               const ObItemType &cmp_type,
                                               ObRawExpr *&expr);
   static int replace_op_row_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                const ObSQLSessionInfo &session,
                                                 const ObItemType &cmp_type,
                                                 ObRawExpr *&left_row_expr,
                                                 ObRawExpr *&right_row_expr);
   static int check_and_transform_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                const ObSQLSessionInfo &session,
                                                 ObRawExpr *&in_expr,
                                                 const ObItemType &cmp_type);
   static int replace_align_date4cmp_recursively(ObRawExprFactory &expr_factory,
+                                                const ObSQLSessionInfo &session,
                                                 ObRawExpr *&root_expr);
   static int replace_inner_row_cmp_val_recursively(ObRawExprFactory &expr_factory,
                                                    const ObSQLSessionInfo &session,
@@ -683,6 +688,11 @@ private:
   int get_rowkey_for_single_table(ObSelectStmt* stmt,
                                   ObIArray<ObRawExpr*> &unique_keys,
                                   bool &is_valid);
+
+  int preserve_order_for_gby(ObDMLStmt *stmt,
+                             bool &trans_happened);
+  int add_order_by_gby_for_stmt(ObSelectStmt* stmt, bool &trans_happened);
+
   int try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened);
   int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
                                                  ObIArray<TableItem*> &flattened_tables);

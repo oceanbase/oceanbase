@@ -47,6 +47,7 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
   ObExprResType *array_type = &types[0];
   ObExprResType *delimiter_type = &types[1];
   ObSubSchemaValue arr_meta;
+  const ObSqlCollectionInfo *coll_info = NULL;
 
   if (OB_ISNULL(session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -64,6 +65,13 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
   } else if (arr_meta.type_ != ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
+  } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collection info is null", K(ret));
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE
+             && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_));
   }
   if (OB_FAIL(ret) || ob_is_null(delimiter_type->get_type())) {
     // do nothing
@@ -238,14 +246,11 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
         continue;
       } else if (arr_vec->is_null(idx) || delimiter_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, arr_obj))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, arr_obj))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_FALSE_IT(delimiter = delimiter_vec->get_string(idx))) {

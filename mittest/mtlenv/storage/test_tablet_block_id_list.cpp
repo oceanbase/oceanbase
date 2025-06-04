@@ -75,7 +75,7 @@ TEST_F(TestBlockIdList, test_id_list)
 
   // empty set
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
@@ -124,7 +124,7 @@ TEST_F(TestBlockIdList, test_serialize_deep_copy)
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set.data_block_info_set_.set_refactored(tmp_macro_id));
@@ -264,7 +264,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info));
@@ -298,7 +298,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_2;
   ObTabletMacroInfo macro_info_2;
   ASSERT_EQ(OB_SUCCESS, info_set_2.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, 15, info_set_2));
   ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, &linked_writer));
   macro_iter.destroy();
@@ -325,7 +325,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_3;
   ObTabletMacroInfo macro_info_3;
   ASSERT_EQ(OB_SUCCESS, info_set_3.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   ASSERT_EQ(OB_SUCCESS, macro_info_3.init(allocator, info_set_3, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_3));
@@ -336,7 +336,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_4;
   ObTabletMacroInfo macro_info_4;
   ASSERT_EQ(OB_SUCCESS, info_set_4.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_4.data_block_info_set_.set_refactored(tmp_macro_id));
@@ -364,7 +364,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObTabletMacroInfo macro_info_5;
   static const int64_t memory_id_cnt = 100;
   ASSERT_EQ(OB_SUCCESS, info_set_5.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init(false, ObMemAttr(MTL_ID(), "TestBlockID")));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
   for (int64_t i = 0; i < memory_id_cnt; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_5.data_block_info_set_.set_refactored(tmp_macro_id));

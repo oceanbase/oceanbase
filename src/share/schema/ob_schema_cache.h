@@ -187,7 +187,9 @@ public:
                                const int64_t schema_version,
                                const int64_t precise_schema_version);
   const ObTableSchema *get_all_core_table() const;
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  const ObTableSchema *get_sslog_table() const;
+#endif
 
   // @param[in]:
   // - key: (tenant_id, tablet_id, schema_version)
@@ -211,6 +213,9 @@ private:
                     const int64_t schema_version) const;
   bool need_use_sys_cache(const ObSchemaCacheKey &cache_key) const;
   int init_all_core_table();
+#ifdef OB_BUILD_SHARED_STORAGE
+  int init_sslog_table();
+#endif
   int put_sys_schema(
       const ObSchemaCacheKey &cache_key,
       const ObSchema &schema);
@@ -229,6 +234,9 @@ private:
   HistoryCache history_cache_;
   bool is_inited_;
   ObTableSchema all_core_table_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObTableSchema sslog_table_;
+#endif
   ObSimpleTenantSchema simple_gts_tenant_;
   ObTenantSchema full_gts_tenant_;
   TabletCache tablet_cache_;

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_view_table_resolver.h"
+#include "share/catalog/ob_catalog_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -48,6 +49,7 @@ int ObViewTableResolver::do_resolve_set_query(const ParseNode &parse_tree,
 int ObViewTableResolver::expand_view(TableItem &view_item)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session info is null");
@@ -60,6 +62,7 @@ int ObViewTableResolver::expand_view(TableItem &view_item)
     uint64_t database_id = OB_INVALID_ID;
     ObString old_database_name;
     uint64_t old_database_id = session_info_->get_database_id();
+    ObSwitchCatalogHelper switch_catalog_helper;
     if (OB_ISNULL(schema_checker_)
         || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
@@ -90,17 +93,28 @@ int ObViewTableResolver::expand_view(TableItem &view_item)
         } else {
           session_info_->set_database_id(database_id);
         }
+      } else {
+        if (session_info_->is_in_external_catalog()
+            && OB_FAIL(session_info_->set_internal_catalog_db(&switch_catalog_helper))) {
+          LOG_WARN("failed to set catalog", K(ret));
+        }
       }
       if (OB_SUCC(ret) && OB_FAIL(do_expand_view(view_item, view_resolver))) {
         LOG_WARN("do expand view failed", K(ret));
       }
       if (is_oracle_mode()) {
-        int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
           ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-          LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+          LOG_WARN("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
         } else {
           session_info_->set_database_id(old_database_id);
+        }
+      } else {
+        if (switch_catalog_helper.is_set()) {
+          if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+            ret = OB_SUCCESS == ret ? tmp_ret : ret;
+            LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
+          }
         }
       }
     }

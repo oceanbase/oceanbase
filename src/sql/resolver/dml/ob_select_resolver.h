@@ -183,6 +183,7 @@ protected:
                                  bool &has_explicit_dir);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
+  int get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);
   int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
   int set_for_update_oracle(ObSelectStmt &stmt,
                             const int64_t wait_us,
@@ -197,8 +198,6 @@ protected:
   int check_cycle_values(const ParseNode &cycle_node);
   int check_unsupported_operation_in_recursive_branch();
   int check_recursive_cte_usage(const ObSelectStmt &select_stmt);
-  int gen_unpivot_target_column(const int64_t table_count, ObSelectStmt &select_stmt,
-                                TableItem &table_item);
 
   //resolve select into
   int resolve_into_clause(const ParseNode *node);

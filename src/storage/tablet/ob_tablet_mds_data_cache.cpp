@@ -83,5 +83,6 @@ void ObDDLInfoCache::reset()
   schema_version_ = INT64_MAX;
   snapshot_version_ = INT64_MAX;
 }
+
 } // namespace storage
 } // namespace oceanbase

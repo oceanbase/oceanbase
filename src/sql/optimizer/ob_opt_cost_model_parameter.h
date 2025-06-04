@@ -24,12 +24,7 @@ namespace oceanbase
 namespace sql
 {
 class OptSystemStat;
-enum PROJECT_TYPE {
-  PROJECT_INT = 0,
-  PROJECT_NUMBER,
-  PROJECT_CHAR,
-  MAX_PROJECT_TYPE
-};
+
 class ObOptCostModelParameter {
 public:
   explicit ObOptCostModelParameter(
@@ -77,7 +72,7 @@ public:
     const double DEFAULT_FUNCTIONAL_LOOKUP_PER_ROW_COST,
     const double (&comparison_params)[common::ObMaxTC + 1],
 		const double (&hash_params)[common::ObMaxTC + 1],
-		const double (&project_params)[2][2][MAX_PROJECT_TYPE]
+		const double (&project_params)[2][2][common::ObMaxTC + 1]
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -132,7 +127,7 @@ public:
   double get_micro_block_seq_cost(const OptSystemStat& stat) const;
   double get_micro_block_rnd_cost(const OptSystemStat& stat) const;
   double get_project_column_cost(const OptSystemStat& stat,
-                                 PROJECT_TYPE type,
+                                 int64_t type,
                                  bool is_rnd,
                                  bool use_column_store) const;
   double get_fetch_row_rnd_cost(const OptSystemStat& stat) const;
@@ -269,7 +264,7 @@ protected:
    *              +-column store-+
    *                             +-random access project
    */
-  const double (&project_params_)[2][2][MAX_PROJECT_TYPE];
+  const double (&project_params_)[2][2][common::ObMaxTC + 1];
 };
 
 }

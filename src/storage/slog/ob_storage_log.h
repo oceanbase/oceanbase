@@ -20,6 +20,8 @@
 #include "share/ob_unit_getter.h"
 #include "storage/ls/ob_ls_meta.h"
 #include "storage/tx/ob_dup_table_base.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/meta_store/ob_startup_accelerate_info.h"
 
 namespace oceanbase
 {
@@ -31,6 +33,7 @@ namespace share
 namespace storage
 {
 class ObTablet;
+struct ObUpdateTabletPointerParam;
 struct ObCreateTenantPrepareLog : public ObIBaseStorageLogEntry
 {
 public:
@@ -204,8 +207,22 @@ struct ObDeleteTabletLog : public ObIBaseStorageLogEntry
 public:
   ObDeleteTabletLog();
   ObDeleteTabletLog(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+  ObDeleteTabletLog(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t ls_epoch,
+      const int64_t tablet_meta_version,
+      const ObPendingFreeTabletStatus &status,
+      const int64_t free_time,
+      const GCTabletType &gc_type,
+      const int64_t tablet_transfer_seq);
   virtual ~ObDeleteTabletLog() {}
   virtual bool is_valid() const override;
+
+  bool operator ==(const ObDeleteTabletLog &other) const;
+  bool operator !=(const ObDeleteTabletLog &other) const;
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
 
   DECLARE_TO_STRING;
   OB_UNIS_VERSION_V(1);
@@ -213,16 +230,53 @@ public:
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
+  int64_t ls_epoch_;
+  int64_t tablet_meta_version_;
+  ObPendingFreeTabletStatus status_;
+  int64_t free_time_;
+  GCTabletType gc_type_;
+  int64_t tablet_transfer_seq_;
+};
+
+class ObGCTabletLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObGCTabletLog();
+  ObGCTabletLog(
+      const share::ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObTabletID &tablet_id,
+      const int64_t tablet_meta_version,
+      const ObPendingFreeTabletStatus &status,
+      const int64_t tablet_transfer_seq);
+  virtual ~ObGCTabletLog() = default;
+
+  virtual bool is_valid() const override;
+  bool operator ==(const ObGCTabletLog &other) const;
+  bool operator !=(const ObGCTabletLog &other) const;
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
+
+  DECLARE_TO_STRING;
+  OB_UNIS_VERSION_V(1);
+public:
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  int64_t ls_epoch_;
+  int64_t tablet_meta_version_;
+  ObPendingFreeTabletStatus status_;
+  int64_t tablet_transfer_seq_;
 };
 
 struct ObUpdateTabletLog : public ObIBaseStorageLogEntry
 {
 public:
-  ObUpdateTabletLog() = default;
+  ObUpdateTabletLog();
   ObUpdateTabletLog(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const ObMetaDiskAddr &disk_addr);
+      const ObUpdateTabletPointerParam &tablet_pointer_param,
+      const int64_t ls_epoch);
   virtual ~ObUpdateTabletLog() = default;
   virtual bool is_valid() const override;
   DECLARE_TO_STRING;
@@ -231,15 +285,24 @@ public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObMetaDiskAddr disk_addr_;
+  int64_t ls_epoch_;
+  storage::ObTabletAttr tablet_attr_;
+  storage::ObStartupTabletAccelerateInfo accelerate_info_;
 };
 
 struct ObEmptyShellTabletLog : public ObIBaseStorageLogEntry
 {
 public:
-  const int64_t EMPTY_SHELL_SLOG_VERSION = 1;
+  const int64_t EMPTY_SHELL_SLOG_VERSION_1 = 1;
+  const int64_t EMPTY_SHELL_SLOG_VERSION_2 = 2;
+  const int64_t EMPTY_SHELL_SLOG_VERSION = EMPTY_SHELL_SLOG_VERSION_2;
 public:
-  ObEmptyShellTabletLog() = default;
-  explicit ObEmptyShellTabletLog(const ObLSID &ls_id_, const ObTabletID &tablet_id, ObTablet *tablet);
+  ObEmptyShellTabletLog();
+  ObEmptyShellTabletLog(
+      const ObLSID &ls_id_,
+      const ObTabletID &tablet_id,
+      const int64_t ls_epoch,
+      ObTablet *tablet);
   virtual ~ObEmptyShellTabletLog() {}
   virtual bool is_valid() const override;
   virtual int serialize(
@@ -262,6 +325,7 @@ public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObTablet *tablet_;
+  int64_t ls_epoch_;
 };
 
 }

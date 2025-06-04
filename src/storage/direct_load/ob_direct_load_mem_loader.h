@@ -36,7 +36,6 @@ public:
   VIRTUAL_TO_STRING_KV(KP(mem_ctx_), K_(fragments));
 
 private:
-  int acquire_chunk(ChunkType *&chunk);
   int close_chunk(ChunkType *&chunk);
 
 private:

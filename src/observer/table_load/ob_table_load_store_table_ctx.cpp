@@ -66,7 +66,7 @@ int ObTableLoadStoreTableCtx::inner_init(const uint64_t table_id)
   if (OB_ISNULL(schema_ = OB_NEWx(ObTableLoadSchema, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadSchema", KR(ret));
-  } else if (OB_FAIL(schema_->init(store_ctx_->ctx_->param_.tenant_id_, table_id_))) {
+  } else if (OB_FAIL(schema_->init(store_ctx_->ctx_->param_.tenant_id_, table_id_, store_ctx_->ctx_->ddl_param_.schema_version_))) {
     LOG_WARN("fail to init schema", KR(ret));
   }
   return ret;
@@ -303,20 +303,12 @@ int ObTableLoadStoreDataTableCtx::init_ls_partition_ids(
   const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids)
 {
   int ret = OB_SUCCESS;
-  int64_t schema_version = OB_INVALID_VERSION;
   const bool is_incremental = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
-  if (!is_incremental) {
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema_version(MTL_ID(),
-                                                                 store_ctx_->ctx_->ddl_param_.schema_version_,
-                                                                 table_id_,
-                                                                 schema_version))) {
-    LOG_WARN("fail to get schema version", KR(ret), K(MTL_ID()), K(table_id_));
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
     const ObTableLoadLSIdAndPartitionId &ls_partition_id = ls_partition_ids[i];
     if (is_incremental && OB_FAIL(check_tablet(ls_partition_id.ls_id_,
                                                ls_partition_id.part_tablet_id_.tablet_id_,
-                                               schema_version))) {
+                                               store_ctx_->ctx_->ddl_param_.schema_version_))) {
       LOG_WARN("fail to check tablet", KR(ret),
                                        K(ls_partition_id.ls_id_),
                                        K(ls_partition_id.part_tablet_id_.tablet_id_));

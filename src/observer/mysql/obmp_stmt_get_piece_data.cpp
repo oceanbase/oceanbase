@@ -123,7 +123,7 @@ int ObMPStmtGetPieceData::process()
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id),
-               K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
+               K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowd for the session", K_(stmt_id), K(ret));
@@ -204,6 +204,7 @@ int ObMPStmtGetPieceData::do_process(ObSQLSessionInfo &session)
   const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   bool is_diagnostics_stmt = false;
+  ObString sql = "get piece info";
 
   ObWaitEventStat total_wait_desc;
   {
@@ -220,7 +221,6 @@ int ObMPStmtGetPieceData::do_process(ObSQLSessionInfo &session)
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
     int64_t execution_id = 0;
-    ObString sql = "get piece info";
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
     if (FALSE_IT(execution_id = gctx_.sql_engine_->get_execution_id())) {
@@ -240,24 +240,23 @@ int ObMPStmtGetPieceData::do_process(ObSQLSessionInfo &session)
       bool first_record = (1 == audit_record.try_cnt_);
       ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_end();
-        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.update_event_stage_state();
-        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-        EVENT_INC(SQL_PS_PREPARE_COUNT);
-        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-      }
-
-      if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.move_to_sqlstat_cache(session, sql);
-      }
-
     }
   } // diagnose end
+
+  if (enable_perf_event) {
+    audit_record.exec_record_.record_end();
+    audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+    audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+    audit_record.update_event_stage_state();
+    const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+    EVENT_INC(SQL_PS_PREPARE_COUNT);
+    EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
+  }
+
+  if (enable_sqlstat) {
+    sqlstat_record.record_sqlstat_end_value();
+    sqlstat_record.move_to_sqlstat_cache(session, sql);
+  }
 
   // store the warning message from the most recent statement in the current session
   if (OB_SUCC(ret) && is_diagnostics_stmt) {

@@ -14,6 +14,7 @@
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
+#include "sql/rewrite/ob_transform_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -277,8 +278,6 @@ int ObLogSubPlanFilter::get_re_est_cost_infos(const EstimateCostInfo &param,
   EstimateCostInfo cur_param;
   double cur_child_card = 0.0;
   double cur_child_cost = 0.0;
-  bool first_child_is_match_all = false;
-  const common::ObIArray<common::ObAddr> *rescan_left_server_list = param.rescan_left_server_list_;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     const ObLogicalOperator *child = get_child(i);
     cur_param.reset();
@@ -288,15 +287,13 @@ int ObLogSubPlanFilter::get_re_est_cost_infos(const EstimateCostInfo &param,
     } else if (OB_FAIL(cur_param.assign(param))) {
       LOG_WARN("failed to assign param", K(ret));
     } else if (0 == i) {
-      if (!child->is_match_all()) {
-        rescan_left_server_list = &child->get_server_list();
-      }
+      /* do noting */
     } else {
       cur_param.need_row_count_ = -1;
       cur_param.need_batch_rescan_ = enable_das_group_rescan()
                                      && !init_plan_idxs_.has_member(i)
                                      && !one_time_idxs_.has_member(i);
-      cur_param.rescan_left_server_list_ = rescan_left_server_list;
+      cur_param.rescan_left_server_list_ = &get_server_list();
     }
 
     if (OB_FAIL(ret)) {
@@ -528,6 +525,8 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
     can_batch = false;
   } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo_
              || DistAlgo::DIST_NONE_ALL == dist_algo_
+             || DistAlgo::DIST_HASH_ALL == dist_algo_
+             || DistAlgo::DIST_RANDOM_ALL == dist_algo_
              || (DistAlgo::DIST_PARTITION_WISE == dist_algo_
                  && !left_allocated_exchange
                  && !right_allocated_exchange)) {
@@ -895,6 +894,16 @@ int ObLogSubPlanFilter::print_outline_data(PlanText &plan_text)
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULl", K(ret), K(get_plan()), K(stmt));
+  } else if (get_plan()->has_added_push_subq_hint()) {
+    // do nothing
+  } else if (OB_FAIL(print_push_subq_outline(plan_text))) {
+    LOG_WARN("failed to print push subq outline", K(ret));
+  } else {
+    get_plan()->set_added_push_subq_hint();
+  }
+
+  // print pq subquery hint
+  if (OB_FAIL(ret)) {
   } else if (DistAlgo::DIST_BASIC_METHOD == get_distributed_algo()) {
     /* do not print data for basic. need remove this when support split subplan filter op */
   } else if (OB_FAIL(get_sub_qb_names(hint.get_sub_qb_names()))) {
@@ -921,6 +930,8 @@ int ObLogSubPlanFilter::print_used_hint(PlanText &plan_text)
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULl", K(ret), K(get_plan()));
+  } else if (OB_FAIL(print_push_subq_used_hint(plan_text))) {
+    LOG_WARN("failed to print push subq used hint", K(ret));
   } else if (OB_FAIL(get_sub_qb_names(sub_qb_names))) {
     LOG_WARN("fail to get subplan qb_names", K(ret));
   } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_valid_pq_subquery_hint(sub_qb_names,
@@ -960,17 +971,143 @@ int ObLogSubPlanFilter::get_sub_qb_names(ObIArray<ObString> &sub_qb_names)
   return ret;
 }
 
+int ObLogSubPlanFilter::print_push_subq_outline(PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULl", K(ret), K(get_plan()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_plan()->get_push_subq_exprs().count(); ++i) {
+    ObRawExpr *push_subq_expr = get_plan()->get_push_subq_exprs().at(i);
+    ObSEArray<ObQueryRefRawExpr*, 4> query_ref_exprs;
+    const ObSelectStmt *subq_stmt = NULL;
+    ObString subq_qb_name;
+    ObOptHint push_subq_hint(T_PUSH_SUBQ);
+    if (OB_ISNULL(push_subq_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null expr", K(ret), K(i));
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(push_subq_expr,
+                                                                query_ref_exprs,
+                                                                false /* with_nested */ ))) {
+      LOG_WARN("failed to extract query expr", K(ret));
+    } else if (OB_UNLIKELY(query_ref_exprs.empty())
+               || OB_ISNULL(query_ref_exprs.at(0))
+               || OB_ISNULL(subq_stmt = query_ref_exprs.at(0)->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected empty subquery expr", K(ret), KPC(push_subq_expr), K(subq_stmt));
+    } else if (OB_FAIL(subq_stmt->get_qb_name(subq_qb_name))) {
+      LOG_WARN("failed to get qb_name", K(ret), KPC(subq_stmt));
+    } else if (OB_FALSE_IT(push_subq_hint.set_qb_name(subq_qb_name))) {
+    } else if (OB_FAIL(push_subq_hint.print_hint(plan_text))) {
+      LOG_WARN("failed to print push subq hint", K(ret), K(push_subq_hint));
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::print_push_subq_used_hint(PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> pushed_subq_stmts;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULl", K(ret), K(get_plan()));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_stmts(get_plan()->get_push_subq_exprs(),
+                                                               pushed_subq_stmts,
+                                                               false /* with_nested */ ))) {
+    LOG_WARN("failed to extract query expr", K(ret));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    ObLogicalOperator *child = NULL;
+    const ObDMLStmt *child_stmt = NULL;
+    const ObHint *push_subq_hint = NULL;
+    if (OB_ISNULL(child = get_child(i)) || OB_ISNULL(child->get_plan())
+        || OB_ISNULL(child_stmt = child->get_plan()->get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(child), K(child_stmt));
+    } else if (NULL == (push_subq_hint = child_stmt->get_stmt_hint().get_normal_hint(T_PUSH_SUBQ))) {
+      // do nothing
+    } else if ((push_subq_hint->is_enable_hint()
+                && ObOptimizerUtil::find_item(pushed_subq_stmts, child_stmt))
+               || (push_subq_hint->is_disable_hint()
+                   && !ObOptimizerUtil::find_item(pushed_subq_stmts, child_stmt))) {
+      if (OB_FAIL(push_subq_hint->print_hint(plan_text))) {
+        LOG_WARN("failed to print used push subq hint", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &first_op,
+                                                  const ObLogSubPlanFilter &second_op,
+                                                  bool &need_compare)
+{
+  int ret = OB_SUCCESS;
+  need_compare = true;
+  const ObLogicalOperator *op1 = first_op.get_child(0);
+  const ObLogicalOperator *op2 = second_op.get_child(0);
+  if (OB_ISNULL(op1) || OB_ISNULL(op2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(op1), K(op2));
+  } else if (op1->get_op_below_exchange() != op2->get_op_below_exchange()) {
+    need_compare = false;
+  } else if (OB_UNLIKELY(first_op.get_num_of_child() != second_op.get_num_of_child())) {
+    need_compare = false;
+  } else {
+    bool simple_rescan_path = false;
+    uint64_t first_table_id = OB_INVALID_ID;
+    uint64_t second_table_id = OB_INVALID_ID;
+    uint64_t first_index_id = OB_INVALID_ID;
+    uint64_t second_index_id = OB_INVALID_ID;
+    double range_row_count = 0;
+    for (int64_t i = 1; need_compare && OB_SUCC(ret) && i < first_op.get_num_of_child(); i++) {
+      simple_rescan_path = true;
+      if (first_op.get_onetime_idxs().has_member(i) != second_op.get_onetime_idxs().has_member(i)
+          || first_op.get_initplan_idxs().has_member(i) != second_op.get_initplan_idxs().has_member(i)) {
+        need_compare = false;
+      } else if (first_op.get_onetime_idxs().has_member(i) || first_op.get_initplan_idxs().has_member(i)) {
+        /* do nothing */
+      } else if (OB_ISNULL(op1 = first_op.get_child(i)) || OB_ISNULL(op2 = second_op.get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i), K(op1), K(op2));
+      } else if (OB_FAIL(ObOptimizerUtil::get_rescan_path_index_id(op1,
+                                                                   simple_rescan_path,
+                                                                   first_table_id,
+                                                                   first_index_id,
+                                                                   range_row_count))) {
+        LOG_WARN("failed get rescan path index id", K(ret));
+      } else if (!simple_rescan_path) {
+        need_compare = true;
+      } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
+        need_compare = false;
+      } else if (OB_FAIL(ObOptimizerUtil::get_rescan_path_index_id(op2,
+                                                                   simple_rescan_path,
+                                                                   second_table_id,
+                                                                   second_index_id,
+                                                                   range_row_count))) {
+        LOG_WARN("failed get rescan path index id", K(ret));
+      } else if (!simple_rescan_path) {
+        need_compare = true;
+      } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
+        need_compare = false;
+      } else if (first_table_id == second_table_id && first_index_id == second_index_id) {
+        need_compare = true;
+      } else {
+        need_compare = false;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogSubPlanFilter::check_right_is_local_scan(int64_t &local_scan_type) const
 {
   int ret = OB_SUCCESS;
   local_scan_type = 2;  // 0: dist scan, 1: local das scan, 2: local scan
-  const ObLogicalOperator *first_child = NULL;
   const ObLogicalOperator *child = NULL;
   bool contain_dist_das = false;
-  if (OB_ISNULL(first_child = get_child(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(first_child));
-  }
   for (int64_t i = 1; 0 < local_scan_type && OB_SUCC(ret) && i < get_num_of_child(); i++) {
     if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
       /* do nothing */
@@ -981,10 +1118,10 @@ int ObLogSubPlanFilter::check_right_is_local_scan(int64_t &local_scan_type) cons
       local_scan_type = 0;
     } else if (!child->get_contains_das_op()) {
       /* do nothing */
-    } else if (1 != first_child->get_server_list().count()
-               || ObShardingInfo::is_shuffled_server_list(first_child->get_server_list())) {
+    } else if (1 != get_server_list().count()
+               || ObShardingInfo::is_shuffled_server_list(get_server_list())) {
       local_scan_type = 0;
-    } else if (OB_FAIL(child->check_contain_dist_das(first_child->get_server_list(), contain_dist_das))) {
+    } else if (OB_FAIL(child->check_contain_dist_das(get_server_list(), contain_dist_das))) {
       LOG_WARN("failed to check contain dist das", K(ret));
     } else if (contain_dist_das) {
       local_scan_type = 0;

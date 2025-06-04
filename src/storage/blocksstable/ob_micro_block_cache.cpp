@@ -600,6 +600,7 @@ int ObAsyncSingleMicroBlockIOCallback::process(
     const bool use_tl_reader)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("SingleMicroBlockIOCallback");
   ObTimeGuard time_guard("AsyncSingle_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -673,6 +674,7 @@ int ObMultiDataBlockIOCallback::process(
     const bool use_tl_reader)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("MultiDataBlockIOCallback");
   ObTimeGuard time_guard("MultiData_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -933,10 +935,6 @@ int ObIMicroBlockCache::prefetch(
             if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback, is_major_macro_preread))) {
         LOG_WARN("Fail to prefetch data micro block", K(ret));
       }
-      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
-        callback->~ObAsyncSingleMicroBlockIOCallback();
-        allocator->free(callback);
-      }
     }
   }
   return ret;
@@ -976,15 +974,20 @@ int ObIMicroBlockCache::prefetch(
     read_info.size_ = idx_row.get_block_size();
     read_info.io_timeout_ms_ = max(THIS_WORKER.get_timeout_remain() / 1000, 0);
     read_info.mtl_tenant_id_ = MTL_ID();
-    read_info.logic_micro_id_ = idx_row.get_logic_micro_id();
-    read_info.micro_crc_ = idx_row.get_data_checksum();
+    read_info.set_logic_micro_id(idx_row.get_logic_micro_id());
+    read_info.set_micro_crc(idx_row.get_data_checksum());
     if (is_major_macro_preread) {
-      read_info.bypass_micro_cache_ = true;
-      read_info.is_major_macro_preread_ = true;
+      read_info.set_bypass_micro_cache(true);
+      read_info.set_is_major_macro_preread(true);
     }
 
     if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
       STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
+      if (OB_NOT_NULL(callback.get_allocator())) { //Avoid double_free with io_handle
+        ObIAllocator *allocator = callback.get_allocator();
+        callback.~ObIMicroBlockIOCallback();
+        allocator->free(&callback);
+      }
     } else {
       EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);
       EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, idx_row.get_block_size());
@@ -1024,12 +1027,17 @@ int ObIMicroBlockCache::prefetch(
   read_info.size_ = size;
   read_info.io_timeout_ms_ = max(THIS_WORKER.get_timeout_remain() / 1000, 0);
   read_info.mtl_tenant_id_ = MTL_ID();
-  read_info.bypass_micro_cache_ = true;
+  read_info.set_bypass_micro_cache(true);
   // only prefetch_multi_block need preread major macro
-  read_info.is_major_macro_preread_ = true;
+  read_info.set_is_major_macro_preread(true);
 
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
+    if (OB_NOT_NULL(callback.get_allocator())) { //Avoid double_free with io_handle
+      ObIAllocator *allocator = callback.get_allocator();
+      callback.~ObIMicroBlockIOCallback();
+      allocator->free(&callback);
+    }
   } else {
     EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT, io_param.micro_block_count_);
     EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, size);
@@ -1191,7 +1199,10 @@ int ObDataMicroBlockCache::prefetch_multi_block(
   int ret = OB_SUCCESS;
   ObMultiDataBlockIOCallback *callback = nullptr;
   ObIAllocator *allocator = nullptr;
-  if (OB_FAIL(get_allocator(allocator))) {
+  if (OB_UNLIKELY(!io_param.is_valid() || 0 == tenant_id || OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid input parameters", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_allocator(allocator))) {
     LOG_WARN("Fail to get allocator", K(ret));
   } else {
     void *buf = nullptr;
@@ -1201,18 +1212,15 @@ int ObDataMicroBlockCache::prefetch_multi_block(
     } else {
       callback = new (buf) ObMultiDataBlockIOCallback;
       callback->allocator_ = allocator;
-      if (OB_UNLIKELY(!io_param.is_valid() || 0 == tenant_id || OB_INVALID_TENANT_ID == tenant_id)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Invalid input parameters", K(ret), K(tenant_id));
-      } else if (OB_FAIL(callback->set_io_ctx(io_param))) {
+      if (OB_FAIL(callback->set_io_ctx(io_param))) {
         LOG_WARN("Set io context failed", K(ret), K(io_param));
+        if (OB_NOT_NULL(callback->get_allocator())) {
+          callback->~ObMultiDataBlockIOCallback();
+          allocator->free(callback);
+        }
       } else if (OB_FAIL(ObIMicroBlockCache::prefetch(
           tenant_id, macro_id, io_param, use_cache, macro_handle, *callback))) {
         LOG_WARN("Fail to prefetch multi data blocks", K(ret));
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
-        callback->~ObMultiDataBlockIOCallback();
-        allocator->free(callback);
       }
     }
   }
@@ -1260,19 +1268,21 @@ int ObDataMicroBlockCache::load_block(
       macro_read_info.size_ = micro_block_id.size_;
       macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       macro_read_info.mtl_tenant_id_ = MTL_ID();
-      macro_read_info.logic_micro_id_ = logic_micro_id;
-      macro_read_info.micro_crc_ = data_checksum;
+      macro_read_info.set_logic_micro_id(logic_micro_id);
+      macro_read_info.set_micro_crc(data_checksum);
 
-      if (OB_FAIL(ObObjectManager::read_object(macro_read_info, macro_handle))) {
-        LOG_WARN("Fail to sync read block", K(ret), K(macro_read_info));
+      if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
+        LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
+        if (OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+          callback->~ObSyncSingleMicroBLockIOCallback();
+          allocator->free(callback);
+        }
+      } else if (OB_FAIL(macro_handle.wait())) {
+        LOG_WARN("Fail to wait io finish", K(ret), K(macro_read_info));
       } else {
         block_data.type_ = ObMicroBlockData::DATA_BLOCK;
         EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);
         EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, micro_block_id.size_);
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
-        callback->~ObSyncSingleMicroBLockIOCallback();
-        allocator->free(callback);
       }
     }
   }
@@ -1562,14 +1572,20 @@ int ObIndexMicroBlockCache::load_block(
       macro_read_info.size_ = micro_block_id.size_;
       macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       macro_read_info.mtl_tenant_id_ = MTL_ID();
-      macro_read_info.logic_micro_id_ = logic_micro_id;
-      macro_read_info.micro_crc_ = data_checksum;
+      macro_read_info.set_logic_micro_id(logic_micro_id);
+      macro_read_info.set_micro_crc(data_checksum);
 
       ObIndexBlockDataTransformer idx_transformer;
       char *transform_buf = nullptr;
       char *raw_idx_block_buf = nullptr;
-      if (OB_FAIL(ObObjectManager::read_object(macro_read_info, macro_handle))) {
-        LOG_WARN("Fail to sync read block", K(ret), K(macro_read_info));
+      if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
+        LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
+        if (OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+          callback->~ObSyncSingleMicroBLockIOCallback();
+          allocator->free(callback);
+        }
+      } else if (OB_FAIL(macro_handle.wait())) {
+        LOG_WARN("Fail to wait io finish", K(ret), K(macro_read_info));
       }
       // the reason why block_data.get_buf() can be released by this allocator directly is that the
       // memory is deep coiped in ObSyncSingleMicroBLockIOCallback. Maybe we should deep copy the memory in any case.
@@ -1584,10 +1600,6 @@ int ObIndexMicroBlockCache::load_block(
         allocator->free(raw_idx_block_buf);
       }
       if (OB_FAIL(ret)) {
-        if (nullptr != callback->get_allocator()) { //Avoid double_free with io_handle
-          callback->~ObSyncSingleMicroBLockIOCallback();
-          allocator->free(callback);
-        }
         if (nullptr != transform_buf) {
           allocator->free(transform_buf);
         }

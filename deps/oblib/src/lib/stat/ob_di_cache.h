@@ -33,8 +33,9 @@ public:
   ObDISessionCollect();
   virtual ~ObDISessionCollect();
   void clean();
-  TO_STRING_KV(K_(session_id), "di_session_info", (uint64_t)&base_value_, K(lock_.get_lock()));
+  TO_STRING_KV(K_(session_id), K_(client_sid), "di_session_info", (uint64_t)&base_value_, K(lock_.get_lock()));
   uint64_t session_id_;
+  uint32_t client_sid_;
   ObDiagnoseSessionInfo base_value_;
   DIRWLock lock_;
 };

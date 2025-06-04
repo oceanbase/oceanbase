@@ -59,18 +59,18 @@ private:
   int do_backup_meta_(ObIArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int backup_user_meta_();
   int backup_meta_finish_();
-  int calc_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn);
+  int inner_calculate_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn);
   int check_need_change_meta_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn);
   int change_meta_turn_(const share::ObBackupLSTaskAttr &sys_ls_task);
   int get_backup_user_meta_task_(ObIArray<share::ObBackupLSTaskAttr> &ls_task);
   int merge_tablet_to_ls_info_(const share::SCN &consistent_scn,
       const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
       common::ObIArray<share::ObLSID> &ls_ids);
-  int backup_major_compaction_mview_dep_tablet_list_();
+  int backup_major_compaction_mview_dep_tablet_list_(const share::SCN &consistent_scn);
   int get_tablet_list_by_snapshot(
       const share::SCN &consistent_scn, common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);
   int fill_map_with_sys_tablets_(common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);
-  int update_tablet_id_backup_scn_(const share::SCN &backup_scn);
+  int calculate_backup_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &backup_scn);
   int get_extern_tablet_info_(const share::ObLSID &ls_id,
       ObIArray<ObTabletID> &user_tablet_ids, share::SCN &backup_scn);
   int merge_ls_meta_infos_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
@@ -80,6 +80,7 @@ private:
   int do_backup_fuse_tablet_meta_(ObArray<ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int do_backup_data_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt, 
       share::ObBackupLSTaskAttr *& build_index_attr);
+  int full_tablet_checksum_verification_();
   int backup_data_finish_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
                           const ObBackupLSTaskAttr &build_index_attr);
   int build_index_(share::ObBackupLSTaskAttr *build_index_attr, bool &finish_build_index);
@@ -135,7 +136,7 @@ private:
   int write_tenant_backup_set_infos_();
   int write_extern_locality_info_(storage::ObExternTenantLocalityInfoDesc &locality_info);
   int write_extern_tenant_param_info_();
-  int write_backup_set_info_(const share::ObBackupSetTaskAttr &set_task_attr, 
+  int write_backup_set_info_(share::ObBackupSetTaskAttr &set_task_attr,
       storage::ObExternBackupSetInfoDesc &backup_set_info);
   int write_extern_diagnose_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info,
       const storage::ObExternBackupSetInfoDesc &backup_set_info);
@@ -150,6 +151,7 @@ private:
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
   int get_backup_end_scn_(share::SCN &end_scn) const;
   int get_resource_pool_infos_(ObIArray<ObBackupResourcePool> &resource_pool_infos) const;
+  int check_merge_error_();
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

@@ -31,6 +31,7 @@ const static char * ObMergeTypeStr[] = {
     "MDS_MINOR_MERGE",
     "BATCH_EXEC",
     "CONVERT_CO_MAJOR_MERGE",
+    "INC_MAJOR_MERGE",
     "EMPTY_MERGE_TYPE"
 };
 

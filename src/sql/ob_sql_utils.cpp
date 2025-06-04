@@ -798,22 +798,24 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                      ObCtxIds::DEFAULT_CTX_ID)
     .set_properties(lib::USE_TL_PAGE_OPTIONAL)
     .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
+  bool use_tmp_phy_plan_ctx = !(out_ctx != NULL
+                                && out_ctx->get_physical_plan_ctx() != NULL
+                                && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store()));
+  if (!use_tmp_phy_plan_ctx && !out_ctx->get_physical_plan_ctx()->is_param_datum_frame_inited()) {
+    out_ctx->get_physical_plan_ctx()->set_rich_format(session->use_rich_format());
+    if (OB_FAIL(out_ctx->get_physical_plan_ctx()->init_datum_param_store())) {
+      LOG_WARN("init datum param store failed", K(ret));
+    }
+  }
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
     ObPhysicalPlanCtx tmp_phy_plan_ctx(tmp_allocator);
     ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
-    bool use_tmp_phy_plan_ctx = false;
 
     if (out_ctx != NULL
         && out_ctx->get_physical_plan_ctx() != NULL
         && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store())) {
       phy_plan_ctx = out_ctx->get_physical_plan_ctx();
-      if (OB_UNLIKELY(!phy_plan_ctx->is_param_datum_frame_inited())) {
-        phy_plan_ctx->set_rich_format(session->use_rich_format());
-        if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
-          LOG_WARN("init datum param store failed", K(ret));
-        }
-      }
     } else {
       phy_plan_ctx = &tmp_phy_plan_ctx;
       phy_plan_ctx->set_rich_format(session->use_rich_format());
@@ -825,8 +827,6 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
         LOG_WARN("init datum param store failed", K(ret));
-      } else {
-        use_tmp_phy_plan_ctx = true;
       }
     }
     // pass the outside timeout timestamp if available
@@ -974,253 +974,6 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
   return ret;
 }
 
-int ObSQLUtils::make_generated_expression_from_str(const common::ObString &expr_str,
-                                                   const share::schema::ObTableSchema &schema,
-                                                   const share::schema::ObColumnSchemaV2 &gen_col,
-                                                   const common::ObIArray<share::schema::ObColDesc> &col_ids,
-                                                   common::ObIAllocator &allocator,
-                                                   ObTempExpr *&temp_expr)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  const ObTenantSchema *tenant_schema = nullptr;
-  ObSchemaGetterGuard guard;
-  SMART_VAR(sql::ObSQLSessionInfo, default_session) {
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
-      LOG_WARN("fail to get schema guard", K(ret));
-    } else if (OB_FAIL(default_session.init(0, 0, &allocator))) {
-      LOG_WARN("init empty session failed", K(ret));
-    } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
-      LOG_WARN("fail to get tenant_schema", K(ret));
-    } else if (OB_FAIL(default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
-      LOG_WARN("fail to init", K(ret));
-    } else if (OB_FAIL(default_session.load_all_sys_vars(guard))) {
-      LOG_WARN("session load default system variable failed", K(ret));
-    } else if (OB_FAIL(make_generated_expression_from_str(
-                expr_str, default_session, schema, gen_col, col_ids, allocator, temp_expr))) {
-      LOG_WARN("make generated expression failed", K(ret), K(expr_str));
-    }
-  }
-  return ret;
-}
-
-int ObSQLUtils::make_generated_expression_from_str(const common::ObString &expr_str,
-                                                   ObSQLSessionInfo &session,
-                                                   const share::schema::ObTableSchema &schema,
-                                                   const share::schema::ObColumnSchemaV2 &gen_col,
-                                                   const common::ObIArray<share::schema::ObColDesc> &col_ids,
-                                                   common::ObIAllocator &allocator,
-                                                   ObTempExpr *&temp_expr)
-{
-  int ret = OB_SUCCESS;
-  temp_expr = NULL;
-  ObRawExprFactory expr_factory(allocator);
-  ObRawExpr *expr = NULL;
-  RowDesc row_desc;
-  ObArray<ObQualifiedName> columns;
-  ObSEArray<ObRawExpr *, 6> real_exprs;
-  ObSchemaGetterGuard guard;
-  ObSchemaChecker schema_checker;
-  const bool allow_sequence = false;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_checker.init(guard))) {
-    LOG_WARN("failed to init schema checker", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str, expr_factory,
-                                                          session, expr, columns,
-                                                          &schema, allow_sequence, NULL,
-                                                          &schema_checker))) {
-    LOG_WARN("get generated column expr failed", K(ret));
-  } else if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null");
-  } else if (OB_FAIL(row_desc.init())) {
-    LOG_WARN("Failed to init row desc", K(ret));
-  } else {
-    //create row_desc
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
-      ObColumnRefRawExpr *col_ref = NULL;
-      const ObColumnSchemaV2 *col_schema = NULL;
-      if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == col_ids.at(i).col_id_ ||
-          OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == col_ids.at(i).col_id_) {
-        continue; // hidden multi version column, not exist in schema, no need to add.
-      } else if (OB_ISNULL(col_schema = schema.get_column_schema(col_ids.at(i).col_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column schema failed", K_(col_ids.at(i).col_id));
-      } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *col_schema, col_ref))) {
-        LOG_WARN("build column expr failed", K(ret));
-      } else if (OB_FAIL(row_desc.add_column(col_ref))) {
-        LOG_WARN("add column to row desc failed", K(ret));
-      } else { /*do nothing*/ }
-      //替换expr中所有和当前column ref相同的column
-      for (int64_t j = 0; OB_SUCC(ret) && j < columns.count(); ++j) {
-        ObQualifiedName &q_name = columns.at(j);
-        if ((!q_name.database_name_.empty() || !q_name.tbl_name_.empty()) && !q_name.is_pl_udf()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr is not based on single table", K(q_name));
-        } else if (ObCharset::case_insensitive_equal(q_name.col_name_, col_schema->get_column_name_str())) {
-          if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, col_ref))) {
-            LOG_WARN("replace reference column failed", K(ret));
-          }
-        } else { /*do nothing*/ }
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-      ObQualifiedName &q_name = columns.at(i);
-      if (q_name.is_pl_udf()) {
-          OZ (session.set_default_database(q_name.tbl_name_));
-          OZ (ObRawExprUtils::resolve_gen_column_udf_expr(expr, const_cast<ObQualifiedName &>(q_name),
-          expr_factory, session, &schema_checker, columns, real_exprs, NULL), q_name, i, q_name.access_idents_.at(q_name.access_idents_.count() -1).udf_info_);
-      } else {
-        OZ (real_exprs.push_back(q_name.ref_expr_));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(expr_factory, session, schema, gen_col, expr))) {
-        LOG_WARN("add pad expr failed", K(ret));
-      } else if (OB_FAIL(expr->formalize(&session))) {
-        LOG_WARN("formalize expression failed", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      ObExprResType dest_type;
-      dest_type.set_meta(gen_col.get_meta_type());
-      dest_type.set_accuracy(gen_col.get_accuracy());
-      if (ObRawExprUtils::need_column_conv(dest_type, *expr, true)) {
-        if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory, &gen_col, expr, &session))) {
-          LOG_WARN("create column convert expr failed", K(ret));
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      OZ (ObStaticEngineExprCG::gen_expr_with_row_desc(expr, row_desc, allocator,
-                                                       &session, &guard, temp_expr));
-      CK (OB_NOT_NULL(temp_expr));
-    }
-  }
-  return ret;
-}
-
-int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allocator, ObExprCtx &expr_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard guard;
-  const ObTenantSchema *tenant_schema = nullptr;
-  ObSQLSessionInfo *default_session = static_cast<ObSQLSessionInfo*>(allocator.alloc(sizeof(ObSQLSessionInfo)));
-  if (OB_ISNULL(default_session)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else {
-    default_session = new(default_session)ObSQLSessionInfo();
-    if (OB_FAIL(default_session->init(0, 0, &allocator))) {
-      LOG_WARN("init default session failed", K(ret));
-    } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
-      LOG_WARN("fail to get tenant_schema", K(ret));
-    } else if (OB_FAIL(default_session->init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
-      LOG_WARN("fail to init", K(ret));
-    } else if (OB_FAIL(default_session->load_all_sys_vars(guard))) {
-      LOG_WARN("load default system variable to session failed", K(ret));
-    } else {
-      expr_ctx.my_session_ = default_session;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObPhysicalPlanCtx *phy_plan_ctx = static_cast<ObPhysicalPlanCtx*>(allocator.alloc(sizeof(ObPhysicalPlanCtx)));
-    if (OB_ISNULL(phy_plan_ctx)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      phy_plan_ctx = new(phy_plan_ctx)ObPhysicalPlanCtx(allocator);
-      expr_ctx.phy_plan_ctx_ = phy_plan_ctx;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObPhysicalPlan *phy_plan = static_cast<ObPhysicalPlan*>(allocator.alloc(sizeof(ObPhysicalPlan)));
-    if (OB_ISNULL(phy_plan)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      phy_plan = new(phy_plan)ObPhysicalPlan();
-      expr_ctx.phy_plan_ctx_->set_phy_plan(phy_plan);
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObExecContext *exec_ctx = static_cast<ObExecContext*>(allocator.alloc(sizeof(ObExecContext)));
-    if (OB_ISNULL(exec_ctx)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      exec_ctx = new(exec_ctx)ObExecContext(allocator);
-      exec_ctx->set_my_session(default_session);
-      exec_ctx->set_mem_attr(ObMemAttr(tenant_id,
-                                       ObModIds::OB_SQL_EXEC_CONTEXT,
-                                       ObCtxIds::EXECUTE_CTX_ID));
-      expr_ctx.exec_ctx_ = exec_ctx;
-      expr_ctx.exec_ctx_->set_my_session(default_session);
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    expr_ctx.calc_buf_ = &allocator;
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(wrap_column_convert_ctx(expr_ctx, expr_ctx.column_conv_ctx_))) {
-      LOG_WARN("wrap column convert ctx failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-void ObSQLUtils::destruct_default_expr_context(ObExprCtx &expr_ctx)
-{
-  if (NULL != expr_ctx.my_session_) {
-    expr_ctx.my_session_->~ObSQLSessionInfo();
-    expr_ctx.my_session_ = NULL;
-  }
-  if (NULL != expr_ctx.phy_plan_ctx_ && NULL != expr_ctx.phy_plan_ctx_->get_phy_plan()) {
-    expr_ctx.phy_plan_ctx_->get_phy_plan()->~ObPhysicalPlan();
-    expr_ctx.phy_plan_ctx_->set_phy_plan(NULL);
-  }
-  if (NULL != expr_ctx.phy_plan_ctx_) {
-    expr_ctx.phy_plan_ctx_->~ObPhysicalPlanCtx();
-    expr_ctx.phy_plan_ctx_ = NULL;
-  }
-  if (NULL != expr_ctx.exec_ctx_) {
-    expr_ctx.exec_ctx_->~ObExecContext();
-    expr_ctx.exec_ctx_ = NULL;
-  }
-}
-
-int ObSQLUtils::calc_sql_expression(const ObTempExpr *expr,
-                                    const ObIArray<share::schema::ObColDesc> &col_ids,
-                                    const ObNewRow &row,
-                                    ObExecContext &exec_ctx,
-                                    ObObj &result)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Expr to calc is NULL", K(expr), K(ret));
-  } else if (col_ids.count() != row.count_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cells count in row is not equal to col_ids", K(col_ids), K(row.count_), K(ret));
-  } else {
-    if (OB_FAIL(expr->eval(exec_ctx, row, result))) {
-      LOG_WARN("Fail to calc value", K(ret), K(*expr), K(row));
-    }
-  }
-  return ret;
-}
-
 int64_t ObSQLUtils::get_usec()
 {
   struct timeval time_val;
@@ -1301,6 +1054,48 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
         }
       }
     }
+  }
+  return ret;
+}
+
+/* 将用户输入的dbname换成数据库内部存放的大小写 */
+int ObSQLUtils::cvt_db_name_to_org(sql::ObSqlSchemaGuard &sql_schema_guard,
+                                   const ObSQLSessionInfo *session,
+                                   const uint64_t catalog_id,
+                                   common::ObString &db_name,
+                                   ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_internal_catalog_id(catalog_id)) {
+    // compatible with origin internal catalog's cvt_db_name_to_org() logic
+    if (OB_ISNULL(sql_schema_guard.get_schema_guard())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      ret = cvt_db_name_to_org(*sql_schema_guard.get_schema_guard(), session, db_name, allocator);
+    }
+  } else if (is_external_catalog_id(catalog_id)) {
+    const ObDatabaseSchema *database_schema = NULL;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    // for external catalog, we must require allocator to hold db_name
+    if (OB_ISNULL(session)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
+    } else if (OB_FAIL(sql_schema_guard.get_catalog_database_schema(tenant_id, catalog_id, db_name, database_schema))) {
+      LOG_WARN("fail to get catalog database schema", K(ret), K(tenant_id), K(catalog_id), K(db_name));
+    } else if (OB_ISNULL(database_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      db_name = database_schema->get_database_name();
+      if (allocator != NULL) {
+        OZ(ob_write_string(*allocator, db_name, db_name));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected", K(ret));
   }
   return ret;
 }
@@ -1913,26 +1708,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                && root->children_[1]->type_ == T_SELECT
                && NULL == root->children_[1]->children_[PARSE_SELECT_FOR_UPD]) {
       ret = true;
-    } else if (T_SHOW_COLUMNS == type
-               || T_SHOW_TABLES == type
-               || T_SHOW_DATABASES == type
-               || T_SHOW_TABLE_STATUS == type
-               || T_SHOW_SERVER_STATUS == type
-               || T_SHOW_VARIABLES == type
-               || T_SHOW_SCHEMA == type
-               || T_SHOW_CREATE_DATABASE == type
-               || T_SHOW_CREATE_TABLE == type
-               || T_SHOW_CREATE_VIEW == type
-               || T_SHOW_WARNINGS == type
-               || T_SHOW_ERRORS == type
-               || T_SHOW_GRANTS == type
-               || T_SHOW_CHARSET == type
-               || T_SHOW_COLLATION == type
-               || T_SHOW_PARAMETERS == type
-               || T_SHOW_INDEXES == type
-               || T_SHOW_PROCESSLIST == type
-               || T_SHOW_TABLEGROUPS == type
-               || T_SHOW_TRIGGERS == type
+    } else if (IS_SHOW_STMT(type)
                || T_HELP == type
                || T_USE_DATABASE == type
                || T_TRANSACTION == type
@@ -1942,13 +1718,6 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_VARIABLE_SET == type
                || T_SET_NAMES == type //read only not restrict it
                || T_SET_CHARSET == type  //read only not restrict it
-               || T_SHOW_RECYCLEBIN == type
-               || T_SHOW_PROFILE == type
-               || T_SHOW_TENANT == type
-               || T_SHOW_RESTORE_PREVIEW == type
-               || T_SHOW_SEQUENCES == type
-               || T_SHOW_ENGINE == type
-               || T_SHOW_OPEN_TABLES == type
                || T_XA_START == type
                || T_XA_END == type
                || T_XA_PREPARE == type
@@ -1956,7 +1725,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_XA_ROLLBACK == type
                || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
-               || T_SHOW_CREATE_USER == type) {
+               || T_SET_CATALOG == type) {
       ret = true;
     }
   }
@@ -2178,7 +1947,7 @@ void ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
 }
 
 int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
-                                          const ObExprResType &dst_type,
+                                          const ObRawExprResType &dst_type,
                                           const ObSQLSessionInfo *session,
                                           ObCastMode &cast_mode)
 {
@@ -2828,7 +2597,7 @@ int ObSQLUtils::wrap_expr_ctx(
   return ret;
 }
 
-bool ObSQLUtils::is_same_type(const ObExprResType &type1, const ObExprResType &type2)
+bool ObSQLUtils::is_same_type(const ObRawExprResType &type1, const ObRawExprResType &type2)
 {
   return is_same_type(type1.get_obj_meta(), type2.get_obj_meta(), type1.get_accuracy(), type2.get_accuracy());
 }
@@ -3576,8 +3345,9 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
         selected_addr = other_region_addr.at(selected_idx);
         LOG_TRACE("has other region replica", K(selected_addr));
       } else {
-        ret = OB_WORKING_PARTITION_NOT_EXIST;
-        LOG_WARN("No useful replica found", K(ret));
+        ret = OB_NO_READABLE_REPLICA;
+        LOG_WARN("No useful replica found", K(ret), K(local_addr), K(candi_replicas),
+                 K(all_server_arr));
       }
     }
   }
@@ -3621,6 +3391,43 @@ int ObSQLUtils::merge_solidified_var_into_collation(const ObLocalSessionVar &ses
     } else if (NULL != local_var) {
       cs_type = static_cast<ObCollationType>(local_var->val_.get_int());
     }
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_solidified_vars_from_ctx(const ObRawExpr &expr,
+                                             const ObLocalSessionVar *&local_vars)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = NULL;
+  const int64_t session_var_id = expr.get_local_session_var_id();
+  if (OB_INVALID_INDEX_INT64 == session_var_id) {
+    local_vars = NULL;
+  } else if (OB_ISNULL(expr.get_expr_factory()) ||
+             OB_ISNULL(query_ctx = expr.get_expr_factory()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(query_ctx->get_local_session_vars(session_var_id, local_vars))) {
+    LOG_WARN("failed to get local session vars", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
+                                                    const ObRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  const ObLocalSessionVar *local_vars = NULL;
+  const int64_t session_var_id = expr.get_local_session_var_id();
+  if (OB_INVALID_INDEX_INT64 == session_var_id) {
+    // do nothing
+  } else if (OB_FAIL(get_solidified_vars_from_ctx(expr, local_vars))) {
+    LOG_WARN("failed to get local session vars", K(ret));
+  } else if (OB_ISNULL(local_vars)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(merge_solidified_vars_into_type_ctx(type_ctx, *local_vars))) {
+    LOG_WARN("failed to merge_solidified_vars_into_type_ctx", K(ret));
   }
   return ret;
 }
@@ -3680,6 +3487,14 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
       LOG_WARN("get sql mode failed", K(ret));
     } else {
       type_ctx.set_max_allowed_packet(max_allowed_packet);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t compat_version = type_ctx.get_compat_version();
+    if (OB_FAIL(merge_solidified_var_into_compat_version(&session_vars_snapshot, compat_version))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else {
+      type_ctx.set_compat_version(compat_version);
     }
   }
   return ret;
@@ -3786,6 +3601,7 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
 {
   if (NULL != session) {
     ObCollationType coll_type = CS_TYPE_INVALID;
+    uint64_t compat_version = 0;
     int64_t div_precision_increment = OB_INVALID_COUNT;
     int64_t ob_max_allowed_packet;
     // 对于type_ctx的collation_type，我理解这里需要初始化一个默认值，
@@ -3794,6 +3610,9 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     if (lib::is_mysql_mode()) {
       if (OB_SUCCESS == (session->get_collation_connection(coll_type))) {
         type_ctx.set_coll_type(coll_type);
+      }
+      if (OB_SUCCESS == (session->get_compatibility_version(compat_version))) {
+        type_ctx.set_compat_version(compat_version);
       }
     } else if (lib::is_oracle_mode()) {
       type_ctx.set_coll_type(session->get_nls_collation());
@@ -5074,6 +4893,8 @@ int ObSQLUtils::create_encode_sortkey_expr(
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_ENCODE_SORTKEY, encode_expr))) {
     LOG_WARN("failed to create encode_expr", K(ret));
+  } else if (OB_FAIL(encode_expr->init_param_exprs(order_keys.count() * 3))) {
+    LOG_WARN("failed to init param exprs", K(ret));
   } else {
     // Assemble encode sortkey.
     for (int64_t i = start_key; OB_SUCC(ret) && i < order_keys.count(); i++) {
@@ -6537,9 +6358,10 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
   return ret;
 }
 
-bool ObSQLUtils::check_json_expr(ObItemType type)
+bool ObSQLUtils::check_json_expr(const ObRawExpr &expr)
 {
   bool res = false;
+  ObItemType type = expr.get_expr_type();
   switch(type) {
     case T_FUN_SYS_JSON_ARRAY:
     case T_FUN_SYS_JSON_OBJECT:
@@ -6548,6 +6370,10 @@ bool ObSQLUtils::check_json_expr(ObItemType type)
     case T_FUN_SYS_JSON_QUERY:
     case T_FUN_SYS_JSON_MERGE_PATCH: {
       res = true;
+      break;
+    }
+    case T_FUN_SYS_TREAT: {
+      res = ObJsonType == expr.get_extra_calc_meta().get_type();
       break;
     }
     default : {

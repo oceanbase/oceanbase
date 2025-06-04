@@ -46,7 +46,7 @@ bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(const void *table_schem
     bret = table->is_rowkey_doc_id() ||
            table->is_vec_rowkey_vid_type() ||
            table->is_vec_ivfflat_rowkey_cid_index() ||
-          // TODO(liyao): use the expression calculation currently.
+          // TODO(mengyi): use the expression calculation currently.
           //              use the merge_iter after the split post build step.
           //  table->is_vec_ivfflat_centroid_index() ||
            table->is_vec_ivfflat_cid_vector_index() ||
@@ -131,6 +131,7 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(
     const ObDomainIDType type,
     const void *col_expr,
     const ObIndexType index_type,
+    sql::ObSqlSchemaGuard &schema_guard,
     bool &res)
 {
   int ret = OB_SUCCESS;
@@ -149,8 +150,32 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(
           } else {
             for (int64_t i = 0; OB_SUCC(ret) && !res && i < simple_index_infos.count(); ++i) {
               const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+              const uint64_t index_tid = simple_index_infos.at(i).table_id_;
               if (schema::is_fts_or_multivalue_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
-                res = true;
+                // has doc_id column on table with valid fulltext / multivalue index
+                const share::schema::ObTableSchema *index_schema = nullptr;
+                const share::schema::ObTableSchema *rowkey_doc_schema = nullptr;
+                uint64_t rowkey_doc_tid = OB_INVALID_ID;
+                if (OB_FAIL(schema_guard.get_table_schema(index_tid, index_schema))) {
+                  LOG_WARN("failed to get index table schema", K(ret), K(index_tid));
+                } else if (OB_ISNULL(index_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected nullptr to index schema", K(ret));
+                } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
+                  // skip invalid index
+                } else if (OB_FAIL(table_schema.get_rowkey_doc_tid(rowkey_doc_tid))) {
+                  LOG_WARN("failed to get rowkey doc table id", K(ret));
+                } else if (OB_FAIL(schema_guard.get_table_schema(rowkey_doc_tid, rowkey_doc_schema))) {
+                  LOG_WARN("failed to get rowkey doc table schema", K(ret), K(rowkey_doc_tid));
+                } else if (OB_ISNULL(rowkey_doc_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected nullptr to rowkey doc schema", K(ret));
+                } else if (OB_UNLIKELY(!rowkey_doc_schema->can_read_index() || !rowkey_doc_schema->is_index_visible())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected rowkey doc table unreadable", K(ret), KPC(rowkey_doc_schema));
+                } else {
+                  res = true;
+                }
               }
             }
           }
@@ -195,7 +220,12 @@ int ObDomainIdUtils::get_domain_tid_table_by_type(ObDomainIDType type,
     switch (type) {
       case ObDomainIDType::DOC_ID: {
         if (OB_FAIL(data_table->get_rowkey_doc_tid(domain_id_table_id))) {
-          LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+            LOG_WARN("fail to get rowkey doc table id, retry", K(ret), KPC(data_table));
+            ret = OB_SCHEMA_EAGAIN;
+          } else {
+            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          }
         }
         break;
       }
@@ -231,7 +261,12 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
     switch (type) {
       case ObDomainIDType::DOC_ID: {
         if (OB_FAIL(data_table->get_rowkey_doc_tid(tid))) {
-          LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+            LOG_WARN("fail to get rowkey doc table id, retry", K(ret), KPC(data_table));
+            ret = OB_SCHEMA_EAGAIN;
+          } else {
+            LOG_WARN("fail to get rowkey doc table id", K(ret), KPC(data_table));
+          }
         }
         break;
       }
@@ -242,21 +277,21 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
         break;
       }
       case ObDomainIDType::IVFFLAT_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }
         break;
       }
       case ObDomainIDType::IVFSQ_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }
         break;
       }
       case ObDomainIDType::IVFPQ_CID: {
-        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+        if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid_check_valid(
             sql_schema_guard, *data_table, INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL, domain_col_id, tid))) {
           LOG_WARN("failed to get rowkey cid table", K(ret), KPC(data_table));
         }
@@ -693,6 +728,68 @@ int ObDomainIdUtils::get_pq_cids_col_id(
   if (OB_SUCC(ret) && pq_cids_col_id == OB_INVALID_ID) {
     ret = OB_NOT_EXIST_COLUMN_ID;
     LOG_WARN("pq cids col id not exist", K(ret));
+  }
+
+  return ret;
+}
+
+int ObDomainIdUtils::resort_domain_info_by_base_cols(
+    sql::ObSqlSchemaGuard &sql_schema_guard,
+    const ObTableSchema &table_schema,
+    const ObIArray<uint64_t> &base_col_ids,
+    ObIArray<int64_t> &domain_types,
+    ObIArray<uint64_t> &domain_tids) {
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 16> tmp_domain_types;
+  ObSEArray<uint64_t, 16> tmp_domain_tids;
+  if (OB_FAIL(tmp_domain_types.prepare_allocate(base_col_ids.count()))) {
+    LOG_WARN("fail to reserve space", K(ret), K(base_col_ids.count()));
+  } else if (OB_FAIL(tmp_domain_tids.prepare_allocate(base_col_ids.count()))) {
+    LOG_WARN("fail to reserve space", K(ret), K(base_col_ids.count()));
+  } else {
+    for (int i = 0; i < base_col_ids.count(); ++i) {
+      tmp_domain_types[i] = -1;
+      tmp_domain_tids[i] = 0;
+    }
+  }
+
+  DomainIdxs col_ids;
+  int64_t idx = OB_INVALID_INDEX;
+  int64_t sort_cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < domain_types.count(); i++) {
+    col_ids.reuse();
+    ObDomainIdUtils::ObDomainIDType type = static_cast<ObDomainIdUtils::ObDomainIDType>(domain_types.at(i));
+    if (OB_FAIL(ObDomainIdUtils::get_domain_id_col_by_tid(type, &table_schema, &sql_schema_guard, domain_tids.at(i), col_ids))) {
+      LOG_WARN("fail to get domain id col id", K(ret), K(type), K(table_schema));
+    } else if (is_contain(col_ids, OB_INVALID_ID) || col_ids.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid domain id col id", K(ret), K(type), K(table_schema));
+    } else if (has_exist_in_array(base_col_ids, col_ids.at(0), &idx)) {
+      tmp_domain_types[idx] = domain_types.at(i);
+      tmp_domain_tids[idx] = domain_tids.at(i);
+      ++sort_cnt;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (sort_cnt != domain_types.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of domain_types should be equal to sort_cnt", K(ret), K(sort_cnt), K(domain_types.count()));
+    }
+
+    int real_pos = 0;
+    for (int i = 0; OB_SUCC(ret) && i < base_col_ids.count(); ++i) {
+      if (tmp_domain_types[i] != -1) {
+        if (real_pos >= domain_types.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pos of domain_types", K(ret), K(i), K(real_pos), K(domain_types.count()));
+        } else {
+          domain_types.at(real_pos) = tmp_domain_types[i];
+          domain_tids.at(real_pos) = tmp_domain_tids[i];
+          ++real_pos;
+        }
+      }
+    }
   }
 
   return ret;

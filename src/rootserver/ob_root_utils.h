@@ -549,6 +549,14 @@ private:
       int64_t pre_paxos_num,
       int64_t cur_paxos_num,
       const share::ObArbitrationServiceStatus &arb_service_status);
+  static int check_zone_same_region(
+      const common::ObZone &z1,
+      const common::ObZone &z2,
+      bool &same_region);
+  static int check_replace_locality_valid(
+      const ObIArray<share::ObZoneReplicaNumSet> &pre_zone_locality,
+      const ObIArray<share::ObZoneReplicaNumSet> &cur_zone_locality,
+      bool &single_replace_valid);
   static int add_multi_zone_locality_task(
       common::ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
       const share::ObZoneReplicaAttrSet &multi_zone_locality,
@@ -574,6 +582,7 @@ public:
   ObRootUtils() {}
   virtual ~ObRootUtils() {}
 
+  static bool if_deployment_mode_match();
   static int get_rs_default_timeout_ctx(ObTimeoutCtx &ctx);
   static int get_invalid_server_list(
     const ObIArray<share::ObServerInfoInTable> &servers_info,

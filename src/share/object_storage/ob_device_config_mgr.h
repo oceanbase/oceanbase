@@ -53,6 +53,7 @@ public:
   // check if config_map_ is empty in current used_for_type
   bool config_map_is_empty(const ObStorageUsedType::TYPE used_for) const;
   int set_storage_dest(const ObStorageUsedType::TYPE used_for, const ObBackupDest &storage_dest);
+  bool is_shared_storage_dump_manifest() { return !data_storage_dest_.is_valid() && !clog_storage_dest_.is_valid(); }
 
 private:
   enum class DeviceConfigModifyType

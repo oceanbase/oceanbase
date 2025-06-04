@@ -842,7 +842,7 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
   }
   while (busy_wait) {
     if (tx.flags_.BLOCK_) {
-      ob_usleep(500);
+      ob_throttle_usleep(500, ret, tx.get_tx_id().get_id());
     } else {
       ObSpinLockGuard guard(tx.lock_);
       tx.flags_.INTERRUPTED_ = false;
@@ -1143,7 +1143,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
     TRANS_LOG(WARN, "use ls snapshot access another ls", K(ret), K(snapshot), K(ls_id));
   } else if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special, snapshot.read_elr(), ctx_exist))) {
     TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
+  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch, write_flag))) {
     TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
     // when transfer move_tx phase we put src_ls tx_ctx into dest_ls ctx_mgr when transfer abort we need remove it
     // when access tx_ctx first get ctx from mgr, second increase pending_write
@@ -1154,13 +1154,15 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       ob_usleep(10 * 1000);
       if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special, snapshot.read_elr(), ctx_exist))) {
         TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
+      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch, write_flag))) {
         TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(access_started = true)) {
+  } else if (OB_NOT_NULL(tx_ctx) && OB_FAIL(tx_ctx->check_pending_log_overflow(store_ctx.timeout_))) {
+    TRANS_LOG(WARN, "too many pending log in the tx_ctx", K(ret), K(tx), K(store_ctx));
   } else if (OB_FAIL(store_ctx.mvcc_acc_ctx_.init_write(*tx_ctx,
                                                         *tx_ctx->get_memtable_ctx(),
                                                         tx.tx_id_,
@@ -1307,6 +1309,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
                     tx.cluster_id_,
                     tx.cluster_version_,
                     tx.sess_id_, /*session_id*/
+                    tx.client_sid_,
                     tx.assoc_sess_id_, /*associated_session_id*/
                     tx.addr_,
                     tx.get_expire_ts(),
@@ -1383,6 +1386,9 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
       p.epoch_      = tx_ctx->epoch_;
       p.first_scn_  = tx_ctx->first_scn_;
       p.last_scn_   = tx_ctx->last_scn_;
+      if (dup_table_loop_worker_.is_useful_dup_ls(p.id_)) {
+        p.flag_.set_dup_ls();
+      }
       if (OB_FAIL(tx->update_part(p))) {
         TRANS_LOG(WARN, "append part fail", K(ret), K(p), KPC(tx_ctx));
       }
@@ -1497,7 +1503,7 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
   } else if (!check_ls_readable_(ls, snapshot.core_.version_, src)) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
-    } else if (leader || is_sync_replica_(ls_id)) {
+    } else if (leader || is_sync_replica_(ls_id) || tablet_id.is_ls_inner_tablet()) {
       ret = OB_SUCCESS;
     } else if (ObTxReadSnapshot::SRC::SPECIAL == src ||
                ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src) {
@@ -2205,7 +2211,7 @@ int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
   return ret;
 }
 
-// need_check_leader : just for unittest case
+// need_check_leader : for unittest, set to false
 int ObTransService::handle_tx_batch_req(int msg_type,
                                         const char *buf,
                                         int32_t size,
@@ -2230,7 +2236,6 @@ int ObTransService::handle_tx_batch_req(int msg_type,
       if (OB_TRANS_CTX_NOT_EXIST == ret ||                              \
           OB_PARTITION_NOT_EXIST == ret ||                              \
           OB_LS_NOT_EXIST == ret) {                                     \
-        /* need_check_leader : just for unittest case*/                 \
         (void)handle_orphan_2pc_msg_(msg, need_check_leader, false);    \
       }                                                                 \
     } else if (OB_FAIL(ctx->get_ls_tx_ctx_mgr()                         \
@@ -2502,7 +2507,7 @@ int ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_c
   bool leader = false;
 
   if (need_check_leader && OB_FAIL(check_ls_status_(msg.get_receiver(), leader))) {
-    if (OB_LS_NOT_EXIST == ret) {
+    if (OB_PARTITION_NOT_EXIST == ret || OB_LS_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       TRANS_LOG(INFO, "check ls status with ls not exist", K(ret), K(msg), K(need_check_leader));
     } else {
@@ -3068,7 +3073,7 @@ int ObTransService::handle_sub_prepare_request(const ObTxSubPrepareMsg &msg,
     CONVERT_PARTS_TO_COMMIT_PARTS(msg.parts_, commit_parts);
     if (FAILEDx(sub_prepare_local_ls_(msg.tx_id_,
                                       msg.receiver_,
-                                      msg.commit_parts_,
+                                      commit_parts,
                                       msg.expire_ts_,
                                       msg.app_trace_info_,
                                       msg.request_id_,

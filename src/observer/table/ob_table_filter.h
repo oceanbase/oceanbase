@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/string/ob_string.h"
 #include "ob_table_aggregation.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase {
 
@@ -130,8 +131,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTableFilterParser);
 };
 
+class ObTableQueryIResultIterator
+{
+public:
+  ObTableQueryIResultIterator() = default;
+  virtual ~ObTableQueryIResultIterator() = default;
+  virtual int get_next_result(table::ObTableQueryIterableResult *&one_result) = 0;
+  DECLARE_PURE_VIRTUAL_TO_STRING;
+};
 
-class ObTableQueryResultIterator
+
+class ObTableQueryResultIterator : public ObTableQueryIResultIterator
 {
 public:
   ObTableQueryResultIterator(const ObTableQuery *query = nullptr)

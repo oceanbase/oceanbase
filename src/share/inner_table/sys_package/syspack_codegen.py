@@ -197,6 +197,7 @@ def embed_syspack(syspack_config):
 syspack_config = [
     # Oracle
     SysPackConfig(SysPackGroup.ORACLE, "dbms_standard", "dbms_standard.sql", None, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "standard", "standard.sql", None, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_output", "dbms_output.sql", "dbms_output_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
@@ -259,6 +260,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_ddl", "dbms_ddl.sql", "dbms_ddl_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "utl_tcp", "utl_tcp.sql", "utl_tcp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "utl_smtp", "utl_smtp.sql", "utl_smtp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_partition", "dbms_partition.sql", "dbms_partition_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),
@@ -279,6 +281,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "external_table_alert_log", "external_table_alert_log.sql", None),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

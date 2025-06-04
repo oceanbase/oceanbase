@@ -103,6 +103,8 @@ typedef hdfsFile (*HdfsOpenFileFunc)(hdfsFS, const char*, int, int, short, tSize
 typedef int (*HdfsFileIsOpenForReadFunc)(hdfsFile);
 typedef int (*HdfsFileIsOpenForWriteFunc)(hdfsFile);
 typedef tSize (*HdfsPreadFunc)(hdfsFS, hdfsFile, tOffset, void*, tSize);
+typedef tSize (*HdfsWriteFunc)(hdfsFS, hdfsFile, void*, tSize);
+typedef tSize (*HdfsFlushFunc)(hdfsFS, hdfsFile);
 typedef struct hdfsBuilder* (*HdfsNewBuilderFunc)(void);
 typedef void (*HdfsBuilderSetNameNodeFunc)(struct hdfsBuilder *, const char *);
 typedef void (*HdfsBuilderSetUserNameFunc)(struct hdfsBuilder *, const char *);
@@ -135,6 +137,8 @@ extern "C" HdfsOpenFileFunc obHdfsOpenFile;
 extern "C" HdfsFileIsOpenForReadFunc obHdfsFileIsOpenForRead;
 extern "C" HdfsFileIsOpenForWriteFunc obHdfsFileIsOpenForWrite;
 extern "C" HdfsPreadFunc obHdfsPread;
+extern "C" HdfsWriteFunc obHdfsWrite;
+extern "C" HdfsFlushFunc obHdfsFlush;
 extern "C" HdfsNewBuilderFunc obHdfsNewBuilder;
 extern "C" HdfsBuilderSetNameNodeFunc obHdfsBuilderSetNameNode;
 extern "C" HdfsBuilderSetUserNameFunc obHdfsBuilderSetUserName;
@@ -283,6 +287,12 @@ private:
     }
   }
 
+  // Only simplify checking jni exception and clear it to avoid jni excution failed.
+  int check_jni_exception_(JNIEnv *env);
+
+  // Check loaded jars are valid
+  bool is_valid_loaded_jars_();
+
   int init_classes();
   int do_init_();
   int jni_find_class(const char *clazz, jclass *gen_clazz);
@@ -299,6 +309,9 @@ private:
   int open_hdfs_lib(ObHdfsEnvContext &java_env_ctx);
 
   int load_lib(ObJavaEnvContext &java_env_ctx, ObHdfsEnvContext &hdfs_env_ctx);
+
+private:
+  const char* JAR_VERSION_CLASS = "com/oceanbase/utils/version/JarVersion";
 
 private:
   bool is_inited_;

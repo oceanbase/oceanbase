@@ -341,9 +341,15 @@ int ObBackupCheckFile::compare_check_file_name_(
           LOG_WARN("failed to set check file path", K(ret), K(path), K_(tmp_entry.name));
         } else {
           common::ObString uri(del_file_path);
-          if(OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
-            LOG_WARN("failed to delete check file", K(ret), K_(tenant_id));
+          if (OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
+            if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && backup_dest.is_enable_worm()) {
+              //if object locked by worm, don't need to return error
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to delete check file", K(ret), K_(tenant_id));
+            }
           }
+
         }
       }
     }
@@ -464,8 +470,13 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
           LOG_WARN("failed to set delete file path", K(ret), K(path), K_(tmp_entry.name));
         } else {
           common::ObString uri(del_file_path);
-          if(OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
-            LOG_WARN("failed to delete permission check file", K(ret), K_(tenant_id));
+          if (OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
+            if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && backup_dest.is_enable_worm()) {
+              //if object locked by worm, don't need to return error
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to delete permission check file", K(ret), K_(tenant_id));
+            }
           }
         }
       }
@@ -541,7 +552,8 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
     LOG_WARN("fail to set data", K(ret), K(path.get_ptr()));
   } else if (OB_FAIL(device_handle->pwrite(fd, 0, strlen(data), data, write_size))) {
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
-  } else if (OB_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
+  } else if (!backup_dest.is_enable_worm()
+                && OB_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     LOG_WARN("failed to del file", K(ret), K(path));
   }
 
@@ -580,7 +592,8 @@ int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &ba
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
   } else if (OB_FAIL(device_handle->complete(fd))) {
     STORAGE_LOG(WARN, "fail to complete multipart upload", K(ret), K(device_handle), K(fd));
-  } else if (OB_FAIL(util.del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
+  } else if (!backup_dest.is_enable_worm()
+                && OB_FAIL(util.del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     LOG_WARN("failed to del file", K(ret));
   }
 
@@ -661,7 +674,8 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     }
     LOG_WARN("failed to read single file", K(ret));
   }
-  if (write_ok && (OB_SUCCESS != (tmp_ret = util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info())))) {
+  if (write_ok && !backup_dest.is_enable_worm()
+          && OB_TMP_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     if (is_permission_error_(tmp_ret)) {
       tmp_ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
@@ -897,7 +911,7 @@ int ObBackupStorageInfoOperator::update_backup_authorization(
     LOG_WARN("failed to splice insert update sql", K(ret), K(backup_dest));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
-  } else if (1 != affected_rows) {
+  } else if (0 != affected_rows && 1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, invalid affected rows", K(ret), K(sql), K(tenant_id), K(affected_rows));
   } else {

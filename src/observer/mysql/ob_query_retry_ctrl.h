@@ -269,6 +269,7 @@ public:
   static void start_rowlock_retry_wait_event(sql::ObSQLSessionInfo &session);
   static void start_px_worker_insufficient_retry_wait_event(sql::ObSQLSessionInfo &session, const sql::ObSqlCtx& sql_ctx);
   static void start_gts_not_ready_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
+  static void start_log_cb_not_ready_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
   static void start_replica_not_readable_retry_wait_event(sql::ObSQLSessionInfo &session);
   static void start_other_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
 public:

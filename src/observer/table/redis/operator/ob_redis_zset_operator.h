@@ -44,7 +44,7 @@ class ZSetCommandOperator : public SetCommandOperator
 public:
   explicit ZSetCommandOperator(ObRedisCtx &redis_ctx) : SetCommandOperator(redis_ctx)
   {
-    model_ = ObRedisModel::ZSET;
+    model_ = ObRedisDataModel::ZSET;
     is_zset_ = true;
   }
   virtual ~ZSetCommandOperator() = default;

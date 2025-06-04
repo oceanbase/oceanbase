@@ -96,6 +96,8 @@ private:
                                   const ObString &svr_ip,
                                   int64_t svr_port,
                                   uint64_t plan_id,
+                                  const ObString &sql_handle,
+                                  uint64_t plan_hash,
                                   ObIArray<ObSqlPlanItem*> &plan_infos);
 
   static int get_baseline_plan_info(sql::ObExecContext &ctx,
@@ -132,7 +134,8 @@ private:
 
   static int inner_get_plan_info(sql::ObExecContext &ctx,
                                 const ObSqlString& sql,
-                                ObIArray<ObSqlPlanItem*> &plan_infos);
+                                ObIArray<ObSqlPlanItem*> &plan_infos,
+                                const bool is_from_wr=false);
 
   static int inner_get_plan_info_use_current_session(sql::ObExecContext &ctx,
                                                     const ObSqlString& sql,
@@ -140,7 +143,8 @@ private:
 
   static int read_plan_info_from_result(sql::ObExecContext &ctx,
                                         sqlclient::ObMySQLResult& mysql_result,
-                                        ObSqlPlanItem &plan_info);
+                                        ObSqlPlanItem &plan_info,
+                                        const bool is_from_wr=false);
 
   enum WAIT_COLUMN
   {

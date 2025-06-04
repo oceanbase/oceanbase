@@ -36,7 +36,6 @@ protected:
   virtual table::ObTableEntityType get_entity_type() override { return table::ObTableEntityType::ET_DYNAMIC; }
   virtual bool is_kv_processor() override { return false; }
 private:
-  common::ObArenaAllocator allocator_;
   ObTableDirectLoadExecContext exec_ctx_;
 };
 

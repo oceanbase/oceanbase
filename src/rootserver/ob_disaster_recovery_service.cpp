@@ -105,28 +105,21 @@ int ObDRService::do_dr_service_work_()
     int64_t idle_time_us = is_dr_worker_thread_(thread_idx) ? 10L * 1000000L : 1L * 1000000L;
     int64_t service_epoch = 0;
     bool need_clean_task = false;
-    ObArray<uint64_t> tenant_id_array;
     ObCurTraceId::init(GCONF.self_addr_);
     if (OB_FAIL(check_and_update_service_epoch_(service_epoch))) {
       LOG_WARN("fail to check and update service epoch", KR(ret));
     } else if (OB_FAIL(check_need_clean_task_(last_check_ts, need_clean_task))) {
       LOG_WARN("fail to check need clean task", KR(ret), K(last_check_ts));
-    } else if (OB_FAIL(get_tenant_ids_(tenant_id_array))) {
-      LOG_WARN("fail to get tenant id array", KR(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {
-        const uint64_t tenant_id = tenant_id_array.at(i);
-        int64_t service_epoch_to_check = 0;
-        if (OB_TMP_FAIL(get_service_epoch_to_check_(tenant_id, service_epoch, service_epoch_to_check))) {
-          LOG_WARN("failed to get service epoch", KR(ret), KR(tmp_ret), K(tenant_id), K(service_epoch));
-        } else if (is_dr_worker_thread_(thread_idx)) {
-          if (OB_TMP_FAIL(try_tenant_disaster_recovery_(tenant_id, service_epoch_to_check))) {
-            LOG_WARN("failed to process worker thread", KR(ret), KR(tmp_ret), K(tenant_id), K(service_epoch_to_check));
-          }
-        } else if (OB_TMP_FAIL(manage_dr_tasks_(tenant_id, need_clean_task, service_epoch_to_check))) {
-          LOG_WARN("failed to process mgr thread", KR(ret), KR(tmp_ret), K(tenant_id), K(need_clean_task), K(service_epoch_to_check));
-        }
-      } // end for tenant
+      if (OB_TMP_FAIL(try_single_replica_dr_task_(service_epoch))) {
+        LOG_WARN("fail to check single replica dr task", KR(ret), K(service_epoch));
+      }
+      if (OB_TMP_FAIL(try_common_dr_task_(service_epoch))) {
+        LOG_WARN("fail to check common dr task", KR(ret), K(service_epoch));
+      }
+      if (OB_TMP_FAIL(schedule_and_manage_tasks_(need_clean_task, service_epoch))) {
+        LOG_WARN("fail to schedule dr task", KR(ret), K(need_clean_task), K(service_epoch));
+      }
     }
     if (FAILEDx(adjust_idle_time_(idle_time_us))) {
        LOG_WARN("failed to adjust idle time", KR(ret), K(idle_time_us));
@@ -160,14 +153,88 @@ int ObDRService::adjust_idle_time_(
   return ret;
 }
 
+int ObDRService::try_single_replica_dr_task_(
+    const int64_t service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<uint64_t> tenant_id_array;
+  if (is_dr_worker_thread_(get_thread_idx())) {
+    if (!ObRootUtils::if_deployment_mode_match()) {
+      LOG_TRACE("can not do single replace");
+    } else if (OB_FAIL(get_tenant_for_single_replica_task_(tenant_id_array))) {
+      LOG_WARN("fail to get tenant id array", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {
+        const uint64_t tenant_id = tenant_id_array.at(i);
+        if (OB_TMP_FAIL(try_tenant_disaster_recovery_(tenant_id, service_epoch, true/*handle_single_replica_task*/))) {
+          LOG_WARN("failed to process worker thread", KR(ret), KR(tmp_ret), K(tenant_id), K(service_epoch));
+        }
+      } // end for tenant
+    } // end else
+  }
+  return ret;
+}
+
+int ObDRService::try_common_dr_task_(
+    const int64_t service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<uint64_t> tenant_id_array;
+  if (is_dr_worker_thread_(get_thread_idx())) {
+    if (OB_FAIL(get_tenant_for_common_task_(tenant_id_array))) {
+      LOG_WARN("fail to get tenant id array", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {
+        const uint64_t tenant_id = tenant_id_array.at(i);
+        if (OB_TMP_FAIL(try_tenant_disaster_recovery_(tenant_id, service_epoch, false/*handle_single_replica_task*/))) {
+          LOG_WARN("failed to process worker thread", KR(ret), KR(tmp_ret), K(tenant_id), K(service_epoch));
+        }
+      } // end for tenant
+    } // end else
+  }
+  return ret;
+}
+
+int ObDRService::schedule_and_manage_tasks_(
+    const bool need_clean_task,
+    const int64_t service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<uint64_t> table_tenant_ids;
+  if (is_dr_manager_thread_(get_thread_idx())) {
+    ObDRTaskMgr dr_mgr(service_epoch, tenant_id_);
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    if (OB_FAIL(get_tenant_for_schedule_task_(table_tenant_ids))) {
+      LOG_WARN("fail to get tenant id array", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_tenant_ids.count(); ++i) {
+        const uint64_t table_tenant_id = table_tenant_ids.at(i);
+        if (OB_TMP_FAIL(dr_mgr.try_pop_and_execute_task(table_tenant_id))) {
+          LOG_WARN("failed to execute task", KR(ret), KR(tmp_ret));
+        }
+        if (need_clean_task && OB_TMP_FAIL(dr_mgr.try_clean_and_cancel_task(table_tenant_id))) {
+          LOG_WARN("failed to clean task", KR(ret), KR(tmp_ret));
+        }
+      } // end for tenant
+    } // end else
+    const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
+    LOG_INFO("try schedule dr tasks over", KR(ret), K(cost), K_(tenant_id), K(need_clean_task), K(service_epoch));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_WORKER_START);
 int ObDRService::try_tenant_disaster_recovery_(
     const uint64_t tenant_id,
-    const int64_t service_epoch_to_check)
+    const int64_t service_epoch,
+    const bool handle_single_replica_task)
 {
   int ret = OB_SUCCESS;
   int64_t acc_dr_task = 0;
-  ObDRWorker dr_worker;
+  ObDRWorker dr_worker(service_epoch, tenant_id_);
   const int64_t start_time = ObTimeUtility::fast_current_time();
   if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_WORKER_START)) {
     // for test, return success, skip try disaster recovery
@@ -177,8 +244,12 @@ int ObDRService::try_tenant_disaster_recovery_(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (FALSE_IT(dr_worker.set_service_epoch(service_epoch_to_check))) {
-  } else if (OB_FAIL(dr_worker.try_tenant_disaster_recovery(
+  } else if (handle_single_replica_task && OB_FAIL(dr_worker.try_tenant_single_replica_task(
+                                  tenant_id,
+                                  false/*only_for_display*/,
+                                  acc_dr_task))) {
+  LOG_WARN("try tenant disaster recovery failed", KR(ret), K(tenant_id));
+  } else if (!handle_single_replica_task && OB_FAIL(dr_worker.try_tenant_common_dr_task(
                                   tenant_id,
                                   false/*only_for_display*/,
                                   acc_dr_task))) {
@@ -187,35 +258,7 @@ int ObDRService::try_tenant_disaster_recovery_(
     LOG_WARN("fail to wake up", KR(ret), K(tenant_id), K(acc_dr_task));
   }
   const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
-  LOG_INFO("try check dr tasks over", KR(ret), K(cost), K(tenant_id), K(acc_dr_task));
-  return ret;
-}
-
-int ObDRService::manage_dr_tasks_(
-    const uint64_t tenant_id,
-    const bool need_clean_task,
-    const int64_t service_epoch_to_check)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObDRTaskMgr dr_mgr;
-  const int64_t start_time = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (FALSE_IT(dr_mgr.set_service_epoch(service_epoch_to_check))) {
-  } else {
-    if (OB_TMP_FAIL(dr_mgr.try_pop_and_execute_task(tenant_id))) {
-      LOG_WARN("failed to execute task", KR(ret), KR(tmp_ret), K(tenant_id));
-    }
-    if (need_clean_task && OB_TMP_FAIL(dr_mgr.try_clean_and_cancel_task(tenant_id))) {
-      LOG_WARN("failed to clean task", KR(ret), KR(tmp_ret), K(tenant_id));
-    }
-  }
-  const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
-  LOG_INFO("try manage dr tasks over", KR(ret), K(cost), K(tenant_id), K(need_clean_task), K(service_epoch_to_check));
+  LOG_INFO("try check dr tasks over", KR(ret), K(cost), K(tenant_id), K(service_epoch), K(handle_single_replica_task), K(acc_dr_task));
   return ret;
 }
 
@@ -235,37 +278,51 @@ int ObDRService::check_need_clean_task_(
   return ret;
 }
 
-int ObDRService::get_service_epoch_to_check_(
-    const uint64_t execute_task_tenant,
-    const int64_t epoch_of_service_thread,
-    int64_t &service_epoch_to_check)
+int ObDRService::get_tenant_for_schedule_task_(
+    ObIArray<uint64_t> &table_tenant_ids)
 {
-  // 1. When the sys tenant or ordinary tenant's dr threads processes its own dr tasks,
-  //    verify the service_epoch recorded in the memory.
-  // 2. When the sys tenant's dr threads processes dr tasks of other tenants,
-  //    verify whether the service_epoch value is zero.
-  //    (when ordinary tenant's dr threads start to work, it will push this value to non-zero.)
   int ret = OB_SUCCESS;
-  const uint64_t provide_service_tenant = tenant_id_;
-  if (!is_valid_tenant_id(execute_task_tenant)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(execute_task_tenant));
-  } else if (is_sys_tenant(provide_service_tenant)) {
-    if (is_sys_tenant(execute_task_tenant)) {
-      service_epoch_to_check = epoch_of_service_thread;
-    } else {
-      service_epoch_to_check = 0;
+  table_tenant_ids.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (is_sys_tenant(tenant_id_)) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, tenant_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+      if (OB_FAIL(DisasterRecoveryUtils::get_all_meta_tenant_ids(table_tenant_ids))) {
+        LOG_WARN("fail to get tenant id array", KR(ret));
+      }
     }
-  } else if (is_meta_tenant(provide_service_tenant)) {
-    service_epoch_to_check = epoch_of_service_thread;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected tenant id", KR(ret), K_(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_tenant_ids.push_back(tenant_id_))) {
+    LOG_WARN("tenant_ids push back failed", KR(ret), K_(tenant_id));
   }
   return ret;
 }
 
-int ObDRService::get_tenant_ids_(
+int ObDRService::get_tenant_for_single_replica_task_(
+    ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  tenant_ids.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (is_sys_tenant(tenant_id_)) {
+    if (OB_FAIL(DisasterRecoveryUtils::get_all_meta_tenant_ids(tenant_ids))) {
+      LOG_WARN("fail to get tenant id array", KR(ret));
+    }
+  } else if (is_meta_tenant(tenant_id_)) {
+    if (OB_FAIL(tenant_ids.push_back(gen_user_tenant_id(tenant_id_)))) {
+      LOG_WARN("tenant_ids push back failed", KR(ret), K_(tenant_id));
+    }
+  }
+  LOG_TRACE("get tenant id over", KR(ret), K_(tenant_id), K(tenant_ids));
+  return ret;
+}
+
+int ObDRService::get_tenant_for_common_task_(
     ObIArray<uint64_t> &tenant_ids)
 {
   // 1. Before the sys tenant data_version is pushed up to target version,
@@ -275,7 +332,12 @@ int ObDRService::get_tenant_ids_(
   //    the sys tenant no longer processes tasks of other tenants but only processes its own tasks.
   int ret = OB_SUCCESS;
   tenant_ids.reset();
-  if (is_sys_tenant(tenant_id_)) {
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", KR(ret), KP(GCTX.schema_service_));
+  } else if (is_sys_tenant(tenant_id_)) {
     uint64_t tenant_data_version = 0;
     if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, tenant_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
@@ -283,9 +345,6 @@ int ObDRService::get_tenant_ids_(
       if (OB_FAIL(tenant_ids.push_back(OB_SYS_TENANT_ID))) {
         LOG_WARN("fail to push back tenant ids", KR(ret));
       }
-    } else if (OB_ISNULL(GCTX.schema_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", KR(ret), KP(GCTX.schema_service_));
     } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(GCTX.schema_service_, tenant_ids))) {
       LOG_WARN("fail to get tenant id array", KR(ret));
     }
@@ -295,9 +354,6 @@ int ObDRService::get_tenant_ids_(
     } else if (OB_FAIL(tenant_ids.push_back(gen_user_tenant_id(tenant_id_)))) {
       LOG_WARN("tenant_ids push back failed", KR(ret), K_(tenant_id));
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected tenant_id", KR(ret), K_(tenant_id));
   }
   LOG_TRACE("get tenant id over", KR(ret), K_(tenant_id), K(tenant_ids));
   return ret;

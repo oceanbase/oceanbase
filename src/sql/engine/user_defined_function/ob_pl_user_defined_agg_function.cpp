@@ -269,8 +269,7 @@ int ObPlAggUdfFunction::process_init_pl_agg_udf(ObObjParam &pl_obj)
       //for pl agg udf, type member ODCIAggregateInitialize() must only have one param, and the
       //param is self. So, we can stable type(ObExtendType) and position(0, true) ==> IN OUT
       //see url:https://docs.oracle.com/cd/B28359_01/appdev.111/b28425/ext_agg_ref.htm#CACBJHHI
-      common::ObArenaAllocator alloc;
-      ObExprResType param_type(alloc);
+      ObExprResType param_type;
       param_type.set_ext();
       param_type.set_udt_id(type_id_);
       if (OB_FAIL(params_type.push_back(param_type))) {
@@ -322,8 +321,7 @@ int ObPlAggUdfFunction::process_calc_pl_agg_udf(ObObjParam &pl_obj,
     //for pl agg udf, type member ODCIAggregateIterate() the first param must be self and is IN OUT,
     //the other param is IN, so we need rebuild relation infos.
     //see oracle url:https://docs.oracle.com/cd/B28359_01/appdev.111/b28425/ext_agg_ref.htm#CACBJHHI
-    common::ObArenaAllocator alloc;
-    ObExprResType param_type(alloc);
+    ObExprResType param_type;
     param_type.set_ext();
     param_type.set_udt_id(type_id_);
     if (OB_FAIL(all_params_type.push_back(param_type))) {
@@ -406,8 +404,7 @@ int ObPlAggUdfFunction::process_merge_pl_agg_udf(ObObjParam &pl_obj,
   ObSEArray<ObUDFParamDesc, 4> params_desc;
   ObSEArray<ObUDFParamDesc, 4> all_params_desc;
   ObSEArray<ObExprResType, 4> all_params_type;
-  common::ObArenaAllocator alloc;
-  ObExprResType param_type(alloc);
+  ObExprResType param_type;
   param_type.set_ext();
   param_type.set_udt_id(type_id_);
   if (OB_FAIL(params_type.push_back(param_type))) {
@@ -474,9 +471,8 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    common::ObArenaAllocator alloc;
-    ObExprResType param_type(alloc);
-    ObExprResType flags_type(alloc);
+    ObExprResType param_type;
+    ObExprResType flags_type;
     param_type.set_ext();
     param_type.set_udt_id(type_id_);
     flags_type.set_number();

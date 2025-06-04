@@ -40,6 +40,11 @@
           "name": "_enable_filter_reordering",
           "value": false,
           "comment": "disable filter reordering for simple OLTP workloads"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for simple oltp workloads"
         }
       ]
     }
@@ -90,6 +95,11 @@
           "name": "_enable_filter_reordering",
           "value": false,
           "comment": "disable filter reordering for complex OLTP workloads"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for complex oltp workloads"
         }
       ]
     }
@@ -142,6 +152,11 @@
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
         },
         {
+          "name": "_io_callback_thread_count",
+          "value": "64",
+          "comment": "The number of io callback threads"
+        },
+        {
           "name": "default_load_mode",
           "value": "FULL_DIRECT_WRITE",
           "comment": "for classic OLAP workloads, the default import is full direct load"
@@ -160,6 +175,11 @@
           "name": "default_table_organization",
           "value": "HEAP",
           "comment": "the order in which the data rows of the table are stored. For AP, the data rows of table are stored in no particular order"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for olap workloads, modify to delete_insert later"
         }
       ]
     }
@@ -200,6 +220,11 @@
           "name": "_enable_filter_reordering",
           "value": false,
           "comment": "disable filter reordering for KV mode"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for kv mode"
         }
       ]
     }
@@ -245,6 +270,11 @@
           "name": "direct_load_allow_fallback",
           "value": 1,
           "comment": "for classic HTAP workloads, fallback is allowed when direct load fails"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for htap workloads"
         }
       ]
     }
@@ -300,6 +330,11 @@
           "name": "_enable_filter_reordering",
           "value": false,
           "comment": "disable filter reordering for simple OLTP_PERF workloads"
+        },
+        {
+          "name": "default_table_merge_engine",
+          "value": "PARTIAL_UPDATE",
+          "comment": "use partial_update merge engine for oltp perf workloads"
         }
       ]
     }

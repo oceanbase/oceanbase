@@ -407,7 +407,7 @@ int ObDriverRowBuffer::get_next_batch_from_store(int64_t max_rows, int64_t &read
 ObDriverRowIterator::ObDriverRowIterator():
   left_brs_(nullptr), l_idx_(0), op_(nullptr), left_(nullptr),
   join_buffer_(), left_batch_(), rescan_params_(nullptr), is_group_rescan_(false),
-  eval_ctx_(nullptr), op_max_batch_size_(0), need_backup_left_(false), left_expr_extend_size_(0),left_matched_(nullptr), batch_mem_ctx_(NULL), ctx_(nullptr)
+  eval_ctx_(nullptr), op_max_batch_size_(0), need_backup_left_(false), left_expr_extend_size_(0), ctx_(nullptr)
 {
 
 }
@@ -438,34 +438,7 @@ int ObDriverRowIterator::init(ObOperator *op, const int64_t op_group_scan_size,
     rescan_params_ = rescan_params;
     ctx_ = &op->get_exec_ctx();
     if (OB_SUCC(ret) && op_->is_vectorized()) {
-      if (OB_ISNULL(batch_mem_ctx_)) {
-        ObSQLSessionInfo *session = op_->get_exec_ctx().get_my_session();
-        uint64_t tenant_id =session->get_effective_tenant_id();
-        lib::ContextParam param;
-        const int64_t mem_limit = 8 * 1024 * 1024; //8M;
-        param.set_mem_attr(tenant_id,
-                          ObModIds::OB_SQL_NLJ_CACHE,
-                          ObCtxIds::WORK_AREA)
-          .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-        if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(batch_mem_ctx_, param))) {
-          LOG_WARN("create entity failed", K(ret));
-        } else if (OB_ISNULL(batch_mem_ctx_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null memory entity returned", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        char *buf = (char *)batch_mem_ctx_->get_arena_allocator()
-                            .alloc(ObBitVector::memory_size(op_->get_spec().max_batch_size_));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc", K(ret));
-        } else {
-          MEMSET(buf, 0, ObBitVector::memory_size(op_->get_spec().max_batch_size_));
-          left_matched_ = to_bit_vector(buf);
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(left_batch_.init(left_->get_spec().output_, *eval_ctx_))) {
+      if (OB_FAIL(left_batch_.init(left_->get_spec().output_, *eval_ctx_))) {
         LOG_WARN("failed to init left batch result holder", K(ret));
       }
     }
@@ -493,10 +466,6 @@ void ObDriverRowIterator::destroy()
 {
   if (op_->is_vectorized()) {
     left_batch_.reset();
-    if (nullptr != batch_mem_ctx_) {
-      DESTROY_CONTEXT(batch_mem_ctx_);
-      batch_mem_ctx_ = nullptr;
-    }
   }
   if (is_group_rescan_) {
     join_buffer_.destroy();
@@ -525,9 +494,6 @@ int ObDriverRowIterator::get_next_left_batch(int64_t max_rows, const ObBatchRows
 int ObDriverRowIterator::fill_cur_row_group_param()
 {
   int ret = OB_SUCCESS;
-  // ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
-  // batch_info_guard.set_batch_size(left_brs_->size_);
-  // batch_info_guard.set_batch_idx(l_idx_);
   if (is_group_rescan_) {
     if (OB_FAIL(join_buffer_.fill_cur_row_group_param())) {
       LOG_WARN("failed to fill group param from join buffer", K(ret));
@@ -597,9 +563,7 @@ int ObDriverRowIterator::drive_row_extend(int size)
 
 int ObDriverRowIterator::restore_drive_row(int from_idx, int to_idx)
 {
-  int ret = OB_SUCCESS;
-  left_batch_.restore_single_row(from_idx, to_idx);
-  return ret;
+  return left_batch_.restore_single_row(from_idx, to_idx);
 }
 
 int ObDriverRowIterator::rescan_left()
@@ -614,7 +578,6 @@ int ObDriverRowIterator::rescan_left()
       LOG_WARN("failed to rescan left op", K(ret));
     }
   }
-  //reset();
   return ret;
 }
 

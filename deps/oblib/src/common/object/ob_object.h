@@ -135,6 +135,9 @@ public:
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObJsonType == type_) {
       set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (ObUserDefinedSQLType == type_ ||
+               ObCollectionSQLType == type_) {
+      set_subschema_id(UINT_MAX16);
     } else if (!ob_is_string_type(static_cast<ObObjType>(type_))
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
@@ -143,9 +146,6 @@ public:
                && !ob_is_roaringbitmap(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
-    } else if (ObUserDefinedSQLType == type_ ||
-               ObCollectionSQLType == type_) {
-      set_subschema_id(UINT_MAX16);
     }
   }
   OB_INLINE void set_type_simple(const ObObjType &type)
@@ -431,13 +431,13 @@ public:
   OB_INLINE void set_cs_level(uint8_t cs_level) {
     cs_level_ = cs_level;
   }
-  OB_INLINE uint8_t get_cs_level() {
+  OB_INLINE uint8_t get_cs_level() const {
     return cs_level_;
   }
   OB_INLINE void set_cs_type(uint8_t cs_type) {
     cs_type_ = cs_type;
   }
-  OB_INLINE uint8_t get_cs_type() {
+  OB_INLINE uint8_t get_cs_type() const {
     return cs_type_;
   }
 
@@ -455,11 +455,14 @@ public:
 
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const {
-    return static_cast<ObCollationLevel>(cs_level_ & 0x0F);
+    // ObUserDefinedSQLType and ObCollectionSQLType reused cs_level as part of sub schema id,
+    // therefore always return CS_LEVEL_EXPLICIT.
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_LEVEL_EXPLICIT:
+              static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
   OB_INLINE ObCollationType get_collation_type() const {
     // ObUserDefinedSQLType reused cs_type as part of sub schema id,
-    // ObDecimalIntType reuse cs_level as precision, therefore always return CS_TYPE_BINARY.
+    // ObDecimalIntType reuse cs_type as precision, therefore always return CS_TYPE_BINARY.
     return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
                 static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
   }
@@ -485,9 +488,27 @@ public:
                     && extend_type_ < T_EXT_SQL_ARRAY;
   }
 
+// to_string function is used to calc the result of ObExprCmpMeta, can not be modified
+#ifdef NDEBUG
   TO_STRING_KV(N_TYPE, inner_obj_type_str(static_cast<ObObjType>(type_)),
                N_COLLATION, ObCharset::collation_name(get_collation_type()),
                N_COERCIBILITY, ObCharset::collation_level(get_collation_level()));
+#else
+  DECLARE_TO_STRING
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_TYPE, inner_obj_type_str(static_cast<ObObjType>(type_)),
+         N_COLLATION, ObCharset::collation_name(get_collation_type()),
+         N_COERCIBILITY, ObCharset::collation_level(get_collation_level()));
+    if (is_enum_or_set() || is_collection_sql_type()) {
+      J_COMMA();
+      J_KV("subschema_id", get_subschema_id());
+    }
+    J_OBJ_END();
+    return pos;
+  }
+#endif
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   static uint32_t type_offset_bits() { return offsetof(ObObjMeta, type_) * 8; }
@@ -1353,6 +1374,7 @@ struct ObObjPrintParams
       uint32_t refine_range_max_value_:1;
       uint32_t character_hex_safe_represent_:1;
       uint32_t binary_string_print_base64_:1;
+      uint32_t not_print_internal_catalog_:1;
       uint32_t reserved_:19;
     };
   };

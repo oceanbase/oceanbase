@@ -25,7 +25,7 @@ using namespace common;
 
 #define USEC_OF_HOUR (60 * 60 * 1000000LL)
 
-int ObFlushNcompDll::check_flush_ncomp_dll_job_exists(ObMySQLTransaction &trans,
+int ObFlushNcompDll::check_job_exists(ObMySQLTransaction &trans,
                                                         const uint64_t tenant_id,
                                                         const ObString &job_name,
                                                         bool &is_job_exists)
@@ -136,7 +136,7 @@ int ObFlushNcompDll::create_flush_ncomp_dll_job_for_425(const ObSysVariableSchem
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_flush_ncomp_dll_job_exists(trans, tenant_id, async_flush_ncomp_dll_for_425, is_job_exists))) {
+  } else if (OB_FAIL(check_job_exists(trans, tenant_id, async_flush_ncomp_dll_for_425, is_job_exists))) {
     LOG_WARN("fail to check ncomp dll job", K(ret));
   } else if (is_job_exists) {
     // do nothing
@@ -165,7 +165,7 @@ int ObFlushNcompDll::create_flush_ncomp_dll_job(const ObSysVariableSchema &sys_v
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_flush_ncomp_dll_job_exists(trans, tenant_id, async_flush_ncomp_dll, is_job_exists))) {
+  } else if (OB_FAIL(check_job_exists(trans, tenant_id, async_flush_ncomp_dll, is_job_exists))) {
     LOG_WARN("fail to check ncomp dll job", K(ret));
   } else if (is_job_exists) {
     // do nothing
@@ -218,7 +218,7 @@ int ObFlushNcompDll::create_flush_ncomp_dll_job_common(const ObSysVariableSchema
     ObString exec_env(pos, buf);
     int64_t current_hour = ob_time.parts_[DT_HOUR];
     int64_t hours_to_next_day = HOURS_PER_DAY - current_hour;
-    const int64_t start_usec = (current_time / USEC_OF_HOUR + hours_to_next_day) * USEC_OF_HOUR; // next day 00:00:00
+    const int64_t start_usec = ObTimeUtility::current_time();
     HEAP_VAR(dbms_scheduler::ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
       job_info.job_ = job_id;

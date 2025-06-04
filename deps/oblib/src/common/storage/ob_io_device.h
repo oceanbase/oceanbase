@@ -46,6 +46,7 @@ struct ObIOFd
   bool is_backup_block_file() const;
   void reset();
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator == (const ObIOFd& other) const
   {
     return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.third_id_ == this->third_id_
@@ -360,6 +361,7 @@ public:
   virtual int init(const ObIODOpts &opts) = 0;
   virtual int reconfig(const ObIODOpts &opts) = 0;
   virtual int get_config(ObIODOpts &opts) = 0;
+  int get_device_name(char *buf, int32_t len);
   virtual void destroy() = 0;
 
   virtual int start(const ObIODOpts &opts) = 0;

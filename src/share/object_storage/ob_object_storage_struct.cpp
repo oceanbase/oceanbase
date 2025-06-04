@@ -14,6 +14,7 @@
 #include "ob_object_storage_struct.h"
 #include "rootserver/ob_root_service.h"
 #include "share/object_storage/ob_zone_storage_table_operation.h"
+#include "share/object_storage/ob_device_config_mgr.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_format_util.h"
 #endif
@@ -525,11 +526,11 @@ bool ObDeviceConfig::is_valid() const
   if ((STRLEN(used_for_) <= 0) || (STRLEN(path_) <= 0)
       || (STRLEN(state_) <= 0) || (create_timestamp_ < 0)
       || (last_check_timestamp_ < 0)
-      || (UINT64_MAX == op_id_)
-      || (UINT64_MAX == sub_op_id_)
-      || (UINT64_MAX == storage_id_)
-      || (max_iops_ < 0)
-      || (max_bandwidth_ < 0)) {
+      || (OB_DEVICE_CONF_MGR.is_shared_storage_dump_manifest() && (UINT64_MAX == op_id_))
+      || (OB_DEVICE_CONF_MGR.is_shared_storage_dump_manifest() && (UINT64_MAX == sub_op_id_))
+      || (OB_DEVICE_CONF_MGR.is_shared_storage_dump_manifest() && (UINT64_MAX == storage_id_))
+      || (OB_DEVICE_CONF_MGR.is_shared_storage_dump_manifest() && (max_iops_ < 0))
+      || (OB_DEVICE_CONF_MGR.is_shared_storage_dump_manifest() && (max_bandwidth_ < 0))) {
     bool_ret = false;
   } else {
     if (ObString(path_).prefix_match(OB_FILE_PREFIX)) {

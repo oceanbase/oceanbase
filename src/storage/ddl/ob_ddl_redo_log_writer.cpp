@@ -20,6 +20,7 @@
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
+#include "storage/blocksstable/index_block/ob_macro_meta_temp_store.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/compaction/ob_refresh_tablet_util.h"
@@ -82,7 +83,7 @@ int ObDDLCtrlSpeedItem::refresh()
   int64_t total_used_space = 0; // for current tenant, used bytes.
   int64_t total_disk_space = 0; // for current tenant, limit used bytes.
   ObLSHandle ls_handle;
-  palf::PalfOptions palf_opt;
+  palf::PalfDiskOptions palf_disk_opt;
   logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
   ObArchiveService *archive_service = MTL(ObArchiveService*);
   if (OB_ISNULL(log_service) || OB_ISNULL(archive_service)) {
@@ -107,20 +108,26 @@ int ObDDLCtrlSpeedItem::refresh()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(log_service->get_palf_options(palf_opt))) {
-    LOG_WARN("fail to get palf_options", K(ret));
-  } else if (OB_FAIL(log_service->get_palf_disk_usage(total_used_space, total_disk_space))) {
-    STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, bandwidth throttle is null", K(ret), KP(GCTX.bandwidth_throttle_));
   } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(refresh_speed))) {
     LOG_WARN("fail to get rate", K(ret), K(refresh_speed));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice) {
+    write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
+    disk_used_stop_write_threshold_ = 100;
+    need_stop_write_ = false;
+#endif
+  } else if (OB_FAIL(log_service->get_palf_disk_options(palf_disk_opt))) {
+    LOG_WARN("fail to get palf_disk_options", K(ret));
+  } else if (OB_FAIL(log_service->get_palf_disk_usage(total_used_space, total_disk_space))) {
+    STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
   } else {
     // archive is not on if ignore = true.
     write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
-    disk_used_stop_write_threshold_ = min(palf_opt.disk_options_.log_disk_utilization_threshold_,
-                                       palf_opt.disk_options_.log_disk_utilization_limit_threshold_);
+    disk_used_stop_write_threshold_ = min(palf_disk_opt.log_disk_utilization_threshold_,
+                                       palf_disk_opt.log_disk_utilization_limit_threshold_);
     need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
   }
   LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_),
@@ -1711,7 +1718,7 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),table_key_(),ddl_writer_(), task_id_(0), data_format_version_(0),
     direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1),  parallel_cnt_(0), cg_cnt_(0), kv_mgr_handle_(), need_delay_(false), allocator_(), redo_info_array_(),
-    with_cs_replica_(false), need_submit_io_(true), merge_slice_idx_(0)
+    with_cs_replica_(false), need_submit_io_(true), merge_slice_idx_(0), macro_meta_store_(nullptr)
 {
   redo_info_array_.set_attr(lib::ObMemAttr(MTL_ID(), "DdlRedoInfo"));
 }
@@ -1734,7 +1741,8 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
                                      const int64_t row_id_offset/*=-1*/,
                                      const bool need_delay /* false */,
                                      const bool with_cs_replica/*=false*/,
-                                     const bool need_submit_io/*=true*/)
+                                     const bool need_submit_io/*=true*/,
+                                     blocksstable::ObMacroMetaTempStore *macro_meta_store/*=nullptr*/)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1784,6 +1792,7 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
     need_delay_ = need_delay;
     with_cs_replica_ = with_cs_replica;
     need_submit_io_ = need_submit_io;
+    macro_meta_store_ = macro_meta_store;
     is_inited_ = true;
   }
   return ret;
@@ -1808,6 +1817,7 @@ void ObDDLRedoLogWriterCallback::reset()
   with_cs_replica_ = false;
   need_submit_io_ = true;
   merge_slice_idx_ = 0;
+  macro_meta_store_ = nullptr;
 }
 
 bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
@@ -1874,9 +1884,14 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
       redo_info.merge_slice_idx_ = merge_slice_idx_;
       redo_info.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;
+      if (nullptr != macro_meta_store_ && OB_FAIL(macro_meta_store_->append(buf, buf_len, macro_handle.get_macro_id()))) {
+        LOG_WARN("append macro meta store failed", K(ret), KP(buf), K(buf_len), K(macro_handle.get_macro_id()));
+      }
+      LOG_TRACE("append macro meta store", K(ret), K(table_key_), KPC(macro_meta_store_));
     }
 
-    if (need_delay_) {
+    if (OB_FAIL(ret)) {
+    } else if (need_delay_) {
       char *tmp_buf = nullptr;
       if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == block_type_) {
         redo_info.data_buffer_.assign(nullptr, 0);

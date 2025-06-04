@@ -123,6 +123,7 @@
 #include "sql/resolver/cmd/ob_get_diagnostics_resolver.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
 #include "sql/resolver/cmd/ob_mock_resolver.h"
+#include "sql/resolver/cmd/ob_event_resolver.h"
 #include "sql/resolver/dcl/ob_alter_role_resolver.h"
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
@@ -145,6 +146,10 @@
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
+#endif
+#include "sql/resolver/ddl/ob_catalog_resolver.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
 namespace oceanbase
 {
@@ -423,10 +428,17 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+       case T_TRIGGER_STORAGE_CACHE: {
+        REGISTER_STMT_RESOLVER(TriggerStorageCache);
+        break;
+      }
+#endif
       case T_FLUSH_PRIVILEGES:
       case T_INSTALL_PLUGIN:
       case T_UNINSTALL_PLUGIN:
       case T_FLUSH_MOCK:
+      case T_FLUSH_TABLE_MOCK:
       case T_HANDLER_MOCK:
       case T_FLUSH_MOCK_LIST:
       case T_SHOW_PLUGINS:
@@ -600,6 +612,13 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(StopUpgradeJob);
         break;
       }
+      case T_CREATE_CATALOG:
+      case T_ALTER_CATALOG:
+      case T_DROP_CATALOG:
+      case T_SET_CATALOG: {
+        REGISTER_STMT_RESOLVER(Catalog);
+        break;
+      }
       case T_CREATE_DATABASE: {
         REGISTER_STMT_RESOLVER(CreateDatabase);
         break;
@@ -770,7 +789,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_OLAP_ASYNC_JOB_STATUS:
       case T_XA_RECOVER:
       case T_SHOW_CHECK_TABLE:
-      case T_SHOW_CREATE_USER: {
+      case T_SHOW_CREATE_USER:
+      case T_SHOW_CATALOGS:
+      case T_SHOW_CREATE_CATALOG: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }
@@ -945,8 +966,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(DropPackage);
         break;
       }
-      case T_REFRESH_TIME_ZONE_INFO: {
-        REGISTER_STMT_RESOLVER(RefreshTimeZoneInfo);
+      case T_LOAD_TIME_ZONE_INFO: {
+        REGISTER_STMT_RESOLVER(LoadTimeZoneInfo);
         break;
       }
       case T_ENABLE_SQL_THROTTLE: {
@@ -1291,6 +1312,18 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_MODULE_DATA: {
         REGISTER_STMT_RESOLVER(ModuleData);
+        break;
+      }
+      case T_EVENT_JOB_CREATE: {
+        REGISTER_STMT_RESOLVER(Event);
+        break;
+      }
+      case T_EVENT_JOB_ALTER: {
+        REGISTER_STMT_RESOLVER(Event);
+        break;
+      }
+      case T_EVENT_JOB_DROP: {
+        REGISTER_STMT_RESOLVER(Event);
         break;
       }
       case T_OLAP_ASYNC_JOB_SUBMIT: {

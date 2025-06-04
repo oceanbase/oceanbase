@@ -32,12 +32,14 @@ public:
   struct PrivKey {
 
     PrivKey() : obj_type_(share::schema::ObObjectType::INVALID) {}
+    ObString catalog_name_;
     ObString db_name_;
     ObString table_name_;
     ObString column_name_;
     share::schema::ObObjectType obj_type_;
     uint64_t hash() const {
       uint64_t hash_val = 0;
+      hash_val = catalog_name_.hash(hash_val);
       hash_val = db_name_.hash(hash_val);
       hash_val = table_name_.hash(hash_val);
       hash_val = column_name_.hash(hash_val);
@@ -48,21 +50,27 @@ public:
       bool ret = false;
       const PrivKey &left = l.first;
       const PrivKey &right = r.first;
-      if (left.db_name_ == right.db_name_) {
-        if (left.table_name_ == right.table_name_) {
-          if (left.column_name_ == right.column_name_) {
-            ret = left.obj_type_ < right.obj_type_;
-          } else if (left.column_name_ < right.column_name_) {
+      if (left.catalog_name_ == right.catalog_name_) {
+        if (left.db_name_ == right.db_name_) {
+          if (left.table_name_ == right.table_name_) {
+            if (left.column_name_ == right.column_name_) {
+              ret = left.obj_type_ < right.obj_type_;
+            } else if (left.column_name_ < right.column_name_) {
+              ret = true;
+            } else {
+              ret = false;
+            }
+          } else if (left.table_name_ < right.table_name_) {
             ret = true;
           } else {
             ret = false;
           }
-        } else if (left.table_name_ < right.table_name_) {
+        } else if (left.db_name_ < right.db_name_) {
           ret = true;
         } else {
           ret = false;
         }
-      } else if (left.db_name_ < right.db_name_) {
+      } else if (left.catalog_name_ < right.catalog_name_) {
         ret = true;
       } else {
         ret = false;
@@ -71,13 +79,14 @@ public:
     }
     int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator==(const PrivKey &other) const {
-      return db_name_ == other.db_name_
+      return catalog_name_ == other.catalog_name_
+          && db_name_ == other.db_name_
           && table_name_ == other.table_name_
           && column_name_ == other.column_name_
           && obj_type_ == other.obj_type_;
     }
 
-    TO_STRING_KV(K_(db_name), K_(table_name), K_(column_name));
+    TO_STRING_KV(K_(db_name), K_(table_name), K_(column_name), K_(catalog_name));
   };
   typedef hash::ObHashMap<PrivKey, ObPrivSet, hash::NoPthreadDefendMode> PRIV_MAP;
 public:

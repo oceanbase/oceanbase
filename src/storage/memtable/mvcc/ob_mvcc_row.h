@@ -27,7 +27,6 @@ namespace oceanbase
 {
 namespace memtable
 {
-
 static const uint8_t NDT_NORMAL = 0x0;
 static const uint8_t NDT_COMPACT = 0x1;
 class ObIMvccCtx;
@@ -375,7 +374,7 @@ struct ObMvccRow
 
   // ===================== ObMvccRow Getter Interface =====================
   // need_compact checks whether the compaction is necessary
-  bool need_compact(const bool for_read, const bool for_replay);
+  bool need_compact(const bool for_read, const bool for_replay, const bool is_delete_insert);
   // is_empty checks whether ObMvccRow has no tx node(while the row may be deleted)
   bool is_empty() const { return (NULL == ATOMIC_LOAD(&list_head_)); }
   // get_list_head gets the head tx node
@@ -443,6 +442,8 @@ struct ObMvccRow
   int mvcc_write_(storage::ObStoreCtx &ctx,
                   ObMvccTransNode &node,
                   ObMvccWriteResult &res);
+
+  OB_INLINE void mvcc_write_end_(const int ret) const;
 
   // ===================== ObMvccRow Protection Code =====================
   // sanity check during mvcc_write

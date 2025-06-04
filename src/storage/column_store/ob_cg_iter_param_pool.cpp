@@ -277,6 +277,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.has_lob_column_out_ = col_descs.at(cg_pos).col_type_.is_lob_storage();
       cg_param.is_for_foreign_check_ = row_param.is_for_foreign_check_;
       cg_param.limit_prefetch_ = row_param.limit_prefetch_;
+      cg_param.is_delete_insert_ = false;
       //cg_param.ss_rowkey_prefix_cnt_ = 0;
       cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
       cg_param.table_scan_opt_ = row_param.table_scan_opt_;

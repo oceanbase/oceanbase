@@ -223,6 +223,7 @@ protected:
   // in centroid table
   static const int64_t CID_IDX = 0;
   static const int64_t CID_VECTOR_IDX = 1;
+  static const uint64_t IVF_MAX_BRUTE_FORCE_SIZE = 10001;
 
 protected:
   lib::MemoryContext mem_context_;
@@ -316,13 +317,12 @@ protected:
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);
   bool check_cid_exist(const ObIArray<ObString> &dst_cids, const ObString &src_cid);
   int get_cid_from_rowkey_cid_table(ObString &cid);
-  int get_rowkey_pre_filter(bool is_vectorized,
-                            int64_t max_rowkey_count = ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE);
+  int get_rowkey_pre_filter(bool is_vectorized, int64_t max_rowkey_count);
   int filter_pre_rowkey_batch(const ObIArray<ObString> &nearest_cids, bool is_vectorized, int64_t batch_row_count);
   int filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cids,
                                   bool is_vectorized,
                                   int64_t batch_row_count,
-                                  bool &index_end);
+                                  int &push_count);
   int get_pre_filter_rowkey_batch(ObIAllocator &allocator,
                                   bool is_vectorized,
                                   int64_t batch_row_count,
@@ -402,7 +402,7 @@ protected:
                                   bool is_vectorized,
                                   int64_t batch_row_count,
                                   IvfRowkeyHeap &rowkey_heap,
-                                  bool &index_end);
+                                  int &push_count);
   int parse_cid_vec_datum(
     ObIAllocator &allocator,
     int64_t cid_vec_column_count,

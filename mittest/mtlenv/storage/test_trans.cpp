@@ -186,6 +186,7 @@ void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_d
                                                       tx_desc,
                                                       snapshot,
                                                       0,/*branch_id*/
+                                                      dml_param.write_flag_,
                                                       store_ctx_guard));
   ASSERT_EQ(OB_SUCCESS, as->insert_rows(ls_id,
                                          tablet_id,

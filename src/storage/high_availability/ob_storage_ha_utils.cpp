@@ -645,6 +645,89 @@ int ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
   return ret;
 }
 
+int ObStorageHAUtils::deal_compat_with_ls_inner_tablet(const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = NULL;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObTabletHandle tablet_handle;
+  ObArray<ObTabletID> tablet_id_array;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("deal compact with ls inner tablet get invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("ls_srv->get_ls() fail", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(ls_id));
+  } else {
+    ObLS::ObLSInnerTabletIDIter tablet_iter;
+    ObTabletID tablet_id;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_iter.get_next(tablet_id))) {
+        tablet_id.reset();
+        tablet_handle.reset();
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next tablet id", K(ret));
+        }
+      } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          //overwrite ret
+          if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
+            LOG_WARN("failed to push tablet id into array", K(ret));
+          }
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_ls_inner_tablet_for_compat_(tablet_id_array, ls))) {
+      LOG_WARN("failed to create ls inner tablet for compat", K(ret), K(tablet_id_array));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::create_ls_inner_tablet_for_compat_(
+    const common::ObIArray<ObTabletID> &tablet_id_array,
+    ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("create ls inner tablet for compat get invalid argument", K(ret), KP(ls));
+  } else if (tablet_id_array.empty()) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+      const ObTabletID &tablet_id = tablet_id_array.at(i);
+      switch (tablet_id.id()) {
+      case ObTabletID::LS_MEMBER_TABLET_ID: {
+        if (OB_FAIL(ls->get_member_table()->init_tablet_for_compat())) {
+          LOG_WARN("failed to create member table", K(ret), KPC(ls));
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_ERROR("ls inner tablet create do not supported", K(ret), K(tablet_id));
+      }
+      }
+    }
+  }
+  return ret;
+}
+
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;
@@ -1487,11 +1570,12 @@ int ObStorageHAUtils::build_major_sstable_reuse_info(
       LOG_WARN("failed to init reuse info mgr", K(ret));
     }
 
-    // when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
+    // 1. for shared storage mode, we won't build reuse info
+    // 2. when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
     // (i.e. will scan all sstables' macro block again when tablet restore dag retry)
     // when migrate, we will keep the major sstable already been copied to dest server, so we need to build reuse info for lastest major sstable
     // that already been copied to dest server
-    if (OB_SUCC(ret) && !is_restore) {
+    if (OB_SUCC(ret) && !GCTX.is_shared_storage_mode() && !is_restore) {
       common::ObArray<const ObSSTable *> major_sstables;
       int64_t reuse_info_count = 0;
 

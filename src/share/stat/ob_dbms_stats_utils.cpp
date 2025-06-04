@@ -194,7 +194,7 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
   if (!is_sys_table(table_id) ||
       ObSysTableChecker::is_sys_table_index_tid(table_id) ||
       is_sys_lob_table(table_id) ||
-      table_id == share::OB_ALL_CORE_TABLE_TID ||//circular dependency,
+      is_hardcode_schema_table(table_id) ||//circular dependency,
       table_id == share::OB_ALL_TABLE_STAT_TID ||
       table_id == share::OB_ALL_COLUMN_STAT_TID ||
       table_id == share::OB_ALL_HISTOGRAM_STAT_TID ||
@@ -226,6 +226,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_PROC_TID ||
          table_id == share::OB_TENANT_VIRTUAL_ALL_TABLE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_TABLE_COLUMN_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CATALOG_DATABASES_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_TID ||
          table_id == share::OB_TENANT_VIRTUAL_CURRENT_TENANT_TID ||
@@ -250,6 +252,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLEGROUP_ORA_TID ||
@@ -1059,6 +1062,7 @@ int ObDbmsStatsUtils::remove_stat_gather_param_partition_info(int64_t reserved_p
 int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
                                                 StatLevel stat_level,
                                                 const PartitionIdBlockMap *partition_id_block_map,
+                                                const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                                 bool is_split_gather,
                                                 int64_t gather_vectorize,
                                                 bool use_column_store,
@@ -1087,6 +1091,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.max_duration_time_ = param.duration_time_;
   gather_param.allocator_ = param.allocator_;
   gather_param.partition_id_block_map_ = partition_id_block_map;
+  gather_param.partition_id_skip_rate_map_ = partition_id_skip_rate_map;
   gather_param.gather_start_time_ = ObTimeUtility::current_time();
   gather_param.stattype_ = param.stattype_;
   gather_param.is_split_gather_ = is_split_gather;
@@ -1109,6 +1114,9 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.part_level_ = param.part_level_;
   gather_param.consumer_group_id_ = param.consumer_group_id_;
   ret = gather_param.column_group_params_.assign(param.column_group_params_);
+  if (OB_SUCC(ret)) {
+    ret = gather_param.all_column_params_.assign(param.column_params_);
+  }
   return ret;
 }
 
@@ -1188,8 +1196,13 @@ int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected error", K(ret), K(idx), K(column_stats.count()));
             } else if (table_stats.at(i) != NULL && column_stats.at(idx) != NULL && column_stats.at(idx)->get_num_distinct() > 0) {
-              column_stats.at(idx)->set_num_not_null(table_stats.at(i)->get_row_count() - column_stats.at(idx)->get_num_null());
-              column_stats.at(idx)->set_total_col_len(column_stats.at(idx)->get_num_not_null() * column_stats.at(idx)->get_avg_len());
+              int64_t num_not_null = table_stats.at(i)->get_row_count() - column_stats.at(idx)->get_num_null();
+              if (num_not_null < 0) {
+                num_not_null = 0;
+                column_stats.at(idx)->set_num_null(table_stats.at(i)->get_row_count());
+              }
+              column_stats.at(idx)->set_num_not_null(num_not_null);
+              column_stats.at(idx)->set_total_col_len(num_not_null * column_stats.at(idx)->get_avg_len());
             }
           }
         }

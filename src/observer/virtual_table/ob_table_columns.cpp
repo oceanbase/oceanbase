@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -68,7 +69,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_table_id)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
-      } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
+      } else if (OB_FAIL(sql_schema_guard_.get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
        LOG_WARN("fail to get table schema", K(ret), K(effective_tenant_id_));
       } else if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
@@ -84,16 +85,14 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
         ObSessionPrivInfo session_priv;
         const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
         session_->get_session_priv_info(session_priv);
-        const ObSimpleDatabaseSchema *db_schema = NULL;
+        const ObDatabaseSchema *db_schema = NULL;
         if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                     "user_id", session_priv.user_id_, K(ret));
         } else if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
           LOG_WARN("init failed", K(ret));
-        } else if (OB_FAIL(schema_guard_->get_database_schema(table_schema->get_tenant_id(),
-                                                              table_schema->get_database_id(),
-                                                              db_schema))) {
+        } else if (OB_FAIL(sql_schema_guard_.get_database_schema(table_schema->get_tenant_id(), table_schema->get_database_id(), db_schema))) {
           LOG_WARN("get database schema failed", K(ret));
         } else if (OB_ISNULL(db_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -361,8 +360,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                 "user_id", session_priv.user_id_, K(ret));
-    } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id,
-               table_schema.get_database_id(), db_schema))) {
+    } else if (OB_FAIL(sql_schema_guard_.get_database_schema(tenant_id, table_schema.get_database_id(), db_schema))) {
       LOG_WARN("failed to get database_schema", K(ret),
          K(tenant_id), K(table_schema.get_database_id()));
     } else if (OB_UNLIKELY(NULL == db_schema)) {
@@ -968,7 +966,7 @@ int ObTableColumns::deduce_column_attributes(
 
   if (OB_SUCC(ret)) {
     //TODO(yts): should get types_info from expr, wait for yyy
-    const ObExprResType &result_type = select_item.expr_->get_result_type();
+    const ObRawExprResType &result_type = select_item.expr_->get_result_type();
     ObLength char_len = result_type.get_length();
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
@@ -1003,21 +1001,12 @@ int ObTableColumns::deduce_column_attributes(
       sub_type = result_type.get_subschema_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
       sub_type = result_type.get_udt_id();
-    } else if (result_type.is_collection_sql_type()) {
-      if (OB_NOT_NULL(session->get_cur_exec_ctx())) {
-        int tmp_ret = OB_SUCCESS;
-        const ObSqlCollectionInfo *coll_info = NULL;
-        uint16_t subschema_id = select_item.expr_->get_result_type().get_subschema_id();
-        ObSubSchemaValue value;
-        if (OB_SUCCESS != (tmp_ret = session->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-          LOG_WARN("failed to get subschema ctx", K(tmp_ret));
-        } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
-        } else if (OB_SUCCESS != (tmp_ret = extend_type_info.push_back(coll_info->get_def_string()))) {
-          LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
-        }
+    } else if (result_type.is_enum_or_set() || result_type.is_collection_sql_type()) {
+      if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
+                                                             session,
+                                                             extend_type_info))) {
+        LOG_WARN("failed to extract extended type info", K(ret));
       }
-    } else if (result_type.is_enum_or_set() && OB_FAIL(extend_type_info.assign(select_item.expr_->get_enum_set_values()))) {
-      LOG_WARN("failed to assign enum values", K(ret));
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
@@ -1130,6 +1119,8 @@ int ObTableColumns::deduce_column_attributes(
     column_attributes.result_type_ = select_item.expr_->get_result_type();
     column_attributes.is_hidden_ = 0;
     column_attributes.is_string_lob_ = is_string_lob;
+    OZ (ObRawExprUtils::extract_enum_set_collation(select_item.expr_->get_result_type(),
+                                                   session, column_attributes.result_type_));
     //TODO:
     //ObObj default;
     //view_column.set_cur_default_value(default);
@@ -1172,7 +1163,10 @@ int ObTableColumns::set_col_attrs_according_binary_expr(
       ret = OB_SUCCESS;
       LOG_WARN("fail to get table schema", K(ret), K(tenant_id), "table_id", tbl_item->ref_id_);
     } else if (table_schema->is_table()) {
-      if (OB_UNLIKELY(NULL == (column_schema = table_schema->get_column_schema(bexpr->get_column_id())))) {
+      if (OB_FAIL(sql::ObSQLMockSchemaUtils::try_mock_partid(table_schema, table_schema))) {
+        LOG_WARN("failed to try mock rowid column", K(ret));
+      } else if (OB_UNLIKELY(NULL == (column_schema =
+            table_schema->get_column_schema(bexpr->get_column_id())))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN(" column schema is NULL", K(ret), K(column_schema));
       } else if (!nullable && !column_schema->is_not_null_validate_column()

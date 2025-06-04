@@ -626,6 +626,13 @@ int inner_main(int argc, char *argv[])
   return ret;
 }
 
+#ifdef OB_USE_ASAN
+const char* __asan_default_options()
+{
+  return "abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1:log_path=./log/asan.log";
+}
+#endif
+
 int main(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;

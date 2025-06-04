@@ -27,7 +27,10 @@
 #include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_task_queue.h"
+#endif
+#include "storage/tx/ob_tx_log_cb_define.h"
 
 namespace oceanbase
 {
@@ -169,6 +172,9 @@ public:
         is_inited_(false), mt_ctx_(), reserve_allocator_("PartCtx", MTL_ID()),
         exec_info_(reserve_allocator_),
         mds_cache_(reserve_allocator_),
+        has_extra_log_cb_group_(false),
+        reserve_log_cb_group_(true/*is_reserve*/),
+        extra_cb_group_list_(),
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
@@ -183,6 +189,7 @@ public:
   int init(const uint64_t tenant_id,
            const common::ObAddr &scheduler,
            const uint32_t session_id,
+           const uint32_t client_sid,
            const uint32_t associated_session_id,
            const ObTransID &trans_id,
            const int64_t trans_expired_time,
@@ -245,6 +252,7 @@ public:
   int check_modify_time_elapsed(const ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const;
   int iterate_tx_lock_stat(ObTxLockStatIterator &iter);
   int get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr);
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
@@ -271,6 +279,7 @@ public:
 
   share::ObLSID get_ls_id() const { return ls_id_; }
   uint32_t get_session_id() const { return session_id_; }
+  uint32_t get_client_sid() const { return client_sid_; }
 
   // for elr
   bool is_can_elr() const { return can_elr_; }
@@ -308,6 +317,8 @@ private:
                           K_(pending_write),
                           "2pc_role",
                           to_str_2pc_role(get_2pc_role()),
+                          K(extra_cb_group_list_.get_size()),
+                          K(busy_cbs_.get_size()),
                           K(ctx_tx_data_),
                           K(role_state_),
                           K(create_ctx_scn_),
@@ -325,7 +336,6 @@ private:
                           KP_(block_frozen_memtable),
                           K_(max_2pc_commit_scn),
                           K(mt_ctx_));
-
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -749,6 +759,7 @@ private:
 
   int init_log_cbs_(const share::ObLSID&ls_id, const ObTransID &tx_id);
   int extend_log_cbs_(ObTxLogCb *&log_cb);
+  int extend_log_cb_group_();
   void reset_log_cb_list_(common::ObDList<ObTxLogCb> &cb_list);
   void reset_log_cbs_();
   int prepare_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
@@ -952,12 +963,17 @@ public:
    * @data_seq: the sequence_no of current access will be alloced
    *            new created data will marked with this seq no
    * @branch: branch id of this access
+   * @is_delete_insert: tag for delete_insert table
    */
-  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq, const int16_t branch);
+  int start_access(const ObTxDesc &tx_desc,
+                   ObTxSEQ &data_seq,
+                   const int16_t branch,
+                   const concurrent_control::ObWriteFlag &write_flag);
   /*
    * end_access - end of txn protected resources access
    */
   int end_access();
+  int check_pending_log_overflow(const int64_t stmt_timeout);
   int rollback_to_savepoint(const int64_t op_sn,
                             ObTxSEQ from_seq,
                             const ObTxSEQ to_seq,
@@ -1003,6 +1019,9 @@ public:
   bool is_parallel_logging() const;
   int assign_commit_parts(const share::ObLSArray &log_participants,
                           const ObTxCommitParts &log_commit_parts);
+#ifdef OB_BUILD_SHARED_STORAGE
+  sslog::ObSSLogNotifyTaskQueue &get_sslog_notify_queue() { return sslog_notify_queue_; }
+#endif
 protected:
   // for xa
   virtual bool is_sub2pc() const override
@@ -1088,10 +1107,13 @@ private:
   ObIRetainCtxCheckFunctor *retain_ctx_func_ptr_;
   // sub_state_ is volatile
   ObTxSubState sub_state_;
-  ObTxLogCb log_cbs_[PREALLOC_LOG_CALLBACK_COUNT];
+
+  bool has_extra_log_cb_group_;
+  ObTxLogCbGroup reserve_log_cb_group_;
+  TxLogCbGroupList extra_cb_group_list_;
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
-  ObTxLogCb final_log_cb_;
+
   ObSpinLock log_cb_lock_;
   ObTxLogBigSegmentInfo big_segment_info_;
   // flag if the first callback is linked to a logging_block memtable
@@ -1162,6 +1184,10 @@ private:
 
   // for transfer move tx ctx to clean for abort
   bool transfer_deleted_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for sslog notify service
+  sslog::ObSSLogNotifyTaskQueue sslog_notify_queue_;
+#endif
   // ========================================================
 };
 

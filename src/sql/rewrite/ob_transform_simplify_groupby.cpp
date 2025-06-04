@@ -310,13 +310,11 @@ int ObTransformSimplifyGroupby::remove_child_stmts_group_by(ObArray<ObSelectStmt
                    T_FUN_SYS_BIT_AND == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_OR == expr->get_expr_type() ||
                    T_FUN_SYS_BIT_XOR == expr->get_expr_type()) {
-          ObRawExpr *cast_expr;
-          if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                              ctx_->session_info_,
-                                                              *expr->get_param_expr(0),
-                                                              expr->get_result_type(),
-                                                              cast_expr))) {
-            LOG_WARN("try add cast expr above failed", K(ret));
+          ObRawExpr *cast_expr = expr->get_param_expr(0);
+          if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, cast_expr,
+                                                                      ctx_->session_info_))) {
+            LOG_WARN("failed to add cast", K(ret));
           } else {
             stmt->get_select_item(i).expr_ = cast_expr;
           }
@@ -1159,6 +1157,7 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
   ObSEArray<ObRawExpr*, 2> count_null_exprs;
   ObSEArray<ObRawExpr*, 2> const_zeros;
   ObConstRawExpr *const_zero = NULL;
+  ObRawExpr *const_zero_with_cast = NULL;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(select_stmt), K(ctx_));
@@ -1175,7 +1174,12 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
       } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_, 0,
                                                                       const_zero))) {
         LOG_WARN("failed to build const expr for count", K(ret));
-      } else if (OB_FAIL(const_zeros.push_back(const_zero))) {
+      } else if (OB_FALSE_IT(const_zero_with_cast = const_zero)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                        aggr, const_zero_with_cast,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast for replace if need", K(ret));
+      } else if (OB_FAIL(const_zeros.push_back(const_zero_with_cast))) {
         LOG_WARN("failed to push back exprs", K(ret));
       }
     }
@@ -2494,7 +2498,7 @@ int ObTransformSimplifyGroupby::get_split_result_expr(
   }
 
   if (OB_SUCC(ret)) {
-    ObExprResType res_type = aggr_expr->get_result_type();
+    ObRawExprResType res_type = aggr_expr->get_result_type();
     ObRawExpr *casted_const_expr = NULL;
     ObOpRawExpr *mul_expr = NULL; /* count(column) * const */
     ObOpRawExpr *upper_expr = NULL; /* add expr or minus expr */
@@ -2611,7 +2615,7 @@ int ObTransformSimplifyGroupby::transform_split_const(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(select_stmt.replace_relation_exprs(src_exprs, dst_exprs))) {
     LOG_WARN("failed to replace relation exprs", K(ret));
-  } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else {
     trans_happened = true;

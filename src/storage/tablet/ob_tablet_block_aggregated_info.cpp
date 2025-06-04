@@ -299,7 +299,7 @@ int ObTabletMacroInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos)
     LOG_WARN("ObBlockInfoArray hasn't been inited", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || buf_len - pos < total_size)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(pos));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(pos), K(total_size));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, meta_pos, version))) {
     LOG_WARN("fail to serialize version", K(ret), KP(buf), K(buf_len), K(version));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, meta_pos, size))) {

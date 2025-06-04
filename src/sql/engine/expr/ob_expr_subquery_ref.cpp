@@ -174,12 +174,8 @@ int ObExprSubQueryRef::ObExprSubQueryRefCtx::add_cursor_info(
   CK (OB_NOT_NULL(cursor_info));
   OX (session_info_ = session_info);
   if (OB_FAIL(ret)) {
-  } else if (NULL == cursor_info_) {
-    OX (cursor_info_ = cursor_info);
-  } else if (cursor_info_ != cursor_info) {
-    OZ (cursor_info_->close(*session_info_));
-    OX (cursor_info_->~ObPLCursorInfo());
-    OX (cursor_info_ = cursor_info);
+  } else if (OB_FAIL(cursor_infos_.push_back(cursor_info))) {
+    LOG_WARN("failed to push back cursor_info", K(ret));
   }
   return ret;
 }
@@ -259,12 +255,15 @@ int ObExprSubQueryRef::cg_expr(
 }
 
 int ObExprSubQueryRef::convert_datum_to_obj(
-    ObEvalCtx &ctx, ObSubQueryIterator &iter, ObIAllocator &allocator, ObNewRow &row)
+    ObEvalCtx &ctx, ObSubQueryIterator &iter, ObSPICursor* spi_cursor, ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  if (iter.get_output().count() > 0 && NULL == row.cells_) {
+  CK (OB_NOT_NULL(spi_cursor));
+  CK (OB_NOT_NULL(spi_cursor->allocator_));
+  if (OB_FAIL(ret)) {
+  } else if (iter.get_output().count() > 0 && NULL == row.cells_) {
     if (OB_ISNULL(row.cells_ = static_cast<ObObj *>(
-                  allocator.alloc(sizeof(ObObj) * iter.get_output().count())))) {
+                  spi_cursor->allocator_->alloc(sizeof(ObObj) * iter.get_output().count())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
@@ -279,12 +278,43 @@ int ObExprSubQueryRef::convert_datum_to_obj(
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < iter.get_output().count(); i++) {
       ObDatum *datum = NULL;
+      ObObj& obj = row.cells_[i];
       ObExpr *expr = iter.get_output().at(i);
       if (OB_FAIL(expr->eval(ctx, datum))) {
         LOG_WARN("expr evaluate failed", K(ret));
       } else if (OB_FAIL(datum->to_obj(
-                 row.cells_[i], expr->obj_meta_, expr->obj_datum_map_))) {
+                         obj, expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("convert datum to obj failed", K(ret));
+      } else { //deep copy to spi_cursor
+        ObObj tmp;
+        if (obj.is_pl_extend()) {
+          if (pl::PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
+            pl::ObPLCursorInfo* cursor_info = reinterpret_cast<pl::ObPLCursorInfo*>(obj.get_ext());
+            if (OB_NOT_NULL(cursor_info)) {
+              if (OB_FAIL(spi_cursor->complex_objs_.push_back(obj))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {
+                cursor_info->inc_ref_count();
+              }
+            }
+          } else {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(spi_cursor->allocator_), obj, tmp))) {
+              LOG_WARN("failed to copy pl extend", K(ret));
+            } else {
+              obj = tmp;
+              if (OB_FAIL(spi_cursor->complex_objs_.push_back(tmp))) {
+                int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp, spi_cursor->session_info_);
+                LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+              }
+            }
+          }
+        } else {
+          if (OB_FAIL(deep_copy_obj(*spi_cursor->allocator_, obj, tmp))) {
+            LOG_WARN("failed to deep copy obj", K(ret));
+          } else {
+            obj = tmp;
+          }
+        }
       }
     }
   }
@@ -315,30 +345,24 @@ int ObExprSubQueryRef::expr_eval(
 #ifdef OB_BUILD_ORACLE_PL
   } else if (extra_info->is_cursor_) {
     const pl::ObRefCursorType pl_type;
-    int64_t param_size = 0;
-    char *data = NULL;
     ObObj *obj = NULL;
     pl::ObPLCursorInfo *cursor = NULL;
     ObSPICursor* spi_cursor = NULL;
     uint64_t size = 0;
     ObNewRow row;
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    CK (OB_NOT_NULL(session));
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
-    OZ (pl_type.get_size(pl::PL_TYPE_INIT_SIZE, param_size));
-    CK (OB_NOT_NULL(data = static_cast<char *>(
-        ctx.exec_ctx_.get_allocator().alloc(param_size))));
     CK (OB_NOT_NULL(obj = static_cast<ObObj *>(
         ctx.exec_ctx_.get_allocator().alloc(sizeof(ObObj)))));
-    if (OB_SUCC(ret)) {
-      MEMSET(data, 0, param_size);
-      new(data) pl::ObPLCursorInfo(&ctx.exec_ctx_.get_allocator());
-      obj->set_extend(reinterpret_cast<int64_t>(data), pl::PL_CURSOR_TYPE);
-      expr_datum.from_obj(*obj);
-      OX (cursor = reinterpret_cast<pl::ObPLCursorInfo*>(obj->get_ext()));
-    }
+    OZ (session->make_cursor(cursor));
     CK (OB_NOT_NULL(cursor));
-    CK (OB_NOT_NULL(session));
+    OX (cursor->set_is_session_cursor());
+    OX (cursor->set_ref_by_refcursor());
+    OX (cursor->set_ref_count(1));
+    OX (obj->set_extend(reinterpret_cast<int64_t>(cursor), pl::PL_REF_CURSOR_TYPE));
+    OX (expr_datum.from_obj(*obj));
     OZ (session->get_tmp_table_size(size));
     OZ (cursor->prepare_spi_cursor(spi_cursor,
                                    session->get_effective_tenant_id(),
@@ -349,7 +373,7 @@ int ObExprSubQueryRef::expr_eval(
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter->get_next_row())) {
         //do nothing
-      } else if (OB_FAIL(convert_datum_to_obj(ctx, *iter, ctx.exec_ctx_.get_allocator(), row))) {
+      } else if (OB_FAIL(convert_datum_to_obj(ctx, *iter, spi_cursor, row))) {
         LOG_WARN("failed to convert datum to obj", K(ret));
       } else if (OB_FAIL(spi_cursor->row_store_.add_row(row))) {
         LOG_WARN("failed to add row to row store", K(ret));
@@ -366,7 +390,6 @@ int ObExprSubQueryRef::expr_eval(
     if (OB_SUCC(ret)) {
       OX (spi_cursor->row_store_.finish_add_row());
       OX (cursor->open(spi_cursor));
-      OZ (session->add_non_session_cursor(cursor));  //add to non session cursor map
       if (lib::is_oracle_mode()) {
         transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
         OZ (cursor->set_and_register_snapshot(snapshot));
@@ -380,8 +403,11 @@ int ObExprSubQueryRef::expr_eval(
       CK (OB_NOT_NULL(sub_query_ctx));
       OZ (sub_query_ctx->add_cursor_info(cursor, ctx.exec_ctx_.get_my_session()));
       if (OB_FAIL(ret)) {
-        cursor->close(*ctx.exec_ctx_.get_my_session());
-        cursor->~ObPLCursorInfo();
+        session->close_cursor(cursor->get_id());
+      }
+    } else {
+      if (OB_NOT_NULL(cursor) && OB_NOT_NULL(session)) {
+        session->close_cursor(cursor->get_id());
       }
     }
 #endif

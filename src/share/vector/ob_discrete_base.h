@@ -34,13 +34,13 @@ public:
   OB_INLINE void set_lens(ObLength *lens) { lens_ = lens; }
   inline char **get_ptrs() const { return ptrs_; }
   OB_INLINE void set_ptrs(char **ptrs) { ptrs_ = ptrs; }
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int32_t to_rows(const sql::RowMeta &row_meta,
                        sql::ObCompactRow **stored_rows,
                        const uint16_t selector[],
                        const int64_t size,
                        const int64_t col_idx) const override final;
 
-  virtual void to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+  virtual int to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
                        const int64_t size, const int64_t col_idx) const override final;
 
 protected:

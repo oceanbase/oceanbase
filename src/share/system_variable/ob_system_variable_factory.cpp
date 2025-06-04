@@ -563,6 +563,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
   "_clear_last_archive_timestamp",
   "_create_audit_purge_job",
+  "_current_default_catalog",
   "_drop_audit_purge_job",
   "_enable_mysql_pl_priv_check",
   "_enable_old_charset_aggregation",
@@ -676,6 +677,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "eq_range_index_dive_limit",
   "error_count",
   "error_on_overlap_time",
+  "event_scheduler",
   "expire_logs_days",
   "explicit_defaults_for_timestamp",
   "external_user",
@@ -1096,6 +1098,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_parameter_anonymous_block",
   "ob_enable_pl_cache",
   "ob_enable_plan_cache",
+  "ob_enable_ps_parameter_anonymous_block",
   "ob_enable_rich_error_msg",
   "ob_enable_show_trace",
   "ob_enable_sql_audit",
@@ -1126,6 +1129,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
   "ob_security_version",
+  "ob_sparse_drop_ratio_search",
   "ob_sql_audit_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
@@ -1400,6 +1404,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
   SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP,
   SYS_VAR__CREATE_AUDIT_PURGE_JOB,
+  SYS_VAR__CURRENT_DEFAULT_CATALOG,
   SYS_VAR__DROP_AUDIT_PURGE_JOB,
   SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK,
   SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
@@ -1513,6 +1518,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_ERROR_COUNT,
   SYS_VAR_ERROR_ON_OVERLAP_TIME,
+  SYS_VAR_EVENT_SCHEDULER,
   SYS_VAR_EXPIRE_LOGS_DAYS,
   SYS_VAR_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,
   SYS_VAR_EXTERNAL_USER,
@@ -1933,6 +1939,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK,
   SYS_VAR_OB_ENABLE_PL_CACHE,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
+  SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
   SYS_VAR_OB_ENABLE_SHOW_TRACE,
   SYS_VAR_OB_ENABLE_SQL_AUDIT,
@@ -1963,6 +1970,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
   SYS_VAR_OB_SECURITY_VERSION,
+  SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH,
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
@@ -2709,6 +2717,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_autoinc_lock_mode",
   "skip_external_locking",
   "super_read_only",
+  "event_scheduler",
   "plsql_optimize_level",
   "low_priority_updates",
   "max_error_count",
@@ -3065,8 +3074,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "mview_refresh_dop",
   "enable_optimizer_rowgoal",
   "ob_ivf_nprobes",
+  "_current_default_catalog",
+  "ob_enable_ps_parameter_anonymous_block",
   "ob_hnsw_extra_info_max_size",
-  "_push_join_predicate"
+  "_push_join_predicate",
+  "ob_sparse_drop_ratio_search"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -3747,6 +3759,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbAutoincLockMode)
         + sizeof(ObSysVarSkipExternalLocking)
         + sizeof(ObSysVarSuperReadOnly)
+        + sizeof(ObSysVarEventScheduler)
         + sizeof(ObSysVarPlsqlOptimizeLevel)
         + sizeof(ObSysVarLowPriorityUpdates)
         + sizeof(ObSysVarMaxErrorCount)
@@ -4103,8 +4116,11 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarMviewRefreshDop)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarObIvfNprobes)
+        + sizeof(ObSysVarCurrentDefaultCatalog)
+        + sizeof(ObSysVarObEnablePsParameterAnonymousBlock)
         + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         + sizeof(ObSysVarPushJoinPredicate)
+        + sizeof(ObSysVarObSparseDropRatioSearch)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -8398,6 +8414,15 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EVENT_SCHEDULER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEventScheduler));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
@@ -11602,6 +11627,24 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__CURRENT_DEFAULT_CATALOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCurrentDefaultCatalog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePsParameterAnonymousBlock));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObHnswExtraInfoMaxSize())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObHnswExtraInfoMaxSize", K(ret));
@@ -11617,6 +11660,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__PUSH_JOIN_PREDICATE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPushJoinPredicate));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObSparseDropRatioSearch));
       }
     }
 
@@ -16865,6 +16917,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       }
       break;
     }
+    case SYS_VAR_EVENT_SCHEDULER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEventScheduler)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEventScheduler)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
+      }
+      break;
+    }
     case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlOptimizeLevel)))) {
@@ -20781,6 +20844,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       }
       break;
     }
+    case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCurrentDefaultCatalog)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCurrentDefaultCatalog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCurrentDefaultCatalog())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCurrentDefaultCatalog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePsParameterAnonymousBlock)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePsParameterAnonymousBlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePsParameterAnonymousBlock", K(ret));
+      }
+      break;
+    }
     case SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObHnswExtraInfoMaxSize)))) {
@@ -20800,6 +20885,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPushJoinPredicate())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPushJoinPredicate", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObSparseDropRatioSearch)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObSparseDropRatioSearch)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
       }
       break;
     }

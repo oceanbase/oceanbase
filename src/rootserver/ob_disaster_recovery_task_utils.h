@@ -31,6 +31,7 @@ class DisasterRecoveryUtils
 {
 public:
   const static int64_t INVALID_DR_SERVICE_EPOCH_VALUE = -1;
+  const static int64_t DR_TASK_RPC_REQUEST_TIMEOUT = 10 * 1000 * 1000; // 10s
   const static int64_t MAX_REPORT_RETRY_TIMES = 3;
   const static int64_t REPORT_RETRY_INTERVAL_MS = 100 * 1000; // 100ms
 public:
@@ -38,6 +39,10 @@ public:
   virtual ~DisasterRecoveryUtils() {}
 
 public:
+  static int get_tenant_zone_list(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObZone> &zone_list);
+
   static int wakeup_local_service(const uint64_t tenant_id);
 
   static int wakeup_tenant_service(
@@ -136,7 +141,8 @@ public:
       const share::ObTaskId &task_id,
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
-      const int ret_code);
+      const int ret_code,
+      const obrpc::ObDRTaskType &task_type);
 
   // check whether the tenant was enabled parallel migrate
   // @params[in]  tenant_id, tenant to check
@@ -144,6 +150,31 @@ public:
   static int check_tenant_enable_parallel_migration(
       const uint64_t &tenant_id,
       bool &enable_parallel_migration);
+  static int check_member_list_for_single_replica(
+      const common::ObMemberList &member_list,
+      bool &pass_check);
+  static int get_all_meta_tenant_ids(
+      ObIArray<uint64_t> &meta_tenant_ids);
+  static int get_service_epoch_value_to_check(
+      const ObDRTask &task,
+      const uint64_t thread_tenant_id,
+      const int64_t thread_service_epoch,
+      int64_t &service_epoch);
+  static int get_service_epoch_and_persistent_tenant(
+      const uint64_t task_tenant_id,
+      const obrpc::ObDRTaskType &task_type,
+      uint64_t &service_epoch_tenant,
+      uint64_t &persistent_tenant);
+  static int check_dest_has_sslog(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObAddr& dest_server,
+      bool has_sslog);
+  static int get_member_info(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      palf::LogConfigVersion &config_version,
+      common::ObMemberList &member_list);
 private:
 
   // get ObReplicaMember from leader member list in meta table

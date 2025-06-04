@@ -116,6 +116,8 @@ public:
                           const common::ObIArray<common::ObString> &enum_set_values);
   inline const common::ObIArray<common::ObString> &get_enum_set_values() const { return enum_set_values_; }
   int assign(const ObKeyPartPos &other);
+
+  int deep_copy(common::ObIAllocator &allocator, const ObKeyPartPos &other);
   TO_STRING_KV(N_OFFSET, offset_,
                N_COLUMN_TYPE, column_type_,
                N_ENUM_SET_VALUES, enum_set_values_);
@@ -171,6 +173,7 @@ struct InParamMeta
     ObKeyPartPos pos_;
     ObArray<ObObj> vals_;
     int assign(const InParamMeta &other, ObIAllocator &alloc);
+    int deep_copy( ObIAllocator &alloc, const InParamMeta &other);
     TO_STRING_KV(K_(pos), K_(vals));
 };
 

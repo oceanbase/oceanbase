@@ -21,7 +21,7 @@ void ObRedisTTLCtx::reset()
 {
   meta_ = nullptr;
   return_meta_ = false;
-  model_ = ObRedisModel::INVALID;
+  model_ = ObRedisDataModel::MODEL_MAX;
 }
 }  // namespace table
 }  // namespace oceanbase

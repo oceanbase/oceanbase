@@ -31,13 +31,19 @@ public:
       inv_scan_vec_id_col_(nullptr),
       vec_index_param_(),
       dim_(0),
+      vec_type_(ObVecIndexType::VEC_INDEX_INVALID),
+      algorithm_type_(ObVectorIndexAlgorithmType::VIAT_MAX),
+      selectivity_(0.0),
+      row_count_(0),
       access_pk_(false),
       can_use_vec_pri_opt_(false),
+      extra_column_count_(0),
       spiv_scan_docid_col_(nullptr),
       spiv_scan_value_col_(nullptr) {}
 
-  inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_; }
-  inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_; }
+  inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
+  inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
+  inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
 
@@ -56,6 +62,12 @@ public:
   int64_t get_ivf_rowkey_cid_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
   int64_t get_ivf_sq_meta_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX ; }
   int64_t get_ivf_pq_id_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
+
+  // SPIV
+  int64_t get_spiv_scan_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
+  int64_t get_spiv_rowkey_docid_tbl_idx() const { return ObVecAuxTableIdx::SECOND_VEC_AUX_TBL_IDX; }
+  int64_t get_spiv_aux_data_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
+
 
   const ObDASBaseCtDef *get_inv_idx_scan_ctdef() const
   {
@@ -80,7 +92,7 @@ public:
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        KPC_(inv_scan_vec_id_col), K_(vec_index_param), K_(dim),
-                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count));
+                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count), K_(extra_column_count));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;

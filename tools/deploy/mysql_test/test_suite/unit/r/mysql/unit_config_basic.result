@@ -304,6 +304,20 @@ alter resource unit box_for_unit_config_test IOPS_WEIGHT=0.9;
 ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be 'number' type
 alter resource unit box_for_unit_config_test IOPS_WEIGHT=100.90;
 ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be 'number' type
+====   DATA_DISK_SIZE
+shared_nothing模式, 不可指定;
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=2147483647;
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=-1;
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE='2048';
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=2147483648.0;
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE='2G';
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
+alter resource unit box_for_unit_config_test DATA_DISK_SIZE=0;
+ERROR 0A000: DATA_DISK_SIZE in shared-nothing mode not supported
 ====   MAX_NET_BANDWIDTH: 最小值
 alter resource unit box_for_unit_config_test MAX_NET_BANDWIDTH='1M';
 select * from dba_ob_unit_configs where name = 'box_for_unit_config_test';

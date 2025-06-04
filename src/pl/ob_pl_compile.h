@@ -161,12 +161,14 @@ public:
   ObPLCompilerEnvGuard(const ObPackageInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
+                       ObPLCompileUnitAST &compile_unit,
                        int &ret,
                        const ObPLBlockNS *prarent_ns = nullptr);
 
   ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
+                       ObPLCompileUnitAST &compile_unit,
                        int &ret);
 
   ~ObPLCompilerEnvGuard();
@@ -176,6 +178,7 @@ private:
   void init(const Info &info,
             ObSQLSessionInfo &sessionInfo,
             share::schema::ObSchemaGetterGuard &schema_guard,
+            ObPLCompileUnitAST &compile_unit,
             int &ret,
             const ObPLBlockNS *parent_ns = nullptr);
 

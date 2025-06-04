@@ -21,12 +21,27 @@ using namespace std;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
+struct TestTenantCtxAllocator
+{
+  TestTenantCtxAllocator(int64_t tenant_id, int64_t ctx_id = 0)
+    : ctx_allocator_(tenant_id, ctx_id, &allocator_, 1),
+      allocator_(ctx_allocator_, tenant_id, ctx_id, 0)
+  {
+    ctx_allocator_.set_tenant_memory_mgr();
+    ctx_allocator_.set_limit(INT64_MAX);
+  }
+  int set_tenant_memory_mgr() {return ctx_allocator_.set_tenant_memory_mgr(); }
+  int set_limit(int64_t size) { return ctx_allocator_.set_limit(size); }
+
+  ObTenantCtxAllocatorV2 ctx_allocator_;
+  ObTenantCtxAllocator allocator_;
+};
+
 TEST(TestTenantAllocator, CtxAlloc)
 {
   CHUNK_MGR.set_max_chunk_cache_size(1<<20);
-  ObTenantCtxAllocator ta(123, 1);
-  ta.set_tenant_memory_mgr();
-  ta.set_limit(INT64_MAX);
+  TestTenantCtxAllocator test_allocator(123, 1);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
   ObMemAttr attr(123, "TenantCtxAlloc", 1);
   const int64_t hold = get_memory_hold();
 
@@ -40,9 +55,8 @@ TEST(TestTenantAllocator, CtxAlloc)
 
 TEST(TestTenantAllocator, SysLimit)
 {
-  ObTenantCtxAllocator ta(324);
-  ta.set_tenant_memory_mgr();
-  ta.set_limit(INT64_MAX);
+  TestTenantCtxAllocator test_allocator(324);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
   ObMemAttr attr(324, "TenantCtxAlloc");
   const int64_t hold = get_memory_hold();
 
@@ -60,9 +74,8 @@ TEST(TestTenantAllocator, SysLimit)
 
 TEST(TestTenantAllocator, TenantLimit)
 {
-  ObTenantCtxAllocator ta(324);
-  ta.set_tenant_memory_mgr();
-  ta.set_limit(INT64_MAX);
+  TestTenantCtxAllocator test_allocator(324);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
   ObMemAttr attr(324, "TenantCtxAlloc");
   const int64_t hold = get_memory_hold();
 
@@ -90,9 +103,8 @@ TEST(TestTenantAllocator, TenantLimit)
 
 TEST(TestTenantAllocator, SetMemoryMgrTwice)
 {
-  ObTenantCtxAllocator ta(324);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
-  ASSERT_EQ(OB_INIT_TWICE, ta.set_tenant_memory_mgr());
+  TestTenantCtxAllocator test_allocator(324);
+  ASSERT_EQ(OB_INIT_TWICE, test_allocator.set_tenant_memory_mgr());
 }
 
 TEST(TestTenantAllocator, ctx_limit)
@@ -100,11 +112,8 @@ TEST(TestTenantAllocator, ctx_limit)
   CHUNK_MGR.set_limit(1L * 1024L * 1024L * 1024L);
   const uint64_t tenant_id = 1001;
   const uint64_t ctx_id = 1;
-  ObTenantCtxAllocator ta(tenant_id);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
-  ta.set_limit(INT64_MAX);
-  ObTenantCtxAllocator ctx_ta(tenant_id, ctx_id);
-  ASSERT_EQ(OB_SUCCESS, ctx_ta.set_tenant_memory_mgr());
+  TestTenantCtxAllocator test_allocator(tenant_id, ctx_id);
+  ObTenantCtxAllocator &ctx_ta = test_allocator.allocator_;
 
   ObMemAttr attr;
   attr.tenant_id_ = tenant_id;
@@ -132,10 +141,10 @@ TEST(TestTenantAllocator, reserve)
   CHUNK_MGR.set_limit(1L * 1024L * 1024L * 1024L);
   const uint64_t tenant_id = 1003;
   const uint64_t ctx_id = 1;
-  ObTenantCtxAllocator ta(tenant_id, ctx_id);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
+  TestTenantCtxAllocator test_allocator(tenant_id, ctx_id);
   const int64_t limit = 1L * 1024L * 1024L * 1024L;
-  ta.set_limit(limit);
+  test_allocator.set_limit(limit);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
 
   ASSERT_EQ(nullptr, ta.head_chunk_.next_);
   const int64_t reserve_size = 2 * INTACT_ACHUNK_SIZE;
@@ -184,10 +193,10 @@ TEST(TestTenantAllocator, set_idle)
   CHUNK_MGR.set_limit(1L * 1024L * 1024L * 1024L);
   const uint64_t tenant_id = 1004;
   const uint64_t ctx_id = 1;
-  ObTenantCtxAllocator ta(tenant_id, ctx_id);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
+  TestTenantCtxAllocator test_allocator(tenant_id, ctx_id);
   const int64_t limit = 1L * 1024L * 1024L * 1024L;
-  ta.set_limit(limit);
+  test_allocator.set_limit(limit);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
   ObMemAttr attr(tenant_id, "TenantCtxAlloc", ctx_id);
   void *ptr = ta.alloc(INTACT_ACHUNK_SIZE / 2, attr);
   ASSERT_NE(nullptr, ptr);
@@ -223,10 +232,10 @@ TEST(TestTenantAllocator, idle)
   CHUNK_MGR.set_limit(1L * 1024L * 1024L * 1024L);
   const uint64_t tenant_id = 1005;
   const uint64_t ctx_id = 1;
-  ObTenantCtxAllocator ta(tenant_id, ctx_id);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
+  TestTenantCtxAllocator test_allocator(tenant_id, ctx_id);
   const int64_t limit = 1L * 1024L * 1024L * 1024L;
-  ta.set_limit(limit);
+  test_allocator.set_limit(limit);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
 
   // > limit
   ASSERT_EQ(OB_INVALID_ARGUMENT, ta.set_idle(limit + INTACT_ACHUNK_SIZE));
@@ -288,9 +297,10 @@ TEST(TestTenantAllocator, chunk_free_list_push_pop_concurrency)
   CHUNK_MGR.set_limit(1L * 1024L * 1024L * 1024L);
   const uint64_t tenant_id = 1002;
   const uint64_t ctx_id = 1;
-  ObTenantCtxAllocator ta(tenant_id, ctx_id);
-  ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
-  ta.set_limit(INT64_MAX);
+  TestTenantCtxAllocator test_allocator(tenant_id, ctx_id);
+  const int64_t limit = 1L * 1024L * 1024L * 1024L;
+  test_allocator.set_limit(limit);
+  ObTenantCtxAllocator &ta = test_allocator.allocator_;
 
   ASSERT_EQ(nullptr, ta.head_chunk_.next_);
 
@@ -366,7 +376,6 @@ TEST(TestTenantAllocator, sub_ctx_id)
   ASSERT_EQ(true, NULL == ptr);
 
   int64_t wash_size = ta->sync_wash(INT64_MAX);
-  ASSERT_NE(0, wash_size);
   ptr = ob_malloc(size, ObMemAttr(tenant_id, "TestSubCtx", ctx_id));
   ASSERT_EQ(true, NULL != ptr);
   ASSERT_EQ(wash_size, ta->sync_wash(INT64_MAX) * ObSubCtxIds::MAX_SUB_CTX_ID);

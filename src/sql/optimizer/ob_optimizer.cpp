@@ -495,7 +495,6 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else {
     can_use_pdml = false;
   }
-
   if (OB_FAIL(ret)) {
   } else if (can_use_pdml && OB_FAIL(check_is_heap_table(stmt))) {
     LOG_WARN("failed to check is heap table", K(ret));
@@ -540,9 +539,9 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
   } else if (table_infos.count() != 1) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_JOINED_TABLES);
-  } else if (stmt::T_INSERT == pdml_stmt.get_stmt_type() &&
-             static_cast< const ObInsertStmt &>(pdml_stmt).is_insert_up()) {
-    is_use_pdml = false;
+  } else if (OB_FAIL(check_pdml_insert_up_enabled(pdml_stmt, session, is_use_pdml))) {
+    LOG_WARN("check pdml insert up enabled failed", K(ret));
+  } else if (!is_use_pdml) {
     ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_UP);
   } else if (pdml_stmt.is_pdml_disabled()) {
     is_use_pdml = false;
@@ -598,6 +597,75 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
           is_use_pdml = false;
           ctx_.add_plan_note(PDML_DISABLED_BY_UPDATE_NOW);
         }
+      }
+    }
+  }
+  return ret;
+}
+
+// disable pdml insert on duplicate when exists unique index or update unique key.
+int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
+                                              const ObSQLSessionInfo &session,
+                                              bool &is_use_pdml)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  if (stmt::T_INSERT == pdml_stmt.get_stmt_type() &&
+             static_cast<const ObInsertStmt &>(pdml_stmt).is_insert_up()) {
+    is_use_pdml = false;
+    bool enable_pdml_insert_up = false;
+    if (OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query ctx is null", K(ret));
+    } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(
+                ObOptParamHint::ENABLE_PDML_INSERT_UP, enable_pdml_insert_up))) {
+      LOG_WARN("fail to get bool opt param", K(ret));
+    } else if (!enable_pdml_insert_up) {
+      is_use_pdml = false;
+      LOG_TRACE("disable pdml insert up");
+    } else {
+      const share::schema::ObTableSchema *table_schema = NULL;
+      const ObInsertStmt &insert_stmt = static_cast<const ObInsertStmt &>(pdml_stmt);
+      uint64_t ref_table_id = insert_stmt.get_insert_table_info().ref_table_id_;
+      share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
+      ObSEArray<const ObSimpleTableSchemaV2 *, 8> index_schema;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is null", K(ret));
+      } else if (OB_INVALID_ID == ref_table_id) {
+        // do nothing.
+      } else if (OB_FAIL(schema_guard->get_index_schemas_with_data_table_id(session.get_effective_tenant_id(),
+                                                      ref_table_id, index_schema))) {
+        LOG_WARN("get unique index ids failed", K(ret), K(ref_table_id));;
+      } else {
+        bool has_unique_or_global_idx = false;
+        for (int64_t i = 0; i < index_schema.count() && !has_unique_or_global_idx && OB_SUCC(ret); i++) {
+          const ObSimpleTableSchemaV2 *index = NULL;
+          if (OB_ISNULL(index = index_schema.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("schema is null", K(ret));
+          } else if ((index->is_unique_index() || index->is_global_index_table())
+                     && index->get_index_type() != INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY) {
+            has_unique_or_global_idx = true;
+          }
+        }
+        if (OB_SUCC(ret) && !has_unique_or_global_idx) {
+          const ObIArray<ObAssignment> &assignments = insert_stmt.get_table_assignments();
+          bool update_unique_key = false;
+          for (int64_t i = 0; i < assignments.count() && OB_SUCC(ret); i++) {
+            const ObColumnRefRawExpr *col_expr = assignments.at(i).column_expr_;
+            if (OB_ISNULL(col_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column ref raw expr is null");
+            } else if (col_expr->is_rowkey_column() || col_expr->is_unique_key_column()) {
+              update_unique_key = true;
+              break;
+            }
+          }
+          is_use_pdml = !update_unique_key;
+        }
+        LOG_TRACE("check whether enable pdml insert on duplicate", K(ref_table_id),
+                  K(index_schema));
       }
     }
   }
@@ -721,7 +789,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to check has ref assign user var", K(ret));
   } else if (OB_FAIL(session.is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
     LOG_WARN("fail to get force_serial_set_order", K(ret));
-  } else if (OB_FAIL(check_force_default_stat())) {
+  } else if (OB_FAIL(check_force_default_stat(stmt))) {
     LOG_WARN("failed to check force default stat", K(ret));
   } else if (OB_FAIL(init_system_stat())) {
     LOG_WARN("failed to init system stat", K(ret));
@@ -789,7 +857,11 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
-    ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
+    if (query_ctx->get_query_hint().has_outline_data()) {
+      ctx_.set_push_join_pred_into_view_enabled(true);
+    } else {
+      ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
+    }
     ctx_.set_enable_px_ordered_coord(enable_px_ordered_coord);
     ctx_.set_enable_distributed_das_scan(enable_distributed_das_scan);
     if (!hash_join_enabled
@@ -1347,7 +1419,7 @@ int ObOptimizer::update_column_usage_infos()
   return ret;
 }
 
-int ObOptimizer::check_force_default_stat()
+int ObOptimizer::check_force_default_stat(const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard* schema_guard = ctx_.get_schema_guard();
@@ -1375,6 +1447,13 @@ int ObOptimizer::check_force_default_stat()
   } else if (is_exists_opt && use_default_opt_stat) {
     ctx_.set_use_default_stat();
   }
+  #ifdef OB_BUILD_SHARED_STORAGE
+  else if (stmt.is_single_table_stmt()
+        && OB_NOT_NULL(stmt.get_table_item(0))
+        && is_shared_storage_sslog_table(stmt.get_table_item(0)->ref_id_)) {
+    ctx_.set_use_default_stat();
+  }
+  #endif
   return ret;
 }
 
@@ -1388,6 +1467,8 @@ int ObOptimizer::init_system_stat()
   if (OB_ISNULL(opt_stat_manager) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret));
+  } else if (ctx_.use_default_stat()) {
+    // skip
   } else if (OB_FAIL(opt_stat_manager->check_system_stat_validity(ctx_.get_exec_ctx(),
                                                                   session->get_effective_tenant_id(),
                                                                   is_valid))) {

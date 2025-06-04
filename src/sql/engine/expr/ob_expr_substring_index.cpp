@@ -63,8 +63,7 @@ inline int ObExprSubstringIndex::calc_result_type3(ObExprResType &type,
   if (OB_SUCC(ret)) {
     type.set_varchar();
     type.set_length(str.get_length());
-    common::ObArenaAllocator alloc;
-    ObExprResType types[2] = {alloc, alloc};
+    ObExprResType types[2] = {};
     types[0] = str;
     types[1] = delim;
     if (OB_FAIL(aggregate_charsets_for_string_result_with_comparison(type, types, 2, type_ctx))) {

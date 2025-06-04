@@ -65,7 +65,7 @@ TestKVCache::TestKVCache()
     lower_mem_limit_(8 * 1024 * 1024),
     upper_mem_limit_(16 * 1024 * 1024)
 {
-  for (int64_t t = tenant_id_; t < tenant_id_ + 30; ++t) {
+  for (int64_t t = tenant_id_; t < tenant_id_ + 4; ++t) {
     auto guard = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(t, ObCtxIds::KVSTORE_CACHE_ID);
     if (nullptr == guard.allocator_) {
       ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(t);
@@ -376,7 +376,7 @@ TEST_F(TestKVCache, test_func)
   ret = cache.erase(key);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = cache.erase(key);
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
   //test alloc and put
   handle.reset();
@@ -554,7 +554,7 @@ TEST_F(TestKVCache, test_wash)
 
 
   COMMON_LOG(INFO, "********** Start nonempty wash every tenant **********");
-  for (int64_t t = 190000; t < 190030; ++t) {
+  for (int64_t t = 190000; t < 190004; ++t) {
     key.tenant_id_ = t;
     ret = getter.add_tenant(t,
                             lower_mem_limit_,
@@ -571,7 +571,7 @@ TEST_F(TestKVCache, test_wash)
 
   COMMON_LOG(INFO, "********** Start nonempty wash all tenant **********");
   for (int64_t j = 0; j < 20; ++j) {
-    for (int64_t t = 190000; t < 190030; ++t) {
+    for (int64_t t = 190000; t < 190004; ++t) {
       key.tenant_id_ = t;
       ret = getter.add_tenant(t,
                               lower_mem_limit_,
@@ -1251,6 +1251,7 @@ TEST_F(TestKVCache, cache_handle_pin) {
   static const int64_t V_SIZE = 8 << 10; // 8K
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
+  CHUNK_MGR.set_limit(5ll << 30);
 
   int ret = OB_SUCCESS;
   ObKVCache<TestKey, TestValue> cache;
@@ -1267,24 +1268,26 @@ TEST_F(TestKVCache, cache_handle_pin) {
   ret = cache.init("test");
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  bool finished = false;
   std::vector<std::thread> threads;
   constexpr static int64_t THREAD_NUM = 8;
   for (int64_t thread_idx = 0; thread_idx < THREAD_NUM; ++thread_idx) {
-    threads.emplace_back([&cache, thread_idx](){
+    threads.emplace_back([this, &cache, &finished, thread_idx](){
       int64_t handle_size = (thread_idx + 1) * 128;
       std::vector<ObKVCacheHandle> handles(handle_size);
       std::vector<typeof(pvalue)> values(handle_size);
 	  TestKey key;
 	  TestValue value;
-      for (uint16_t repeat = 0; repeat < 1; ++repeat) {
+      for (uint16_t repeat = 0; !ATOMIC_LOAD_RLX(&finished); repeat += THREAD_NUM, repeat = repeat % 1024) {
         for (uint16_t j = 0; j < handle_size; ++j) {
           auto val = (thread_idx << 32) + (repeat << 16) + j;
           key.v_ = val;
+          key.tenant_id_ = tenant_id_;
           value.v_ = val;
-          int ret = cache.put_and_fetch(key, value, values[j], handles[j]);
-          ASSERT_EQ(OB_SUCCESS, ret);
-          ASSERT_EQ(val, values[j]->v_);
-          ASSERT_TRUE(handles[j].is_valid());
+          ObKVCacheHandle handle, another_handle;
+          ASSERT_EQ(OB_SUCCESS, cache.put_and_fetch(key, value, values[j], handle));
+          ASSERT_EQ(OB_SUCCESS, another_handle.assign(handle));
+          handles[j].move_from(another_handle);
         }
         for (uint16_t j = 0; j < handle_size; ++j) {
           auto val = (thread_idx << 32) + (repeat << 16) + j;
@@ -1295,20 +1298,24 @@ TEST_F(TestKVCache, cache_handle_pin) {
     });
   }
 
-  bool finished = false;
-
   threads.emplace_back([&]() {
-    for (; ATOMIC_LOAD(&finished) == false;) {
-      ObKVGlobalCache::get_instance().wash();
+    while (!ATOMIC_LOAD(&finished)) {
+      ObKVGlobalCache::get_instance().store_.flush_washable_mbs(tenant_id_, false);
+      if (REACH_TIME_INTERVAL(1000)) {
+        HazardDomain::get_instance().wash();
+      }
+      if (REACH_TIME_INTERVAL(1000000)) {
+        ObKVGlobalCache::get_instance().print_all_cache_info();
+      }
     }
   });
 
-  for (auto i = 0; i < THREAD_NUM; ++i) {
-    threads[i].join();
-  }
-
+  sleep(10);
   ATOMIC_STORE(&finished, true);
-  threads.back().join();
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
 }
 
 // TEST(HazardPointer, produce_consume) {

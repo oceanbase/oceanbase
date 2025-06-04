@@ -419,6 +419,7 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(database);
   RETRIEVE_SCHEMA_FUNC_DECLARE(tablegroup);
   RETRIEVE_SCHEMA_FUNC_DECLARE(outline);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(catalog_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
@@ -461,6 +462,7 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_context);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -531,6 +533,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_column, ObRlsSecColumnSchema);
+  FILL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
 
   //for full schema
   template<typename T>
@@ -541,6 +544,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(database, ObDatabaseSchema);
   FILL_SCHEMA_FUNC_DECLARE(tablegroup, ObTablegroupSchema);
   FILL_SCHEMA_FUNC_DECLARE(outline, ObOutlineInfo);
+  FILL_SCHEMA_FUNC_DECLARE(catalog_priv, ObCatalogPriv);
   FILL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   FILL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   FILL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);

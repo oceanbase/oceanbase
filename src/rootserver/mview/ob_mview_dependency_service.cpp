@@ -256,7 +256,8 @@ int ObMViewDependencyService::update_mview_reference_table_status(
         LOG_TRACE("ref table schema is null", KR(ret), K(tenant_id), K(ref_table_id));
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
-      } else {
+      } else if ((update_opt.need_update_table_flag_ && ref_table_schema->get_table_mode_struct().table_referenced_by_mv_flag_ != update_opt.table_flag_) ||
+                 (update_opt.need_update_mv_flag_ && ref_table_schema->get_mv_mode_struct().table_referenced_by_fast_lsm_mv_flag_ != update_opt.mv_flag_)) {
         SMART_VAR(ObTableSchema, new_ref_table_schema) {
           if (OB_FAIL(new_ref_table_schema.assign(*ref_table_schema))) {
             LOG_WARN("fail to assign ref table schema", KR(ret));

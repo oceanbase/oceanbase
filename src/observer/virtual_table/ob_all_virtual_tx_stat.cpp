@@ -181,7 +181,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
           cur_row_.cells_[i].set_int(tx_stat.tx_id_.get_id());
           break;
         case SESSION_ID:
-          cur_row_.cells_[i].set_int(tx_stat.session_id_);
+          cur_row_.cells_[i].set_int(tx_stat.client_sid_);
           break;
         case SCHEDULER_ADDR:
           (void)tx_stat.scheduler_addr_.to_string(scheduler_buffer_, MAX_IP_PORT_LENGTH + 8);

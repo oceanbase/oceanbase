@@ -92,7 +92,7 @@ int ObFtsEvalNode::fts_boolean_eval(ObFtsEvalNode *node, const common::ObIArray<
   return ret;
 }
 
-int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const FtsNode *cur_node, ObIAllocator &allocator, ObArray<ObString> &tokens, hash::ObHashMap<ObString, int32_t> &tokens_map) // TODO: tokens maybe repeat
+int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const FtsNode *cur_node, const ObCollationType &cs_type, ObIAllocator &allocator, ObArray<ObString> &tokens, hash::ObHashMap<ObString, int32_t> &tokens_map) // TODO: tokens maybe repeat
 {
   int ret = OB_SUCCESS;
   ObFtsEvalNode *node = nullptr;
@@ -122,7 +122,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
       }
       if (OB_FAIL(parant_node->child_flags_.push_back(flag))) {
         LOG_WARN("failed to append flag", K(ret));
-      } else if (OB_FAIL(fts_boolean_node_create(node, tail, allocator, tokens, tokens_map))) {
+      } else if (OB_FAIL(fts_boolean_node_create(node, tail, cs_type, allocator, tokens, tokens_map))) {
         LOG_WARN("failed to create fts compute node", K(ret));
       } else if (OB_FAIL(parant_node->child_nodes_.push_back(node))) {
         LOG_WARN("failed to append node", K(ret));
@@ -154,7 +154,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
       if (FTS_NODE_TERM == feak_head->type) {
         if (OB_FAIL(re_node->child_flags_.push_back(NO_OPERATOR))) {
           LOG_WARN("failed to append flag", K(ret));
-        } else if (OB_FAIL(fts_boolean_node_create(node, feak_head, allocator, tokens, tokens_map))) {
+        } else if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else if (OB_FAIL(re_node->child_nodes_.push_back(node))) {
           LOG_WARN("failed to append node", K(ret));
@@ -187,7 +187,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected fts compute node type", K(feak_head->type));
           } else if (FTS_NODE_TERM == feak_head->type || FTS_NODE_SUBEXP_LIST == feak_head->type) {
-            if (OB_FAIL(fts_boolean_node_create(node, feak_head, allocator, tokens, tokens_map))) {
+            if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
               LOG_WARN("failed to create fts compute node", K(ret));
             } else if (OB_FAIL(re_node->child_nodes_.push_back(node))) {
               LOG_WARN("failed to append node", K(ret));
@@ -200,7 +200,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
           }
         }
       } else if (FTS_NODE_SUBEXP_LIST == feak_head->type || FTS_NODE_SUBEXP_LIST == cur_node->type) {
-        if (OB_FAIL(fts_boolean_node_create(node, feak_head, allocator, tokens, tokens_map))) {
+        if (OB_FAIL(fts_boolean_node_create(node, feak_head, cs_type, allocator, tokens, tokens_map))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else if (OB_FAIL(re_node->child_flags_.push_back(OR))) {
           LOG_WARN("failed to append flag", K(ret));
@@ -210,7 +210,7 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
           node = nullptr;
         }
       } else if (FTS_NODE_LIST == feak_head->type) {
-        if (OB_FAIL(fts_boolean_node_create(re_node, feak_head, allocator, tokens, tokens_map))) {
+        if (OB_FAIL(fts_boolean_node_create(re_node, feak_head, cs_type, allocator, tokens, tokens_map))) {
           LOG_WARN("failed to create fts compute node", K(ret));
         } else {
           node = nullptr;
@@ -232,8 +232,8 @@ int ObFtsEvalNode::fts_boolean_node_create(ObFtsEvalNode *&parant_node, const Ft
     ObString tmp_string(cur_node->term.len_, cur_node->term.str_);
     ObString token_string;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ob_write_string(allocator, tmp_string, token_string))) {
-      LOG_WARN("failed to deep copy query token", K(ret));
+    } else if (OB_FAIL(common::ObCharset::charset_convert(allocator, tmp_string, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, cs_type, token_string, common::ObCharset::CONVERT_FLAG::COPY_STRING_ON_SAME_CHARSET))) {
+      LOG_WARN("failed to convert string", K(ret), K(cs_type), K(tmp_string));
     } else {
       int32_t token_idx = 0;
       int32_t map_size = tokens_map.size();

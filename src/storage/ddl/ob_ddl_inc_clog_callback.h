@@ -49,6 +49,7 @@ public:
   virtual int on_failure() override;
   virtual void try_release() override;
   share::SCN get_scn() const { return scn_; }
+  const char *get_cb_name() const override { return "DDLIncStartClogCb"; }
   TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
 private:
   bool is_inited_;
@@ -69,6 +70,7 @@ public:
   virtual int on_success() override;
   virtual int on_failure() override;
   virtual void try_release() override;
+  const char *get_cb_name() const override { return "DDLIncRedoClogCb"; }
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
@@ -89,6 +91,7 @@ public:
   virtual int on_failure() override;
   virtual void try_release() override;
   share::SCN get_scn() const { return scn_; }
+  const char *get_cb_name() const override { return "DDLIncCommitClogCb"; }
   TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
 private:
   bool is_inited_;

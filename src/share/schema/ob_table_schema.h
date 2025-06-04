@@ -33,7 +33,8 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "lib/compress/ob_compress_util.h"
-#include "share/storage/ob_storage_cache_common.h"
+#include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 namespace oceanbase
 {
 
@@ -971,6 +972,8 @@ public:
       const common::ObString *&locality_str) const override;
   int get_tablet_ids(
       common::ObIArray<ObTabletID> &tablet_ids) const;
+  int get_first_level_hidden_tablet_ids(
+      common::ObIArray<ObTabletID> &tablet_ids) const;
   int get_part_idx_by_tablet(
       const ObTabletID &tablet_id,
       int64_t &part_id,
@@ -1153,6 +1156,8 @@ public:
   inline bool is_vec_ivfpq_index() const;
   inline bool is_vec_ivfsq8_index() const;
   inline bool is_vec_ivfflat_index() const;
+  inline bool is_vec_spiv_index() const;
+  inline bool is_vec_spiv_index_aux() const;
   inline bool is_vec_ivfflat_centroid_index() const;
   inline bool is_vec_ivfflat_cid_vector_index() const;
   inline bool is_vec_ivfflat_rowkey_cid_index() const;
@@ -1168,6 +1173,7 @@ public:
   inline bool is_vec_rowkey_vid_type() const;
   inline bool is_vec_vid_rowkey_type() const;
   inline bool is_vec_delta_buffer_type() const;
+  inline bool is_vec_dim_docid_value_type() const;
   inline bool is_vec_index_id_type() const;
   inline bool is_vec_index_snapshot_data_type() const;
   inline bool is_fts_index() const;
@@ -1273,6 +1279,12 @@ public:
     const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
     return heap_case || fts_case || vec_case || multivalue_case;
   }
+  inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
+  {
+    with_dynamic_partition_policy_ = with_dynamic_partition_policy;
+  }
+  virtual inline bool with_dynamic_partition_policy() const { return with_dynamic_partition_policy_; }
+
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   uint64_t tenant_id_;
@@ -1319,6 +1331,7 @@ protected:
 
   // storage cache policy type
   storage::ObStorageCachePolicyType storage_cache_policy_type_;
+  bool with_dynamic_partition_policy_; // do not persist to disk
 };
 
 class ObTableSchema : public ObSimpleTableSchemaV2
@@ -1344,6 +1357,7 @@ public:
     CHECK_MODE_OFFLINE = 1,
   };
 
+  static const int64_t MIN_COLUMN_COUNT = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_PK_TABLE = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_HEAP_TABLE = 2;
   static const int64_t DEFAULT_COLUMN_GROUP_ARRAY_CAPACITY = 8;
@@ -1634,6 +1648,8 @@ public:
 
   inline uint64_t get_index_attributes_set() const { return index_attributes_set_; }
   inline int64_t get_dop() const  { return table_dop_; }
+  inline void set_catalog_id(const uint64_t catalog_id) { catalog_id_ = catalog_id; }
+  inline uint64_t get_catalog_id() const { return catalog_id_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
@@ -1716,7 +1732,8 @@ public:
   int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
   // returns true when user defined primary key is given
   int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
-  int get_heap_table_pk(ObIArray<uint64_t> &pk_ids) const;
+  int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
@@ -1747,6 +1764,7 @@ public:
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
   int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
 
+  int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
   int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
   // get columns for building rowid
@@ -1820,7 +1838,7 @@ public:
                                    const bool filter_empty_cg = true) const;
   int get_store_column_groups(ObIArray<const ObColumnGroupSchema *> &column_groups,
                               const bool filter_empty_cg = true) const;
-  int remove_column_group(const uint64_t column_group_id);
+  int remove_column_group(const common::ObString &column_group_name);
   int has_all_column_group(bool &has_all_column_group) const;
   int adjust_column_group_array();
   // materialized view log related
@@ -2042,6 +2060,10 @@ public:
   int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
                            uint64_t column_id,
                            bool &is_uni) const;
+  int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
+                           uint64_t column_id,
+                           bool &is_uni,
+                           bool &is_first_notnull_unique) const;
   int is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
                              uint64_t column_id,
                              bool &is_mul) const;
@@ -2052,6 +2074,7 @@ public:
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
+  int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
@@ -2063,6 +2086,7 @@ public:
   // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
   int has_add_column_instant(bool &add_column_instant) const;
   int get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_user_visible_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int has_unused_column(bool &has_unused_column) const;
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
@@ -2106,6 +2130,7 @@ public:
     mv_mode = mv_mode_;
     return OB_SUCCESS;
   }
+  inline ObMvMode get_mv_mode_struct() const { return mv_mode_; }
   inline bool mv_major_refresh() const
   {
     return IS_MV_MAJOR_REFRESH == (enum ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
@@ -2132,6 +2157,20 @@ public:
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
+  {
+    return deep_copy_str(dynamic_partition_policy, dynamic_partition_policy_);
+  }
+  inline const common::ObString& get_dynamic_partition_policy() const
+  {
+    return dynamic_partition_policy_;
+  }
+  virtual inline bool with_dynamic_partition_policy() const override
+  {
+    return !dynamic_partition_policy_.empty();
+  }
+  int get_part_key_column_type(const int64_t index, ObObjType &type) const;
+  int get_part_key_column_name(const int64_t index, ObString &name) const;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -2308,6 +2347,7 @@ protected:
   common::ObSArray<uint64_t> rls_context_ids_;
 
   //external table
+  uint64_t catalog_id_ = OB_INTERNAL_CATALOG_ID; // do not need to serialized
   common::ObString external_file_format_;
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;
@@ -2321,6 +2361,7 @@ protected:
   ObNameGeneratedType name_generated_type_;
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
+  int64_t micro_block_format_version_;
   bool micro_index_clustered_;
   bool enable_macro_block_bloom_filter_;
 
@@ -2342,6 +2383,10 @@ protected:
   common::ObString storage_cache_policy_;
   ObMergeEngineType merge_engine_type_;
   ObSemiStructEncodingType semistruct_encoding_type_;
+  common::ObString dynamic_partition_policy_;
+  uint64_t external_location_id_;
+  common::ObString external_sub_path_;
+  uint64_t tmp_mlog_tid_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
@@ -2464,6 +2509,16 @@ inline bool ObSimpleTableSchemaV2::is_vec_domain_index() const
   return share::schema::is_vec_domain_index(index_type_);
 }
 
+inline bool ObSimpleTableSchemaV2::is_vec_spiv_index() const
+{
+  return share::schema::is_vec_spiv_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_spiv_index_aux() const
+{
+  return share::schema::is_vec_spiv_index_aux(index_type_);
+}
+
 inline bool ObSimpleTableSchemaV2::is_built_in_vec_index() const
 {
   return share::schema::is_built_in_vec_index(index_type_);
@@ -2542,6 +2597,11 @@ inline bool ObSimpleTableSchemaV2::is_vec_vid_rowkey_type() const
 inline bool ObSimpleTableSchemaV2::is_vec_delta_buffer_type() const
 {
   return share::schema::is_vec_delta_buffer_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_dim_docid_value_type() const
+{
+  return share::schema::is_vec_dim_docid_value_type(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_vec_index_id_type() const
@@ -2633,7 +2693,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfsq8_meta_index(index_type) ||
          share::schema::is_vec_ivfflat_centroid_index(index_type) ||
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
-         share::schema::is_vec_ivfsq8_centroid_index(index_type);
+         share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
+         share::schema::is_vec_dim_docid_value_type(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
@@ -2643,9 +2704,12 @@ inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
 
 inline bool ObSimpleTableSchemaV2::should_not_validate_data_index_ckm() const
 {
+  // [COMPACTION]
   // spatial index column is different from data table column, should not validate data & index column checksum
   // fulltext index cannot validate data by simply column checksum comparision
   // multi-value index column is different from data table column, should not validate data & index column checksum
+
+  // [TRUNCATE] these index will not be preserved when truncate partition of data table
   return is_domain_index();
 }
 

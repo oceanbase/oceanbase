@@ -341,5 +341,35 @@ int ObCGTileScanner::get_next_aligned_rows(ObCGRowScanner *cg_scanner, const uin
   return ret;
 }
 
+int ObCGTileScanner::get_current_row_id(ObCSRowId& current_row_id) const
+{
+  int ret = OB_SUCCESS;
+  ObICGIterator* cg_iter;
+  current_row_id = OB_INVALID_CS_ROW_ID;
+  // we can only get current row id from cg scanners that inherited from ObCGScanner
+  bool found = false;
+  for (int i = 0; OB_SUCC(ret) && i < cg_scanners_.count(); ++i) {
+    if (OB_FAIL(cg_scanners_.at(i, cg_iter))) {
+      LOG_WARN("failed to get cg scanner", K(ret), K(i), K(cg_scanners_));
+    } else if (OB_ISNULL(cg_iter)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("cg scanner is null", K(ret));
+    } else if (OB_FAIL(cg_iter->get_current_row_id(current_row_id))) {
+      if (OB_ERR_UNSUPPORTED_TYPE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get current row id", K(cg_iter->get_type()));
+      }
+    } else if (OB_INVALID_CS_ROW_ID != current_row_id) {
+      found = true;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_ERR_UNSUPPORTED_TYPE;
+    LOG_INFO("Unsupported to get current row id now", K(ret), K(access_ctx_->ls_id_), K(access_ctx_->tablet_id_));
+  }
+  return ret;
+}
 }
 }

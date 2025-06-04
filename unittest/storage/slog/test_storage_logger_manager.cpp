@@ -130,7 +130,7 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
 
   ObStorageLogger *slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, 1));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, 1, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->start_log(cursor);
@@ -171,7 +171,7 @@ TEST_F (TestStorageLoggerManager, test_build_item)
 
   ObStorageLoggerManager &slogger_mgr = SERVER_STORAGE_META_SERVICE.get_slogger_manager();
   ObStorageLogger *slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, 1));
+  ASSERT_EQ(OB_SUCCESS, slogger->init(slogger_mgr, 1, 0/*tenant epoch*/));
   ASSERT_EQ(OB_SUCCESS, slogger->start());
 
   slogger->start_log(start_cursor_);

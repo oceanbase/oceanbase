@@ -168,6 +168,7 @@ private:
  int alloc_sys_ls_addr(const uint64_t tenant_id,
                        const ObIArray<share::ObResourcePoolName> &pools,
                        const share::schema::ZoneLocalityIArray &zone_locality,
+                       const bool is_duplicate_ls,
                        common::ObIArray<ObLSReplicaAddr> &addrs);
 
  int alloc_user_ls_addr(const uint64_t tenant_id, const uint64_t unit_group_id,

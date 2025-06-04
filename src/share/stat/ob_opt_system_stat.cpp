@@ -116,7 +116,7 @@ int OptSystemIoBenchmark::run_benchmark(ObIAllocator &allocator, const uint64_t 
       LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
     } else {
       ObTenantFileManager *tnt_file_manager = MTL(ObTenantFileManager*);
-      ObTenantDiskSpaceManager *tnt_disk_space_manager = MTL(ObTenantDiskSpaceManager*);
+      ObTenantDiskSpaceManager *tnt_disk_space_manager = MTL(ObTenantDiskSpaceManager *);
       ss_second_id = tnt_file_manager->get_micro_cache_file_fd();
       if (OB_UNLIKELY(OB_INVALID_FD == ss_second_id)) {
         ret = OB_ERR_UNEXPECTED;

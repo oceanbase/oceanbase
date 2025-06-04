@@ -66,9 +66,14 @@ public:
       const char *macro_buf,
       const int64_t macro_size,
       const ObDataMacroBlockMeta &macro_meta);
+  // Attention: this interface will trigger read I/O
   int rewrite_and_append_clustered_index_micro_block(const ObDataMacroBlockMeta &macro_data);
+  int rewrite_and_append_clustered_index_micro_block(
+      const ObDataMacroBlockMeta &macro_meta,
+      const char *leaf_index_block_buf,
+      const int64_t block_size);
   int close();
-
+  int64_t get_last_macro_seq() const { return macro_writer_ ? macro_writer_->get_last_macro_seq() : 0; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObClusteredIndexBlockWriter);
 
@@ -88,6 +93,8 @@ private:
   int make_clustered_index_micro_block_with_reuse(
       const ObMicroBlockData &micro_block_data,
       const MacroBlockId &macro_id);
+  void prepare_clustered_row_desc_from_row_header(ObIndexBlockRowDesc &clustered_row_desc,
+                                                  const ObIndexBlockRowHeader &idx_row_header);
   int print_macro_ids();
 
 private:

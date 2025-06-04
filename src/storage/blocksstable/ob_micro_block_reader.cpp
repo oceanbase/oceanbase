@@ -716,6 +716,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
   int ret = OB_SUCCESS;
   allocator_.reuse();
   ObStorageDatum *datum_buf = pd_filter_info.datum_buf_;
+  ObStorageDatum *tmp_datum_buf = pd_filter_info.tmp_datum_buf_;
   const int64_t col_capacity = pd_filter_info.col_capacity_;
   const storage::ObTableIterParam *param = pd_filter_info.param_;
   storage::ObTableAccessContext *context = pd_filter_info.context_;
@@ -730,7 +731,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
   } else if (OB_FAIL(validate_filter_info(pd_filter_info, filter, datum_buf, col_capacity, header_))) {
     LOG_WARN("Failed to validate filter info", K(ret));
   } else {
-    int64_t col_count = filter.get_col_count();
+    const int64_t col_count = filter.get_col_count();
+    const int64_t trans_col_idx = header_->rowkey_column_count_ > 0 ? read_info_->get_schema_rowkey_count() : INT32_MIN;
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
     const common::ObIArray<ObStorageDatum> &default_datums = filter.get_default_datums();
@@ -740,25 +742,28 @@ int ObMicroBlockReader::filter_pushdown_filter(
     bool need_reuse_lob_locator = false;
     for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
       row_idx = offset + pd_filter_info.start_;
-      if (nullptr != parent && parent->can_skip_filter(offset)) {
+      if (pd_filter_info.can_skip_filter_delete_insert(offset)) {
+        continue;
+      } else if (nullptr != parent && parent->can_skip_filter(offset)) {
         continue;
       } else if (0 < col_count) {
-        ObStorageDatum tmp_datum; // used for deep copy decimalint
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
           ObStorageDatum &datum = datum_buf[i];
           const int64_t col_idx = cols_index.at(col_offsets.at(i));
           const ObObjType obj_type = cols_desc.at(col_offsets.at(i)).col_type_.get_type();
           const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
+          ObStorageDatum *tmp_datum = ob_is_decimal_int(obj_type) || (trans_col_idx == col_idx) ? tmp_datum_buf + i : datum_buf + i;
           datum.reuse();
+          tmp_datum_buf[i].reuse();
           if (OB_FAIL(flat_row_reader_.read_column(
               data_begin_ + index_data_[row_idx],
               index_data_[row_idx + 1] - index_data_[row_idx],
               col_idx,
-              tmp_datum))) {
+              *tmp_datum))) {
             LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
-          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
-            datum.set_int(-tmp_datum.get_int());
-          } else if (tmp_datum.is_nop_value()) {
+          } else if (OB_UNLIKELY(trans_col_idx == col_idx)) {
+            datum.set_int(-tmp_datum->get_int());
+          } else if (tmp_datum->is_nop_value()) {
             if (OB_UNLIKELY(default_datums.at(i).is_nop())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("Unexpected nop value", K(ret), K(col_idx), K(row_idx),
@@ -766,8 +771,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
             } else if (OB_FAIL(datum.from_storage_datum(default_datums.at(i), map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(default_datums.at(i)), K(obj_type), K(map_type));
             }
-          } else if (OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
-            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(tmp_datum), K(obj_type), K(map_type));
+          } else if (ob_is_decimal_int(obj_type) && OB_FAIL(datum.from_storage_datum(*tmp_datum, map_type))) {
+            LOG_WARN("Failed to convert storage datum", K(ret), K(i), KPC(tmp_datum), K(obj_type), K(map_type));
           }
           if (OB_FAIL(ret) || nullptr == col_params.at(i) || datum.is_null()) {
           } else if (need_padding(filter.is_padding_mode(), col_params.at(i)->get_meta_type())) {
@@ -790,7 +795,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
 
       bool filtered = false;
       if (OB_SUCC(ret)) {
-        if (filter.is_filter_black_node() || has_lob_out_row) {
+        if (filter.is_filter_black_node() || has_lob_out_row || filter.is_semistruct_filter_node()) {
           sql::ObPhysicalFilterExecutor &physical_filter = static_cast<sql::ObPhysicalFilterExecutor &>(filter);
           if (OB_FAIL(physical_filter.filter(datum_buf, col_count, *pd_filter_info.skip_bit_, filtered))) {
             LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
@@ -816,8 +821,82 @@ int ObMicroBlockReader::filter_pushdown_filter(
         }
       }
     }
-    LOG_TRACE("[PUSHDOWN] micro block pushdown filter row", K(ret), K(col_params), K(pd_filter_info),
-              K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap.size()));
+    LOG_TRACE("[PUSHDOWN] micro block pushdown filter row", K(ret), K(has_lob_out_row), K(pd_filter_info),
+              K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap), KPC_(header));
+  }
+  return ret;
+}
+
+int ObMicroBlockReader::filter_pushdown_truncate_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+  allocator_.reuse();
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0 ||
+                  pd_filter_info.start_ + pd_filter_info.count_ > row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_));
+  } else if (OB_UNLIKELY(!filter.is_truncate_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected truncate filter type", K(ret), K(filter));
+  } else {
+    ObITruncateFilterExecutor *truncate_executor = nullptr;
+    if (filter.is_filter_black_node()) {
+      truncate_executor = static_cast<ObTruncateBlackFilterExecutor*>(&filter);
+    } else {
+      truncate_executor = static_cast<ObTruncateWhiteFilterExecutor*>(&filter);
+    }
+    ObStorageDatum *datum_buf = truncate_executor->get_tmp_datum_buffer();
+    const common::ObIArray<int32_t> &col_idxs = truncate_executor->get_col_idxs();
+    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
+    const int64_t col_count = col_idxs.count();
+    int64_t row_idx = 0;
+    if (OB_UNLIKELY(col_count <= 0 || nullptr == datum_buf)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col count", K(ret), K(col_count), KP(datum_buf));
+    }
+    for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+      row_idx = offset + pd_filter_info.start_;
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
+        continue;
+      } else {
+        ObStorageDatum tmp_datum; // used for deep copy decimalint
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+          ObStorageDatum &datum = datum_buf[i];
+          const int64_t col_idx = col_idxs.at(i);
+          const ObObjType obj_type = cols_desc.at(col_idx).col_type_.get_type();
+          const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
+          datum.reuse();
+          if (OB_FAIL(flat_row_reader_.read_column(
+              data_begin_ + index_data_[row_idx],
+              index_data_[row_idx + 1] - index_data_[row_idx],
+              col_idx,
+              tmp_datum))) {
+            LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
+          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
+            datum.set_int(-tmp_datum.get_int());
+          } else if (OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
+            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(tmp_datum), K(obj_type), K(map_type));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool filtered = false;
+        if (OB_FAIL(truncate_executor->filter(datum_buf, col_count, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[TRUNCATE INFO] micro block black pushdown filter row", K(ret), K(pd_filter_info),
+              K(result_bitmap.popcnt()), K(result_bitmap), KPC_(header),
+              KPC(truncate_executor), K(filter));
   }
   return ret;
 }
@@ -847,6 +926,7 @@ int ObMicroBlockReader::get_rows(
   } else if (OB_FAIL(row_buf.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Failed to reserve row buf", K(ret), K(row_buf), KPC(read_info_));
   } else {
+    const int64_t trans_col_idx = header_->rowkey_column_count_ > 0 ? read_info_->get_schema_rowkey_count() : INT32_MIN;
     const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; ++idx) {
       row_idx = row_ids[idx];
@@ -866,7 +946,7 @@ int ObMicroBlockReader::get_rows(
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
-          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(cols_index.at(col_idx)))) {
+          } else if (OB_UNLIKELY(trans_col_idx == cols_index.at(col_idx))) {
             datum.set_int(-row_buf.storage_datums_[col_idx].get_int());
           } else if (row_buf.storage_datums_[col_idx].is_null()) {
             datum.set_null();
@@ -950,6 +1030,7 @@ int ObMicroBlockReader::get_rows(
   }
   if (OB_SUCC(ret)) {
     ObStorageDatum trans_datum;
+    const int64_t trans_col_idx = header_->rowkey_column_count_ > 0 ? read_info_->get_schema_rowkey_count() : INT32_MIN;
     const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; ++idx) {
       row_idx = row_ids[idx];
@@ -970,7 +1051,7 @@ int ObMicroBlockReader::get_rows(
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
-          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(cols_index.at(col_idx)))) {
+          } else if (OB_UNLIKELY(trans_col_idx == cols_index.at(col_idx))) {
             trans_datum.reuse();
             trans_datum.set_int(-row_buf.storage_datums_[col_idx].get_int());
             col_datum = &trans_datum;
@@ -1017,7 +1098,6 @@ int ObMicroBlockReader::get_rows(
 
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
-        const bool need_dispatch_collection = nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_collection_sql_type();
         if (nullptr != col_params.at(i) && need_padding(is_padding_mode, col_params.at(i)->get_meta_type())) {
           if (OB_FAIL(storage::pad_on_rich_format_columns(
                       col_params.at(i)->get_accuracy(),
@@ -1029,9 +1109,6 @@ int ObMicroBlockReader::get_rows(
                       eval_ctx))) {
             LOG_WARN("Failed pad on rich format columns", K(ret), KPC(exprs.at(i)));
           }
-        } else if (need_dispatch_collection && !has_lob_out_row()
-                   && OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vector_offset, *(exprs.at(i)), eval_ctx))) {
-          LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(row_cap), K(vector_offset));
         }
       }
     }

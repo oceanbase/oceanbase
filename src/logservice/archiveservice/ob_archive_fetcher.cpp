@@ -253,6 +253,7 @@ int ObArchiveFetcher::modify_thread_count(const int64_t thread_count)
 void ObArchiveFetcher::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveFetcher thread start");
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveFetcher");
   lib::set_thread_name("ArcFetcher");
   ObCurTraceId::init(GCONF.self_addr_);
 

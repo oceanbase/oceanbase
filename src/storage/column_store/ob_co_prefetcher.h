@@ -78,12 +78,6 @@ public:
   {
     return OB_INVALID_CS_ROW_ID != block_scan_start_row_id_;
   }
-  OB_INLINE ObCSRowId cur_start_row_id()
-  {
-    blocksstable::ObMicroIndexInfo &micro_info = this->current_micro_info();
-    const ObCSRange &cs_range = micro_info.get_row_range();
-    return cs_range.begin();
-  }
   OB_INLINE bool need_skip_prefetch()
   {
     return PENDING_BLOCK_SCAN == block_scan_state_;
@@ -104,16 +98,6 @@ public:
       block_scan_start_row_id_ -= row_count;
     } else {
       block_scan_start_row_id_ += row_count;
-    }
-  }
-  OB_INLINE void adjust_border_row_id(
-      const uint64_t row_count,
-      const bool is_reverse_scan)
-  {
-    if (!is_reverse_scan) {
-      block_scan_border_row_id_ += row_count;
-    } else {
-      block_scan_border_row_id_ -= row_count;
     }
   }
   OB_INLINE void set_range_scan_finish()
@@ -147,15 +131,20 @@ public:
     return ret;
   }
 
+  int update_start_and_end_rowid_for_column_store(
+      const int64_t start_offset,
+      const int64_t end_offset);
+  int update_end_rowid_for_column_store(
+      const int64_t start_offset,
+      const int64_t end_offset);
+
   INHERIT_TO_STRING_KV("ObCOPrefetcher", ObIndexTreeMultiPassPrefetcher, K_(block_scan_state),
                          K_(block_scan_start_row_id), K_(block_scan_border_row_id));
 
 private:
   struct ObCOIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
-    virtual int forward(
-        ObIndexTreeMultiPassPrefetcher &prefetcher,
-        const bool has_lob_out) override final;
+    virtual int forward(ObIndexTreeMultiPassPrefetcher &prefetcher) override final;
     int try_advancing_fetch_idx(
         ObCOPrefetcher &prefetcher,
         const ObDatumRowkey &border_rowkey,

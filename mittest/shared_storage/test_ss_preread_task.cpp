@@ -193,10 +193,9 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
   ASSERT_EQ(OB_SUCCESS, file_manager->calibrate_disk_space_task_.calibrate_disk_space());
   // tmp_file write_cache and read_cache size
-  int64_t write_cache = disk_space_mgr->get_tmp_file_write_cache_alloc_size();
-  int64_t read_cache = disk_space_mgr->get_tmp_file_read_cache_alloc_size();
-  ASSERT_EQ(0, write_cache);
-  ASSERT_EQ(0, read_cache);
+  ObSSMacroCacheStat cache_stat;
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
   // construct macro_id
   MacroBlockId file_id;
   const int64_t tmp_file_id = 100;
@@ -236,18 +235,15 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   // write
   ASSERT_EQ(OB_SUCCESS, preread_task.do_async_write_segment_file(preread_entry));
   ASSERT_EQ(OB_SUCCESS, preread_entry.write_handle_.wait());
-  write_cache = disk_space_mgr->get_tmp_file_write_cache_alloc_size();
-  read_cache = disk_space_mgr->get_tmp_file_read_cache_alloc_size();
-  ASSERT_EQ(expected_disk_size, write_cache);
-  ASSERT_EQ(16 * 1024, read_cache);
+  expected_disk_size += WRITE_IO_SIZE;
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(expected_disk_size, cache_stat.used_);
   // read_whole
   ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.set_need_preread(file_id, false/*is_not_need_preread*/));
   // GC
   ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(file_id));
-  write_cache = disk_space_mgr->get_tmp_file_write_cache_alloc_size();
-  read_cache = disk_space_mgr->get_tmp_file_read_cache_alloc_size();
-  ASSERT_EQ(0, write_cache);
-  ASSERT_EQ(0, read_cache);
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  ASSERT_EQ(0, cache_stat.used_);
   // update_to_normal
   ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.update_to_normal_status(file_id, preread_entry.write_handle_.get_data_size()));
 }

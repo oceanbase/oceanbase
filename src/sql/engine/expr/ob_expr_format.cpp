@@ -77,16 +77,17 @@ int ObExprFormat::get_origin_param_type(ObExprResType &ori_type) const
   if (OB_ISNULL(expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get_raw_expr", K(ret));
-  } else if (expr->get_children_count() >= 1 && OB_NOT_NULL(expr = expr->get_param_expr(0))
-             && expr->get_expr_type() == T_FUN_SYS_CAST && CM_IS_IMPLICIT_CAST(expr->get_extra())) {
+  } else if (expr->get_param_count() >= 1 && OB_NOT_NULL(expr = expr->get_param_expr(0))
+             && expr->get_expr_type() == T_FUN_SYS_CAST
+             && CM_IS_IMPLICIT_CAST(expr->get_cast_mode())) {
     do {
-      if (expr->get_children_count() >= 1
+      if (expr->get_param_count() >= 1
           && OB_ISNULL(expr = expr->get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get_param_expr", K(ret));
       }
     } while (OB_SUCC(ret) && T_FUN_SYS_CAST == expr->get_expr_type()
-             && CM_IS_IMPLICIT_CAST(expr->get_extra()));
+             && CM_IS_IMPLICIT_CAST(expr->get_cast_mode()));
     if (OB_SUCC(ret)) {
       ori_type = expr->get_result_type();
     }

@@ -126,7 +126,8 @@ public:
    */
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
-                        const ObIArray<ObTableRowCount> *table_row_count_list);
+                        const ObIArray<ObTableRowCount> *table_row_count_list,
+                        const AdaptivePCConf *adpt_pc_conf = nullptr);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {
     stat_.update_cache_stat(scan_stat);
@@ -144,6 +145,7 @@ public:
   bool get_evolution() const { return stat_.is_evolution_; }
   inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
                                         const int64_t current_row_count) const;
+  bool check_if_is_expired_by_error(const int error_code) const;
   void update_plan_expired_info(const ObAuditRecordData &record,
                                 const bool is_first,
                                 const ObIArray<ObTableRowCount> *table_row_count_list);
@@ -189,6 +191,8 @@ public:
   bool is_use_px() const { return use_px_; }
   void set_px_dop(int64_t px_dop) { px_dop_ = px_dop; }
   int64_t get_px_dop() const { return px_dop_; }
+  inline void set_px_parallel_rule(PXParallelRule parallel_rule) { px_parallel_rule_ = parallel_rule; }
+  inline PXParallelRule get_px_parallel_rule() const { return px_parallel_rule_; }
   void set_expected_worker_count(int64_t c) { stat_.expected_worker_count_ = c; }
   int64_t get_expected_worker_count() const { return stat_.expected_worker_count_; }
   void set_minimal_worker_count(int64_t c) { stat_.minimal_worker_count_ = c; }
@@ -558,7 +562,6 @@ public:
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
   void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
   bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
-
   void set_px_node_policy(ObPxNodePolicy px_node_policy)
   {
     px_node_policy_ = px_node_policy;
@@ -574,7 +577,11 @@ public:
   {
     return px_node_addrs_;
   }
-
+  bool is_active_status() const { return ObPlanStat::ACTIVE == ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_); }
+  void set_active_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::ACTIVE);; }
+  void set_inactive_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);; }
+  int64_t get_adaptive_feedback_times() const;
+  void update_adaptive_pc_info(const ObAuditRecordData &record, const AdaptivePCConf *adpt_pc_conf);
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -661,8 +668,6 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
-  //for outline use
-  ObOutlineState outline_state_;
   int64_t concurrent_num_;           //plan当前的并发执行个数
   int64_t max_concurrent_num_;       //plan最大并发可执行个数, -1表示没有限制
   //for plan cache, not need serialize

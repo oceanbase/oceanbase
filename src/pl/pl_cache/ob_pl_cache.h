@@ -115,6 +115,7 @@ struct PCVPlSchemaObj
   uint64_t database_id_;
   int64_t schema_id_;
   int64_t schema_version_;
+  int64_t invoker_db_id_;
   share::schema::ObSchemaType schema_type_;
   share::schema::ObTableType table_type_;
   common::ObString table_name_;
@@ -129,6 +130,7 @@ struct PCVPlSchemaObj
   database_id_(common::OB_INVALID_ID),
   schema_id_(common::OB_INVALID_ID),
   schema_version_(0),
+  invoker_db_id_(common::OB_INVALID_ID),
   schema_type_(share::schema::OB_MAX_SCHEMA),
   table_type_(share::schema::MAX_TABLE_TYPE),
   table_name_(),
@@ -143,6 +145,7 @@ struct PCVPlSchemaObj
     database_id_(common::OB_INVALID_ID),
     schema_id_(common::OB_INVALID_ID),
     schema_version_(0),
+    invoker_db_id_(common::OB_INVALID_ID),
     schema_type_(share::schema::OB_MAX_SCHEMA),
     table_type_(share::schema::MAX_TABLE_TYPE),
     table_name_(),
@@ -197,6 +200,7 @@ struct PCVPlSchemaObj
                K_(database_id),
                K_(schema_id),
                K_(schema_version),
+               K_(invoker_db_id),
                K_(schema_type),
                K_(table_type),
                K_(table_name),
@@ -324,6 +328,9 @@ public:
   int match_params_info(const ParamStore *params,
                                  bool &is_same);
 
+  int set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx);
+  int set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx);
+  int inner_set_max_concurrent_num(const ObOutlineInfo *outline_info);
   OB_INLINE void copy_obj_schema_version(ObSchemaObjVersion& dest, const PCVPlSchemaObj *src)
   {
     dest.object_id_ = src->schema_id_;
@@ -393,6 +400,7 @@ struct ObPLCacheCtx : public ObILibCacheCtx
   ObString raw_sql_;
   int64_t compile_time_; // pl object cost time of compile
   int adjust_definer_database_id();
+  static int assemble_format_routine_name(ObString& out_name, ObPLCacheObject *routine);
 };
 
 

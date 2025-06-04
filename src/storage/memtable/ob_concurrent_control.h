@@ -24,20 +24,21 @@ namespace concurrent_control
 // write flag is used for write flag modification
 struct ObWriteFlag
 {
-  #define OBWF_BIT_TABLE_API        1
-  #define OBWF_BIT_TABLE_LOCK       1
-  #define OBWF_BIT_MDS              1
-  #define OBWF_BIT_DML_BATCH_OPT    1
-  #define OBWF_BIT_INSERT_UP        1
-  #define OBWF_BIT_WRITE_ONLY_INDEX 1
-  #define OBWF_BIT_CHECK_ROW_LOCKED 1
-  #define OBWF_BIT_LOB_AUX          1
-  #define OBWF_BIT_SKIP_FLUSH_REDO  1
-  #define OBWF_BIT_UPDATE_UK        1
-  #define OBWF_BIT_UPDATE_PK_DOP    1
-  #define OBWF_BIT_IMMEDIATE_CHECK  1
-  #define OBWF_BIT_DELETE_INSERT    1
-  #define OBWF_BIT_RESERVED         51
+  #define OBWF_BIT_TABLE_API            1
+  #define OBWF_BIT_TABLE_LOCK           1
+  #define OBWF_BIT_MDS                  1
+  #define OBWF_BIT_DML_BATCH_OPT        1
+  #define OBWF_BIT_INSERT_UP            1
+  #define OBWF_BIT_WRITE_ONLY_INDEX     1
+  #define OBWF_BIT_CHECK_ROW_LOCKED     1
+  #define OBWF_BIT_LOB_AUX              1
+  #define OBWF_BIT_SKIP_FLUSH_REDO      1
+  #define OBWF_BIT_UPDATE_UK            1
+  #define OBWF_BIT_UPDATE_PK_DOP        1
+  #define OBWF_BIT_IMMEDIATE_CHECK      1
+  #define OBWF_BIT_DELETE_INSERT        1
+  #define OBWF_BIT_PLAIN_INSERT_GTS_OPT 1
+  #define OBWF_BIT_RESERVED            50
 
   static const uint64_t OBWF_MASK_TABLE_API = (0x1UL << OBWF_BIT_TABLE_API) - 1;
   static const uint64_t OBWF_MASK_TABLE_LOCK = (0x1UL << OBWF_BIT_TABLE_LOCK) - 1;
@@ -52,20 +53,21 @@ struct ObWriteFlag
     uint64_t flag_;
     struct
     {
-      uint64_t is_table_api_        : OBWF_BIT_TABLE_API;        // 0: false(default), 1: true
-      uint64_t is_table_lock_       : OBWF_BIT_TABLE_LOCK;       // 0: false(default), 1: true
-      uint64_t is_mds_              : OBWF_BIT_MDS;              // 0: false(default), 1: true
-      uint64_t is_dml_batch_opt_    : OBWF_BIT_DML_BATCH_OPT;    // 0: false(default), 1: true
-      uint64_t is_insert_up_        : OBWF_BIT_INSERT_UP;        // 0: false(default), 1: true
-      uint64_t is_write_only_index_ : OBWF_BIT_WRITE_ONLY_INDEX; // 0: false(default), 1: true
-      uint64_t is_check_row_locked_ : OBWF_BIT_CHECK_ROW_LOCKED; // 0: false(default), 1: true
-      uint64_t is_lob_aux_          : OBWF_BIT_LOB_AUX;          // 0: false(default), 1: true
-      uint64_t is_skip_flush_redo_  : OBWF_BIT_SKIP_FLUSH_REDO;  // 0: false(default), 1: true
-      uint64_t is_update_uk_        : OBWF_BIT_UPDATE_UK;        // 0: false(default), 1: true
-      uint64_t is_update_pk_dop_    : OBWF_BIT_UPDATE_PK_DOP;    // 0: false(default), 1: true
-      uint64_t immediate_row_check_ : OBWF_BIT_IMMEDIATE_CHECK;  // 0: false(default), 1: true
-      uint64_t is_delete_insert_    : OBWF_BIT_DELETE_INSERT;    // 0: false(default), 1: true
-      uint64_t reserved_            : OBWF_BIT_RESERVED;
+      uint64_t is_table_api_         : OBWF_BIT_TABLE_API;        // 0: false(default), 1: true
+      uint64_t is_table_lock_        : OBWF_BIT_TABLE_LOCK;       // 0: false(default), 1: true
+      uint64_t is_mds_               : OBWF_BIT_MDS;              // 0: false(default), 1: true
+      uint64_t is_dml_batch_opt_     : OBWF_BIT_DML_BATCH_OPT;    // 0: false(default), 1: true
+      uint64_t is_insert_up_         : OBWF_BIT_INSERT_UP;        // 0: false(default), 1: true
+      uint64_t is_write_only_index_  : OBWF_BIT_WRITE_ONLY_INDEX; // 0: false(default), 1: true
+      uint64_t is_check_row_locked_  : OBWF_BIT_CHECK_ROW_LOCKED; // 0: false(default), 1: true
+      uint64_t is_lob_aux_           : OBWF_BIT_LOB_AUX;          // 0: false(default), 1: true
+      uint64_t is_skip_flush_redo_   : OBWF_BIT_SKIP_FLUSH_REDO;  // 0: false(default), 1: true
+      uint64_t is_update_uk_         : OBWF_BIT_UPDATE_UK;        // 0: false(default), 1: true
+      uint64_t is_update_pk_dop_     : OBWF_BIT_UPDATE_PK_DOP;    // 0: false(default), 1: true
+      uint64_t immediate_row_check_  : OBWF_BIT_IMMEDIATE_CHECK;  // 0: false(default), 1: true
+      uint64_t is_delete_insert_     : OBWF_BIT_DELETE_INSERT;    // 0: false(default), 1: true
+      uint64_t is_plain_ins_gts_opt_ : OBWF_BIT_PLAIN_INSERT_GTS_OPT;
+      uint64_t reserved_             : OBWF_BIT_RESERVED;
     };
   };
 
@@ -96,6 +98,8 @@ struct ObWriteFlag
   inline bool is_update_pk_dop() const { return is_update_pk_dop_; }
   inline void set_immediate_row_check() { immediate_row_check_ = true; }
   inline bool is_immediate_row_check() const { return immediate_row_check_; }
+  inline void set_plain_insert_gts_opt() { is_plain_ins_gts_opt_ = true; }
+  inline bool is_plain_insert_gts_opt() const { return is_plain_ins_gts_opt_; }
   inline void set_is_delete_insert() { is_delete_insert_ = true; }
   inline bool is_delete_insert() const { return is_delete_insert_; }
 
@@ -111,7 +115,8 @@ struct ObWriteFlag
                "is_update_uk", is_update_uk_,
                "is_update_pk_dop", is_update_pk_dop_,
                "immediate_row_check",  immediate_row_check_,
-               "is_delete_insert", is_delete_insert_);
+               "is_delete_insert", is_delete_insert_,
+               "is_plain_ins_gts_opt", is_plain_ins_gts_opt_);
 
   OB_UNIS_VERSION(1);
 };

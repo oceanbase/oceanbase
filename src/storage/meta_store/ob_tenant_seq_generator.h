@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObTenantStorageMetaPersister;
+class ObTenantCheckpointSlogHandler;
 struct ObTenantMonotonicIncSeqs
 {
 public:
@@ -59,11 +59,11 @@ public:
     : is_inited_(false),
       is_shared_storage_(false),
       tg_id_(-1),
-      persister_(nullptr),
+      ckpt_slog_handler_(nullptr),
       curr_seqs_(),
       preallocated_seqs_() {}
 
-  int init(const bool is_shared_storage, ObTenantStorageMetaPersister &persister);
+  int init(const bool is_shared_storage, ObTenantCheckpointSlogHandler &ckpt_slog_handler);
   int start();
   void stop();
   void wait();
@@ -87,7 +87,7 @@ private:
   bool is_inited_;
   bool is_shared_storage_;
   int tg_id_;
-  ObTenantStorageMetaPersister *persister_;
+  ObTenantCheckpointSlogHandler *ckpt_slog_handler_;
   ObTenantMonotonicIncSeqs curr_seqs_;
   ObTenantMonotonicIncSeqs preallocated_seqs_;
 };

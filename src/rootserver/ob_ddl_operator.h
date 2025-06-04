@@ -259,6 +259,11 @@ public:
                               share::schema::ObTableSchema &inc_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObMySQLTransaction &trans);
+  int alter_policy_table_partitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
+
+  int alter_policy_table_subpartitions(const ObTableSchema &orig_table_schema,
+      ObTableSchema &inc_table_schema, ObTableSchema &new_table_schema, ObMySQLTransaction &trans);
   int get_part_array_from_table(const share::schema::ObTableSchema &orig_table_schema,
                                 const share::schema::ObTableSchema &inc_table_schema,
                                 common::ObIArray<share::schema::ObPartition*> &part_array);
@@ -438,7 +443,8 @@ public:
                          const bool is_truncate_table = false,
                          share::schema::DropTableIdHashSet *drop_table_set = NULL,
                          const bool is_drop_db = false,
-                         const bool delete_priv = true);
+                         const bool delete_priv = true,
+                         const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_for_not_dropped_schema(
       const share::schema::ObTableSchema &table_schema,
       common::ObMySQLTransaction &trans,
@@ -446,7 +452,8 @@ public:
       const bool is_truncate_table = false,
       share::schema::DropTableIdHashSet *drop_table_set = NULL,
       const bool is_drop_db = false,
-      const bool delete_priv = true);
+      const bool delete_priv = true,
+      const bool is_force_drop_lonely_lob_aux_table = false);
   virtual int drop_table_to_recyclebin(const share::schema::ObTableSchema &table_schema,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        common::ObMySQLTransaction &trans,
@@ -1020,13 +1027,14 @@ public:
                         ObMySQLTransaction &trans);
   inline share::schema::ObMultiVersionSchemaService &get_multi_schema_service() { return schema_service_; }
   inline common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }
-private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObObjPrivSortKey &obj_priv_key,          /* in: obj priv key*/
       const uint64_t option,                                        /* in: new option */
       const share::ObRawObjPrivArray &obj_priv_array,               /* in: new privs used want to add */
       share::ObRawObjPrivArray &new_obj_priv_array);
+
+private:
   virtual int init_tenant_tablegroup(const uint64_t tenant_id,
                                      common::ObMySQLTransaction &trans);
   virtual int init_tenant_database(const share::schema::ObTenantSchema &tenant_schema,
@@ -1197,7 +1205,15 @@ private:
   int init_tenant_optimizer_stats_info(const share::schema::ObSysVariableSchema &sys_variable,
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
+
+  int init_tenant_recompile_pl_obj(const share::schema::ObSysVariableSchema &sys_variable,
+                                       uint64_t tenant_id,
+                                       ObMySQLTransaction &trans);
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
+  int init_tenant_scheduled_job(
+      const share::schema::ObSysVariableSchema &sys_variable,
+      const uint64_t tenant_id,
+      common::ObMySQLTransaction &trans);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
 protected:

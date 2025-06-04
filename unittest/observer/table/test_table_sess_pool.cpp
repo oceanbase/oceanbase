@@ -12,7 +12,7 @@
 
 #define private public  // 获取私有成员
 #define protected public  // 获取私有成员
-#include "observer/table/ob_table_session_pool.h"
+#include "observer/table/object_pool/ob_table_object_pool.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 using namespace oceanbase;
@@ -38,12 +38,12 @@ public:
   void SetUp()
   {
     ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
-    TABLEAPI_SESS_POOL_MGR->init();
+    TABLEAPI_OBJECT_POOL_MGR->init();
     create_credential(1, mock_cred_);
   }
   void TearDown()
   {
-    TABLEAPI_SESS_POOL_MGR->destroy();
+    TABLEAPI_OBJECT_POOL_MGR->destroy();
   }
 private:
   void create_credential(uint64_t user_id, ObTableApiCredential *&cred);
@@ -74,7 +74,7 @@ int TestTableSessPool::create_and_add_node(ObTableApiCredential &cred)
   ObTableApiSessNode *tmp_node = nullptr;
   void *buf = nullptr;
 
-  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->create_session_pool_safe())) {
+  if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->create_session_pool_safe())) {
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -93,7 +93,7 @@ int TestTableSessPool::create_and_add_node(ObTableApiCredential &cred)
       tmp_node->last_active_ts_ = ObTimeUtility::fast_current_time();
       tmp_node->is_inited_ = true;
       if (OB_FAIL(tmp_node->sess_queue_.init(max_sess_num, &tmp_node->queue_allocator_, attr))) {
-      } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->pool_->key_node_map_.set_refactored(cred.hash_val_, tmp_node))) {
+      } else if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->sess_pool_->key_node_map_.set_refactored(cred.hash_val_, tmp_node))) {
         if (OB_HASH_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // replace error code
@@ -110,15 +110,15 @@ int TestTableSessPool::create_and_add_node(ObTableApiCredential &cred)
 
 TEST_F(TestTableSessPool, test_mgr_init)
 {
-  ObTableApiSessPoolMgr mgr;
+  ObTableObjectPoolMgr mgr;
   ASSERT_FALSE(mgr.is_inited_);
-  ASSERT_EQ(nullptr, mgr.pool_);
-  ASSERT_EQ(nullptr, mgr.elimination_task_.sess_pool_mgr_);
+  ASSERT_EQ(nullptr, mgr.sess_pool_);
+  ASSERT_EQ(nullptr, mgr.sess_elimination_task_.obj_pool_mgr_);
 
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  ASSERT_TRUE(TABLEAPI_SESS_POOL_MGR->is_inited_);
-  ASSERT_EQ(nullptr, TABLEAPI_SESS_POOL_MGR->pool_);
-  ASSERT_EQ(TABLEAPI_SESS_POOL_MGR, TABLEAPI_SESS_POOL_MGR->elimination_task_.sess_pool_mgr_);
+  ASSERT_TRUE(TABLEAPI_OBJECT_POOL_MGR->is_inited_);
+  ASSERT_EQ(nullptr, TABLEAPI_OBJECT_POOL_MGR->sess_pool_);
+  ASSERT_EQ(TABLEAPI_OBJECT_POOL_MGR, TABLEAPI_OBJECT_POOL_MGR->sess_elimination_task_.obj_pool_mgr_);
 }
 
 TEST_F(TestTableSessPool, test_pool_init)
@@ -152,16 +152,16 @@ TEST_F(TestTableSessPool, test_sess_guard_init)
 TEST_F(TestTableSessPool, mgr_get_session)
 {
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
+  ObTableObjectPoolMgr *mgr = TABLEAPI_OBJECT_POOL_MGR;
 
   // first time will create a new node
   ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
-  ASSERT_NE(nullptr, mgr->pool_);
-  ASSERT_TRUE(mgr->pool_->is_inited_);
-  ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
+  ASSERT_NE(nullptr, mgr->sess_pool_);
+  ASSERT_TRUE(mgr->sess_pool_->is_inited_);
+  ASSERT_EQ(1, mgr->sess_pool_->key_node_map_.size());
+  ASSERT_EQ(0, mgr->sess_pool_->retired_nodes_.size_);
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->sess_pool_->get_sess_node(mock_cred_->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_NE(0, node->last_active_ts_);
 
@@ -187,14 +187,14 @@ TEST_F(TestTableSessPool, mgr_get_session)
 TEST_F(TestTableSessPool, mgr_destroy)
 {
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
+  ObTableObjectPoolMgr *mgr = TABLEAPI_OBJECT_POOL_MGR;
   ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
-  ASSERT_NE(nullptr, mgr->pool_);
+  ASSERT_NE(nullptr, mgr->sess_pool_);
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->sess_pool_->get_sess_node(mock_cred_->hash_val_, node));
   mgr->destroy();
   ASSERT_FALSE(mgr->is_inited_);
-  ASSERT_EQ(nullptr, mgr->pool_);
+  ASSERT_EQ(nullptr, mgr->sess_pool_);
   ASSERT_EQ(0, mgr->allocator_.total());
   ASSERT_EQ(0, mgr->allocator_.used());
 }
@@ -202,13 +202,13 @@ TEST_F(TestTableSessPool, mgr_destroy)
 TEST_F(TestTableSessPool, mgr_sess_recycle)
 {
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
+  ObTableObjectPoolMgr *mgr = TABLEAPI_OBJECT_POOL_MGR;
   ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
-  ASSERT_NE(nullptr, mgr->pool_);
+  ASSERT_NE(nullptr, mgr->sess_pool_);
 
   // add mock val to node
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->sess_pool_->get_sess_node(mock_cred_->hash_val_, node));
   void *buf = nullptr;
   ObMemAttr attr(MTL_ID(), "TbSessNodVal", ObCtxIds::DEFAULT_CTX_ID);
   ASSERT_NE(nullptr, buf = node->mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr));
@@ -219,20 +219,20 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   ObTableApiSessGuard guard;
   mgr->sys_vars_.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
-  mgr->elimination_task_.runTimerTask();
-  ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
+  mgr->sess_elimination_task_.runTimerTask();
+  ASSERT_EQ(1, mgr->sess_pool_->key_node_map_.size());
+  ASSERT_EQ(0, mgr->sess_pool_->retired_nodes_.size_);
   guard.~ObTableApiSessGuard();
 
   // 3min not access
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->sess_pool_->get_sess_node(mock_cred_->hash_val_, node));
   node->last_active_ts_ = node->last_active_ts_ - ObTableApiSessPool::SESS_RETIRE_TIME;
-  mgr->elimination_task_.run_retire_sess_task();
-  ASSERT_EQ(0, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(1, mgr->pool_->retired_nodes_.size_);
-  mgr->elimination_task_.run_recycle_retired_sess_task();
-  ASSERT_EQ(0, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
+  mgr->sess_elimination_task_.run_retire_sess_task();
+  ASSERT_EQ(0, mgr->sess_pool_->key_node_map_.size());
+  ASSERT_EQ(1, mgr->sess_pool_->retired_nodes_.size_);
+  mgr->sess_elimination_task_.run_recycle_retired_sess_task();
+  ASSERT_EQ(0, mgr->sess_pool_->key_node_map_.size());
+  ASSERT_EQ(0, mgr->sess_pool_->retired_nodes_.size_);
 }
 
 int main(int argc, char **argv)

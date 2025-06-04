@@ -25,7 +25,7 @@ namespace sql
 ObFastColumnConvExpr::ObFastColumnConvExpr(ObIAllocator &alloc)
     : ObBaseExprColumnConv(alloc),
       ObFastExprOperator(T_FUN_COLUMN_CONV),
-      column_type_(alloc),
+      column_type_(),
       value_item_(),
       column_info_()
 {
@@ -238,8 +238,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
     ObCollationLevel coll_level = ObRawExprUtils::get_column_collation_level(types[0].get_type());
     type.set_collation_level(coll_level);
     type.set_accuracy(types[2].get_accuracy());
-    if (type.get_type() == ObUserDefinedSQLType
-        || type.get_type() == ObCollectionSQLType) {
+    if (type.get_type() == ObUserDefinedSQLType) {
       uint64_t udt_id = types[2].get_accuracy().get_accuracy();
       uint16_t subschema_id = ObMaxSystemUDTSqlType;
       // need const cast to modify subschema ctx, in physcial plan ctx belong to cur exec_ctx;
@@ -250,16 +249,17 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       } else if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
-      } else if (str_values_.count() > 0) {
-        // array type
-        if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(str_values_.at(0), subschema_id))) {
-          LOG_WARN("failed to get array type subschema id", K(ret));
-        }
       } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
         LOG_WARN("failed to get sub schema id", K(ret), K(udt_id));
       }
       if (OB_SUCC(ret)) {
         type.set_subschema_id(subschema_id);
+      }
+    }
+    if (ob_is_enumset_tc(type.get_type()) || ob_is_collection_sql_type(type.get_type())) {
+      type.set_subschema_id(types[0].get_subschema_id());
+      if (ob_is_enumset_tc(type.get_type())) {
+        type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
       }
     }
     if (types[3].is_not_null_for_read()) {
@@ -297,7 +297,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
         type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                               type_ctx.get_raw_expr()->get_extra() |
+                               type_ctx.get_raw_expr()->get_cast_mode() |
                                CM_COLUMN_CONVERT);
         types[4].set_calc_meta(type);
         if (ob_is_number_or_decimal_int_tc(type.get_type())) {
@@ -344,26 +344,12 @@ int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
       // subschema id of the expr result type.
       const ObRawExpr *conv_expr = get_raw_expr();
       const ObRawExpr *enumset_expr = NULL;
-      const ObEnumSetMeta *src_meta = NULL;
-      const ObExecContext *exec_ctx = NULL;
       if (OB_ISNULL(conv_expr) || OB_ISNULL(enumset_expr = conv_expr->get_param_expr(4))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("raw expr or child expr is null", K(ret), KP(conv_expr));
-      } else if (OB_ISNULL(exec_ctx = type_ctx.get_session()->get_cur_exec_ctx())) {
-      } else if (OB_UNLIKELY(!enumset_expr->is_enum_set_with_subschema())) {
-        // skip check enum/set expr with old behavior
-      } else if (OB_UNLIKELY(conv_expr->get_enum_set_values().empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("str values for enum set expr is empty", K(ret));
-      } else if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(
-                          enumset_expr->get_subschema_id(), src_meta))) {
-        LOG_WARN("failed to meta from exec_ctx", K(ret), K(enumset_expr->get_subschema_id()));
-      } else if (OB_ISNULL(src_meta)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("src meta is unexpected", K(ret), KP(src_meta));
-      } else if (src_meta->is_same(src_meta->get_obj_meta(), conv_expr->get_enum_set_values())) {
+      } else {
         // set wrap to str to false, it will be checked in `ObRawExprWrapEnumSet`
-        wrap_to_str = false;
+        wrap_to_str = type.get_subschema_id() != enumset_expr->get_subschema_id();
       }
     }
     if (OB_SUCC(ret)) {
@@ -371,7 +357,7 @@ int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
         types[4].set_calc_type(calc_type);
         types[4].set_calc_collation_type(coll_type);
         types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_cast_mode());
       }
     }
   }
@@ -391,7 +377,7 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (OB_FAIL(ObEnumSetInfo::init_enum_set_info(op_cg_ctx.allocator_, rt_expr, type_,
-      raw_expr.get_extra(), str_values_))) {
+      raw_expr.get_cast_mode(), str_values_))) {
     LOG_WARN("fail to init_enum_set_info", K(ret), K(type_), K(str_values_));
   } else {
     ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);
@@ -406,6 +392,7 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
       rt_expr.eval_func_ = column_convert_fast;
       if (rt_expr.args_[4]->is_batch_result()) {
         rt_expr.eval_batch_func_ = column_convert_batch_fast;
+        rt_expr.eval_vector_func_ = column_convert_vector_fast;
       }
     } else {
       rt_expr.eval_func_ = column_convert;
@@ -413,8 +400,12 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
           && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)
           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
         if (!is_lob_storage(rt_expr.datum_meta_.type_)
-            || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0)
-        rt_expr.eval_batch_func_ = column_convert_batch;
+            || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
+          rt_expr.eval_batch_func_ = column_convert_batch;
+          if (!is_lob_storage(rt_expr.datum_meta_.type_)) {
+            rt_expr.eval_vector_func_ = column_convert_vector;
+          }
+        }
       }
     }
   }
@@ -468,6 +459,69 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
         && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
       LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_info->get_string().length(),
                                            column_info->get_string().ptr(), rownum);
+    }
+  }
+  return ret;
+}
+
+static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
+                                                          ObEvalCtx &ctx,
+                                                          const ObBitVector &skip,
+                                                          bool has_lob_header,
+                                                          const uint64_t &cast_mode,
+                                                          const int64_t idx,
+                                                          const ObIVector &in_vec,
+                                                          ObIVector &out_vec)
+{
+  int ret = OB_SUCCESS;
+  int warning = OB_SUCCESS;
+  const int64_t max_accuracy_len = static_cast<int64_t>(expr.max_length_);
+  const int64_t str_len_byte = static_cast<int64_t>(in_vec.get_length(idx));
+  if (OB_FAIL(vector_accuracy_check(expr,
+                                   cast_mode,
+                                   ctx,
+                                   has_lob_header,
+                                   idx,
+                                   in_vec,
+                                   out_vec,
+                                   warning))) {
+    LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
+    //compatible with old code
+    if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+      ObString column_info_str;
+      ObDatum *column_info = NULL;
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+      batch_info_guard.set_batch_size(ctx.max_batch_size_);
+      batch_info_guard.set_batch_idx(idx);
+      EvalBound bound(ctx.max_batch_size_, idx, idx + 1, false);
+      if (OB_FAIL(expr.args_[5]->eval_vector(ctx, skip, bound))) {
+        LOG_WARN("evaluate parameter failed", K(ret));
+      } else {
+        column_info_str = expr.args_[5]->get_vector(ctx)->get_string(idx);
+        int64_t col_length = str_len_byte;
+        if (ObStringTC == ob_obj_type_class(expr.datum_meta_.get_type())
+            && !is_oracle_byte_length(lib::is_oracle_mode(), expr.datum_meta_.length_semantics_)) {
+          col_length = ObCharset::strlen_char(expr.datum_meta_.cs_type_, in_vec.get_payload(idx), str_len_byte);
+        }
+        LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_str.length(),
+                              column_info_str.ptr(), col_length, max_accuracy_len);
+      }
+      ret = OB_ERR_DATA_TOO_LONG;
+    }
+  }
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && OB_ERR_DATA_TOO_LONG == warning) {
+    ObDatum *column_info = NULL;
+    int64_t rownum = ctx.exec_ctx_.get_cur_rownum();
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+    batch_info_guard.set_batch_size(ctx.max_batch_size_);
+    batch_info_guard.set_batch_idx(idx);
+    EvalBound bound(ctx.max_batch_size_, idx, idx + 1, false);
+    if (rownum > 0
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && OB_SUCCESS == expr.args_[5]->eval_vector(ctx, skip, bound)) {
+      LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, expr.args_[5]->get_vector(ctx)->get_string(idx).length(),
+                                           expr.args_[5]->get_vector(ctx)->get_string(idx).ptr(), rownum);
     }
   }
   return ret;
@@ -808,8 +862,183 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
               }
             }
           }
+
+          if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+            // overwrite ret on diagnosis node
+            if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+              LOG_WARN("failed to add warning info", K(ret), K(i));
+            } else {
+              // set null to avoid accessing invalid data before setting skip
+              // in ObTableScanOp::do_diagnosis
+              results[i].set_null();
+            }
+          }
         }
         eval_flags.set(i);
+      }
+    }
+
+    if (OB_SUCC(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      if (OB_FAIL(calc_column_name_for_diagnosis(expr, ctx,
+                                                ctx.exec_ctx_.get_diagnosis_manager()))) {
+        LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprColumnConv::calc_column_name_for_diagnosis(const ObExpr &expr,
+                                                    ObEvalCtx &ctx,
+                                                    ObDiagnosisManager& diagnosis_manager) {
+  int ret = OB_SUCCESS;
+
+  if (diagnosis_manager.col_names_.count() < diagnosis_manager.rets_.count()) {
+    ObDatum *column_info = NULL;
+    if (ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
+      ObString column_name(column_info->get_string().length(), column_info->get_string().ptr());
+
+      ObString tmp_str;
+      if (OB_FAIL(ob_write_string(diagnosis_manager.allocator_, column_name, tmp_str, true))) {
+        LOG_WARN("failed to write string", K(ret));
+      } else {
+        int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
+          if (OB_FAIL(diagnosis_manager.col_names_.push_back(tmp_str))) {
+            LOG_WARN("failed to push back column name into array", K(ret), K(tmp_str));
+          }
+        }
+      }
+    }
+  } else {
+    // do nothing
+  }
+
+  return ret;
+}
+
+int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            const ObBitVector &skip,
+                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
+  const uint64_t cast_mode = enumset_info->cast_mode_;
+  bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
+  ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
+  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).evaluated_
+                        && !expr.args_[4]->get_eval_info(ctx).projected_;
+  if (OB_FAIL(expr.args_[4]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval args", K(ret));
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    bool is_string_type = ob_is_string_type(out_type);
+    bool is_int_tc = ob_is_int_uint_tc(out_type);
+    bool is_decimal_int_tc = ob_is_decimal_int_tc(out_type);
+    ObAccuracy accuracy;
+    accuracy.set_length(expr.max_length_);
+    accuracy.set_scale(expr.datum_meta_.scale_);
+    const ObObjTypeClass &dst_tc = ob_obj_type_class(expr.datum_meta_.type_);
+    const ObLength max_accuracy_len = accuracy.get_length();
+    VectorFormat res_format = expr.get_format(ctx);
+    VectorFormat arg_format = expr.args_[4]->get_format(ctx);
+    if (is_string_type) {
+      accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
+    }
+    if (!is_lob_storage(out_type)) {
+      if (is_string_type) {
+        if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+                          && (static_cast<ObDiscreteBase *>
+                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+          if (bound.get_all_rows_active()) {
+            if (has_null) {
+              ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObDiscreteFormat, ObDiscreteFormat, true, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+            } else {
+              ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObDiscreteFormat, ObDiscreteFormat, true, false>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+            }
+          } else {
+            ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObDiscreteFormat, ObDiscreteFormat, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+          }
+        } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+          ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObUniformFormat<false>, ObUniformFormat<false>, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        } else {
+          ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObVectorBase, ObVectorBase, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to convert batch", K(ret));
+        }
+      } else if (is_int_tc) {
+        if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
+          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+                          && (static_cast<ObFixedLengthBase *>
+                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+          if (bound.get_all_rows_active()) {
+            if (has_null) {
+              ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              true, true>(expr, ctx, skip, bound,
+                                                     is_strict, max_accuracy_len, cast_mode,
+                                                     eval_flags);
+            } else {
+              ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              true, false>(expr, ctx, skip, bound,
+                                                     is_strict, max_accuracy_len, cast_mode,
+                                                     eval_flags);
+            }
+          } else {
+            ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                              false, true>(expr, ctx, skip, bound,
+                                                     is_strict, max_accuracy_len, cast_mode,
+                                                     eval_flags);
+          }
+        } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+          ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC, ObUniformFormat<false>, ObUniformFormat<false>, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        } else {
+          ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC, ObVectorBase, ObVectorBase, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to convert batch", K(ret));
+        }
+      } else if (is_decimal_int_tc
+                 && OB_SUCCESS != (ret = inner_loop_for_convert_vector<PARAM_TC::DECIMAL_INT_TC, ObVectorBase, ObVectorBase, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags))) {
+        LOG_WARN("failed to convert batch", K(ret));
+      } else if (OB_SUCCESS != (ret = inner_loop_for_convert_vector<PARAM_TC::OTHER_TC, ObVectorBase, ObVectorBase, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags))) {
+        LOG_WARN("failed to convert batch", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      if (OB_FAIL(calc_column_name_for_diagnosis(expr, ctx,
+                                                ctx.exec_ctx_.get_diagnosis_manager()))) {
+        LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
       }
     }
   }
@@ -833,6 +1062,80 @@ int ObExprColumnConv::column_convert_batch_fast(const ObExpr &expr,
         continue;
       }
       results[i].set_datum(vals[i]);
+      eval_flags.set(i);
+    }
+  }
+  return ret;
+}
+
+int ObExprColumnConv::column_convert_vector_fast(const ObExpr &expr,
+                                                 ObEvalCtx &ctx,
+                                                 const ObBitVector &skip,
+                                                 const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  VectorFormat res_format = expr.get_format(ctx);
+  VectorFormat arg_format = expr.args_[4]->get_format(ctx);
+  ObObjType out_type = expr.datum_meta_.type_;
+  if (OB_FAIL(expr.args_[4]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval args", K(ret));
+  } else {
+    if (VEC_FIXED == res_format && VEC_FIXED == arg_format) {
+      if (ob_is_integer_type(out_type)) {
+        ret = inner_calc_column_convert_vector_fast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>,
+                                                    ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>> (expr, ctx, skip, bound);
+      } else if (ObDoubleType == out_type) {
+        ret = inner_calc_column_convert_vector_fast<ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>,
+                                                    ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>> (expr, ctx, skip, bound);
+      } else if (ObFloatType == out_type) {
+        ret = inner_calc_column_convert_vector_fast<ObFixedLengthFormat<RTCType<VEC_TC_FLOAT>>,
+                                                    ObFixedLengthFormat<RTCType<VEC_TC_FLOAT>>> (expr, ctx, skip, bound);
+      } else {
+        ret = inner_calc_column_convert_vector_fast<ObVectorBase, ObVectorBase> (expr, ctx, skip, bound);
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to convert args", K(ret));
+      }
+    } else if (VEC_DISCRETE == res_format && VEC_DISCRETE == arg_format) {
+      if (OB_SUCCESS != inner_calc_column_convert_vector_fast<ObDiscreteFormat, ObDiscreteFormat>(expr, ctx, skip, bound)) {
+        LOG_WARN("failed to convert args", K(ret));
+      }
+    } else if (OB_SUCCESS != inner_calc_column_convert_vector_fast<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound)) {
+      LOG_WARN("failed to convert args", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprColumnConv::inner_calc_column_convert_vector_fast(const ObExpr &expr,
+                                                            ObEvalCtx &ctx,
+                                                            const ObBitVector &skip,
+                                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[4]->get_vector(ctx));
+  if (bound.get_all_rows_active()) {
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      if (arg_vec->is_null(i)) {
+        res_vec->set_null(i);
+      } else {
+        res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
+      }
+    }
+    eval_flags.set_all(bound.start(), bound.end());
+  } else {
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      if (arg_vec->is_null(i)) {
+        res_vec->set_null(i);
+      } else {
+        res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
+      }
       eval_flags.set(i);
     }
   }
@@ -922,8 +1225,7 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
     min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
     max_decint = wide::ObDecimalIntConstValue::get_max_value(precision);
     int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
-    cmp_fp =
-      wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(int_bytes, int_bytes);
+    cmp_fp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(int_bytes, int_bytes);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
     if (skip.at(i) || eval_flags.at(i)) {
@@ -957,8 +1259,99 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
                                                              cast_mode, vals[i]))) {
         LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
       }
+
+      if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+        // overwrite ret on diagnosis node
+        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+          LOG_WARN("failed to add warning info", K(ret), K(i));
+        } else {
+          results[i].set_null();
+        }
+      }
     }
     eval_flags.set(i);
+  }
+  return ret;
+}
+
+
+template <ObExprColumnConv::PARAM_TC TC, typename ArgVec, typename ResVec, bool ALL_ROWS_ACTIVE, bool HAS_NULL>
+int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
+                                                    ObEvalCtx &ctx,
+                                                    const ObBitVector &skip,
+                                                    const EvalBound &bound,
+                                                    const bool is_strict,
+                                                    const ObLength max_accuracy_len,
+                                                    const uint64_t cast_mode,
+                                                    ObBitVector &eval_flags)
+{
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  int32_t int_bytes = 0;
+  const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
+  common::ObPrecision precision = expr.datum_meta_.precision_;
+  decint_cmp_fp cmp_fp;
+  ResVec *res_vec = static_cast<ResVec *> (expr.get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *> (expr.args_[4]->get_vector(ctx));
+  if (TC == PARAM_TC::DECIMAL_INT_TC) {
+    min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
+    max_decint = wide::ObDecimalIntConstValue::get_max_value(precision);
+    int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+    cmp_fp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(int_bytes, int_bytes);
+  }
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+  batch_info_guard.set_batch_size(bound.batch_size());
+  for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+    if (!ALL_ROWS_ACTIVE && (skip.at(i) || eval_flags.at(i))) {
+      continue;
+    }
+    if (HAS_NULL && arg_vec->is_null(i)) {
+      res_vec->set_null(i);
+    } else {
+      batch_info_guard.set_batch_idx(i);
+      if (TC == PARAM_TC::STRING_TC) {
+        ObString str = arg_vec->get_string(i);
+        int64_t orign_len = str.length();
+        if (!check_is_ascii(str)
+            && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+          LOG_WARN("fail to check collation", K(i), K(bound), K(ret), K(str), K(is_strict), K(expr));
+        } else if (orign_len != str.length()) {
+          arg_vec->set_string(i, str);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (TC == PARAM_TC::INT_TC
+                 || (TC == PARAM_TC::STRING_TC
+                     && max_accuracy_len > 0
+                     && arg_vec->get_length(i) < max_accuracy_len)) {
+        res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
+      } else if (TC == PARAM_TC::DECIMAL_INT_TC
+                 && cmp_fp(arg_vec->get_decimal_int(i), min_decint) >= 0
+                 && cmp_fp(arg_vec->get_decimal_int(i), max_decint) <= 0) {
+        res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
+      } else if (OB_FAIL(column_convert_vector_accuracy_check(expr, ctx, skip,
+                                                             false, cast_mode,
+                                                             i, *arg_vec, *res_vec))) {
+        LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
+      }
+    }
+    if (!ALL_ROWS_ACTIVE) {
+      eval_flags.set(i);
+    }
+    if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
+      // overwrite ret on diagnosis node
+      if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+        LOG_WARN("failed to add warning info", K(ret), K(i));
+      } else {
+        // set null to avoid accessing invalid data before setting skip
+        // in ObTableScanOp::do_diagnosis
+        res_vec->set_null(i);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && ALL_ROWS_ACTIVE) {
+    eval_flags.set_all(bound.start(), bound.end());
   }
   return ret;
 }

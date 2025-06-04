@@ -555,11 +555,13 @@ void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
   }
 
   if (need_cluster_heartbeat_(begin_tstamp)) {
+    ObDIActionGuard ag("do_cluster_heartbeat");
     do_cluster_heartbeat_();
     time_guard.click("do_cluster_heartbeat");
   }
 
   if (need_generate_cluster_version_(begin_tstamp)) {
+    ObDIActionGuard ag("gen_cluster_version");
     generate_cluster_version_();
     time_guard.click("generate_cluster_version");
   }
@@ -717,7 +719,9 @@ bool ObTenantWeakReadService::check_can_skip_ls(ObLS *ls)
   share::SCN offline_scn;
 
   if (OB_NOT_NULL(ls)) {
-    if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+    if (is_tenant_sslog_ls(ls->get_tenant_id(), ls->get_ls_id())) {
+      bool_ret = true;
+    } else if (ls->get_ls_wrs_handler()->can_skip_ls()) {
       bool_ret = true;
     } else if (OB_SUCC(ls->get_offline_scn(offline_scn)) && offline_scn.is_valid()) {
       bool_ret = true;

@@ -14,6 +14,7 @@
 
 #define private public
 #define protected public
+#include "src/storage/tx/ob_tx_log_cb_define.h"
 #include "src/storage/tx/ob_trans_ctx.h"
 
 namespace oceanbase

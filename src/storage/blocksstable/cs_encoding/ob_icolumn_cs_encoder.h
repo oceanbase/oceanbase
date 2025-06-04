@@ -30,6 +30,7 @@ public:
   virtual ~ObIColumnCSEncoder() {}
   ObCSColumnHeader &get_column_header() { return column_header_; }
   virtual int store_column(ObMicroBufferWriter &buf_writer) = 0;
+  virtual int store_column_meta(ObMicroBufferWriter &buf_writer) = 0;
   virtual ObCSColumnHeader::Type get_type() const = 0;
   virtual int init(const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count);
   virtual void reuse();
@@ -42,6 +43,7 @@ public:
   virtual int get_string_data_len(uint32_t &len) const = 0;
 
   int get_stream_offsets(ObIArray<uint32_t> &offsets) const;
+  int get_previous_cs_encoding(ObPreviousColumnEncoding *&pre_col_encoding);
   int64_t get_row_count() const {return row_count_; }
 
   VIRTUAL_TO_STRING_KV(K_(column_index), K_(column_type), K_(store_class),
@@ -50,6 +52,11 @@ public:
 protected:
   int store_null_bitamp(ObMicroBufferWriter &buf_writer);
 
+private:
+  int init_common_(const ObColumnCSEncodingCtx &ctx,
+                   const int64_t column_index,
+                   const ObObjMeta& col_type,
+                   const int64_t row_count);
 
 protected:
   bool is_inited_;

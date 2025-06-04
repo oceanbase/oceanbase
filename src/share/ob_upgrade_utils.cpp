@@ -19,6 +19,7 @@
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
 #include "rootserver/ob_tenant_ddl_service.h"
+#include "share/ob_scheduled_manage_dynamic_partition.h"
 
 namespace oceanbase
 {
@@ -49,6 +50,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 5UL, 1UL),  // 4.2.5.1
   CALC_VERSION(4UL, 2UL, 5UL, 2UL),  // 4.2.5.2
   CALC_VERSION(4UL, 2UL, 5UL, 3UL),  // 4.2.5.3
+  CALC_VERSION(4UL, 2UL, 5UL, 4UL),  // 4.2.5.4
+  CALC_VERSION(4UL, 2UL, 5UL, 5UL),  // 4.2.5.5
   CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
   CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
   CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
@@ -61,6 +64,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 3UL, 5UL, 0UL),  // 4.3.5.0
   CALC_VERSION(4UL, 3UL, 5UL, 1UL),  // 4.3.5.1
   CALC_VERSION(4UL, 3UL, 5UL, 2UL),  // 4.3.5.2
+  CALC_VERSION(4UL, 3UL, 5UL, 3UL),  // 4.3.5.3
+  CALC_VERSION(4UL, 4UL, 0UL, 0UL),  // 4.4.0.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -91,6 +96,8 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_1, MOCK_DATA_VERSION_4_2_5_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_2, MOCK_DATA_VERSION_4_2_5_2)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_3, MOCK_DATA_VERSION_4_2_5_3)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_4, MOCK_DATA_VERSION_4_2_5_4)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_5, MOCK_DATA_VERSION_4_2_5_5)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_1_0, DATA_VERSION_4_3_1_0)
@@ -103,6 +110,8 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_5_0, DATA_VERSION_4_3_5_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_5_1, DATA_VERSION_4_3_5_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_5_2, DATA_VERSION_4_3_5_2)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_3_5_3, MOCK_DATA_VERSION_4_3_5_3)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_4_0_0, DATA_VERSION_4_4_0_0)
 
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
@@ -693,6 +702,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 2);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 3);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 4);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 5);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 1, 0);
@@ -705,6 +716,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 2);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 5, 3);
+    INIT_PROCESSOR_BY_VERSION(4, 4, 0, 0);
 
 #undef INIT_PROCESSOR_BY_NAME_AND_VERSION
 #undef INIT_PROCESSOR_BY_VERSION
@@ -1803,6 +1816,57 @@ int ObUpgradeFor4351Processor::post_upgrade_for_optimizer_stats()
   return ret;
 }
 /* =========== 4351 upgrade processor end ============= */
+
+/* =========== 4352 upgrade processor start ============= */
+int ObUpgradeFor4352Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_dynamic_partition())) {
+    LOG_WARN("fail to post upgrade for dynamic partition", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4352Processor::post_upgrade_for_dynamic_partition()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(ObScheduledManageDynamicPartition::create_jobs_for_upgrade(
+        sql_proxy_,
+        *sys_variable_schema,
+        tenant_id_,
+        trans))) {
+      LOG_WARN("create scheduled manage dynamic partition job failed", KR(ret), K_(tenant_id));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for reate scheduled manage dynamic partition job finished", KR(ret),  K_(tenant_id));
+  }
+  return ret;
+}
+/* =========== 4352 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

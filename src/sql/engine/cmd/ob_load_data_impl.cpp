@@ -27,6 +27,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "src/observer/mysql/ob_query_driver.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -663,7 +664,7 @@ public:
       } else {
         is_user_variable = true;
         ObSysFunRawExpr *func_expr = static_cast<ObSysFunRawExpr*>(raw_expr);
-        if (func_expr->get_children_count() != 1) {
+        if (func_expr->get_param_count() != 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sys func expr child num is not correct", K(ret));
         } else {
@@ -3253,9 +3254,14 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
 
   // 只有当hint不为空时才添加
   if (!stmt_hints.get_hint_str().empty()) {
+
     const ObString &hint_str = stmt_hints.get_hint_str();
-    const char* hint_start = strstr(hint_str.ptr(), "/*+");
-    if (OB_NOT_NULL(hint_start)) {
+    const char* hint_start = strstr(hint_str.ptr(), "/*");
+
+    if (OB_ISNULL(hint_start)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid hint", K(ret), K(hint_str));
+    } else {
       ObString new_hint(hint_str.length() - (hint_start - hint_str.ptr()), hint_start);
       OZ (sql.append(new_hint));
     }
@@ -3335,13 +3341,26 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   common::sqlclient::ObISQLConnection *conn = NULL;
   ObInnerSQLConnectionPool *pool = NULL;
   ObSQLSessionInfo *session = NULL;
-
+  ObSwitchCatalogHelper switch_catalog_helper;
+  int tmp_ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(session = ctx.get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is null", K(ret));
-    } else if (OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(
-                          sql_proxy->get_pool()))) {
+    } else {
+      if (load_stmt.get_load_arguments().is_diagnosis_enabled_) {
+        session->set_diagnosis_enabled(true);
+        session->set_diagnosis_limit_num(load_stmt.get_load_arguments().diagnosis_limit_num_);
+      }
+      if (session->is_in_external_catalog()
+          && OB_FAIL(session->set_internal_catalog_db(&switch_catalog_helper))) {
+        LOG_WARN("failed to set catalog", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(sql_proxy->get_pool()))) {
       ret = OB_NOT_INIT;
       LOG_WARN("connection pool is NULL", K(ret));
     } else if (OB_FAIL(pool->acquire(session, conn))) {
@@ -3358,6 +3377,19 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
       ctx.get_physical_plan_ctx()->set_affected_rows(affected_rows);
+      ctx.get_physical_plan_ctx()->set_row_matched_count(affected_rows);
+    }
+  }
+
+  if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
+    session->set_diagnosis_enabled(false);
+    session->set_diagnosis_limit_num(0);
+  }
+
+  if (OB_NOT_NULL(session) && switch_catalog_helper.is_set()) {
+    if (OB_SUCCESS != (tmp_ret = switch_catalog_helper.restore())) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to reset catalog", K(ret), K(tmp_ret));
     }
   }
 
@@ -3369,7 +3401,6 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
 
   return ret;
 }
-
 
 } // sql
 } // oceanbase

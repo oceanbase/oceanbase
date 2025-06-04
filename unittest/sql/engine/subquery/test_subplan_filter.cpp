@@ -94,7 +94,6 @@ void ObSubPlanFilterTest::add_filter_expr()
   subquery_ref->set_result_is_scalar(true);
   subquery_ref->set_result_type(ObInt32Type);
   subquery_ref->set_scalar_result_type(subquery_ref->get_result_type());
-  const_cast<ObExprResType*>(&subquery_ref->get_result_type())->init_row_dimension(10);
   subquery_ref->set_subquery_idx(0);
   expr_item.assign(subquery_ref);
   sql_expr->add_expr_item(expr_item);
@@ -131,7 +130,6 @@ void ObSubPlanFilterTest::add_calc_expr()
   subquery_ref->set_real_param_num(0);
   subquery_ref->set_result_is_scalar(false);
   subquery_ref->set_result_type(ObNullType);
-  const_cast<ObExprResType*>(&subquery_ref->get_result_type())->init_row_dimension(10);
   subquery_ref->set_scalar_result_type(subquery_ref->get_result_type());
   subquery_ref->set_subquery_idx(0);
   expr_item.assign(subquery_ref);
@@ -156,11 +154,6 @@ void ObSubPlanFilterTest::add_calc_expr()
   calc_type.set_tinyint();
   ObExprResType result_type;
   ObArenaAllocator alloc;
-  result_type.set_allocator(&alloc);
-  result_type.init_row_dimension(10);
-  result_type.get_row_calc_cmp_types().push_back(calc_type);
-  result_type.get_row_calc_cmp_types().push_back(calc_type);
-  result_type.get_row_calc_cmp_types().push_back(calc_type);
   equal_op->set_result_type(result_type);
   equal_op->set_result_type(ObTinyIntType);
   equal_op->set_real_param_num(4);

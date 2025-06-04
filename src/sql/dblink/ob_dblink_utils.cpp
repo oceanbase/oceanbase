@@ -130,7 +130,7 @@ int ObDblinkService::init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &
     param_ctx.ncharset_id_ = ncharset_id;
     param_ctx.pool_type_ = pool_type;
     param_ctx.tenant_id_ = session_info->get_effective_tenant_id();
-    param_ctx.sessid_ = session_info->get_sessid();
+    param_ctx.sessid_ = session_info->get_server_sid();
     param_ctx.sql_request_level_ = session_info->get_next_sql_request_level();
     param_ctx.dblink_id_ = dblink_id;
     param_ctx.link_type_ = link_type;
@@ -707,14 +707,14 @@ int ObDblinkCtxInSession::register_dblink_conn_pool(common::sqlclient::ObCommonS
   } else if (OB_ISNULL(dblink_conn_pool)) {
     //do nothing
   } else if (OB_FAIL(add_var_to_array_no_dup(dblink_conn_pool_array_, dblink_conn_pool))) {
-    LOG_WARN("register dblink conn pool failed in session", K(dblink_conn_pool), K(session_info_->get_sessid()), K(ret));
+    LOG_WARN("register dblink conn pool failed in session", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(ret));
     // directly free dblink connection in dblink_conn_pool
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = dblink_conn_pool->free_dblink_session(session_info_->get_sessid()))) {
-      LOG_WARN("register dblink conn pool failed in session, then free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_sessid()), K(tmp_ret));
+    if (OB_SUCCESS != (tmp_ret = dblink_conn_pool->free_dblink_session(session_info_->get_server_sid()))) {
+      LOG_WARN("register dblink conn pool failed in session, then free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(tmp_ret));
     }
   } else {
-    LOG_DEBUG("register_dblink_conn_pool", KP(this), K(session_info_->get_sessid()), KP(dblink_conn_pool), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), K(lbt()));
+    LOG_DEBUG("register_dblink_conn_pool", KP(this), K(session_info_->get_server_sid()), KP(dblink_conn_pool), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), K(lbt()));
   }
   return ret;
 }
@@ -732,10 +732,10 @@ int ObDblinkCtxInSession::free_dblink_conn_pool()
     common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool = dblink_conn_pool_array_.at(i);
     if (OB_UNLIKELY(NULL == dblink_conn_pool)) {
       //do nothing
-    } else if (OB_FAIL(dblink_conn_pool->free_dblink_session(session_info_->get_sessid()))) {
-      LOG_WARN("free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_sessid()), K(ret));
+    } else if (OB_FAIL(dblink_conn_pool->free_dblink_session(session_info_->get_server_sid()))) {
+      LOG_WARN("free dblink conn pool failed", K(dblink_conn_pool), K(session_info_->get_server_sid()), K(ret));
     } else {
-      LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_sessid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
+      LOG_TRACE("free and close dblink connection in session", KP(this), K(session_info_->get_server_sid()), K(i), K(dblink_conn_pool_array_.count()), K(dblink_conn_pool_array_), KP(dblink_conn_pool), K(lbt()));
     }
   }
   dblink_conn_pool_array_.reset();
@@ -756,7 +756,7 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
   if (OB_ISNULL(session_info_) || OB_ISNULL(tenant_dblink_keeper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+  } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
   } else if (OB_FAIL(tenant_dblink_keeper->get_dblink_conn((0 != tm_sessid) ? tm_sessid : sessid, dblink_id, conn))) {
     LOG_WARN("failed to get dblink conn", K(ret), K(tm_sessid), K(sessid), K(dblink_id), KP(tenant_dblink_keeper));
   } else if (OB_ISNULL(conn)) {
@@ -795,7 +795,7 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
   if (OB_ISNULL(session_info_) || OB_ISNULL(tenant_dblink_keeper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+  } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
   } else if (OB_ISNULL(dblink_conn)) {
     //do nothing
   } else if (OB_FAIL(tenant_dblink_keeper->set_dblink_conn(sessid, dblink_conn))) {
@@ -815,8 +815,8 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
   // Why do not use MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*) ?
   // MTL(xxx) accesses the ptr in the cache, we need to access the ptr in the memory.
   // In the following scene，we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed or not:
-  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableApiSessPoolMgr*) destroy later.
-  // When MTL(ObTableApiSessPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
+  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableObjectPoolMgr*) destroy later.
+  // When MTL(ObTableObjectPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
   // so we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed to avoid accessing the memory that has been destroyed
   if (OB_ISNULL(MTL_CTX())) {
     // do nothing
@@ -827,7 +827,7 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
     } else if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-    } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+    } else if (FALSE_IT(sessid = session_info_->get_server_sid())) {
     } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid, force_disconnect))) {
       LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
     }
@@ -882,7 +882,7 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
         } else {
           reverse_dblink_->set_session_info(session_info_);
           reverse_dblink = reverse_dblink_;
-          LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+          LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
         }
       }
     } else if (OB_ISNULL(reverse_dblink_)) {
@@ -890,11 +890,11 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
       LOG_WARN("unexpected NULL ptr", K(ret));
     } else {
       reverse_dblink = reverse_dblink_;
-      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+      LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
     }
   } else {
     reverse_dblink = reverse_dblink_;
-    LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
+    LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_server_sid()), K(*reverse_dblink), KP(reverse_dblink));
   }
   return ret;
 }

@@ -332,7 +332,7 @@ int ObLSRecoveryStatOperator::get_ls_recovery_stat(
       const uint64_t &tenant_id,
       const share::ObLSID &ls_id,
       const bool need_for_update,
-      ObLSRecoveryStat &ls_recvery, 
+      ObLSRecoveryStat &ls_recvery,
       ObISQLClient &client)
 {
   int ret = OB_SUCCESS;

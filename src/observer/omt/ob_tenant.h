@@ -49,7 +49,7 @@ class ObAllVirtualDumpTenantInfo;
 }
 namespace omt
 {
-typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> ReqQueue;
+typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO, OB_MAX_NUMA_NUM> ReqQueue;
 class ObPxPool
     : public share::ObThreadPool
 {
@@ -278,6 +278,8 @@ public:
   ~ObResourceGroup() {}
 
   bool is_inited() const { return inited_; }
+  bool is_deleted() const { return deleted_; }
+  void set_deleted(bool deleted) { deleted_ = deleted; }
   void atomic_inc_recv_cnt() { ATOMIC_INC(&recv_req_cnt_); }
   uint64_t get_recv_req_cnt() const { return recv_req_cnt_; }
   int64_t min_worker_cnt() const;
@@ -313,6 +315,7 @@ private:
   common::ObPriorityQueue2<0, 1> req_queue_;
   ObMultiLevelQueue multi_level_queue_;
   bool inited_;                                  // Mark whether the container has threads and queues allocated
+  bool deleted_;
   volatile uint64_t recv_req_cnt_ CACHE_ALIGNED; // Statistics requested to enqueue
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t token_change_ts_;
@@ -371,7 +374,7 @@ class ObTenant : public share::ObTenantBase
   friend class ObResourceGroup;
   friend int ::select_dump_tenant_info(lua_State*);
   friend int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
-                           int32_t level, bool force, ObResourceGroup *group);
+                           int32_t level, bool force, ObResourceGroup *group, int32_t group_index);
   friend int destroy_worker(ObThWorker *worker);
   using WListNode = common::ObDLinkNode<lib::Worker*>;
   using WList = common::ObDList<WListNode>;
@@ -445,6 +448,7 @@ public:
   void update_queue_size();
 
   int timeup();
+  int get_default_group_throttled_time(int64_t &default_group_throttled_time);
   void print_throttled_time();
   void regist_threads_to_cgroup();
 
@@ -474,6 +478,8 @@ public:
   {
     return (!OB_ISNULL(t1) && !OB_ISNULL(t2) && t1->id_ == t2->id_);
   }
+
+  int mark_group_deleted(uint64_t group_id);
 
   void lq_end(ObThWorker &w);
   // called each checkpoint for worker of this tenant.
@@ -564,7 +570,7 @@ protected:
 
   /// tenant task queue,
   // 'hp' for high priority and 'np' for normal priority
-  common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> req_queue_;
+  ReqQueue req_queue_;
 
   //Create a request queue for each level of nested requests
   ObMultiLevelQueue *multi_level_queue_;
@@ -616,6 +622,7 @@ public:
   lib::ObQueryRateLimiter sql_limiter_;
   // idle time between two checkpoints
   int64_t worker_us_;
+  int64_t default_group_throttled_time_us_;
   int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 

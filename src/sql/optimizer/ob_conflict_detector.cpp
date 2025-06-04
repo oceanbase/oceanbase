@@ -684,7 +684,7 @@ int ObConflictDetectorGenerator::generate_semi_join_detectors(const ObDMLStmt *s
           LOG_WARN("failed to try replace onetime subquery", K(ret));
         } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
           LOG_WARN("failed to add members", K(ret));
-        } else if (OB_FAIL(detector->join_info_.where_conditions_.push_back(expr))) {
+        } else if (OB_FAIL(detector->join_info_.on_conditions_.push_back(expr))) {
           LOG_WARN("failed to push back exprs", K(ret));
         } else if (expr->has_flag(IS_JOIN_COND) &&
                    OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
@@ -774,7 +774,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
-                  expr->has_flag(CNT_SUB_QUERY)) {
+                 (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr))) {
         //do nothing
       } else if (expr->get_relation_ids().is_empty() &&
                  !expr->is_const_expr() &&
@@ -825,7 +825,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
-      } else if (expr->has_flag(CNT_SUB_QUERY) &&
+      } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                  OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
         LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
@@ -850,7 +850,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
-    } else if (expr->has_flag(CNT_SUB_QUERY) &&
+    } else if (expr->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, expr) &&
                OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
       LOG_WARN("failed to add members", K(ret));
     }
@@ -893,7 +893,7 @@ int ObConflictDetectorGenerator::generate_inner_join_detectors(const ObDMLStmt *
       if (OB_ISNULL(outer_detector)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null detector", K(ret));
-      } else if (!IS_OUTER_OR_CONNECT_BY_JOIN(outer_detector->join_info_.join_type_)) {
+      } else if (IS_INNER_JOIN(outer_detector->join_info_.join_type_)) {
         //inner join与inner join之前没有冲突，do nothing
       } else if (OB_FAIL(generate_conflict_rule(inner_detector,
                                                 outer_detector,
@@ -1314,7 +1314,8 @@ int ObConflictDetectorGenerator::pushdown_on_conditions(const ObDMLStmt *stmt,
       if (OB_ISNULL(qual = new_conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
-      } else if (qual->has_flag(CNT_ROWNUM) || qual->has_flag(CNT_SUB_QUERY)) {
+      } else if (qual->has_flag(CNT_ROWNUM) ||
+                 (qual->has_flag(CNT_SUB_QUERY) && !ObOptimizerUtil::find_item(push_subq_exprs_, qual))) {
         if (OB_FAIL(join_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
@@ -1612,21 +1613,28 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds(const ObDMLStmt *st
 {
   int ret = OB_SUCCESS;
   EqualSets all_equal_sets;
+  ObSEArray<ObRawExpr*, 8> normal_quals;
+  ObSEArray<ObRawExpr*, 8> subquery_quals;
   ObSEArray<ObRelIds, 8> connect_infos;
   ObSEArray<ObRelIds, 8> single_table_ids;
   ObRelIds table_ids;
   ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
-                                                 quals,
-                                                 all_equal_sets))) {
+  if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(quals,
+                                                       subquery_quals,
+                                                       normal_quals,
+                                                       false /* with_onetime */ ))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
+  } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
+                                                        normal_quals,
+                                                        all_equal_sets))) {
     LOG_WARN("failed to compute equal set", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
-    if (OB_ISNULL(quals.at(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < normal_quals.count(); ++i) {
+    if (OB_ISNULL(normal_quals.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(add_var_to_array_no_dup(connect_infos,
-                                               quals.at(i)->get_relation_ids()))) {
+                                               normal_quals.at(i)->get_relation_ids()))) {
       LOG_WARN("failed to add var to array no dup", K(ret));
     }
   }
@@ -1667,49 +1675,62 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds_with_equal_set(cons
   int ret = OB_SUCCESS;
   ObRelIds table_ids;
   ObRawExpr *new_expr = NULL;
-  if (OB_ISNULL(session_info_)) {
+  bool contain_const = false;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(session_info_), K(query_ctx_));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3, COMPAT_VERSION_4_3_0,
+                                                  COMPAT_VERSION_4_3_5_BP2)) {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain_const && i < equal_set.count(); i ++) {
+      if (OB_ISNULL(equal_set.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (equal_set.at(i)->is_const_expr()) {
+        contain_const = true;
+      }
+    }
   }
-  for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {
-    for (int64_t n = m + 1; OB_SUCC(ret) && n < equal_set.count(); ++n) {
-      table_ids.reuse();
-      new_expr = NULL;
-      if (OB_ISNULL(equal_set.at(m)) ||
-          OB_ISNULL(equal_set.at(n))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (equal_set.at(m)->get_result_meta() !=
-                  equal_set.at(n)->get_result_meta()) {
-        // do nothing
-      } else if (!equal_set.at(m)->has_flag(CNT_COLUMN) ||
-                 !equal_set.at(n)->has_flag(CNT_COLUMN) ||
-                 equal_set.at(m)->get_relation_ids().overlap(equal_set.at(n)->get_relation_ids())) {
-        // do nothing
-      } else if (OB_FAIL(table_ids.add_members(equal_set.at(m)->get_relation_ids())) ||
-                 OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
-        // do nothing
-      } else if (ObOptimizerUtil::find_superset(table_ids, single_table_ids)) {
-        // do nothing
-      } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
-                         expr_factory_,
-                         session_info_,
-                         T_OP_EQ,
-                         new_expr,
-                         equal_set.at(m),
-                         equal_set.at(n)))) {
-          LOG_WARN("failed to create double op expr", K(ret));
-      } else if (OB_ISNULL(new_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(new_expr->pull_relation_id())) {
-        LOG_WARN("failed to pull releation id");
-      } else if (OB_FAIL(connect_infos.push_back(table_ids))) {
+  if (OB_SUCC(ret) && !contain_const) {
+    for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {
+      for (int64_t n = m + 1; OB_SUCC(ret) && n < equal_set.count(); ++n) {
+        table_ids.reuse();
+        new_expr = NULL;
+        if (OB_ISNULL(equal_set.at(m)) ||
+            OB_ISNULL(equal_set.at(n))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (equal_set.at(m)->get_result_meta() !=
+                    equal_set.at(n)->get_result_meta()) {
+          // do nothing
+        } else if (!equal_set.at(m)->has_flag(CNT_COLUMN) ||
+                  !equal_set.at(n)->has_flag(CNT_COLUMN) ||
+                  equal_set.at(m)->get_relation_ids().overlap(equal_set.at(n)->get_relation_ids())) {
+          // do nothing
+        } else if (OB_FAIL(table_ids.add_members(equal_set.at(m)->get_relation_ids())) ||
+                  OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
+          LOG_WARN("failed to add members", K(ret));
+        } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
+          // do nothing
+        } else if (ObOptimizerUtil::find_superset(table_ids, single_table_ids)) {
+          // do nothing
+        } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
+                          expr_factory_,
+                          session_info_,
+                          T_OP_EQ,
+                          new_expr,
+                          equal_set.at(m),
+                          equal_set.at(n)))) {
+            LOG_WARN("failed to create double op expr", K(ret));
+        } else if (OB_ISNULL(new_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(new_expr->pull_relation_id())) {
+          LOG_WARN("failed to pull releation id");
+        } else if (OB_FAIL(connect_infos.push_back(table_ids))) {
+            LOG_WARN("failed to push back array", K(ret));
+        } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
           LOG_WARN("failed to push back array", K(ret));
-      } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
-        LOG_WARN("failed to push back array", K(ret));
+        }
       }
     }
   }

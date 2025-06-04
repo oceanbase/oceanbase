@@ -338,6 +338,8 @@ public:
 
   int execute(obrpc::ObAdminSetConfigArg &arg);
 
+  static int construct_arg_and_broadcast_tenant_config_map();
+
 private:
   class ObServerConfigChecker : public common::ObServerConfig
   {
@@ -349,12 +351,58 @@ private:
 private:
   int verify_config(obrpc::ObAdminSetConfigArg &arg);
   int update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new_version);
-  int update_config_for_compatible(const uint64_t tenant_id,
-                                   const obrpc::ObAdminSetConfigItem *item,
-                                   const char *svr_ip, const int64_t svr_port,
-                                   const char *table_name,
-                                   share::ObDMLSqlSplicer &dml,
-                                   const int64_t new_version);
+  int update_tenant_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int inner_update_tenant_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const uint64_t tenant_id,
+      const char *table_name,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int inner_update_tenant_config_for_compatible_(
+      const uint64_t tenant_id,
+      const obrpc::ObAdminSetConfigItem *item,
+      const char *svr_ip, const int64_t svr_port,
+      const char *table_name,
+      share::ObDMLSqlSplicer &dml,
+      const int64_t new_version);
+  int inner_update_tenant_config_for_others_(
+      const uint64_t tenant_id,
+      const char *svr_ip,
+      const uint64_t svr_port,
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *table_name,
+      share::ObDMLSqlSplicer &dml,
+      const uint64_t new_version);
+  int update_sys_config_(
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const int64_t new_version);
+  int build_dml_before_update_(
+      const uint64_t tenant_id,
+      const obrpc::ObAdminSetConfigItem &item,
+      const ObConfigItem &config_item,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const char *table_name,
+      const int64_t new_version,
+      share::ObDMLSqlSplicer &dml);
+  int check_with_lock_before_update_(
+      ObMySQLTransaction &trans,
+      const char *svr_ip,
+      const int64_t svr_port,
+      const uint64_t tenant_id,
+      const uint64_t exec_tenant_id,
+      const obrpc::ObAdminSetConfigItem &item,
+      const char *table_name,
+      const int64_t new_version);
+  static int broadcast_config_version_(const obrpc::ObBroadcastConfigVersionArg &broadcast_arg);
+  int construct_arg_and_broadcast_global_config_version_(const int64_t new_version);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetConfig);

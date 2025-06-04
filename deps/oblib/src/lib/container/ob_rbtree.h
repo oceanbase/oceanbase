@@ -24,6 +24,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/ob_errno.h"
+#include "lib/container/ob_se_array_iterator.h"
 
 namespace oceanbase
 {
@@ -97,6 +98,7 @@ public:
   {
     T *node_;
     int cmp_;
+    TO_STRING_KV(K_(node), K_(cmp));
   };
 
   typedef Compare CompHepler;
@@ -283,31 +285,49 @@ public:
     T *left_node = NULL;
     T *right_node = NULL;
     T *left_node_left = NULL;
-    ObRbPath path[sizeof(void *) << 4], *pathp;
+    const int64_t DEFAULT_PATH_SIZE = sizeof(void *) << 4;
+    common::ObSEArray<ObRbPath, DEFAULT_PATH_SIZE> path;
+    typename common::ObSEArray<ObRbPath, DEFAULT_PATH_SIZE>::iterator pathp;
 
     if (OB_ISNULL(node)) {
       ret = common::OB_INVALID_ARGUMENT;
       OB_LOG(ERROR, "rbtree insert node fail", K(ret));
     } else {
       init_node(node);
-      path[0].node_ = root_;
-      for (pathp = path; OB_NOT_NULL(pathp->node_) && OB_SUCC(ret); pathp++) {
-        cmp = pathp->cmp_ = compare_.compare(node, pathp->node_);
-        if (cmp < 0) {
-          pathp[1].node_ = get_left(pathp->node_);
-        } else if (cmp > 0) {
-          pathp[1].node_ = get_right(pathp->node_);
-        } else {
-          ret = common::OB_ENTRY_EXIST;
+      ObRbPath root_path;
+      root_path.node_ = root_;
+      if (OB_FAIL(path.push_back(root_path))) {
+        OB_LOG(WARN, "fail to add node", K(ret));
+      } else {
+        pathp = path.begin();
+        while (OB_SUCC(ret) && OB_NOT_NULL(pathp->node_)) {
+          cmp = pathp->cmp_ = compare_.compare(node, pathp->node_);
+          ObRbPath tmp_path;
+          if (cmp < 0) {
+            tmp_path.node_ = get_left(pathp->node_);
+          } else if (cmp > 0) {
+            tmp_path.node_ = get_right(pathp->node_);
+          } else {
+            ret = common::OB_ENTRY_EXIST;
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(path.push_back(tmp_path))) {
+              OB_LOG(WARN, "fail to add path", K(ret));
+            } else {
+              pathp = path.end() - 1;
+            }
+          }
         }
       }
 
       if (OB_SUCC(ret)) {
         pathp->node_ = node;
-        for (pathp--; (reinterpret_cast<uint64_t>(pathp) >= reinterpret_cast<uint64_t>(path)); pathp--) {
+        while (pathp != path.begin()) {
+          pathp--;
           cur_node = pathp->node_;
           if (pathp->cmp_ < 0) {
-            left_node = pathp[1].node_;
+            left_node = (pathp+1)->node_;
             set_left(cur_node, left_node);
             if (get_red(left_node)) {
               left_node_left = get_left(left_node);
@@ -321,7 +341,7 @@ public:
               break;
             }
           } else {
-            right_node = pathp[1].node_;
+            right_node = (pathp+1)->node_;
             set_right(cur_node, right_node);
             if (!get_red(right_node)) {
               break;
@@ -346,7 +366,7 @@ public:
         }
 
         //Set root, and make it black.
-        root_ = path->node_;
+        root_ = path.begin()->node_;
         set_black(root_);
       }
     }
@@ -367,297 +387,326 @@ public:
     T *cur_node = NULL;
     bool finish_flag = false;
 
-    ObRbPath *pathp, *nodep, path[sizeof(void *) << 4];
-    nodep = NULL;
+    const int64_t DEFAULT_PATH_SIZE = sizeof(void *) << 4;
+    common::ObSEArray<ObRbPath, DEFAULT_PATH_SIZE> path;
+    typename common::ObSEArray<ObRbPath, DEFAULT_PATH_SIZE>::iterator pathp;
+    typename common::ObSEArray<ObRbPath, DEFAULT_PATH_SIZE>::iterator nodep;
 
     if (OB_ISNULL(node)) {
       ret = common::OB_INVALID_ARGUMENT;
       OB_LOG(ERROR, "rbtree remove node fail", K(ret));
     } else {
-      path->node_ = root_;
-      for (pathp = path; OB_NOT_NULL(pathp->node_); pathp++) {
+      ObRbPath root_path;
+      root_path.node_ = root_;
+      if (OB_FAIL(path.push_back(root_path))) {
+        OB_LOG(WARN, "fail to add node", K(ret));
+      }
+      int64_t nodep_idx = 0;
+      for (pathp = path.begin(); OB_SUCC(ret) && OB_NOT_NULL(pathp->node_); pathp++) {
         cmp = pathp->cmp_ = compare_.compare(node, pathp->node_);
         if (cmp < 0) {
-          pathp[1].node_ = get_left(pathp->node_);
-        } else {
-          pathp[1].node_ = get_right(pathp->node_);
-          if (0 == cmp) {
-            // Find node's successor, in preparation for swap.
-            pathp->cmp_ = 1;
-            nodep = pathp;
-            for (pathp++; NULL != pathp->node_; pathp++) {
-              pathp->cmp_ = -1;
-              pathp[1].node_ = get_left(pathp->node_);
-            }
-            break;
-          }
-        }
-      }
-
-      abort_unless(nodep->node_ == node);
-      pathp--;
-      if (pathp->node_ != node) {
-        //Swap node with its successor.
-        bool tred = get_red(pathp->node_);
-        set_color(pathp->node_, get_red(node));
-        set_left(pathp->node_, get_left(node));
-        //If node's successor is its right child, the following code
-        //will do the wrong thing for the right child pointer.
-        //However, it doesn't matter, because the pointer will be
-        //properly set when the successor is pruned.
-        set_right(pathp->node_, get_right(node));
-        set_color(node, tred);
-        //The pruned leaf node's child pointers are never accessed
-        //again, so don't bother setting them to nil.
-        nodep->node_ = pathp->node_;
-        pathp->node_ = node;
-        if (nodep == path) {
-          root_ = nodep->node_;
-        } else if (nodep[-1].cmp_ < 0) {
-          set_left(nodep[-1].node_, nodep->node_);
-        } else {
-          set_right(nodep[-1].node_, nodep->node_);
-        }
-      } else {
-        left_node = get_left(node);
-        if (OB_NOT_NULL(left_node)) {
-          //node has no successor, but it has a left child.
-          //Splice node out, without losing the left child.
-          abort_unless(!get_red(node));
-          abort_unless(get_red(left_node));
-          set_black(left_node);
-          if (pathp == path) {
-            root_ = left_node;
-          } else if (pathp[-1].cmp_ < 0) {
-            set_left(pathp[-1].node_, left_node);
+          ObRbPath tmp_path;
+          tmp_path.node_ = get_left(pathp->node_);
+          if (OB_FAIL(path.push_back(tmp_path))) {
+             OB_LOG(WARN, "fail to add path node", K(ret));
           } else {
-            set_right(pathp[-1].node_, left_node);
+            pathp = path.end() - 2;
           }
-          finish_flag = true;
-        } else if (pathp == path) {
-          //The tree only contained one node.
-          root_ = NULL;
-          finish_flag = true;
-        }
-      }
-
-      if (!finish_flag) {
-        if (get_red(pathp->node_)) {
-          //Prune red node, which requires no fixup.
-          abort_unless(pathp[-1].cmp_ < 0);
-          set_left(pathp[-1].node_, NULL);
-          finish_flag = true;
-        }
-      }
-
-      if (!finish_flag) {
-        //The node to be pruned is black, so unwind until balance is
-        //restored.
-        pathp->node_ = NULL;
-        for (pathp--; (reinterpret_cast<uint64_t>(pathp) >= reinterpret_cast<uint64_t>(path)) && (!finish_flag); pathp--) {
-          abort_unless(0 != pathp->cmp_);
-          if (pathp->cmp_ < 0) {
-            set_left(pathp->node_, pathp[1].node_);
-            if (get_red(pathp->node_)) {
-              right_node = get_right(pathp->node_);
-              right_node_left = get_left(right_node);
-              if (OB_NOT_NULL(right_node_left) && get_red(right_node_left)) {
-                /* In the following diagrams, ||, //, and \\      */
-                /* indicate the path to the removed node.         */
-                /*                                                */
-                /*      ||                                        */
-                /*    pathp(r)                                    */
-                /*  //        \                                   */
-                /* (b)        (b)                                 */
-                /*           /                                    */
-                /*          (r)                                   */
-                /*                                                */
-                set_black(pathp->node_);
-                rotate_right(right_node, tmp_node);
-                set_right(pathp->node_, tmp_node);
-                rotate_left(pathp->node_, tmp_node);
-              } else {
-                /*      ||                                        */
-                /*    pathp(r)                                    */
-                /*  //        \                                   */
-                /* (b)        (b)                                 */
-                /*           /                                    */
-                /*          (b)                                   */
-                /*                                                */
-                rotate_left(pathp->node_, tmp_node);
-              }
-              //Balance restored, but rotation modified subtree
-              //root.
-              abort_unless(reinterpret_cast<uint64_t>(pathp) > reinterpret_cast<uint64_t>(path));
-              if (pathp[-1].cmp_ < 0) {
-                set_left(pathp[-1].node_, tmp_node);
-              } else {
-                set_right(pathp[-1].node_, tmp_node);
-              }
-              finish_flag = true;
-            } else {
-              right_node = get_right(pathp->node_);
-              right_node_left = get_left(right_node);
-              if (OB_NOT_NULL(right_node_left) && get_red(right_node_left)) {
-                /*      ||                                        */
-                /*    pathp(b)                                    */
-                /*  //        \                                   */
-                /* (b)        (b)                                 */
-                /*           /                                    */
-                /*          (r)                                   */
-                set_black(right_node_left);
-                rotate_right(right_node, tmp_node);
-                set_right(pathp->node_, tmp_node);
-                rotate_left(pathp->node_, tmp_node);
-                //Balance restored, but rotation modified
-                //subtree root, which may actually be the tree
-                //root.
-                if (pathp == path) {
-                  //Set root.
-                  root_ = tmp_node;
-                } else if (pathp[-1].cmp_ < 0) {
-                  set_left(pathp[-1].node_, tmp_node);
-                } else {
-                  set_right(pathp[-1].node_, tmp_node);
-                }
-                finish_flag = true;
-              } else {
-                /*      ||                                        */
-                /*    pathp(b)                                    */
-                /*  //        \                                   */
-                /* (b)        (b)                                 */
-                /*           /                                    */
-                /*          (b)                                   */
-                set_red(pathp->node_);
-                rotate_left(pathp->node_, tmp_node);
-                pathp->node_ = tmp_node;
-              }
-            }
-
+        } else {
+          ObRbPath tmp_path;
+          tmp_path.node_ = get_right(pathp->node_);
+          if (OB_FAIL(path.push_back(tmp_path))) {
+             OB_LOG(WARN, "fail to add path node", K(ret));
           } else {
-            set_right(pathp->node_, pathp[1].node_);
-            left_node = get_left(pathp->node_);
-            if (get_red(left_node)) {
-              left_node_right = get_right(left_node);
-              left_node_right_left = get_left(left_node_right);
-              if (OB_NOT_NULL(left_node_right_left) && get_red(left_node_right_left)) {
-                /*      ||                                        */
-                /*    pathp(b)                                    */
-                /*   /        \\                                  */
-                /* (r)        (b)                                 */
-                /*   \                                            */
-                /*   (b)                                          */
-                /*   /                                            */
-                /* (r)                                            */
-                set_black(left_node_right_left);
-                rotate_right(pathp->node_, cur_node);
-                rotate_right(pathp->node_, tmp_node);
-                set_right(cur_node, tmp_node);
-                rotate_left(cur_node, tmp_node);
-
-              } else {
-                /*      ||                                        */
-                /*    pathp(b)                                    */
-                /*   /        \\                                  */
-                /* (r)        (b)                                 */
-                /*   \                                            */
-                /*   (b)                                          */
-                /*   /                                            */
-                /* (b)                                            */
-                abort_unless(NULL != left_node_right);
-                set_red(left_node_right);
-                rotate_right(pathp->node_, tmp_node);
-                set_black(tmp_node);
-              }
-              //Balance restored, but rotation modified subtree
-              //root, which may actually be the tree root.
-              if (pathp == path) {
-                root_ = tmp_node;
-              } else if (pathp[-1].cmp_ < 0) {
-                set_left(pathp[-1].node_, tmp_node);
-              } else {
-                set_right(pathp[-1].node_, tmp_node);
-              }
-              finish_flag = true;
-            } else if (get_red(pathp->node_)) {
-              left_node_left = get_left(left_node);
-              if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
-                /*        ||                                      */
-                /*      pathp(r)                                  */
-                /*     /        \\                                */
-                /*   (b)        (b)                               */
-                /*   /                                            */
-                /* (r)                                            */
-
-                set_black(pathp->node_);
-                set_red(left_node);
-                set_black(left_node_left);
-                rotate_right(pathp->node_, tmp_node);
-                //Balance restored, but rotation modified
-                //subtree root.
-                abort_unless(reinterpret_cast<uint64_t>(pathp) > reinterpret_cast<uint64_t>(path));
-                if (pathp[-1].cmp_ < 0) {
-                  set_left(pathp[-1].node_, tmp_node);
+            pathp = path.end() - 2;
+            if (0 == cmp) {
+              // Find node's successor, in preparation for swap.
+              pathp->cmp_ = 1;
+              for (pathp++; OB_SUCC(ret) && NULL != pathp->node_;) {
+                pathp->cmp_ = -1;
+                ObRbPath tmp_path2;
+                tmp_path2.node_ = get_left(pathp->node_);
+                if (OB_FAIL(path.push_back(tmp_path2))) {
+                  OB_LOG(WARN, "fail to add node", K(ret));
                 } else {
-                  set_right(pathp[-1].node_, tmp_node);
+                  pathp = path.end() - 1;
                 }
-                finish_flag = true;
-
-              } else {
-                /*        ||                                      */
-                /*      pathp(r)                                  */
-                /*     /        \\                                */
-                /*   (b)        (b)                               */
-                /*   /                                            */
-                /* (b)                                            */
-
-                set_red(left_node);
-                set_black(pathp->node_);
-                //Balance restored.
-                finish_flag = true;
               }
-            } else {
-              left_node_left = get_left(left_node);
-              if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
-                /*               ||                               */
-                /*             pathp(b)                           */
-                /*            /        \\                         */
-                /*          (b)        (b)                        */
-                /*          /                                     */
-                /*        (r)                                     */
-
-                set_black(left_node_left);
-                rotate_right(pathp->node_, tmp_node);
-                //Balance restored, but rotation modified
-                //subtree root, which may actually be the tree
-                //root.
-                if (pathp == path) {
-                  //Set root.
-                  root_ = tmp_node;
-                } else if (pathp[-1].cmp_ < 0) {
-                  set_left(pathp[-1].node_, tmp_node);
-                } else {
-                  set_right(pathp[-1].node_, tmp_node);
-                }
-                finish_flag = true;
-              } else {
-                /*               ||                               */
-                /*             pathp(b)                           */
-                /*            /        \\                         */
-                /*          (b)        (b)                        */
-                /*          /                                     */
-                /*        (b)                                     */
-                set_red(left_node);
-              }
+              break;
             }
-
           }
         }
+        nodep_idx++;
+      }
+
+      if (OB_SUCC(ret)) {
+        nodep = path.begin() + nodep_idx;
+        abort_unless(path[nodep_idx].node_ == node);
+        pathp--;
+        if (pathp->node_ != node) {
+          //Swap node with its successor.
+          bool tred = get_red(pathp->node_);
+          set_color(pathp->node_, get_red(node));
+          set_left(pathp->node_, get_left(node));
+          //If node's successor is its right child, the following code
+          //will do the wrong thing for the right child pointer.
+          //However, it doesn't matter, because the pointer will be
+          //properly set when the successor is pruned.
+          set_right(pathp->node_, get_right(node));
+          set_color(node, tred);
+          //The pruned leaf node's child pointers are never accessed
+          //again, so don't bother setting them to nil.
+          nodep->node_ = pathp->node_;
+          pathp->node_ = node;
+          if (nodep == path.begin()) {
+            root_ = nodep->node_;
+          } else if ((nodep-1)->cmp_ < 0) {
+            set_left((nodep-1)->node_, nodep->node_);
+          } else {
+            set_right((nodep-1)->node_, nodep->node_);
+          }
+        } else {
+          left_node = get_left(node);
+          if (OB_NOT_NULL(left_node)) {
+            //node has no successor, but it has a left child.
+            //Splice node out, without losing the left child.
+            abort_unless(!get_red(node));
+            abort_unless(get_red(left_node));
+            set_black(left_node);
+            if (pathp == path.begin()) {
+              root_ = left_node;
+            } else if ((pathp-1)->cmp_ < 0) {
+              set_left((pathp-1)->node_, left_node);
+            } else {
+              set_right((pathp-1)->node_, left_node);
+            }
+            finish_flag = true;
+          } else if (pathp == path.begin()) {
+            //The tree only contained one node.
+            root_ = NULL;
+            finish_flag = true;
+          }
+        }
+
         if (!finish_flag) {
-          //Set root.
-          root_ = path->node_;
-          abort_unless(!get_red(root_));
+          if (get_red(pathp->node_)) {
+            //Prune red node, which requires no fixup.
+            abort_unless((pathp-1)->cmp_ < 0);
+            set_left((pathp-1)->node_, NULL);
+            finish_flag = true;
+          }
         }
+
+        if (!finish_flag) {
+          //The node to be pruned is black, so unwind until balance is
+          //restored.
+          pathp->node_ = NULL;
+          for (pathp--; !(pathp < path.begin()) && (!finish_flag); pathp--) {
+            abort_unless(0 != pathp->cmp_);
+            if (pathp->cmp_ < 0) {
+              set_left(pathp->node_, (pathp+1)->node_);
+              if (get_red(pathp->node_)) {
+                right_node = get_right(pathp->node_);
+                right_node_left = get_left(right_node);
+                if (OB_NOT_NULL(right_node_left) && get_red(right_node_left)) {
+                  /* In the following diagrams, ||, //, and \\      */
+                  /* indicate the path to the removed node.         */
+                  /*                                                */
+                  /*      ||                                        */
+                  /*    pathp(r)                                    */
+                  /*  //        \                                   */
+                  /* (b)        (b)                                 */
+                  /*           /                                    */
+                  /*          (r)                                   */
+                  /*                                                */
+                  set_black(pathp->node_);
+                  rotate_right(right_node, tmp_node);
+                  set_right(pathp->node_, tmp_node);
+                  rotate_left(pathp->node_, tmp_node);
+                } else {
+                  /*      ||                                        */
+                  /*    pathp(r)                                    */
+                  /*  //        \                                   */
+                  /* (b)        (b)                                 */
+                  /*           /                                    */
+                  /*          (b)                                   */
+                  /*                                                */
+                  rotate_left(pathp->node_, tmp_node);
+                }
+                //Balance restored, but rotation modified subtree
+                //root.
+                abort_unless(!(pathp <= path.begin()));
+                if ((pathp-1)->cmp_ < 0) {
+                  set_left((pathp-1)->node_, tmp_node);
+                } else {
+                  set_right((pathp-1)->node_, tmp_node);
+                }
+                finish_flag = true;
+              } else {
+                right_node = get_right(pathp->node_);
+                right_node_left = get_left(right_node);
+                if (OB_NOT_NULL(right_node_left) && get_red(right_node_left)) {
+                  /*      ||                                        */
+                  /*    pathp(b)                                    */
+                  /*  //        \                                   */
+                  /* (b)        (b)                                 */
+                  /*           /                                    */
+                  /*          (r)                                   */
+                  set_black(right_node_left);
+                  rotate_right(right_node, tmp_node);
+                  set_right(pathp->node_, tmp_node);
+                  rotate_left(pathp->node_, tmp_node);
+                  //Balance restored, but rotation modified
+                  //subtree root, which may actually be the tree
+                  //root.
+                  if (pathp == path.begin()) {
+                    //Set root.
+                    root_ = tmp_node;
+                  } else if ((pathp-1)->cmp_ < 0) {
+                    set_left((pathp-1)->node_, tmp_node);
+                  } else {
+                    set_right((pathp-1)->node_, tmp_node);
+                  }
+                  finish_flag = true;
+                } else {
+                  /*      ||                                        */
+                  /*    pathp(b)                                    */
+                  /*  //        \                                   */
+                  /* (b)        (b)                                 */
+                  /*           /                                    */
+                  /*          (b)                                   */
+                  set_red(pathp->node_);
+                  rotate_left(pathp->node_, tmp_node);
+                  pathp->node_ = tmp_node;
+                }
+              }
+
+            } else {
+              set_right(pathp->node_, (pathp+1)->node_);
+              left_node = get_left(pathp->node_);
+              if (get_red(left_node)) {
+                left_node_right = get_right(left_node);
+                left_node_right_left = get_left(left_node_right);
+                if (OB_NOT_NULL(left_node_right_left) && get_red(left_node_right_left)) {
+                  /*      ||                                        */
+                  /*    pathp(b)                                    */
+                  /*   /        \\                                  */
+                  /* (r)        (b)                                 */
+                  /*   \                                            */
+                  /*   (b)                                          */
+                  /*   /                                            */
+                  /* (r)                                            */
+                  set_black(left_node_right_left);
+                  rotate_right(pathp->node_, cur_node);
+                  rotate_right(pathp->node_, tmp_node);
+                  set_right(cur_node, tmp_node);
+                  rotate_left(cur_node, tmp_node);
+
+                } else {
+                  /*      ||                                        */
+                  /*    pathp(b)                                    */
+                  /*   /        \\                                  */
+                  /* (r)        (b)                                 */
+                  /*   \                                            */
+                  /*   (b)                                          */
+                  /*   /                                            */
+                  /* (b)                                            */
+                  abort_unless(NULL != left_node_right);
+                  set_red(left_node_right);
+                  rotate_right(pathp->node_, tmp_node);
+                  set_black(tmp_node);
+                }
+                //Balance restored, but rotation modified subtree
+                //root, which may actually be the tree root.
+                if (pathp == path.begin()) {
+                  root_ = tmp_node;
+                } else if ((pathp-1)->cmp_ < 0) {
+                  set_left((pathp-1)->node_, tmp_node);
+                } else {
+                  set_right((pathp-1)->node_, tmp_node);
+                }
+                finish_flag = true;
+              } else if (get_red(pathp->node_)) {
+                left_node_left = get_left(left_node);
+                if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
+                  /*        ||                                      */
+                  /*      pathp(r)                                  */
+                  /*     /        \\                                */
+                  /*   (b)        (b)                               */
+                  /*   /                                            */
+                  /* (r)                                            */
+
+                  set_black(pathp->node_);
+                  set_red(left_node);
+                  set_black(left_node_left);
+                  rotate_right(pathp->node_, tmp_node);
+                  //Balance restored, but rotation modified
+                  //subtree root.
+                  abort_unless(!(pathp <= path.begin()));
+                  if ((pathp-1)->cmp_ < 0) {
+                    set_left((pathp-1)->node_, tmp_node);
+                  } else {
+                    set_right((pathp-1)->node_, tmp_node);
+                  }
+                  finish_flag = true;
+
+                } else {
+                  /*        ||                                      */
+                  /*      pathp(r)                                  */
+                  /*     /        \\                                */
+                  /*   (b)        (b)                               */
+                  /*   /                                            */
+                  /* (b)                                            */
+
+                  set_red(left_node);
+                  set_black(pathp->node_);
+                  //Balance restored.
+                  finish_flag = true;
+                }
+              } else {
+                left_node_left = get_left(left_node);
+                if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
+                  /*               ||                               */
+                  /*             pathp(b)                           */
+                  /*            /        \\                         */
+                  /*          (b)        (b)                        */
+                  /*          /                                     */
+                  /*        (r)                                     */
+
+                  set_black(left_node_left);
+                  rotate_right(pathp->node_, tmp_node);
+                  //Balance restored, but rotation modified
+                  //subtree root, which may actually be the tree
+                  //root.
+                  if (pathp == path.begin()) {
+                    //Set root.
+                    root_ = tmp_node;
+                  } else if ((pathp-1)->cmp_ < 0) {
+                    set_left((pathp-1)->node_, tmp_node);
+                  } else {
+                    set_right((pathp-1)->node_, tmp_node);
+                  }
+                  finish_flag = true;
+                } else {
+                  /*               ||                               */
+                  /*             pathp(b)                           */
+                  /*            /        \\                         */
+                  /*          (b)        (b)                        */
+                  /*          /                                     */
+                  /*        (b)                                     */
+                  set_red(left_node);
+                }
+              }
+
+            }
+          }
+          if (!finish_flag) {
+            //Set root.
+            root_ = path.begin()->node_;
+            abort_unless(!get_red(root_));
+          }
+        }
+
       }
 
     }

@@ -18,24 +18,12 @@
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_table_stmt.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
 namespace share
 {
-
-enum VecColType {
-  IVF_CENTER_ID_COL = 0,
-  IVF_CENTER_VECTOR_COL,
-  IVF_FLAT_DATA_VECTOR_COL,
-  IVF_SQ8_DATA_VECTOR_COL,
-  IVF_META_ID_COL,
-  IVF_META_VECTOR_COL,
-  IVF_PQ_CENTER_ID_COL,
-  IVF_PQ_CENTER_IDS_COL,
-  IVF_PQ_CENTER_VECTOR_COL,
-  MAX_COL_TYPE
-};
 
 class ObVecIndexBuilderUtil
 {
@@ -43,6 +31,8 @@ public:
   static const int64_t OB_VEC_DELTA_BUFFER_TABLE_INDEX_COL_CNT = 2;         // 辅助表的主键列数
   static const int64_t OB_VEC_INDEX_ID_TABLE_INDEX_COL_CNT = 3;             // 辅助表的主键列数
   static const int64_t OB_VEC_INDEX_SNAPSHOT_DATA_TABLE_INDEX_COL_CNT = 1;  // 辅助表的主键列数
+  static const int64_t OB_VEC_DIM_DOCID_VALUE_TABLE_INDEX_COL_CNT = 2;      // 辅助表的主键列数
+
   // hnsw
   static const char * ROWKEY_VID_TABLE_NAME;
   static const char * VID_ROWKEY_TABLE_NAME;
@@ -59,11 +49,14 @@ public:
   static const char * IVF_PQ_ROWKEY_CID_TABLE_NAME_SUFFIX;
   static const char * IVF_PQ_CENTER_IDS_COL_TYPE_NAME;
 
+  // spiv
+  static const char * SPIV_DIM_DOCID_VALUE_TABLE_NAME_SUFFIX;
 public:
   static int append_vec_args(
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &vec_common_aux_table_exist,
+      bool &fts_common_table_exist,
       ObIArray<sql::ObPartitionResolveResult> &resolve_results,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator,
@@ -90,14 +83,17 @@ public:
   static int set_vec_delta_buffer_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int set_vec_index_id_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int set_vec_index_snapshot_data_table_columns(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
   static int generate_vec_index_name(
       common::ObIAllocator *allocator,
@@ -115,6 +111,41 @@ public:
   static int get_vector_index_prefix(
       const ObTableSchema &index_schema,
       ObString &prefix);
+  static int generate_vec_index_aux_columns(
+      const ObTableSchema &orig_table_schema,
+      const ObTableSchema &index_table_schema,
+      ObTableSchema &new_table_schema,
+      ObTableSchema &new_index_schema,
+      common::ObIAllocator &allocator,
+      oceanbase::rootserver::ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      ObSEArray<obrpc::ObColumnSortItem, 2> &domain_index_columns,
+      ObSEArray<ObString, 1> &domain_store_columns);
+  static int vec_set_index_arg_index_schema(
+      ObCreateIndexArg &create_index_arg,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema);
+
+  static int set_vec_aux_table_columns(
+      const ObCreateIndexArg &arg,
+      const ObTableSchema &data_schema,
+      ObTableSchema &index_schema);
+  static int construct_ivf_col_name(
+      const ObIArray<uint64_t> &cascaded_col_ids,
+      const VecColType col_type,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos);
+
+  static int check_index_match(
+      const schema::ObColumnSchemaV2 &column,
+      const schema::ColumnReferenceSet &index_column_ids,
+      bool &is_match);
+  static int get_index_column_ids(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg &arg,
+      schema::ColumnReferenceSet &index_column_ids);
 private:
   static int append_vec_hnsw_args(
       const sql::ObPartitionResolveResult &resolve_result,
@@ -124,6 +155,13 @@ private:
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator,
       const sql::ObSQLSessionInfo *session_info);
+  static int append_vec_spiv_args(
+      const sql::ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &common_aux_table_exist,
+      ObIArray<sql::ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
   static int append_vec_ivfpq_args(
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
@@ -160,6 +198,10 @@ private:
       ObIAllocator *allocator,
       const sql::ObSQLSessionInfo *session_info,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int append_vec_dim_docid_value_arg(
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIAllocator *allocator,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int append_vec_index_id_arg(
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
@@ -168,12 +210,22 @@ private:
       const obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int adjust_vec_spiv_arg(
+      obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      ObIAllocator &allocator,
+      const ObIArray<const ObColumnSchemaV2 *> &vec_cols);
   static int adjust_vec_ivf_arg(
       obrpc::ObCreateIndexArg *index_arg,
       const ObTableSchema &data_schema,
       const int64_t rowkey_size,
       ObIAllocator &allocator,
       const ObIArray<const ObColumnSchemaV2 *> &vec_cols);
+  static int get_spiv_column_cnt(
+      const ObIndexType index_type,
+      const int64_t main_table_rowkey_size,
+      int64_t &total_column_cnt,
+      int64_t &index_column_cnt);
   static int get_ivf_column_cnt(
       const ObIndexType index_type,
       const int64_t main_table_rowkey_size,
@@ -204,6 +256,11 @@ private:
       ObTableSchema &data_schema, // not const since will add column to data schema
       ObIAllocator &allocator,
       ObIArray<ObColumnSchemaV2 *> &gen_columns);
+  static int adjust_vec_spiv_args(
+      obrpc::ObCreateIndexArg &index_arg,
+      ObTableSchema &data_schema, // not const since will add column to data schema
+      ObIAllocator &allocator,
+      ObIArray<ObColumnSchemaV2 *> &gen_columns);
   static int adjust_vec_ivfflat_args(
       obrpc::ObCreateIndexArg &index_arg,
       ObTableSchema &data_schema, // not const since will add column to data schema
@@ -225,6 +282,11 @@ private:
       const VecColType col_type,
       ObTableSchema &data_schema,
       ObColumnSchemaV2 *&col_schema);
+  static int generate_vec_spiv_index_name(
+      const share::schema::ObIndexType type,
+      const ObString &index_name,
+      char *name_buf,
+      int64_t &pos);
   static int generate_vec_hnsw_index_name(
       const share::schema::ObIndexType type,
       const ObString &index_name,
@@ -238,6 +300,10 @@ private:
   static int check_vec_cols(
       const obrpc::ObCreateIndexArg *index_arg,
       ObTableSchema &data_schema);
+  static int get_vec_spiv_col(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObColumnSchemaV2 *&sparse_vec_col);
   static int get_vec_ivfflat_col(
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg *index_arg,
@@ -258,6 +324,7 @@ private:
       const ObColumnSchemaV2 *&center_id_col,
       const ObColumnSchemaV2 *&center_vector_col,
       const ObColumnSchemaV2 *&pq_center_id_col,
+      const ObColumnSchemaV2 *&pq_center_vector_col,
       const ObColumnSchemaV2 *&pq_center_ids_col);
   static int get_vec_vid_col(
       const ObTableSchema &data_schema,
@@ -282,10 +349,6 @@ private:
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg *index_arg,
       const ObColumnSchemaV2 *&data_col);
-   static int check_index_match(
-      const schema::ObColumnSchemaV2 &column,
-      const schema::ColumnReferenceSet &index_column_ids,
-      bool &is_match);
   static int push_back_gen_col(
       ObIArray<const ObColumnSchemaV2 *> &cols,
       const ObColumnSchemaV2 *existing_col,
@@ -300,6 +363,16 @@ private:
       const uint64_t col_id,
       ObTableSchema &data_schema,
       ObColumnSchemaV2 *&type_col);
+  static int generate_spiv_dim_column(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema,
+      ObColumnSchemaV2 *&spiv_dim_col);
+  static int generate_spiv_value_column(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema,
+      ObColumnSchemaV2 *&spiv_dim_col);
   static int generate_vector_column(
       const obrpc::ObCreateIndexArg *index_arg,
       const uint64_t col_id,
@@ -320,6 +393,11 @@ private:
       const uint64_t col_id,
       ObTableSchema &data_schema,
       ObColumnSchemaV2 *&data_col);
+  static int generate_ivf_col_name_prefix(
+      const VecColType col_type,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos);
   static int construct_vid_col_name(
       char *col_name_buf,
       const int64_t buf_len,
@@ -330,6 +408,13 @@ private:
       char *col_name_buf,
       const int64_t buf_len,
       int64_t &name_pos);
+  static int construct_spiv_col_name(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos,
+      bool is_dim_col);
   static int construct_vector_col_name(
       const obrpc::ObCreateIndexArg *index_arg,
       const ObTableSchema &data_schema,
@@ -370,16 +455,23 @@ private:
       const char *col_name_buf,
       const int64_t name_pos,
       bool &col_exists);
-  static int get_index_column_ids(
-      const ObTableSchema &data_schema,
-      const obrpc::ObCreateIndexArg &arg,
-      schema::ColumnReferenceSet &index_column_ids);
-  static bool is_part_key_column_exist(
+  static bool is_column_exist(
       const ObTableSchema &index_schema,
-      const ObColumnSchemaV2 &part_key_col);
+      const ObColumnSchemaV2 &col);
   static int set_part_key_columns(
       const ObTableSchema &data_schema,
       ObTableSchema &index_schema);
+
+  static int get_extra_info_actual_size(
+      const ObTableSchema &data_schema,
+      ObVectorIndexParam &index_param);
+
+  static int set_extra_info_columns(
+    const ObTableSchema &data_schema,
+    ObRowDesc &row_desc,
+    bool need_set_rk,
+    ObVectorIndexParam &index_param,
+    ObTableSchema &index_schema);
 };
 
 

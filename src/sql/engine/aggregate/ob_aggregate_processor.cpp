@@ -2529,6 +2529,8 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
         case T_FUNC_SYS_ARRAY_AGG:
+        case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+        case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -2744,6 +2746,8 @@ int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
         case T_FUNC_SYS_ARRAY_AGG:
+        case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+        case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -3196,6 +3200,8 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
@@ -3549,6 +3555,8 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3875,6 +3883,8 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -4142,6 +4152,8 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -4580,6 +4592,22 @@ int ObAggregateProcessor::collect_aggr_result(
       GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(get_rb_calc_agg_result(aggr_info, extra, result, ObRbOperation::AND))) {
         LOG_WARN("failed to get roaringbitmap calculate and result", K(ret));
+      } else {
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_OR_CARDINALITY_AGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_rb_calc_agg_result(aggr_info, extra, result, ObRbOperation::OR, true))) {
+        LOG_WARN("failed to get rb aggregate calculate or result", K(ret));
+      } else {
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:{
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_rb_calc_agg_result(aggr_info, extra, result, ObRbOperation::AND, true))) {
+        LOG_WARN("failed to get rb aggregate calculate and result", K(ret));
       } else {
       }
       break;
@@ -9327,7 +9355,8 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
 int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
                                                  GroupConcatExtraResult *&extra,
                                                  ObDatum &concat_result,
-                                                 ObRbOperation calc_op)
+                                                 ObRbOperation calc_op,
+                                                 bool is_cardinality)
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -9410,7 +9439,10 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
     } else {
       ret = OB_SUCCESS;
       ObString rb_bin;
-      if (OB_FAIL(ObRbUtils::rb_serialize(tmp_alloc, rb_bin, rb))) {
+      if (is_cardinality) {
+        uint64_t cardinality = rb->get_cardinality();
+        concat_result.set_uint(cardinality);
+      } else if (OB_FAIL(ObRbUtils::rb_serialize(tmp_alloc, rb_bin, rb))) {
         LOG_WARN("failed to serialize roaringbitmap", K(ret));
       } else {
         ObString blob_locator;

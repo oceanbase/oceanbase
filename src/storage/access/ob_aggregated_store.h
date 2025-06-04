@@ -50,8 +50,7 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_idx,
       blocksstable::ObIMicroBlockReader *reader,
-      const int32_t *row_ids,
-      const int64_t row_count,
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
       const bool reserve_memory) override;
   int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
@@ -125,7 +124,8 @@ public:
     //        !index_info.is_right_border();
     can_agg = filter_is_null() &&
               !agg_row_.check_need_access_data() &&
-              index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
+              index_info.can_blockscan() &&
+              (!agg_row_.has_lob_column_out() || !index_info.has_lob_out_row()) &&
               !index_info.is_left_border() &&
               !index_info.is_right_border();
     return OB_SUCCESS;

@@ -37,7 +37,7 @@ class SetCommandOperator : public CommandOperator
 public:
   explicit SetCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx), is_zset_(false)
   {
-    model_ = ObRedisModel::SET;
+    model_ = ObRedisDataModel::SET;
   }
   virtual ~SetCommandOperator() = default;
   int do_aggregate(int64_t db, const ObIArray<ObString> &keys, SetCommand::AggFunc agg_func);

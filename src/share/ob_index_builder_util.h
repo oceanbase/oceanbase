@@ -46,6 +46,7 @@ class ObColumnSchemaV2;
 class ObIndexBuilderUtil
 {
 public:
+  static bool is_do_create_dense_vec_index(const ObIndexType index_type);
   static int adjust_expr_index_args(
       obrpc::ObCreateIndexArg &arg,
       share::schema::ObTableSchema &data_schema,
@@ -53,7 +54,7 @@ public:
       common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns);
   static int generate_ordinary_generated_column(
       sql::ObRawExpr &expr,
-      const ObSQLMode sql_mode,
+      const sql::ObSQLSessionInfo &session,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObColumnSchemaV2 *&gen_col,
       share::schema::ObSchemaGetterGuard *schema_guard,

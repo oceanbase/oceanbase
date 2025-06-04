@@ -242,6 +242,11 @@ public:
     TASK_TYPE_BACKUP_LS_LOG_GROUP_FINISH = 87,
     TASK_TYPE_COMPLEMENT_CALC_RANGE = 88,
     TASK_TYPE_COMPLEMENT_RESCAN_WRITE = 89,
+    TASK_TYPE_UNIQUE_CHECKING_MERGE = 90,
+    TASK_TYPE_DDL_SPLIT_DOWNLOAD_SSTABLE = 91,
+    TASK_TYPE_DDL_SPLIT_FINISH = 92,
+    TASK_TYPE_UPLOAD_MINI_SSTABLE = 93,
+    TASK_TYPE_ATTACH_SHARED_SSTABLE = 94,
     TASK_TYPE_MAX,
   };
 
@@ -857,7 +862,6 @@ public:
       ObDagId &dag_net_id,
       int64_t &start_time);
   int64_t get_dag_net_count(const ObDagNetType::ObDagNetTypeEnum type);
-  bool is_dag_map_full();
   int loop_running_dag_net_list();
   // do not hold dag_net_map_lock_, otherwise deadlock when clear_dag_net_ctx,  see
   int loop_finished_dag_net_list();
@@ -869,6 +873,7 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
+  bool is_dag_map_full_();
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
                           ObIDagNet*,
@@ -1074,7 +1079,6 @@ private:
   int schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_list);
   int pop_task_from_ready_list_(ObITask *&task);
   int rank_compaction_dags_();
-  void try_update_adaptive_task_limit_(const int64_t batch_size);
   int batch_move_compaction_dags_(const int64_t batch_size);
   bool check_need_compaction_rank_() const;
   int do_rank_compaction_dags_(

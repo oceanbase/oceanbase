@@ -140,8 +140,17 @@ enum ObMatchAgainstMode {
   NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION = 1,
   BOOLEAN_MODE = 2,
   WITH_QUERY_EXPANSION = 3,
-  MAX_MATCH_AGAINST_MODE = 4,
+  MATCH_PHRASE_MODE = 4,
+  MAX_MATCH_AGAINST_MODE = 5,
 };
+
+#define IS_HASH_SLAVE_MAPPING(type)                                                                \
+  (((type) == SlaveMappingType::SM_PWJ_HASH_HASH)                                                  \
+   || ((type) == SlaveMappingType::SM_PPWJ_HASH_HASH))
+
+#define IS_BCAST_SLAVE_MAPPING(type)                                                               \
+  (((type) == SlaveMappingType::SM_PPWJ_BCAST_NONE)                                                \
+   || ((type) == SlaveMappingType::SM_PPWJ_NONE_BCAST))
 
 #define IS_JOIN(type) \
 (((type) == PHY_MERGE_JOIN) || \
@@ -177,6 +186,10 @@ enum ObMatchAgainstMode {
    (join_type) == RIGHT_ANTI_JOIN)
 
 #define IS_OUTER_OR_CONNECT_BY_JOIN(join_type) (IS_OUTER_JOIN(join_type) || CONNECT_BY_JOIN == join_type)
+
+#define IS_INNER_JOIN(join_type) (INNER_JOIN == join_type)
+
+#define IS_NOT_INNER_JOIN(join_type) (INNER_JOIN != join_type)
 
 #define IS_LEFT_STYLE_JOIN(join_type) \
   ((join_type) == LEFT_SEMI_JOIN || \
@@ -521,7 +534,7 @@ enum PXParallelRule
 
 inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
 {
-  const char *ret = "USE_PX_DEFAULT";
+  const char *ret = "MAX_OPTION";
   static const char *parallel_rule_type_to_str[] =
   {
     "USE_PX_DEFAULT",
@@ -570,6 +583,16 @@ enum ObIDPAbortType
   IDP_STOPENUM_LINEARDOWN_ABORT = 2,
   IDP_ENUM_FAILED_ABORT = 3,
   IDP_NO_ABORT = 4
+};
+
+enum class PseudoColumnRefType {
+  PSEUDO_PARTITION_ID = 0,
+  PSEUDO_SUB_PARTITION_ID = 1,
+  PSEUDO_PARTITION_NAME = 2,
+  PSEUDO_SUB_PARTITION_NAME = 3,
+  PSEUDO_PARTITION_INDEX = 4,
+  PSEUDO_SUB_PARTITION_INDEX = 5,
+  MAX = 255  // 不超过 8 位的最大值
 };
 
 struct ObSqlDatumArray
@@ -673,6 +696,7 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
     "NATURAL LANGUAGE MODE WITH QUERY EXPANSION",
     "BOOLEAN MODE",
     "WITH QUERY EXPANSION",
+    "MATCH_PHRASE_MODE",
     "UNKNOWN MATCH MODE"
   };
 

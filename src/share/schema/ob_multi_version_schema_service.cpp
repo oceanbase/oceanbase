@@ -313,11 +313,15 @@ int ObMultiVersionSchemaService::get_latest_schema(
     LOG_WARN("invalid argument", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
   } else if ((TABLE_SCHEMA == schema_type
               || TABLE_SIMPLE_SCHEMA == schema_type)
-             && OB_ALL_CORE_TABLE_TID == schema_id) {
-    const ObTableSchema *hard_code_schema = schema_cache_.get_all_core_table();
+             && is_hardcode_schema_table(schema_id)) {
+    const ObTableSchema *hard_code_schema =
+#ifdef OB_BUILD_SHARED_STORAGE
+      is_shared_storage_sslog_table(schema_id) ? schema_cache_.get_sslog_table() :
+#endif
+      schema_cache_.get_all_core_table();
     if (OB_ISNULL(hard_code_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("all core table schema is null", KR(ret));
+      LOG_WARN("all hard code table schema is null", KR(ret));
     } else if (is_sys_tenant(tenant_id)) {
       schema = hard_code_schema;
     } else {
@@ -325,10 +329,10 @@ int ObMultiVersionSchemaService::get_latest_schema(
       if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, new_table))) {
         LOG_WARN("fail to alloc table schema", KR(ret));
       } else if (OB_FAIL(new_table->assign(*hard_code_schema))) {
-        LOG_WARN("fail to assign all core schema", KR(ret), K(tenant_id));
+        LOG_WARN("fail to assign hardcode schema", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
                 tenant_id, *new_table))) {
-        LOG_WARN("fail to construct tenant's __all_core_table schema", KR(ret), K(tenant_id));
+        LOG_WARN("fail to construct tenant's hard code table schema", KR(ret), K(tenant_id));
       } else {
         schema = static_cast<const ObSchema*>(new_table);
       }
@@ -356,7 +360,7 @@ int ObMultiVersionSchemaService::get_latest_schema(
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
         LOG_WARN("not support to fetch latest mv", KR(ret), "table_id", schema_id);
-      } else if (OB_ALL_CORE_TABLE_TID == schema_id) {
+      } else if (is_hardcode_schema_table(schema_id)) {
         // do-nothing
       } else if (!need_construct_aux_infos_(*new_table)) {
         // do-nothing
@@ -405,8 +409,12 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
     LOG_WARN("fail to get simple table", K(ret),
              KP(mgr), K(tenant_id), K(schema_id), K(schema_version));
   } else if ((TABLE_SCHEMA == schema_type || TABLE_SIMPLE_SCHEMA == schema_type)
-             && OB_ALL_CORE_TABLE_TID == schema_id) {
-    const ObTableSchema *hard_code_schema = schema_cache_.get_all_core_table();
+             && is_hardcode_schema_table(schema_id)) {
+    const ObTableSchema *hard_code_schema =
+#ifdef OB_BUILD_SHARED_STORAGE
+      is_shared_storage_sslog_table(schema_id) ? schema_cache_.get_sslog_table() :
+#endif
+      schema_cache_.get_all_core_table();
     if (OB_ISNULL(hard_code_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("all core table schema is null", KR(ret));
@@ -558,7 +566,7 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
         } else if (TABLE_SCHEMA == schema_type) {
           ObTableSchema *table_schema = static_cast<ObTableSchema *>(tmp_schema);
           // process index
-          if (OB_ALL_CORE_TABLE_TID == schema_id) {
+          if (is_hardcode_schema_table(schema_id)) {
             // do-nothing
           } else if (!need_construct_aux_infos_(*table_schema)) {
             // do-nothing
@@ -1148,8 +1156,10 @@ int ObMultiVersionSchemaService::get_tenant_schema_guard(
   if (OB_FAIL(ret)) {
   } else if (OB_SYS_TENANT_ID == tenant_id) {
     // The system tenant has already taken it, you can skip here
-  } else if (OB_CORE_SCHEMA_VERSION == tenant_schema_version) {
-    // the scenario where specifying the version takes the guard. At this time, the tenant has not been created yet,
+  } else if (!GCTX.is_shared_storage_mode() && OB_CORE_SCHEMA_VERSION == tenant_schema_version) {
+    // In ss, based on the requirements of the sslog table, the tenant's schema needs to be accessed before the tenant creation is completed.
+    // Therefore, even if the tenant is being created, the schema info of the tenant must be filled in for Guard.
+    // In sn, the scenario where specifying the version takes the guard. At this time, the tenant has not been created yet,
     // and a special schema_version will be passed in. At this time, no error will be reported to avoid
     // error of the tenant building in transaction two.
     LOG_DEBUG("tenant maybe not create yet, just skip", K(ret), K(tenant_id));
@@ -2371,7 +2381,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
             sleep_time = timeout_remain > 0 ? timeout_remain : 0;
           }
           retry_cnt++;
-          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, RETRY_IDLE_TIME, schema_version, 0);
+          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, schema_version, local_schema_version, 0);
         }
       }
     }
@@ -4099,10 +4109,11 @@ int ObMultiVersionSchemaService::set_last_refreshed_schema_info(const ObRefreshS
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(schema_info_rwlock_);
-  const uint64_t last_sequence_id = last_refreshed_schema_info_.get_sequence_id();
-  const uint64_t new_sequence_id = schema_info.get_sequence_id();
-  if (OB_INVALID_ID == new_sequence_id
-      || (OB_INVALID_ID != last_sequence_id && last_sequence_id >= new_sequence_id)) {
+  const ObDDLSequenceID last_sequence_id = last_refreshed_schema_info_.get_sequence_id();
+  const ObDDLSequenceID new_sequence_id = schema_info.get_sequence_id();
+  if (!new_sequence_id.is_valid()
+      || (last_sequence_id.is_valid() && (ObDDLSequenceID::LESS_THAN == new_sequence_id.compare_to_other_id(last_sequence_id)
+                                          || ObDDLSequenceID::EQUAL_TO == new_sequence_id.compare_to_other_id(last_sequence_id)))) {
     LOG_INFO("no need to set last refreshed schema info", K(ret), K(last_refreshed_schema_info_), K(schema_info));
   } else if (OB_FAIL(last_refreshed_schema_info_.assign(schema_info))) {
     LOG_WARN("fail to assign last refreshed schema info", K(ret), K(schema_info), K_(last_refreshed_schema_info));

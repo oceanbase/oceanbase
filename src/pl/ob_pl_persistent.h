@@ -127,7 +127,8 @@ public:
   int gen_routine_storage_dml(const uint64_t exec_tenant_id,
                               ObDMLSqlSplicer &dml,
                               int64_t merge_version,
-                              const ObString &binary);
+                              const ObString &binary,
+                              const ObString &stack_sizes);
 
   template<typename DependencyTable>
   static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
@@ -143,8 +144,9 @@ public:
                           ObRoutinePersistentInfo::ObPLOperation &op);
 
   int insert_or_update_dll_to_disk(schema::ObSchemaGetterGuard &schema_guard,
-                                    const ObString &binary,
-                                    const ObRoutinePersistentInfo::ObPLOperation op);
+                                   const ObString &binary,
+                                   const ObString &stack_sizes,
+                                   const ObRoutinePersistentInfo::ObPLOperation op);
 
   int process_storage_dll(ObIAllocator &alloc,
                             schema::ObSchemaGetterGuard &schema_guard,
@@ -162,6 +164,10 @@ public:
                                   uint64_t key_id,
                                   uint64_t database_id);
 
+  static int get_stack_size_length(const ObPLCompileUnit &unit, int64_t &stack_size_length);
+  static int encode_stack_sizes(char *buf, const int64_t len, int64_t &pos, const ObPLCompileUnit &unit);
+  static int decode_stack_sizes(ObPLCompileUnit &unit, char *buf, const int64_t len, int64_t &pos);
+
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
@@ -176,5 +182,4 @@ private:
 }
 
 }
-
 #endif

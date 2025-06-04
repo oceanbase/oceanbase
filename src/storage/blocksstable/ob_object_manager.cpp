@@ -16,6 +16,8 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "storage/shared_storage/ob_ss_object_access_util.h"
 #endif
 
 namespace oceanbase
@@ -35,6 +37,24 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
                get_storage_objet_type_str(object_type_), private_opt_.tablet_id_, private_opt_.tablet_trasfer_seq_))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
                                                 K(private_opt_.tablet_id_), K(private_opt_.tablet_trasfer_seq_));
+    }
+    break;
+  }
+  case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
+  case ObStorageObjectType::SHARED_MINI_META_MACRO:
+  case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
+  case ObStorageObjectType::SHARED_MINOR_META_MACRO:
+  case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
+  case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
+  case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
+  case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO: {
+    if(OB_FAIL(databuff_printf(buf, buf_len, pos,
+              "object_type=%s (tablet_id=%lu,op_id=%lu,data_seq=%lu,reorganization_scn=%lu)",
+              get_storage_objet_type_str(object_type_),
+              ss_share_opt_.tablet_id_, (ss_share_opt_.data_seq_ >> 32),
+              (ss_share_opt_.data_seq_ & 0xFFFFFFFF), ss_share_opt_.reorganization_scn_))) {
+      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
+               K(ss_share_opt_.tablet_id_), K(ss_share_opt_.data_seq_), K(ss_share_opt_.column_group_id_), K(ss_share_opt_.reorganization_scn_));
     }
     break;
   }
@@ -62,26 +82,18 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
     }
     break;
   }
-  case ObStorageObjectType::TENANT_DISK_SPACE_META:
-  case ObStorageObjectType::TENANT_SUPER_BLOCK:
-  case ObStorageObjectType::TENANT_UNIT_META: {
+  case ObStorageObjectType::TENANT_ROOT_KEY: {
+    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", get_storage_objet_type_str(object_type_)))) {
+      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
+    }
+    break;
+  }
+  case ObStorageObjectType::TENANT_DISK_SPACE_META: {
     if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (tenant_id=%lu,tenant_epoch_id=%lu)",
                get_storage_objet_type_str(object_type_),
                ss_tenant_level_opt_.tenant_id_, ss_tenant_level_opt_.tenant_epoch_id_))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
                                                 K(ss_tenant_level_opt_.tenant_id_), K(ss_tenant_level_opt_.tenant_epoch_id_));
-    }
-    break;
-  }
-  case ObStorageObjectType::LS_META:
-  case ObStorageObjectType::LS_DUP_TABLE_META:
-  case ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY:
-  case ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY:
-  case ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (ls_id=%lu)",
-               get_storage_objet_type_str(object_type_), ss_ls_level_opt_.ls_id_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_ls_level_opt_.ls_id_));
     }
     break;
   }
@@ -93,16 +105,6 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
                                                 K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_),
                                                 K(ss_private_tablet_opt_.version_), K(ss_private_tablet_opt_.tablet_transfer_seq_));
-    }
-    break;
-  }
-  case ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos,
-        "object_type=%s (ls_id=%lu,tablet_id=%lu)", get_storage_objet_type_str(object_type_),
-        ss_private_tablet_current_version_opt_.ls_id_, ss_private_tablet_current_version_opt_.tablet_id_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_private_tablet_current_version_opt_.ls_id_),
-                                                K(ss_private_tablet_current_version_opt_.tablet_id_));
     }
     break;
   }
@@ -189,6 +191,27 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
     }
     break;
   }
+  case ObStorageObjectType::SHARED_TABLET_SUB_META: {
+    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (tablet_id=%lu, ls_id=%lu, op_id=%u, data_seq=%u, is_inner_tablet=%d, reorganization_scn=%lu)",
+                               get_storage_objet_type_str(object_type_), ss_tablet_sub_meta_opt_.tablet_id_,
+                               ss_tablet_sub_meta_opt_.ls_id_, ss_tablet_sub_meta_opt_.op_id_,
+                               ss_tablet_sub_meta_opt_.data_seq_ , ss_tablet_sub_meta_opt_.is_inner_tablet_,
+                               ss_tablet_sub_meta_opt_.reorganization_scn_))) {
+      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
+               K(ss_tablet_sub_meta_opt_.tablet_id_),
+               K(ss_tablet_sub_meta_opt_.ls_id_),
+               K(ss_tablet_sub_meta_opt_.is_inner_tablet_),
+               K(ss_tablet_sub_meta_opt_.op_id_),
+               K(ss_tablet_sub_meta_opt_.data_seq_),
+               K(ss_tablet_sub_meta_opt_.reorganization_scn_));
+    }
+    break;
+  }
+  #ifdef OB_BUILD_CLOSE_MODULES
+  #define REGISTER_OPT_TO_STRING
+    #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
+  #undef REGISTER_OPT_TO_STRING
+  #endif
   default:
     if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", "unknow object type"))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
@@ -308,9 +331,10 @@ int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObject
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
     if (ObStorageObjectType::PRIVATE_DATA_MACRO != opt.object_type_
-        && ObStorageObjectType::PRIVATE_META_MACRO != opt.object_type_) {
+        && ObStorageObjectType::PRIVATE_META_MACRO != opt.object_type_
+        && ObStorageObjectType::PRIVATE_CKPT_FILE != opt.object_type_) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt));
+      LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt.object_type_), K(opt));
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {
       LOG_WARN("fail to alloc object", K(ret), K(opt));
     }
@@ -469,16 +493,15 @@ int ObObjectManager::check_disk_space_available()
   return ret;
 }
 
-int ObObjectManager::update_super_block(const common::ObLogCursor &replay_start_point,
-                                        const blocksstable::MacroBlockId &tenant_meta_entry)
+int ObObjectManager::update_super_block(
+    const common::ObLogCursor &replay_start_point,
+    const blocksstable::MacroBlockId &tenant_meta_entry,
+    const storage::ObSlogCheckpointFdDispenser &fd_dispenser)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(is_shared_storage_)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported for shared-storage", K(ret));
   } else {
     SpinWLockGuard guard(lock_);
     HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
@@ -487,11 +510,20 @@ int ObObjectManager::update_super_block(const common::ObLogCursor &replay_start_
       tmp_super_block.body_.replay_start_point_ = replay_start_point;
       tmp_super_block.body_.tenant_meta_entry_ = tenant_meta_entry;
       tmp_super_block.construct_header();
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {
+      tmp_super_block.min_file_id_ = fd_dispenser.get_min_file_id();
+      tmp_super_block.max_file_id_ = fd_dispenser.get_max_file_id();
+      if (is_shared_storage_) {
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
+          LOG_WARN("fail to ss write super block", K(ret));
+        }
+#endif
+      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {
         LOG_WARN("fail to write server super block", K(ret));
       } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
         LOG_WARN("failed to fsync_block", K(ret));
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         super_block_ = tmp_super_block;
       }
     }
@@ -581,14 +613,18 @@ int ObObjectManager::seal_object(const MacroBlockId &object_id, const int64_t ls
 {
   int ret = OB_SUCCESS;
   ObTenantFileManager *file_mgr = MTL(ObTenantFileManager *);
+  ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
   if (OB_UNLIKELY(!object_id.is_valid() || (ls_epoch_id < 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(object_id), K(ls_epoch_id));
   } else if (OB_ISNULL(file_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant file manager is null", KR(ret), "tenant_id", MTL_ID());
-  } else if (OB_FAIL(file_mgr->push_to_flush_queue(object_id, ls_epoch_id))) {
-    LOG_WARN("fail to push to flush queue", KR(ret), K(object_id), K(ls_epoch_id));
+  } else if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("macro cache mgr is null", KR(ret), "tenant_id", MTL_ID());
+  } else if (OB_FAIL(macro_cache_mgr->seal_and_push_to_flush_map(object_id, ls_epoch_id))) {
+    LOG_WARN("fail to seal and push to flush map", KR(ret), K(object_id), K(ls_epoch_id));
   }
   return ret;
 }
@@ -616,11 +652,21 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       }
       break;
     }
+    case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MINI_META_MACRO:
+    case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MINOR_META_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
+    case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
     case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
     case ObStorageObjectType::SHARED_MAJOR_META_MACRO: {
       set_ss_object_first_id_(obj_type, default_incarnation_id, opt.ss_share_opt_.column_group_id_, object_id);
       object_id.set_second_id(opt.ss_share_opt_.tablet_id_);
       object_id.set_third_id(opt.ss_share_opt_.data_seq_);
+      object_id.set_ss_fourth_id(opt.ss_share_opt_.is_ls_inner_tablet_,
+          opt.ss_share_opt_.ls_id_, opt.ss_share_opt_.reorganization_scn_);
       break;
     }
     case ObStorageObjectType::TMP_FILE: {
@@ -633,25 +679,23 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       }
       break;
     }
+    case ObStorageObjectType::TENANT_ROOT_KEY:
     case ObStorageObjectType::SERVER_META: {
       set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
       break;
     }
-    case ObStorageObjectType::TENANT_DISK_SPACE_META:
-    case ObStorageObjectType::TENANT_SUPER_BLOCK:
-    case ObStorageObjectType::TENANT_UNIT_META: {
+    case ObStorageObjectType::TENANT_DISK_SPACE_META: {
       set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
       object_id.set_second_id(opt.ss_tenant_level_opt_.tenant_id_);
       object_id.set_third_id(opt.ss_tenant_level_opt_.tenant_epoch_id_);
       break;
     }
-    case ObStorageObjectType::LS_META:
-    case ObStorageObjectType::LS_DUP_TABLE_META:
-    case ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY: {
+    case ObStorageObjectType::PRIVATE_SLOG_FILE:
+    case ObStorageObjectType::PRIVATE_CKPT_FILE: {
       set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_ls_level_opt_.ls_id_);
+      object_id.set_second_id(opt.ss_slog_ckpt_obj_opt_.tenant_id_);
+      object_id.set_third_id(opt.ss_slog_ckpt_obj_opt_.tenant_epoch_id_);
+      object_id.set_fourth_id(opt.ss_slog_ckpt_obj_opt_.file_id_);
       break;
     }
     case ObStorageObjectType::PRIVATE_TABLET_META: {
@@ -660,12 +704,6 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       object_id.set_third_id(opt.ss_private_tablet_opt_.tablet_id_);
       object_id.set_meta_version_id(opt.ss_private_tablet_opt_.version_);
       object_id.set_meta_transfer_seq(opt.ss_private_tablet_opt_.tablet_transfer_seq_);
-      break;
-    }
-    case ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_private_tablet_current_version_opt_.ls_id_);
-      object_id.set_third_id(opt.ss_private_tablet_current_version_opt_.tablet_id_);
       break;
     }
     case ObStorageObjectType::SHARED_MAJOR_TABLET_META: {
@@ -735,6 +773,19 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       object_id.set_fourth_id(opt.ss_ckm_error_dump_macro_id_opt_.block_seq_);
       break;
     }
+    case ObStorageObjectType::SHARED_TABLET_SUB_META: {
+      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
+      object_id.set_second_id(opt.ss_tablet_sub_meta_opt_.tablet_id_);
+      object_id.set_third_id((uint64_t(opt.ss_tablet_sub_meta_opt_.op_id_) << 32) | (opt.ss_tablet_sub_meta_opt_.data_seq_ & 0xFFFFFFFF));
+      object_id.set_ss_fourth_id(opt.ss_tablet_sub_meta_opt_.is_inner_tablet_,
+          opt.ss_tablet_sub_meta_opt_.ls_id_, opt.ss_tablet_sub_meta_opt_.reorganization_scn_);
+      break;
+    }
+    #ifdef OB_BUILD_CLOSE_MODULES
+    #define REGISTER_OPT_GET_OBJECT_ID
+      #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
+    #undef REGISTER_OPT_GET_OBJECT_ID
+    #endif
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected share storage object type", K(ret), K(opt));
@@ -794,7 +845,7 @@ int ObObjectManager::ss_read_super_block_(
   read_info.size_ = super_block_buf_holder_.get_len();
   read_info.mtl_tenant_id_ = OB_SERVER_TENANT_ID;
   int64_t pos = 0;
-  if (OB_FAIL(OB_SERVER_FILE_MGR.pread_file(read_info, object_handle))) {
+  if (OB_FAIL(ObSSObjectAccessUtil::pread_file(read_info, object_handle))) {
     LOG_WARN("fail to read super block", K(ret), K(read_info));
   } else if (OB_UNLIKELY(super_block_buf_holder_.get_len() != object_handle.get_data_size())) {
     ret = OB_IO_ERROR;
@@ -838,7 +889,7 @@ int ObObjectManager::ss_write_super_block_(const ObServerSuperBlock &super_block
   return ret;
 }
 
-int ObObjectManager::create_super_block_tenant_item(const uint64_t tenant_id, int64_t &tenant_epoch)
+int ObObjectManager::alloc_tenant_epoch(const uint64_t tenant_id, int64_t &tenant_epoch)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -851,33 +902,68 @@ int ObObjectManager::create_super_block_tenant_item(const uint64_t tenant_id, in
     SpinWLockGuard guard(lock_);
     HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
       tmp_super_block = super_block_;
+      const int64_t tmp_epoch = tmp_super_block.body_.auto_inc_tenant_epoch_++;
+      tmp_super_block.body_.modify_timestamp_ = ObTimeUtility::current_time();
+      tmp_super_block.construct_header();
+      if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
+        LOG_WARN("fail to write super block", K(ret), K(tmp_super_block));
+      } else {
+        super_block_ = tmp_super_block;
+        tenant_epoch = tmp_epoch;
+      }
+      FLOG_INFO("alloc tenant epoch", K(ret), K(tenant_id), K(tmp_epoch), K(tenant_epoch));
+    }
+  }
+  return ret;
+}
+
+int ObObjectManager::create_super_block_tenant_item(
+    const uint64_t tenant_id,
+    const int64_t tenant_epoch,
+    const storage::ObTenantCreateStatus status)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!is_shared_storage_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only available for shared-storage");
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                      || 0 >= tenant_epoch
+                      || (ObTenantCreateStatus::DELETED != status && ObTenantCreateStatus::CREATE_ABORT != status))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(tenant_epoch), K(status));
+  } else {
+    SpinWLockGuard guard(lock_);
+    HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
+      tmp_super_block = super_block_;
       int64_t i = 0;
-      for (; i < tmp_super_block.body_.tenant_cnt_; i++) {
+      bool is_found = false;
+      for (; OB_SUCC(ret) && i < tmp_super_block.body_.tenant_cnt_; ++i) {
         const ObTenantItem &item = tmp_super_block.body_.tenant_item_arr_[i];
-        if (tenant_id == item.tenant_id_ &&
-            item.status_ != ObTenantCreateStatus::DELETED &&
-            item.status_ != ObTenantCreateStatus::CREATE_ABORT) {
+        if (item.status_ != ObTenantCreateStatus::DELETED && item.status_ != ObTenantCreateStatus::CREATE_ABORT) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, status in tenant item isn't delete or abort", K(ret), K(item));
+        } else if (tenant_id == item.tenant_id_ && tenant_epoch == item.epoch_) {
+          is_found = true;
           break;
         }
       }
-      if (OB_UNLIKELY(i != tmp_super_block.body_.tenant_cnt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant item already exist", K(ret), "tenant_item", tmp_super_block.body_.tenant_item_arr_[i]);
+      if (OB_FAIL(ret)) {
+      } else if (is_found) { // nothing to do
+        LOG_INFO("tenant item already exist", K(ret), K(tenant_id), K(tenant_epoch), K(status));
       } else if (OB_UNLIKELY(ServerSuperBlockBody::MAX_TENANT_COUNT == i)) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("too many tenants", K(ret), K(tenant_id), K(tmp_super_block));
       } else {
         ObTenantItem &item = tmp_super_block.body_.tenant_item_arr_[i];
         item.tenant_id_ = tenant_id;
-        item.status_ = ObTenantCreateStatus::CREATING;
-        item.epoch_ = tmp_super_block.body_.auto_inc_tenant_epoch_++;
-        tenant_epoch = item.epoch_;
+        item.status_ = status;
+        item.epoch_ = tenant_epoch;
         tmp_super_block.body_.tenant_cnt_ = i + 1;
         tmp_super_block.body_.modify_timestamp_ = ObTimeUtility::current_time();
         tmp_super_block.construct_header();
-      }
-
-      if (OB_SUCC(ret)) {
         if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
           LOG_WARN("fail to write super block", K(ret), K(tmp_super_block));
         } else {
@@ -935,49 +1021,6 @@ int ObObjectManager::delete_super_block_tenant_item(
       } else {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("tenant item not exist", K(ret), K(tenant_id), K(tenant_epoch), K(super_block_));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObObjectManager::update_super_block_tenant_item(
-    const uint64_t tenant_id, const int64_t tenant_epoch,
-    const ObTenantCreateStatus status)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_shared_storage_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only available for shared-storage");
-  } else {
-    SpinWLockGuard guard(lock_);
-    HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
-      tmp_super_block = super_block_;
-      int64_t i = 0;
-      for (; i < tmp_super_block.body_.tenant_cnt_; i++) {
-        const ObTenantItem &item = tmp_super_block.body_.tenant_item_arr_[i];
-        if (tenant_id == item.tenant_id_ && tenant_epoch == item.epoch_) {
-          break;
-        }
-      }
-      if (OB_UNLIKELY(i == tmp_super_block.body_.tenant_cnt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant item not exist", K(ret), K(tenant_id), K(tenant_epoch), K(status));
-      } else {
-        const ObTenantItem old_item = super_block_.body_.tenant_item_arr_[i];
-        ObTenantItem &new_item = tmp_super_block.body_.tenant_item_arr_[i];
-        new_item.status_ = status;
-        tmp_super_block.body_.modify_timestamp_ = ObTimeUtility::current_time();
-        tmp_super_block.construct_header();
-        if (OB_FAIL(ss_write_super_block_(tmp_super_block))) {
-          LOG_WARN("fail to write super block", K(ret), K(tmp_super_block));
-        } else {
-          super_block_ = tmp_super_block;
-          FLOG_INFO("update super block tenant item", K(old_item), K(new_item), K(tmp_super_block));
-        }
       }
     }
   }

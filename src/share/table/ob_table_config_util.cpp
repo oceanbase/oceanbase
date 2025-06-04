@@ -23,7 +23,7 @@ ObKVFeatureMode::ObKVFeatureMode(const uint8_t *values)
     value_ = 0;
     is_valid_ = false;
   } else {
-    value_ = static_cast<uint16_t>(values[0]);
+    value_ = (static_cast<uint16_t>(values[1]) << 8) | static_cast<uint16_t>(values[0]);
     is_valid_ = true;
   }
 }
@@ -54,14 +54,14 @@ void ObKVFeatureMode::set_hotkey_mode(uint16_t mode)
 
 void ObKVFeatureMode::set_value(uint16_t value)
 {
-  if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11) {
+  if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11 ||
+      ((value >> 6) & 0b11) == 0b11 || ((value >> 8) & 0b11) == 0b11) {
     is_valid_ = false;
   } else {
     is_valid_ = true;
     value_ = value;
   }
 }
-
 
 bool ObKVFeatureMode::is_ttl_enable() {
   bool mode = MODE_DEFAULT_VAL_TTL;

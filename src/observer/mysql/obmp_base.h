@@ -78,6 +78,9 @@ protected:
 
   // send a ok packet to client
   int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL);
+  int send_ok_packet_without_lock(sql::ObSQLSessionInfo &session,
+                                  ObOKPParam &ok_param,
+                                  obmysql::ObMySQLPacket* pkt);
   int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param = NULL);
 
   int send_null_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param);

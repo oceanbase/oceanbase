@@ -146,6 +146,12 @@ private:
 void PxWorkerFunctor::operator ()(bool need_exec)
 {
   int ret = OB_SUCCESS;
+  const char *px_parallel_rule_str = nullptr;
+  if (task_arg_.op_spec_root_ != nullptr && task_arg_.op_spec_root_->plan_ != nullptr) {
+    PXParallelRule px_parallel_rule = task_arg_.op_spec_root_->plan_->get_px_parallel_rule();
+    px_parallel_rule_str = ob_px_parallel_rule_str(px_parallel_rule);
+  }
+  ObDIActionGuard action_guard(px_parallel_rule_str);
   ObCurTraceId::set(env_arg_.get_trace_id());
   GET_DIAGNOSTIC_INFO->get_ash_stat().trace_id_ = env_arg_.get_trace_id();
   /**
@@ -245,6 +251,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
     if (task_arg_.sqc_task_ptr_ != NULL) {
       task_arg_.sqc_task_ptr_->set_task_state(SQC_TASK_EXIT);
     }
+    ObInterruptUtil::update_schema_error_code(task_arg_.exec_ctx_, ret, task_arg_.task_.px_worker_execute_start_schema_version_);
     (void) ObInterruptUtil::interrupt_qc(task_arg_.task_, ret, task_arg_.exec_ctx_);
   }
 
@@ -347,6 +354,7 @@ int ObPxThreadWorker::exit()
 int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("FastDFO");
   ObPxSqcHandler *h = task_arg.get_sqc_handler();
 
   if (OB_ISNULL(h)) {

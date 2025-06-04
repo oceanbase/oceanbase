@@ -618,7 +618,7 @@ ObJsonNode *ObJsonObject::get_value(const common::ObString &key) const
 {
   ObJsonNode *j_node = NULL;
   ObJsonObjectPair pair(key, NULL);
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
 
   ObJsonObjectArray::const_iterator low_iter = std::lower_bound(object_array_.begin(),
                                                                 object_array_.end(),
@@ -670,7 +670,7 @@ int ObJsonObject::remove(const common::ObString &key)
 {
   INIT_SUCC(ret);
   const ObJsonObjectPair pair(key, NULL);
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
   ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                           object_array_.end(), pair, cmp);
   if (low_iter != object_array_.end() && low_iter->get_key() == key) {
@@ -678,6 +678,7 @@ int ObJsonObject::remove(const common::ObString &key)
     if (OB_FAIL(object_array_.remove(low_iter - object_array_.begin()))) {
       LOG_WARN("fail to remove json node", K(ret), K(key));
     } else {
+      children_serialize_size_ -= delta_size;
       set_serialize_delta_size(-1 * delta_size);
     }
   }
@@ -727,7 +728,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
 
     if (is_schema) {
       // if is schema, keep the first value, don't raise error or overwrite
-      ObJsonKeyCompare cmp;
+      ObJsonKeyCompare cmp(use_lexicographical_order_);
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                               object_array_.end(), pair, cmp);
       if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
@@ -738,7 +739,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
         sort();
       }
     } else if (need_overwrite) {
-      ObJsonKeyCompare cmp;
+      ObJsonKeyCompare cmp(use_lexicographical_order_);
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                               object_array_.end(), pair, cmp);
       if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
@@ -758,7 +759,11 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
     } else if (!is_lazy_sort) {
       sort();
     }
-    set_serialize_delta_size(value->get_serialize_size());
+    if (OB_SUCC(ret)) {
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      set_serialize_delta_size(child_serialize_size);
+    }
   }
 
   return ret;
@@ -772,7 +777,7 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
     LOG_WARN("key is NULL", K(ret), K(new_key), K(old_key));
   } else {
     ObJsonObjectPair pair(old_key, NULL);
-    ObJsonKeyCompare cmp;
+    ObJsonKeyCompare cmp(use_lexicographical_order_);
     ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                             object_array_.end(), pair, cmp);
     if (low_iter != object_array_.end() && low_iter->get_key() == old_key) { // Found and covered
@@ -794,13 +799,13 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
 
 void ObJsonObject::sort()
 {
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
   lib::ob_sort(object_array_.begin(), object_array_.end(), cmp);
 }
 
 void ObJsonObject::stable_sort()
 {
-  ObJsonKeyCompare cmp;
+  ObJsonKeyCompare cmp(use_lexicographical_order_);
   std::stable_sort(object_array_.begin(), object_array_.end(), cmp);
 }
 
@@ -1015,6 +1020,7 @@ int ObJsonArray::remove(uint64_t index)
     if (OB_FAIL(node_vector_.remove(index))) {
       LOG_WARN("fail to remove json node from array", K(ret), K(index));
     } else {
+      children_serialize_size_ -= delta_size;
       set_serialize_delta_size(-1 * delta_size);
       ret = OB_SUCCESS;
     } 
@@ -1074,7 +1080,9 @@ int ObJsonArray::append(ObJsonNode *value)
     if (OB_FAIL(node_vector_.push_back(value))) {
       LOG_WARN("fail to push back value", K(ret));
     } else {
-      value->update_serialize_size_cascade(value->get_serialize_size());
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      value->update_serialize_size_cascade(child_serialize_size);
     }
   }
 
@@ -1095,7 +1103,9 @@ int ObJsonArray::insert(uint64_t index, ObJsonNode *value)
     if (OB_FAIL(node_vector_.insert(pos, value))) {
       LOG_WARN("fail to insert node to json array", K(ret), K(pos));
     } else {
-      value->update_serialize_size_cascade(value->get_serialize_size());
+      uint64_t child_serialize_size = value->get_serialize_size();
+      children_serialize_size_ += child_serialize_size;
+      value->update_serialize_size_cascade(child_serialize_size);
     }
   }
 
@@ -1126,6 +1136,15 @@ int ObJsonArray::consume(ObIAllocator *allocator, ObJsonArray *other)
   }
 
   return ret;
+}
+
+ObJsonNode *ObJsonArray::get_value(uint64_t index) const
+{
+  ObJsonNode *j_node = NULL;
+  if (index < node_vector_.size()) {
+    j_node = node_vector_[index];
+  }
+  return j_node;
 }
 
 ObJsonDatetime::ObJsonDatetime(const ObTime &time, ObObjType field_type)

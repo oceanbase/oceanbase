@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-DEF_LIMIT(L1, 100000);
+DEF_LIMIT(L1, 10000000);
 ROOT(root);
 FIFO(g1, root, 1);
 FIFO(g2, root, 2);

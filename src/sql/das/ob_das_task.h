@@ -104,7 +104,8 @@ public:
       plan_id_(0),
       plan_hash_(0),
       detectable_id_(),
-      tsc_monitor_info_(nullptr)
+      tsc_monitor_info_(nullptr),
+      stmt_type_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -141,6 +142,7 @@ public:
   uint64_t plan_hash_;
   ObDetectableId detectable_id_;
   ObTSCMonitorInfo *tsc_monitor_info_;
+  uint64_t stmt_type_;
 };
 
 class ObIDASTaskOp

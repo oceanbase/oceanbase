@@ -164,7 +164,7 @@ int ListCommandOperator::build_push_ops(
     list_meta.left_idx_ = push_left ? left_idx + ObRedisListMeta::INDEX_STEP : left_idx;
     list_meta.right_idx_ = push_left ? right_idx : right_idx - ObRedisListMeta::INDEX_STEP;
     ObITableEntity *meta_entity = nullptr;
-    if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::LIST, list_meta, meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::LIST, list_meta, meta_entity))) {
       LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
     } else if (OB_FAIL(push_value_ops.insert_or_update(*meta_entity))) {
       LOG_WARN("fail to push back", K(ret), KPC(meta_entity));
@@ -199,7 +199,7 @@ int ListCommandOperator::do_push(int64_t db, const ObString &key, const ObIArray
   int ret = OB_SUCCESS;
   // 1. Get meta data and check whether it has expired.
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get list meta", K(ret));
     } else {
@@ -323,7 +323,7 @@ int ListCommandOperator::update_list_after_pop(
       }
 
       ObITableEntity *meta_entity = nullptr;
-      if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::LIST, list_meta, meta_entity))) {
+      if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::LIST, list_meta, meta_entity))) {
         LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
       } else if (OB_FAIL(batch_ops.insert_or_update(*meta_entity))) {
         LOG_WARN("fail to push back", K(ret));
@@ -447,7 +447,7 @@ int ListCommandOperator::do_pop(int64_t db, const ObString &key, bool pop_left)
   ObString res_value;
   ObRedisListMeta *list_meta = nullptr;
   ObRedisMeta *meta = nullptr;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -654,7 +654,7 @@ int ListCommandOperator::do_index(int64_t db, const ObString &key, int64_t offse
   ObRedisListMeta *list_meta = nullptr;
   ObRedisMeta *meta = nullptr;
   ObTableQuery query;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -753,7 +753,7 @@ int ListCommandOperator::do_set(int64_t db, const ObString &key, int64_t offset,
   ObRedisMeta *meta = nullptr;
   ObTableQuery query;
   int64_t set_index = 0;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -895,7 +895,7 @@ int ListCommandOperator::do_range(int64_t db, const ObString &key, int64_t start
   ObRedisListMeta *list_meta = nullptr;
   ObRedisMeta *meta = nullptr;
   ObTableQuery query;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -1085,7 +1085,7 @@ int ListCommandOperator::update_meta_after_trim(
   }
 
   ObITableEntity *new_meta_entity = nullptr;
-  if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::LIST, list_meta, new_meta_entity))) {
+  if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::LIST, list_meta, new_meta_entity))) {
     LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
   } else {
     ObTableOperation op;
@@ -1221,7 +1221,7 @@ int ListCommandOperator::do_trim(int64_t db, const ObString &key, int64_t start,
   ObRedisListMeta *list_meta = nullptr;
   ObRedisMeta *meta = nullptr;
 
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -1805,7 +1805,7 @@ int ListCommandOperator::do_insert(
   ObTableQuery query;
   int64_t pivot_idx = 0;
   int64_t insert_idx = 0;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -1827,7 +1827,7 @@ int ListCommandOperator::do_insert(
     ObITableEntity *meta_entity = nullptr;
     ObITableEntity *new_data_entity;
     ObObj value_obj;
-    if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::LIST, *list_meta, meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(db, key, ObRedisDataModel::LIST, *list_meta, meta_entity))) {
       LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(*list_meta));
     } else if (OB_FAIL(put_value_ops.insert_or_update(*meta_entity))) {
       LOG_WARN("fail to push back", K(ret));
@@ -1862,7 +1862,7 @@ int ListCommandOperator::do_get_len(int64_t db, const ObString &key)
   ObTableQuery query;
   int64_t pivot_idx = 0;
   int64_t insert_idx = 0;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -2072,7 +2072,7 @@ int ListCommandOperator::update_meta_after_rem(
       ObITableEntity *meta_entity = nullptr;
       if (OB_FAIL(gen_meta_entity(db,
                                   key,
-                                  ObRedisModel::LIST,
+                                  ObRedisDataModel::LIST,
                                   list_meta,
                                   meta_entity))) {
         LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
@@ -2152,7 +2152,7 @@ int ListCommandOperator::do_rem(int64_t db, const ObString &key, int64_t count, 
   ObTableQuery query;
   int64_t real_rem_count = 0;
 
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -2323,7 +2323,7 @@ int ListCommandOperator::del_key(const ObString &key, int64_t db, ObRedisListMet
     ResultFixedArray results(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(del_ops, results))) {
       LOG_WARN("fail to process table batch op", K(ret), K(del_ops));
-    } else if (OB_FAIL(fake_del_meta(ObRedisModel::LIST, db, key, list_meta))) {
+    } else if (OB_FAIL(fake_del_meta(ObRedisDataModel::LIST, db, key, list_meta))) {
       LOG_WARN("fail to delete complex type meta", K(db), K(key), KPC(list_meta));
     }
   }
@@ -2340,7 +2340,7 @@ int ListCommandOperator::do_del(int64_t db, const ObString &key, bool &is_exist)
   ObRedisMeta *meta = nullptr;
 
   is_exist = true;
-  if (OB_FAIL(get_meta(db, key, ObRedisModel::LIST, meta))) {
+  if (OB_FAIL(get_meta(db, key, ObRedisDataModel::LIST, meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
     } else {
@@ -2441,7 +2441,7 @@ int ListCommandOperator::do_group_push()
   // Get all op's meta
   ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE,
                               ModulePageAllocator(op_temp_allocator_, "RedisGPush"));
-  if (OB_FAIL(get_group_metas(op_temp_allocator_, ObRedisModel::LIST, metas))) {
+  if (OB_FAIL(get_group_metas(op_temp_allocator_, ObRedisDataModel::LIST, metas))) {
     LOG_WARN("fail to get group metas", K(ret));
   } else {
     ObTableBatchOperation batch_op;
@@ -2602,7 +2602,7 @@ int ListCommandOperator::gen_group_pop_res(
       // update meta
       if (list_meta->count_ <= (same_key_end_pos - same_key_start_pos + 1)) {
         ObITableEntity *meta_entity = nullptr;
-        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisDataModel::LIST, *list_meta, meta_entity))) {
           LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
         } else if (OB_FAIL(batch_op_del.del(*meta_entity))) {
           LOG_WARN("fail to push back", K(ret));
@@ -2621,7 +2621,7 @@ int ListCommandOperator::gen_group_pop_res(
           update_ins_region_after_pop(pop->is_pop_left(), *list_meta);
         }
         ObITableEntity *meta_entity = nullptr;
-        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisDataModel::LIST, *list_meta, meta_entity))) {
           LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
         } else if (OB_FAIL(batch_op_insup.insert_or_update(*meta_entity))) {
           LOG_WARN("fail to push back", K(ret));
@@ -2853,7 +2853,7 @@ int ListCommandOperator::update_meta_after_multi_pop(
 
   if (list_meta->count_ <= (same_key_end_pos - same_key_start_pos + 1)) {
     ObITableEntity *meta_entity = nullptr;
-    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisDataModel::LIST, *list_meta, meta_entity))) {
       LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
     } else if (OB_FAIL(batch_op_del.del(*meta_entity))) {
       LOG_WARN("fail to push back", K(ret));
@@ -2872,7 +2872,7 @@ int ListCommandOperator::update_meta_after_multi_pop(
       update_ins_region_after_pop(pop->is_pop_left(), *list_meta);
     }
     ObITableEntity *meta_entity = nullptr;
-    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisDataModel::LIST, *list_meta, meta_entity))) {
       LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
     } else if (OB_FAIL(batch_op_insup.insert_or_update(*meta_entity))) {
       LOG_WARN("fail to push back", K(ret));
@@ -3099,7 +3099,7 @@ int ListCommandOperator::do_group_pop()
   ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
   // Get all op's meta
   ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisGPop"));
-  if (OB_FAIL(get_group_metas(op_temp_allocator_, ObRedisModel::LIST, metas))) {
+  if (OB_FAIL(get_group_metas(op_temp_allocator_, ObRedisDataModel::LIST, metas))) {
     LOG_WARN("fail to get group metas", K(ret));
   } else {
     ObTableBatchOperation batch_op_get;

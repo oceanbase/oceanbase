@@ -22,6 +22,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_vector_kmeans_ctx.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/ob_ddl_common.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/basic/ob_temp_column_store.h"
@@ -44,6 +45,11 @@ namespace sql
 {
 class ObPxMultiPartSSTableInsertOp;
 class ObExecContext;
+}
+
+namespace blocksstable
+{
+class ObMacroMetaTempStore;
 }
 
 namespace storage
@@ -349,7 +355,7 @@ public:
       sql::ObPxMultiPartSSTableInsertOp *op,
       const common::ObTabletID &tablet_id,
       const bool is_slice_empty,
-      const bool is_index_table,
+      const bool need_check_outrow_lob,
       const int64_t rowkey_cnt,
       const int64_t lob_inrow_threshold,
       const int64_t snapshot_version,
@@ -361,7 +367,7 @@ public:
   virtual ~ObDDLSliceRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version),
-    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table), K_(index_has_lob), K_(lob_inrow_threshold));
+    K_(is_next_row_cached), K_(ddl_slice_param), K_(need_check_outrow_lob), K_(lob_inrow_threshold));
 private:
   sql::ObPxMultiPartSSTableInsertOp *op_;
   common::ObTabletID tablet_id_; // data_tablet_id rather than lob_meta_tablet_id.
@@ -377,8 +383,7 @@ private:
   bool is_slice_empty_; // without data.
   bool is_next_row_cached_;
   bool need_idempotent_autoinc_val_;
-  bool is_index_table_;
-  bool index_has_lob_;
+  bool need_check_outrow_lob_;
 };
 
 // for ddl insert row.
@@ -472,7 +477,8 @@ public:
                K_(data_format_version),
                K_(table_key),
                K_(snapshot_version),
-               K_(trans_id));
+               K_(trans_id),
+               K_(rec_scn));
 public:
   ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
@@ -482,6 +488,7 @@ public:
   ObITable::TableKey table_key_;
   int64_t snapshot_version_; // used for full direct load only.
   transaction::ObTransID trans_id_; // used for incremental direct load only
+  share::SCN rec_scn_;
 };
 
 struct ObDDLTableMergeDagParam : public share::ObIDagInitParam
@@ -602,12 +609,15 @@ public:
 class ObVectorIndexSliceStore : public ObVectorIndexBaseSliceStore
 {
 public:
+  static const int64_t OB_VEC_IDX_SNAPSHOT_KEY_LENGTH = 256;
   ObVectorIndexSliceStore()
     : ObVectorIndexBaseSliceStore(), vec_allocator_("VecIdxSS", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tmp_allocator_("VecIdxSSAR", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       ctx_(), vector_vid_col_idx_(-1),
       vector_col_idx_(-1)
-  {}
+  {
+    extra_column_idx_types_.set_attr(ObMemAttr(MTL_ID(), "VecIdxExCol"));
+  }
   virtual ~ObVectorIndexSliceStore() { reset(); }
   virtual int init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const ObString vec_idx_param,
@@ -621,7 +631,8 @@ public:
     ObIAllocator *allocator,
     transaction::ObTxDesc *tx_desc,
     int64_t lob_inrow_threshold,
-    ObVectorIndexAlgorithmType &type);
+    ObVectorIndexAlgorithmType &type,
+    const int64_t snapshot_version);
   virtual int get_next_vector_data_row(
     const int64_t rowkey_cnt,
     const int64_t column_cnt,
@@ -629,9 +640,8 @@ public:
     ObVectorIndexAlgorithmType index_type,
     blocksstable::ObDatumRow *&datum_row) override;
   INHERIT_TO_STRING_KV("ObVectorIndexBaseSliceStore", ObVectorIndexBaseSliceStore,
-      K(ctx_), K(vector_vid_col_idx_), K(vector_col_idx_), K(vector_key_col_idx_), K(vector_data_col_idx_));
+      K(ctx_), K(vector_vid_col_idx_), K(vector_col_idx_), K(vector_key_col_idx_), K(vector_data_col_idx_), K(extra_column_idx_types_));
 private:
-  static const int64_t OB_VEC_IDX_SNAPSHOT_KEY_LENGTH = 256;
   bool is_vec_idx_col_invalid(const int64_t column_cnt) const;
 public:
   ObArenaAllocator vec_allocator_;
@@ -641,6 +651,7 @@ public:
   int32_t vector_col_idx_;
   int32_t vector_key_col_idx_;
   int32_t vector_data_col_idx_;
+  ObSEArray<ObExtraInfoIdxType, 4> extra_column_idx_types_;
 };
 
 class ObIvfSliceStore : public ObVectorIndexBaseSliceStore
@@ -649,14 +660,17 @@ public:
   ObIvfSliceStore()
     : ObVectorIndexBaseSliceStore(),
       tmp_allocator_("IvfSSTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      helper_guard_()
+      helper_guard_(),
+      context_id_(-1),
+      lob_inrow_threshold_(-1)
   {}
 
   virtual ~ObIvfSliceStore() {}
   virtual void reset();
   virtual int build_clusters() = 0;
   virtual int is_empty(bool &empty) = 0;
-  inline int64_t get_context_id() { return context_id_; }
+  OB_INLINE int64_t get_context_id() { return context_id_; }
+  OB_INLINE void set_lob_inrow_threshold(int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold; }
 
 protected:
   template<typename HelperType>
@@ -666,6 +680,7 @@ protected:
   ObArenaAllocator tmp_allocator_;
   ObIvfBuildHelperGuard helper_guard_;
   int64_t context_id_;
+  int64_t lob_inrow_threshold_;
 };
 
 template<typename HelperType>
@@ -1405,8 +1420,18 @@ private:
 class ObCOSliceWriter
 {
 public:
-  ObCOSliceWriter() : is_inited_(false), cg_idx_(-1), cg_schema_(nullptr), data_desc_(),
-  index_builder_(true /*use buffer*/), macro_block_writer_(true /*use buffer*/) {}
+  ObCOSliceWriter()
+    : is_inited_(false),
+      cg_idx_(-1),
+      cg_schema_(nullptr),
+      data_desc_(),
+      index_builder_(true /*use buffer*/),
+      macro_block_writer_(true /*use buffer*/),
+      macro_meta_store_(nullptr),
+      allocator_("COSliceWriter")
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   ~ObCOSliceWriter() {}
   int init(
       const ObStorageSchema *storage_schema,
@@ -1415,18 +1440,20 @@ public:
       const blocksstable::ObMacroDataSeq &start_seq,
       const int64_t row_id_offset,
       const share::SCN &start_scn,
-      const bool with_cs_replica);
+      const bool with_cs_replica,
+      const int64_t parallel_idx);
   void reset();
   int append_row(
       const sql::ObChunkDatumStore::StoredRow *stored_row);
-  int append_batch(const ObIArray<ObIVector *> &vectors, const int64_t batch_size);
+  int append_batch(const blocksstable::ObBatchDatumRows &datum_rows);
   static int project_cg_row(
       const ObStorageColumnGroupSchema &cg_schema,
       const sql::ObChunkDatumStore::StoredRow *stored_row,
       blocksstable::ObDatumRow &cg_row);
   int close();
+  blocksstable::ObBatchDatumRows &get_datum_rows() { return datum_rows_; }
   bool is_inited() { return is_inited_; }
-  TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_));
+  TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_), K(datum_rows_));
 private:
   bool is_inited_;
   int64_t cg_idx_;
@@ -1437,6 +1464,8 @@ private:
   storage::ObDDLRedoLogWriterCallback flush_callback_;
   blocksstable::ObDatumRow cg_row_;
   blocksstable::ObBatchDatumRows datum_rows_;
+  blocksstable::ObMacroMetaTempStore *macro_meta_store_;
+  ObArenaAllocator allocator_;
 };
 
 struct ObTabletDirectLoadExecContextId final
@@ -1531,6 +1560,31 @@ public:
   ObBucketLock bucket_lock_;
   hash::ObHashMap<ObTabletDirectLoadBatchSliceKey, ObArray<int64_t/*slices_array_idx*/> *> batch_slice_map_;
   ObConcurrentFIFOAllocator allocator_;
+};
+
+class ObMacroMetaStoreManager
+{
+public:
+  ObMacroMetaStoreManager();
+  ~ObMacroMetaStoreManager();
+  TO_STRING_KV(K(store_items_.count()));
+  int add_macro_meta_store(const int64_t cg_idx, const int64_t parallel_idx, const int64_t dir_id, blocksstable::ObMacroMetaTempStore *&macro_meta_store);
+  int get_sorted_macro_meta_stores(const int64_t cg_idx, ObIArray<blocksstable::ObMacroMetaTempStore *> &macro_meta_stores);
+private:
+  struct StoreItem
+  {
+  public:
+    StoreItem() : macro_meta_store_(nullptr), cg_idx_(-1), parallel_idx_(-1) {}
+    TO_STRING_KV(KP(macro_meta_store_), K(cg_idx_), K(parallel_idx_));
+  public:
+    blocksstable::ObMacroMetaTempStore *macro_meta_store_;
+    int64_t cg_idx_;
+    int64_t parallel_idx_;
+  };
+private:
+  ObArenaAllocator allocator_;
+  lib::ObMutex mutex_;
+  ObArray<StoreItem> store_items_;
 };
 
 }// namespace storage

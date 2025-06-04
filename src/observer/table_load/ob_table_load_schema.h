@@ -44,11 +44,6 @@ public:
   static int get_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                               uint64_t tenant_id, uint64_t table_id,
                               const share::schema::ObTableSchema *&table_schema);
-  // 指定tenant schema version 和 table id 获取schema version
-  static int get_table_schema_version(const uint64_t tenant_id,
-                                      const int64_t tenant_schema_version,
-                                      const uint64_t table_id,
-                                      int64_t &schema_version);
 
   static int get_user_column_schemas(const share::schema::ObTableSchema *table_schema,
                                      ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas,
@@ -72,24 +67,23 @@ public:
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,
                                         ObIArray<ObTabletID> &tablet_ids);
+  static int prepare_col_descs(const ObTableSchema *table_schema,
+                               common::ObIArray<share::schema::ObColDesc> &col_descs);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
   void reset();
-  int init(uint64_t tenant_id, uint64_t table_id);
+  int init(uint64_t tenant_id, uint64_t table_id, const int64_t schema_version);
   bool is_valid() const { return is_inited_; }
+  bool is_column_store() const { return cg_cnt_ > 1; }
   TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
-               K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count),
-               K_(store_column_count), K_(collation_type), K_(column_descs), K_(is_inited));
+               K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
+               K_(cg_cnt), K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
   int init_cmp_funcs(const common::ObIArray<share::schema::ObColDesc> &column_descs,
                      const bool is_oracle_mode);
-  int init_lob_storage(common::ObIArray<share::schema::ObColDesc> &column_descs);
-  int update_decimal_int_precision(const share::schema::ObTableSchema *table_schema,
-                                   common::ObIArray<share::schema::ObColDesc> &cols_desc);
-
-  int prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs);
+  int init_lob_storage(const common::ObIArray<share::schema::ObColDesc> &column_descs);
   int gen_lob_meta_datum_utils();
 public:
   common::ObArenaAllocator allocator_;
@@ -101,7 +95,6 @@ public:
   bool is_table_without_pk_;
   bool is_table_with_hidden_pk_column_;
   share::schema::ObIndexType index_type_;
-  bool is_column_store_;
   bool has_autoinc_column_;
   bool has_identity_column_;
   bool has_lob_rowkey_;
@@ -113,12 +106,12 @@ public:
   int64_t schema_version_;
   uint64_t lob_meta_table_id_;
   int64_t lob_inrow_threshold_;
+  int64_t cg_cnt_;
   common::ObArray<uint64_t> index_table_ids_;
   common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns
   common::ObArray<share::schema::ObColDesc> column_descs_;
-  common::ObArray<share::schema::ObColDesc> multi_version_column_descs_;
   blocksstable::ObStorageDatumUtils datum_utils_;
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;

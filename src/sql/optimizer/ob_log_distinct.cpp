@@ -396,8 +396,10 @@ int ObLogDistinct::print_used_hint(PlanText &plan_text)
                  && OB_FAIL(pushdown_hint->print_hint(plan_text))) {
         LOG_WARN("failed to print used hint for group by", K(ret), KPC(pushdown_hint));
       } else if (NULL != pq_hint
-                 && ((NULL != op && pq_hint->is_force_dist_hash())
-                     || (is_partition_wise() && pq_hint->is_force_partition_wise()))
+                 && ((DIST_HASH_HASH == get_dist_method() && pq_hint->is_force_dist_hash())
+                     || (DIST_HASH_HASH_LOCAL == get_dist_method() && pq_hint->is_force_hash_local())
+                     || (DIST_PARTITION_WISE == get_dist_method() && pq_hint->is_force_partition_wise())
+                     || (DIST_BASIC_METHOD == get_dist_method() && pq_hint->is_force_basic()))
                  && OB_FAIL(pq_hint->print_hint(plan_text))) {
         LOG_WARN("failed to print used hint for pq group by", K(ret), KPC(pq_hint));
       }

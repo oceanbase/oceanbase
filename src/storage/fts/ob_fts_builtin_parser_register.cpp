@@ -10,16 +10,17 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/fts/ob_fts_literal.h"
-#define USING_LOG_PREFIX STORAGE_FTS
-
-#include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_whitespace_ft_parser.h"
-#include "storage/fts/ob_ngram_ft_parser.h"
-#include "storage/fts/ob_beng_ft_parser.h"
-#include "storage/fts/ob_ik_ft_parser.h"
-#include "plugin/sys/ob_plugin_helper.h"
 #include "lib/ob_errno.h"
+#include "plugin/sys/ob_plugin_helper.h"
+#include "storage/fts/ob_beng_ft_parser.h"
+#include "storage/fts/ob_fts_literal.h"
+#include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/fts/ob_ik_ft_parser.h"
+#include "storage/fts/ob_ngram2_ft_parser.h"
+#include "storage/fts/ob_ngram_ft_parser.h"
+#include "storage/fts/ob_whitespace_ft_parser.h"
+
+#define USING_LOG_PREFIX STORAGE_FTS
 
 using namespace oceanbase::plugin;
 using namespace oceanbase::storage;
@@ -44,6 +45,12 @@ static int plugin_init(ObPluginParamPtr plugin)
                  ObFTSLiteral::PARSER_NAME_BENG,
                  "This is a basic english parser plugin."))) {
     LOG_WARN("failed to init beng builtin ftparser", K(ret));
+  } else if (OB_FAIL(ObPluginHelper::register_builtin_ftparser<ObNgram2FTParserDesc>(
+                 plugin,
+                 ObFTSLiteral::PARSER_NAME_NGRAM2,
+                 "This is a range ngram fulltext parser plugin."
+                 "It is used to parse fulltext with range ngram."))) {
+    LOG_WARN("failed to init range ngram builtin ftparser", K(ret));
   } else if (OB_FAIL(ObPluginHelper::register_builtin_ftparser<ObIKFTParserDesc>(
                  plugin,
                  ObFTSLiteral::PARSER_NAME_IK,

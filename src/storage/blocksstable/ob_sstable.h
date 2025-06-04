@@ -25,7 +25,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObAllMicroBlockRangeIterator;
+class ObMicroBlockIndexIterator;
 struct ObTabletCreateSSTableParam;
 class ObStoreRowIterator;
 class ObSSTableRowLockMultiChecker;
@@ -70,13 +70,14 @@ public:
     PADDING = 1,
     NORMAL = 2
   };
-  static const int SSTABLE_META_CACHE_VERSION = 1;
+  static const int SSTABLE_META_CACHE_VERSION_1 = 1;
+  static const int SSTABLE_META_CACHE_VERSION = 2;
   ObSSTableMetaCache();
   ~ObSSTableMetaCache() = default;
   void reset();
   int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
   void set_upper_trans_version(const int64_t upper_trans_version);
-  bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION; }
+  bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION_1; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_for_compat(const bool has_multi_version_row, const char *buf, const int64_t data_len, int64_t &pos);
@@ -110,6 +111,7 @@ public:
   int64_t upper_trans_version_;
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
+  share::SCN rec_scn_;
 };
 
 
@@ -153,16 +155,6 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
-  virtual int exist(
-      const ObTableIterParam &param,
-	    ObTableAccessContext &context,
-	    const blocksstable::ObDatumRowkey &rowkey,
-	    bool &is_exist,
-	    bool &has_found) override;
-  virtual int exist(
-      ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found) override;
 
   int scan_macro_block(
       const ObDatumRange &range,
@@ -176,7 +168,7 @@ public:
       const ObDatumRange &range,
       const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
-      ObAllMicroBlockRangeIterator *&micro_iter,
+      ObMicroBlockIndexIterator *&micro_iter,
       const bool is_reverse_scan = false);
   int scan_secondary_meta(
       ObIAllocator &allocator,
@@ -218,6 +210,10 @@ public:
   OB_INLINE share::SCN get_filled_tx_scn() const
   {
     return meta_cache_.filled_tx_scn_;
+  }
+  OB_INLINE share::SCN get_rec_scn() override
+  {
+    return meta_cache_.rec_scn_;
   }
   OB_INLINE bool has_padding_meta_cache() const
   {
@@ -363,19 +359,9 @@ protected:
   int check_valid_for_reading();
   int add_used_size() const;
   int dec_used_size() const;
-  int build_exist_iterator(
-      const ObTableIterParam &iter_param,
-      const ObDatumRowkey &rowkey,
-      ObTableAccessContext &access_context,
-      ObStoreRowIterator *&iter);
-  int build_multi_exist_iterator(
-      const ObTableIterParam &iter_param,
-      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
-      ObTableAccessContext &access_context,
-      ObStoreRowIterator *&iter);
-    int init_sstable_meta(
-        const ObTabletCreateSSTableParam &param,
-        common::ObArenaAllocator *allocator);
+  int init_sstable_meta(
+      const ObTabletCreateSSTableParam &param,
+      common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);

@@ -2158,11 +2158,6 @@ static int alter_system_set_reset_constraint_check_and_add_item_mysql_mode(obrpc
   int ret = OB_SUCCESS;
   bool is_backup_config = false;
   bool can_set_trace_control_info = false;
-  int  tmp_ret = OB_SUCCESS;
-  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
-  if (OB_SUCCESS != tmp_ret) {
-    can_set_trace_control_info = true;
-  }
   share::ObBackupConfigChecker backup_config_checker;
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2756,13 +2751,14 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_CHANGE_EXTERNAL_STORAGE_DEST", "type", get_type_name(parse_tree.type_));
   } else if (OB_ISNULL(parse_tree.children_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children should not be null");
   } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
-  } else if (OB_ISNULL(parse_tree.children_[0]) && (OB_ISNULL(parse_tree.children_[1]) || OB_ISNULL(parse_tree.children_[2])) ) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(parse_tree.children_[0])
+                || (OB_ISNULL(parse_tree.children_[1]) && OB_ISNULL(parse_tree.children_[2])) ) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("children should not be null", K(ret), "children", parse_tree.children_);
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2796,7 +2792,11 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
           // access info may be null
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             const ObString access_info_value = parse_tree.children_[1]->str_value_;
-            if (OB_FAIL(item.value_.assign(access_info_value))) {
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "min cluster version is less than 4.3.5.2, changing ak&sk is");
+              LOG_WARN("min cluster version is less than 4.3.5.2, changing ak&sk is not supported", K(ret));
+            } else if (OB_FAIL(item.value_.assign(access_info_value))) {
               LOG_WARN("failed to assign config value", K(ret));
             }
           }
@@ -4363,23 +4363,40 @@ int ObSwitchRSRoleResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObRefreshTimeZoneInfoResolver::resolve(const ParseNode &parse_tree)
+int ObLoadTimeZoneInfoResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(T_REFRESH_TIME_ZONE_INFO != parse_tree.type_)
-      || OB_ISNULL(session_info_)) {
+  ObLoadTimeZoneInfoStmt *load_time_zone_info_stmt = NULL;
+  ObString file_path;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type is not T_REFRESH_TIME_ZONE_INFO", "type", get_type_name(parse_tree.type_),
-              K(session_info_));
+    LOG_WARN("unexpected null", K(ret), K(schema_checker_), K(session_info_));
+  } else if (OB_UNLIKELY(T_LOAD_TIME_ZONE_INFO != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_LOAD_TIME_ZONE_INFO", "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_) ||
+             OB_UNLIKELY(1 != parse_tree.num_child_) ||
+             OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+  } else if (ObSchemaChecker::is_ora_priv_check()
+            && OB_FAIL((schema_checker_->check_ora_ddl_priv(
+                        session_info_->get_effective_tenant_id(),
+                        session_info_->get_priv_user_id(),
+                        ObString(""),
+                        stmt::T_LOAD_TIME_ZONE_INFO,
+                        session_info_->get_enable_role_array())))) {
+    LOG_WARN("check priv failed", K(ret), K(session_info_->get_effective_tenant_id()),
+             K(session_info_->get_user_id()));
+  } else if (OB_ISNULL(load_time_zone_info_stmt = create_stmt<ObLoadTimeZoneInfoStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create ObLoadTimeZoneInfoStmt failed", K(ret));
+  } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], file_path))) {
+    LOG_WARN("resolve path failed", K(ret));
   } else {
-    ObRefreshTimeZoneInfoStmt *refresh_time_zone_info_stmt = create_stmt<ObRefreshTimeZoneInfoStmt>();
-    if (OB_UNLIKELY(NULL == refresh_time_zone_info_stmt)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create ObRefreshTimeZoneInfoStmt failed", K(ret));
-    } else {
-      refresh_time_zone_info_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
-      stmt_ = refresh_time_zone_info_stmt;
-    }
+    load_time_zone_info_stmt->set_path(file_path);
+    load_time_zone_info_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
+    stmt_ = load_time_zone_info_stmt;
   }
   return ret;
 }

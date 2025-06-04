@@ -618,7 +618,8 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
 
 bool ObVecIndexOptDutyTimeChecker::check(const ObConfigItem& t) const
 {
-  return OB_SUCCESS;// TODO@xiajin: completed in 435bp2
+  common::ObTTLDutyDuration duty_duration;
+  return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
 bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const
@@ -904,6 +905,26 @@ bool ObConfigStorageCachePolicyChecker::check(const ObConfigItem &t) const
     is_valid = true;
   } else if (0 == str.case_compare("hot")) {
     is_valid = true;
+  }
+  return is_valid;
+}
+
+bool ObConfigEnableManualSCPChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  const bool enabled = ObConfigBoolParser::get(t.str(), is_valid);
+  if (enabled) {
+    // TODO @fangdan: impl it in next MR
+  }
+  return is_valid;
+}
+
+bool ObConfigSuspendStorageCacheTaskChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  const bool enabled = ObConfigBoolParser::get(t.str(), is_valid);
+  if (enabled) {
+    // TODO @fangdan: impl it in next MR
   }
   return is_valid;
 }
@@ -1310,7 +1331,7 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
     } else {
       ObKVFeatureMode kv_mode;
       for (int64_t i = 0; i < kv_list.count() && bret; i++) {
-        uint8_t mode = MODE_DEFAULT;
+        uint16_t mode = MODE_DEFAULT;
         if (kv_list.at(i).second.case_compare(MODE_VAL_ON) == 0) {
           mode = MODE_ON;
         } else if (kv_list.at(i).second.case_compare(MODE_VAL_OFF) == 0) {
@@ -1332,7 +1353,9 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
         }
       } // end for
       if (bret) {
-        arr[0] = kv_mode.get_value();
+        int16_t mode_value = kv_mode.get_value();
+        arr[0] = (mode_value & 0xFF);
+        arr[1] = ((mode_value >> 8) & 0xFF);
       }
     }
   }
@@ -1347,20 +1370,9 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
 bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
   bool bret = true;
   const ObString tmp_str(t.str());
-  // Note: Shared-Storage mode does not support column store in default. if want to test
-  // column store under shared-storage mode, then need to set tracepoint.
-  bool is_column_store_supported = true;
-  if (GCTX.is_shared_storage_mode()) {
-    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
-    is_column_store_supported = (tmp_ret != OB_SUCCESS);
-  }
-  if (is_column_store_supported) {
-    bret = ((0 == tmp_str.case_compare("ROW")) ||
-            (0 == tmp_str.case_compare("COLUMN")) ||
-            (0 == tmp_str.case_compare("COMPOUND")));
-  } else {
-    bret = (0 == tmp_str.case_compare("ROW"));
-  }
+  return 0 == tmp_str.case_compare("ROW") ||
+         0 == tmp_str.case_compare("COLUMN") ||
+         0 == tmp_str.case_compare("COMPOUND");
   return bret;
 }
 
@@ -1660,6 +1672,16 @@ bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
   bool is_valid = false;
   int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
   return is_valid && !GCTX.is_shared_storage_mode();
+}
+
+bool ObConfigGlobalIndexAutoSplitPolicyChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("DISTRIBUTED")
+          || 0 == tmp_str.case_compare("ALL")
+          || 0 == tmp_str.case_compare("OFF"));
+  return bret;
 }
 
 } // end of namepace common

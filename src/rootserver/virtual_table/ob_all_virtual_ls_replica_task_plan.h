@@ -40,6 +40,9 @@ private:
   int get_full_row_(const share::schema::ObTableSchema *table,
                     const ObLSReplicaTaskDisplayInfo &task_stat,
                     common::ObIArray<Column> &columns);
+  int try_tenant_disaster_recovery_(const uint64_t tenant_id,
+                                    ObDRWorker &task_worker);
+
 private:
   common::ObArenaAllocator arena_allocator_;
 

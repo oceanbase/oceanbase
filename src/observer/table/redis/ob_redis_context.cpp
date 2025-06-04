@@ -226,12 +226,12 @@ int ObRedisCtx::init_cmd_ctx(ObRowkey &cur_rowkey, const ObIArray<ObString> &key
 
   bool is_in_same_ls = true;
   ObLSID last_ls_id(ObLSID::INVALID_LS_ID);
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     ObRedisTableInfo *tb_info = nullptr;
     bool cur_is_in_same_ls = false;
     ObString table_name;
-    if (OB_FAIL(ObRedisHelper::get_table_name_by_model(static_cast<ObRedisModel>(i), table_name))) {
-      LOG_WARN("fail to get table name by model", K(ret), K(static_cast<ObRedisModel>(i)));
+    if (OB_FAIL(ObRedisHelper::get_table_name_by_model(static_cast<ObRedisDataModel>(i), table_name))) {
+      LOG_WARN("fail to get table name by model", K(ret), K(static_cast<ObRedisDataModel>(i)));
     } else if (OB_FAIL(init_table_info(cur_rowkey, *schema_guard, *sess_guard, table_name, keys, tb_info, cur_is_in_same_ls, last_ls_id))) {
       LOG_WARN("fail to init table info", K(ret), K(i));
     } else {

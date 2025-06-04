@@ -192,6 +192,7 @@ void ObRoleChangeService::destroy()
 
 void ObRoleChangeService::handle(void *task)
 {
+  ObDIActionGuard ag("LogService", "RoleChangeService", "HandleEvent");
   int ret = OB_SUCCESS;
   // When role chage service hang exceeds 30 seconds, we think there is dead lock in 'handle_role_change_event_',
   // TIMEGUARD will pring lbt().
@@ -309,6 +310,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
   } else {
     switch (event.event_type_) {
       case RoleChangeEventType::CHANGE_LEADER_EVENT_TYPE:
+        ObDIActionGuard("change leader event");
         CLOG_LOG(INFO, "begin change leader", K(curr_access_mode), K(event), KPC(ls));
 #ifdef ERRSIM
         ret = OB_E(EventTable::EN_RC_ONLY_LEADER_TO_LEADER) OB_SUCCESS;
@@ -328,6 +330,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
         CLOG_LOG(INFO, "end change leader", K(ret), K(curr_access_mode), K(event), KPC(ls));
         break;
       case RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE:
+        ObDIActionGuard("role change cb event");
         CLOG_LOG(INFO, "begin log handler role change", K(curr_access_mode), K(event), KPC(ls));
         if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, ls, retry_ctx))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_log_handler_ failed", K(ret),
@@ -851,7 +854,7 @@ int ObRoleChangeService::wait_replay_service_replay_done_(
     if (OB_FAIL(replay_service_->is_replay_done(ls_id, end_lsn, is_done))) {
       CLOG_LOG(WARN, "replay_service_ is_replay_done failed", K(ret), K(is_done), K(end_lsn));
     } else if (false == is_done) {
-      ob_usleep(50*1000);
+      ob_throttle_usleep(50*1000, 0, ls_id.id());
       CLOG_LOG(INFO, "wait replay done return false, need retry", K(ls_id), K(end_lsn), K(start_ts));
     } else {
     }
@@ -869,7 +872,7 @@ int ObRoleChangeService::wait_replay_service_submit_task_clear_(const share::ObL
     if (OB_FAIL(replay_service_->is_submit_task_clear(ls_id, is_clear))) {
       CLOG_LOG(WARN, "replay_service_ is_submit_task_clean failed", K(is_clear));
     } else if (!is_clear) {
-      ob_usleep(1 * 1000);
+      ob_throttle_usleep(1 * 1000, 0, ls_id.id());
       if (REACH_TIME_INTERVAL(100 * 1000L)) {
         CLOG_LOG(WARN, "submit_task is not clear, need retry", K(ls_id), K(start_ts));
       }
@@ -890,7 +893,7 @@ int ObRoleChangeService::wait_apply_service_apply_done_(
     if (OB_FAIL(apply_service_->is_apply_done(ls_id, is_done, end_lsn))) {
       CLOG_LOG(WARN, "apply_service_ is_apply_done failed", K(ret), K(is_done), K(end_lsn));
     } else if (false == is_done) {
-      ob_usleep(5*1000);
+      ob_throttle_usleep(5*1000, ls_id.id());
       CLOG_LOG(WARN, "wait apply done return false, need retry", K(ls_id), K(is_done), K(end_lsn), K(start_ts));
     } else {
     }
@@ -930,7 +933,7 @@ int ObRoleChangeService::wait_apply_service_apply_done_when_change_leader_(
     } else if (false == is_done || end_lsn != max_lsn) {
       CLOG_LOG(INFO, "wait apply done return false, need retry", K(ls_id), K(is_done),
           K(end_lsn), K(max_lsn));
-      ob_usleep(5*1000);
+      ob_throttle_usleep(5*1000, 0, ls_id.id());
     } else {
     }
   }

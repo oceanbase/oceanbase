@@ -453,11 +453,16 @@ bool ObDASRef::check_rcode_can_retry(int ret)
 
 int ObDASRef::get_detectable_id(ObDetectableId &detectable_id) {
   int ret = OB_SUCCESS;
-  if (detectable_id_.is_invalid() && OB_FAIL(ObDetectManagerUtils::das_task_register_detectable_id_into_dm(detectable_id_,
-                                                 get_exec_ctx().get_my_session()->get_effective_tenant_id()))) {
-      LOG_WARN("register detectable id into dm failed", K(ret));
+  if (OB_LIKELY(GCONF._enable_px_fast_reclaim)) {
+    if (detectable_id_.is_invalid() &&
+        OB_FAIL(ObDetectManagerUtils::das_task_register_detectable_id_into_dm(detectable_id_,
+                    get_exec_ctx().get_my_session()->get_effective_tenant_id()))) {
+        LOG_WARN("register detectable id into dm failed", K(ret));
+    } else {
+      detectable_id = detectable_id_;
+    }
   } else {
-    detectable_id = detectable_id_;
+    detectable_id.reset();
   }
   return ret;
 }
@@ -705,14 +710,14 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     task_op->set_tablet_id(tablet_loc->tablet_id_);
     task_op->set_ls_id(tablet_loc->ls_id_);
     task_op->set_tablet_loc(tablet_loc);
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      task_op->set_plan_line_id(di->get_ash_stat().plan_line_id_);
+    }
     if (is_do_gts_opt() && OB_FAIL(task_op->init_das_gts_opt_info(session->get_tx_isolation()))) {
       LOG_WARN("fail to init gts opt info", K(ret), K(session->get_tx_isolation()));
     } else if (OB_FAIL(add_aggregated_task(task_op, op_type))) {
       LOG_WARN("failed to add aggregated task", K(ret));
-    }
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      task_op->set_plan_line_id(di->get_ash_stat().plan_line_id_);
     }
   }
   return ret;

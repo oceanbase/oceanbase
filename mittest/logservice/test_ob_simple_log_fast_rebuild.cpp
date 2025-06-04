@@ -38,7 +38,8 @@ int LogRequestHandler::handle_acquire_log_rebuild_info_msg_(const LogAcquireRebu
   } else {
     logservice::ObLogHandler log_handler;
     log_handler.is_inited_ = true;
-    log_handler.palf_handle_.palf_handle_impl_ = palf_handle_guard.palf_handle_.palf_handle_impl_;
+    log_handler.is_in_stop_state_ = false;
+    log_handler.palf_handle_ = palf_handle_guard.palf_handle_;
     logservice::ObLogService *log_srv = MTL(logservice::ObLogService*);
     ObLogFastRebuildEngine *fast_rebuild_engine = log_srv->get_shared_log_service()->get_log_fast_rebuild_engine();
     log_handler.rpc_proxy_ = log_srv->get_rpc_proxy();
@@ -59,7 +60,8 @@ int LogRequestHandler::handle_acquire_log_rebuild_info_msg_(const LogAcquireRebu
     }
 
     log_handler.is_inited_ = false;
-    log_handler.palf_handle_.palf_handle_impl_ = NULL;
+    log_handler.is_in_stop_state_ = true;
+    log_handler.palf_handle_ = NULL;
   }
   return ret;
 }
@@ -248,6 +250,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_fast_rebuild)
   // check log sync and wait for rebuilding
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id, 6 * 1024));
   EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), leader.palf_handle_impl_->get_end_lsn());
+  PALF_LOG(INFO, "leader max lsn is ", K(leader.palf_handle_impl_->get_max_lsn()));
   EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), rebuild_server->palf_handle_impl_->get_max_lsn());
 
   LSN leader_end_lsn, rebuild_server_end_lsn;

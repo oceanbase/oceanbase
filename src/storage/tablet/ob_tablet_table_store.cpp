@@ -27,6 +27,7 @@ using namespace compaction;
 using namespace oceanbase::share;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_GET_RECYCLE_VERSION);
 
 ObTabletTableStore::ObTabletTableStore()
   : version_(TABLE_STORE_VERSION_V4),
@@ -266,6 +267,43 @@ int ObTabletTableStore::init_for_shared_storage(
     }
     return ret;
   }
+
+int ObTabletTableStore::process_minor_sstables_for_ss_(
+    ObArenaAllocator &allocator,
+    const UpdateUpperTransParam &upper_trans_param,
+    ObArray<ObITable *> &sstables,
+    const int64_t inc_base_snapshot_version,
+    int64_t &inc_pos)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<UpdateUpperTransParam::SCNAndVersion> *new_upper_trans = upper_trans_param.ss_new_upper_trans_;
+  if (OB_ISNULL(new_upper_trans) || new_upper_trans->empty() || sstables.empty()) {
+  } else {
+    int j = 0;
+    for(int i = inc_pos; i < sstables.count(); i++) {
+      if (sstables.at(i)->is_sstable()) {
+        ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
+        if (sstable->get_upper_trans_version() == INT64_MAX) {
+          for (; j < new_upper_trans->count(); j++) {
+            if (new_upper_trans->at(j).scn_ == sstable->get_end_scn()) {
+              sstable->set_upper_trans_version(allocator, new_upper_trans->at(j).upper_trans_version_);
+            } else if (new_upper_trans->at(j).scn_ > sstable->get_end_scn()) {
+              break;
+            }
+          }
+        }
+        if (sstable->get_upper_trans_version() <= inc_base_snapshot_version) {
+          inc_pos = i + 1; // remove this minor
+        }
+      }
+    }
+    if (inc_pos == sstables.count()) {
+      inc_pos = -1; // all minor removed
+    }
+  }
+  return ret;
+}
+
 #endif
 
 int ObTabletTableStore::init(
@@ -358,7 +396,6 @@ int ObTabletTableStore::init(
     } else if (OB_FAIL(major_ckm_info_.assign(major_ckm_info, &allocator))) {
       LOG_WARN("fail to assign major ckm info", K(ret), K(major_ckm_info));
     } else {
-      LOG_INFO("success to assign major ckm info", K(ret), K(major_ckm_info));
       is_ready_for_read_ = false; // can not read temp table store for serialize
       is_inited_ = true;
     }
@@ -1346,6 +1383,13 @@ int ObTabletTableStore::get_recycle_version(
       LOG_WARN("not found inc base snapshot version, use the oldest major table", K(ret));
     }
   }
+#ifdef ERRSIM
+  if (OB_FAIL(ret)) {
+  } else if (EN_COMPACTION_GET_RECYCLE_VERSION) {
+    recycle_version = major_tables.at(major_tables.count() - 1)->get_snapshot_version();
+    FLOG_INFO("EN_COMPACTION_GET_RECYCLE_VERSION", KR(ret), K(recycle_version));
+  }
+#endif
   return ret;
 }
 
@@ -1794,6 +1838,13 @@ int ObTabletTableStore::inner_process_minor_tables(
         }
       }
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (OB_SUCC(ret) &&GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(process_minor_sstables_for_ss_(allocator, upper_trans_param, sstables, inc_base_snapshot_version, inc_pos))) {
+        LOG_WARN("fail process for ss", K(ret));
+      }
+    }
+#endif
     if (OB_FAIL(ret) || inc_pos < 0) {
     } else if (OB_FAIL(init_minor_sstable_array_with_check(new_sstables, allocator, sstables, inc_pos))) {
       LOG_WARN("failed to init minor_tables", K(ret));
@@ -1840,8 +1891,6 @@ int ObTabletTableStore::build_meta_major_table(
     } else if (OB_FAIL(meta_major_tables_.init(allocator, static_cast<ObSSTable *>(new_table)))) {
       LOG_WARN("failed to init meta major tables", K(ret));
     }
-  } else if (OB_NOT_NULL(new_table) && new_table->is_major_sstable()) {
-    // new table is major sstable, retire old meta sstable.
   } else if (!old_store.meta_major_tables_.empty()) {
     ObITable *old_meta_major = old_store.meta_major_tables_.at(0);
     if (old_meta_major->get_snapshot_version() <= last_major->get_snapshot_version()) { // new table is not meta sstable

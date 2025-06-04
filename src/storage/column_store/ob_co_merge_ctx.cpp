@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #include "storage/compaction/ob_merge_ctx_func.h"
@@ -164,7 +165,7 @@ int ObCOTabletMergeCtx::init_tablet_merge_info()
   return ret;
 }
 
-int ObCOTabletMergeCtx::prepare_cs_replica_param()
+int ObCOTabletMergeCtx::prepare_cs_replica_param(const ObMediumCompactionInfo *medium_info)
 {
   int ret = OB_SUCCESS;
   static_param_.is_cs_replica_ = false;
@@ -183,9 +184,18 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
     } else if (is_convert_co_major_merge(get_merge_type())) {
       static_param_.is_cs_replica_ = true;
     } else {
+      bool is_row_store_medium_info = false;
+      if (is_medium_merge(get_merge_type()) || is_major_merge(get_merge_type())) {
+        if (OB_ISNULL(medium_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid medium info", K(ret));
+        } else {
+          is_row_store_medium_info = medium_info->storage_schema_.is_row_store();
+        }
+      }
       static_param_.is_cs_replica_ = static_param_.get_tablet_id().is_user_tablet()
                                   && schema_on_tablet->is_user_data_table()
-                                  && schema_on_tablet->is_row_store();
+                                  && (schema_on_tablet->is_row_store() || is_row_store_medium_info);
     }
 
     if (OB_FAIL(ret) || !static_param_.is_cs_replica_) {
@@ -212,13 +222,40 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
   return ret;
 }
 
-// major_sstable_status_ is decided in static_param_, according to the storage schema in medium compaction info
-int ObCOTabletMergeCtx::check_and_set_build_redundant_row_merge()
+int ObCOTabletMergeCtx::handle_alter_cg_delayed_in_cs_replica()
 {
   int ret = OB_SUCCESS;
-  if (static_param_.is_cs_replica_ && static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
-    static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
-    LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for cs replica", K(ret), K_(static_param));
+  // in cs replica, alter column group delayed need reset co major merge type in some conditions
+  if (get_ls()->is_cs_replica() && ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(static_param_.co_major_merge_type_)) {
+    if (static_param_.is_cs_replica_) {
+      // major_sstable_status_ is decided in static_param_, according to the storage schema in medium compaction info
+      if (static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
+        static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
+        LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for cs replica", K(ret), K_(static_param));
+      }
+    } else {
+      // Storage schema in tablet may be column store when alter column group delayed and do transfer (with updated storage schema).
+      // The operation will make it confuse to decide the co major merge type, so need handle it case by case.
+      ObStorageSchema *schema_on_tablet = nullptr;
+      if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
+        LOG_WARN("failed to load schema", K(ret));
+      } else if (OB_ISNULL(schema_on_tablet)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema on tablet is nullptr", K(ret));
+      } else if (schema_on_tablet->is_column_table_schema_) {
+        if (is_rowkey_major_sstable(static_param_.major_sstable_status_)) {
+          // storage schema for compaction: rowkey cg + normal cg (from table schema after alter column group delayed)
+          // base major sstable: rowkey cg + normal cg (from cs replica)
+          static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
+          LOG_INFO("[CS-Replica] Decide build column store from rowkey cg for potential cs replica", K(ret), K_(static_param));
+        } else if (static_param_.is_build_redundent_row_store_from_rowkey_cg()) {
+          // storage schema for compaction: all cg + normal cg (from table schema after alter column group delayed)
+          // base major sstable: rowkey cg + normal cg (from cs replica)
+          static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_REDUNDANT_ROW_STORE_MERGE;
+          LOG_INFO("[CS-Replica] Decide build redundant row store from rowkey cg for potential cs replica", K(ret), K_(static_param));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -263,8 +300,13 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
 int ObCOTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(prepare_cs_replica_param())) {
-    LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param));
+  const bool need_medium_info = is_medium_merge(get_merge_type()) || is_major_merge(get_merge_type());
+  ObArenaAllocator allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObMediumCompactionInfo *medium_info = nullptr;
+  if (need_medium_info && OB_FAIL(OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info)))) {
+    LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
+  } else if (OB_FAIL(prepare_cs_replica_param(medium_info))) {
+    LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param), KPC(medium_info));
   } else if (is_meta_major_merge(get_merge_type())) {
     if (OB_FAIL(get_meta_compaction_info())) {
       LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
@@ -273,19 +315,20 @@ int ObCOTabletMergeCtx::prepare_schema()
     if (OB_FAIL(get_convert_compaction_info())) {
       LOG_WARN("failed to get convert compaction info", K(ret), KPC(this));
     }
-  } else if (OB_FAIL(get_medium_compaction_info())) {
+  } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) {
     // have checked medium info inside
-    LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
+    LOG_WARN("failed to get medium compaction info", K(ret), KPC(this), KPC(medium_info));
   }
 
   if (FAILEDx(prepare_row_store_cg_schema())) {
     LOG_WARN("failed to init major sstable status", K(ret));
-  } else if (OB_FAIL(check_and_set_build_redundant_row_merge())) {
-    LOG_WARN("failed to check and set build redundant row merge", K(ret), KPC(this));
+  } else if (OB_FAIL(handle_alter_cg_delayed_in_cs_replica())) {
+    LOG_WARN("failed to handle alter column group in cs replica ", K(ret), KPC(this));
   } else {
     LOG_INFO("[CS-Replica] finish prepare schema for co merge", K(ret),
              "is_cs_replica", static_param_.is_cs_replica_, KPC(this));
   }
+  ObTabletObjLoadHelper::free(allocator, medium_info);
   return ret;
 }
 
@@ -356,7 +399,10 @@ int ObCOTabletMergeCtx::cal_merge_param()
   int ret = OB_SUCCESS;
   bool force_full_merge = false;
   const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = static_param_.co_major_merge_type_;
-  if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
+  if (OB_UNLIKELY(has_filter())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support compaction filter in co major merge", KR(ret), K_(filter_ctx));
+  } else if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid major merge type", K(ret), K(co_major_merge_type));
   } else if (ObCOMajorMergePolicy::is_build_column_store_merge(co_major_merge_type)) {
@@ -384,7 +430,7 @@ int ObCOTabletMergeCtx::collect_running_info()
   } else {
     dag_net_merge_history_.static_info_.shallow_copy(static_history_);
     dag_net_merge_history_.static_info_.is_fake_ = true;
-    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
+    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_prepare_dag_running_ts();
     // add a fake merge info into history with only dag_net time_guard
     (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_,
                                                          dag_net_.get_dag_id(),

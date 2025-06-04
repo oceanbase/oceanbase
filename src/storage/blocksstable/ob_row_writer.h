@@ -60,7 +60,7 @@ public:
       const int64_t buf_len,
       int64_t &pos);
   int write(const int64_t rowkey_column_cnt, const ObDatumRow &datum_row, char *&buf, int64_t &len);
-  int write_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len);
+  int write_lock_rowkey(const common::ObStoreRowkey &rowkey, char *&buf, int64_t &len);
   int write(
       const int64_t rowkey_cnt,
       const ObDatumRow &datum_row,

@@ -364,6 +364,10 @@ public:
   int build_storage_schema_info(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int build_src_reorganization_scn(const share::ObTransferTaskInfo &task_info);
+  int get_src_reorganization_scn(common::ObIArray<share::SCN> &reorganization_scn);
+#endif
   TO_STRING_KV(K_(index), K_(tablet_info_array), K_(child_task_num), K_(total_tablet_count),
       K_(result), K_(data_version), K_(task_id));
 private:
@@ -430,6 +434,9 @@ private:
   uint64_t data_version_;
   common::ObCurTraceId::TraceId task_id_;
   ObTransferTabletInfoMgr mgr_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  common::ObArray<share::SCN> src_reorganization_scn_array_;
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObTransferBuildTabletInfoCtx);
 };
 

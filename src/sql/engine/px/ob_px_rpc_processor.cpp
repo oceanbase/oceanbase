@@ -465,6 +465,7 @@ int ObInitFastSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    ObDIActionGuard action_guard("PX SUB COORDINATOR");
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {
@@ -658,6 +659,13 @@ int ObPxCleanDtlIntermResP::process()
 {
   int ret = OB_SUCCESS;
   dtl::ObDTLIntermResultKey key;
+#ifdef ERRSIM
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("rpc not erase_dtl_interm_result by design", K(ret));
+    return OB_SUCCESS;
+  }
+#endif
   int64_t batch_size = 0 == arg_.batch_size_ ? 1 : arg_.batch_size_;
   for (int64_t i = 0; i < arg_.info_.count(); i++) {
     ObPxCleanDtlIntermResInfo &info = arg_.info_.at(i);

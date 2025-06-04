@@ -119,12 +119,14 @@ public:
   }
   OB_INLINE common::ObObjType get_type() const { return type_; }
   OB_INLINE uint16_t get_subschema_id() const { return static_cast<uint16_t>(cs_type_); }
+  // ObCollectionSQLType reused cs_type as part of sub schema id, always return CS_TYPE_BINARY.
+  OB_INLINE ObCollationType get_cs_type() const { return type_ == ObCollectionSQLType ? CS_TYPE_BINARY : cs_type_; }
 };
 
 // Expression evaluate result info
 struct ObEvalInfo
 {
-  void clear_evaluated_flag()
+  OB_INLINE void clear_evaluated_flag()
   {
     if (evaluated_ || projected_) {
       evaluated_ = 0;
@@ -190,22 +192,30 @@ struct ObEvalCtx
     {
       batch_idx_ptr_ = &eval_ctx.batch_idx_;
       batch_size_ptr_ = &eval_ctx.batch_size_;
+      max_batch_size_ptr_ = &eval_ctx.max_batch_size_;
       batch_idx_default_val_ = eval_ctx.batch_idx_;
       batch_size_default_val_ = eval_ctx.batch_size_;
+      max_batch_size_default_val_ = eval_ctx.max_batch_size_;
     }
     ~BatchInfoScopeGuard()
     {
        *batch_idx_ptr_ = batch_idx_default_val_;
        *batch_size_ptr_ = batch_size_default_val_;
+       *max_batch_size_ptr_ = max_batch_size_default_val_;
     }
     inline void set_batch_idx(int64_t v) { *batch_idx_ptr_ = v; }
     inline void set_batch_size(int64_t v) { *batch_size_ptr_ = v; }
+private:
+    friend class ObExpr;
+    inline void set_max_batch_size(int64_t v) { *max_batch_size_ptr_ = v; }
 
   private:
     int64_t *batch_idx_ptr_ = nullptr;
     int64_t *batch_size_ptr_ = nullptr;
+    int64_t *max_batch_size_ptr_ = nullptr;
     int64_t batch_idx_default_val_ = 0;
     int64_t batch_size_default_val_ = 0;
+    int64_t max_batch_size_default_val_ = 0;
   };
   explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
@@ -262,6 +272,8 @@ private:
     return tmp_alloc_;
   }
 
+  int get_pvt_skip_for_eval_row(ObBitVector *&skip);
+
 public:
   char **frames_;
   // Used for das, the semantics is the same as max_batch_size_ in spec
@@ -277,6 +289,8 @@ private:
   int64_t batch_size_;
   // Expression result allocator, never reset.
   common::ObArenaAllocator &expr_res_alloc_;
+  // used in `eval_one_datum_of_batch`
+  ObBitVector *pvt_skip_for_eval_row_;
 };
 
 
@@ -361,7 +375,8 @@ struct ObDynReserveBuf
            || common::ObGeometryTC == tc
            || common::ObUserDefinedSQLTC == tc
            || common::ObCollectionSQLTC == tc
-           || common::ObRoaringBitmapTC == tc;
+           || common::ObRoaringBitmapTC == tc
+           || common::ObEnumSetInnerTC == tc;
   }
 
   ObDynReserveBuf() = default;
@@ -412,14 +427,18 @@ struct VectorHeader {
                                 ObDatum *datum,
                                 ObEvalInfo *eval_info);
   ObIVector *get_vector() { return reinterpret_cast<ObIVector *>(vector_buf_); }
+
   int assign(const VectorHeader &other)
   {
     int ret = OB_SUCCESS;
+    ObVectorBase *vec_base = static_cast<ObVectorBase *>(get_vector());
     format_ = other.format_;
     MEMCPY(vector_buf_, other.vector_buf_, common::ObIVector::MAX_VECTOR_STRUCT_SIZE);
     return ret;
   }
 
+private:
+  DISALLOW_COPY_AND_ASSIGN(VectorHeader);
 public:
   VectorFormat format_;
   char vector_buf_[common::ObIVector::MAX_VECTOR_STRUCT_SIZE];
@@ -755,7 +774,6 @@ public:
 
   void reset_attrs_datums(ObEvalCtx &ctx) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
-  int assign_nested_vector(const ObExpr &other, ObEvalCtx &ctx);
 
 
   OB_INLINE void set_all_not_null(ObEvalCtx &ctx, const int64_t size) {
@@ -1361,11 +1379,13 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   int ret = common::OB_SUCCESS;
   const ObEvalInfo &info = get_eval_info(ctx);
   if (!is_batch_result()) {
-    if (skip.accumulate_bit_cnt(size) < size) {
-      common::ObDatum *datum = NULL;
-      ret = eval(ctx, datum);
-    } else {
-      // all skiped
+    bool const_dry_run = skip.accumulate_bit_cnt(size) >= size;
+    common::ObDatum *datum = NULL;
+    ret = eval(ctx, datum);
+    if (!const_dry_run) {
+      // do nothing
+    } else if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
     }
   } else if (info.projected_ || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
@@ -1393,7 +1413,7 @@ OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx,
 
 OB_INLINE VectorFormat ObExpr::get_default_res_format() const {
   return !batch_result_ ? VEC_UNIFORM_CONST
-         : ((datum_meta_.type_ == ObNullType || datum_meta_.type_ == ObCollectionSQLType) ? VEC_UNIFORM
+         : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
          : (is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
 }
 

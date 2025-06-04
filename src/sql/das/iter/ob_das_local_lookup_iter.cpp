@@ -15,6 +15,7 @@
 #include "sql/das/iter/ob_das_functional_lookup_iter.h"
 #include "sql/das/iter/ob_das_domain_id_merge_iter.h"
 #include "sql/das/ob_das_ir_define.h"
+#include "sql/das/ob_das_vec_define.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
@@ -121,6 +122,8 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
     param.output_exprs_ = &(ctdef->pd_expr_spec_.access_exprs_);
     param.aggregate_exprs_ = &(ctdef->pd_expr_spec_.pd_storage_aggregate_output_);
     param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
+    param.ext_mapping_column_exprs_ = &(ctdef->pd_expr_spec_.ext_mapping_column_exprs_);
+    param.ext_mapping_column_ids_ = &(ctdef->pd_expr_spec_.ext_mapping_column_ids_);
     param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
     param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     param.table_param_ = &(ctdef->table_param_);
@@ -363,23 +366,37 @@ int ObDASLocalLookupIter::init_rowkey_exprs_for_compat()
       }
     }
   } else if (ObDASOpType::DAS_OP_IR_SCAN == index_ctdef_->op_type_
-      || ObDASOpType::DAS_OP_SORT == index_ctdef_->op_type_) {
-    // only doc_id as rowkey for text retrieval index back
+      || ObDASOpType::DAS_OP_SORT == index_ctdef_->op_type_
+      || ObDASOpType::DAS_OP_VEC_SCAN == index_ctdef_->op_type_) {
+    // only doc_id/vid as rowkey for text retrieval/vector index back
     const ObDASIRScanCtDef *ir_ctdef = nullptr;
+    const ObDASVecAuxScanCtDef *vec_idx_ctdef = nullptr;
     if (ObDASOpType::DAS_OP_SORT == index_ctdef_->op_type_) {
-      if (OB_UNLIKELY(ObDASOpType::DAS_OP_IR_SCAN != index_ctdef_->children_[0]->op_type_)) {
+      if (ObDASOpType::DAS_OP_IR_SCAN != index_ctdef_->children_[0]->op_type_) {
+        ir_ctdef = static_cast<const ObDASIRScanCtDef *>(index_ctdef_->children_[0]);
+      } else if (ObDASOpType::DAS_OP_VEC_SCAN == index_ctdef_->children_[0]->op_type_) {
+        vec_idx_ctdef = static_cast<const ObDASVecAuxScanCtDef *>(index_ctdef_->children_[0]);
+      } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected child of sort iter is not an ir scan iter for compatible scan", K(ret));
-      } else {
-        ir_ctdef = static_cast<const ObDASIRScanCtDef *>(index_ctdef_->children_[0]);
       }
-    } else {
+    } else if (ObDASOpType::DAS_OP_IR_SCAN == index_ctdef_->op_type_) {
       ir_ctdef = static_cast<const ObDASIRScanCtDef *>(index_ctdef_);
+    } else if (ObDASOpType::DAS_OP_VEC_SCAN == index_ctdef_->op_type_) {
+      vec_idx_ctdef = static_cast<const ObDASVecAuxScanCtDef *>(index_ctdef_);
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(ir_ctdef)) {
       if (OB_FAIL(rowkey_exprs_.push_back(ir_ctdef->inv_scan_doc_id_col_))) {
         LOG_WARN("gailed to add rowkey exprs", K(ret));
       }
+    } else if (OB_NOT_NULL(vec_idx_ctdef)) {
+      if (OB_FAIL(rowkey_exprs_.push_back(vec_idx_ctdef->inv_scan_vec_id_col_))) {
+        LOG_WARN("gailed to add rowkey exprs", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ir_ctdef and vec_idx_ctdef shouldn't be null at the same time", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

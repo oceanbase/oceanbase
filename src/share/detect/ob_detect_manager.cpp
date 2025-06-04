@@ -19,7 +19,7 @@ namespace common {
 ObDetectableIdGen::ObDetectableIdGen()
 {
   detect_sequence_id_ = ObTimeUtil::current_time();
-  callback_node_sequence_id_ = ObTimeUtil::current_time();
+  callback_sequence_id_ = ObTimeUtil::current_time();
 }
 
 ObDetectableIdGen &ObDetectableIdGen::instance()
@@ -37,7 +37,7 @@ int ObDetectableIdGen::generate_detectable_id(ObDetectableId &detectable_id, uin
     ret = OB_SERVER_IS_INIT;
     LIB_LOG(WARN, "[DM] server index is invalid", K(server_index));
   } else {
-    detectable_id.first_ = get_detect_sequence_id();
+    detectable_id.first_ = generate_detect_sequence_id();
     // use timestamp to ensure that the detectable_id is unique during the process
     uint64_t timestamp = ObTimeUtility::current_time();
     // [ server_index (16bits) ][ timestamp (32bits) ]
@@ -152,6 +152,14 @@ void ObDMMultiDlist::pop_active_node(
   }
 }
 
+int ObDMCallbackDList::assign(const ObDMCallbackDList &src)
+{
+  int ret = OB_SUCCESS;
+  // move all nodes from src
+  const_cast<ObDMCallbackDList &>(src).move(*this);
+  return ret;
+}
+
 int ObDetectManager::mtl_new(ObDetectManager *&dm)
 {
   int ret = OB_SUCCESS;
@@ -195,29 +203,30 @@ void ObDetectManager::destroy()
   // destroy dm_multi_list_
   dm_multi_list_.destroy();
 
-  // destroy node and callback in all_check_items_
+  // destroy callback in all_check_items_
   FOREACH(iter, all_check_items_) {
     const ObDetectableId &detectable_id = iter->first;
-    ObDetectCallbackNode *node = iter->second;
-    while (OB_NOT_NULL(node)) {
-      ObDetectCallbackNode *next_node = node->next_;
+    ObDMCallbackDList &dlist = iter->second;
+    DLIST_FOREACH_NORET(curr, dlist) {
+      ObIDetectCallback *prev = curr->get_prev();
       // DM is destroying means that all tenant threads have already exited,
       // the remain detect callbacks must be
       // ObSingleDfoDetectCB, ObTempTableDetectCB, or ObP2PDataHubDetectCB
-      int temp_ret = node->cb_->do_callback();
+      int temp_ret = curr->do_callback();
       LIB_LOG(WARN, "[DM] do callback during mtl destroy",
-            K(temp_ret), K(node->cb_->get_trace_id()),
-            K(detectable_id), K(node->cb_->get_detect_callback_type()),
-            K(node->sequence_id_));
-      delete_cb_node(node);
-      node = next_node;
+            K(temp_ret), K(curr->get_trace_id()),
+            K(detectable_id), K(curr->get_type()),
+            K(curr->get_sequence_id()));
+      dlist.remove(curr);
+      delete_callback(curr);
+      curr = prev;
     }
   }
   all_check_items_.destroy();
   still_need_check_id_.destroy();
   detectable_ids_.destroy();
   DESTROY_CONTEXT(mem_context_);
-  LIB_LOG(INFO, "[DM] destory dm", K_(tenant_id));
+  LIB_LOG(INFO, "[DM] destroy dm", K_(tenant_id));
 }
 
 int ObDetectManager::init(const ObAddr &self, double mem_factor)
@@ -300,51 +309,53 @@ int ObDetectManager::unregister_detectable_id(const ObDetectableId &detectable_i
   return ret;
 }
 
-int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id, ObDetectCallbackNode *cb_node,
-                                         uint64_t &node_sequence_id, bool need_ref)
+int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id,
+                                            ObIDetectCallback *callback)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cb_node)) {
+  if (OB_ISNULL(callback)) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "[DM] invaild cb node pointer");
+    LIB_LOG(WARN, "[DM] invalid callback pointer");
   } else {
-    // if need_ref is true, which means that work thread may use cb, so add ref_count in case of deleting cb during ObDetectCallbackNodeExecuteCall
-    // typical scene: qc may change sqc's task state in callback upon receiving the report message from sqc, but dm may free callback already
-    if (need_ref) {
-      cb_node->cb_->inc_ref_count();
-    }
-    node_sequence_id = cb_node->sequence_id_;
+    ObDMCallbackDList callback_dlist;
     // A slightly more complicated but safe inspection operation
     // Since map does not provide the operation of "create or modify", nor does it provide the ability to hold bucket locks
     // Therefore, add cyclic verification to prevent the occurrence of
     // thread a failed to create --> thread b erased --> thread a failed to modify
     // Such a situation
-    ObObDetectCallbackNodeSetCall set_node_call(this);
+    ObDetectCallbackSetCall set_call(this, callback);
     do {
-      if (OB_HASH_EXIST == (ret = all_check_items_.set_refactored(detectable_id, cb_node, 0, 0, 0, &set_node_call))) {
-        ObDetectCallbackNodeAddCall add_node_call(cb_node, this);
-        ret = all_check_items_.atomic_refactored(detectable_id, add_node_call);
-        // If it is an empty queue, it means that another thread wants to delete the node but unexpectedly got the lock by this thread
+      // hashmap copy value before set_refactored, if set_refactored failed(return HASH_NOT_EXIST),
+      // the data of callback_dlist is moved to the copied one, the outside one is empty, we should
+      // reset it in the next while loop.
+      callback->reset();
+      callback_dlist.reset();
+      callback_dlist.add_last(callback);
+      ret = all_check_items_.set_refactored(detectable_id, callback_dlist, 0, 0, 0, &set_call);
+      if (OB_HASH_EXIST == ret) {
+        ObDetectCallbackAddCall add_call(callback, this);
+        ret = all_check_items_.atomic_refactored(detectable_id, add_call);
+        // If it is an empty queue, it means that another thread wants to delete the callback but unexpectedly got the lock by this thread
         // So do not delete, try to put again according to HASH_NOT_EXIST
-        if (add_node_call.is_empty()) {
+        if (add_call.is_empty()) {
           ret = OB_HASH_NOT_EXIST;
         }
       }
     } while (ret == OB_HASH_NOT_EXIST);
     // hashmap may set_refactored for alloc failed
     if OB_FAIL(ret) {
-      delete_cb_node(cb_node);
+      delete_callback(callback);
     }
   }
 
   if (OB_SUCC(ret)) {
-    LIB_LOG(DEBUG, "[DM] register_check_item", K(ret), K(detectable_id),
-            K(cb_node->cb_->get_detect_callback_type()), K(node_sequence_id));
+    LIB_LOG(DEBUG, "[DM] register_check_item", K(ret), K(detectable_id));
   }
   return ret;
 }
 
-int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id, const uint64_t &node_sequence_id)
+int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id,
+                                           const uint64_t &sequence_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -352,24 +363,25 @@ int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id, 
     LIB_LOG(ERROR, "[DM] detect manager not inited");
   } else if (detectable_id.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "[DM] invaild detectable_id", K(node_sequence_id) ,K(common::lbt()));
+    LIB_LOG(WARN, "[DM] invalid detectable_id", K(sequence_id) ,K(common::lbt()));
   } else {
-    // CHECK_MAP key: ObDetectableId, CHECK_MAP value: linked list with node type ObDetectCallbackNode*
-    // remove node from CHECK_MAP with detectable_id(CHECK_MAP key) and node_sequence_id(identify specific node in the linked list)
-    // remove kv pair from CHECK_MAP if this node is the last one in the linked list
-    ObDetectCallbackNodeRemoveCall remove_node_call(this, node_sequence_id);
+    // CHECK_MAP key: ObDetectableId, CHECK_MAP value: ObDList<ObIDetectCallback>
+    // Remove callback from CHECK_MAP with detectable_id(CHECK_MAP key) and sequence_id(identify
+    // specific callback in the linked list).
+    // Remove kv pair from CHECK_MAP if the linked list is empty.
+    ObDetectCallbackRemoveCall remove_call(this, sequence_id);
     bool is_erased = false;
-    if (OB_FAIL(all_check_items_.erase_if(detectable_id, remove_node_call, is_erased))) {
+    if (OB_FAIL(all_check_items_.erase_if(detectable_id, remove_call, is_erased))) {
       if (OB_HASH_NOT_EXIST == ret) {
-        // if not found, the possible reason is that node is removed by ObDetectCallbackNodeExecuteCall
+        // if not found, the possible reason is that callback is removed by ObDetectCallbackExecuteCall
         LIB_LOG(TRACE, "[DM] unregister cb failed, maybe removed by other thread",
-            K(detectable_id), K(node_sequence_id));
+            K(detectable_id), K(sequence_id));
       } else {
-        LIB_LOG(WARN, "[DM] unregister cb failed", K(ret), K(detectable_id), K(node_sequence_id));
+        LIB_LOG(WARN, "[DM] unregister cb failed", K(ret), K(detectable_id), K(sequence_id));
       }
     }
   }
-  LIB_LOG(DEBUG, "[DM] unregister_check_item", K(ret), K(detectable_id), K(node_sequence_id));
+  LIB_LOG(DEBUG, "[DM] unregister_check_item", K(ret), K(detectable_id), K(sequence_id));
   return ret;
 }
 
@@ -413,7 +425,7 @@ void ObDetectManager::do_detect_local(const ObDetectableId &detectable_id)
         // nop
       } else {
         // peer exits unexpectly, do detect callbacks
-        ObDetectCallbackNodeExecuteCall execute_call(this, detectable_id, self_);
+        ObDetectCallbackExecuteCall execute_call(this, detectable_id, self_);
         bool is_erased = false;
         IGNORE_RETURN all_check_items_.erase_if(detectable_id, execute_call, is_erased);
       }
@@ -429,158 +441,126 @@ void ObDetectManager::do_handle_one_result(const ObDetectableId &detectable_id, 
     if (check_state_finish_call.is_finished()) {
       // nop
     } else {
-      ObDetectCallbackNodeExecuteCall execute_call(this, detectable_id, rpc_status.dst_);
+      ObDetectCallbackExecuteCall execute_call(this, detectable_id, rpc_status.dst_);
       bool is_erased = false;
       IGNORE_RETURN all_check_items_.erase_if(detectable_id, execute_call, is_erased);
     }
   }
 }
 
-void ObDetectManager::delete_cb_node(ObDetectCallbackNode *&cb_node)
+void ObDetectManager::delete_callback(ObIDetectCallback *callback)
 {
   int ret = OB_SUCCESS;
-  // cb and cb_node allocated simultaneously, just need to free cb_node
-  LIB_LOG(DEBUG, "[DM] dm free cb ", K(cb_node->cb_));
-  cb_node->cb_->destroy();
-  cb_node->cb_ = nullptr;
-  LIB_LOG(DEBUG, "[DM] dm free cbnode ", K(cb_node));
-  mem_context_->free(cb_node);
-  cb_node = nullptr;
+  LIB_LOG(DEBUG, "[DM] dm free cb ", K(callback));
+  callback->destroy();
+  mem_context_->free(callback);
 }
 
-int ObDetectManager::ObObDetectCallbackNodeSetCall::operator()(const hash::HashMapPair<ObDetectableId,
-    ObDetectCallbackNode *> &entry)
+int ObDetectManager::ObDetectCallbackSetCall::operator()(const hash::HashMapPair<ObDetectableId,
+    ObDMCallbackDList> &entry)
 {
   int ret = OB_SUCCESS;
-  (void) dm_->dm_multi_list_.add_list_node_tail(entry.first, &entry.second->cb_->d_node_);
+  const ObDetectableId &id = entry.first;
+  (void) dm_->dm_multi_list_.add_list_node_tail(id, &callback_->d_node_);
   return ret;
 }
 
-void ObDetectManager::ObDetectCallbackNodeAddCall::operator()(hash::HashMapPair<ObDetectableId,
-    ObDetectCallbackNode *> &entry)
+void ObDetectManager::ObDetectCallbackAddCall::operator()(hash::HashMapPair<ObDetectableId,
+    ObDMCallbackDList> &entry)
 {
-  // The map only stores the head of the linked list, so add it directly from the head
-  if (entry.second != nullptr) {
-    cb_node_->next_ = entry.second;
-    entry.second->prev_ = cb_node_;
-    entry.second = cb_node_;
-    (void) dm_->dm_multi_list_.add_list_node_tail(entry.first, &cb_node_->cb_->d_node_);
-    is_empty_ = false;
-  } else {
-    is_empty_ = true;
+  const ObDetectableId &id = entry.first;
+  ObDMCallbackDList &dlist = entry.second;
+  is_empty_ = dlist.is_empty();
+  if (!is_empty_) {
+    // before add, unlink callback from the original linked list
+    callback_->reset();
+    dlist.add_last(callback_);
+    (void)dm_->dm_multi_list_.add_list_node_tail(id, &callback_->d_node_);
   }
 }
 
-bool ObDetectManager::ObDetectCallbackNodeRemoveCall::operator()(hash::HashMapPair<ObDetectableId,
-    ObDetectCallbackNode *> &entry)
+bool ObDetectManager::ObDetectCallbackRemoveCall::operator()(hash::HashMapPair<ObDetectableId,
+    ObDMCallbackDList> &entry)
 {
-  auto node = entry.second;
-  int node_cnt = 0; // node_cnt in linked list, only if node_cnt == 0 the kv pair can be deleted.
-  while (OB_NOT_NULL(node)) {
-    node_cnt++;
-    if (node_sequence_id_ == node->sequence_id_) {
-      found_node_ = true;
-      if (node->next_ != nullptr) {
-        node->next_->prev_ = node->prev_;
-        // loop will be break after found node, but next node is not null
-        // add node_cnt to prevent to delete the kv pair
-        node_cnt++;
-      }
-      if (node->prev_ != nullptr) {
-        node->prev_->next_ = node->next_;
-      } else {
-        // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
-        entry.second = node->next_;
-      }
-      (void) dm_->dm_multi_list_.remove_list_node(entry.first, &node->cb_->d_node_);
-      dm_->delete_cb_node(node);
-      node_cnt--;
+  const ObDetectableId &id = entry.first;
+  ObDMCallbackDList &dlist = entry.second;
+  DLIST_FOREACH_NORET(curr, dlist) {
+    if (sequence_id_ == curr->get_sequence_id()) {
+      dlist.remove(curr);
+      (void)dm_->dm_multi_list_.remove_list_node(id, &curr->d_node_);
+      dm_->delete_callback(curr);
       break;
     }
-    node = node->next_;
   }
-  // 0 == node_cnt means that the linked list is empty, return true so that erase_if can erase the kv pair
-  return (0 == node_cnt);
+  // if no callback in dlist, return true so that erase_if can erase the kv pair
+  return dlist.is_empty();
 }
 
-bool ObDetectManager::ObDetectCallbackNodeExecuteCall::operator()(hash::HashMapPair<ObDetectableId,
-    ObDetectCallbackNode *> &entry)
+bool ObDetectManager::ObDetectCallbackExecuteCall::operator()(hash::HashMapPair<ObDetectableId,
+    ObDMCallbackDList> &entry)
 {
   int ret = OB_SUCCESS;
   const ObDetectableId &detectable_id = entry.first;
-  ObDetectCallbackNode *node = entry.second;
-  int node_cnt = 0; // node_cnt in linked list, remove kv pair if the last node is removed
-  while (OB_NOT_NULL(node)) {
+  ObDMCallbackDList &dlist = entry.second;
+  DLIST_FOREACH_NORET(curr, dlist) {
     ret = OB_SUCCESS;
-    node_cnt++;
-    ObDetectCallbackNode *next_node = node->next_;
+    ObIDetectCallback *prev = curr->get_prev();
     // if a callback can be reentrant, don't set is_executed so that it can be do for several times
     // typical scene: qc detects sqc, if at least 2 sqc failed, both of them should be set not_need_report,
-    // the callback should be reentrant and node not set to executed
-    if (!node->is_executed()) {
+    // the callback should be reentrant and not set to executed
+    if (!curr->is_executed()) {
       LIB_LOG(WARN, "[DM] DM found peer not exist, execute detect callback",
-              K(node->cb_->get_trace_id()), K(from_svr_addr_),
-              K(detectable_id), K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
-      node->cb_->set_from_svr_addr(from_svr_addr_);
-      if (OB_FAIL(node->cb_->do_callback())) {
+              K(curr->get_trace_id()), K(from_svr_addr_), K(detectable_id),
+              K(curr->get_type()), K(curr->get_sequence_id()));
+      curr->set_from_svr_addr(from_svr_addr_);
+      if (OB_FAIL(curr->do_callback())) {
         // if do_callback failed, reset state to running for next detect loop
-        node->cb_->atomic_set_running(from_svr_addr_);
-        LIB_LOG(WARN, "[DM] failed to do_callback",
-                K(node->cb_->get_trace_id()), K(from_svr_addr_), K(detectable_id),
-                K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
+        curr->atomic_set_running(from_svr_addr_);
+        LIB_LOG(WARN, "[DM] failed to do_callback", K(curr->get_trace_id()), K(from_svr_addr_),
+                K(detectable_id), K(curr->get_type()), K(curr->get_sequence_id()));
       } else {
-        if (!node->cb_->reentrant()) {
-          node->set_executed();
+        if (!curr->reentrant()) {
+          curr->set_executed();
         }
         // ref_count > 0 means that cb is still referred by work thread, don‘t remove it from the linked list
-        int64_t ref_count = node->cb_->get_ref_count();
-        if (0 == ref_count) {
-          if (node->next_ != nullptr) {
-            node->next_->prev_ = node->prev_;
-          }
-          if (node->prev_ != nullptr) {
-            node->prev_->next_ = node->next_;
-          } else {
-            // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
-            entry.second = node->next_;
-          }
-          (void) dm_->dm_multi_list_.remove_list_node(entry.first, &node->cb_->d_node_);
-          dm_->delete_cb_node(node);
-          node_cnt--;
+        if (0 == curr->get_ref_count()) {
+          dlist.remove(curr);
+          (void)dm_->dm_multi_list_.remove_list_node(detectable_id, &curr->d_node_);
+          dm_->delete_callback(curr);
+          curr = prev;
         }
       }
     }
-    node = next_node;
   }
-  return 0 == node_cnt;
+  // if no callback in dlist, return true so that erase_if can erase the kv pair
+  return dlist.is_empty();
 }
 
 void ObDetectManager::ObCheckStateFinishCall::operator()(hash::HashMapPair<ObDetectableId,
-    ObDetectCallbackNode *> &entry)
+    ObDMCallbackDList> &entry)
 {
-  ObDetectCallbackNode *node = entry.second;
+  ObDMCallbackDList &dlist = entry.second;
   // check task has already been marked as finished
-  while (OB_NOT_NULL(node)) {
+  DLIST_FOREACH_NORET(curr, dlist) {
     ObTaskState state = ObTaskState::RUNNING;
-    if (OB_SUCCESS == node->cb_->atomic_set_finished(addr_, &state)) {
+    if (OB_SUCCESS == curr->atomic_set_finished(addr_, &state)) {
       if (ObTaskState::FINISHED == state) {
         finished_ = true;
       }
       break;
     }
-    node = node->next_;
   }
 }
 
-void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetectableId, ObDetectCallbackNode *> &entry)
+void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetectableId,
+    ObDMCallbackDList> &entry)
 {
   int ret = OB_SUCCESS;
   const ObDetectableId &peer_id = entry.first;
-  ObDetectCallbackNode *cb_node = entry.second;
-
-  while (OB_NOT_NULL(cb_node)) {
-    if (!cb_node->is_executed()) {
-      ObIArray<ObPeerTaskState> &peer_states = cb_node->cb_->get_peer_states();
+  ObDMCallbackDList &dlist = entry.second;
+  DLIST_FOREACH_NORET(curr, dlist) {
+    if (!curr->is_executed()) {
+      ObIArray<ObPeerTaskState> &peer_states = curr->get_peer_states();
       ARRAY_FOREACH_NORET(peer_states, idx) {
         ObPeerTaskState &peer_state = peer_states.at(idx);
         // only detect running tasks
@@ -592,7 +572,7 @@ void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetecta
           if (OB_FAIL((*req_ptr_ptr)->peer_ids_.set_refactored(peer_id, 0/* flag */))) {
             if (OB_HASH_EXIST != ret) {
               LIB_LOG(WARN, "[DM] peer_ids_ set_refactored failed", K(peer_id),
-                      K(peer_state.peer_addr_), K(cb_node->cb_->get_trace_id()));
+                      K(peer_state.peer_addr_), K(curr->get_trace_id()));
             } else {
               // this peer id has already been set, ignore
               ret = OB_SUCCESS;
@@ -604,18 +584,17 @@ void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetecta
           if (OB_ISNULL(req_ptr)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LIB_LOG(WARN, "[DM] failed to new ObTaskStateDetectReq", K(peer_id),
-                    K(peer_state.peer_addr_), K(cb_node->cb_->get_trace_id()));
+                    K(peer_state.peer_addr_), K(curr->get_trace_id()));
           } else if (OB_FAIL(req_ptr->peer_ids_.set_refactored(peer_id, 0/* flag */))) {
             LIB_LOG(WARN, "[DM] peer_ids_ set_refactored failed", K(peer_id),
-                    K(peer_state.peer_addr_), K(cb_node->cb_->get_trace_id()));
+                    K(peer_state.peer_addr_), K(curr->get_trace_id()));
           } else if (OB_FAIL(req_map_.set_refactored(peer_state.peer_addr_, req_ptr))) {
             LIB_LOG(WARN, "[DM] req_map_ set req failed", K(peer_state.peer_addr_),
-                    K(ret), K(peer_state.peer_addr_), K(cb_node->cb_->get_trace_id()));
+                    K(ret), K(peer_state.peer_addr_), K(curr->get_trace_id()));
           }
         }
       }
     }
-    cb_node = cb_node->next_;
   }
 }
 

@@ -98,6 +98,9 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ or allocator_ is NULL",
              KP(session_info_), K(allocator_), K(ret));
+  } else if (OB_UNLIKELY(is_external_catalog_id(session_info_->get_current_default_catalog()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create outline in catalog is");
   } else if (OB_ISNULL(node)
       || OB_UNLIKELY(node->type_ != T_CREATE_OUTLINE)
       || OB_UNLIKELY(node->num_child_ != OUTLINE_CHILD_COUNT)) {

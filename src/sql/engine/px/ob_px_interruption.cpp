@@ -120,6 +120,7 @@ int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta &sqc, int code)
 void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &code, int64_t px_worker_execute_start_schema_version)
 {
   int ret = OB_SUCCESS;
+  int prev_code = code;
   if (is_schema_error(code) && OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(exec_ctx->get_my_session())) {
     uint64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
     ObSchemaGetterGuard current_moment_schema_guard;
@@ -167,7 +168,7 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
       code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     }
 
-    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(ret), K(code), K(tenant_id), K(px_worker_execute_start_schema_version), K(current_moment_schema_version),
+    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(ret), K(prev_code), K(code), K(tenant_id), K(px_worker_execute_start_schema_version), K(current_moment_schema_version),
               K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
   } else {
     LOG_TRACE("update_schema_error_code, exec_ctx is null", K(lbt()));
@@ -182,11 +183,9 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
                            GETTID(),
                            GCTX.self_addr(),
                            "SQC ABORT QC");
-  ObInterruptCode orig_int_code = int_code;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = sqc.get_interrupt_id().query_interrupt_id_;
 
-  update_schema_error_code(exec_ctx, int_code.code_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(sqc.get_qc_addr(),
@@ -194,7 +193,6 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
                                         int_code))) {
     LOG_WARN("fail send interrupt signal to qc",
               "addr", sqc.get_qc_addr(),
-              K(orig_int_code),
               K(int_code),
               K(ret));
   } else {
@@ -203,7 +201,6 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exe
               "qc_id", sqc.get_qc_id(),
               "interrupt_id", interrupt_id,
               "sqc_id", sqc.get_sqc_id(),
-              K(orig_int_code),
               K(int_code));
   }
   return ret;
@@ -218,11 +215,9 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
                            GETTID(),
                            GCTX.self_addr(),
                            "TASK ABORT QC");
-  ObInterruptCode orig_int_code = int_code;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = task.get_interrupt_id().query_interrupt_id_;
 
-  update_schema_error_code(exec_ctx, int_code.code_, task.px_worker_execute_start_schema_version_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(),
@@ -231,7 +226,6 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
     LOG_WARN("fail send interrupt signal to qc",
               "addr", task.get_qc_addr(),
               K(int_code),
-              K(orig_int_code),
               K(ret));
   } else {
     LOG_TRACE("task notify qc to interrupt",
@@ -240,7 +234,6 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_
               "task_id", task.get_task_id(),
               "task_co_id", task.get_task_co_id(),
               "interrupt_id", interrupt_id,
-              K(orig_int_code),
               K(int_code));
   }
   return ret;

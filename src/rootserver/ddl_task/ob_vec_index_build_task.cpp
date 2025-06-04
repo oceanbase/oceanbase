@@ -15,6 +15,8 @@
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_vec_index_builder_util.h"
@@ -48,6 +50,7 @@ ObVecIndexBuildTask::ObVecIndexBuildTask()
     drop_index_task_submitted_(false),
     drop_index_task_id_(-1),
     is_rebuild_index_(false),
+    is_offline_rebuild_(false),
     root_service_(nullptr),
     create_index_arg_(),
     dependent_task_result_map_()
@@ -74,15 +77,16 @@ int ObVecIndexBuildTask::init(
 {
   int ret = OB_SUCCESS;
   const bool is_rebuild_index = create_index_arg.is_rebuild_index_;
+  const bool is_offline_rebuild = create_index_arg.is_offline_rebuild_;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("root_service is null", K(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID ||
                          task_id <= 0 ||
                          OB_ISNULL(data_table_schema) ||
@@ -131,6 +135,7 @@ int ObVecIndexBuildTask::init(
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
     is_rebuild_index_ = is_rebuild_index;
+    is_offline_rebuild_ = is_offline_rebuild;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(task_status_ = static_cast<ObDDLTaskStatus>(task_status))) {
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
@@ -159,9 +164,9 @@ int ObVecIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("root_service is null", K(ret), KP(root_service_));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service", K(ret));
+    LOG_WARN("ddl service not started", KR(ret));
   } else if (!task_record.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
@@ -195,6 +200,11 @@ int ObVecIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     }
   }
   return ret;
+}
+
+bool ObVecIndexBuildTask::is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema)
+{
+  return index_schema.is_vec_index() && !index_schema.is_vec_spiv_index();
 }
 
 int ObVecIndexBuildTask::process()
@@ -322,23 +332,25 @@ int ObVecIndexBuildTask::check_health()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!root_service_->in_service()) {
+  } else if (!ObDDLServiceLauncher::is_ddl_service_started()) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("root service not in service, not need retry", K(ret));
-    need_retry_ = false; // only stop run the task, need not clean up task context
+    LOG_WARN("ddl service not started", KR(ret));
+    need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
   } else if (status == ObDDLTaskStatus::FAIL) {
     /*already failed, and have submitted drop index task, do nothing*/
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else {
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = nullptr;
     bool is_data_table_exist = false;
     bool is_all_indexes_exist = false;
-    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_,
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
@@ -392,7 +404,10 @@ int ObVecIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
   ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_schema = nullptr;
-  if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else {
     bool rowkey_vid_exist = true;
@@ -1096,7 +1111,6 @@ int ObVecIndexBuildTask::update_index_status_in_schema(
     }
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    obrpc::ObCommonRpcProxy *common_rpc = nullptr;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(),
                                                       ddl_rpc_timeout))) {
@@ -1106,11 +1120,10 @@ int ObVecIndexBuildTask::update_index_status_in_schema(
                                                       tmp_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
     } else if (OB_FALSE_IT(ddl_rpc_timeout += tmp_timeout)) {
-    } else if (OB_FALSE_IT(common_rpc = root_service_->get_ddl_service().get_common_rpc())) {
-    } else if (OB_ISNULL(common_rpc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("common rpc is nullptr", K(ret));
-    } else if (OB_FAIL(common_rpc->to(GCTX.self_addr()).timeout(ddl_rpc_timeout).
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr()).timeout(ddl_rpc_timeout).
                        update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
@@ -1134,6 +1147,7 @@ int ObVecIndexBuildTask::serialize_params_to_message(
   int8_t index_snapshot_data_task_submitted = static_cast<int8_t>(index_snapshot_data_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1232,6 +1246,11 @@ int ObVecIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_rebuild_index))) {
     LOG_WARN("serialize drop index task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_len,
+                                              pos,
+                                              is_offline_rebuild))) {
+    LOG_WARN("serialize is_offline_rebuild failed", K(ret));
   }
   return ret;
 }
@@ -1250,166 +1269,174 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t index_snapshot_data_task_submitted = 0;
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
-  obrpc::ObCreateIndexArg tmp_arg;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
-                  nullptr == buf ||
-                  data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
-                                                                buf,
-                                                                data_len,
-                                                                pos))) {
-    LOG_WARN("ObDDLTask deserlize failed", K(ret));
-  } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
-    LOG_WARN("deserialize table failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
-    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
-  } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
-    LOG_WARN("deep copy create index arg failed", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len, pos, rowkey_vid_aux_table_id_))) {
-    LOG_WARN("fail to deserialize rowkey vid table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           vid_rowkey_aux_table_id_))) {
-    LOG_WARN("fail to deserialize vid rowkey table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           delta_buffer_table_id_))) {
-    LOG_WARN("fail to deserialize delta buf index aux table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           index_id_table_id_))) {
-    LOG_WARN("fail to deserialize index id table id", K(ret));
-  } else if (OB_FAIL(serialization::decode(buf,
-                                           data_len,
-                                           pos,
-                                           index_snapshot_data_table_id_))) {
-    LOG_WARN("fail to deserialize snapthot table id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &rowkey_vid_submitted))) {
-    LOG_WARN("fail to deserialize rowkey vid task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &vid_rowkey_submitted))) {
-    LOG_WARN("fail to deserialize vid rowkey task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &delta_buffer_task_submitted))) {
-    LOG_WARN("fail to deserialize vid index aux task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &index_id_task_submitted))) {
-    LOG_WARN("fail to deserialize index id task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &index_snapshot_data_task_submitted))) {
-    LOG_WARN("fail to deserialize snapshot task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &rowkey_vid_task_id_))) {
-    LOG_WARN("fail to deserialize rowkey vid task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &vid_rowkey_task_id_))) {
-    LOG_WARN("fail to deserialize vid rowkey task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &delta_buffer_task_id_))) {
-    LOG_WARN("fail to deserialize delta buffer index aux task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &index_id_task_id_))) {
-    LOG_WARN("fail to deserialize index id task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &index_snapshot_task_id_))) {
-    LOG_WARN("fail to deserialize index sanpshot id task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &drop_index_submitted))) {
-    LOG_WARN("fail to deserialize drop vec index task submmitted", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf,
-                                               data_len,
-                                               pos,
-                                               &drop_index_task_id_))) {
-    LOG_WARN("fail to deserialize drop vec index task id", K(ret));
-  } else if (OB_FAIL(serialization::decode_i8(buf,
-                                              data_len,
-                                              pos,
-                                              &is_rebuild_index))) {
-    LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
-                                                       lib::ObLabel("DepTasMap")))) {
-    LOG_WARN("create dependent task map failed", K(ret));
-  } else {
-    rowkey_vid_task_submitted_ = rowkey_vid_submitted;
-    vid_rowkey_task_submitted_ = vid_rowkey_submitted;
-    delta_buffer_task_submitted_ = delta_buffer_task_submitted;
-    index_id_task_submitted_ = index_id_task_submitted;
-    index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
-    drop_index_task_submitted_ = drop_index_submitted;
-    is_rebuild_index_ = is_rebuild_index;
-    if (rowkey_vid_task_id_ > 0) {
-      share::ObDomainDependTaskStatus rowkey_vid_status;
-      rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_vid_aux_table_id_,
-                                                            rowkey_vid_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(rowkey_vid_aux_table_id_),
-            K(rowkey_vid_status));
+  int8_t is_offline_rebuild = 0;
+  SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
+    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+                    nullptr == buf ||
+                    data_len <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+    } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id,
+                                                                  buf,
+                                                                  data_len,
+                                                                  pos))) {
+      LOG_WARN("ObDDLTask deserlize failed", K(ret));
+    } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize table failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+      LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
+    } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
+      LOG_WARN("deep copy create index arg failed", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len, pos, rowkey_vid_aux_table_id_))) {
+      LOG_WARN("fail to deserialize rowkey vid table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            vid_rowkey_aux_table_id_))) {
+      LOG_WARN("fail to deserialize vid rowkey table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            delta_buffer_table_id_))) {
+      LOG_WARN("fail to deserialize delta buf index aux table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            index_id_table_id_))) {
+      LOG_WARN("fail to deserialize index id table id", K(ret));
+    } else if (OB_FAIL(serialization::decode(buf,
+                                            data_len,
+                                            pos,
+                                            index_snapshot_data_table_id_))) {
+      LOG_WARN("fail to deserialize snapthot table id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_vid_submitted))) {
+      LOG_WARN("fail to deserialize rowkey vid task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &vid_rowkey_submitted))) {
+      LOG_WARN("fail to deserialize vid rowkey task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &delta_buffer_task_submitted))) {
+      LOG_WARN("fail to deserialize vid index aux task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &index_id_task_submitted))) {
+      LOG_WARN("fail to deserialize index id task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &index_snapshot_data_task_submitted))) {
+      LOG_WARN("fail to deserialize snapshot task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &rowkey_vid_task_id_))) {
+      LOG_WARN("fail to deserialize rowkey vid task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &vid_rowkey_task_id_))) {
+      LOG_WARN("fail to deserialize vid rowkey task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &delta_buffer_task_id_))) {
+      LOG_WARN("fail to deserialize delta buffer index aux task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &index_id_task_id_))) {
+      LOG_WARN("fail to deserialize index id task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &index_snapshot_task_id_))) {
+      LOG_WARN("fail to deserialize index sanpshot id task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_submitted))) {
+      LOG_WARN("fail to deserialize drop vec index task submmitted", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf,
+                                                data_len,
+                                                pos,
+                                                &drop_index_task_id_))) {
+      LOG_WARN("fail to deserialize drop vec index task id", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_rebuild_index))) {
+      LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf,
+                                                data_len,
+                                                pos,
+                                                &is_offline_rebuild))) {
+      LOG_WARN("fail to deserialize is_offline_rebuild", K(ret));
+    } else if (!dependent_task_result_map_.created() &&
+              OB_FAIL(dependent_task_result_map_.create(OB_VEC_INDEX_BUILD_CHILD_TASK_NUM,
+                                                        lib::ObLabel("DepTasMap")))) {
+      LOG_WARN("create dependent task map failed", K(ret));
+    } else {
+      rowkey_vid_task_submitted_ = rowkey_vid_submitted;
+      vid_rowkey_task_submitted_ = vid_rowkey_submitted;
+      delta_buffer_task_submitted_ = delta_buffer_task_submitted;
+      index_id_task_submitted_ = index_id_task_submitted;
+      index_snapshot_data_task_submitted_ = index_snapshot_data_task_submitted;
+      drop_index_task_submitted_ = drop_index_submitted;
+      is_rebuild_index_ = is_rebuild_index;
+      is_offline_rebuild_ = is_offline_rebuild;
+      if (rowkey_vid_task_id_ > 0) {
+        share::ObDomainDependTaskStatus rowkey_vid_status;
+        rowkey_vid_status.task_id_ = rowkey_vid_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(rowkey_vid_aux_table_id_,
+                                                              rowkey_vid_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(rowkey_vid_aux_table_id_),
+              K(rowkey_vid_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && vid_rowkey_task_id_ > 0) {
-      share::ObDomainDependTaskStatus vid_rowkey_status;
-      vid_rowkey_status.task_id_ = vid_rowkey_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(vid_rowkey_aux_table_id_,
-                                                            vid_rowkey_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(vid_rowkey_aux_table_id_),
-            K(vid_rowkey_status));
+      if (OB_SUCC(ret) && vid_rowkey_task_id_ > 0) {
+        share::ObDomainDependTaskStatus vid_rowkey_status;
+        vid_rowkey_status.task_id_ = vid_rowkey_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(vid_rowkey_aux_table_id_,
+                                                              vid_rowkey_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(vid_rowkey_aux_table_id_),
+              K(vid_rowkey_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && delta_buffer_task_id_ > 0) {
-      share::ObDomainDependTaskStatus delta_buf_aux_status;
-      delta_buf_aux_status.task_id_ = delta_buffer_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(delta_buffer_table_id_,
-                                                            delta_buf_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(delta_buffer_table_id_),
-            K(delta_buf_aux_status));
+      if (OB_SUCC(ret) && delta_buffer_task_id_ > 0) {
+        share::ObDomainDependTaskStatus delta_buf_aux_status;
+        delta_buf_aux_status.task_id_ = delta_buffer_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(delta_buffer_table_id_,
+                                                              delta_buf_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(delta_buffer_table_id_),
+              K(delta_buf_aux_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && index_id_task_id_ > 0) {
-      share::ObDomainDependTaskStatus index_id_aux_status;
-      index_id_aux_status.task_id_ = index_id_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(index_id_table_id_,
-                                                            index_id_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(index_id_table_id_),
-            K(index_id_aux_status));
+      if (OB_SUCC(ret) && index_id_task_id_ > 0) {
+        share::ObDomainDependTaskStatus index_id_aux_status;
+        index_id_aux_status.task_id_ = index_id_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(index_id_table_id_,
+                                                              index_id_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(index_id_table_id_),
+              K(index_id_aux_status));
+        }
       }
-    }
-    if (OB_SUCC(ret) && index_snapshot_task_id_ > 0) {
-      share::ObDomainDependTaskStatus index_snapshot_aux_status;
-      index_snapshot_aux_status.task_id_ = index_snapshot_task_id_;
-      if (OB_FAIL(dependent_task_result_map_.set_refactored(index_snapshot_data_table_id_,
-                                                            index_snapshot_aux_status))) {
-        LOG_WARN("set dependent task map failed", K(ret), K(index_snapshot_data_table_id_),
-            K(index_snapshot_aux_status));
+      if (OB_SUCC(ret) && index_snapshot_task_id_ > 0) {
+        share::ObDomainDependTaskStatus index_snapshot_aux_status;
+        index_snapshot_aux_status.task_id_ = index_snapshot_task_id_;
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(index_snapshot_data_table_id_,
+                                                              index_snapshot_aux_status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(index_snapshot_data_table_id_),
+              K(index_snapshot_aux_status));
+        }
       }
     }
   }
@@ -1425,6 +1452,7 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
   int8_t index_snapshot_data_task_submitted = static_cast<int8_t>(index_snapshot_data_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_offline_rebuild = static_cast<int8_t>(is_offline_rebuild_);
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length(rowkey_vid_aux_table_id_)
@@ -1444,7 +1472,8 @@ int64_t ObVecIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(index_snapshot_task_id_)
       + serialization::encoded_length_i8(drop_index_submitted)
       + serialization::encoded_length_i64(drop_index_task_id_)
-      + serialization::encoded_length_i8(is_rebuild_index);
+      + serialization::encoded_length_i8(is_rebuild_index)
+      + serialization::encoded_length_i8(is_offline_rebuild);
 }
 
 int ObVecIndexBuildTask::print_child_task_ids(char *buf, int64_t len)
@@ -1763,13 +1792,12 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
   ObString index_name;
   ObSqlString drop_index_sql;
   bool is_index_exist = true;
-  ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
   bool has_aux_table = (delta_buffer_table_id_ != OB_INVALID_ID);
   uint64_t index_table_id = has_aux_table ? delta_buffer_table_id_ : index_table_id_;
-  if (OB_ISNULL(root_service_)) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_WARN("should not be null", K(ret));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+  if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_), KP(GCTX.rs_rpc_proxy_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_INVALID_ID != rowkey_vid_aux_table_id_ &&
              OB_FAIL(drop_index_arg.index_ids_.push_back(rowkey_vid_aux_table_id_))) {
@@ -1812,11 +1840,12 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
     drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
+    drop_index_arg.is_hidden_         = is_offline_rebuild_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
       LOG_WARN("ddl sim failure", KR(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index_on_failed(drop_index_arg, drop_index_res))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(ddl_rpc_timeout).drop_index_on_failed(drop_index_arg, drop_index_res))) {
       LOG_WARN("drop index failed", KR(ret), K(ddl_rpc_timeout));
     } else {
       drop_index_task_submitted_ = true;
@@ -1924,21 +1953,20 @@ int ObVecIndexBuildTask::cleanup_impl()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rootservice is null", K(ret));
   } else if (OB_FAIL(report_error_code(unused_str))) {
     LOG_WARN("report error code failed", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
   } else {
     const uint64_t data_table_id = object_id_;
     const uint64_t index_table_id = index_table_id_;
-    ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_schema = nullptr;
     int64_t refreshed_schema_version = 0;
     ObTableLockOwnerID owner_id;
     ObMySQLTransaction trans;
-    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_,
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
@@ -1948,7 +1976,7 @@ int ObVecIndexBuildTask::cleanup_impl()
     } else if (OB_ISNULL(data_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("fail to get table schema", K(ret), KP(data_schema));
-    } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), dst_tenant_id_))) {
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                    task_id_))) {
@@ -1972,7 +2000,7 @@ int ObVecIndexBuildTask::cleanup_impl()
   DEBUG_SYNC(CREATE_INDEX_SUCCESS);
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service_->get_sql_proxy(),
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_,
                                                             tenant_id_,
                                                             task_id_))) {
     LOG_WARN("delete task record failed", K(ret), K(task_id_), K(schema_version_));
@@ -1982,9 +2010,9 @@ int ObVecIndexBuildTask::cleanup_impl()
 
   if (OB_SUCC(ret) && parent_task_id_ > 0) {
     const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
-    root_service_->get_ddl_task_scheduler().on_ddl_task_finish(parent_task_id,
-                                                               get_task_key(),
-                                                               ret_code_, trace_id_);
+    ObSysDDLSchedulerUtil::on_ddl_task_finish(parent_task_id,
+                                              get_task_key(),
+                                              ret_code_, trace_id_);
   }
   LOG_INFO("clean task finished", K(ret), K(*this));
   return ret;

@@ -171,13 +171,14 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
     if (ObJsonNodeType::J_STRING != val->json_type()) {
       LOG_WARN("Json argument invalid", K(ret));
       ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "output mode should be string default or all");
     } else if (0 == ObString(val->get_data_length(), val->get_data()).case_compare("DEFAULT")) {
       output_mode_ = DEFAULT;
     } else if (0 == ObString(val->get_data_length(), val->get_data()).case_compare("ALL")) {
       output_mode_ = ALL;
     } else {
       ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "output mode");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "output mode should be string default or all");
     }
   } else if (0 == str.case_compare(STOPWORDS_LIST_STR)) {
     ret = OB_NOT_SUPPORTED;
@@ -186,11 +187,14 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
     if (ObJsonNodeType::J_ARRAY != val->json_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Additional args should be an array", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser arguments");
     } else {
       ObString json_str;
       if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, json_str))) {
         LOG_WARN("Fail to tokenize array to props json", K(ret));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser arguments");
+        ObSqlString message;
+        message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
       } else {
         properties_ = json_str;
       }
@@ -198,6 +202,9 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
   } else {
     LOG_WARN("Unsupported parameter", K(ret), K(str));
     ret = OB_INVALID_ARGUMENT;
+    ObSqlString message;
+    message.append_fmt("config: %s", str.ptr());
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
   }
   return ret;
 }

@@ -140,14 +140,15 @@ public:
   // usage.
   transaction::ObTransID get_reader_tx_id() const { return ctx_->tx_id_; }
   transaction::ObTransID get_snapshot_tx_id() const { return ctx_->snapshot_.tx_id_; }
+  int64_t get_major_snapshot() const { return ctx_->major_snapshot_; }
 
-  TO_STRING_KV(KPC_(value), KPC_(version_iter), KPC_(ctx), K_(memtable_ls_id));
+  TO_STRING_KV(KPC_(value), KPC_(version_iter), KPC_(ctx), K_(memtable_ls_id), K(get_major_snapshot()));
+
 private:
   int lock_for_read_(const ObQueryFlag &flag);
   int lock_for_read_inner_(const ObQueryFlag &flag, ObMvccTransNode *&iter);
   int try_cleanout_tx_node_(ObMvccTransNode *tnode);
   void move_to_next_node_();
-  void lock_for_read_end(const int64_t lock_start_time, int64_t ret) const;
 private:
   static const int64_t WAIT_COMMIT_US = 20 * 1000;
 private:

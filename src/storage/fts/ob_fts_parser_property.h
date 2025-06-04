@@ -22,6 +22,8 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "storage/fts/ob_fts_literal.h"
 
+#include <cstdint>
+
 namespace oceanbase
 {
 namespace storage
@@ -46,6 +48,8 @@ public:
   int config_set_dict_table(const ObString &str);
   int config_set_quantifier_table(const ObString &str);
   int config_set_ik_mode(const ObString &ik_mode);
+  int config_set_min_ngram_token_size(const int64_t size);
+  int config_set_max_ngram_token_size(const int64_t size);
 
   int config_get_min_token_size(int64_t &size) const;
   int config_get_max_token_size(int64_t &size) const;
@@ -54,12 +58,12 @@ public:
   int config_get_dict_table(ObString &str) const;
   int config_get_quantifier_table(ObString &str) const;
   int config_get_ik_mode(ObString &ik_mode) const;
+  int config_get_min_ngram_token_size(int64_t &size) const;
+  int config_get_max_ngram_token_size(int64_t &size) const;
 
   int rebuild_props_for_ddl(const ObString &parser_name,
                             const common::ObCollationType &type,
                             const bool log_to_user);
-
-  int check_conflict_config_for_resolve(bool &has_conflict_config) const;
 
   int check_unsupported_config(const char **config_array,
                                int32_t config_count,
@@ -85,6 +89,18 @@ public:
            && size <= ObFTSLiteral::FT_NGRAM_TOKEN_SIZE_UPPER_BOUND;
   }
 
+  static bool is_valid_min_ngram_token_size(const int64_t size)
+  {
+    return size >= ObFTSLiteral::FT_NGRAM_MIN_TOKEN_SIZE_LOWER_BOUND
+           && size <= ObFTSLiteral::FT_NGRAM_MIN_TOKEN_SIZE_UPPER_BOUND;
+  }
+
+  static bool is_valid_max_ngram_token_size(const int64_t size)
+  {
+    return size >= ObFTSLiteral::FT_NGRAM_MAX_TOKEN_SIZE_LOWER_BOUND
+           && size <= ObFTSLiteral::FT_NGRAM_MAX_TOKEN_SIZE_UPPER_BOUND;
+  }
+
   static int tokenize_array_to_props_json(ObIAllocator &allocator,
                                           ObIJsonBase *array,
                                           ObString &json_str);
@@ -101,6 +117,7 @@ private:
   int ngram_rebuild_props_for_ddl(bool log_to_user);
   int space_rebuild_props_for_ddl(bool log_to_user);
   int beng_rebuild_props_for_ddl(bool log_to_user);
+  int ngram2_rebuild_props_for_ddl(bool log_to_user);
   int plugin_rebuild_props_for_ddl(bool log_to_user);
 
 private:
@@ -123,7 +140,9 @@ public:
     return min_token_size_ == other.min_token_size_ && max_token_size_ == other.max_token_size_
            && ngram_token_size_ == other.ngram_token_size_ && ik_mode_smart_ == other.ik_mode_smart_
            && stopword_table_ == other.stopword_table_ && dict_table_ == other.dict_table_
-           && quantifier_table_ == other.quantifier_table_;
+           && quantifier_table_ == other.quantifier_table_
+           && min_ngram_token_size_ == other.min_ngram_token_size_
+           && max_ngram_token_size_ == other.max_ngram_token_size_;
   }
 
   TO_STRING_KV(K_(min_token_size),
@@ -131,7 +150,10 @@ public:
                K_(ngram_token_size),
                K_(stopword_table),
                K_(dict_table),
-               K_(quantifier_table));
+               K_(quantifier_table),
+               K_(min_ngram_token_size),
+               K_(max_ngram_token_size),
+               K_(ik_mode_smart));
 
 public:
   int64_t min_token_size_;
@@ -141,6 +163,8 @@ public:
   common::ObString stopword_table_;
   common::ObString dict_table_;
   common::ObString quantifier_table_;
+  int64_t min_ngram_token_size_;
+  int64_t max_ngram_token_size_;
 };
 
 } // end namespace storage

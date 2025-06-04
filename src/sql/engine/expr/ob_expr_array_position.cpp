@@ -219,7 +219,7 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
       eval_flags.set(j);
       if (arr_vec->is_null(j)) {
         is_null_res = true;
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_string = arr_vec->get_string(j);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator,
                                             ctx,
@@ -228,9 +228,6 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
                                             src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, j, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
 
       if (OB_FAIL(ret)) {
@@ -369,11 +366,12 @@ int ObExprArrayPosition::array_position_vector(const ObExpr &expr,
   case ObCollectionSQLTC: {
     const uint16_t val_subshemaid = expr.args_[1]->obj_meta_.get_subschema_id();
     ObIArrayType *val = NULL;
-    if (OB_FAIL(ObArrayExprUtils::get_array_obj(alloc,
-                                      ctx,
-                                      val_subshemaid,
-                                      val_vec->get_string(vec_idx),
-                                      val))) {
+    ObString arr_str = val_vec->get_string(vec_idx);
+    if (OB_FAIL(ObNestedVectorFunc::construct_param(alloc,
+                                        ctx,
+                                        val_subshemaid,
+                                        arr_str,
+                                        val))) {
       LOG_WARN("construct array obj failed", K(ret));
     } else if (OB_FAIL(ObArrayUtil::position(*src_arr, *val, idx))) {
       LOG_WARN("array position failed", K(ret));

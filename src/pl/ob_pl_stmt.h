@@ -1172,6 +1172,8 @@ public:
     SELF_ATTRIBUTE,
     DBLINK_PKG_NS,      // dblink package
     UDT_MEMBER_ROUTINE, //
+    TRIGGER,            // Trigger
+    SEQUENCE            // Sequence
   };
 
   ObPLExternalNS(const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS *parent_ns)
@@ -1186,9 +1188,14 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *dep_table) const;
-  int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
-                              uint64_t &parent_id, int64_t &var_idx) const;
+                      const pl::ObPLDependencyTable *dep_table,
+                      bool full_schema) const;
+  int resolve_external_symbol(const common::ObString &name,
+                              ExternalType &type,
+                              ObPLDataType &data_type,
+                              uint64_t &parent_id,
+                              int64_t &var_idx,
+                              bool full_schema = false) const;
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,
@@ -1604,8 +1611,11 @@ public:
        compile_flag_(),
        can_cached_(true),
        priv_user_(),
+       invoker_database_id_(OB_INVALID_ID),
        analyze_flag_(0)
-  {}
+  {
+    CHAR_CARRAY_INIT(invoker_database_name_);
+  }
 
   virtual ~ObPLCompileUnitAST();
 
@@ -1655,6 +1665,14 @@ public:
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
   inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
+  inline char* get_invoker_db_name() { return invoker_database_name_; }
+  inline void set_invoker_db_name(const ObString &database_name) {
+    uint64_t db_name_len = min(database_name.length(), OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN);
+    MEMCPY(invoker_database_name_, database_name.ptr(), db_name_len);
+    invoker_database_name_[db_name_len] = '\0';
+  }
+  inline uint64_t get_invoker_db_id() { return invoker_database_id_; }
+  inline void set_invoker_db_id(uint64_t db_id) { invoker_database_id_ = db_id; }
 
   inline bool get_can_cached() const { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
@@ -1739,6 +1757,8 @@ protected:
   ObPLCompileFlag compile_flag_;
   bool can_cached_;
   ObString priv_user_;
+  char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
+  uint64_t invoker_database_id_; //invoker database_id
   union {
     uint64_t analyze_flag_;
     struct {
@@ -2236,6 +2256,7 @@ public:
       pl_integer_ranges_(allocator),
       data_type_(allocator),
       into_data_type_(allocator),
+      into_name_(allocator),
       bulk_(false),
       is_type_record_(false) {}
   virtual ~ObPLInto() {}
@@ -2256,6 +2277,9 @@ public:
   inline const common::ObIArray<ObPLDataType> &get_into_data_type() const { return into_data_type_; }
   inline common::ObIArray<ObPLDataType> &get_into_data_type() { return into_data_type_; }
   inline const ObPLDataType &get_into_data_type(int64_t i) const { return into_data_type_.at(i); }
+  inline int add_into_name(common::ObString& name) { return into_name_.push_back(name); }
+  inline const common::ObString&  get_into_name(int64_t i) const { return into_name_.at(i); }
+  inline common::ObIArray<common::ObString> &get_into_name() { return into_name_; }
   inline bool is_type_record() const { return is_type_record_; }
   inline bool is_bulk() const { return bulk_; }
   inline void set_bulk() { bulk_ = true; }
@@ -2286,6 +2310,7 @@ protected:
   ObPLSEArray<int64_t> pl_integer_ranges_;
   ObPLSEArray<ObDataType> data_type_;
   ObPLSEArray<ObPLDataType> into_data_type_;
+  ObPLSEArray<common::ObString> into_name_;
   bool bulk_;
   bool is_type_record_; // 表示into后面是否只有一个type定义的record类型(非object定义)
 };

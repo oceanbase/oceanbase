@@ -110,6 +110,7 @@ void TestLSMigrationParam::SetUp()
   sstable_meta_.basic_meta_.max_merged_trans_version_ = 0;
   sstable_meta_.basic_meta_.ddl_scn_.set_min();
   sstable_meta_.basic_meta_.filled_tx_scn_.set_min();
+  sstable_meta_.basic_meta_.rec_scn_.set_min();
   sstable_meta_.basic_meta_.contain_uncommitted_row_ = 0;
   sstable_meta_.data_root_info_.addr_ = addr;
   sstable_meta_.basic_meta_.root_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
@@ -170,6 +171,7 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
   sstable_param.basic_meta_.upper_trans_version_           = sstable_meta_.basic_meta_.upper_trans_version_;
   sstable_param.basic_meta_.ddl_scn_                       = sstable_meta_.basic_meta_.ddl_scn_;
   sstable_param.basic_meta_.filled_tx_scn_                 = sstable_meta_.basic_meta_.filled_tx_scn_;
+  sstable_param.basic_meta_.rec_scn_                       = sstable_meta_.basic_meta_.rec_scn_;
   sstable_param.basic_meta_.max_merged_trans_version_      = sstable_meta_.basic_meta_.max_merged_trans_version_;
   sstable_param.basic_meta_.table_mode_                    = sstable_meta_.basic_meta_.table_mode_;
   sstable_param.basic_meta_.contain_uncommitted_row_       = sstable_meta_.basic_meta_.contain_uncommitted_row_;
@@ -179,6 +181,7 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
   sstable_param.basic_meta_.compressor_type_               = sstable_meta_.basic_meta_.compressor_type_;
   sstable_param.basic_meta_.encrypt_id_                    = sstable_meta_.basic_meta_.encrypt_id_;
   sstable_param.basic_meta_.master_key_id_                 = sstable_meta_.basic_meta_.master_key_id_;
+  sstable_param.basic_meta_.rec_scn_                       = sstable_meta_.basic_meta_.rec_scn_;
   MEMCPY(sstable_param.basic_meta_.encrypt_key_, sstable_meta_.basic_meta_.encrypt_key_,
       share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {

@@ -13,9 +13,6 @@
 #define private public
 #include "ob_simple_log_cluster_env.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "log/ob_shared_log_utils.h"
-#endif
 #undef private
 
 namespace oceanbase
@@ -261,11 +258,6 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id,
       } else if (OB_FAIL(svr->create_ls(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
         CLOG_LOG(WARN, "create ls failed", K(ret), K(id), KPC(svr));
         break;
-      #ifdef OB_BUILD_SHARED_STORAGE
-      } else if (GCTX.is_shared_storage_mode() && OB_FAIL(server->log_service_.shared_log_service_.add_ls(ObLSID(id)))) {
-        CLOG_LOG(WARN, "failed to add_ls to shared_log_service", K(ret), K(id), KPC(svr));
-        break;
-      #endif
       } else {
         if (with_mock_election) {
           if (OB_FAIL(svr->create_mock_election(id, mock_election))) {
@@ -607,14 +599,14 @@ int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleImplGuard 
         PALF_LOG(WARN, "get_role failed", K(ret));
       } else if (role == LEADER
           && false == is_pending_state) {
-      leader_idx = i;
-      leader.palf_handle_impl_ = dynamic_cast<PalfHandleImpl *>(ipalf_handle_impl);
-      leader.palf_id_ = id;
-      leader.palf_env_impl_ = dynamic_cast<PalfEnvImpl*>(svr->get_palf_env());
-      PALF_LOG(INFO, "get_leader is", K(svr->get_addr()), K(leader_idx), K(epoch));
-      ObTenantEnv::set_tenant(cluster[leader_idx]->get_tenant_base());
-      break;
-    }
+        leader_idx = i;
+        leader.palf_handle_impl_ = dynamic_cast<PalfHandleImpl *>(ipalf_handle_impl);
+        leader.palf_id_ = id;
+        leader.palf_env_impl_ = dynamic_cast<PalfEnvImpl*>(svr->get_palf_env());
+        PALF_LOG(INFO, "get_leader is", K(svr->get_addr()), K(leader_idx), K(epoch));
+        ObTenantEnv::set_tenant(cluster[leader_idx]->get_tenant_base());
+        break;
+      }
       svr->get_palf_env()->revert_palf_handle_impl(ipalf_handle_impl);
     }
     if (NULL== leader.palf_handle_impl_) {
@@ -1544,52 +1536,54 @@ int ObSimpleLogClusterTestEnv::update_server_log_disk(const int64_t log_disk_siz
 int ObSimpleLogClusterTestEnv::create_ls_shared_storage(int64_t id)
 {
   int ret = OB_SUCCESS;
-  ObBackupDest dest;
-  common::ObBackupIoAdapter adapter;
-  char uri[OB_MAX_URI_LENGTH] = {'\0'};
-  uint64_t storage_id = OB_INVALID_ID;
-  if (!need_shared_storage_) {
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
-    PALF_LOG(WARN, "get_storage_dest_ failed");
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_ls_str_(dest, tenant_id_, ObLSID(id), uri, OB_MAX_URI_LENGTH))) {
-    PALF_LOG(WARN, "construct_ls_str_ failed", K(tenant_id_), K(id));
-  } else if (OB_FAIL(adapter.mkdir(uri, dest.get_storage_info()))) {
-    PALF_LOG(WARN, "mkdir failed", K(tenant_id_), K(id), K(uri));
-  } else {
-    PALF_LOG(INFO, "mkdir success", K(tenant_id_), K(id), K(uri));
-  }
+  UNUSED(id);
+//  ObBackupDest dest;
+//  common::ObBackupIoAdapter adapter;
+//  char uri[OB_MAX_URI_LENGTH] = {'\0'};
+//  uint64_t storage_id = OB_INVALID_ID;
+//  if (!need_shared_storage_) {
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
+//    PALF_LOG(WARN, "get_storage_dest_ failed");
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_ls_str_(dest, tenant_id_, ObLSID(id), uri, OB_MAX_URI_LENGTH))) {
+//    PALF_LOG(WARN, "construct_ls_str_ failed", K(tenant_id_), K(id));
+//  } else if (OB_FAIL(adapter.mkdir(uri, dest.get_storage_info()))) {
+//    PALF_LOG(WARN, "mkdir failed", K(tenant_id_), K(id), K(uri));
+//  } else {
+//    PALF_LOG(INFO, "mkdir success", K(tenant_id_), K(id), K(uri));
+//  }
   return ret;
 }
 
 int ObSimpleLogClusterTestEnv::remove_ls_shared_storage(int64_t id)
 {
   int ret = OB_SUCCESS;
-  ObBackupDest dest;
-  uint64_t storage_id = OB_INVALID_ID;
-  common::ObBackupIoAdapter adapter;
-  char uri[OB_MAX_URI_LENGTH] = {'\0'};
-  block_id_t min_block_id = 0;
-  block_id_t max_block_id = 0;
-  if (!need_shared_storage_) {
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
-    PALF_LOG(WARN, "get_storage_dest_ failed");
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_ls_str_(dest, tenant_id_, ObLSID(id), uri, OB_MAX_URI_LENGTH))) {
-    PALF_LOG(WARN, "construct_ls_str_ failed", K(tenant_id_), K(id));
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_oldest_block(tenant_id_, ObLSID(id), min_block_id))
-             && OB_ENTRY_NOT_EXIST != ret) {
-    PALF_LOG(WARN, "get_oldest_block failed", K(tenant_id_), K(id));
-  } else if (OB_ENTRY_NOT_EXIST == ret && FALSE_IT(min_block_id = 0)) {
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_newest_block(tenant_id_, ObLSID(id), min_block_id, max_block_id))
-             && OB_ENTRY_NOT_EXIST != ret) {
-    PALF_LOG(WARN, "get_newest_block failed", K(tenant_id_), K(id));
-  } else if (OB_ENTRY_NOT_EXIST == ret && FALSE_IT(max_block_id = 0)) {
-  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.delete_blocks(tenant_id_, ObLSID(id), min_block_id, max_block_id + 1))) {
-    PALF_LOG(WARN, "delete_blocks failed", K(tenant_id_), K(id), K(min_block_id), K(max_block_id));
-  } else if (OB_FAIL(adapter.del_dir(uri, dest.get_storage_info()))) {
-    PALF_LOG(WARN, "mkdir failed", K(tenant_id_), K(id), K(uri));
-  } else {
-    PALF_LOG(INFO, "removedir success", K(tenant_id_), K(id), K(uri));
-  }
+  UNUSED(id);
+//  ObBackupDest dest;
+//  uint64_t storage_id = OB_INVALID_ID;
+//  common::ObBackupIoAdapter adapter;
+//  char uri[OB_MAX_URI_LENGTH] = {'\0'};
+//  block_id_t min_block_id = 0;
+//  block_id_t max_block_id = 0;
+//  if (!need_shared_storage_) {
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_storage_dest_and_id_(dest, storage_id))) {
+//    PALF_LOG(WARN, "get_storage_dest_ failed");
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.construct_ls_str_(dest, tenant_id_, ObLSID(id), uri, OB_MAX_URI_LENGTH))) {
+//    PALF_LOG(WARN, "construct_ls_str_ failed", K(tenant_id_), K(id));
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_oldest_block(tenant_id_, ObLSID(id), min_block_id))
+//             && OB_ENTRY_NOT_EXIST != ret) {
+//    PALF_LOG(WARN, "get_oldest_block failed", K(tenant_id_), K(id));
+//  } else if (OB_ENTRY_NOT_EXIST == ret && FALSE_IT(min_block_id = 0)) {
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.get_newest_block(tenant_id_, ObLSID(id), min_block_id, max_block_id))
+//             && OB_ENTRY_NOT_EXIST != ret) {
+//    PALF_LOG(WARN, "get_newest_block failed", K(tenant_id_), K(id));
+//  } else if (OB_ENTRY_NOT_EXIST == ret && FALSE_IT(max_block_id = 0)) {
+//  } else if (OB_FAIL(SHARED_LOG_GLOBAL_UTILS.delete_blocks(tenant_id_, ObLSID(id), min_block_id, max_block_id + 1))) {
+//    PALF_LOG(WARN, "delete_blocks failed", K(tenant_id_), K(id), K(min_block_id), K(max_block_id));
+//  } else if (OB_FAIL(adapter.del_dir(uri, dest.get_storage_info()))) {
+//    PALF_LOG(WARN, "mkdir failed", K(tenant_id_), K(id), K(uri));
+//  } else {
+//    PALF_LOG(INFO, "removedir success", K(tenant_id_), K(id), K(uri));
+//  }
   return ret;
 }
 

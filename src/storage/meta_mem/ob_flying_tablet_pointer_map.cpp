@@ -70,7 +70,7 @@ int ObFlyingTabletPointerMap::check_exist(
 {
   int ret = common::OB_SUCCESS;
   ObInnerTPHandlePtr handle_ptr;
-  ObTabletPointer *t_ptr = nullptr;
+  ObTabletBasePointer *t_ptr = nullptr;
   is_exist = false;
   uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_)) {

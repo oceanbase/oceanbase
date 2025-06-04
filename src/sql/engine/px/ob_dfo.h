@@ -519,6 +519,7 @@ public:
     in_slave_mapping_type_(SlaveMappingType::SM_NONE),
     out_slave_mapping_type_(SlaveMappingType::SM_NONE),
     part_ch_map_(),
+    dist_method_(ObPQDistributeMethod::NONE),
     total_task_cnt_(0),
     pkey_table_loc_id_(0),
     tsc_op_cnt_(0),
@@ -565,7 +566,7 @@ public:
   inline void set_phy_plan(const ObPhysicalPlan *phy_plan) { phy_plan_ = phy_plan; }
   inline const ObPhysicalPlan *get_phy_plan() const { return phy_plan_; }
   inline void set_root_op_spec(const ObOpSpec *op_spec) {root_op_spec_ = op_spec;}
-  inline const ObOpSpec *get_root_op_spec() { return root_op_spec_; }
+  inline const ObOpSpec *get_root_op_spec() const { return root_op_spec_; }
   inline void get_root(const ObOpSpec *&root) const { root = root_op_spec_; }
   inline void set_scan(bool has_scan) { has_scan_ = has_scan; }
   inline bool has_scan_op() const { return has_scan_; }
@@ -575,6 +576,7 @@ public:
   inline bool has_das_op() const { return has_das_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
+  bool need_access_store() { return has_scan_op() || has_dml_op(); }
   inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
   inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }

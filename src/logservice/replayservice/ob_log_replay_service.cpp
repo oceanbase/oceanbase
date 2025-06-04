@@ -197,7 +197,7 @@ ObLogReplayService::~ObLogReplayService()
   destroy();
 }
 
-int ObLogReplayService::init(PalfEnv *palf_env,
+int ObLogReplayService::init(ipalf::IPalfEnv *palf_env,
                              ObLSAdapter *ls_adapter,
                              ObILogAllocator *allocator)
 {
@@ -209,7 +209,7 @@ int ObLogReplayService::init(PalfEnv *palf_env,
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObLogReplayService init twice", K(ret));
-  } else if (OB_ISNULL(palf_env_= palf_env)
+  } else if (OB_ISNULL(palf_env_ = palf_env)
              || OB_ISNULL(ls_adapter_ = ls_adapter)
              || OB_ISNULL(allocator_ = allocator)) {
     ret = OB_INVALID_ARGUMENT;
@@ -315,6 +315,7 @@ void ObLogReplayService::destroy()
 void ObLogReplayService::handle(void *task)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard ag("LogService", "LogReplayService", "ReplayTask");
   ObReplayServiceTask *task_to_handle = static_cast<ObReplayServiceTask *>(task);
   ObReplayStatus *replay_status = NULL;
   bool need_push_back = false;
@@ -684,7 +685,7 @@ int ObLogReplayService::submit_task(ObReplayServiceTask *task)
     task->set_enqueue_ts(ObTimeUtility::fast_current_time());
     while (OB_FAIL(TG_PUSH_TASK(tg_id_, task)) && OB_EAGAIN == ret) {
       //预期不应该失败
-      ob_usleep(1000);
+      ob_throttle_usleep(1000, ret);
       CLOG_LOG(ERROR, "failed to push", K(ret));
     }
   }
@@ -818,7 +819,14 @@ int ObLogReplayService::stat_for_each(const common::ObFunction<int (const ObRepl
     }
     return bret;
   };
-  return replay_status_map_.for_each(stat_func);
+  int ret = OB_SUCCESS;
+  if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = replay_status_map_.for_each(stat_func);
+  }
+  return ret;
 }
 
 int ObLogReplayService::stat_all_ls_replay_process(int64_t &submitted_log_size,
@@ -929,10 +937,10 @@ int ObLogReplayService::pre_check_(ObReplayStatus &replay_status,
       }
       //set egain just to push back into thread_pool
       ret = OB_EAGAIN;
-      ob_usleep(1000); //1ms
+      ob_throttle_usleep(1000, ret); //1ms
     } else if (!task.need_replay_immediately()) {
       //避免重试过于频繁导致cpu跑满
-      ob_usleep(10); //10us
+      ob_throttle_usleep(10, ret); //10us
     }
     // Check the waiting time of the task in the global queue
     if (OB_SUCC(ret) && (cur_time - enqueue_ts > TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD)) {
@@ -1128,10 +1136,11 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   int64_t decompressed_log_size = -1;
   ObLogReplayTask *replay_task = NULL;
   const SCN &replayable_point = inner_get_replayable_point_();
+  palf::LSN end_lsn;
   if (OB_UNLIKELY(OB_ISNULL(submit_task))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "submit task is NULL when fetch log", K(replay_status), KPC(submit_task));
-  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn))) {
+  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn, end_lsn))) {
     CLOG_LOG(WARN, "submit task get log value failed",  K(replay_status), K(submit_task));
   } else if (OB_FAIL(replay_status.get_ls_id(id))) {
     CLOG_LOG(ERROR, "replay status get log stream id failed", KPC(submit_task), K(replay_status));
@@ -1209,7 +1218,7 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   } else if (OB_SUCC(ret) && need_iterate_next_log) {
     bool unused_iterate_end_by_replayable_point = false;
     // TODO by runlin: compatibility with LogEntryHeader
-    if (OB_FAIL(submit_task->update_submit_log_meta_info(cur_lsn + log_size + sizeof(LogEntryHeader),
+    if (OB_FAIL(submit_task->update_submit_log_meta_info(end_lsn,
                                                          cur_log_submit_scn))) {
       // log info fallback
       CLOG_LOG(ERROR, "failed to update_submit_log_meta_info", KR(ret), K(cur_lsn),
@@ -1229,6 +1238,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObDIActionGuard ag("SUBMIT_LOG");
   ObReplayStatus *replay_status = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1353,33 +1363,38 @@ int ObLogReplayService::handle_replay_task_(ObReplayServiceReplayTask *task_queu
         } else if (OB_ISNULL(replay_task = static_cast<ObLogReplayTask *>(link))) {
           ret = OB_ERR_UNEXPECTED;
           CLOG_LOG(ERROR, "replay_task is NULL", KPC(replay_status), K(ret));
-        } else if (OB_FAIL(do_replay_task_(replay_task, replay_status, task_queue->idx()))) {
-          (void)process_replay_ret_code_(ret, *replay_status, *task_queue, *replay_task);
-        } else if (OB_FAIL(statistics_replay_cost_(replay_task->init_task_ts_, replay_task->first_handle_ts_))) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "do statistics replay cost failed", KPC(replay_task), K(ret));
-        } else if (OB_ISNULL(link_to_destroy = task_queue->pop())) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "failed to pop task after replay", KPC(replay_task), K(ret));
-          //It's impossible to get to this branch. Use on_replay_error to defend it.
-          on_replay_error_(*replay_task, ret);
-        } else if (OB_ISNULL(replay_task_to_destroy = static_cast<ObLogReplayTask *>(link_to_destroy))) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "replay_task_to_destroy is NULL when pop after replay", KPC(replay_task), K(ret));
-          //It's impossible to get to this branch. Use on_replay_error to defend it.
-          on_replay_error_(*replay_task, ret);
         } else {
-          task_queue->clear_err_info();
-          if (!replay_task->is_pre_barrier_) {
-            //前向barrier日志执行回放的线程会提前释放内存
-            replay_status->dec_pending_task(replay_task->get_replay_payload_size());
-          }
-          free_replay_task(replay_task_to_destroy);
-          //To avoid a single task occupies too long thread time, the upper limit of
-          //single occupancy time is set to 10ms
-          int64_t used_time = ObTimeUtility::fast_current_time() - start_ts;
-          if (used_time > MAX_REPLAY_TIME_PER_ROUND) {
-            is_timeslice_run_out = true;
+          char log_type_str[ASH_ACTION_STR_LEN] = "";
+          log_base_type_to_string(replay_task->log_type_, log_type_str, ASH_ACTION_STR_LEN);
+          ObDIActionGuard ag(log_type_str);
+          if (OB_FAIL(do_replay_task_(replay_task, replay_status, task_queue->idx()))) {
+            (void)process_replay_ret_code_(ret, *replay_status, *task_queue, *replay_task);
+          } else if (OB_FAIL(statistics_replay_cost_(replay_task->init_task_ts_, replay_task->first_handle_ts_))) {
+            ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "do statistics replay cost failed", KPC(replay_task), K(ret));
+          } else if (OB_ISNULL(link_to_destroy = task_queue->pop())) {
+          ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "failed to pop task after replay", KPC(replay_task), K(ret));
+            //It's impossible to get to this branch. Use on_replay_error to defend it.
+            on_replay_error_(*replay_task, ret);
+          } else if (OB_ISNULL(replay_task_to_destroy = static_cast<ObLogReplayTask *>(link_to_destroy))) {
+            ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "replay_task_to_destroy is NULL when pop after replay", KPC(replay_task), K(ret));
+            //It's impossible to get to this branch. Use on_replay_error to defend it.
+            on_replay_error_(*replay_task, ret);
+          } else {
+            task_queue->clear_err_info();
+            if (!replay_task->is_pre_barrier_) {
+              //前向barrier日志执行回放的线程会提前释放内存
+              replay_status->dec_pending_task(replay_task->get_replay_payload_size());
+            }
+            free_replay_task(replay_task_to_destroy);
+            //To avoid a single task occupies too long thread time, the upper limit of
+            //single occupancy time is set to 10ms
+            int64_t used_time = ObTimeUtility::fast_current_time() - start_ts;
+            if (used_time > MAX_REPLAY_TIME_PER_ROUND) {
+              is_timeslice_run_out = true;
+            }
           }
         }
         replay_status->unlock();
@@ -1563,7 +1578,7 @@ void ObLogReplayService::on_replay_error_(ObLogReplayTask &replay_task, int ret_
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       CLOG_LOG_RET(ERROR, ret_code, "REPLAY_ERROR", K(ret_code), K(replay_task), K(error_moment));
     }
-    ob_usleep(1 * 1000 * 1000); // sleep 1s
+    ob_throttle_usleep(1 * 1000 * 1000, ret_code); // sleep 1s
   }
 }
 
@@ -1574,7 +1589,7 @@ void ObLogReplayService::on_replay_error_()
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       CLOG_LOG_RET(ERROR, OB_ERROR, "REPLAY_ERROR", K(error_moment));
     }
-    ob_usleep(1 * 1000 * 1000); // sleep 1s
+    ob_throttle_usleep(1 * 1000 * 1000, OB_ERROR); // sleep 1s
   }
 }
 

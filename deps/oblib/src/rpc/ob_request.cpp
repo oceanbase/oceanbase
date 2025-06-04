@@ -31,6 +31,7 @@ void on_translate_fail(ObRequest* req, int ret)
   } else if (ObRequest::OB_MYSQL == req_type) {
     SQL_REQ_OP.disconnect_sql_conn(req);
     SQL_REQ_OP.finish_sql_request(req);
+    req->reset_diagnostic_info();
   }
 }
 

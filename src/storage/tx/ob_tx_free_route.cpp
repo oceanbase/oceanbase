@@ -404,6 +404,7 @@ int ObTransService::txn_free_route__handle_tx_exist_(
   }
 
 int ObTransService::txn_free_route__update_static_state(const uint32_t session_id,
+                                                        const uint32_t client_sid,
                                                         ObTxDesc *&tx,
                                                         ObTxnFreeRouteCtx &ctx,
                                                         const char* buf,
@@ -433,7 +434,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         TRANS_LOG(WARN, "handle tx exist fail", K(ret));
       } else if (OB_ISNULL(tx)) {
         audit_record.alloc_tx_ = true;
-        if (OB_FAIL(acquire_tx(tx, session_id, data_version))) {
+        if (OB_FAIL(acquire_tx(tx, session_id, client_sid, data_version))) {
           // if acquire tx failed, it may retryable: alloc-memory failed
           TRANS_LOG(WARN, "acquire tx for decode failed", K(ret));
         } else { need_add_tx = true; }
@@ -464,7 +465,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       }
       if (OB_SUCC(ret)) {
         // reset tx to cleanup for new txn
-        reinit_tx_(*tx, session_id, tx->get_cluster_version());
+        reinit_tx_(*tx, session_id, client_sid, tx->get_cluster_version());
         need_add_tx = true;
       }
     } else {
@@ -542,6 +543,7 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
 }
 
 int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_id,
+                                                         const uint32_t client_sid,
                                                          ObTxDesc *&tx,
                                                          ObTxnFreeRouteCtx &ctx,
                                                          const char* buf,
@@ -602,6 +604,7 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
 }
 
 int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id,
+                                                       const uint32_t client_sid,
                                                        ObTxDesc *&tx,
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
@@ -660,6 +663,7 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
 }
 
 int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id,
+                                                       const uint32_t client_sid,
                                                        ObTxDesc *&tx,
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
@@ -703,7 +707,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
     } else if (OB_FAIL(update_logic_clock_(logic_clock, NULL, false))) {
       TRANS_LOG(ERROR, "update logic clock fail", K(ret));
     }
-    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id, data_version))) {
+    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id, client_sid, data_version))) {
       // only has savepoints or txn scope snapshot, txn not started
       // acquire tx to hold extra info
       TRANS_LOG(WARN, "acquire tx fail", K(ret));

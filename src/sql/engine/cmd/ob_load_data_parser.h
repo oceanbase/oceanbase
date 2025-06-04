@@ -85,7 +85,7 @@ struct ObODPSGeneralFormat {
   bool collect_statistics_on_create_;
   common::ObString region_;
   common::ObArenaAllocator arena_alloc_;
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
                K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
@@ -112,7 +112,8 @@ struct ObCSVGeneralFormat {
     is_optional_(false),
     file_extension_(DEFAULT_FILE_EXTENSION),
     parse_header_(false),
-    binary_format_(ObCSVBinaryFormat::DEFAULT)
+    binary_format_(ObCSVBinaryFormat::DEFAULT),
+    ignore_last_empty_col_(true)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -129,7 +130,8 @@ struct ObCSVGeneralFormat {
     "IS_OPTIONAL",
     "FILE_EXTENSION",
     "PARSE_HEADER",
-    "BINARY_FORMAT"
+    "BINARY_FORMAT",
+    "IGNORE_LAST_EMPTY_COLUMN"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -149,6 +151,7 @@ struct ObCSVGeneralFormat {
     FILE_EXTENSION,
     PARSE_HEADER,
     BINARY_FORMAT,
+    IGNORE_LAST_EMPTY_COLUMN,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
@@ -191,16 +194,17 @@ struct ObCSVGeneralFormat {
   common::ObString file_extension_;
   bool parse_header_;
   ObCSVBinaryFormat binary_format_;
+  bool ignore_last_empty_col_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
                   ObCollationType file_cs_type);
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos, bool into_outfile = false) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
-               K(compression_algorithm_), K(file_extension_), K(binary_format_));
+               K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_));
   OB_UNIS_VERSION(1);
 };
 
@@ -230,7 +234,7 @@ struct ObParquetGeneralFormat {
   int64_t row_group_size_;
   int64_t compress_type_index_;
 
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(row_group_size), K_(compress_type_index));
   OB_UNIS_VERSION(1);
@@ -267,7 +271,7 @@ struct ObOrcGeneralFormat {
   int64_t row_index_stride_;
   common::ObArrayWrap<int64_t> column_use_bloom_filter_;
 
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_), K(row_index_stride_), K(column_use_bloom_filter_));
   OB_UNIS_VERSION(1);
@@ -335,6 +339,158 @@ public:
                  handle_func &handle_one_line,
                  common::ObIArray<LineErrRec> &errors,
                  bool is_end_file);
+  // used for utf8, single char term, no enclosed char and no need escaped result
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD, bool IS_END_FILE, bool IGNORE_LAST_EMPTY_COLUMN>
+  int scan_utf8_ex(const char *&str, const char *end, int64_t &nrows,
+                   char *escape_buf, char *escaped_buf_end,
+                   handle_func &handle_one_line,
+                   common::ObIArray<LineErrRec> &errors);
+
+  template<typename handle_func, bool HAS_ESCAPE>
+  OB_INLINE int dispatch_scan_utf8_l1(bool HAS_LINE_START,
+                            bool SKIP_BLANK_LINES,
+                            bool NO_FIELD,
+                            bool IGNORE_LAST_EMPTY_COLUMN,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (HAS_LINE_START) {
+      ret = dispatch_scan_utf8_l2<handle_func, HAS_ESCAPE, true> (SKIP_BLANK_LINES, NO_FIELD,
+                                                        IGNORE_LAST_EMPTY_COLUMN, str, end,
+                                                        nrows, escape_buf, escaped_buf_end,
+                                                        handle_one_line, errors, is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l2<handle_func, HAS_ESCAPE, false> (SKIP_BLANK_LINES, NO_FIELD,
+                                                        IGNORE_LAST_EMPTY_COLUMN, str, end,
+                                                        nrows, escape_buf, escaped_buf_end,
+                                                        handle_one_line, errors, is_end_file);
+    }
+    return ret;
+  }
+
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START>
+  OB_INLINE int dispatch_scan_utf8_l2(bool SKIP_BLANK_LINES,
+                            bool NO_FIELD,
+                            bool IGNORE_LAST_EMPTY_COLUMN,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (SKIP_BLANK_LINES) {
+      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, HAS_LINE_START, true> (NO_FIELD,
+                                                                IGNORE_LAST_EMPTY_COLUMN, str, end,
+                                                                nrows, escape_buf,
+                                                                escaped_buf_end, handle_one_line,
+                                                                errors, is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l3<handle_func, HAS_ESCAPE, HAS_LINE_START, false> (NO_FIELD,
+                                                                IGNORE_LAST_EMPTY_COLUMN, str, end,
+                                                                nrows, escape_buf,
+                                                                escaped_buf_end, handle_one_line,
+                                                                errors, is_end_file);
+}
+    return ret;
+  }
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES>
+  OB_INLINE int dispatch_scan_utf8_l3(bool NO_FIELD, bool IGNORE_LAST_EMPTY_COLUMN,
+                            const char *&str, const char *end, int64_t &nrows,
+                            char *escape_buf, char *escaped_buf_end,
+                            handle_func &handle_one_line,
+                            common::ObIArray<LineErrRec> &errors,
+                            bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (NO_FIELD) {
+      ret = dispatch_scan_utf8_l4<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, true>(
+                                                          IGNORE_LAST_EMPTY_COLUMN, str, end, nrows,
+                                                          escape_buf, escaped_buf_end,
+                                                          handle_one_line, errors, is_end_file);
+    } else {
+      ret = dispatch_scan_utf8_l4<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, false>(
+                                                          IGNORE_LAST_EMPTY_COLUMN, str, end, nrows,
+                                                          escape_buf, escaped_buf_end,
+                                                          handle_one_line, errors, is_end_file);
+    }
+    return ret;
+  }
+
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD>
+  OB_INLINE int dispatch_scan_utf8_l4(bool IGNORE_LAST_EMPTY_COLUMN,
+                                      const char *&str, const char *end, int64_t &nrows,
+                                      char *escape_buf, char *escaped_buf_end,
+                                      handle_func &handle_one_line,
+                                      common::ObIArray<LineErrRec> &errors,
+                                      bool is_end_file)
+  {
+    int ret = OB_SUCCESS;
+    if (is_end_file) {
+      ret = dispatch_scan_utf8_l5<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, true>(
+                                                        IGNORE_LAST_EMPTY_COLUMN,  str, end, nrows,
+                                                        escape_buf, escaped_buf_end,
+                                                        handle_one_line, errors);
+    } else {
+      ret = dispatch_scan_utf8_l5<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, false>(
+                                                          IGNORE_LAST_EMPTY_COLUMN, str, end, nrows,
+                                                          escape_buf, escaped_buf_end,
+                                                          handle_one_line, errors);
+    }
+    return ret;
+  }
+
+  template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD, bool IS_END_FILE>
+  OB_INLINE int dispatch_scan_utf8_l5(bool IGNORE_LAST_EMPTY_COLUMN,
+                                      const char *&str, const char *end, int64_t &nrows,
+                                      char *escape_buf, char *escaped_buf_end,
+                                      handle_func &handle_one_line,
+                                      common::ObIArray<LineErrRec> &errors)
+  {
+    int ret = OB_SUCCESS;
+    if (IGNORE_LAST_EMPTY_COLUMN) {
+      ret = scan_utf8_ex<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, IS_END_FILE, true>(
+                                                                        str, end, nrows,
+                                                                        escape_buf, escaped_buf_end,
+                                                                        handle_one_line, errors);
+    } else {
+      ret = scan_utf8_ex<handle_func, HAS_ESCAPE, HAS_LINE_START, SKIP_BLANK_LINES, NO_FIELD, IS_END_FILE, false>(
+                                                                        str, end, nrows,
+                                                                        escape_buf, escaped_buf_end,
+                                                                        handle_one_line, errors);
+    }
+    return ret;
+  }
+
+  template <bool SKIP_BLANK_LINES, bool IGNORE_LAST_EMPTY_COLUMN>
+  OB_INLINE void process_term(const char *line_t, const char *&ori_field_begin, const char *&field_begin,
+                              const char *&str, int &field_idx, bool &find_new_line)
+  {
+    while (OB_LIKELY(str < line_t)) {
+      if (static_cast<unsigned> (*str) == opt_param_.field_term_c_
+          && field_idx++ < format_.file_column_nums_) {
+        gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
+        ori_field_begin = str + 1;
+        field_begin = ori_field_begin;
+      }
+      ++str;
+    }
+    find_new_line = true;
+    if (field_idx < format_.file_column_nums_) {
+      if ((!SKIP_BLANK_LINES || field_idx > 0) &&
+          (str > ori_field_begin || !IGNORE_LAST_EMPTY_COLUMN)) {
+        ++field_idx;
+        gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
+      } else {
+        find_new_line = false;
+      }
+    }
+    str++;
+  }
 
   template<typename handle_func, bool NEED_ESCAPED_RESULT = false>
   int scan(const char *&str, const char *end, int64_t &nrows,
@@ -360,8 +516,20 @@ public:
         }
       } else {
         if (single_char_term) {
-          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, true, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+          const bool has_line_start = !format_.line_start_str_.empty();
+          const bool skip_blank_lines = format_.skip_blank_lines_;
+          const bool no_field = (0 == format_.file_column_nums_ && !skip_blank_lines);
+          const bool ignore_last_empty_col = format_.ignore_last_empty_col_;
+          if (opt_param_.is_line_term_by_counting_field_ || (!no_field && NEED_ESCAPED_RESULT)) {
+            ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, true, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+          } else {
+            ret = dispatch_scan_utf8_l1<handle_func, NEED_ESCAPED_RESULT/*only process no field*/> (
+                                                      has_line_start, skip_blank_lines, no_field,
+                                                      ignore_last_empty_col, str, end, nrows,
+                                                      escape_buf, escaped_buf_end,
+                                                      handle_one_line, errors, is_end_file);
+          }
         } else {
           ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
@@ -670,9 +838,11 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
             field_end = escape_buf_pos;
           }
         }
-
-        if (is_field_term || ori_field_end > ori_field_begin
-            || (field_idx < format_.file_column_nums_ && !format_.skip_blank_lines_)) {
+        if (is_field_term || ori_field_end > ori_field_begin ||
+            (field_idx < format_.file_column_nums_
+            && !format_.skip_blank_lines_
+            && !format_.ignore_last_empty_col_)
+        ) {
           if (field_idx++ < format_.file_column_nums_) {
             gen_new_field(is_enclosed, ori_field_begin, ori_field_end, field_begin, field_end, field_idx);
           }
@@ -709,10 +879,105 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
   return ret;
 }
 
+OB_INLINE bool is_valid_term(const char *begin, const char *term, const char escape) {
+  int64_t escape_num = 0;
+  const char *curr = term;
+  while (curr > begin && OB_UNLIKELY(*(curr - 1) == escape)) {
+    curr = curr - 1;
+    ++escape_num;
+  }
+  return escape_num == 0 || (escape_num  % 2) == 0;
+}
+
+template<typename handle_func, bool HAS_ESCAPE, bool HAS_LINE_START, bool SKIP_BLANK_LINES, bool NO_FIELD, bool IS_END_FILE, bool IGNORE_LAST_EMPTY_COLUMN>
+int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
+                                     const char *end,
+                                     int64_t &nrows,
+                                     char *escape_buf,
+                                     char *escape_buf_end,
+                                     handle_func &handle_one_line,
+                                     common::ObIArray<LineErrRec> &errors)
+{
+  int ret = common::OB_SUCCESS;
+  int line_no = 0;
+  int blank_line_cnt = 0;
+  const char *line_begin = str;
+  char *escape_buf_pos = escape_buf;
+  while (OB_SUCC(ret) && str < end && line_no - blank_line_cnt < nrows) {
+    bool find_new_line = false;
+    int field_idx = 0;
+    if (HAS_LINE_START) {
+      bool is_line_start_found = false;
+      for (; str + format_.line_start_str_.length() <= end; str++) {
+        if (0 == MEMCMP(str, format_.line_start_str_.ptr(), format_.line_start_str_.length())) {
+          str += format_.line_start_str_.length();
+          is_line_start_found = true;
+          break;
+        }
+      }
+      if (!is_line_start_found) {
+        if (IS_END_FILE) {
+          line_begin = end;
+        } else {
+          line_begin = str;
+        }
+        break;
+      }
+    }
+    const char *ori_field_begin = str;
+    const char *field_begin = str;
+    const char *line_t = nullptr;
+    line_t = static_cast<const char *> (memchr(str, opt_param_.line_term_c_, end - str));
+    if (HAS_ESCAPE) {
+      while (OB_LIKELY(line_t != nullptr)
+            && OB_UNLIKELY(!is_valid_term(line_begin, line_t, format_.field_escaped_char_))
+            && OB_LIKELY(++line_t < end)) {
+        line_t = static_cast<const char *> (memchr(line_t, opt_param_.line_term_c_, end - line_t));
+      }
+    }
+    if (NO_FIELD && OB_NOT_NULL(line_t)) {
+      str = line_t + 1;
+      find_new_line = true;
+    } else if (OB_NOT_NULL(line_t)) {
+      process_term<SKIP_BLANK_LINES, IGNORE_LAST_EMPTY_COLUMN> (line_t, ori_field_begin, field_begin,
+                                      str, field_idx, find_new_line);
+    } else if (IS_END_FILE) {
+      line_t = end;
+      process_term<SKIP_BLANK_LINES, IGNORE_LAST_EMPTY_COLUMN> (line_t, ori_field_begin, field_begin,
+                                      str, field_idx, find_new_line);
+    } else {
+      str = end;
+    }
+
+    if (OB_LIKELY(find_new_line) || IS_END_FILE) {
+      if (!SKIP_BLANK_LINES || field_idx > 0) {
+        if (field_idx < format_.file_column_nums_
+            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
+          ret = handle_irregular_line(field_idx, line_no, errors);
+        }
+        if (OB_SUCC(ret)) {
+          HandleOneLineParam param(fields_per_line_, field_idx);
+          ret = handle_one_line(param);
+        }
+      } else {
+        if (format_.skip_blank_lines_) {
+          blank_line_cnt++;
+        }
+      }
+      line_no++;
+      line_begin = str;
+    }
+  }
+
+  str = line_begin;
+  nrows = line_no;
+  return ret;
+}
+
 // user using to define create external table format
 struct ObOriginFileFormat
 {
-  int64_t to_json_kv_string(char *buf, const int64_t buf_len) const;
+  int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K(origin_line_term_str_), K(origin_field_term_str_), K(origin_field_escaped_str_),
                 K(origin_field_enclosed_str_), K(origin_null_if_str_));
@@ -775,6 +1040,7 @@ struct ObExternalFileFormat
     PARQUET_FORMAT,
     ODPS_FORMAT,
     ORC_FORMAT,
+    PLUGIN_FORMAT,
     MAX_FORMAT
   };
 
@@ -784,7 +1050,8 @@ struct ObExternalFileFormat
   };
 
   ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
-
+  int to_string_with_alloc(common::ObString &str, common::ObIAllocator &allocator, bool into_outfile = false) const;
+  int to_string(char* buf, const int64_t buf_len, int64_t &pos, bool into_outfile = false) const;
   int64_t to_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
   int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);

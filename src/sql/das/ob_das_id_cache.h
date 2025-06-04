@@ -44,7 +44,6 @@ public:
   int init(const common::ObAddr &server, rpc::frame::ObReqTransport *req_transport);
   void destroy();
   void reset();
-  int refresh_id_service_location();
   int update_das_id(const int64_t start_id, const int64_t end_id);
   int get_das_id(int64_t &das_id, const bool force_renew);
 private:

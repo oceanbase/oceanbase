@@ -152,7 +152,7 @@ bool ObAllVirtualSqlStatIter::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSes
     SMART_VAR(common::ObDISessionCollect, session_collect) {
       if (!key.is_valid()) {
         // do nothing
-      } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(sess_info->get_sessid(), session_collect))) {
+      } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(sess_info->get_server_sid(), session_collect))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {

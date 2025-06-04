@@ -111,7 +111,7 @@ public:
   static constexpr const uint64_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
   static constexpr const uint64_t POINTER_BIT = 48;
   union {
-    struct {
+    struct { // FARM COMPAT WHITELIST
       uint64_t row_ptr_ : 48;
       uint64_t salt_ : 16;
     };

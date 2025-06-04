@@ -25,6 +25,7 @@ ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator)
     allocator_(allocator),
     agg_type_(PD_MAX_TYPE),
     is_assigned_to_group_by_processor_(false),
+    skip_index_datum_is_prefix_(false),
     is_inited_(false)
 {
 }
@@ -43,6 +44,7 @@ void ObAggCellBase::reset()
   }
   result_datum_.reset();
   skip_index_datum_.reset();
+  skip_index_datum_is_prefix_ = false;
   is_assigned_to_group_by_processor_ = false;
   agg_type_ = PD_MAX_TYPE;
   is_inited_ = false;
@@ -57,6 +59,7 @@ void ObAggCellBase::reuse()
   result_datum_.set_null();
   skip_index_datum_.reuse();
   skip_index_datum_.set_null();
+  skip_index_datum_is_prefix_ = false;
 }
 
 int ObAggCellBase::reserve_bitmap(const int64_t count)

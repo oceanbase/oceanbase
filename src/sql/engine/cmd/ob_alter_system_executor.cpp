@@ -35,6 +35,8 @@
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
 #include "share/table/ob_redis_importer.h"
+#include "share/ob_timezone_importer.h"
+#include "share/ob_srs_importer.h"
 
 namespace oceanbase
 {
@@ -1812,16 +1814,107 @@ int ObBootstrapExecutor::execute(ObExecContext &ctx, ObBootstrapStmt &stmt)
 	}
 	return ret;
 }
-int ObRefreshTimeZoneInfoExecutor::execute(ObExecContext &ctx, ObRefreshTimeZoneInfoStmt &stmt)
+
+ERRSIM_POINT_DEF(EN_LOAD_TIME_ZONE_INFO_FAILED);
+//TODO shanting, add concurrency control.
+int ObLoadTimeZoneInfoExecutor::execute(ObExecContext &ctx, ObLoadTimeZoneInfoStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(stmt);
-  // 226改为定时刷新tz_map, RS与其他server间也不再同步tz_version
-  // 所以不再需要执行refresh timezone info触发RS刷新tz map
-  ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter system refresh time_zone_info ");
-
+  ObSqlString sql;
+  char *buf = NULL;
+  common::ObMySQLProxy *sql_proxy = NULL;
+  ObSQLSessionInfo *session = NULL;
+  ObMySQLTransaction trans;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not null", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(trans.start(sql_proxy, session->get_effective_tenant_id()))) {
+    LOG_WARN("fail to start transaction", K(ret));
+  } else {
+    tenant_id = session->get_effective_tenant_id();
+  }
+  if (OB_SUCC(ret)) {
+    // 1. truncate tables.
+    ObSqlString trunc_sql1;
+    ObSqlString trunc_sql2;
+    ObSqlString trunc_sql3;
+    ObSqlString trunc_sql4;
+    if (OB_FAIL(trunc_sql1.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trunc_sql2.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_NAME_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trunc_sql3.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TRANSITION_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trunc_sql4.assign_fmt("DELETE FROM %s", OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql1.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql2.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql3.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, trunc_sql4.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // 2. load data
+    ObSqlString load_sql1;
+    ObSqlString load_sql2;
+    ObSqlString load_sql3;
+    ObSqlString load_sql4;
+    const char *timezone_file = "timezone.data";
+    const char *timezone_name_file = "timezone_name.data";
+    const char *timezone_transition_file = "timezone_trans.data";
+    const char *timezone_transition_type_file = "timezone_trans_type.data";
+    ObString path = stmt.get_path();
+    if (OB_FAIL(load_sql1.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
+                path.length(), path.ptr(), timezone_file, OB_ALL_TENANT_TIME_ZONE_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(load_sql2.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
+                path.length(), path.ptr(), timezone_name_file, OB_ALL_TENANT_TIME_ZONE_NAME_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(load_sql3.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
+                path.length(), path.ptr(), timezone_transition_file, OB_ALL_TENANT_TIME_ZONE_TRANSITION_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(load_sql4.assign_fmt("LOAD DATA INFILE '%.*s/%s' INTO TABLE %s FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'",
+                path.length(), path.ptr(), timezone_transition_type_file, OB_ALL_TENANT_TIME_ZONE_TRANSITION_TYPE_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, load_sql1.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, load_sql2.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(EN_LOAD_TIME_ZONE_INFO_FAILED)) {
+      LOG_WARN("load time zone info failed due to trace point", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, load_sql3.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, load_sql4.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // 3. insert version into __all_sys_stat
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("replace into %s(tenant_id, zone, data_type, name, value, info) "
+                  "values(0, '' ,5, 'current_timezone_version', 1, 'current time zone version')",
+                  OB_ALL_SYS_STAT_TNAME))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("write failed", K(ret));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
   return ret;
 }
 
@@ -2213,7 +2306,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
         ObSQLSessionMgr *session_mgr = ctx.get_session_mgr();
-        uint32_t session_id = session_info->get_sessid();
+        uint32_t session_id = session_info->get_server_sid();
         if (OB_ISNULL(session_mgr)) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_WARN("session_mgr is null", KR(ret), KR(tmp_ret));
@@ -3095,13 +3188,27 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
         if (OB_FAIL(importer.exec_op(arg.op_))) {
           LOG_WARN("fail to exec op", K(ret), K(arg.op_));
         }
+         break;
+      }
+      case table::ObModuleDataArg::GIS: {
+        table::ObSRSImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+        break;
+      }
+      case table::ObModuleDataArg::TIMEZONE: {
+        table::ObTimezoneImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
         break;
       }
       // add other module before here
       default: {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "module except 'redis'");
-        LOG_WARN("modules except 'redis' are not supported yet", K(ret), K(arg.module_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified module");
+        LOG_WARN("modules except 'redis'/'gis'/'timezone' are not supported yet", K(ret), K(arg.module_));
       }
     }
   }

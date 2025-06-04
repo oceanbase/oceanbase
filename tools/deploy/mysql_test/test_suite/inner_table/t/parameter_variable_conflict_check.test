@@ -22,7 +22,7 @@ connection my_sys;
 SELECT a.name as para_name, b.name as var_name 
 FROM __all_sys_variable a, __all_virtual_sys_parameter_stat b 
 WHERE a.name = b.name 
-GROUP BY a.name;
+GROUP BY a.name order by para_name;
 # sql end
 disconnect my_sys;
  

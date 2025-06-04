@@ -206,17 +206,23 @@ private:
 struct ObTmpFileFlushInfo
 {
 public:
+  enum Type {
+    INVALID = 0,
+    DATA,
+    META
+  };
   ObTmpFileFlushInfo();
   ~ObTmpFileFlushInfo() { reset(); }
   void reset();
-  bool has_data() const { return flush_data_page_num_ > 0; }
-  bool has_meta() const { return !flush_meta_page_array_.empty(); }
+  bool has_data() const { return Type::DATA == type_ && flush_data_page_num_ > 0; }
+  bool has_meta() const { return Type::META == type_; }
   int assign(const ObTmpFileFlushInfo &other);
   TO_STRING_KV(K(fd_), K(batch_flush_idx_), K(has_last_page_lock_), K(insert_meta_tree_done_), K(update_meta_data_done_),
                K(flush_data_page_disk_begin_id_), K(flush_data_page_num_), K(flush_virtual_page_id_), K(file_size_),
-               K(flush_meta_page_array_), KP(file_handle_.get()));
+               KP(file_handle_.get()));
 public:
   int64_t fd_;
+  Type type_;
   int64_t batch_flush_idx_; // during one round of flushing, multiple FlushInfo may be generated.
                             // records the sequence number to which this info belongs (starting from 0).
   bool has_last_page_lock_;                // indicate the last page is in flushing and holds last_page_lock_ in file
@@ -229,8 +235,6 @@ public:
   int64_t flush_data_page_num_;
   int64_t flush_virtual_page_id_;          // record virtual_page_id while copying data, pass to meta tree while inserting items
   int64_t file_size_;                      // if file_size > 0, it means the last page is in flushing
-  // information for updating meta tree
-  ObArray<ObTmpFileTreeIOInfo> flush_meta_page_array_;
 };
 
 // Each ObTmpFileFlushTask corresponds to a flushing macro block, which can be exclusively used by one file

@@ -364,8 +364,8 @@ int ObExprInnerDoubleToInt::calc_result_type1(ObExprResType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("op raw expr is null or param_count error", K(ret), K(raw_expr));
   } else {
-    bool is_unsigned = (raw_expr->get_extra() & 4) == 4;
-    bool is_decimal = (raw_expr->get_extra() & 8) == 8;
+    bool is_unsigned = (raw_expr->get_range_flag() & 4) == 4;
+    bool is_decimal = (raw_expr->get_range_flag() & 8) == 8;
     if (is_decimal) {
       type.set_number();
     } else if (is_unsigned) {
@@ -393,7 +393,7 @@ int ObExprInnerDoubleToInt::cg_expr(ObExprCGCtx &expr_cg_ctx,
     LOG_WARN("the arg of inner double to int is null.", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = ObExprInnerDoubleToInt::eval_inner_double_to_int;
-    rt_expr.extra_ = raw_expr.get_extra();
+    rt_expr.extra_ = raw_expr.get_range_flag();
   }
   return ret;
 }

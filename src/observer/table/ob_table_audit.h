@@ -14,7 +14,7 @@
 #define OCEANBASE_OBSERVER_OB_TABLE_AUDIT_H_
 
 #include "ob_htable_filters.h"
-#include "ob_table_session_pool.h"
+#include "object_pool/ob_table_object_pool.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "share/table/ob_table.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -35,7 +35,9 @@ public:
         req_buf_(nullptr),
         req_buf_len_(0),
         retry_count_(retry_count),
-        user_client_addr_(user_client_addr)
+        user_client_addr_(user_client_addr),
+        filter_(nullptr)
+
   {
     need_audit_ = GCONF.enable_sql_audit && need_audit;
   }
@@ -81,6 +83,7 @@ public:
   sql::ObExecTimestamp exec_timestamp_;
   const int32_t &retry_count_;
   const common::ObAddr &user_client_addr_;
+  hfilter::Filter *filter_;
 };
 
 template<typename T>
@@ -253,7 +256,7 @@ public:
 
       if (OB_SUCC(ret)) {
         const bool enable_stats = false; // stats has been recorded in record_stat
-        const int64_t record_limit = TABLEAPI_SESS_POOL_MGR->get_query_record_size_limit();
+        const int64_t record_limit = TABLEAPI_OBJECT_POOL_MGR->get_query_record_size_limit();
         MTL_SWITCH(record_.tenant_id_) {
           obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
           if (OB_ISNULL(req_manager)) {
@@ -316,16 +319,29 @@ struct ObTableAuditMultiOp
 {
   static const int64_t MULTI_PREFIX_LEN = 5;
 public:
-  ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<ObTableOperation> &ops)
+  ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<ObTableOperation> *ops)
       : op_type_(op_type),
-        ops_(ops)
+        ops_(ops),
+        entities_(nullptr)
+  {}
+  ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<ObITableEntity*> *entities)
+      : op_type_(op_type),
+        ops_(nullptr),
+        entities_(entities)
   {}
   virtual ~ObTableAuditMultiOp() = default;
   int64_t get_stmt_length(const common::ObString &table_name) const;
   int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
+private:
+  int64_t get_op_count() const { return ops_ != nullptr ? ops_->count() : (entities_ != nullptr ? entities_->count() : 0); }
+  const ObITableEntity* get_entity(int64_t idx) const
+  {
+    return ops_ != nullptr ? &(ops_->at(idx).entity()) : (entities_ != nullptr ? entities_->at(idx) : nullptr);
+  }
 public:
   ObTableOperationType::Type op_type_;
-  const common::ObIArray<ObTableOperation> &ops_;
+  const common::ObIArray<ObTableOperation> *ops_;
+  const common::ObIArray<ObITableEntity*> *entities_;
 };
 
 struct ObTableAuditRedisOp
@@ -339,6 +355,60 @@ public:
   int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
 public:
   const common::ObString &cmd_name_;
+};
+
+// use for audit when start and end can is not in same scope
+template<typename T>
+class ObTableAuditHelper
+{
+public:
+  explicit ObTableAuditHelper(const ObTableApiCredential &credential,
+                              const T &op,
+                              const common::ObString &table_name,
+                              ObTableApiSessGuard &sess_guard,
+                              ObTableAuditCtx *audit_ctx)
+  : credential_(credential),
+    audit_(op, table_name, sess_guard, audit_ctx)
+  {}
+
+  ~ObTableAuditHelper() {}
+
+  void start_audit()
+  {
+    if (audit_.need_audit_ && OB_NOT_NULL(audit_.audit_ctx_)) {
+      if (lib::is_diagnose_info_enabled()) {
+        audit_.record_.exec_record_.record_start();
+      }
+      audit_.start_audit(credential_, audit_.audit_ctx_->get_request_string());
+    }
+  }
+
+  void end_audit(int ret_code,
+                 transaction::ObTxReadSnapshot &snapshot,
+                 sql::stmt::StmtType stmt_type,
+                 int64_t row_cnt,
+                 bool has_table_scan)
+  {
+    if (audit_.need_audit_) {
+      common::ObMaxWaitGuard max_wait_guard(&audit_.record_.exec_record_.max_wait_event_);
+      common::ObTotalWaitGuard total_wait_guard(&audit_.total_wait_desc_);
+      observer::ObProcessMallocCallback pmcb(0, audit_.record_.request_memory_used_);
+      lib::ObMallocCallbackGuard malloc_guard(pmcb);
+      audit_.set_tb_audit_ret_code(ret_code);
+      audit_.set_tb_audit_snapshot(snapshot);
+      audit_.set_tb_audit_stmt_type(stmt_type);
+      audit_.set_tb_audit_return_rows(row_cnt);
+      audit_.set_tb_audit_has_table_scan(has_table_scan);
+      if (OB_NOT_NULL(audit_.audit_ctx_)) {
+        audit_.set_tb_audit_filter(audit_.audit_ctx_->filter_);
+      }
+      audit_.end_audit();
+    }
+  }
+
+private:
+  ObTableApiCredential credential_;
+  table::ObTableAudit<T> audit_;
 };
 
 /*

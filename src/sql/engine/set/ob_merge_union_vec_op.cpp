@@ -484,10 +484,6 @@ int ObMergeUnionVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     VectorFormat default_format = !expr->batch_result_ ? VEC_UNIFORM_CONST
       : (expr->datum_meta_.type_ == ObNullType ? VEC_UNIFORM
     : (expr->is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
-    if (expr->is_nested_expr()) {
-      // just let output is uniform vecctor to simplify process
-      default_format = VEC_UNIFORM;
-    }
     if (OB_FAIL(expr->init_vector(eval_ctx_, default_format,
         MY_SPEC.max_batch_size_))) {
       LOG_WARN("init vector failed", K(ret), K(i));
@@ -583,34 +579,14 @@ int ObMergeUnionVecOp::convert_batch_rows() {
     dst_expr = MY_SPEC.set_exprs_.at(i);
     if (left_selectors_item_cnt_ >= 1) {
       src_expr = left_->get_spec().output_.at(i);
-      if (src_expr->is_nested_expr() && !is_uniform_format(src_expr->get_format(eval_ctx_))) {
-        // 尝试进行nested的转换
-        if (OB_FAIL(src_expr->nested_cast_to_uniform(left_info_.child_op_brs_->size_, eval_ctx_,
-            left_info_.child_op_brs_->skip_))) {
-          LOG_WARN("failed to cast nested expr to uniform", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else {
-        dispatch_convert_batch_rows(src_expr, dst_expr, left_src_idx_selectors_,
-          left_dst_idx_selectors_, left_selectors_item_cnt_);
-      }
+      dispatch_convert_batch_rows(src_expr, dst_expr, left_src_idx_selectors_,
+        left_dst_idx_selectors_, left_selectors_item_cnt_);
     }
     if (OB_FAIL(ret)) {
     } else if (right_selectors_item_cnt_ >= 1) {
       src_expr = right_->get_spec().output_.at(i);
-      if (src_expr->is_nested_expr() && !is_uniform_format(src_expr->get_format(eval_ctx_))) {
-        // 尝试进行nested的转换
-        if (OB_FAIL(src_expr->nested_cast_to_uniform(right_info_.child_op_brs_->size_, eval_ctx_,
-            right_info_.child_op_brs_->skip_))) {
-          LOG_WARN("failed to cast nested expr to uniform", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else {
-        dispatch_convert_batch_rows(src_expr, dst_expr, right_src_idx_selectors_,
-          right_dst_idx_selectors_, right_selectors_item_cnt_);
-      }
+      dispatch_convert_batch_rows(src_expr, dst_expr, right_src_idx_selectors_,
+        right_dst_idx_selectors_, right_selectors_item_cnt_);
     }
   }
   return ret;

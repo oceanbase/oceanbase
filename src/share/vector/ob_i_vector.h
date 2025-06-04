@@ -365,15 +365,15 @@ public:                                                                         
   }                                                                                                \
   OB_INLINE void set_interval_ds(const int64_t idx, const ObIntervalDSValue &v)                    \
   {                                                                                                \
-    derived_this().set_payload_shallow(idx, &v, v.get_store_size());                               \
+    derived_this().set_payload(idx, &v, v.get_store_size());                                       \
   }                                                                                                \
   OB_INLINE void set_otimestamp_tz(const int64_t idx, const ObOTimestampData &v)                   \
   {                                                                                                \
-    *(reinterpret_cast<ObOTimestampData *>(no_cv(derived_this().get_payload(idx)))) = v;           \
+    derived_this().set_payload(idx, &v, sizeof(v));                                                \
   }                                                                                                \
   OB_INLINE void set_otimestamp_tiny(const int64_t idx, const ObOTimestampTinyData &v)             \
   {                                                                                                \
-    *(reinterpret_cast<ObOTimestampTinyData *>(no_cv(derived_this().get_payload(idx)))) = v;       \
+    derived_this().set_payload(idx, &v, sizeof(v));                                                \
   }                                                                                                \
   OB_INLINE void set_number(const int64_t idx, const number::ObNumber &num)                        \
   {                                                                                                \
@@ -555,13 +555,13 @@ public:
                        const int64_t col_idx) = 0;
 
   // set values from this vector to idx-th column of rows
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int to_rows(const sql::RowMeta &row_meta,
                       sql::ObCompactRow **stored_rows,
                       const uint16_t selector[],
                       const int64_t size,
                       const int64_t col_idx) const = 0;
 
-  virtual void to_rows(const sql::RowMeta &row_meta,
+  virtual int to_rows(const sql::RowMeta &row_meta,
                       sql::ObCompactRow **stored_rows,
                       const int64_t size,
                       const int64_t col_idx) const = 0;

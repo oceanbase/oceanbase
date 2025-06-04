@@ -46,6 +46,9 @@ int ObCreateDatabaseResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node children", K(node), K(node->children_));
+  } else if (is_external_catalog_id(session_info_->get_current_default_catalog())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create database in catalog is");
   } else {
     ObCreateDatabaseStmt *create_database_stmt = NULL;
     if (OB_ISNULL(create_database_stmt = create_stmt<ObCreateDatabaseStmt>())) {

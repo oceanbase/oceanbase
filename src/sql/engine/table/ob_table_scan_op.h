@@ -240,7 +240,8 @@ public:
     struct {
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
       uint64_t use_index_merge_              : 1; // whether use index merge
-      uint64_t reserved_                     : 62;
+      uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
+      uint64_t reserved_                     : 61;
     };
   };
 };
@@ -464,7 +465,8 @@ public:
       uint64_t is_fts_index_aux_                : 1; // mark if ddl table is the fts index aux table.
       uint64_t is_multivalue_ddl_               : 1;
       uint64_t can_be_paused_                   : 1;
-      uint64_t reserved_                        : 49;
+      uint64_t need_check_outrow_lob_           : 1;
+      uint64_t reserved_                        : 48;
     };
   };
   int64_t tenant_id_col_idx_;
@@ -474,12 +476,47 @@ public:
   common::ObString parser_properties_;
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   ExprFixedArray pseudo_column_exprs_;
+  int64_t lob_inrow_threshold_;
+};
+
+// for random batch_size & skip
+struct ObRandScanProcessor
+{
+  ObRandScanProcessor() : rand_brs_(), status_(RandScanStatus::RAND_SCAN_OFF),
+                          rand_seed_(0), tsc_spec_(nullptr), tsc_op_(nullptr) {}
+  OB_INLINE bool use_rand_scan() { return !(RandScanStatus::RAND_SCAN_OFF == status_); }
+  int init(const ObTableScanSpec *tsc_spec, ObTableScanOp *tsc_op);
+  int inner_get_next_batch(const int64_t max_row_cnt);
+  void reset()
+  {
+    rand_brs_.skip_ = nullptr;
+    rand_brs_.size_ = 0;
+    status_ = RandScanStatus::RAND_SCAN_OFF;
+    rand_seed_ = 0;
+  }
+  void reuse()
+  {
+    status_ = RandScanStatus::RAND_SCAN_INIT;
+  }
+  enum class RandScanStatus
+  {
+    RAND_SCAN_OFF,
+    RAND_SCAN_INIT,
+    RAND_SCAN_FIRST_PART,
+    RAND_SCAN_SECOND_PART
+  };
+  ObBatchRows rand_brs_;
+  RandScanStatus status_;
+  int64_t rand_seed_;
+  const ObTableScanSpec *tsc_spec_;
+  ObTableScanOp *tsc_op_;
 };
 
 class ObTableScanOp : public ObOperator
 {
   friend class ObDASScanOp;
   friend class ObGlobalIndexLookupOpImpl;
+  friend class ObRandScanProcessor;
 public:
   static constexpr int64_t CHECK_STATUS_ROWS_INTERVAL =  1 << 13;
 
@@ -515,6 +552,9 @@ public:
          (! ctx_.get_physical_plan_ctx()->get_phy_plan()->has_for_update() )
         );
   }
+
+  int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip) override;
+
 protected:
   // Get GI task then update location_idx and $cur_access_tablet_
   // NOTE: set $iter_end_ if no task found.
@@ -537,9 +577,9 @@ protected:
   int build_bnlj_params();
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
   bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.get_query_range_provider().has_range(); }
-  int prepare_single_scan_range(int64_t group_idx = 0);
-  int prepare_index_merge_scan_range(int64_t group_idx = 0);
-  int prepare_range_for_each_index(int64_t group_idx, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
+  int prepare_single_scan_range(int64_t group_idx = 0, bool need_sort = false);
+  int prepare_index_merge_scan_range(int64_t group_idx = 0, bool need_sort = false);
+  int prepare_range_for_each_index(int64_t group_idx, bool need_sort, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
   int reuse_table_rescan_allocator();
 
   int local_iter_rescan();
@@ -580,6 +620,7 @@ protected:
                                uint32_t& record_num,
                                bool& is_save_rowkey);
   int inner_get_next_multivalue_index_row();
+  int set_need_check_outrow_lob();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
 
@@ -610,6 +651,7 @@ protected:
   int init_ddl_column_checksum();
   int add_ddl_column_checksum();
   int add_ddl_column_checksum_batch(const int64_t row_count);
+  int check_has_invalid_outrow_lob(const bool is_batch);
   static int corrupt_obj(ObObj &obj);
   int report_ddl_column_checksum();
   int get_next_batch_with_das(int64_t &count, int64_t capacity);
@@ -709,9 +751,6 @@ private:
   int inner_get_next_batch_for_tsc(const int64_t max_row_cnt);
   int inner_rescan_for_tsc();
 
-  void gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size, int64_t &skip_bits);
-
-  void adjust_rand_output_brs(const int64_t rand_skip_bits);
   int inner_get_next_fts_index_row();
   int fetch_next_fts_index_rows();
   int fill_generated_fts_cols(ObDatumRow *row);
@@ -766,6 +805,9 @@ protected:
   // all tasks belonging to this op share the same key
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
+  bool need_check_outrow_lob_;
+private:
+  ObRandScanProcessor rand_scan_processor_;
  };
 
 } // end namespace sql

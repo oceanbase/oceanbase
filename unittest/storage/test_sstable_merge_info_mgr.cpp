@@ -247,11 +247,13 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
 
   const int64_t minor_pool_size = MEMORY_SIZE * ObTenantSSTableMergeInfoMgr::MINOR_MEMORY_PERCENTAGE / 100;
   const int64_t major_pool_size = MEMORY_SIZE * (100 - ObTenantSSTableMergeInfoMgr::MINOR_MEMORY_PERCENTAGE) / 100;
+  const int64_t after_purge_minor_pool_size = ObIDiagnoseInfoMgr::GC_LOW_PERCENTAGE / 100.0 * minor_pool_size;
   const int64_t after_purge_major_pool_size = ObIDiagnoseInfoMgr::GC_LOW_PERCENTAGE / 100.0 * major_pool_size;
-  int64_t minor_item_cnt = MIN(minor_pool_size / sizeof(ObSSTableMergeHistory), max_cnt);
+  int64_t minor_item_cnt_after_purge = MIN(after_purge_minor_pool_size / sizeof(ObSSTableMergeHistory), max_cnt);
   int64_t major_item_cnt_after_purge = MIN(after_purge_major_pool_size / sizeof(ObSSTableMergeHistory), max_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(minor_item_cnt + major_item_cnt_after_purge, MTL(ObTenantSSTableMergeInfoMgr*)->size());
+  STORAGE_LOG(INFO, "print item cnt", K(minor_item_cnt_after_purge), K(major_item_cnt_after_purge));
+  ASSERT_EQ(minor_item_cnt_after_purge + major_item_cnt_after_purge, MTL(ObTenantSSTableMergeInfoMgr*)->size());
   int64_t read_idx = 0;
   // read major merge info from {max_cnt-major_item_cnt_after_purge..max_cnt}
   int64_t tablet_start_idx = max_cnt - major_item_cnt_after_purge + 1;
@@ -266,11 +268,12 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   }
   // read minor merge info from {1..max_cnt}
   read_idx = 0;
-  while (read_idx < minor_item_cnt && OB_SUCC(ret)) {
+  tablet_start_idx = max_cnt - minor_item_cnt_after_purge + 1;
+  while (read_idx < minor_item_cnt_after_purge && OB_SUCC(ret)) {
     if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)))) {
       ASSERT_EQ(OB_ITER_END, ret);
     } else {
-      ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(read_idx + 1));
+      ASSERT_EQ(TRUE, read_info.static_info_.tablet_id_ == ObTabletID(tablet_start_idx + read_idx));
       ASSERT_EQ(TRUE, read_info.static_info_.merge_type_ == ObMergeType::MINOR_MERGE);
       ++read_idx;
     }

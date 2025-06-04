@@ -100,6 +100,37 @@ int ObMigrationOpType::get_ls_wait_status(const TYPE &type, ObMigrationStatus &w
   return ret;
 }
 
+int ObMigrationOpType::convert_to_dr_type(
+    const TYPE &type,
+    obrpc::ObDRTaskType &dr_type)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(type));
+  } else {
+    switch (type) {
+      case ObMigrationOpType::ADD_LS_OP: {
+        dr_type = obrpc::ObDRTaskType::LS_ADD_REPLICA;
+        break;
+      }
+      case ObMigrationOpType::MIGRATE_LS_OP: {
+        dr_type = obrpc::ObDRTaskType::LS_MIGRATE_REPLICA;
+        break;
+      }
+      case ObMigrationOpType::REPLACE_LS_OP: {
+        dr_type = obrpc::ObDRTaskType::LS_REPLACE_REPLICA;
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("unknown op type", KR(ret), K(type));
+      }
+    }
+  }
+  return ret;
+}
+
 /******************ObMigrationStatusHelper*********************/
 int ObMigrationStatusHelper::trans_migration_op(
     const ObMigrationOpType::TYPE &op_type, ObMigrationStatus &migration_status)
@@ -1330,7 +1361,8 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_TRANSFER_SYS_ERROR :
     case OB_INVALID_TABLE_STORE :
     case OB_UNEXPECTED_TABLET_STATUS :
-    case OB_TABLET_TRANSFER_SEQ_NOT_MATCH:
+    case OB_TABLET_TRANSFER_SEQ_NOT_MATCH :
+    case OB_MIGRATE_TX_DATA_NOT_CONTINUES :
       bret = false;
       break;
     default:

@@ -45,6 +45,7 @@ class ObTableLoadCoordinator
   static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
   static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
   static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
+  static const int64_t CG_BUFFER_SIZE = 64LL * 1024; // 64K
   static const int64_t MIN_THREAD_COUNT = 2;
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
@@ -77,14 +78,15 @@ private:
                          int64_t &coord_session_count,
                          int64_t &min_session_count,
                          int64_t &write_session_count);
-  int cal_memory_size(const bool need_check_need_sort,
-                      const int64_t store_server_count,
-                      const int64_t write_session_count,
-                      const int64_t memory_limit,
-                      const ObArray<int64_t> &partitions,
-                      ObDirectLoadResourceApplyArg &apply_arg,
-                      bool &main_need_sort,
-                      bool &task_need_sort);
+  int calc_memory_size(const int64_t store_server_count,
+                       const int64_t write_session_count,
+                       const int64_t memory_limit,
+                       const int64_t part_unsort_memory,
+                       const int64_t min_part_memory,
+                       const ObArray<int64_t> &partitions,
+                       ObDirectLoadResourceApplyArg &apply_arg,
+                       bool &main_need_sort,
+                       bool &task_need_sort);
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();

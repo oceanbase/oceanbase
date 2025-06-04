@@ -420,11 +420,6 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
                                                phy_location_info_ptrs))) {
           LOG_WARN("failed to select replicas", K(ret), K(table_locations),
                    K(exec_ctx.get_addr()), K(phy_location_info_ptrs));
-        } else if (!has_duplicate_tbl_not_in_dml || is_retrying) {
-          // do nothing
-        } else if (OB_FAIL(reselect_duplicate_table_best_replica(candi_table_locs,
-                                                                 on_same_server))) {
-          LOG_WARN("failed to reselect replicas", K(ret));
         }
         LOG_TRACE("after select_replicas", K(on_same_server), K(has_duplicate_tbl_not_in_dml),
                   K(candi_table_locs), K(table_locations), K(ret));

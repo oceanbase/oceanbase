@@ -207,6 +207,16 @@ public:
       const ObMergeType &merge_type,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int schedule_tablet_ss_minor_merge(
+      ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn);
+  static int schedule_tablet_ss_minor_merge(
+      const ObMergeType &merge_type,
+      ObLSHandle &ls_handle,
+      ObTabletHandle &tablet_handle);
+#endif
   static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
@@ -244,7 +254,21 @@ public:
   static int schedule_tablet_ddl_major_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
-
+#ifdef ERRSIM
+  static void errsim_after_mini_schedule_adaptive(
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
+    bool &medium_is_cooling_down,
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &reason);
+#endif
+  static int try_schedule_adaptive_merge(
+    ObLSHandle &ls_handle,
+    ObTabletHandle &tablet_handle,
+    const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
+    const int64_t update_row_cnt,
+    const int64_t delete_row_cnt,
+    bool &create_dag);
   int get_min_dependent_schema_version(int64_t &min_schema_version);
   int user_request_schedule_medium_merge(
     const share::ObLSID &ls_id,
@@ -259,7 +283,7 @@ private:
   int schedule_ls_minor_merge(ObLSHandle &ls_handle);
   OB_INLINE int schedule_tablet_minor(
     ObLSHandle &ls_handle,
-    ObTabletHandle tablet_handle,
+    ObTabletHandle &tablet_handle,
     bool &schedule_minor_flag,
     bool &need_fast_freeze_flag);
   int schedule_ddl_tablet_merge(
@@ -270,7 +294,7 @@ public:
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
   static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 3;
-  static const int64_t TX_TABLE_NO_MAJOR_MERGE_TYPE_CNT = 1;
+  static const int64_t INNER_TABLET_NO_MAJOR_MERGE_TYPE_CNT = 1;
   static const int64_t BF_TASK_QUEUE_SIZE = 10L * 1000;
   static const int64_t BF_TASK_MAP_SIZE = 10L * 1000;
   static const int64_t BF_TASK_TOTAL_LIMIT = 512L * 1024L * 1024L;

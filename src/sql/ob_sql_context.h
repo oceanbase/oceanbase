@@ -27,9 +27,11 @@
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
+#include "share/stat/ob_opt_ds_stat_cache.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -40,6 +42,7 @@ class ObPartMgr;
 }
 namespace share
 {
+class ObExternalObject;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -359,7 +362,7 @@ public:
       last_query_retry_err_(common::OB_SUCCESS),
       retry_cnt_(0),
       query_switch_leader_retry_timeout_ts_(0),
-      query_retry_ash_diag_info_()
+      query_retry_ash_info_()
   {
   }
   virtual ~ObQueryRetryInfo() {}
@@ -404,9 +407,7 @@ public:
   int get_last_query_retry_err() const { return last_query_retry_err_; }
   void inc_retry_cnt() { retry_cnt_++; }
   int64_t get_retry_cnt() const { return retry_cnt_; }
-
-  ObQueryRetryAshInfo* get_query_retry_ash_diag_info_ptr() { return &query_retry_ash_diag_info_; }
-  const ObQueryRetryAshInfo& get_retry_ash_diag_info() const { return query_retry_ash_diag_info_; }
+  ObQueryRetryAshInfo& get_retry_ash_info() { return query_retry_ash_info_; }
 
   TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(last_query_retry_err));
 
@@ -424,7 +425,7 @@ private:
   int64_t retry_cnt_;
   // for fast fail,
   int64_t query_switch_leader_retry_timeout_ts_;
-  ObQueryRetryAshInfo query_retry_ash_diag_info_;
+  ObQueryRetryAshInfo query_retry_ash_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
 };
@@ -464,12 +465,39 @@ public:
   int get_table_schema(uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false) const;
+  int get_database_schema(const uint64_t tenant_id,
+                          const uint64_t database_id,
+                          const ObDatabaseSchema *&database_schema);
   int get_table_schema(const uint64_t tenant_id,
                        const uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false);
   int get_database_schema(const uint64_t database_id,
                           const ObDatabaseSchema *&database_schema);
+  int get_catalog_database_schema(const uint64_t tenant_id,
+                                  const uint64_t catalog_id,
+                                  const ObString &database_name,
+                                  const ObDatabaseSchema *&database_schema);
+  int get_catalog_database_id(const uint64_t tenant_id,
+                              const uint64_t catalog_id,
+                              const ObString &database_name,
+                              uint64_t &database_id);
+  int get_catalog_table_schema(const uint64_t tenant_id,
+                               const uint64_t catalog_id,
+                               const uint64_t database_id,
+                               const ObString &database_name,
+                               const ObString &tbl_name,
+                               const ObTableSchema *&table_schema);
+  int get_catalog_table_schema(const uint64_t tenant_id,
+                               const uint64_t catalog_id,
+                               const uint64_t database_id,
+                               const ObString &tbl_name,
+                               const ObTableSchema *&table_schema);
+  int get_catalog_table_id(const uint64_t tenant_id,
+                           const uint64_t catalog_id,
+                           const uint64_t database_id,
+                           const ObString &tbl_name,
+                           uint64_t &table_id);
   int get_column_schema(uint64_t table_id, const common::ObString &column_name,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
@@ -500,19 +528,20 @@ public:
   uint64_t get_next_mocked_schema_id() { return ++mocked_schema_id_counter_; }
   int get_mocked_table_schema(uint64_t ref_table_id, const share::schema::ObTableSchema *&table_schema) const;
   int add_mocked_table_schema(const share::schema::ObTableSchema &table_schema);
-
+  int add_mocked_database_schema(const share::schema::ObDatabaseSchema &database_schema);
+  int recover_schema_from_external_object(const share::ObExternalObject &external_object);
+  int recover_schema_from_external_objects(const ObIArray<share::ObExternalObject> &external_objects);
+  common::ObIArray<const share::schema::ObDatabaseSchema *> &get_mocked_database_schemas();
+  common::ObIArray<const share::schema::ObTableSchema *> &get_mocked_table_schemas();
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
-  static int get_table_schema(ObSqlSchemaGuard * sql_schema_guard,
-                              ObSchemaGetterGuard * schema_getter_guard,
-                              const uint64_t tenant_id,
-                              const uint64_t table_id,
-                              const ObTableSchema *&table_schema);
+
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;
   common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
+  common::ObSEArray<const share::schema::ObDatabaseSchema *, 1> mocked_database_schemas_;
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
@@ -738,6 +767,9 @@ public:
   bool is_text_ps_mode_;
   uint64_t first_plan_hash_;
   common::ObString first_outline_data_;
+  int64_t first_equal_param_cons_cnt_;
+  int64_t first_const_param_cons_cnt_;
+  int64_t first_expr_cons_cnt_;
   bool is_bulk_;
   ObInsertRewriteOptCtx ins_opt_ctx_;
   union
@@ -844,6 +876,7 @@ public:
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
     ori_question_marks_count_ = 0;
+    filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
   }
 
@@ -875,6 +908,7 @@ public:
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
+  int get_local_session_vars(const int64_t idx, const ObLocalSessionVar *&local_session_var) const;
   bool get_injected_random_status() const { return injected_random_status_; }
   void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
   void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
@@ -957,6 +991,7 @@ public:
   bool injected_random_status_;
   ObRandom rand_gen_;
   int64_t ori_question_marks_count_;
+  common::hash::ObHashMap<ObOptDSStat::Key, ObOptDSStat, common::hash::NoPthreadDefendMode> filter_ds_stat_cache_;
   union {
     int8_t type_demotion_flag_;
     struct {

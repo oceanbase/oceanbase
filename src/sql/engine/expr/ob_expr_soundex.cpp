@@ -83,18 +83,18 @@ int ObExprSoundex::calc_result_type1(
         res_type = ObLongTextType;
         res_length = OB_MAX_LONGTEXT_LENGTH;
       }
-      if (0 == raw_expr->get_extra()) {
+      if (0 == raw_expr->get_res_cs_type()) {
         // calc result type for first time, record collation_type of original param.
         res_cs_type = type1.get_collation_type();
-        raw_expr->set_extra(static_cast<uint64_t>(res_cs_type));
-      } else if (OB_UNLIKELY(raw_expr->get_extra() >= static_cast<uint64_t>(CS_TYPE_MAX))) {
+        raw_expr->set_res_cs_type(static_cast<uint64_t>(res_cs_type));
+      } else if (OB_UNLIKELY(raw_expr->get_res_cs_type() >= static_cast<uint64_t>(CS_TYPE_MAX))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected collationt type", K(ret), K(raw_expr->get_extra()));
+        LOG_WARN("unexpected collationt type", K(ret), K(raw_expr->get_res_cs_type()));
       } else {
         // If collation_type of param is nonascii, implicit cast will be added above it to cast to utf8.
         // To avoid set res_cs_type to utf8, which is different from the last one and makes calc_result_type unstable,
         // we store the res_cs_type in raw_expr->extra_.
-        res_cs_type = static_cast<ObCollationType>(raw_expr->get_extra());
+        res_cs_type = static_cast<ObCollationType>(raw_expr->get_res_cs_type());
       }
     } else {
       param_calc_type = ObVarcharType;
@@ -102,7 +102,7 @@ int ObExprSoundex::calc_result_type1(
       res_type = ObVarcharType;
       res_length = OB_MAX_BINARY_LENGTH;
       res_cs_type = type_ctx.get_coll_type();
-      raw_expr->set_extra(static_cast<uint64_t>(res_cs_type));
+      raw_expr->set_res_cs_type(static_cast<uint64_t>(res_cs_type));
     }
   }
   if (OB_SUCC(ret)) {

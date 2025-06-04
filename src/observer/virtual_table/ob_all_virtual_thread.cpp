@@ -13,6 +13,7 @@
 #include "ob_all_virtual_thread.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
@@ -235,8 +236,13 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               break;
             }
             case NUMA_NODE: {
-              int64_t numa_node = -1;
-              cells[i].set_int(numa_node);
+              GET_OTHER_TSI_ADDR(numa_node, &ObAffinityCtrl::get_tls_node());
+              int64_t numa_node_display = -1;
+              if (numa_node == OB_NUMA_SHARED_INDEX) {
+              } else {
+                numa_node_display = numa_node;
+              }
+              cells[i].set_int(numa_node_display);
               break;
             }
             default: {

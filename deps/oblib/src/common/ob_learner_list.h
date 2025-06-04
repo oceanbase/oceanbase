@@ -62,6 +62,7 @@ public:
   // by addr
   int64_t get_index_by_addr(const common::ObAddr &server) const;
   int get_addr_array(ObIArray<common::ObAddr> &addr_array) const;
+  int to_string_only_ip_port(ObSqlString &member_list_buf) const;
 private:
   typedef common::ObSEArray<T, OB_MAX_MEMBER_NUMBER> LogLearnerArray;
   LogLearnerArray learner_array_;

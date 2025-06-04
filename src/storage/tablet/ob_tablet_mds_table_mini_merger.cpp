@@ -274,7 +274,7 @@ int ObTabletDumpMds2MiniOperator::operator()(const mds::MdsDumpKV &kv)
     } else if (OB_FAIL(row_store_.put_row_into_queue(cur_row_))) {
       LOG_WARN("fail to put row into queue", K(ret));
     } else {
-      LOG_INFO("mds op succeed to add row", K(ret), K(adapter), K(cur_row_));
+      LOG_INFO("mds op succeed to add row", K(ret), K(adapter), K(cur_row_), K(kv));
     }
   }
 
@@ -382,6 +382,7 @@ int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMerge
     ObMacroDataSeq macro_start_seq(0);
     ObMacroSeqParam macro_seq_param;
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+
     if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_EAGAIN;
@@ -400,7 +401,7 @@ int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMerge
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
     } else if (OB_FAIL(data_desc_.init(false/*is ddl*/, *storage_schema, ls_id, tablet_id,
         ctx.get_merge_type(), ctx.get_snapshot(), data_version, ctx.static_desc_.micro_index_clustered_,
-        ctx.static_desc_.tablet_transfer_seq_, ctx.static_param_.scn_range_.end_scn_))) {
+        ctx.static_desc_.tablet_transfer_seq_, ctx.static_desc_.reorganization_scn_, ctx.static_param_.scn_range_.end_scn_))) {
       LOG_WARN("fail to init whole desc", KR(ret), K(ctx), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(0))) {
       LOG_WARN("Failed to set parallel degree to macro start seq", K(ret));
@@ -497,6 +498,8 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     ctx->static_param_.scn_range_.start_scn_ = share::SCN::plus(share::SCN::min_scn(), 1);
     ctx->static_param_.scn_range_.end_scn_ = mig_param.mds_checkpoint_scn_;
+    // migrate of ss should not rewrite the sstable of mds, set with clog checkpoint scn now.
+    ctx->static_param_.rec_scn_ = mig_param.mds_checkpoint_scn_;
     ctx->static_param_.version_range_.snapshot_version_ = mig_param.mds_checkpoint_scn_.get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
     ctx->static_desc_.tablet_transfer_seq_ = mig_param.transfer_info_.transfer_seq_;
@@ -526,7 +529,8 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
 int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     const ObTablet &tablet,
     common::ObArenaAllocator &allocator,
-    ObTableHandleV2 &table_handle)
+    ObTableHandleV2 &table_handle,
+    bool &has_tablet_status)
 {
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(STORAGE, 10_ms);
@@ -552,6 +556,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     ctx->static_param_.scn_range_.start_scn_ = share::SCN::plus(share::SCN::min_scn(), 1);
     ctx->static_param_.scn_range_.end_scn_ = tablet.get_mds_checkpoint_scn();
+    ctx->static_param_.rec_scn_ = tablet.get_mds_checkpoint_scn();
     ctx->static_param_.version_range_.snapshot_version_ = tablet.get_mds_checkpoint_scn().get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
     ctx->static_desc_.tablet_transfer_seq_ = tablet.get_transfer_seq();
@@ -568,7 +573,8 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
         } else if (CLICK_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, table_handle))) {
           LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
         } else {
-          LOG_INFO("succeed to generate mds mini sstable for compat", K(ret), K(ls_id), K(tablet_id), K(data));
+          has_tablet_status = !data.tablet_status_committed_kv_.v_.user_data_.empty() ? true : false;
+          LOG_INFO("succeed to generate mds mini sstable for compat", K(ret), K(ls_id), K(tablet_id), K(has_tablet_status), K(data));
         }
       }
     }

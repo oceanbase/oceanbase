@@ -171,6 +171,7 @@ public:
   static int prepare_gather_stat_param(const ObTableStatParam &param,
                                        StatLevel stat_level,
                                        const PartitionIdBlockMap *partition_id_block_map,
+                                       const PartitionIdSkipRateMap *partition_id_skip_rate_map,
                                        bool is_split_gather,
                                        int64_t gather_vectorize,
                                        bool use_column_store,

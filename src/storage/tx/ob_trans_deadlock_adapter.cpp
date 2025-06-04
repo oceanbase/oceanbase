@@ -628,7 +628,7 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     } else if (++step && exec_ctx.get_errcode() != OB_TRY_LOCK_ROW_CONFLICT) {
       unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_OTHER_ERR);
       DETECT_LOG(INFO, "try unregister deadlock detecotr cause meet non-lock error", PRINT_WRAPPER);
-    } else if (++step && OB_FAIL(register_or_replace_conflict_trans_ids(desc->tid(), session->get_sessid(), conflict_txs))) {
+    } else if (++step && OB_FAIL(register_or_replace_conflict_trans_ids(desc->tid(), session->get_server_sid(), conflict_txs))) {
       DETECT_LOG(WARN, "register or replace list failed", PRINT_WRAPPER);
     } else {
       // do nothing, register success or keep retrying

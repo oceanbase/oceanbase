@@ -92,20 +92,6 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   return ret;
 }
 
-void ObMvccValueIterator::lock_for_read_end(const int64_t lock_start_time, int64_t ret) const
-{
-  // TODO: Add ELR check back
-  if (GCONF.enable_sql_audit && OB_INVALID_TIMESTAMP != lock_start_time) {
-    const int64_t lock_use_time = ObClockGenerator::getClock() - lock_start_time;
-    EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
-    if (OB_FAIL(ret)) {
-      EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);
-    } else {
-      EVENT_INC(MEMSTORE_READ_LOCK_SUCC_COUNT);
-    }
-  }
-}
-
 int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
                                               ObMvccTransNode *&iter)
 {
@@ -435,12 +421,12 @@ int ObMvccRowIterator::get_next_row(
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
-    TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), KP(this));
   }
   while (OB_SUCC(ret)) {
-    const ObMemtableKey *tmp_key = NULL;
-    ObMvccRow *value = NULL;
+    const ObMemtableKey *tmp_key = nullptr;
+    ObMvccRow *value = nullptr;
     if (OB_FAIL(query_engine_iter_->next())) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "query engine iter next fail", K(ret), "ctx", *ctx_);
@@ -459,20 +445,15 @@ int ObMvccRowIterator::get_next_row(
       }
     }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(value_iter_.init(*ctx_,
-                                   tmp_key,
-                                   value,
-                                   memtable_ls_id_,
-                                   query_flag_))) {
-        TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
-      } else if (!value_iter_.is_exist()) {
-        // mvcc row is empty(no tnode), so we continue
-      } else {
-        key = tmp_key;
-        value_iter = &value_iter_;
-        break;
-      }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_iter_.init(*ctx_, tmp_key, value, memtable_ls_id_, query_flag_))) {
+      TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
+    } else if (!value_iter_.is_exist()) {
+      // mvcc row is empty(no tnode), so we continue
+    } else {
+      key = tmp_key;
+      value_iter = &value_iter_;
+      break;
     }
   }
   return ret;

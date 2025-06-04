@@ -68,12 +68,8 @@ public:
                                                     struct _Unwind_Context *context);
   static int eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType *type, int64_t *error_code, const char **sql_state, int64_t *str_len);
   static ObPLConditionType eh_classify_exception(const char *sql_state);
-
-  static int eh_adjust_call_stack(ObPLContext &pl_ctx, uint64_t location, int err_code);
-
 #ifdef OB_BUILD_ORACLE_PL
-  static int eh_adjust_call_stack(
-    ObPLFunction *pl_func, ObPLContext *pl_ctx, uint64_t loc, int error_code);
+  static int eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code);
 #endif
 
 public:
@@ -127,7 +123,11 @@ public:
     eh_resume_(),
     eh_personality_(),
     eh_convert_exception_(),
-    eh_classify_exception() {}
+    eh_classify_exception()
+#ifdef OB_BUILD_ORACLE_PL
+    ,eh_adjust_call_stack_()
+#endif
+  {}
   virtual ~ObPLEHService() {}
 
 public:
@@ -169,6 +169,9 @@ public:
   jit::ObLLVMFunction eh_debug_int8ptr_;
   jit::ObLLVMFunction eh_debug_obj_;
   jit::ObLLVMFunction eh_debug_objparam_;
+#ifdef OB_BUILD_ORACLE_PL
+  jit::ObLLVMFunction eh_adjust_call_stack_;
+#endif
 };
 
 }

@@ -1022,12 +1022,17 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
   const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
   bool is_lob_tablet = false;
   bool is_data_split_finished = false;
+  bool can_skip = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
   } else if (OB_ISNULL(log_) || OB_UNLIKELY(!log_->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(log_));
+  } else if (OB_FAIL(check_can_skip_replay(handle, can_skip))) {
+    LOG_WARN("failed to check can skip replay", K(ret), KPC(log_));
+  } else if (can_skip) {
+    LOG_INFO("skip replay split finish log", KPC(log_));
   } else if (OB_ISNULL(dest_tablet_ids = &(log_->basic_info_.dest_tablets_id_))) {
     ret = OB_NULL_CHECK_ERROR;
     LOG_WARN("unexpected nullptr of dest_tablet_ids", K(ret), KPC(dest_tablet_ids));
@@ -1127,6 +1132,23 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
         LOG_INFO("modify tablet restore status", K(tablet->get_tablet_id()), "old status", des_restore_status, "new status", ObTabletRestoreStatus::STATUS::EMPTY);
       }
     }
+  }
+  return ret;
+}
+
+int ObSplitFinishReplayExecutor::check_can_skip_replay(ObTabletHandle &handle, bool &can_skip)
+{
+  int ret = OB_SUCCESS;
+  can_skip = false;
+  if (!handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_ISNULL(handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr of tablet", K(ret), "tablet", *handle.get_obj());
+  } else if (scn_ < handle.get_obj()->get_mds_checkpoint_scn()) {
+    can_skip = true;
+    LOG_INFO("skip replay split finish log", KPC(log_), K(scn_), "tablet", *handle.get_obj());
   }
   return ret;
 }

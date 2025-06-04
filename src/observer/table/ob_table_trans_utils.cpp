@@ -31,7 +31,7 @@ int ObTableTransParam::init(const ObTableConsistencyLevel consistency_level,
 {
   int ret = OB_SUCCESS;
 
-  if (!ls_id.is_valid()) {
+  if (!need_global_snapshot && !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls id", K(ret), K(ls_id));
   } else {
@@ -52,7 +52,7 @@ int ObTableTransParam::init(bool is_readonly,
 {
   int ret = OB_SUCCESS;
 
-  if (!ls_id.is_valid()) {
+  if (!need_global_snapshot && !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls id", K(ret));
   } else {
@@ -183,6 +183,7 @@ int ObTableTransUtils::start_trans(ObTableTransParam &trans_param)
 int ObTableTransUtils::end_trans(ObTableTransParam &trans_param)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(T_end_trans_begin);
   ObTxExecResult trans_result;
   TransState *trans_state_ptr = trans_param.trans_state_ptr_;
 
@@ -199,7 +200,6 @@ int ObTableTransUtils::end_trans(ObTableTransParam &trans_param)
     }
   }
 
-  NG_TRACE(T_end_trans_begin);
   if (OB_SUCC(ret)) {
     if (trans_state_ptr->is_start_trans_executed() && trans_state_ptr->is_start_trans_success()) {
       if (trans_param.trans_desc_->is_rdonly() || trans_param.use_sync_) {
@@ -217,8 +217,17 @@ int ObTableTransUtils::end_trans(ObTableTransParam &trans_param)
     }
     trans_state_ptr->reset();
   }
-  NG_TRACE(T_end_trans_end);
 
+  // In some scenarios, such as lsop, callback will be alloced for in advance.
+  // If the transaction is rolled back, it also needs to be destroyed
+  if (trans_param.is_rollback_ && OB_NOT_NULL(trans_param.create_cb_functor_)) {
+    ObTableAPITransCb *callback = trans_param.create_cb_functor_->get_callback();
+    if (OB_NOT_NULL(callback)) {
+      callback->destroy_cb();
+    }
+  }
+
+  NG_TRACE(T_end_trans_end);
   return ret;
 }
 

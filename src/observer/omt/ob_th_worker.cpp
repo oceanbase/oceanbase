@@ -19,6 +19,7 @@
 #include "sql/executor/ob_memory_tracker.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/thread/threads.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -34,7 +35,7 @@ namespace oceanbase
 namespace omt
 {
 int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
-                  int32_t level, bool force, ObResourceGroup *group)
+                  int32_t level, bool force, ObResourceGroup *group, int32_t group_index)
 {
   int ret = OB_SUCCESS;
   if (!force && tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
@@ -57,6 +58,7 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
     worker->set_group_id_(group_id);
     worker->set_worker_level(level);
     worker->set_group(group);
+    worker->set_numa_info(tenant->id(), GCONF._enable_numa_aware, group_index);
     if (OB_FAIL(worker->start())) {
       ob_delete(worker);
       worker = nullptr;
@@ -98,6 +100,7 @@ ObThWorker::ObThWorker()
       last_wakeup_ts_(0), blocking_ts_(nullptr),
       idle_us_(0)
 {
+  module_name_[0] = '\0';
 }
 
 ObThWorker::~ObThWorker()
@@ -325,6 +328,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
     if (this->get_worker_level() == INT32_MAX) {
       this->set_worker_level(0);
     }
+    snprintf(module_name_, MAX_MODULE_NAME_LEN, "ReqWorker(Level:%d)", get_worker_level());
     while (!has_set_stop()) {
       worker_level = get_worker_level();
       if (OB_NOT_NULL(tenant_)) {
@@ -379,8 +383,9 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             if (OB_SUCC(ret)) {
               if (OB_NOT_NULL(req)) {
                 ObEnableDiagnoseGuard enable_guard;
-                ObDiagnosticInfo *di = req->get_type() == ObRequest::OB_MYSQL
-                        ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+                ObDiagnosticInfo *di =
+                    req->get_type() == ObRequest::OB_MYSQL
+                        ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
                         : req->get_diagnostic_info();
                 ObDiagnosticInfoSwitchGuard guard(di);
                 if (di) {
@@ -389,7 +394,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
 #ifdef ENABLE_DEBUG_LOG
                 if (OB_ISNULL(di)) {
                   if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-                    LOG_INFO("empty diagnostic info, disable it", KPC(req));
+                    LOG_TRACE("empty diagnostic info, disable it", KPC(req));
                   }
                 }
 #endif
@@ -489,6 +494,10 @@ int ObThWorker::check_status()
     if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
     } else if (is_timeout()) {
       ret = OB_TIMEOUT;
+    } else if (IS_INTERRUPTED()) {
+      ObInterruptCode &ic = GET_INTERRUPT_CODE();
+      ret = ic.code_;
+      LOG_WARN("received a interrupt", K(ic), K(ret));
     } else {
       if (WS_OUT_OF_THROTTLE == check_wait()) {
         ret = OB_KILLED_BY_THROTTLING;

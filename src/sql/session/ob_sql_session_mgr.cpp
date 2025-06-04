@@ -276,32 +276,32 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     uint32_t server_sessid = INVALID_SESSID;
     if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_sess_hold_map().erase_refactored(
                                                     reinterpret_cast<uint64_t>(session)))) {
-      LOG_WARN("fail to erase session", K(session->get_sessid()), K(tmp_ret), KP(session));
-    } else if (session->get_client_sessid() != INVALID_SESSID) {
+      LOG_WARN("fail to erase session", K(session->get_server_sid()), K(tmp_ret), KP(session));
+    } else if (session->get_client_sid() != INVALID_SESSID) {
       if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_client_sess_map().get_refactored(
-                                                    session->get_client_sessid(), server_sessid))) {
+                                                    session->get_client_sid(), server_sessid))) {
         if (tmp_ret == OB_HASH_NOT_EXIST) {
           // no need to display info, if current server no this client session id.
           tmp_ret = OB_SUCCESS;
           LOG_DEBUG("current client session id not find", K(tmp_ret),
-                    K(session->get_client_sessid()));
+                    K(session->get_client_sid()));
         } else {
-          COMMON_LOG(WARN, "get session failed", K(tmp_ret), K(session->get_client_sessid()));
+          COMMON_LOG(WARN, "get session failed", K(tmp_ret), K(session->get_client_sid()));
         }
-      } else if (session->get_sessid() == server_sessid) {
-        ObClientSessMapErase client_sess_map_erase(session->get_sessid());
+      } else if (session->get_server_sid() == server_sessid) {
+        ObClientSessMapErase client_sess_map_erase(session->get_server_sid());
         bool is_erased = false;
         if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_client_sess_map().erase_if(
-                  session->get_client_sessid(),client_sess_map_erase, is_erased))) {
-          LOG_WARN("fail to erase client session", K(session->get_client_sessid()),
-          K(session->get_sessid()), K(tmp_ret));
+                  session->get_client_sid(),client_sess_map_erase, is_erased))) {
+          LOG_WARN("fail to erase client session", K(session->get_client_sid()),
+          K(session->get_server_sid()), K(tmp_ret));
         } else {
-          LOG_DEBUG("success to erase cs id", K(session->get_client_sessid()),
-                    K(session->get_sessid()), K(lbt()));
+          LOG_DEBUG("success to erase cs id", K(session->get_client_sid()),
+                    K(session->get_server_sid()), K(lbt()));
         }
       } else {
-        LOG_DEBUG("no need to erase client session", K(session->get_client_sessid()),
-          K(session->get_sessid()), K(server_sessid), K(tmp_ret),K(lbt()));
+        LOG_DEBUG("no need to erase client session", K(session->get_client_sid()),
+          K(session->get_server_sid()), K(server_sessid), K(tmp_ret),K(lbt()));
       }
     }
     ObTenantSQLSessionMgr *t_session_mgr = session->get_tenant_session_mgr();
@@ -363,7 +363,7 @@ int ObSQLSessionMgr::inc_session_ref(const ObSQLSessionInfo *my_session)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(my_session)) {
     ObSQLSessionInfo *tmp_session = NULL;
-    uint32_t sessid = my_session->get_sessid();
+    uint32_t sessid = my_session->get_server_sid();
     if (OB_FAIL(get_session(sessid, tmp_session))) {
       LOG_WARN("fail to get session", K(sessid), K(ret));
     }
@@ -443,6 +443,7 @@ int ObSQLSessionMgr::create_session(ObSMConnection *conn, ObSQLSessionInfo *&ses
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess_info is null", K(ret));
   } else {
+    GET_DIAGNOSTIC_INFO->get_ash_stat().client_sid_ = conn->client_sessid_;
     sess_info->set_vid(conn->vid_);
     sess_info->set_vip(conn->vip_buf_);
     sess_info->set_vport(conn->vport_);
@@ -732,9 +733,10 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
   session.set_query_start_time(ObTimeUtility::current_time());
+  session.set_mark_killed(true);
   if (session.is_in_transaction()) {
     if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::kill_tx_on_session_killed(&session))) {
-      LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
+      LOG_WARN("fail to rollback transaction", K(session.get_server_sid()),
                "proxy_sessid", session.get_proxy_sessid(),
                K(tmp_ret), KPC(session.get_tx_desc()),
                "query_str", session.get_current_query_string(),
@@ -752,11 +754,12 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
              "proxy", session.get_proxy_addr(),
              "peer", session.get_peer_addr(),
              "real_client_ip", session.get_client_ip(),
-             "sessid", session.get_sessid(),
+             "server_sid", session.get_server_sid(),
+             "client_sid", session.get_client_sid(),
              "proxy_sessid", session.get_proxy_sessid(),
              "query_str", session.get_current_query_string());
   } else {
-    LOG_WARN("get conn from session info is null", K(session.get_sessid()),
+    LOG_WARN("get conn from session info is null", K(session.get_server_sid()),
         "proxy_sessid", session.get_proxy_sessid(), K(session.get_magic_num()));
   }
 
@@ -768,14 +771,14 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   int ret = OB_SUCCESS;
   // NOTE: 下面两个guard的顺序不可更换，否则有机会形成死锁
   ObSQLSessionInfo::LockGuard query_lock_guard(session.get_query_lock());
+  (void) TriggerHandle::calc_system_trigger_logoff(session);
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
-  (void) TriggerHandle::calc_system_trigger_logoff(session);
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {
     if (OB_FAIL(ObSqlTransControl::kill_tx_on_session_disconnect(&session))) {
-      LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
+      LOG_WARN("fail to rollback transaction", K(session.get_server_sid()),
                "proxy_sessid", session.get_proxy_sessid(), K(ret),
                "query_str", session.get_current_query_string(),
                K(need_disconnect));
@@ -957,7 +960,7 @@ bool ObSQLSessionMgr::KillTenant::operator() (
         ret_ = OB_EAGAIN;
         LOG_TRACE("unit gc needs to wait", K(ret_));
       } else if (need_kill) {
-        LOG_INFO("force kill session", K(sess_info->get_sessid()));
+        LOG_INFO("force kill session", K(sess_info->get_server_sid()));
         ret = mgr_->kill_session(*sess_info);
       }
     }
@@ -1014,7 +1017,7 @@ int ObSQLSessionMgr::DumpHoldSession::operator()(
   if (OB_ISNULL(entry.second)) {
     LOG_INFO("session is null", "sess_ptr", entry.first);
   } else {
-    LOG_INFO("dump session", "sid", entry.second->get_sessid(),
+    LOG_INFO("dump session", "sid", entry.second->get_server_sid(),
                              "ref_count", entry.second->get_sess_ref_cnt(),
                              "state",ObString::make_string(entry.second->get_session_state_str()),
                              KP(entry.second),
@@ -1071,7 +1074,7 @@ ObSessionGetterGuard::ObSessionGetterGuard(ObSQLSessionMgr &sess_mgr, uint32_t s
   if (OB_SUCCESS != ret_) {
     LOG_WARN_RET(ret_, "get session fail", K(ret_), K(sessid));
   } else {
-    NG_TRACE_EXT(session, OB_ID(sid), session_->get_sessid(),
+    NG_TRACE_EXT(session, OB_ID(sid), session_->get_server_sid(),
                  OB_ID(tenant_id), session_->get_priv_tenant_id());
   }
 }

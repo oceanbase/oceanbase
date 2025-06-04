@@ -86,7 +86,7 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
         // set dblink_info, to unparse a link sql with dblink_info hint
         oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
         if (OB_FAIL(const_cast<oceanbase::sql::ObSQLSessionInfo *>(session_)->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
-          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_sessid()));
+          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_server_sid()));
         } else if (NULL == reverse_dblink_info) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
@@ -849,8 +849,7 @@ int ObDMLStmtPrinter::print_values_table_to_union_all(const TableItem &table_ite
             DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
-            OZ (ObLinkStmtParam::write(buf_, buf_len_, *pos_, start_idx + i * column_cnt + j,
-                                        table_def->column_types_.at(j).get_calc_type()));
+            OZ (ObLinkStmtParam::write(buf_, buf_len_, *pos_, start_idx + i * column_cnt + j));
             if (i == 0) {
               DATA_PRINTF(" AS \"column_%ld\"", j);
             }
@@ -2718,6 +2717,24 @@ int ObDMLStmtPrinter::print_with()
     }
   }
   return ret;
+}
+
+// 0. oracle模式不拼，因为oracle还不支持catalog.db.table的语法
+// 1. external catalog一定要反拼，当解析出external catalog时说明已经升级完成了
+// 2. internal catalog不一定反拼
+// 2.1 反拼view definition时不拼internal（否则要刷case且会被用户感知）
+// 2.2 升级期间不拼（旧的server解析不了拼出来的sql）
+bool ObDMLStmtPrinter::need_print_catalog_name(const ObString& catalog_name)
+{
+  bool need_print = false;
+  if (is_oracle_mode()) {
+  } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
+    need_print = true;
+  } else if (print_params_.not_print_internal_catalog_ || GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_3_5_2) {
+  } else {
+    need_print = true;
+  }
+  return need_print;
 }
 
 } //end of namespace sql

@@ -31,7 +31,7 @@ ObBackGroundSessionGuard::ObBackGroundSessionGuard(int64_t tenant_id, int64_t gr
       tenant_id = OB_SYS_TENANT_ID;
     }
     int ret = OB_SUCCESS;
-    const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+    const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_background_session_id();
     if (ObDiagnosticInfoContainer::get_global_di_container()->is_inited()) {
       // using global di for all background sessions. because when the tenant is dropped there could
       // be some tenant thread is left. like TXXXX_UnitGC thread when mtl_wait is called.
@@ -49,12 +49,14 @@ ObBackGroundSessionGuard::ObBackGroundSessionGuard(int64_t tenant_id, int64_t gr
           K(group_id));
       di_ = nullptr;
       lib::ObPerfModeGuard::get_tl_instance() = true;
+    } else if (FALSE_IT(ObLocalDiagnosticInfo::inc_ref(di_))) {
     } else {
       OB_ASSERT(di_ != nullptr);
       di_->get_ash_stat().session_id_ = bg_sess_id;
       di_->get_ash_stat().tenant_id_ = tenant_id;
       di_->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-      di_->get_ash_stat().set_sess_active();
+      di_->get_ash_stat()
+          .set_sess_active();  // for background di. It's ref cnt is 1 throughout its life cycle.
       ObLocalDiagnosticInfo::setup_diagnostic_info(di_);
       ObLocalDiagnosticInfo::set_thread_name(ob_get_tname());
       LOG_DEBUG("acquired new diagnostic info for background session", K(tenant_id), K(group_id),
@@ -73,14 +75,141 @@ ObBackGroundSessionGuard::~ObBackGroundSessionGuard()
     di_->get_ash_stat().set_sess_inactive();
     ObLocalDiagnosticInfo::reset_diagnostic_info();
     // background diagnostic info only attach to current thread.
-    dic_->revert_diagnostic_info(di_);
-    // event if aggregate failed, still try to return it.
-    if (OB_FAIL(dic_->return_diagnostic_info(di_))) {
-      LOG_ERROR("failed to return diagnostic info", KPC(di_), K(dic_));
-    }
+    ObLocalDiagnosticInfo::dec_ref(di_);
   }
 
   lib::ObPerfModeGuard::get_tl_instance() = prev_value_;
+}
+
+ObDIActionGuard::ObDIActionGuard(const char *program, const char *module, const char *action)
+  : prev_info_(nullptr),
+    flags_(0)
+{
+  save_prev_action_info(program != nullptr, module != nullptr, action != nullptr);
+  ObLocalDiagnosticInfo::set_service_action(program, module, action);
+}
+
+void ObDIActionGuard::save_prev_action_info(bool has_program, bool has_module, bool has_action)
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr) {
+    pre_guard_ref_ = di->action_guard_ref_;
+    di->action_guard_ref_ = true;
+    save_program_ = has_program && di->get_ash_stat().program_[0] != '\0' ? true : false;
+    reset_program_ = !save_program_ && has_program ? true : false;
+    save_module_ = has_module && di->get_ash_stat().module_[0] != '\0' ? true : false;
+    reset_module_ = !save_module_ && has_module ? true : false;
+    save_action_ = has_action && di->get_ash_stat().action_[0] != '\0' ? true : false;
+    reset_action_ = !save_action_ && has_action ? true : false;
+    if (save_program_ || save_module_ || save_action_) {
+      prev_info_ = op_alloc(ObDIActionGuard::SaveInfo);
+      if (OB_ISNULL(prev_info_)) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate action buffer failed", K(sizeof(ObDIActionGuard::SaveInfo)));
+      } else {
+        di->action_guard_ref_ = true;
+        if (save_program_) {
+          MEMCPY(prev_info_->program_, di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN);
+        }
+        if (save_module_) {
+          MEMCPY(prev_info_->module_, di->get_ash_stat().module_, ASH_MODULE_STR_LEN);
+        }
+        if (save_action_) {
+          MEMCPY(prev_info_->action_, di->get_ash_stat().action_, ASH_ACTION_STR_LEN);
+        }
+      }
+    }
+  }
+}
+
+ObDIActionGuard::ObDIActionGuard(const char *module, const char *action)
+  : ObDIActionGuard(nullptr, module, action)
+{
+}
+
+ObDIActionGuard::ObDIActionGuard(const char *action)
+  : ObDIActionGuard(nullptr, nullptr, action)
+{
+}
+
+ObDIActionGuard::ObDIActionGuard(const ObString &action)
+  : prev_info_(nullptr),
+    flags_(0)
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr) {
+    save_prev_action_info(false, false, true);
+    snprintf(di->get_ash_stat().action_, ASH_ACTION_STR_LEN, "%.*s", action.length(), action.ptr());
+  }
+}
+
+ObDIActionGuard::ObDIActionGuard(const std::type_info &type_info)
+  : prev_info_(nullptr),
+    flags_(0)
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr) {
+    save_prev_action_info(false, false, true);
+    int64_t len = ASH_ACTION_STR_LEN;
+    extract_demangled_class_name(type_info.name(), "Ob", di->get_ash_stat().action_, len);
+  }
+}
+
+ObDIActionGuard::ObDIActionGuard(ActionNameSpace action_ns, const char *action_format, ...)
+  : prev_info_(nullptr),
+    flags_(0)
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (action_ns > NS_INVALID && action_ns < NS_MAX && action_format != nullptr && di != nullptr) {
+    save_prev_action_info(NS_PROGRAM == action_ns, NS_MODULE == action_ns, NS_ACTION == action_ns);
+    char *buffer = nullptr;
+    int64_t buffer_len = 0;
+    switch (action_ns) {
+      case NS_PROGRAM:
+        buffer = di->get_ash_stat().program_;
+        buffer_len = ASH_PROGRAM_STR_LEN;
+        break;
+      case NS_MODULE:
+        buffer = di->get_ash_stat().module_;
+        buffer_len = ASH_MODULE_STR_LEN;
+        break;
+      case NS_ACTION:
+        buffer = di->get_ash_stat().action_;
+        buffer_len = ASH_ACTION_STR_LEN;
+        break;
+      default: break;
+    }
+    va_list args;
+    va_start(args, action_format);
+    vsnprintf(buffer, buffer_len, action_format, args);
+    va_end(args);
+  }
+}
+
+ObDIActionGuard::~ObDIActionGuard()
+{
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr) {
+    di->action_guard_ref_ = pre_guard_ref_;
+    if (reset_program_) {
+      di->get_ash_stat().program_[0] = '\0';
+    } else if (save_program_ && prev_info_ != nullptr) {
+      MEMCPY(di->get_ash_stat().program_, prev_info_->program_, ASH_PROGRAM_STR_LEN);
+    }
+    if (reset_module_) {
+      di->get_ash_stat().module_[0] = '\0';
+    } else if (save_module_ && prev_info_ != nullptr) {
+      MEMCPY(di->get_ash_stat().module_, prev_info_->module_, ASH_MODULE_STR_LEN);
+    }
+    if (reset_action_) {
+      di->get_ash_stat().action_[0] = '\0';
+    } else if (save_action_ && prev_info_ != nullptr) {
+      MEMCPY(di->get_ash_stat().action_, prev_info_->action_, ASH_ACTION_STR_LEN);
+    }
+  }
+  if (prev_info_ != nullptr) {
+    op_free(prev_info_);
+    prev_info_ = nullptr;
+  }
 }
 
 ObLocalDiagnosticInfo::ObLocalDiagnosticInfo()
@@ -111,23 +240,6 @@ int ObLocalDiagnosticInfo::aggregate_diagnostic_info_summary(ObDiagnosticInfo *d
   return ret;
 }
 
-int ObLocalDiagnosticInfo::revert_diagnostic_info(ObDiagnosticInfo *di)
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(di)) {
-    const int64_t tenant_id = di->get_tenant_id();
-    lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
-      if (OB_SUCC(switch_ret)) {
-        ObDiagnosticInfoContainer *c = MTL_DI_CONTAINER();
-        c->revert_diagnostic_info(di);
-      } else {
-        LOG_ERROR("return diagnostic info failed", K(tenant_id), KPC(di));
-      }
-    });
-  }
-  return ret;
-}
-
 int ObLocalDiagnosticInfo::return_diagnostic_info(ObDiagnosticInfo *di)
 {
   int ret = OB_SUCCESS;
@@ -151,21 +263,79 @@ int ObLocalDiagnosticInfo::return_diagnostic_info(ObDiagnosticInfo *di)
   return ret;
 }
 
-int ObLocalDiagnosticInfo::dec_ref(ObDiagnosticInfo *di)
+int ObLocalDiagnosticInfo::dec_ref(ObDiagnosticInfo *&di)
 {
   int ret = OB_SUCCESS;
+  const bool is_global = di->is_acquired_from_global();
   if (OB_NOT_NULL(di)) {
-    if (0 == ATOMIC_SAF(&di->ref_cnt_, 1)) {
+    di->inc_release_holder_cnt();
+    const int64_t cur_ref = ATOMIC_SAF(&di->ref_cnt_, 1);
+    if (OB_UNLIKELY(cur_ref < 0)) {
+      di->dec_release_holder_cnt();
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "dec di ref overflow", K(cur_ref), KPC(di));
+    } else if (1 == cur_ref) {
+      // left 1 for rpc layer
+      di->get_ash_stat().set_sess_inactive();
+      if (di->is_using_cache()) {
+        di->dec_release_holder_cnt();
+        if (OB_UNLIKELY(is_global)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("invalid use of global container cache", K(ret), KPC(di));
+          ObDiagnosticInfoContainer::get_global_di_container()->return_di_to_cache(di);
+        } else {
+          const int64_t tenant_id = di->get_tenant_id();
+          lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
+            if (OB_SUCC(switch_ret)) {
+              MTL_DI_CONTAINER()->return_di_to_cache(di);
+              // ATTENTION: cannot touch di after return it to di cache. It could be released in clear_di_cache
+              di = nullptr;
+            } else {
+              LOG_ERROR("dec diagnostic info ref failed", K(tenant_id), KPC(di));
+            }
+          });
+        }
+      } else {
+        di->dec_release_holder_cnt();
+      }
+    } else if (0 == cur_ref) {
       // only last caller dec ref.
       lib::ObDisableDiagnoseGuard disable_guard;
       const int64_t tenant_id = di->get_tenant_id();
-      lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
-        if (OB_SUCC(switch_ret)) {
-          MTL_DI_CONTAINER()->dec_ref(di);
-        } else {
-          LOG_ERROR("dec diagnostic info ref failed", K(tenant_id), KPC(di));
+      if (OB_UNLIKELY(is_global)) {
+        // wait till other thread end call of ObLocalDiagnosticInfo::dec_ref
+        int64_t cur_time = ObClockGenerator::getClock();
+        while (di->get_release_holder_cnt() != 1) {
+          // this while case would be entered in very rare condition.
+          PAUSE();
+          if (cur_time + 10 * 1000 * 1000 < ObClockGenerator::getClock()) {  // 10 seconds
+            cur_time = ObClockGenerator::getClock();
+            LOG_WARN("dec ref hold too long", KPC(di));
+          }
         }
-      });
+        di->dec_release_holder_cnt();
+        ObDiagnosticInfoContainer::get_global_di_container()->dec_ref(di);
+      } else {
+        lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
+          // wait till other thread end call of ObLocalDiagnosticInfo::dec_ref
+          int64_t cur_time = ObClockGenerator::getClock();
+          while (di->get_release_holder_cnt() != 1) {
+            // this while case would be entered in very rare condition.
+            PAUSE();
+            if (cur_time + 10 * 1000 * 1000 < ObClockGenerator::getClock()) {  // 10 seconds
+              cur_time = ObClockGenerator::getClock();
+              LOG_WARN("dec ref hold too long", KPC(di));
+            }
+          }
+          di->dec_release_holder_cnt();
+          if (OB_SUCC(switch_ret)) {
+            MTL_DI_CONTAINER()->dec_ref(di);
+          } else {
+            LOG_ERROR("dec diagnostic info ref failed", K(tenant_id), KPC(di));
+          }
+        });
+      }
+    } else {
+      di->dec_release_holder_cnt();
     }
   }
   return ret;
@@ -185,7 +355,19 @@ void ObLocalDiagnosticInfo::set_thread_name(const char *name)
 void ObLocalDiagnosticInfo::set_thread_name(uint64_t tenant_id, const char *name)
 {
   ObDiagnosticInfo *di = get();
-  if (OB_NOT_NULL(di)) {
+  if (OB_NOT_NULL(di) && !di->action_guard_ref_) {
+    //If the diagnostic info is held by DIActionGuard,
+    //it means that the program,module,action fields will be filled in by DIActionGuard
+    //and cannot be modified by other interfaces.
+    set_service_name(tenant_id, name);
+    set_service_module(name);
+  }
+}
+
+void ObLocalDiagnosticInfo::set_service_name(uint64_t tenant_id, const char *name)
+{
+  ObDiagnosticInfo *di = get();
+  if (name != nullptr && OB_NOT_NULL(di)) {
     if (tenant_id == 0) {
       snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "%s", name);
     } else {
@@ -195,13 +377,46 @@ void ObLocalDiagnosticInfo::set_thread_name(uint64_t tenant_id, const char *name
   }
 }
 
-void ObLocalDiagnosticInfo::set_service_action(const char *program, const char *module, const char *action)
+void ObLocalDiagnosticInfo::set_program_name(const char *program)
 {
   ObDiagnosticInfo *di = get();
-  if (OB_NOT_NULL(di)) {
-    set_thread_name(ob_get_tenant_id(), program);
+  if (program != nullptr && OB_NOT_NULL(di)) {
+    snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "%s", program);
+  }
+}
+
+void ObLocalDiagnosticInfo::set_service_module(const char *module)
+{
+  ObDiagnosticInfo *di = get();
+  if (module != nullptr && OB_NOT_NULL(di)) {
     snprintf(di->get_ash_stat().module_, ASH_MODULE_STR_LEN, "%s", module);
+  }
+}
+
+void ObLocalDiagnosticInfo::set_service_action(const char *action)
+{
+  ObDiagnosticInfo *di = get();
+  if (action != nullptr && OB_NOT_NULL(di)) {
     snprintf(di->get_ash_stat().action_, ASH_ACTION_STR_LEN, "%s", action);
+  }
+}
+
+void ObLocalDiagnosticInfo::set_service_action(const char *service, const char *module, const char *action)
+{
+  set_service_name(ob_get_tenant_id(), service);
+  set_service_module(module);
+  set_service_action(action);
+}
+
+void ObLocalDiagnosticInfo::set_io_time(int64_t enqueue_time, int64_t device_time, int64_t callback_time) {
+  ObDiagnosticInfo *di = get_instance().get_diagnostic_ptr();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().p1_ = enqueue_time;
+    di->get_ash_stat().p2_ = device_time;
+    di->get_ash_stat().p3_ = callback_time;
+    di->get_curr_wait().p1_ = enqueue_time;
+    di->get_curr_wait().p2_ = device_time;
+    di->get_curr_wait().p3_ = callback_time;
   }
 }
 
@@ -310,11 +525,6 @@ ObDiagnosticInfoSwitchGuard::ObDiagnosticInfoSwitchGuard(ObDiagnosticInfo *di)
       leak_check_ = true;
     }
 #endif
-    // 1 for rpc layer and 1 for this guard
-    if (2 == di->ref_cnt_) {
-      // first guard set session active.
-      cur_di_->get_ash_stat().set_sess_active();
-    }
   } else {
     LOG_DEBUG("disable diagnostic info recording", K(ret),
         K(oceanbase::lib::is_diagnose_info_enabled()), KPC(di));
@@ -327,11 +537,6 @@ ObDiagnosticInfoSwitchGuard::~ObDiagnosticInfoSwitchGuard()
 {
   int ret = OB_SUCCESS;
   if (di_switch_success_) {
-    // 1 for rpc and 1 for this guard
-    if (2 == cur_di_->ref_cnt_) {
-      // last guard set session inactive
-      cur_di_->get_ash_stat().set_sess_inactive();
-    }
     if (OB_NOT_NULL(prev_di_)) {
       ObLocalDiagnosticInfo::setup_diagnostic_info(prev_di_);
     } else {

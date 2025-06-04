@@ -35,6 +35,7 @@
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_table_store.h"
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase
 {
@@ -444,11 +445,7 @@ int ObTableLoadStoreCtx::init_sort_param()
   basic_table_data_desc_.reset();
   basic_table_data_desc_.rowkey_column_num_ = 0;
   basic_table_data_desc_.column_count_ = 0;
-  if (!GCTX.is_shared_storage_mode()) {
-    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SN_DEFAULT_DATA_BLOCK_SIZE;
-  } else {
-    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SS_DEFAULT_DATA_BLOCK_SIZE;
-  }
+  basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
   basic_table_data_desc_.sstable_index_block_size_ =
     ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
   basic_table_data_desc_.sstable_data_block_size_ = ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
@@ -503,6 +500,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
+    static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
@@ -551,7 +549,16 @@ int ObTableLoadStoreCtx::init_write_ctx()
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
         } else if (data_store_table_ctx_->schema_->is_table_without_pk_) {
-          const int64_t bucket_cnt = wa_mem_limit / (thread_cnt_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          int64_t part_mem_size = 0;
+          if (!data_store_table_ctx_->schema_->is_column_store() ||
+              ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+            // 行存
+            part_mem_size = MACRO_BLOCK_WRITER_MEM_SIZE;
+          } else {
+            // 列存
+            part_mem_size = data_store_table_ctx_->schema_->cg_cnt_ * cg_chunk_mem_limit * 10;
+          }
+          const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
           if (part_cnt <= bucket_cnt || !ctx_->param_.need_sort_) {
             // 堆表快速写入
             write_ctx_.is_fast_heap_table_ = true;
@@ -560,9 +567,9 @@ int ObTableLoadStoreCtx::init_write_ctx()
             write_ctx_.is_multiple_mode_ = true;
           }
         } else {
-          int64_t bucket_cnt = wa_mem_limit / thread_cnt_ /
-                               (write_ctx_.table_data_desc_.sstable_index_block_size_ +
-                                write_ctx_.table_data_desc_.sstable_data_block_size_);
+          const int64_t part_mem_size = write_ctx_.table_data_desc_.sstable_index_block_size_ +
+                                        write_ctx_.table_data_desc_.sstable_data_block_size_;
+          const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
           write_ctx_.is_multiple_mode_ = (ctx_->param_.need_sort_ || part_cnt > bucket_cnt);
         }
         break;
@@ -585,6 +592,76 @@ int ObTableLoadStoreCtx::init_write_ctx()
           LOG_WARN("fail to init pre sorter", KR(ret));
         } else if (OB_FAIL(write_ctx_.pre_sorter_->start())) {
           LOG_WARN("fail to start pre_sorter", KR(ret));
+        }
+      }
+    }
+    // px mode
+    if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+      ObSchemaGetterGuard schema_guard;
+      const ObTableSchema *table_schema = nullptr;
+      ObArray<ObColDesc> col_descs;
+      if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_,
+                                                      ctx_->param_.table_id_,
+                                                      schema_guard,
+                                                      table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_));
+      }
+      // mysql模式下SQL执行计划会包含虚拟生成列
+      else if (OB_FAIL(table_schema->get_column_ids(col_descs, lib::is_oracle_mode()/*no_virtual*/))) {
+        LOG_WARN("fail to get column ids", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::prepare_col_descs(table_schema, col_descs))) {
+        LOG_WARN("fail to prepare col descs", KR(ret), KPC(table_schema), K(col_descs));
+      } else {
+        const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_null_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_null_vector_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+        int64_t project_idx = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+          const ObColDesc &col_desc = col_descs.at(i);
+          if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
+          }
+          // SQL执行计划不包含xmltype列, 存储层要写这一列, 需要补null
+          else if (col_schema->is_xmltype()) {
+            ObIVector *vector = nullptr;
+            if (OB_UNLIKELY(!col_schema->is_unused())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected xmltype column is not unused", KR(ret));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
+              LOG_WARN("fail to new vector", KR(ret), K(col_desc));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(
+                         vector, ctx_->param_.batch_size_, allocator_))) {
+              LOG_WARN("fail to prepare vector", KR(ret), KPC(vector));
+            } else if (OB_FAIL(ObDirectLoadVectorUtils::set_vector_all_null(
+                         vector, ctx_->param_.batch_size_))) {
+              LOG_WARN("fail to set vector all null", KR(ret), KPC(vector));
+            } else if (OB_FAIL(write_ctx_.px_null_vectors_.push_back(vector))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else if (OB_FAIL(write_ctx_.px_null_vector_project_idxs_.push_back(project_idx++))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else {
+              write_ctx_.px_need_project_ = true;
+            }
+          }
+          // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
+          else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+          // 旁路不接收隐藏主键列, 存储层不写虚拟生成列, 都需要过滤
+          else if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) ||
+                   col_schema->is_virtual_generated_column()) {
+            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else {
+              write_ctx_.px_need_project_ = true;
+            }
+          } else if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx++))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
         }
       }
     }

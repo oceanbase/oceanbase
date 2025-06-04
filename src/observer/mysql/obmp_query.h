@@ -104,7 +104,9 @@ private:
 
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time,
                    const sql::ObSQLSessionInfo& session,
-                   const int64_t ret) const;
+                   const int64_t ret,
+                   const bool is_commit_cmd,
+                   const bool is_rollback_cmd) const;
   void update_audit_info(const ObWaitEventStat &total_wait_desc,
                          ObAuditRecordData &record);
   int fill_feedback_session_info(ObMySQLResultSet &result,

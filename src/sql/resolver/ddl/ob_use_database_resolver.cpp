@@ -36,7 +36,8 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ParseNode *node = const_cast<ParseNode*>(&parse_tree);
   ObUseDatabaseStmt *use_database_stmt = NULL;
-
+  uint64_t catalog_id = OB_INVALID_ID;
+  ObString db_name;
   if (OB_ISNULL(node)
       || T_USE_DATABASE != node->type_
       || 1 != node->num_child_
@@ -44,17 +45,12 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
       || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node));
-  } else if (OB_ISNULL(node->children_[0])
-             || T_IDENT != node->children_[0]->type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(node), K(node->children_[0]));
   } else if (OB_ISNULL(use_database_stmt = create_stmt<ObUseDatabaseStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to create use_database_stmt");
+  } else if (OB_FAIL(resolve_database_factor_(node->children_[0], catalog_id, db_name))) {
+    LOG_WARN("failed to resolve database factor", K(ret));
   } else {
-    ObString db_name;
-    db_name.assign_ptr(node->children_[0]->str_value_,
-                       static_cast<int32_t>(node->children_[0]->str_len_));
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
     if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -72,9 +68,10 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
       } else {
         CK (OB_NOT_NULL(schema_checker_));
-        CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
-        OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
+        CK (OB_NOT_NULL(schema_checker_->get_sql_schema_guard()));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_sql_schema_guard(),
                                            session_info_,
+                                           catalog_id,
                                            db_name,
                                            allocator_));
         use_database_stmt->set_db_name(db_name);
@@ -84,11 +81,11 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
         const share::schema::ObDatabaseSchema *db_schema = NULL;
         if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
           LOG_WARN("faile to get session priv info", K(ret));
-        } else  if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
+        } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, catalog_id, db_name, database_id))) {
           LOG_USER_ERROR(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
-          LOG_WARN("invalid database name. ", K(db_name));
-        } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, session_info_->get_enable_role_array(), db_name))) {
-          SQL_ENG_LOG(WARN, "fail to check user privilege", K(db_name),K(ret));
+          LOG_WARN("invalid database name. ", K(catalog_id), K(db_name));
+        } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, session_info_->get_enable_role_array(), catalog_id, db_name))) {
+          SQL_ENG_LOG(WARN, "fail to check user privilege", K(db_name), K(ret));
           if (params_.disable_privilege_check_ == PRIV_CHECK_FLAG_DISABLE) {
             LOG_WARN("db access privilege check is disabled");
             ret = OB_SUCCESS;
@@ -98,6 +95,7 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
           if (OB_FAIL(schema_checker_->get_database_schema(tenant_id, database_id, db_schema))) {
             LOG_WARN("failed to get db schema", K(ret), K(database_id));
           } else {
+            use_database_stmt->set_catalog_id(catalog_id);
             use_database_stmt->set_db_id(database_id);
             use_database_stmt->set_db_priv_set(session_priv.db_priv_set_);
             use_database_stmt->set_db_charset(
@@ -111,5 +109,29 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
   }
   return ret;
 }
+
+int ObUseDatabaseResolver::resolve_database_factor_(const ParseNode *node, uint64_t &catalog_id, common::ObString &database_name)
+{
+  int ret = OB_SUCCESS;
+  ObString catalog_name;
+  UNUSED(catalog_name);
+  const ParseNode *catalog_node = NULL;
+  const ParseNode *database_node = NULL;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) || node->type_ != ObItemType::T_DATABASE_FACTOR || node->num_child_ != 2) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(node->children_), K(node->type_), K(node->num_child_));
+  } else if (OB_FALSE_IT(catalog_node = node->children_[0])) {
+  } else if (OB_FALSE_IT(database_node = node->children_[1])) {
+  } else if (OB_ISNULL(database_node) || database_node->type_ != ObItemType::T_IDENT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("database node must existed", K(ret), K(database_node->type_));
+  } else if (OB_FAIL(resolve_catalog_node(catalog_node, catalog_id, catalog_name))) {
+    LOG_WARN("failed to resolve catalog node", K(ret));
+  } else {
+    database_name.assign_ptr(database_node->str_value_, database_node->str_len_);
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

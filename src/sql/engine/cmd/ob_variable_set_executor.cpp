@@ -15,6 +15,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "observer/ob_server.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
 using namespace oceanbase::common;
@@ -140,10 +141,16 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
           } else if (false == node.is_system_variable_) {
             if (ob_is_enum_or_set_type(value_obj.get_type())) {
               ObObjParam obj_param = value_obj;
-              if (OB_FAIL(ObSPIService::cast_enum_set_to_string(ctx,
-                                                                node.value_expr_->get_enum_set_values(),
-                                                                obj_param,
-                                                                value_obj))) {
+              const ObEnumSetMeta *meta = NULL;
+              if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(node.value_expr_->get_result_type(), session, meta))) {
+                LOG_WARN("failed to extrac enum set meta", K(ret));
+              } else if (OB_ISNULL(meta) || OB_ISNULL(meta->get_str_values())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get enum set meta", K(ret));
+              } else if (OB_FAIL(ObSPIService::cast_enum_set_to_string(ctx,
+                                                                       *meta->get_str_values(),
+                                                                       obj_param,
+                                                                       value_obj))) {
                 LOG_WARN("cast enum set to string failed", K(ret));
               }
             }
@@ -1354,15 +1361,17 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
  if(SYS_VAR_INVALID == (var_id = ObSysVarFactory::find_sys_var_id_by_name(set_var.var_name_))) {
     ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
     LOG_WARN("unknown variable", K(set_var.var_name_), K(ret));
-  } else if ((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
-             (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
-             (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
-             (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
-             (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id) ||
-             (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
-             (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id
-              && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id
-              && SYS_VAR_LOG_SLAVE_UPDATES != var_id)) {
+  } else if (((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
+              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+              (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
+              (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
+              (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id) ||
+              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+              (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id
+               && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id)) &&
+              SYS_VAR_LOG_SLAVE_UPDATES != var_id &&
+              SYS_VAR_EXPIRE_LOGS_DAYS != var_id &&
+              SYS_VAR_LOG_BIN_TRUST_FUNCTION_CREATORS != var_id) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {

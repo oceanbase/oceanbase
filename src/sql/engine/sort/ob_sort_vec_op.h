@@ -113,7 +113,6 @@ private:
   ObTempRowStore addon_row_store_;
   ObTempRowStore::Iterator sk_row_iter_;
   ObTempRowStore::Iterator addon_row_iter_;
-  ObTempRowStore::BlockHolder blk_holder_;
 };
 
 } // end namespace sql

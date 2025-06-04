@@ -108,6 +108,17 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
       LOG_WARN("caught exception when call external driver api", K(ret), K(ex.what()), KP(this));
       LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
     }
+  } catch (apsara::odps::sdk::OdpsException &ex) {
+    if (OB_SUCC(ret)) {
+      if (apsara::odps::sdk::NO_SUCH_OBJECT == ex.GetErrorCode() || apsara::odps::sdk::NO_SUCH_TABLE == ex.GetErrorCode()) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("odps table not found", K(ret), K(ex.what()), KP(this));
+      } else {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when call external driver api", K(ret), K(ex.what()), KP(this));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    }
   } catch (const std::exception &ex) {
     if (OB_SUCC(ret)) {
       ret = OB_ODPS_ERROR;
@@ -1390,7 +1401,8 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObString in_str(len, v);
                       number::ObNumber nmb;
                       ObNumStackOnceAlloc tmp_alloc;
-                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                          ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                         LOG_WARN("cast string to number failed", K(ret), K(row_idx), K(column_idx));
                       } else {
                         datums[row_idx].set_number(nmb);
@@ -2101,7 +2113,8 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObString in_str(len, v);
                   number::ObNumber nmb;
                   ObNumStackOnceAlloc tmp_alloc;
-                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, tmp_alloc, nmb))) {
+                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                      ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                     LOG_WARN("cast string to number failed", K(ret), K(column_idx));
                   } else {
                     datum.set_number(nmb);

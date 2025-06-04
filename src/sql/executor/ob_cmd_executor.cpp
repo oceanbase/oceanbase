@@ -136,6 +136,8 @@
 #include "sql/engine/cmd/ob_clone_executor.h"
 #include "sql/resolver/cmd/ob_olap_async_job_stmt.h"
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
+#include "sql/resolver/cmd/ob_event_stmt.h"
+#include "sql/engine/cmd/ob_event_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -148,6 +150,12 @@
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/resolver/ddl/ob_audit_stmt.h"
 #include "sql/engine/cmd/ob_audit_executor.h"
+#endif
+#include "sql/resolver/ddl/ob_catalog_stmt.h"
+#include "sql/engine/cmd/ob_catalog_executor.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "sql/resolver/cmd/ob_trigger_storage_cache_stmt.h"
+#include "sql/engine/cmd/ob_trigger_storage_cache_executor.h"
 #endif
 
 namespace oceanbase
@@ -362,6 +370,17 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDropDatabaseStmt, ObDropDatabaseExecutor);
         break;
       }
+      case stmt::T_CREATE_CATALOG:
+      case stmt::T_ALTER_CATALOG:
+      case stmt::T_DROP_CATALOG: {
+        DEFINE_EXECUTE_CMD(ObCatalogStmt, ObCatalogExecutor);
+        break;
+      }
+      case stmt::T_SET_CATALOG: {
+        DEFINE_EXECUTE_CMD(ObCatalogStmt, ObSetCatalogExecutor);
+        sql_text = ObString::make_empty_string();  // do not record
+        break;
+      }
       case stmt::T_CREATE_TABLEGROUP: {
         DEFINE_EXECUTE_CMD(ObCreateTablegroupStmt, ObCreateTablegroupExecutor);
         break;
@@ -538,6 +557,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAdminStorageStmt, ObAdminStorageExecutor);
         break;
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+      case stmt::T_TRIGGER_STORAGE_CACHE: {
+        DEFINE_EXECUTE_CMD(ObTriggerStorageCacheStmt, ObTriggerStorageCacheExecutor);
+        break;
+      }
+#endif
       case stmt::T_FREEZE: {
         DEFINE_EXECUTE_CMD(ObFreezeStmt, ObFreezeExecutor);
         break;
@@ -570,6 +595,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_INSTALL_PLUGIN:
       case stmt::T_UNINSTALL_PLUGIN:
       case stmt::T_FLUSH_MOCK:
+      case stmt::T_FLUSH_TABLE_MOCK:
       case stmt::T_FLUSH_MOCK_LIST:
       case stmt::T_HANDLER_MOCK:
       case stmt::T_SHOW_PLUGINS:
@@ -793,8 +819,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAlterTriggerStmt, ObAlterTriggerExecutor);
         break;
       }
-      case stmt::T_REFRESH_TIME_ZONE_INFO: {
-        DEFINE_EXECUTE_CMD(ObRefreshTimeZoneInfoStmt, ObRefreshTimeZoneInfoExecutor);
+      case stmt::T_LOAD_TIME_ZONE_INFO: {
+        DEFINE_EXECUTE_CMD(ObLoadTimeZoneInfoStmt, ObLoadTimeZoneInfoExecutor);
         break;
       }
       case stmt::T_SET_DISK_VALID: {
@@ -1111,6 +1137,18 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_MODULE_DATA: {
         DEFINE_EXECUTE_CMD(ObModuleDataStmt, ObModuleDataExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_CREATE: {
+        DEFINE_EXECUTE_CMD(ObCreateEventStmt, ObCreateEventExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_ALTER: {
+        DEFINE_EXECUTE_CMD(ObAlterEventStmt, ObAlterEventExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_DROP: {
+        DEFINE_EXECUTE_CMD(ObDropEventStmt, ObDropEventExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

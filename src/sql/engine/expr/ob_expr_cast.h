@@ -141,10 +141,10 @@ public:
                                 sql::ObEvalCtx &ctx,
                                 sql::ObDatum &res_datum);
   static int get_cast_type(const bool enable_decimal_int,
-                           const ObExprResType param_type2,
+                           const ObExprResType &param_type2,
                            const ObCastMode cast_mode,
                            const ObExprTypeCtx &type_ctx,
-                           ObExprResType &dst_type);
+                           ObRawExprResType &dst_type);
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int get_explicit_cast_cm(const ObExprResType &src_type,

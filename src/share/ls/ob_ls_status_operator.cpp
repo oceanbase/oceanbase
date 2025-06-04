@@ -206,8 +206,8 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
       LOG_WARN("fail to splice insert sql", KR(ret), K(sql), K(ls_info), K(flag_str));
     } else if (OB_FAIL(exec_write(ls_info.tenant_id_, sql, this, trans))) {
       LOG_WARN("failed to exec write", KR(ret), K(ls_info), K(sql));
-    } else if (ls_info.ls_id_.is_sys_ls()) {
-      LOG_INFO("sys ls no need update max ls id", KR(ret), K(ls_info));
+    } else if (is_sys_tenant(ls_info.tenant_id_) || is_meta_tenant(ls_info.tenant_id_)) {
+      LOG_INFO("sys and meta tenant no need update max ls id", KR(ret), K(ls_info));
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_max_ls_id(
                    ls_info.tenant_id_, ls_info.ls_id_, trans, false))) {
       LOG_WARN("failed to update tenant max ls id", KR(ret), K(ls_info));

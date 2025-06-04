@@ -93,6 +93,61 @@ private:
   int64_t snapshot_version_;
 };
 
+class ObTruncateInfoCache final
+{
+public:
+  ObTruncateInfoCache()
+    : newest_commit_version_(INT64_MAX),
+      newest_schema_version_(INT64_MAX),
+      cnt_(0),
+      replay_seq_(0)
+  {}
+  ~ObTruncateInfoCache() { reset(); }
+  bool is_valid() const
+  {
+    return INT64_MAX != newest_commit_version_ && INT64_MAX != newest_schema_version_ && cnt_ >= 0;
+  }
+  int64_t newest_commit_version() const { return newest_commit_version_; }
+  int64_t newest_schema_version() const { return newest_schema_version_; }
+  int64_t replay_seq() const { return replay_seq_; }
+  int64_t count() const { return cnt_; }
+  bool is_empty() const
+  {
+    return 0 == cnt_;
+  }
+  void replay_truncate_info()
+  {
+    newest_commit_version_ = INT64_MAX;
+    newest_schema_version_ = INT64_MAX;
+    cnt_ = 0;
+    replay_seq_++;
+  }
+  void set_empty() { set_value(0, 0, 0); }
+  void set_value(
+    const int64_t newest_commit_version,
+    const int64_t newest_schema_version,
+    const uint32_t cnt)
+  {
+    newest_commit_version_ = newest_commit_version;
+    newest_schema_version_ = newest_schema_version;
+    cnt_ = cnt;
+  }
+  TO_STRING_KV(K_(newest_commit_version), K_(newest_schema_version), K_(cnt), K_(replay_seq));
+private:
+  void reset()
+  {
+    newest_commit_version_ = INT64_MAX;
+    newest_schema_version_ = INT64_MAX;
+    cnt_ = 0;
+    replay_seq_ = 0;
+  }
+private:
+  int64_t newest_commit_version_;
+  int64_t newest_schema_version_;
+  uint32_t cnt_;
+  uint8_t replay_seq_;
+};
+
 } // namespace storage
 } // namespace oceanbase
 

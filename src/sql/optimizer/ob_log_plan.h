@@ -272,6 +272,7 @@ public:
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
+  int set_scan_order(ObLogicalOperator *op);
   int check_das_need_scan_with_domain_id(ObLogicalOperator *op);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
@@ -337,9 +338,7 @@ public:
   inline ObIArray<ObConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
   inline const ObIArray<ObConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
 
-  int get_base_table_items(const ObDMLStmt &stmt,
-                           const ObIArray<TableItem*> &table_items,
-                           const ObIArray<SemiInfo*> &semi_infos,
+  int get_base_table_items(const ObDMLStmt *stmt,
                            ObIArray<TableItem*> &base_tables);
 
   int generate_base_level_join_order(const common::ObIArray<TableItem*> &table_items,
@@ -350,7 +349,6 @@ public:
   int select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_list);
 
   int get_subplan(const ObRawExpr *expr, SubPlanInfo *&info);
-  int get_subplan(const ObStmt *stmt, SubPlanInfo *&info);
 
   /**
    *  Get plan signature (hash value)
@@ -496,18 +494,20 @@ public:
                                                                   !force_pull_to_local_ &&
                                                                   !force_hash_local_); }
     inline bool allow_partition_wise() const { return ignore_hint_ || (!force_basic_ &&
-                                                                        !force_dist_hash_ &&
-                                                                        !force_pull_to_local_ &&
-                                                                        !force_hash_local_); }
+                                                                       !force_dist_hash_ &&
+                                                                       !force_pull_to_local_ &&
+                                                                       !force_hash_local_); }
     inline bool allow_pull_to_local() const { return ignore_hint_ || (!force_basic_ &&
                                                                       !force_dist_hash_ &&
                                                                       !force_partition_wise_ &&
-                                                                      !force_hash_local_); }
+                                                                      !force_hash_local_);}
+
+    inline bool force_basic() const { return ignore_hint_ ? false : force_basic_; }
 
     inline bool allow_hash_local() const { return ignore_hint_ || (!force_basic_ &&
-                                                                      !force_dist_hash_ &&
-                                                                      !force_partition_wise_ &&
-                                                                      !force_pull_to_local_); }
+                                                                   !force_dist_hash_ &&
+                                                                   !force_partition_wise_ &&
+                                                                   !force_pull_to_local_); }
 
     inline void reset_three_stage_info()
     {
@@ -898,7 +898,7 @@ public:
 
   int adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
                                 ObIArray<ObOrderDirection> &sort_directions,
-                                ObLogicalOperator &child_op,
+                                const ObLogicalOperator &child_op,
                                 bool check_win_func);
 
   int adjust_exprs_by_win_func(ObIArray<ObRawExpr *> &exprs,
@@ -957,7 +957,7 @@ public:
                            bool is_fetch_with_ties);
 
   int allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
-                                        ObExchangeInfo &exch_info,
+                                        const ObExchangeInfo &exch_info,
                                         const ObIArray<OrderItem> &sort_keys,
                                         const bool need_sort,
                                         const int64_t prefix_pos,
@@ -1207,9 +1207,8 @@ public:
                                           const ObIArray<ObExecParamRawExpr *> &params,
                                           bool &is_match_repart);
 
-  int check_if_match_none_all(ObLogicalOperator *top,
-                              const ObIArray<ObLogicalOperator*> &subquery_ops,
-                              bool &is_none_all);
+  int check_if_all_match_all(const ObIArray<ObLogicalOperator*> &ops,
+                             bool &is_all_match_all);
 
   int get_subplan_filter_equal_keys(ObLogicalOperator *child,
                                     const ObIArray<ObExecParamRawExpr *> &params,
@@ -1541,6 +1540,10 @@ public:
                                     const ObTableSchema &table_schema,
                                     const uint64_t& vec_col_id,
                                     ObLogTableScan *table_scan);
+  int prepare_spiv_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
   int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                     ObRawExpr *topn_expr,
@@ -1566,6 +1569,10 @@ public:
                                              bool need_exchange,
                                              const ObIArray<OrderItem> &sort_keys,
                                              bool &need_further_sort);
+  static int adjust_dup_table_replica_by_cons(
+    const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
+    common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list);
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
@@ -1598,6 +1605,33 @@ protected:
                                const common::ObIArray<SemiInfo*> &semi_infos,
                                common::ObIArray<ObJoinOrder *> &baserels,
                                common::ObIArray<ObRawExpr*> &quals);
+
+  int pre_process_push_subq(ObIArray<ObRawExpr*> &quals);
+
+  int get_connected_table_ids(const ObIArray<ObRawExpr*> &quals,
+                              ObIArray<ObRelIds> &connected_table_ids);
+
+  int check_push_subq_hint(const ObRawExpr *expr,
+                           bool &force_push,
+                           bool &force_no_push);
+
+  int check_subq_need_push(ObRawExpr *expr,
+                           ObIArray<ObRelIds> &connected_table_ids,
+                           bool &need_push_subq);
+
+  int check_push_subq_expr_pattern(const ObRawExpr *expr,
+                                   const ObColumnRefRawExpr *&col_expr,
+                                   const ObRawExpr *&subq_expr,
+                                   bool &is_valid_pattern);
+
+  int check_push_subq_has_other_quals(const ObColumnRefRawExpr *col_expr,
+                                      const ObRawExpr *subq_expr,
+                                      ObIArray<ObRelIds> &connected_table_ids,
+                                      bool &has_other_quals);
+
+  int check_push_subq_expr_match_index(ObRawExpr *expr,
+                                       const ObColumnRefRawExpr *col_expr,
+                                       bool &is_match_index);
 
   int pre_process_quals(const ObIArray<TableItem*> &table_items,
                       const ObIArray<SemiInfo*> &semi_infos,
@@ -1678,7 +1712,6 @@ protected:
   int process_join_pred(ObJoinOrder *left_tree,
                         ObJoinOrder *right_tree,
                         JoinInfo &join_info);
-
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
@@ -1819,7 +1852,8 @@ private: // member functions
   static int strong_select_replicas(const common::ObAddr &local_server,
                                     common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
-                                    bool sess_in_retry);
+                                    bool sess_in_retry,
+                                    bool is_dup_ls_modified);
   static int weak_select_replicas(const common::ObAddr &local_server,
                                   ObRoutePolicyType route_type,
                                   bool proxy_priority_hit_support,
@@ -1866,14 +1900,17 @@ private: // member functions
                                   ObMatchFunRawExpr *ma_expr,
                                   ObTextRetrievalInfo &tr_info);
 public:
-  const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
-  bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
-  const ObRelIds& get_leading_tables() { return log_plan_hint_.join_order_.leading_tables_; }
-  void reset_outline_print_flags() { outline_print_flags_ = 0; }
-  bool has_added_leading() const { return outline_print_flags_ & ADDED_LEADING_HINT; }
-  void set_added_leading() { outline_print_flags_ |= ADDED_LEADING_HINT; }
-  bool has_added_win_dist() const { return outline_print_flags_ & ADDED_WIN_DIST_HINT; }
-  void set_added_win_dist() { outline_print_flags_ |= ADDED_WIN_DIST_HINT; }
+  inline const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
+  inline bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
+  inline const ObRelIds& get_leading_tables() { return log_plan_hint_.join_order_.leading_tables_; }
+  inline const common::ObIArray<ObRawExpr*> &get_push_subq_exprs() const { return push_subq_exprs_; }
+  inline void reset_outline_print_flags() { outline_print_flags_ = 0; }
+  inline bool has_added_leading() const { return outline_print_flags_ & ADDED_LEADING_HINT; }
+  inline void set_added_leading() { outline_print_flags_ |= ADDED_LEADING_HINT; }
+  inline bool has_added_win_dist() const { return outline_print_flags_ & ADDED_WIN_DIST_HINT; }
+  inline void set_added_win_dist() { outline_print_flags_ |= ADDED_WIN_DIST_HINT; }
+  inline bool has_added_push_subq_hint() const { return outline_print_flags_ & ADDED_PUSH_SUBQ_HINT; }
+  inline void set_added_push_subq_hint() { outline_print_flags_ |= ADDED_PUSH_SUBQ_HINT; }
   const common::ObIArray<ObRawExpr*> &get_onetime_query_refs() const { return onetime_query_refs_; }
   int do_alloc_values_table_path(ValuesTablePath *values_table_path,
                                  ObLogExprValues *&out_access_path_op);
@@ -1920,6 +1957,7 @@ private: // member variable
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> having_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> orderby_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> winfunc_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> push_subq_exprs_; // exprs containing subquery that need to be pushed down
 private:
   struct JoinPathPairInfo
   {
@@ -1963,9 +2001,10 @@ private:
                                   2> JoinPathSet;
 
   ObLogPlanHint log_plan_hint_;
-  enum OUTLINE_PRINT_FLAG {
+  enum OUTLINE_PRINT_FLAG { // FARM COMPAT WHITELIST
     ADDED_LEADING_HINT    = 1 << 0,
-    ADDED_WIN_DIST_HINT   = 1 << 1
+    ADDED_WIN_DIST_HINT   = 1 << 1,
+    ADDED_PUSH_SUBQ_HINT  = 1 << 2
   };
   uint64_t outline_print_flags_; // used print outline
   common::ObSEArray<ObRelIds, 8, common::ModulePageAllocator, true> bushy_tree_infos_;

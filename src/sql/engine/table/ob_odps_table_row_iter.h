@@ -160,7 +160,7 @@ public:
   int pull_column();
   int pull_all_columns();
 
-  inline ObSEArray<OdpsColumn, 8>& get_column_list() { return column_list_; }
+  inline common::ObIArray<OdpsColumn>& get_column_list() { return column_list_; }
   inline common::ObIArray<ObString>& get_part_col_names() { return part_col_names_; }
 private:
   int inner_get_next_row(bool &need_retry);

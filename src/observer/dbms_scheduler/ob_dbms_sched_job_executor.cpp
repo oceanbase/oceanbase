@@ -13,11 +13,19 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_dbms_sched_job_utils.h"
+#include "ob_dbms_sched_table_operator.h"
 #include "ob_dbms_sched_job_executor.h"
 
+#include "lib/oblog/ob_log.h"
+#include "lib/mysqlclient/ob_isql_connection.h"
+#include "share/ob_define.h"
+#include "share/ob_errno.h"
+#include "share/schema/ob_schema_getter_guard.h"
 
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_sql.h"
 
 namespace oceanbase
 {
@@ -108,6 +116,8 @@ int ObDBMSSchedJobExecutor::init_session(
   } else {
     OX (session.set_shadow(false));
   }
+  OX (session.gen_gtt_session_scope_unique_id());
+  OX (session.gen_gtt_trans_scope_unique_id());
   if (OB_SUCC(ret)) {
     if (job_info.is_mview_job()) {
       // set larger timeout for mview scheduler jobs
@@ -274,6 +284,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       } else if (job_info.is_olap_async_job()){
         OZ (what.append_fmt("%.*s",
             job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_mysql_event_job()) { //mysql event
+        OZ (what.append_fmt("%.*s",
+              job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",
@@ -379,7 +392,30 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       OX (session_info->set_job_info(&job_info));
       OZ (table_operator_.update_for_start_execute(tenant_id, job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
-      OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+      if (OB_NOT_NULL(conn) && OB_NOT_NULL(session_info) && !is_ora_sys_user(session_info->get_user_id()) && !is_root_user(session_info->get_user_id())) {
+        conn->set_check_priv(true);
+      }
+      if (OB_SUCC(ret) && job_info.is_mysql_event_job()) {
+        ObArenaAllocator allocator("MYSQL_EVENT_TMP");
+        ObParser parser(allocator, session_info->get_sql_mode(), session_info->get_charsets4parser());
+        ObSEArray<ObString, 1> queries;
+        ObMPParseStat parse_stat;
+        if (OB_FAIL(parser.split_multiple_stmt(what.string().ptr(), queries, parse_stat))) {
+          LOG_WARN("failed to split multiple stmt", K(ret));
+        } else if (parse_stat.parse_fail_) {
+          ret = parse_stat.fail_ret_;
+          LOG_WARN("failed to split multiple stmt", K(ret));
+        } else {
+          for (int i = 0; i < queries.count() && OB_SUCC(ret); i++) {
+            OZ (conn->execute_write(tenant_id, queries[i].ptr(), affected_rows));
+          }
+        }
+      } else {
+        OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+      }
+      if (OB_NOT_NULL(conn) && OB_NOT_NULL(session_info) && !is_ora_sys_user(session_info->get_user_id()) && !is_root_user(session_info->get_user_id())) {
+        conn->set_check_priv(false);
+      }
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);
       }

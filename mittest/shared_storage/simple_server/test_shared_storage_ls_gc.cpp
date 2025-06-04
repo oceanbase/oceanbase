@@ -67,6 +67,63 @@ int ObCheckDirEmptOp::func(const dirent *entry)
   return OB_ERR_EXIST_OBJECT;
 }
 
+class ObSharedMajorMacroListOp : public ObBaseDirEntryOperator
+{
+public:
+  explicit ObSharedMajorMacroListOp(const ObMacroType macro_type)
+    : macro_type_(macro_type), file_list_()
+  {
+    file_list_.set_attr(ObMemAttr(MTL_ID(), "ListMajorMacro"));
+  }
+  virtual int func(const dirent *entry) override
+  {
+    int ret = OB_SUCCESS;
+    int64_t macro_seq = 0;
+    bool is_match = false;
+    char format[512] = {0};
+    if (OB_ISNULL(entry)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid entry", KR(ret));
+    } else if (ObMacroType::DATA_MACRO == macro_type_) {
+      if (OB_FAIL(databuff_printf(format, sizeof(format), "%s%%ld.T%hhu", SEQ_KEY_STR,
+                                  ObStorageObjectType::SHARED_MAJOR_DATA_MACRO))) {
+        LOG_WARN("fail to databuff printf", KR(ret));
+      } else if (OB_UNLIKELY(1 != sscanf(entry->d_name, format, &macro_seq))) {
+        // do nothing, only print log
+        LOG_WARN("unexpected path", K(entry->d_name));
+      } else {
+        is_match = true;
+      }
+    } else if (ObMacroType::META_MACRO == macro_type_) {
+      if (OB_FAIL(databuff_printf(format, sizeof(format), "%s%%ld.T%hhu", SEQ_KEY_STR,
+                                  ObStorageObjectType::SHARED_MAJOR_META_MACRO))) {
+        LOG_WARN("fail to databuff printf", KR(ret));
+      } else if (OB_UNLIKELY(1 != sscanf(entry->d_name, format, &macro_seq))) {
+        // do nothing, only print log
+        LOG_WARN("unexpected path", K(entry->d_name));
+      } else {
+        is_match = true;
+      }
+    }
+    if (OB_SUCC(ret) && is_match) {
+      if (OB_UNLIKELY(macro_seq < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", KR(ret), K(macro_seq));
+      } else {
+        if (OB_FAIL(file_list_.push_back(macro_seq))) {
+          LOG_WARN("failed to push back", KR(ret), K(macro_seq));
+        }
+      }
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(file_list));
+public:
+  static const int64_t OB_DEFAULT_ARRAY_CAPACITY = 128;
+  ObMacroType macro_type_;
+  ObSEArray<int64_t, OB_DEFAULT_ARRAY_CAPACITY> file_list_;
+};
+
 class ObSharedStorageTest : public ObSimpleClusterTestBase
 {
 public:
@@ -177,7 +234,7 @@ TEST_F(ObSharedStorageTest, test_ls_abort)
   ObLS *ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   ASSERT_EQ(OB_SUCCESS, ls->offline());
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()));
   wait_ls_gc_finish(ls->get_ls_id(), ls->get_ls_epoch());
 }
 
@@ -384,14 +441,14 @@ int ObSharedStorageTest::get_block_ids_from_dir(
     ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
-  ObSingleNumFileListOp shared_macro_op;
+  ObSharedMajorMacroListOp shared_macro_op(macro_type);
   char shared_macro_path[storage::ObServerFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   const int64_t cluster_id = GCONF.cluster_id;
   char *object_storage_root_dir = nullptr;
   if (OB_FAIL(OB_DIR_MGR.get_object_storage_root_dir(object_storage_root_dir))) {
     LOG_WARN("fail to get object storage root dir", KR(ret), K(object_storage_root_dir));
-  // cluster_id/tenant_id/tablet/tablet_id/major/sstable/cg_id/data or meta
-  } else if (OB_FAIL(databuff_printf(shared_macro_path, sizeof(shared_macro_path), "%s/%s_%ld/%s_%lu/%s/%ld/%s/%s/cg_0/%s",
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/sstable/cg_id/data or meta
+  } else if (OB_FAIL(databuff_printf(shared_macro_path, sizeof(shared_macro_path), "%s/%s_%ld/%s_%lu/%s/%ld/0/%s/%s/cg_0/%s",
                                      object_storage_root_dir, CLUSTER_DIR_STR,
                                      cluster_id, TENANT_DIR_STR, MTL_ID(), TABLET_DIR_STR,
                                      tablet_id.id(), MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR,

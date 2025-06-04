@@ -552,9 +552,9 @@ int ObGroupByChecker::add_abs_equal_constraint_in_grouping_sets(ObConstRawExpr &
           if (lib::is_oracle_mode() && c_expr != nullptr &&
               expr.get_expr_type() == T_QUESTIONMARK && c_expr->get_expr_type() == T_QUESTIONMARK) {
             const ObObj &left_value = expr.get_value().is_unknown() ?
-                                      expr.get_result_type().get_param() : expr.get_value();
+                                      expr.get_param() : expr.get_value();
             const ObObj &right_value = c_expr->get_value().is_unknown() ?
-                                       c_expr->get_result_type().get_param() : c_expr->get_value();
+                                       c_expr->get_param() : c_expr->get_value();
             if (check_obj_abs_equal(left_value, right_value)) {
               // add abs equal constraint
               ObPCParamEqualInfo abs_equal_info;

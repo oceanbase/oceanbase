@@ -338,10 +338,54 @@ TEST(ObRowFuseTest, test_row_flag_fuse)
   check_fuse_row_flag(DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK, DF_DELETE, DF_DELETE);
   check_fuse_row_flag(DF_DELETE, DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK, DF_DELETE);
   check_fuse_row_flag(DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK,
-      DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK,
-      DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK);
+                      DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK,
+                      DF_DELETE | ObDmlRowFlag::OB_FLAG_TYPE_MASK);
 }
 
+TEST(ObRowFuseTest, test_delete_version)
+{
+  int count = 5;
+  common::ObArenaAllocator allocator("StTemp");
+  ObNopPos nop_pos;
+  bool final_result = false;
+  ASSERT_EQ(OB_SUCCESS, nop_pos.init(allocator, 256));
+
+  ObDatumRow row1;
+  ASSERT_EQ(OB_SUCCESS, row1.init(allocator, count));
+  for (int i = 0; i < count; i++) {
+    row1.storage_datums_[i].set_int(i*2);
+  }
+
+  ObDatumRow row2;
+  ASSERT_EQ(OB_SUCCESS, row2.init(allocator, count));
+  for (int i = 0; i < count; i++) {
+    row2.storage_datums_[i].set_int(i);
+  }
+
+  // 1.insert_with_delete fuse insert
+  row1.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+  row1.delete_version_ = 100;
+  ASSERT_EQ(true, row1.is_di_delete());
+  row2.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+  row2.delete_version_ = 0;
+  ASSERT_EQ(false, row2.is_di_delete());
+
+  nop_pos.count_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObRowFuse::fuse_row(row2, row1, nop_pos, final_result, NULL));
+  ASSERT_EQ(false, row1.is_di_delete());
+
+  // 2.insert fuse delete
+  row1.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+  row1.delete_version_ = 0;
+  ASSERT_EQ(false, row1.is_di_delete());
+  row2.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
+  row2.delete_version_ = 100;
+  ASSERT_EQ(true, row2.is_di_delete());
+
+  nop_pos.count_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObRowFuse::fuse_row(row2, row1, nop_pos, final_result, NULL));
+  ASSERT_EQ(true, row1.is_di_delete());
+}
 
 } // namespace unittest
 } // namespace oceanbase

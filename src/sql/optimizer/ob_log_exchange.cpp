@@ -39,7 +39,7 @@ int ObLogExchange::get_explain_name_internal(char *buf,
       (is_repart_exchange() || is_pq_dist())) {
     ret = BUF_PRINTF(" (");
     if (OB_FAIL(ret)){
-    } else if (is_repart_exchange()) {
+    } else if (is_repart_exchange() && ObPQDistributeMethod::SM_BROADCAST != dist_method_) {
       if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
         ret = BUF_PRINTF("PKEY RANDOM");
       } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {
@@ -396,7 +396,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
     } else { /*do nothing*/ }
   } else if (is_pq_local()) {
     set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
-    set_available_parallel(child->get_parallel());
+    set_available_parallel(child->get_available_parallel());
     set_server_cnt(1);
     static_cast<ObLogExchange*>(child)->set_in_server_cnt(1);
     get_server_list().reuse();
@@ -406,7 +406,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
   } else {
     // set_exchange_info not set these info, use child parallel and server info.
     if (OB_FAIL(ret)) {
-    } else if (is_pq_hash_dist() || is_pq_random()) {
+    } else if ((is_pq_hash_dist() && !is_slave_mapping()) || is_pq_random()) {
       server_list_.reuse();
       common::ObAddr all_server_list;
       all_server_list.set_max(); // a special ALL server list indicating hash data distribution
@@ -429,8 +429,10 @@ int ObLogExchange::compute_op_parallel_and_server_info()
         LOG_WARN("get unexpected exchange above match all sharding", K(ret));
       } else if (child->is_single()) {
         set_parallel(child->get_available_parallel());
+        set_available_parallel(child->get_available_parallel());
       } else {
         set_parallel(child->get_parallel());
+        set_available_parallel(child->get_available_parallel());
       }
     }
   }

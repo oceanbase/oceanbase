@@ -41,6 +41,7 @@
 #include "share/schema/ob_udt_mgr.h"
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
+#include "share/schema/ob_catalog_mgr.h"
 
 namespace oceanbase
 {
@@ -106,6 +107,8 @@ struct SchemaKey
     uint64_t rls_context_id_;
     uint64_t routine_type_;
     uint64_t column_priv_id_;
+    uint64_t catalog_id_;
+    uint64_t external_resource_id_;
   };
   union {
     common::ObString table_name_;
@@ -116,6 +119,7 @@ struct SchemaKey
     common::ObString tablespace_name_;
     common::ObString context_namespace_;
     common::ObString mock_fk_parent_table_namespace_;
+    common::ObString catalog_name_;
   };
   int64_t schema_version_;
   uint64_t col_id_;
@@ -163,7 +167,9 @@ struct SchemaKey
                K_(routine_type),
                K_(column_priv_id),
                K_(client_user_id),
-               K_(proxy_user_id));
+               K_(proxy_user_id),
+               K_(catalog_id),
+               K_(catalog_name));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -326,6 +332,14 @@ struct SchemaKey
   {
     return ObColumnPrivIdKey(tenant_id_, column_priv_id_);
   }
+  ObTenantCatalogId get_catalog_key() const
+  {
+    return ObTenantCatalogId(tenant_id_, catalog_id_);
+  }
+  ObCatalogPrivSortKey get_catalog_priv_key() const
+  {
+    return ObCatalogPrivSortKey(tenant_id_, user_id_, catalog_name_);
+  }
 };
 
 struct VersionHisKey
@@ -470,6 +484,7 @@ public:
   SCHEMA_KEY_FUNC(rls_policy);
   SCHEMA_KEY_FUNC(rls_group);
   SCHEMA_KEY_FUNC(rls_context);
+  SCHEMA_KEY_FUNC(catalog);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -482,6 +497,33 @@ public:
   struct udf_key_equal_to {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const {
       return a.udf_name_ == b.udf_name_;
+    }
+  };
+
+  struct catalog_priv_key_hash_func
+  {
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
+    {
+      hash_code = 0;
+      hash_code = common::murmurhash(&schema_key.tenant_id_,
+                                     sizeof(schema_key.tenant_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.user_id_,
+                                     sizeof(schema_key.user_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(schema_key.catalog_name_.ptr(),
+                                     schema_key.catalog_name_.length(),
+                                     hash_code);
+      return OB_SUCCESS;
+    }
+  };
+  struct catalog_priv_key_equal_to
+  {
+    bool operator()(const SchemaKey &a, const SchemaKey &b) const
+    {
+      return a.tenant_id_ == b.tenant_id_ &&
+          a.user_id_ == b.user_id_ &&
+          a.catalog_name_ == b.catalog_name_;
     }
   };
 
@@ -754,6 +796,8 @@ public:
   SCHEMA_KEYS_DEF(rls_policy, RlsPolicyKeys);
   SCHEMA_KEYS_DEF(rls_group, RlsGroupKeys);
   SCHEMA_KEYS_DEF(rls_context, RlsContextKeys);
+  SCHEMA_KEYS_DEF(catalog, CatalogKeys);
+  SCHEMA_KEYS_DEF(catalog_priv, CatalogPrivKeys);
 
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -887,6 +931,12 @@ public:
     RlsContextKeys new_rls_context_keys_;
     RlsContextKeys del_rls_context_keys_;
 
+    // catalog
+    CatalogKeys new_catalog_keys_;
+    CatalogKeys del_catalog_keys_;
+    CatalogPrivKeys new_catalog_priv_keys_;
+    CatalogPrivKeys del_catalog_priv_keys_;
+
     void reset();
     int create(int64_t bucket_size);
 
@@ -914,6 +964,7 @@ public:
     common::ObArray<ObSequenceSchema> simple_sequence_schemas_;
     common::ObArray<ObSimpleUserSchema> simple_user_schemas_;
     common::ObArray<ObDbLinkSchema> simple_dblink_schemas_;
+    common::ObArray<ObCatalogPriv> simple_catalog_priv_schemas_;
     common::ObArray<ObDBPriv> simple_db_priv_schemas_;
     common::ObArray<ObTablePriv> simple_table_priv_schemas_;
     common::ObArray<ObRoutinePriv> simple_routine_priv_schemas_;
@@ -936,6 +987,7 @@ public:
     common::ObArray<ObRlsPolicySchema> simple_rls_policy_schemas_;
     common::ObArray<ObRlsGroupSchema> simple_rls_group_schemas_;
     common::ObArray<ObRlsContextSchema> simple_rls_context_schemas_;
+    common::ObArray<ObCatalogSchema> simple_catalog_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArenaAllocator allocator_;
   };
@@ -950,6 +1002,10 @@ public:
   //call this(if you really need this , use friend class, such as chunkserver)
   //construct core schema from hard code
   int fill_all_core_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
+#ifdef OB_BUILD_SHARED_STORAGE
+  //construct sslog schema from hard code
+  int fill_sslog_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
+#endif
   virtual int get_tenant_schema_version(const uint64_t tenant_id, int64_t &schema_version);
   int64_t get_table_count() const;
   //the schema service should be thread safe
@@ -1066,6 +1122,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(tablegroup);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(outline);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(db_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine_priv);
@@ -1095,6 +1152,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_policy);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_group);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_context);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -1114,6 +1172,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(routine, ObRoutineMgr);
   APPLY_SCHEMA_TO_CACHE(package, ObPackageMgr);
   APPLY_SCHEMA_TO_CACHE(trigger, ObTriggerMgr);
+  APPLY_SCHEMA_TO_CACHE(catalog_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(db_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(table_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(routine_priv, ObPrivMgr);
@@ -1139,6 +1198,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(rls_policy, ObRlsPolicyMgr);
   APPLY_SCHEMA_TO_CACHE(rls_group, ObRlsGroupMgr);
   APPLY_SCHEMA_TO_CACHE(rls_context, ObRlsContextMgr);
+  APPLY_SCHEMA_TO_CACHE(catalog, ObSchemaMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log

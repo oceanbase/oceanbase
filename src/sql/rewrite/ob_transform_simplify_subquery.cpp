@@ -356,7 +356,7 @@ int ObTransformSimplifySubquery::do_transform_not_expr(ObRawExpr *&expr, bool &t
       LOG_WARN("failed to create raw expr", K(ret));
     } else if (OB_FALSE_IT(new_op_expr = static_cast<ObOpRawExpr *>(new_param))) {
     } else if (OB_FALSE_IT(new_op_expr->set_subquery_key(key_flag))) {
-    } else if (OB_FAIL(append(new_op_expr->get_param_exprs(),
+    } else if (OB_FAIL(new_op_expr->set_param_exprs(
                         static_cast<ObOpRawExpr *>(param)->get_param_exprs()))) {
       LOG_WARN("failed to append param exprs", K(ret));
     } else if (OB_FAIL(new_op_expr->formalize(ctx_->session_info_))) {
@@ -550,7 +550,7 @@ int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
         if (OB_ISNULL(query_refs.at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret));
-        } else if (query_refs.at(j)->get_ref_count() == 1){
+        } else if (query_refs.at(j)->is_non_shared_reference()){
           can_push_down = true;
         } else {
           can_push_down = false;
@@ -1161,6 +1161,8 @@ int ObTransformSimplifySubquery::transform_exists_query(ObDMLStmt *stmt, bool &t
       LOG_WARN("fail to transform expr", K(ret));
     } else if (!is_happened) {
       // do nothing
+    } else if (OB_FAIL(target->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize", K(ret));
     } else if (OB_FAIL(relation_expr_pointers.at(i).set(target))) {
       LOG_WARN("failed to set expr", K(ret));
     } else {
@@ -1222,7 +1224,7 @@ int ObTransformSimplifySubquery::recursive_eliminate_subquery(ObDMLStmt *stmt,
 //        c. 消除order by
 //2. 如果是ANY/ALL
 //  2.1 消除group by
-//  2.2 非相关any子查询如果select item为const item，则添加limit 1，
+//  2.2 非相关any子查询如果select item为const item，则添加limit 1
 //      eg: select * from t1 where c1 in (select 1 from t2);
 //          ==> select * from t1 where c1 in (select 1 from t2 limit 1);
 //  2.3 消除distinct
@@ -1561,7 +1563,7 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
         LOG_WARN("Simplify select list in EXISTS fails", K(ret));
       }
     }
-    ObExprResType res_type;
+    ObRawExprResType res_type;
     res_type.set_type(ObIntType);
     for(int64_t i = 0; OB_SUCC(ret) && i < subquery->get_select_item_size(); i++) {
       SelectItem &select_item = subquery->get_select_item(i);
@@ -2154,7 +2156,7 @@ int ObTransformSimplifySubquery::empty_table_subquery_can_be_eliminated_in_exist
     LOG_WARN("failed to check limit", K(ret));
   } else if (contain_rownum || has_limit) {
     is_valid = false;
-  } else if (query_ref->get_ref_count() > 1) {
+  } else if (query_ref->is_shared_reference()) {
     is_valid = false;
   } else if (0 != ref_stmt->get_from_item_size() ||
              0 == ref_stmt->get_condition_size() ||
@@ -2227,6 +2229,18 @@ int ObTransformSimplifySubquery::do_trans_empty_table_subquery_as_expr(ObRawExpr
   } else {
     expr = out_expr;
     trans_happened = true;
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::check_rule_bypass(const ObDMLStmt &stmt, bool &reject)
+{
+  int ret = OB_SUCCESS;
+  reject = false;
+  if (is_normal_disabled_transform(stmt)) {
+    reject = true;
+  } else if (stmt.get_subquery_expr_size() < 1) {
+    reject = true;
   }
   return ret;
 }

@@ -72,7 +72,7 @@ public:
 protected:
   int move_iter_next(ObPartitionMergeIter &iter);
   int compare(const blocksstable::ObDatumRow &left, ObPartitionMergeIter &row_store_iter_, int64_t &cmp_ret);
-  virtual int close() override;
+  virtual int inner_close() override;
 private:
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) override;
   int init_base_merge_iter(ObSSTable *sstable);

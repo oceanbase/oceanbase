@@ -40,6 +40,7 @@ struct ObExternalFileInfo {
   int64_t file_size_;
   int64_t row_start_;
   int64_t row_count_;
+  common::ObString session_id_;
   int deep_copy(ObIAllocator &allocator, const ObExternalFileInfo &other);
   TO_STRING_KV(K_(file_url), K_(file_id), K_(part_id), K_(file_addr), K_(file_size), K_(row_start), K_(row_count));
   OB_UNIS_VERSION(1);
@@ -91,13 +92,17 @@ class ObExternalTableFileManager
 {
 public:
   struct ObExternalFileInfoTmp {
-    ObExternalFileInfoTmp(common::ObString file_url, int64_t file_size, int64_t part_id) :
-                          file_url_(file_url), file_size_(file_size), part_id_(part_id) {}
-    ObExternalFileInfoTmp() : file_url_(), file_size_(0), part_id_(0) {}
+    ObExternalFileInfoTmp(common::ObString file_url,
+                          int64_t file_size,
+                          int64_t part_id,
+                          int64_t delete_version = MAX_VERSION) :
+      file_url_(file_url), file_size_(file_size), part_id_(part_id), delete_version_(delete_version) {}
+    ObExternalFileInfoTmp() : file_url_(), file_size_(0), part_id_(0), delete_version_(0) {}
     common::ObString file_url_;
     int64_t file_size_;
     int64_t part_id_;
-    TO_STRING_KV(K_(file_url),K_(part_id), K_(file_size));
+    int64_t delete_version_;
+    TO_STRING_KV(K_(file_url),K_(part_id), K_(file_size), K_(delete_version));
   };
 
   static const int64_t CACHE_EXPIRE_TIME = 20 * 1000000L; //20s

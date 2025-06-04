@@ -17,6 +17,7 @@
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 namespace oceanbase
 {
@@ -954,19 +955,12 @@ int ObOptStatMonitorManager::do_get_opt_stats_expired_table_info(const int64_t t
 {
   int ret = OB_SUCCESS;
   ObSqlString select_sql;
-  if (OB_FAIL(select_sql.append_fmt("SELECT    m.table_id, m.tablet_id, m.inserts "\
+  if (OB_FAIL(select_sql.append_fmt("SELECT m.table_id, m.tablet_id, m.inserts  "\
                                      "FROM      %s m " \
-                                     "LEFT JOIN %s up " \
-                                     "ON        m.table_id = up.table_id "\
-                                     "AND       up.pname = 'ASYNC_GATHER_STALE_RATIO' "\
-                                     "JOIN      %s gp "\
-                                     "ON        gp.sname = 'ASYNC_GATHER_STALE_RATIO' "\
-                                     "WHERE (CASE WHEN m.last_inserts = 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as signed) "\
-                                                "ELSE m.inserts * 1.0 / m.last_inserts END) > cast(coalesce(up.valchar, gp.spare4) as signed) "\
+                                     "WHERE (CASE WHEN m.last_inserts = 0 THEN 11 "\
+                                                "ELSE m.inserts * 1.0 / m.last_inserts END) >  10.0 "\
                                               "AND (m.tenant_id, m.table_id, m.tablet_id) in %s",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
-          share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
-          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
           where_str.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
@@ -1092,6 +1086,7 @@ int ObOptStatMonitorManager::mark_the_opt_stat_expired(const OptStatExpiredTable
     obrpc::ObUpdateStatCacheArg stat_arg;
     stat_arg.tenant_id_ = expired_table_info.tenant_id_;
     stat_arg.table_id_ = expired_table_info.table_id_;
+    stat_arg.no_invalidate_ = true;
     if (OB_FAIL(append(stat_arg.partition_ids_, expired_partition_ids))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(expired_table_info.tenant_id_, stat_arg))) {
@@ -1340,28 +1335,21 @@ int ObOptStatMonitorManager::check_table_stat_expired_by_dml_info(const uint64_t
     ObSqlString select_sql;
     if (OB_FAIL(select_sql.append_fmt("SELECT 1 "\
                                        "FROM  (SELECT  table_id,"\
-                                                      "sum(inserts-deletes) AS row_cnt,"\
+                                                       "sum(inserts-deletes) AS row_cnt,"\
                                                       "sum(inserts+updates+deletes) AS total_modified_cnt,"\
                                                       "sum(last_inserts+last_updates+last_deletes) AS last_modified_cnt "\
                                                   "from     %s "\
                                                   "WHERE    tenant_id = %lu "\
                                                   "AND      table_id = %lu %s%s "\
                                                   "GROUP BY table_id) m "\
-                                        "LEFT JOIN %s up "\
-                                        "ON        m.table_id = up.table_id "\
-                                        "AND       up.pname = 'ASYNC_GATHER_STALE_RATIO' "\
-                                        "JOIN      %s gp "\
-                                        "ON        gp.sname = 'ASYNC_GATHER_STALE_RATIO' "\
-                                        "WHERE     (CASE WHEN last_modified_cnt = 0 THEN 1 + cast(coalesce(up.valchar, gp.spare4) as signed) "\
-                                                    "ELSE total_modified_cnt * 1.0 / last_modified_cnt END) > cast(COALESCE(up.valchar, gp.spare4) AS signed) "\
+                                        "WHERE     (CASE WHEN row_cnt = 0 THEN 10.1 "\
+                                                    "ELSE (total_modified_cnt  * 1.0) / last_modified_cnt END) > 10.1 "\
                                         "AND row_cnt > 0;",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           ext_tenant_id,
           pure_table_id,
           tablet_list.empty() ? " " : " AND tablet_id in ",
-          tablet_list.empty() ? " " : tablet_list.ptr(),
-          share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
-          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME
+          tablet_list.empty() ? " " : tablet_list.ptr()
           ))) {
       LOG_WARN("failed to append fmt", K(ret));
     } else {

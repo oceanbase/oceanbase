@@ -14,6 +14,7 @@
 #include "observer/ob_srv_network_frame.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "observer/mysql/obsm_conn_callback.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 
 #include "share/ob_rpc_share.h"
 #include "observer/ob_rpc_intrusion_detect.h"
@@ -81,11 +82,9 @@ static int update_tcp_keepalive_parameters_for_sql_nio_server(int tcp_keepalive_
   return ret;
 }
 
-int ObSrvNetworkFrame::init()
+int ObSrvNetworkFrame::init(const char* mysql_unix_path, const char* rpc_unix_path)
 {
   int ret = OB_SUCCESS;
-  const char* mysql_unix_path = "unix:run/sql.sock";
-  const char* rpc_unix_path = "unix:run/rpc.sock";
   const uint32_t rpc_port = static_cast<uint32_t>(GCONF.rpc_port);
   ObNetOptions opts;
   int io_cnt = static_cast<int>(GCONF.net_thread_count);
@@ -221,8 +220,16 @@ int ObSrvNetworkFrame::start()
             sql_net_thread_count = GCONF.net_thread_count;
           }
         }
+        if (GCONF._enable_numa_aware) {
+          int numa_node_count = AFFINITY_CTRL.get_num_nodes();
+          if (sql_net_thread_count < numa_node_count) {
+            sql_net_thread_count = common::upper_align(sql_net_thread_count, numa_node_count);
+            LOG_INFO("sql nio net thread count adjusted", K(sql_net_thread_count));
+          }
+        }
         if (OB_FAIL(obmysql::global_sql_nio_server->start(
-                GCONF.mysql_port, &deliver_, sql_net_thread_count))) {
+                GCONF.mysql_port, &deliver_, sql_net_thread_count,
+                GCONF._enable_numa_aware))) {
           LOG_ERROR("sql nio server start failed", K(ret));
         }
       }

@@ -484,6 +484,14 @@ private:
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       int64_t &inc_base_snapshot_version);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int process_minor_sstables_for_ss_(
+    ObArenaAllocator &allocator,
+    const UpdateUpperTransParam &upper_trans_param,
+    ObArray<ObITable *> &sstables,
+    const int64_t inc_base_snapshot_version,
+    int64_t &inc_pos);
+#endif
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

@@ -91,6 +91,8 @@ int ObDDLRedoLogRowIterator::get_next_row(const ObDatumRow *&row,
     for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_column_count_; i++) {
       if (OB_FAIL(datums[i].to_obj_enhance(rowkey_obobj_[i], col_desc.at(i).col_type_))) {
         LOG_WARN("fail to get obobj", KR(ret), K(i));
+      } else if (col_desc.at(i).col_type_.is_lob_storage()){
+        rowkey_obobj_[i].set_has_lob_header();
       }
     }
     if (OB_SUCC(ret)) {

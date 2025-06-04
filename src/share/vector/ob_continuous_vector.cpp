@@ -46,8 +46,8 @@ int ObContinuousVector<BasicOp>::murmur_hash_v3_for_one_row(EVAL_HASH_ARGS_FOR_R
 {
   RowHashResIter hash_iter(&hash_value);
   sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
-  char mock_skip_data[1] = {0};
-  sql::ObBitVector &skip = *sql::to_bit_vector(mock_skip_data);
+  int64_t mock_skip_data = 0;
+  sql::ObBitVector &skip = *sql::to_bit_vector(&mock_skip_data);
   return VecOpUtil::template hash_dispatch<ObMurmurHash, true, RowHashResIter>(
     hash_iter, expr.obj_meta_, *this, skip, bound, &seed, false);
 }

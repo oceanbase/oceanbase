@@ -390,7 +390,7 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
     const int64_t MODE_COUNT = static_cast<int64_t>(ObIOMode::MAX_MODE) + 1;
     const int64_t GROUP_MODE_CNT = static_cast<int64_t>(ObIOGroupMode::MODECNT);
     io_usage.calculate_io_usage();
-    const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &info = io_usage.get_io_usage();
+    const ObIOUsageInfoArray &info = io_usage.get_io_usage();
     uint64_t group_config_index = 0;
     int tmp_ret = OB_SUCCESS;
     for (int64_t i = 0; i < info.count(); ++i) {
@@ -459,7 +459,7 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObIOUsage &s
     const int64_t MODE_COUNT = static_cast<int64_t>(ObIOMode::MAX_MODE) + 1;
     const int64_t GROUP_MODE_CNT = static_cast<int64_t>(ObIOGroupMode::MODECNT);
     sys_io_usage.calculate_io_usage();
-    const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &info = sys_io_usage.get_io_usage();
+    const ObIOUsageInfoArray &info = sys_io_usage.get_io_usage();
     int tmp_ret = OB_SUCCESS;
     uint64_t group_config_index = 0;
     for (uint64_t i = 0; i < info.count(); ++i) {
@@ -875,7 +875,7 @@ int ObAllVirtualGroupIOStat::record_user_group_io_status(const int64_t tenant_id
     } else {
       int tmp_ret = OB_SUCCESS;
       const ObTenantIOConfig io_config = io_manager->get_io_config();
-      const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &info = io_usage.get_io_usage();
+      const ObIOUsageInfoArray &info = io_usage.get_io_usage();
       const int64_t MODE_COUNT = static_cast<int64_t>(ObIOMode::MAX_MODE) + 1;
       const int64_t GROUP_MODE_CNT = static_cast<int64_t>(ObIOGroupMode::MODECNT);
       uint64_t local_group_config_index = 0;
@@ -1001,7 +1001,7 @@ int ObAllVirtualGroupIOStat::record_sys_group_io_status(const int64_t tenant_id,
       LOG_WARN("assign io usage failed", K(ret));
     } else {
       sys_io_usage.calculate_io_usage();
-      const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &info = sys_io_usage.get_io_usage();
+      const ObIOUsageInfoArray &info = sys_io_usage.get_io_usage();
       int tmp_ret = OB_SUCCESS;
       uint64_t group_config_index = 0;
 

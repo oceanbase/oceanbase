@@ -686,6 +686,12 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
       return true;
     }
   }
+  case T_FUN_TOP_FRE_HIST: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
+  }
+  case T_FUN_HYBRID_HIST: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
+  }
   default:
     return false;
   }

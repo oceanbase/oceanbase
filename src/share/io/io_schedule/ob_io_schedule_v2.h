@@ -62,7 +62,6 @@ class ObTenantIOSchedulerV2
 {
 public:
   enum { N_SUB_ROOT = ObIOManagerV2::N_SUB_ROOT };
-  enum { GROUP_START_NUM = 3 * 3 };
   ObTenantIOSchedulerV2();
   ~ObTenantIOSchedulerV2() { destroy(); }
 public:
@@ -78,7 +77,7 @@ private:
   uint64_t tenant_id_;
   int top_qid_[N_SUB_ROOT];
   int default_qid_[N_SUB_ROOT];
-  ObSEArray <int, GROUP_START_NUM> qid_;
+  ObSEArray <int, GROUP_START_NUM * (static_cast<uint64_t>(ObIOMode::MAX_MODE) + 1)> qid_;
 };
 
 }; // end namespace common

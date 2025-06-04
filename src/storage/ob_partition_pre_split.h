@@ -72,10 +72,11 @@ private:
       const ObString &db_name,
       const ObTableSchema &data_table_schema,
       const ObTableSchema &ori_index_schema,
+      const int64_t auto_part_size,
       ObTableSchema &new_index_schema);
 
   int generate_tablet_and_part_id(ObTableSchema &new_table_schema);
-  int check_table_can_do_pre_split(const ObTableSchema &ori_table_schema);
+  int check_table_can_do_pre_split(const ObTableSchema &data_table_schema, const ObTableSchema &index_table_schema);
 
   int build_tablet_pre_split_ranges(
       const int64_t tenant_id,
@@ -152,7 +153,9 @@ private:
   int get_exist_table_size(
       const ObTableSchema &table_schema,
       ObIArray<TabletIDSize> &tablet_size);
-
+  int get_exist_table_size(
+      const ObTableSchema &table_schema,
+      int64_t &table_size);
   int get_table_partition_bounder(
       const ObTableSchema &table_schema,
       const int64_t part_key_length,

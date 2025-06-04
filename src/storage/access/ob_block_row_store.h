@@ -37,6 +37,10 @@ struct ObTableScanStoreStat;
 struct ObFilterResult
 {
 public:
+  ObFilterResult() :
+      filter_start_(0),
+      bitmap_(nullptr)
+  {}
   bool test(int64_t row_id) const
   {
     bool not_filtered = true;
@@ -46,8 +50,8 @@ public:
     }
     return not_filtered;
   }
-  const ObBitmap *bitmap_;
   int64_t filter_start_;
+  const ObBitmap *bitmap_;
   TO_STRING_KV(K_(filter_start), KP_(bitmap));
 };
 
@@ -66,37 +70,31 @@ public:
   OB_INLINE bool can_refresh() const { return !is_aggregated_in_prefetch_; }
   OB_INLINE void set_aggregated_in_prefetch() { is_aggregated_in_prefetch_ = true; }
   // for blockscan
-  OB_INLINE void reset_blockscan() { can_blockscan_ = false; filter_applied_ = false; }
-  OB_INLINE bool can_blockscan() const { return can_blockscan_; }
   OB_INLINE bool filter_pushdown() const { return pd_filter_info_.is_pd_filter_; }
-  OB_INLINE bool filter_applied() const { return filter_applied_; }
   OB_INLINE bool filter_is_null() const { return pd_filter_info_.is_pd_filter_ && nullptr == pd_filter_info_.filter_; }
-  int apply_blockscan(
-      blocksstable::ObIMicroBlockRowScanner &micro_scanner,
-      const bool can_pushdown,
-      ObTableScanStoreStat &table_store_stat);
-  int get_filter_result(ObFilterResult &res);
   OB_INLINE sql::ObPushdownFilterExecutor *get_pd_filter()
   { return pd_filter_info_.filter_; }
-  OB_INLINE ObWhereOptimizer *get_where_optimizer()
-  { return where_optimizer_; }
+  OB_INLINE sql::PushdownFilterInfo &get_pd_filter_info()
+  { return pd_filter_info_; }
+  OB_INLINE int reorder_filter()
+  {
+    return nullptr != where_optimizer_ ?
+        where_optimizer_->reorder_row_filter() : OB_SUCCESS;
+  }
+  OB_INLINE bool disable_bypass() const
+  {
+    return nullptr != where_optimizer_ ?
+        where_optimizer_->is_disable_bypass() : false;
+  }
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied),
-      K_(disabled), K_(is_aggregated_in_prefetch));
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(disabled), K_(is_aggregated_in_prefetch), K_(pd_filter_info));
 protected:
-  int filter_micro_block(
-      const int64_t row_count,
-      blocksstable::ObIMicroBlockRowScanner &micro_scanner,
-      sql::ObPushdownFilterExecutor *parent,
-      sql::ObPushdownFilterExecutor *filter);
   bool is_inited_;
   sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
   const ObTableIterParam *iter_param_;
 private:
-  bool can_blockscan_;
-  bool filter_applied_;
   bool disabled_;
   bool is_aggregated_in_prefetch_;
   ObWhereOptimizer *where_optimizer_;

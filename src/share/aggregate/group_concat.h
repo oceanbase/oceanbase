@@ -138,11 +138,11 @@ public:
 
 protected:
   /*
-              ------------------------------------------------------------------
-    Agg_cell: |pointer of string| buffer size | string length | concated rows  |
-              ------------------------------------------------------------------
-              |     char **     |   int32_t   |    int32_t    |     int64_t    |
-              ------------------------------------------------------------------
+              ------------------------------------------------------------------------------------
+    Agg_cell: |pointer of string| buffer size | string length | concated rows  |  has_truncated  |
+              ------------------------------------------------------------------------------------
+              |     char **     |   int32_t   |    int32_t    |     int64_t    |       bool      |
+              ------------------------------------------------------------------------------------
 
     The GroupConcat function uses an ObString type along with an int32_t to process and record
     concatenated rows for aggregation. As shown in the table, an ObString is stored using a string
@@ -168,9 +168,7 @@ protected:
 
     In MySQL mode, the handling is a bit more complex. If the buffer is full, add_string will be
     trimmed to fill the remaining space up to str_max_len. Additionally, the current count of
-    concatenated rows is outputed. To improve efficiency, the buf_is_full flag is computed before
-    processing each batch, allowing the system to skip unnecessary concatenation once the buffer is
-    full.
+    concatenated rows is outputed. To improve efficiency, set buf_is_full to true to avoid concat on subsequent batch.
   */
   int append_str(const ObCollationType cs_type, ObString &base_string, ObString add_string,
                  int64_t concated_rows, bool &buf_is_full, const uint64_t concat_str_max_len)
@@ -313,12 +311,18 @@ protected:
     cur_string = ObString(buffer_size, string_len, string_ptr);
   }
 
-  inline void set_string(char *agg_cell, ObString &cur_string, int64_t concated_rows)
+  inline bool has_truncated_from_cell(char *agg_cell)
+  {
+    return *reinterpret_cast<bool *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t) + sizeof(int64_t));
+  }
+
+  inline void set_string(char *agg_cell, ObString &cur_string, int64_t concated_rows, bool has_truncated)
   {
     *reinterpret_cast<char **>(agg_cell) = cur_string.ptr();
     *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **)) = cur_string.size();
     *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **) + sizeof(int32_t)) = cur_string.length();
     *reinterpret_cast<int64_t *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t)) = concated_rows;
+    *reinterpret_cast<bool *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t) + sizeof(int64_t)) = has_truncated;
   }
 
   inline int extend_string(ObString &base_string, const int32_t length,
@@ -391,9 +395,10 @@ public:
     ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_;
 
     bool buf_is_full = false;
+    bool has_truncated = has_truncated_from_cell(agg_cell);
     uint64_t concat_str_max_len = 0;
 
-    if (skip.is_all_true(bound.start(), bound.end())) {
+    if (has_truncated || skip.is_all_true(bound.start(), bound.end())) {
     } else if (OB_FAIL(get_concat_str_max_len(agg_ctx, concat_str_max_len))) {
       SQL_LOG(WARN, "fail to get group concat max len", K(ret));
     } else if (OB_FAIL(get_buf_is_full_sign(agg_cell, buf_is_full, concat_str_max_len))) {
@@ -423,7 +428,7 @@ public:
         if (OB_SUCC(ret) && concated_rows > before_concat_rows) {
           NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
           not_nulls.set(agg_col_id);
-          set_string(agg_cell, base_string, concated_rows);
+          set_string(agg_cell, base_string, concated_rows, buf_is_full);
         }
       }
     }

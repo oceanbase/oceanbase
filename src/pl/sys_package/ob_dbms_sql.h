@@ -68,6 +68,11 @@ public:
   inline void set_stmt_type(sql::stmt::StmtType type) { stmt_type_ = type; }
   ParamStore &get_exec_params() { return exec_params_; }
   common::ColumnsFieldArray &get_field_columns() { return fields_; }
+  virtual int get_field_count(int64_t &field_count)
+  {
+    field_count = fields_.count();
+    return common::OB_SUCCESS;
+  }
   static int deep_copy_field_columns(
     ObIAllocator& allocator,
     const common::ColumnsFieldIArray* src_fields,
@@ -103,13 +108,13 @@ public:
                    ObIAllocator *allocator,
                    int64_t col_idx,
                    const ObObjParam src_obj,
-                   sql::ObExprResType &result_type,
+                   sql::ObRawExprResType &result_type,
                    ObObjParam &result);
   int variable_value(sql::ObSQLSessionInfo *session,
                      ObIAllocator *allocator,
                      int64_t col_idx,
                      const ObObjParam src_obj,
-                     sql::ObExprResType &result_type,
+                     sql::ObRawExprResType &result_type,
                      ObObjParam &result);
 #endif
 protected:
@@ -224,12 +229,12 @@ public:
   int column_value(sql::ObSQLSessionInfo *session,
                    ObIAllocator *allocator,
                    int64_t col_idx,
-                   sql::ObExprResType &result_type,
+                   sql::ObRawExprResType &result_type,
                    ObObjParam &result);
   int variable_value(sql::ObSQLSessionInfo *session,
                     ObIAllocator *allocator,
                     const ObString &variable_name,
-                    sql::ObExprResType &result_type,
+                    sql::ObRawExprResType &result_type,
                     ObObjParam &result);
 #endif
 
@@ -238,6 +243,7 @@ public:
   void reset();
   void reuse();
   void reset_private();
+  inline void reset_dbms_info() {ObDbmsInfo::reset();};
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   int64_t get_affected_rows() const { return affected_rows_; }
   int prepare_entity(sql::ObSQLSessionInfo &session);
@@ -322,6 +328,11 @@ public:
   static int to_cursor_number(sql::ObExecContext &exec_ctx,
                               ParamStore &params,
                               ObObj &result);
+
+  static int to_refcursor(sql::ObExecContext &exec_ctx,
+                          ParamStore &params,
+                          ObObj &result);
+
   static int define_column_long(sql::ObExecContext &exec_ctx,
                                 ParamStore &params,
                                 ObObj &result);

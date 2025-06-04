@@ -53,54 +53,13 @@ int ObTabletCreateDeleteHelper::replay_mds_get_tablet(
     LOG_WARN("ls is null", K(ret));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (GCTX.is_shared_storage_mode() && OB_FAIL(try_get_current_version_tablet_(key, ls, handle))) {
-        if (OB_TABLET_NOT_EXIST != ret) {
-          LOG_WARN("fail to get current version tablet", K(ret), K(key));
-        }
-      }
-#endif
+      // nothing to do
     } else {
       LOG_WARN("fail to get tablet", K(ret), K(key));
     }
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObTabletCreateDeleteHelper::try_get_current_version_tablet_(
-    const ObTabletMapKey &key, ObLS *ls, ObTabletHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
-  ObPrivateTabletCurrentVersion current_version;
-  ObStorageObjectOpt opt;
-  bool is_exist = false;
-  opt.set_ss_private_tablet_meta_current_verison_object_opt(key.ls_id_.id(), key.tablet_id_.id());
-  ObLSTabletService *ls_tablet_svr;
-
-  if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, ls->get_ls_epoch(), is_exist))) {
-    LOG_WARN("fail to check existence", K(ret), K(opt));
-  } else if (!is_exist) {
-    ret = OB_TABLET_NOT_EXIST;
-  } else if (OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
-      opt, allocator, MTL_ID(), ls->get_ls_epoch(), current_version))) {
-    LOG_WARN("fail to read current version tablet addr", K(ret), K(opt));
-  } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet service is null", K(ret), K(key));
-  } else if (OB_FAIL(ls_tablet_svr->ss_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
-    LOG_WARN("fail to replay create tablet", K(ret), K(current_version));
-  } else if (OB_FAIL(get_tablet(key, handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get tablet", K(ret), K(key));
-    }
-  }
-  LOG_INFO("try get current version tablet", K(ret), K(key), K(is_exist));
-  return ret;
-}
-#endif
 
 int ObTabletCreateDeleteHelper::get_tablet(
     const ObTabletMapKey &key,
@@ -233,7 +192,8 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state && ObTabletStatus::NORMAL == user_data.tablet_status_) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state &&
+        (ObTabletStatus::NORMAL == user_data.tablet_status_ || ObTabletStatus::SPLIT_DST == user_data.tablet_status_)) {
       tablet_status_cache.set_value(user_data);
       LOG_INFO("refresh tablet status cache", K(ret), K(ls_id), K(tablet_id), K(tablet_status_cache), K(snapshot_version));
     }
@@ -772,6 +732,26 @@ int ObTabletCreateDeleteHelper::acquire_tablet_from_pool(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("new tablet is null", K(ret), K(handle));
   }
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::acquire_tablet_from_pool_for_ss(
+    const ObTabletPoolType &type,
+    const ObTabletMapKey &key,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  if (OB_UNLIKELY(OB_ISNULL(t3m))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("t3m should not be nullptr", K(ret), KP(t3m));
+  } else if (OB_FAIL(t3m->acquire_tablet_from_pool_for_ss(type, WashTabletPriority::WTP_HIGH, key, handle))) {
+    LOG_WARN("fail to acquire tablet from pool", K(ret), K(type));
+  } else if (OB_ISNULL(handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("new tablet is null", K(ret), K(handle));
+  }
+
   return ret;
 }
 

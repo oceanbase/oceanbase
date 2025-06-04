@@ -128,13 +128,15 @@ TEST_F(TestTabletMdsData, read_medium_info)
   ret = write_handle.get_write_ctx(write_ctx);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> array;
-  ret = ObTabletMdsData::read_medium_info(allocator_, write_ctx.addr_, array);
+  ObTabletDumpedMediumInfo dumped_medium_info;
+  ret = dumped_medium_info.init_for_first_creation(allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTabletMdsData::read_items(write_ctx.addr_, dumped_medium_info, dumped_medium_info.medium_info_list_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   constexpr int64_t count = 5;
   for (int64_t i = 0; i < count; ++i) {
-    const compaction::ObMediumCompactionInfo* info = array.at(i);
+    const compaction::ObMediumCompactionInfo* info = dumped_medium_info.medium_info_list_.at(i);
     ASSERT_EQ(current_time + count - i, info->medium_snapshot_);
   }
 }

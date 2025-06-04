@@ -27,7 +27,9 @@
 #include <assert.h>
 #include "logservice/leader_coordinator/failure_event.h"
 #include "logservice/leader_coordinator/ob_leader_coordinator.h"
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 namespace oceanbase
 {
 namespace unittest
@@ -64,10 +66,23 @@ struct AbstractPriority
   bool is_valid() const { return is_valid_; }
   // fatal failure将绕过RCS在选举层面直接切主
   bool has_fatal_failure() const { return is_valid_ && has_fatal_failure_(); }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int fill_libpalf_priority(libpalf::LibPalfElectionPriority *priority)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(fill_libpalf_priority_(priority))) {
+      COORDINATOR_LOG(WARN, "fail to fill libpalf priority", KR(ret), K(*this));
+    }
+    return ret;
+  }
+#endif
   virtual TO_STRING_KV(K_(is_valid));
 protected:
   virtual bool has_fatal_failure_() const = 0;
   virtual int refresh_(const share::ObLSID &ls_id) = 0;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int fill_libpalf_priority_(libpalf::LibPalfElectionPriority *priority) = 0;
+#endif
 protected:
   bool is_valid_;
 };
@@ -88,6 +103,9 @@ protected:
   virtual bool has_fatal_failure_() const override { return false; }
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int fill_libpalf_priority_(libpalf::LibPalfElectionPriority *priority) override { return OB_SUCCESS; }
+#endif
 private:
   int64_t port_number_;
 };
@@ -118,6 +136,21 @@ protected:
   virtual bool has_fatal_failure_() const override;
   int get_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_role_(const share::ObLSID &ls_id, common::ObRole &role) const;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int fill_libpalf_priority_(libpalf::LibPalfElectionPriority *priority) override;
+private:
+  const double DEFAULT_COMPARE_THRESHOLD = 0.0;
+  const char *const OBSERVER_STOPPED_ITEM_NAME = "observer_stopped";
+  const char *const SERVER_STOPPED_ITEM_NAME = "server_stopped";
+  const char *const ZONE_STOPPED_ITEM_NAME = "zone_stopped";
+  const char *const PRIMARY_REGION_ITEM_NAME = "primary_region";
+  const char *const IN_BLACKLIST_ITEM_NAME = "in_blacklist";
+  const char *const MANUAL_LEADER_ITEM_NAME = "manual_leader";
+  const char *const ZONE_PRIORITY_ITEM_NAME = "zone_priority";
+  const char *const SCN_ITEM_NAME = "scn";
+  const char *const FATAL_FAILURES_ITEM_NAME = "fatal_failures";
+  const char *const SERIOUS_FAILURES_ITEM_NAME = "serious_failures";
+#endif
 private:
   int compare_observer_stopped_(int &ret, const PriorityV1&) const;
   int compare_server_stopped_flag_(int &ret, const PriorityV1&) const;
@@ -134,7 +167,18 @@ private:
       const uint64_t &tenant_id,
       const share::ObLSID &ls_id,
       LsElectionReferenceInfo &election_reference_info);
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int convert_observer_stopped_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_server_stopped_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_zone_stopped_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_fatal_failures_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_primary_region_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_serious_failures_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_scn_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_in_blacklist_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_manual_leader_item_(libpalf::LibPalfElectionPriority *priority);
+  int convert_zone_priority_item_(libpalf::LibPalfElectionPriority *priority);
+#endif
   bool is_observer_stopped_;// kill -15
   bool is_server_stopped_;
   bool is_zone_stopped_;
@@ -177,6 +221,9 @@ public:
   // fatal failure跳过RCS直接切主
   virtual bool has_fatal_failure() const;
   int64_t to_string(char *buf, const int64_t buf_len) const override;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual int fill_libpalf_priority(libpalf::LibPalfElectionPriority *lib_priority) override;
+#endif
 private:
   share::ObLSID ls_id_;
   ObTuple<PriorityV0, PriorityV1> priority_tuple_;

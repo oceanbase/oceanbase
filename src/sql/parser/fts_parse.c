@@ -17,7 +17,7 @@
 
 extern int obsql_fts_yyparse(void* yyscanner);
 
-void fts_parse_docment(const char *input, void * pool, FtsParserResult *ss)
+void fts_parse_docment(const char *input, const int length, void * pool, FtsParserResult *ss)
 {
     void *scanner = NULL;
     ss->ret_ = 0;
@@ -29,7 +29,7 @@ void fts_parse_docment(const char *input, void * pool, FtsParserResult *ss)
     ss->charset_info_ = NULL;
     ss->malloc_pool_ = pool;
     obsql_fts_yylex_init_extra(ss, &scanner);
-    YY_BUFFER_STATE bufferState = obsql_fts_yy_scan_string(input, scanner);  // 读取字符串
+    YY_BUFFER_STATE bufferState = obsql_fts_yy_scan_bytes(input, length, scanner);  // 读取字符串
     ss->yyscanner_ = scanner;
     obsql_fts_yyparse(ss);  // 调用语法分析器
     obsql_fts_yy_delete_buffer(bufferState, scanner);  // 删除缓冲区

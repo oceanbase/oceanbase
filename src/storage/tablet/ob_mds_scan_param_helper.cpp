@@ -15,6 +15,8 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/multi_data_source/mds_table_impl.h"
+#include "storage/compaction/ob_medium_compaction_info.h"
+#include "storage/truncate_info/ob_truncate_info.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -34,7 +36,8 @@ int ObMdsScanParamHelper::build_scan_param(
     const common::ObString &udf_key,
     const bool is_get,
     const int64_t timeout,
-    const share::SCN &snapshot,
+    const common::ObVersionRange &read_version_range,
+    ObMdsReadInfoCollector &collector,
     ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
@@ -50,20 +53,24 @@ int ObMdsScanParamHelper::build_scan_param(
   scan_param.scan_flag_.is_mds_query_ = is_mds_query & common::ObQueryFlag::OBSF_MASK_IS_MDS_QUERY;
   scan_param.allocator_ = &allocator;
   scan_param.scan_allocator_ = &allocator;
-  scan_param.frozen_version_ = snapshot.get_val_for_tx();
+  scan_param.frozen_version_ = read_version_range.snapshot_version_;
   scan_param.need_scn_ = false;
   scan_param.for_update_ = false;
   scan_param.is_mds_query_ = true;
-  scan_param.fb_snapshot_ = snapshot;
+  scan_param.read_version_range_ = read_version_range;
   scan_param.pd_storage_flag_ = false;
   scan_param.index_id_ = ObMdsSchemaHelper::MDS_TABLE_ID;
   scan_param.schema_version_ = ObMdsSchemaHelper::MDS_SCHEMA_VERSION;
-
+  scan_param.mds_collector_ = &collector;
   if (OB_FAIL(ret)) {
   } else {
     transaction::ObTxSnapshot tx_snapshot;
-    tx_snapshot.version_ = snapshot;
-    scan_param.snapshot_.init_ls_read(ls_id, tx_snapshot);
+    if (OB_FAIL(tx_snapshot.version_.convert_for_tx(read_version_range.snapshot_version_))) {
+      LOG_WARN("failed to convert for tx", KR(ret), K(read_version_range));
+    } else {
+      scan_param.snapshot_.init_ls_read(ls_id, tx_snapshot);
+      scan_param.fb_snapshot_ = tx_snapshot.version_;
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -115,33 +122,6 @@ int ObMdsScanParamHelper::build_scan_param(
     } else if (OB_FAIL(scan_param.key_ranges_.push_back(key_range))) {
       LOG_WARN("fail to push back key range", K(ret));
     }
-  }
-
-  return ret;
-}
-
-int ObMdsScanParamHelper::build_medium_info_scan_param(
-    common::ObIAllocator &allocator,
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    ObTableScanParam &scan_param)
-{
-  int ret = OB_SUCCESS;
-  constexpr uint8_t mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
-  const int64_t abs_timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US + ObClockGenerator::getClock();
-
-  if (OB_FAIL(build_scan_param(
-      allocator,
-      ls_id,
-      tablet_id,
-      ObMdsSchemaHelper::MDS_TABLE_ID,
-      mds_unit_id,
-      common::ObString()/*udf_key*/,
-      false/*is_get*/,
-      abs_timeout,
-      share::SCN::max_scn()/*read_snapshot*/,
-      scan_param))) {
-    LOG_WARN("fail to build scan param", K(ret));
   }
 
   return ret;

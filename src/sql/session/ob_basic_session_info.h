@@ -56,6 +56,9 @@ class ObSMConnection;
 namespace common {
 class ObDiagnosticInfo;
 }
+namespace share {
+class ObSwitchCatalogHelper;
+}
 using sql::FLTControlInfo;
 namespace sql
 {
@@ -83,6 +86,31 @@ struct ObSessionNLSParams //oracle nls parameters
   TO_STRING_KV(K(nls_length_semantics_), K(nls_collation_), K(nls_nation_collation_));
 };
 
+struct ObDiagnosisInfo
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObDiagnosisInfo()
+    : is_enabled_(false),
+      limit_num_(0),
+      log_file_(),
+      bad_file_()
+  {}
+
+  void reset() {
+    is_enabled_ = false;
+    limit_num_ = 0;
+    log_file_.reset();
+    bad_file_.reset();
+  }
+
+  bool is_enabled_;
+  int64_t limit_num_;
+  common::ObString log_file_;
+  common::ObString bad_file_;
+
+  TO_STRING_KV(K(is_enabled_), K(limit_num_), K(log_file_), K(bad_file_));
+};
 
 #define TZ_INFO(session) \
   (NULL != (session) ? (session)->get_timezone_info() : NULL)
@@ -300,6 +328,12 @@ public:
     ~UserScopeGuard() { sql_scope_flags_.set_is_in_user_scope(false); }
     SqlScopeFlags &sql_scope_flags_;
   };
+  enum class ForceRichFormatStatus
+  {
+    Disable = 0,
+    FORCE_ON,
+    FORCE_OFF
+  };
   // 切换自治事务一定需要切换嵌套语句，否则切回主事务后语句执行的上下文信息可能已经有变化，比如：
   //
   // 所以原则上TransSavedValue应该包含StmtSavedValue的所有属性，考虑将前者作为后者的子类，
@@ -345,6 +379,7 @@ public:
     bool need_serial_exec_;
     int64_t cur_query_buf_len_;
     char *cur_query_;
+    ForceRichFormatStatus force_rich_format_status_;
   public:
     // 原TransSavedValue的属性
 //  transaction::ObTxDesc trans_desc_;   // 两者都有trans_desc，但执行操作完全不同，不放在基类中。
@@ -403,13 +438,6 @@ public:
     transaction::ObXATransID xid_;
   };
 
-  enum class ForceRichFormatStatus
-  {
-    Disable = 0,
-    FORCE_ON,
-    FORCE_OFF
-  };
-
 public:
   ObBasicSessionInfo(const uint64_t tenant_id);
   virtual ~ObBasicSessionInfo();
@@ -440,6 +468,13 @@ public:
                  uint64_t &ori_tenant_id);
   int switch_tenant(uint64_t effective_tenant_id);
   int switch_tenant_with_name(uint64_t effective_tenant_id, const common::ObString &tenant_name);
+  int set_default_catalog_db(uint64_t catalog_id,
+                             uint64_t db_id,
+                             const common::ObString &database_name,
+                             share::ObSwitchCatalogHelper* switch_catalog_helper = NULL);
+  int set_internal_catalog_db(share::ObSwitchCatalogHelper* switch_catalog_helper = NULL);
+  bool is_in_internal_catalog();
+  bool is_in_external_catalog();
   int set_default_database(const common::ObString &database_name,
                            common::ObCollationType coll_type = common::CS_TYPE_INVALID);
   int reset_default_database() { return set_default_database(""); }
@@ -490,6 +525,7 @@ public:
   bool get_local_ob_enable_plan_cache() const;
   bool get_local_ob_enable_sql_audit() const;
   bool get_local_ob_enable_parameter_anonymous_block() const;
+  bool get_local_ob_enable_ps_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
@@ -577,6 +613,7 @@ public:
   int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const;
   int get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const;
   int get_ob_hnsw_extra_info_max_size(uint64_t &ob_hnsw_extra_info_max_size) const;
+  int get_ob_sparse_drop_ratio_search(uint64_t &ob_sparse_drop_ratio_search) const;
   int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
@@ -746,13 +783,13 @@ public:
   void eval_sys_var_config_hash_val();
   int gen_sys_var_in_pc_str();
   int gen_configs_in_pc_str();
-  uint32_t get_sessid() const { return sessid_; }
+  uint32_t get_server_sid() const { return sessid_; }
   // Used for view or function compatibility display.
-  uint32_t get_compatibility_sessid() const
+  uint32_t get_sid() const
   {
     return client_sessid_ == INVALID_SESSID ? sessid_ : client_sessid_;
   }
-  uint32_t get_client_sessid() const { return client_sessid_; }
+  uint32_t get_client_sid() const { return client_sessid_; }
   inline void set_client_sessid(uint32_t client_sessid)
   {
     client_sessid_ = client_sessid;
@@ -762,8 +799,9 @@ public:
   {
     client_create_time_ = client_create_time;
   }
+  static int get_client_sid(uint32_t server_sid, uint32_t& client_sid); // get client sid by server sid
   uint64_t get_proxy_sessid() const { return proxy_sessid_; }
-  uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sessid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
+  uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
   uint32_t get_master_sessid() const { return master_sessid_; }
   inline const common::ObString get_sess_bt() const { return ObString::make_string(sess_bt_buff_); }
   inline int32_t get_sess_ref_cnt() const { return sess_ref_cnt_; }
@@ -927,6 +965,8 @@ public:
   int set_session_active();
   const common::ObString get_current_query_string() const;
   const common::ObString get_top_query_string() const;
+  void set_sql_mem_used(int64_t mem_used) { ATOMIC_STORE(&sql_mem_used_, mem_used); }
+  int64_t get_sql_mem_used() const { return ATOMIC_LOAD(&sql_mem_used_); }
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
@@ -1049,7 +1089,7 @@ public:
   const ObString get_cur_sql_id() const { return ObString(sql_id_); }
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
-  void reset_cur_sql_id() {sql_id_[0] = '\0';}
+  void reset_cur_sql_id() { sql_id_[0] = '\0'; }
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
@@ -1235,14 +1275,36 @@ public:
     return capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR;
   }
 
+  // NOTICE: Don't use this function, this is only used in pl clob/blob for oracle tenant
+  inline void set_client_use_lob_locator(bool flag)
+  {
+    capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR = (flag ? 1 : 0);
+  }
+
   inline bool is_client_support_lob_locatorv2() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
   }
 
+  // NOTICE: Don't use this function, this is only used in pl clob/blob for oracle tenant
+  inline void set_client_support_lob_locatorv2(bool flag)
+  {
+    client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = (flag ? 1 : 0);
+  }
+
+  inline bool need_return_lob_locator() const
+  {
+    return is_client_use_lob_locator() || is_client_support_lob_locatorv2();
+  }
+
   inline bool is_support_new_result_meta_data() const
   {
     return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA;
+  }
+
+  inline bool is_support_jdbc_binary_double() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE;
   }
 
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
@@ -1288,6 +1350,14 @@ public:
   void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
     enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
   }
+  bool is_diagnosis_enabled() const { return is_diagnosis_enabled_; }
+  void set_diagnosis_enabled(const bool is_diagnosis_enabled) {
+    is_diagnosis_enabled_ = is_diagnosis_enabled;
+  }
+  void set_diagnosis_limit_num(const int64_t diagnosis_limit_num) {
+    diagnosis_limit_num_ = diagnosis_limit_num;
+  }
+  int64_t get_diagnosis_limit_num() const { return diagnosis_limit_num_; }
   int reset_tx_variable_if_remote_trans(const ObPhyPlanType& type);
   int check_tx_read_only_privilege(const ObSqlTraits &sql_traits);
   int get_group_concat_max_len(uint64_t &group_concat_max_len) const;
@@ -1425,6 +1495,7 @@ public:
   bool has_explicit_start_trans() const { return tx_desc_ != NULL && tx_desc_->is_explicit(); }
   bool is_in_transaction() const { return tx_desc_ != NULL && tx_desc_->is_in_tx(); }
   bool has_active_autocommit_trans(transaction::ObTransID &trans_id);
+  bool is_dup_ls_modified() const { return tx_desc_ != NULL && tx_desc_->is_dup_ls_modified(); }
   virtual bool is_txn_free_route_temp() const { return false; }
   bool get_in_transaction() const { return is_in_transaction(); }
   uint64_t get_trans_flags() const { return trans_flags_.get_flags(); }
@@ -1457,7 +1528,11 @@ public:
   inline stmt::StmtType get_first_need_txn_stmt_type() const { return first_need_txn_stmt_type_; }
   inline void set_need_recheck_txn_readonly(bool need) { need_recheck_txn_readonly_ = need; }
   inline bool need_recheck_txn_readonly() const { return need_recheck_txn_readonly_; }
-  void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
+  void set_stmt_type(stmt::StmtType stmt_type)
+  {
+    stmt_type_ = stmt_type;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().stmt_type_ = stmt_type;
+  }
   stmt::StmtType get_stmt_type() const { return stmt_type_; }
 
   int get_session_label(uint64_t policy_id, share::ObLabelSeSessionLabel &session_label) const;
@@ -1482,6 +1557,7 @@ public:
   int get_compatibility_control(share::ObCompatType &compat_type) const;
   int get_compatibility_version(uint64_t &compat_version) const;
   int get_security_version(uint64_t &security_version) const;
+  uint64_t get_current_default_catalog() const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   void trace_all_sys_vars() const;
   void reuse_labels() { labels_.reuse(); }
@@ -1764,7 +1840,8 @@ public:
         enable_sql_plan_monitor_(false),
         ob_enable_parameter_anonymous_block_(false),
         current_default_catalog_(0),
-        security_version_(0)
+        security_version_(0),
+        ob_enable_ps_parameter_anonymous_block_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1833,6 +1910,8 @@ public:
       enable_sql_plan_monitor_ = false;
       ob_enable_parameter_anonymous_block_ = false;
       security_version_ = 0;
+      ob_enable_ps_parameter_anonymous_block_ = false;
+      current_default_catalog_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1885,7 +1964,9 @@ public:
             compat_type_ == other.compat_type_ &&
             compat_version_ == other.compat_version_ &&
             ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
-            security_version_ == other.security_version_;
+            security_version_ == other.security_version_ &&
+            ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_ &&
+            current_default_catalog_ == other.current_default_catalog_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2073,6 +2154,7 @@ public:
     bool ob_enable_parameter_anonymous_block_;
     uint64_t current_default_catalog_;
     uint64_t security_version_;
+    bool ob_enable_ps_parameter_anonymous_block_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2194,6 +2276,8 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2271,6 +2355,8 @@ private:
         bool inc_enable_sql_plan_monitor_:1;
         bool inc_ob_enable_parameter_anonymous_block_:1;
         bool inc_security_version_:1;
+        bool inc_ob_enable_ps_parameter_anonymous_block_:1;
+        bool inc_current_default_catalog_:1;
       };
     };
   };
@@ -2380,6 +2466,9 @@ private:
   int64_t next_tx_read_only_;
   transaction::ObTxIsolationLevel next_tx_isolation_;
   bool enable_mysql_compatible_dates_;
+  bool is_diagnosis_enabled_;
+  int64_t diagnosis_limit_num_;
+  ObDiagnosisInfo diagnosis_info_;
   //===============================================================
 
   //==============系统变量相关的变量，不需序列化到远端==============
@@ -2531,6 +2620,7 @@ private:
   // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
+  int64_t sql_mem_used_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
@@ -2629,6 +2719,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_sql_audit() const
 inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() const
 {
   return sys_vars_cache_.get_ob_enable_parameter_anonymous_block();
+}
+
+inline bool ObBasicSessionInfo::get_local_ob_enable_ps_parameter_anonymous_block() const
+{
+  return sys_vars_cache_.get_ob_enable_ps_parameter_anonymous_block();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

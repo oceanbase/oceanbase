@@ -225,6 +225,11 @@ public:
   static int set_first_part_id(ObExecContext &ctx, const ObExpr &expr, const int64_t first_part_id);
   static int update_part_id_calc_type_for_upgrade(ObExecContext &ctx, const ObExpr &expr,
                                             PartitionIdCalcType calc_type);
+  static int calc_part_and_subpart_and_tablet_id(const ObExpr *calc_part_id,
+                                                ObEvalCtx &eval_ctx,
+                                                ObObjectID &partition_id,
+                                                ObObjectID &first_partition_id,
+                                                ObTabletID &tablet_id);
 private:
  int init_calc_part_info(common::ObIAllocator *allocator,
                          const share::schema::ObTableSchema &table_schema,

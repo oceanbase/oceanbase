@@ -475,7 +475,7 @@ int ObMigrationDagNet::clear_dag_net_ctx()
   } else {
     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->switch_next_stage(result))) {
+    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
@@ -2331,7 +2331,8 @@ int ObTabletMigrationDag::init(
     LOG_WARN("failed to check copy tablet exist", K(ret), K(tablet_id));
   } else if (FALSE_IT(status = is_exist ? ObCopyTabletStatus::TABLET_EXIST : ObCopyTabletStatus::TABLET_NOT_EXIST)) {
   } else if (FALSE_IT(copy_tablet_ctx_.tablet_id_ = tablet_id)) {
-  } else if (FALSE_IT(copy_tablet_ctx_.tablet_handle_ = tablet_handle)) {
+  } else if (OB_FAIL(copy_tablet_ctx_.tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else if (OB_FAIL(copy_tablet_ctx_.set_copy_tablet_status(status))) {
     LOG_WARN("failed to set copy tablet status", K(ret), K(status), K(tablet_id));
   } else if (FALSE_IT(ha_dag_net_ctx_ = ctx)) {
@@ -3843,8 +3844,12 @@ int ObDataTabletsMigrationTask::process()
     LOG_WARN("data tablets migration task do not init", K(ret));
   } else if (ctx_->is_failed()) {
     //do nothing
+  } else if (OB_FAIL(check_tx_data_continue_())) {
+    LOG_WARN("failed to check tx data continue", K(ret), KPC(ctx_));
   } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::deal_compat_with_ls_inner_tablet(ctx_->arg_.ls_id_))) {
+    LOG_WARN("failed to deal compat with ls inner tablet", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start replay log", K(ret), K(*ctx_));
   } else if (OB_FAIL(ObStorageHAUtils::check_log_status(ctx_->tenant_id_, ctx_->arg_.ls_id_, result))) {
@@ -4337,6 +4342,31 @@ int ObDataTabletsMigrationTask::try_offline_ls_()
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to offline ls", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObDataTabletsMigrationTask::check_tx_data_continue_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  share::SCN tx_data_recycle_scn;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ls->get_tx_data_sstable_recycle_scn(tx_data_recycle_scn))) {
+    LOG_WARN("failed to get tx data recycle scn", K(ret), KPC(ctx_));
+  } else if (!ctx_->src_ls_meta_package_.tx_data_recycle_scn_.is_valid()) {
+    //do nothing
+  } else if (ctx_->src_ls_meta_package_.tx_data_recycle_scn_ != tx_data_recycle_scn) {
+    ret = OB_MIGRATE_TX_DATA_NOT_CONTINUES;
+    LOG_WARN("src tx data is already recycle, need retry", K(ret), KPC(ctx_), K(tx_data_recycle_scn));
   }
   return ret;
 }

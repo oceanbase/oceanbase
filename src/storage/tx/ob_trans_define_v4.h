@@ -260,8 +260,9 @@ struct ObTxPart
   bool is_clean() const { return flag_.is_clean(); }
   bool is_without_valid_write() const { return !first_scn_.is_valid() || last_scn_ < first_scn_; }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
+  bool is_dup_ls() const { return flag_.is_dup_ls(); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
-  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
+  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts), K(flag_.flag_bit_));
   OB_UNIS_VERSION(1);
 };
 
@@ -897,6 +898,7 @@ public:
   int64_t get_expire_ts() const;
   int64_t get_tx_lock_timeout() const { return lock_timeout_us_; }
   bool is_in_tx() const { return state_ > State::IDLE; }
+  bool is_dup_ls_modified() const;
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
@@ -955,6 +957,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t get_coord_epoch() const;
   int get_and_inc_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
+  int inc_and_get_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
   int clear_state_for_autocommit_retry();
@@ -1252,6 +1255,22 @@ inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
   } else {
     return ObTxSEQ::mk_v0(seq);
   }
+}
+
+inline int ObTxDesc::inc_and_get_tx_seq(const int16_t branch,
+                                        const int N,
+                                        ObTxSEQ &tx_seq) const
+{
+  int ret = OB_SUCCESS;
+  int64_t seq = 0;
+  if (OB_FAIL(ObSequence::inc_and_get_max_seq_no(N, seq))) {
+    TRANS_LOG(ERROR, "inc max seq no failed", K(ret), K(N));
+  } else if (OB_LIKELY(support_branch())) {
+    tx_seq = ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    tx_seq = ObTxSEQ::mk_v0(seq);
+  }
+  return ret;
 }
 
 enum ObTxCleanPolicy {

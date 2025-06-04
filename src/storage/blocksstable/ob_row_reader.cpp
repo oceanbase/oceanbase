@@ -480,7 +480,8 @@ int ObRowReader::read_memtable_row(
     const ObITableReadInfo &read_info,
     ObDatumRow &datum_row,
     memtable::ObNopBitMap &nop_bitmap,
-    bool &read_finished)
+    bool &read_finished,
+    const ObRowHeader *&row_header)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!read_info.is_valid() || read_info.get_request_count() > datum_row.get_capacity() || read_finished)) {
@@ -504,6 +505,7 @@ int ObRowReader::read_memtable_row(
         }
       }
     }
+    row_header = row_header_;
   }
 
   if (OB_FAIL(ret)) {

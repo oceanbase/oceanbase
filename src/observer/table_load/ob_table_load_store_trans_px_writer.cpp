@@ -117,8 +117,8 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, 1);
 
     is_table_without_pk_ = store_ctx_->ctx_->schema_.is_table_without_pk_;
-    column_count_ = store_ctx_->ctx_->schema_.store_column_count_;
-    store_column_count_ = (is_table_without_pk_ ? column_count_ - 1 : column_count_);
+    column_count_ = store_ctx_->write_ctx_.px_column_descs_.count();
+    store_column_count_ = store_ctx_->ctx_->schema_.store_column_count_ - (is_table_without_pk_ ? 1 : 0);
     if (!store_ctx_->ctx_->schema_.is_partitioned_table_) {
       non_partitioned_tablet_id_vector_ =
         store_ctx_->ctx_->schema_.non_partitioned_tablet_id_vector_;
@@ -150,9 +150,12 @@ int ObTableLoadStoreTransPXWriter::prepare_write(const ObIArray<uint64_t> &colum
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTransPXWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(column_ids.count() != column_count_)) {
+  }
+  // 不要在这里检查column_ids.count()与column_count_的关系
+  // 旁路导入与DDL并发的场景, 两个值就是可能不一样的
+  else if (OB_UNLIKELY(column_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(column_ids), K(column_ids.count()), K(column_count_));
+    LOG_WARN("invalid args", KR(ret), K(column_ids));
   } else if (OB_UNLIKELY(can_write_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("already can write", KR(ret), KPC(this));
@@ -177,7 +180,7 @@ int ObTableLoadStoreTransPXWriter::check_columns(const ObIArray<uint64_t> &colum
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(column_ids));
   } else {
-    const ObIArray<ObColDesc> &col_descs = store_ctx_->ctx_->schema_.column_descs_;
+    const ObIArray<ObColDesc> &col_descs = store_ctx_->write_ctx_.px_column_descs_;
     if (OB_UNLIKELY(col_descs.count() != column_ids.count())) {
       ret = OB_SCHEMA_NOT_UPTODATE;
       LOG_WARN("column count not match", KR(ret), K(col_descs), K(column_ids));
@@ -199,7 +202,7 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                   const bool use_rich_format)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObColDesc> &col_descs = store_ctx_->ctx_->schema_.column_descs_;
+  const ObIArray<ObColDesc> &col_descs = store_ctx_->write_ctx_.px_column_descs_;
   const int64_t max_batch_size = store_ctx_->ctx_->param_.batch_size_;
   if (OB_UNLIKELY(nullptr != batch_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -212,7 +215,7 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
     batch_ctx_->batch_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
     batch_ctx_->const_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
     batch_ctx_->append_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-    batch_ctx_->heap_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
+    batch_ctx_->project_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
     // non-vectorized
     if (!is_vectorized) {
       batch_ctx_->row_flag_.uncontain_hidden_pk_ = is_table_without_pk_;
@@ -343,9 +346,18 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_table_without_pk_ &&
-          OB_FAIL(batch_ctx_->heap_vectors_.prepare_allocate(store_column_count_))) {
+      // 无主键表或者有xmltype列则需要进行列映射
+      batch_ctx_->need_project_ = store_ctx_->write_ctx_.px_need_project_;
+      if (!batch_ctx_->need_project_) {
+      } else if (OB_FAIL(batch_ctx_->project_vectors_.prepare_allocate(store_column_count_))) {
         LOG_WARN("fail to prepare allocate", KR(ret), K(store_column_count_));
+      } else {
+        // project null vector to project_vectors_
+        for (int64_t i = 0; i < store_ctx_->write_ctx_.px_null_vectors_.count(); ++i) {
+          ObIVector *null_vector = store_ctx_->write_ctx_.px_null_vectors_.at(i);
+          const int64_t column_idx = store_ctx_->write_ctx_.px_null_vector_project_idxs_.at(i);
+          batch_ctx_->project_vectors_.at(column_idx) = null_vector;
+        }
       }
     }
   }
@@ -671,11 +683,14 @@ int ObTableLoadStoreTransPXWriter::flush_batch(ObIVector *tablet_id_vector,
              K(batch_rows));
   } else {
     const ObIArray<ObIVector *> *append_vectors = nullptr;
-    if (is_table_without_pk_) {
-      for (int64_t i = 0; i < store_column_count_; ++i) {
-        batch_ctx_->heap_vectors_.at(i) = vectors.at(i + 1);
+    if (batch_ctx_->need_project_) {
+      for (int64_t i = 0; i < store_ctx_->write_ctx_.px_column_project_idxs_.count(); ++i) {
+        const int64_t column_idx = store_ctx_->write_ctx_.px_column_project_idxs_.at(i);
+        if (column_idx >= 0) {
+          batch_ctx_->project_vectors_.at(column_idx) = vectors.at(i);
+        }
       }
-      append_vectors = &batch_ctx_->heap_vectors_;
+      append_vectors = &batch_ctx_->project_vectors_;
     } else {
       append_vectors = &vectors;
     }

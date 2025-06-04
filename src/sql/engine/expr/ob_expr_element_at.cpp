@@ -46,6 +46,7 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   ObSQLSessionInfo *session = NULL;
   ObExecContext *exec_ctx = NULL;
   ObSubSchemaValue arr_meta;
+  ObCollectionTypeBase *coll_type = NULL;
   // Set cast mode for %count parameter, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
 
@@ -60,6 +61,11 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
+  } else if (OB_FAIL(ObArrayExprUtils::get_coll_type_by_subschema_id(exec_ctx, type1.get_subschema_id(), coll_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(type1.get_subschema_id()));
+  } else if (coll_type->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_type->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid collection type", K(ret), K(coll_type->type_id_));
   } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1.get_subschema_id(), arr_meta))) {
     LOG_WARN("failed to get elem meta.", K(ret), K(type1.get_subschema_id()));
   } else if (type2.is_null()) {
@@ -96,6 +102,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -116,7 +123,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     res.set_null();
   } else if (src_arr->is_null(idx)) {
     res.set_null();
-  } else if (src_arr->is_nested_array()) {
+  } else if (src_arr->get_format() == Nested_Array) {
     uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
     ObString child_arr_str;
     if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
@@ -134,6 +141,9 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       LOG_WARN("failed to get element", K(ret), K(idx));
     } else {
       res.from_obj(elem_obj);
+      if (elem_obj.is_string_type() && OB_FAIL(res.deep_copy(res, res_alloc))) {
+        LOG_WARN("fail to deep copy for res datum", K(ret), K(elem_obj), K(res));
+      }
     }
   }
   return ret;
@@ -147,6 +157,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -173,7 +184,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
         res_datum.at(j)->set_null();
       } else if (src_arr->is_null(idx)) {
         res_datum.at(j)->set_null();
-      } else if (src_arr->is_nested_array()) {
+      } else if (src_arr->get_format() == Nested_Array) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {
@@ -207,6 +218,9 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
           LOG_WARN("failed to get element", K(ret), K(idx));
         } else {
           res_datum.at(j)->from_obj(elem_obj);
+          if (elem_obj.is_string_type() && OB_FAIL(res_datum.at(j)->deep_copy(*res_datum.at(j), res_alloc))) {
+            LOG_WARN("fail to deep copy for res datum", K(ret), K(elem_obj), KPC(res_datum.at(j)));
+          }
         }
       }
     } // end for
@@ -220,6 +234,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
@@ -244,14 +259,11 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
+      } else {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[0], subschema_id, idx, src_arr))) {
-        LOG_WARN("construct array obj failed", K(ret));
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_FALSE_IT(arr_idx = idx_vec->get_int(idx) - 1)) {
@@ -263,7 +275,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-      } else if (src_arr->is_nested_array()) {
+      } else if (src_arr->get_format() == Nested_Array) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {
@@ -287,7 +299,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
         ObObj elem_obj;
         if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(arr_idx), elem_obj))) {
           LOG_WARN("failed to get element", K(ret), K(arr_idx));
-        } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj))) {
+        } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj, res_alloc))) {
           LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(elem_obj));
         }
       }

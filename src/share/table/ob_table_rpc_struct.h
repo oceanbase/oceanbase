@@ -47,7 +47,7 @@ public:
   {}
 public:
   uint8_t auth_method_;  // always 1 for now
-  uint8_t client_type_;  // 1: libobtable; 2: java client
+  uint8_t client_type_;  // 1: libobtable; 2: java client 3: hbase client
   uint8_t client_version_;  // always 1 for now
   uint8_t reserved1_;
   uint32_t client_capabilities_;
@@ -82,6 +82,22 @@ enum ObTableLoginFlag
   LOGIN_FLAG_NONE = 0,
   REDIS_PROTOCOL_V2 = 1 << 0,
   LOGIN_FLAG_MAX = 1 << 1,
+};
+
+enum ObTableServerCapacity
+{
+  CAPACITY_NONE = 0,
+  DISTRIBUTED_EXECUTE = 1 << 0,
+  CAPACITY_MAX = 1 << 31,
+};
+
+enum ObTableClientType
+{
+  INVALID_CLIENT = 0,
+  LIBTABLE_CLIENT = 1, // c++ client
+  JAVA_TABLE_CLIENT = 2,
+  JAVA_HTABLE_CLIENT = 3,
+  MAX_CLIENT = 15,
 };
 
 class ObTableLoginResult final
@@ -434,7 +450,7 @@ public:
     : credential_(),
       entity_type_(),
       consistency_level_(),
-      ls_op_()
+      ls_op_(nullptr)
   {
   }
   ~ObTableLSOpRequest() {}
@@ -442,33 +458,91 @@ public:
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(entity_type),
                K_(consistency_level),
-               K_(ls_op));
+               KPC_(ls_op));
 public:
   void reset()
   {
     credential_.reset();
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
-    ls_op_.reset();
+    if (OB_NOT_NULL(ls_op_)) {
+      ls_op_->reset();
+      ls_op_ = nullptr;
+    }
   }
+
   bool is_hbase_put() const
   {
     bool bret = false;
     if (entity_type_ == ObTableEntityType::ET_HKV
-        && ls_op_.is_same_type()
-        && ls_op_.count() > 0
-        && ls_op_.at(0).count() > 0) {
-      const ObTableSingleOp &op = ls_op_.at(0).at(0);
+        && OB_NOT_NULL(ls_op_)
+        && ls_op_->is_same_type()
+        && ls_op_->count() > 0
+        && ls_op_->at(0).count() > 0) {
+      const ObTableSingleOp &op = ls_op_->at(0).at(0);
       bret = op.get_op_type() == ObTableOperationType::INSERT_OR_UPDATE;
     }
 
     return bret;
   }
+  bool is_hbase_batch_get() const
+  {
+    bool bret = false;
+    if (entity_type_ == ObTableEntityType::ET_HKV
+        && OB_NOT_NULL(ls_op_)
+        && ls_op_->is_same_type()
+        && ls_op_->count() > 0
+        && ls_op_->at(0).count() > 0) {
+      const ObTableSingleOp &op = ls_op_->at(0).at(0);
+      bret = op.get_op_type() == ObTableOperationType::SCAN;
+    }
+
+    return bret;
+  }
+
+  bool is_hbase_query_and_mutate() const
+  {
+    bool bret = false;
+    if (entity_type_ == ObTableEntityType::ET_HKV
+        && OB_NOT_NULL(ls_op_)
+        && ls_op_->is_same_type()
+        && ls_op_->count() > 0
+        && ls_op_->at(0).count() > 0) {
+      const ObTableSingleOp &op = ls_op_->at(0).at(0);
+      bret = op.get_op_type() == ObTableOperationType::QUERY_AND_MUTATE;
+    }
+    return bret;
+  }
+
+  bool is_hbase_batch() const
+  {
+    int64_t op_cnt = 0;
+    if (entity_type_ == ObTableEntityType::ET_HKV && OB_NOT_NULL(ls_op_)) {
+      for (int64_t i = 0; op_cnt <= 1 && i < ls_op_->count(); i++) {
+        op_cnt += ls_op_->at(i).count();
+      }
+    }
+    return op_cnt > 1;
+  }
+
+  bool is_hbase_mix_batch() const
+  {
+    bool bret = false;
+    if (entity_type_ == ObTableEntityType::ET_HKV
+        && OB_NOT_NULL(ls_op_)
+        && !ls_op_->is_same_type()
+        && ls_op_->count() > 0) {
+      bret = true;
+    }
+    return bret;
+  }
+
+  void shaddow_copy_without_op(const ObTableLSOpRequest &other);
 public:
   ObString credential_;
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableConsistencyLevel consistency_level_;
-  ObTableLSOp ls_op_;
+  ObTableLSOp *ls_op_; // FARM COMPAT WHITELIST
 };
 
 using ObTableSingleOpResult = ObTableOperationResult;
@@ -504,7 +578,9 @@ private:
 };
 
 class ObTableLSOpResult : public common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>,
-                          public ObITableResult
+                          public ObITableResult,
+                          public common::ObDLinkBase<ObTableLSOpResult>,
+                          public ObTableObject
 {
   OB_UNIS_VERSION(1);
 public:
@@ -522,6 +598,12 @@ public:
     entity_factory_ = NULL;
     alloc_ = NULL;
   }
+  virtual void reuse() override
+  {
+    BaseType::reuse();
+    reset_last_active_ts();
+  }
+  TO_STRING_KV(K(rowkey_names_));
   OB_INLINE void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
   OB_INLINE common::ObIAllocator *get_allocator() { return alloc_; }
   OB_INLINE int assign_rowkey_names(const ObIArray<ObString>& all_rowkey_names)
@@ -562,9 +644,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLSOpResult);
   using BaseType = common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>;
   // allways empty
-  ObSEArray<ObString, 1> rowkey_names_;
+  ObSEArray<ObString, 8> rowkey_names_;
   // Only when this batch of operations is read-only is it not empty.
-  ObSEArray<ObString, 4> properties_names_;
+  ObSEArray<ObString, 16> properties_names_;
   // do not serialize
   // ObITableEntityFactory *entity_factory_;
   ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory_;

@@ -59,6 +59,12 @@
     return delegate_obj.func_name(std::forward<Args>(args)...); \
   }
 
+#define CONST_DELEGATE_PTR_WITH_RET(delegate_obj, func_name, ret) \
+  template <typename ...Args>                                     \
+  ret func_name(Args &&...args) const {                           \
+    return delegate_obj->func_name(std::forward<Args>(args)...);  \
+  }
+
 #define DELEGATE_WITH_EXTRA_ARG(delegate_obj, func_name, extra_arg)                \
   template <typename ...Args>                                                      \
     int func_name_(Args &&...args) {                                               \

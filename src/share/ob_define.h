@@ -488,6 +488,11 @@ inline bool is_query_killed_return(const int ret)
     || OB_DEAD_LOCK == ret;
 }
 
+OB_NOINLINE bool is_shared_storage_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_sslog_table(const uint64_t tid);
+OB_NOINLINE bool is_shared_storage_sslog_exist();
+OB_NOINLINE bool is_hardcode_schema_table(const uint64_t tid);
+
 //@TODO shanyan.g Temporary settings for elr
 static const bool CAN_ELR = false;
 
@@ -544,7 +549,7 @@ const int64_t OB_STATUS_LENGTH = 64;
 ///////////////////////////
 //// used for replay
 const int64_t REPLAY_TASK_QUEUE_SIZE = 32;
-const int64_t APPLY_TASK_QUEUE_SIZE = 32;
+const int64_t APPLY_TASK_QUEUE_SIZE = 64;
 inline int64_t &get_replay_queue_index()
 {
   struct DEFAULT_WRAPPER {

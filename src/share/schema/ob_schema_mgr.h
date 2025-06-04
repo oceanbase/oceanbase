@@ -40,6 +40,7 @@
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
 #include "share/schema/ob_rls_mgr.h"
+#include "share/schema/ob_catalog_mgr.h"
 
 namespace oceanbase
 {
@@ -915,6 +916,10 @@ private:
   {
     return is_built_in ? built_in_index_name_map_ : normal_index_name_map_;
   }
+  // catalog
+  int add_catalogs(const common::ObIArray<ObCatalogSchema> &catalog_schemas);
+  int add_catalog(const ObCatalogSchema &catalog_schema);
+  int del_catalog(const ObTenantCatalogId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -971,6 +976,7 @@ private:
   ObRlsPolicyMgr rls_policy_mgr_;
   ObRlsGroupMgr rls_group_mgr_;
   ObRlsContextMgr rls_context_mgr_;
+  ObCatalogMgr catalog_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;

@@ -71,7 +71,7 @@ int init_vasg_logger(void* logger)
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
 #else
         obvectorlib::set_logger(logger);
-        obvectorlib::set_log_level(static_cast<vsag::Logger::Level>(1));
+        obvectorlib::set_log_level(static_cast<vsag::Logger::Level>(OB_LOGGER.get_log_level()));
 #endif
     }
     return 0;
@@ -90,7 +90,7 @@ bool check_vsag_init()
 int create_index(obvectorlib::VectorIndexPtr& index_handler, int index_type,
                  const char* dtype, const char* metric, int dim,
                  int max_degree, int ef_construction, int ef_search,
-                 void* allocator)
+                 void* allocator, int extra_info_size /*= 0*/)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -104,28 +104,29 @@ int create_index(obvectorlib::VectorIndexPtr& index_handler, int index_type,
                                    max_degree,
                                    ef_construction,
                                    ef_search,
-                                   allocator);
+                                   allocator,
+                                   extra_info_size);
 #endif
 }
 
-int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size)
+int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size, char* extra_info /*= nullptr*/)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
-  return obvectorlib::build_index(index_handler, vector_list, ids, dim, size);
+  return obvectorlib::build_index(index_handler, vector_list, ids, dim, size, extra_info);
 #endif
 
 }
 
-int add_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, int size)
+int add_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int64_t* ids, int dim, char *extra_info, int size)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
   return ret;
 #else
-  return obvectorlib::add_index(index_handler, vector_list, ids, dim, size);
+  return obvectorlib::add_index(index_handler, vector_list, ids, dim, size, extra_info);
 #endif
 }
 
@@ -149,9 +150,13 @@ int get_index_type(obvectorlib::VectorIndexPtr index_handler)
 #endif
 }
 
-int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances)
+int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler,
+                       const float *vector,
+                       const int64_t *ids,
+                       int64_t count,
+                       const float *&distances)
 {
-    INIT_SUCC(ret);
+  INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
@@ -159,17 +164,58 @@ int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler, const float* v
 #endif
 }
 
+int get_vid_bound(obvectorlib::VectorIndexPtr index_handler, int64_t &min_vid, int64_t &max_vid)
+{
+    INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+    return obvectorlib::get_vid_bound(index_handler, min_vid, max_vid);
+#endif
+}
+
+int get_extra_info_by_ids(obvectorlib::VectorIndexPtr& index_handler,
+                          const int64_t* ids,
+                          int64_t count,
+                          char *extra_infos) {
+INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+    return obvectorlib::get_extra_info_by_ids(index_handler, ids, count, extra_infos);
+#endif
+return ret;
+}
+
 int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
-               const float*& result_dist, const int64_t*& result_ids, int64_t &result_size, int ef_search,
-               void* invalid, bool reverse_filter, float valid_ratio)
+               const float*& result_dist, const int64_t*& result_ids, const char *&extra_info, int64_t &result_size, int ef_search,
+               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, bool need_extra_info)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
   return ret;
 #else
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
-                                 result_dist, result_ids, result_size,
-                                 ef_search, invalid, reverse_filter, valid_ratio);
+                                  result_dist, result_ids, result_size,
+                                  ef_search, need_extra_info, extra_info,
+                                  invalid, reverse_filter, is_extra_info_filter,
+                                  valid_ratio);
+#endif
+}
+
+int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
+               const float*& result_dist, const int64_t*& result_ids, const char *&extra_info, int64_t &result_size, int ef_search,
+               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, bool need_extra_info, void *&iter_ctx, bool is_last_search)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+  return ret;
+#else
+  return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
+                                result_dist, result_ids, result_size,
+                                ef_search, need_extra_info, extra_info,
+                                invalid, reverse_filter, is_extra_info_filter,
+                                valid_ratio, iter_ctx, is_last_search);
 #endif
 }
 
@@ -201,6 +247,26 @@ int delete_index(obvectorlib::VectorIndexPtr& index_handler)
 #else
     return obvectorlib::delete_index(index_handler);
 #endif
+}
+
+void delete_iter_ctx(void *iter_ctx)
+{
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+#else
+    obvectorlib::delete_iter_ctx(iter_ctx);
+#endif
+}
+
+// return byte
+uint64_t estimate_memory(obvectorlib::VectorIndexPtr& index_handler, uint64_t row_count)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+  return obvectorlib::estimate_memory(index_handler, row_count);
+#endif
+
 }
 
 } //namespace obvectorlib

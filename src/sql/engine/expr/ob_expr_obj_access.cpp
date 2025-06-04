@@ -233,7 +233,7 @@ int ObExprObjAccess::calc_result(ObObj &result,
   return info_.calc(result,
                     alloc,
                     get_result_type(),
-                    get_result_type().get_extend_size(),
+                    info_.extend_size_,
                     param_store,
                     objs_stack,
                     param_num,
@@ -597,7 +597,7 @@ int ObExprObjAccess::ExtraInfo::from_raw_expr(const ObObjAccessRawExpr &raw_acce
 {
   int ret = 0;
   if (OB_SUCC(ret)) {
-    extend_size_ = raw_access.get_result_type().get_extend_size();
+    extend_size_ = raw_access.get_extend_size();
     get_attr_func_ = raw_access.get_get_attr_func_addr();
     for_write_ = raw_access.for_write();
     property_type_ = raw_access.get_property();
@@ -626,7 +626,7 @@ int ObExprObjAccess::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else {
     const ObObjAccessRawExpr &raw_access = static_cast<const ObObjAccessRawExpr &>(raw_expr);
     if (OB_SUCC(ret)) {
-      info->extend_size_ = raw_expr.get_result_type().get_extend_size();
+      info->extend_size_ = raw_access.get_extend_size();
       info->get_attr_func_ = raw_access.get_get_attr_func_addr();
       info->for_write_ = raw_access.for_write();
       info->property_type_ = raw_access.get_property();

@@ -53,7 +53,6 @@ private:
   void init_redis_common(table::ObRedisCtx &ctx);
 
 private:
-  common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
   table::ObRedisSingleCtx redis_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisExecuteV2P);

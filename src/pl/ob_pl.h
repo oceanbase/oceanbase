@@ -274,8 +274,15 @@ public:
   OB_INLINE void set_profiler_unit_info(uint64_t unit_id, ObProcType type) { profiler_unit_info_ = std::make_pair(unit_id, type); }
   OB_INLINE void set_profiler_unit_info(const std::pair<uint64_t, ObProcType> &unit_info) { profiler_unit_info_ = unit_info; }
 
-  TO_STRING_KV(K_(routine_table), K_(can_cached),
-               K_(tenant_schema_version), K_(sys_schema_version), K_(stat));
+  OB_INLINE int32_t get_stack_size() const { return stack_size_; }
+  OB_INLINE void set_stack_size(int64_t stack_size) { stack_size_ = stack_size; }
+
+  TO_STRING_KV(K_(routine_table),
+               K_(can_cached),
+               K_(tenant_schema_version),
+               K_(sys_schema_version),
+               K_(stat),
+               K_(stack_size));
 
 protected:
 
@@ -292,6 +299,8 @@ protected:
   sql::ObExecEnv exec_env_;
 
   std::pair<uint64_t, ObProcType> profiler_unit_info_;
+
+  int32_t stack_size_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnit);
 };
@@ -529,7 +538,8 @@ public:
                K_(default_idxs),
                K_(function_name),
                K_(priv_user),
-               K_(stat));
+               K_(stat),
+               K_(stack_size));
 
 private:
   //符号表信息
@@ -789,7 +799,7 @@ public:
 
   inline bool is_called_from_sql() const { return is_called_from_sql_; }
   inline void set_is_called_from_sql(bool flag) { is_called_from_sql_ = flag; }
-
+  inline bool is_for_trigger() const { return ObTriggerInfo::is_trigger_package_id(func_.get_package_id());}
   inline void set_dwarf_helper(jit::ObDWARFHelper *dwarf_helper)
   {
     dwarf_helper_ = dwarf_helper;
@@ -822,6 +832,7 @@ public:
     return need_free_.count() > i ? need_free_.at(i) : false;
   }
   ObPLContext *get_top_pl_context() { return top_context_; }
+  ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
 
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
@@ -842,6 +853,7 @@ private:
   bool top_call_;
 
   ExecCtxBak exec_ctx_bak_;
+  ExecCtxBak self_exec_ctx_bak_;
   bool need_reset_physical_plan_;
 
   ObPLContext *top_context_;
@@ -1100,6 +1112,9 @@ struct PlTransformTreeCtx
   int64_t copied_idx_;
   ParamList *p_list_; // 存储匿名块内部所有expr和sql语句fast parser后得到的raw param node
   int64_t raw_param_num_; // 匿名块内部单个expr或者sql fast parser后raw param node的个数, 每个expr和sql fast parser后, 会将param num存储在node节点中
+  bool is_ps_mode_;
+  int64_t total_param_nums_;
+  ObPlanCacheCtx *ps_pc_ctx_;
   PlTransformTreeCtx() :
     allocator_(NULL),
     params_(NULL),
@@ -1112,7 +1127,10 @@ struct PlTransformTreeCtx
     no_param_sql_(),
     copied_idx_(0),
     p_list_(NULL),
-    raw_param_num_(0)
+    raw_param_num_(0),
+    is_ps_mode_(false),
+    total_param_nums_(0),
+    ps_pc_ctx_(nullptr)
   {}
 };
 
@@ -1141,7 +1159,9 @@ public:
                               const ObStmtNodeTree *block,
                               ParamStore &params,
                               ObIAllocator &allocator,
-                              ObCacheObjGuard &cacheobj_guard);
+                              bool is_ps_mode,
+                              ObString &parameter_sql,
+                              ObPlanCacheCtx *pc_ctx = nullptr);
   int transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *block, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result);
   int trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContext &ctx);
   // for anonymous
@@ -1250,6 +1270,13 @@ public:
 
   static int check_session_alive(const ObBasicSessionInfo &session);
 
+  bool forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bool forbid);
+  bool parameter_ps_anonymous_block(ObExecContext &ctx,
+                                            ObIAllocator &allocator,
+                                            ParseResult &parse_result,
+                                            ObString &no_param_sql,
+                                            ObPlanCacheCtx &pc_ctx);
+
 private:
   common::ObMySQLProxy *sql_proxy_;
   ObPLPackageManager package_manager_;
@@ -1298,6 +1325,18 @@ private:
   ObPLContext *parent_stack_;
 };
 
+class ObPLConcurrentGuard
+{
+public:
+  ObPLConcurrentGuard(): inner_obj_(NULL), save_ret_(OB_SUCCESS) {}
+  ~ObPLConcurrentGuard();
+  int set_concurrent_num(ObPLFunction &routine, ObExecContext &ctx, ObPLPackageGuard &package_guard);
+
+private:
+  ObPLCacheObject* inner_obj_;
+  int64_t save_ret_;
+};
+
 class ObPLASHGuard
 {
 public:
@@ -1323,6 +1362,8 @@ private:
   bool set_entry_name_;
   bool set_current_name_;
   ObPLASHStatus pl_ash_status_;
+public:
+  inline bool is_set_entry_info() const {return set_entry_info_;}
 };
 }
 }

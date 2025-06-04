@@ -800,10 +800,10 @@ int ObCompactionDiagnoseMgr::diagnose_tenant( //TODO(mingqiao): check tenant res
     }
 
     // step 3: get next freeze info
-    share::ObFreezeInfo freeze_info;
+    ObSEArray<share::ObFreezeInfo, 4> freeze_infos;
     if (merged_version == ObBasicMergeScheduler::INIT_COMPACTION_SCN) {
       // do nothing
-    } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_snapshot_version(merged_version, freeze_info))) {
+    } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_major_snapshot(merged_version, false/*include_equal*/, freeze_infos))) {
       LOG_WARN("failed to get freeze info behind snapshot version", K(ret), K(merged_version));
       if (can_add_diagnose_info()
           && OB_TMP_FAIL(ADD_COMMON_DIAGNOSE_INFO(
@@ -815,7 +815,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant( //TODO(mingqiao): check tenant res
         LOG_WARN("failed to add dignose info about freeze_info", K(tmp_ret), K(merged_version));
       }
     } else {
-      compaction_scn = freeze_info.frozen_scn_.get_val_for_tx();
+      compaction_scn = freeze_infos.at(0).frozen_scn_.get_val_for_tx();
     }
   }
   (void)diagnose_medium_scn_table();
@@ -847,7 +847,7 @@ void ObCompactionDiagnoseMgr::diagnose_tenant_ls(
   (void) get_and_set_suspect_info(MINI_MERGE, ls_status.ls_id_, UNKNOW_TABLET_ID);
 
   // check ls suspect info for ls locality change
-  if (ls_status.is_leader_ && MTL(ObTenantMediumChecker*)->locality_cache_empty()) {
+  if (diagnose_major_flag && ls_status.is_leader_ && MTL(ObTenantMediumChecker*)->locality_cache_empty()) {
     if (OB_TMP_FAIL(ADD_DIAGNOSE_INFO(
             MEDIUM_MERGE,
             ls_status.ls_id_,

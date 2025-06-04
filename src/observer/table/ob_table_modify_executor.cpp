@@ -72,7 +72,7 @@ int ObTableApiModifyExecutor::init_das_ref()
   } else {
     // todo@dazhi: use different labels for each dml type
     const char *label = "DmlDASCtx";
-    const bool use_dist_das = tb_ctx_.has_global_index();
+    const bool use_dist_das = tb_ctx_.need_dist_das();
     ObMemAttr memattr(session->get_effective_tenant_id(), label, ObCtxIds::EXECUTE_CTX_ID);
     // das_ref.set_expr_frame_info(expr_frame_info_);
     das_ref.set_mem_attr(memattr);
@@ -220,13 +220,14 @@ int ObTableApiModifyExecutor::calc_local_tablet_loc(ObDASTabletLoc *&tablet_loc)
   return ret;
 }
 
-int ObTableApiModifyExecutor::calc_tablet_loc(ObExpr *calc_part_id_expr,
+int ObTableApiModifyExecutor::calc_tablet_loc(bool is_primary_index,
+                                              ObExpr *calc_part_id_expr,
                                               ObDASTableLoc &table_loc,
                                               ObDASTabletLoc *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   tablet_loc = nullptr;
-  if (OB_NOT_NULL(calc_part_id_expr)) {
+  if (!is_primary_index && OB_NOT_NULL(calc_part_id_expr)) {
     ObObjectID partition_id = OB_INVALID_ID;
     ObTabletID tablet_id;
     if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr,
@@ -399,10 +400,13 @@ int ObTableApiModifyExecutor::insert_row_to_das(const ObTableInsCtDef &ins_ctdef
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
   ObChunkDatumStore::StoredRow* stored_row = nullptr;
-  if (OB_FAIL(ObTableApiModifyExecutor::calc_tablet_loc(ins_ctdef.new_part_id_expr_,
+  bool is_primary_index = (ins_ctdef.das_ctdef_.table_id_ == ins_ctdef.das_ctdef_.index_tid_);
+
+  if (OB_FAIL(ObTableApiModifyExecutor::calc_tablet_loc(is_primary_index,
+                                                        ins_ctdef.new_part_id_expr_,
                                                         *ins_rtdef.das_rtdef_.table_loc_,
                                                         tablet_loc))) {
-    LOG_WARN("fail to calc partition key", K(ret));
+    LOG_WARN("fail to calc partition key", K(ret), K(is_primary_index));
   } else if (OB_FAIL(check_row_null(ins_ctdef.new_row_, ins_ctdef.column_infos_))) {
     LOG_WARN("fail to check row nullable", K(ret));
   } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef.das_ctdef_,
@@ -423,11 +427,14 @@ int ObTableApiModifyExecutor::delete_row_to_das(const ObTableDelCtDef &del_ctdef
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
   ObChunkDatumStore::StoredRow* stored_row = nullptr;
+  bool is_primary_index = (del_ctdef.das_ctdef_.table_id_ == del_ctdef.das_ctdef_.index_tid_);
+
   // todo:linjing check rowkey null and skip
-  if (OB_FAIL(ObTableApiModifyExecutor::calc_tablet_loc(del_ctdef.old_part_id_expr_,
+  if (OB_FAIL(ObTableApiModifyExecutor::calc_tablet_loc(is_primary_index,
+                                                        del_ctdef.old_part_id_expr_,
                                                         *del_rtdef.das_rtdef_.table_loc_,
                                                         tablet_loc))) {
-      LOG_WARN("fail to calc partition key", K(ret));
+      LOG_WARN("fail to calc partition key", K(ret), K(is_primary_index));
   } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef.das_ctdef_,
                                               del_rtdef.das_rtdef_,
                                               tablet_loc,
@@ -727,11 +734,13 @@ int ObTableApiModifyExecutor::delete_upd_old_row_to_das(const ObTableUpdCtDef &u
 {
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
+  bool is_primary_index = (upd_ctdef.das_ctdef_.table_id_ == upd_ctdef.das_ctdef_.index_tid_);
 
-  if (OB_FAIL(calc_tablet_loc(upd_ctdef.old_part_id_expr_,
+  if (OB_FAIL(calc_tablet_loc(is_primary_index,
+                              upd_ctdef.old_part_id_expr_,
                               *upd_rtdef.das_rtdef_.table_loc_,
                               tablet_loc))) {
-    LOG_WARN("fail to calc tablet location", K(ret));
+    LOG_WARN("fail to calc tablet location", K(ret), K(is_primary_index));
   } else {
     if (OB_ISNULL(upd_ctdef.ddel_ctdef_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -770,11 +779,13 @@ int ObTableApiModifyExecutor::insert_upd_new_row_to_das(const ObTableUpdCtDef &u
 {
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
+  bool is_primary_index = (upd_ctdef.das_ctdef_.table_id_ == upd_ctdef.das_ctdef_.index_tid_);
 
-  if (OB_FAIL(calc_tablet_loc(upd_ctdef.new_part_id_expr_,
+  if (OB_FAIL(calc_tablet_loc(is_primary_index,
+                              upd_ctdef.new_part_id_expr_,
                               *upd_rtdef.das_rtdef_.table_loc_,
                               tablet_loc))) {
-    LOG_WARN("fail to calc tablet location", K(ret));
+    LOG_WARN("fail to calc tablet location", K(ret), K(is_primary_index));
   } else {
     if (OB_ISNULL(upd_ctdef.dins_ctdef_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -854,16 +865,20 @@ int ObTableApiModifyExecutor::update_row_to_das(const ObTableUpdCtDef &upd_ctdef
   ObChunkDatumStore::StoredRow *full_row = nullptr;
   ObDASTabletLoc *old_tablet_loc = nullptr;
   ObDASTabletLoc *new_tablet_loc = nullptr;
+  bool is_primary_index = (upd_ctdef.das_ctdef_.table_id_ == upd_ctdef.das_ctdef_.index_tid_);
+
   if (upd_ctdef.das_ctdef_.updated_column_ids_.empty()) {
     // assign column is empty, do nothing
-  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.old_part_id_expr_,
-                              *upd_rtdef.das_rtdef_.table_loc_,
-                              old_tablet_loc))) {
-    LOG_WARN("fail to calc tablet loc", K(ret), K(old_tablet_loc));
-  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.new_part_id_expr_,
-                                      *upd_rtdef.das_rtdef_.table_loc_,
-                                    new_tablet_loc))) {
-    LOG_WARN("fail to calc tablet loc", K(ret), K(new_tablet_loc));
+  } else if (OB_FAIL(calc_tablet_loc(is_primary_index,
+                                     upd_ctdef.old_part_id_expr_,
+                                     *upd_rtdef.das_rtdef_.table_loc_,
+                                     old_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(old_tablet_loc), K(is_primary_index));
+  } else if (OB_FAIL(calc_tablet_loc(is_primary_index,
+                                     upd_ctdef.new_part_id_expr_,
+                                     *upd_rtdef.das_rtdef_.table_loc_,
+                                     new_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(new_tablet_loc), K(is_primary_index));
   } else if (OB_ISNULL(new_tablet_loc) || OB_ISNULL(old_tablet_loc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet loc is NULL", K(ret), KPC(new_tablet_loc), KPC(old_tablet_loc));

@@ -40,7 +40,10 @@ public:
 public:
   //NOT thread safe.
   //Init the redo log and do recovery if there is redo logs in log_dir.
-  int init(ObStorageLoggerManager &slogger_manager, const uint64_t tenant_id);
+  int init(
+      ObStorageLoggerManager &slogger_manager,
+      const uint64_t tenant_id,
+      const int64_t tenant_epoch);
   int start();
   void stop();
   void wait();

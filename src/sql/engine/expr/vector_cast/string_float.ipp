@@ -39,6 +39,7 @@ struct StringFloatCastImpl
       ObDatum tmp_datum;
       tmp_datum.ptr_ = reinterpret_cast<const char *>(&tmp_double);
       tmp_datum.pack_ = sizeof(double);
+      bool is_diagnosis = ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled();
 
       auto convert_string_to_float_task = [&](int i) __attribute__((always_inline))
       {
@@ -67,6 +68,16 @@ struct StringFloatCastImpl
         if (!input_vector->has_null()) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             convert_string_to_float_task(i);
+            if(OB_FAIL(ret) && is_diagnosis) {
+              // overwrite ret on diagnosis node
+              if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+                SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
+              } else {
+                // set null to avoid accessing invalid data before setting skip
+                // in ObTableScanOp::do_diagnosis
+                output_vector->set_null(i);
+              }
+            }
           }
           eval_flags.set_all(bound.start(), bound.end());
         } else {
@@ -75,6 +86,16 @@ struct StringFloatCastImpl
               output_vector->set_null(i);
             } else {
               convert_string_to_float_task(i);
+              if(OB_FAIL(ret) && is_diagnosis) {
+                // overwrite ret on diagnosis node
+                if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+                  SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
+                } else {
+                  // set null to avoid accessing invalid data before setting skip
+                  // in ObTableScanOp::do_diagnosis
+                  output_vector->set_null(i);
+                }
+              }
             }
           }
           eval_flags.set_all(bound.start(), bound.end());
@@ -87,6 +108,16 @@ struct StringFloatCastImpl
             output_vector->set_null(i);
           } else {
             convert_string_to_float_task(i);
+            if(OB_FAIL(ret) && is_diagnosis) {
+              // overwrite ret on diagnosis node
+              if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+                SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
+              } else {
+                // set null to avoid accessing invalid data before setting skip
+                // in ObTableScanOp::do_diagnosis
+                output_vector->set_null(i);
+              }
+            }
           }
           eval_flags.set(i);
         }

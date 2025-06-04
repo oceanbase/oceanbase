@@ -56,13 +56,17 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_ss_minor_merge_tables(
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
+#endif
   static int get_hist_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int get_medium_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
@@ -106,7 +110,7 @@ public:
       const storage::ObTablet &tablet);
 
   static int get_multi_version_start(
-      const compaction::ObMergeType merge_type,
+      const ObMergeType merge_type,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       ObVersionRange &result_version_range,
@@ -147,8 +151,14 @@ private:
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result,
       bool &need_check_tablet);
+  static int refine_and_get_minor_merge_result(
+      const ObGetMergeTablesParam &param,
+      const ObTablet &tablet,
+      const int64_t minor_compact_trigger,
+      ObTablesHandleArray &tables,
+      ObGetMergeTablesResult &result);
   static int refine_minor_merge_result(
-      const ObMergeType merge_type,
+      const compaction::ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       const bool is_tablet_referenced_by_collect_mv,
       storage::ObGetMergeTablesResult &result);
@@ -172,7 +182,17 @@ private:
   static int deal_hist_minor_merge(
       const storage::ObTablet &tablet,
       int64_t &max_snapshot_version);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_ss_minor_boundary_snapshot_version(
+      ObLS &ls,
+      const ObTablet &tablet,
+      int64_t &min_snapshot,
+      int64_t &max_snapshot);
+  static int deal_with_ss_minor_result(
+      ObLS &ls,
+      const ObTablet &tablet,
+      ObGetMergeTablesResult &result);
+#endif
   // diagnose part
   static int diagnose_minor_dag(
       compaction::ObMergeType merge_type,
@@ -239,6 +259,7 @@ public:
     NO_INC_DATA = 9,
     // no major sstable / table schema is hidden or invalid index
     DURING_DDL = 10,
+    RECYCLE_TRUNCATE_INFO = 11,
     INVALID_REASON
   };
 
@@ -249,16 +270,26 @@ public:
     INVALID_POLICY
   };
 
+  enum AdaptiveCompactionEvent : uint8_t {
+    SCHEDULE_MEDIUM = 0,
+    SCHEDULE_META = 1,
+    SCHEDULE_AFTER_MINI = 2,
+    INVALID_EVENT
+  };
+
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
   static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_advanced_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
+  static bool need_schedule_meta(const AdaptiveCompactionEvent& event);
+  static bool need_schedule_medium(const AdaptiveCompactionEvent& event);
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -267,7 +298,20 @@ public:
       storage::ObGetMergeTablesResult &result);
 
   static int get_adaptive_merge_reason(
+      storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason,
+      int64_t &least_medium_snapshot);
+  static int check_adaptive_merge_reason(
       const storage::ObTablet &tablet,
+      const ObTabletStatAnalyzer &tablet_analyzer,
+      AdaptiveMergeReason &reason);
+  static int check_adaptive_merge_reason_for_event(
+      const storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      const AdaptiveCompactionEvent &event,
+      const int64_t update_row_cnt,
+      const int64_t delete_row_cnt,
+      ObTableModeFlag &mode,
       AdaptiveMergeReason &reason);
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
@@ -305,6 +349,7 @@ public:
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
   static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
+  static const int64_t RECYCLE_TRUNCATE_INFO_THRESHOLD = 5;
 };
 
 /*

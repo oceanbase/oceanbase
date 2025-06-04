@@ -47,6 +47,8 @@ public:
     TRANS_LOG(INFO, "[ObMultiReplicaTestBase] invoke test on_failure", K(ret), KP(this));
     return ret;
   }
+  const char *get_cb_name() const override { return "TestExtraLogCb"; }
+
 };
 
 void submit_ddl_redo_log(transaction::ObPartTransCtx *tx_ctx)

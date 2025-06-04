@@ -106,7 +106,7 @@ static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllo
   } else {
     DISABLE_SQL_MEMLEAK_GUARD;
     if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_,
-      pl_json_node->get_ref_node() ? pl_json_node->get_ref_node() : pl_json_node->get_data_node(),
+      pl_json_node->get_data_node() ? pl_json_node->get_data_node() : pl_json_node->get_ref_node(),
       new_jsontype))) {
       LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
     } else if(OB_ISNULL(new_jsontype)) {

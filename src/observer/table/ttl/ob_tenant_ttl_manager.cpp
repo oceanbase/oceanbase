@@ -795,8 +795,10 @@ int ObTTLTaskScheduler::check_all_tablet_finished(bool &all_finished)
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("table schema is null", KR(ret), K(table_id));
-        } else if (OB_FAIL(ObTTLUtil::check_is_ttl_table(*table_schema, is_ttl_table))) {
-          LOG_WARN("fail to check is ttl table", KR(ret));
+        } else if (OB_FAIL(ObTTLUtil::check_is_normal_ttl_table(*table_schema, is_ttl_table))) {
+          LOG_ERROR("fail to check is ttl table", KR(ret), K(table_schema->get_table_name()));
+          // skip this error table to prevent one table from causing TTL unavailability.
+          ret = OB_SUCCESS; // ignore error
         } else if (is_ttl_table) {
           ObArray<ObTabletID> tablet_ids;
           if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {

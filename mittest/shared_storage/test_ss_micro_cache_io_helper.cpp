@@ -79,7 +79,7 @@ TEST_F(TestSSMicroCacheIOHelper, basic_read_write)
     write_buf[i] = static_cast<char>(ObRandom::rand(0, 128));
   }
   ObSSPhysicalBlock phy_block;
-  ObSSPhysicalBlockHandle phy_block_handle;
+  ObSSPhyBlockHandle phy_block_handle;
   phy_block_handle.set_ptr(&phy_block);
   ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheIOHelper::write_block(offset, size, write_buf, phy_block_handle));
 

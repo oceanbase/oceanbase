@@ -232,14 +232,17 @@ int ObExprUserEnv::eval_sessionid_result1(const ObExpr &expr, ObEvalCtx &ctx, Ob
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = NULL;
-  CK(OB_NOT_NULL(ctx.exec_ctx_.get_my_session()));
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  CK(OB_NOT_NULL(session));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
       LOG_WARN("eval arg failed", K(ret));
     } else if (arg->is_null()) {
       res.set_null();
     } else {
-      const uint64_t sid = ctx.exec_ctx_.get_my_session()->get_compatibility_sessid();
+      const uint64_t sid = session->is_master_session()
+                               ? session->get_sid()
+                               : session->get_master_sessid();
       ObNumStackOnceAlloc tmp_alloc;
       number::ObNumber res_nmb;
       if (OB_FAIL(res_nmb.from(sid, tmp_alloc))) {

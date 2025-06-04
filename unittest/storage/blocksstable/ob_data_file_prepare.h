@@ -267,7 +267,7 @@ int TestDataFilePrepareUtil::open()
     ObTenantIOConfig io_config = ObTenantIOConfig::default_instance();
     const int64_t async_io_thread_count = 8;
     const int64_t sync_io_thread_count = 2;
-    const int64_t max_io_depth = 256;
+    const int64_t max_io_depth = 512;
 
     static ObTenantBase tenant_ctx(OB_SERVER_TENANT_ID);
     ObTenantEnv::set_tenant(&tenant_ctx);

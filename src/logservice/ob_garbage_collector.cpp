@@ -20,6 +20,10 @@
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "lib/wait_event/ob_wait_event.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_shared_meta_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -1142,16 +1146,43 @@ int ObGCHandler::offline_ls_(const SCN &offline_scn)
       }
     }
 #endif
+
     if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      // update ss_ls_meta first and then change the local meta.
+    } else if (GCTX.is_shared_storage_mode()
+               && OB_FAIL(update_ss_ls_meta_(ls_id, LSGCState::LS_OFFLINE, offline_scn))) {
+      CLOG_LOG(WARN, "update ss ls meta failed", K(ret), K(offline_scn));
+#endif
     } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE, offline_scn))) {
       int ret_code = ret;
       ret = overwrite_set_gc_state_retcode_(ret_code, LSGCState::LS_OFFLINE, ls_id);
     } else {
-      CLOG_LOG(INFO, "offline_ls success",  K(ls_->get_ls_id()), K(offline_scn));
+      CLOG_LOG(INFO, "offline_ls success", K(ls_->get_ls_id()), K(offline_scn));
     }
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObGCHandler::update_ss_ls_meta_(const ObLSID &ls_id,
+                                    const logservice::LSGCState &gc_state,
+                                    const share::SCN &offline_scn)
+{
+  int ret = OB_SUCCESS;
+  SYNC_UPLOAD_INC_META_WITH_RET(SSIncMetaUploadType::GC_HANDLER_UPLOAD_TYPE,
+                                ret,
+                                ls_gc_state,
+                                (*MTL(ObSSMetaService *)),
+                                ls_id,
+                                gc_state,
+                                offline_scn);
+  if (OB_FAIL(ret)) {
+    CLOG_LOG(WARN, "update ls gc state failed", K(ret), K(ls_id), K(offline_scn));
+  }
+  return ret;
+}
+#endif
 
 int ObGCHandler::overwrite_set_gc_state_retcode_(const int ret_code,
                                                  const LSGCState gc_state,

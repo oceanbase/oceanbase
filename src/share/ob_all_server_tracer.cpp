@@ -341,6 +341,31 @@ int ObServerTraceMap::get_server_zone(const ObAddr &server, ObZone &zone) const
   }
   return ret;
 }
+
+int ObServerTraceMap::get_zones_count(int64_t &zone_count) const
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashSet<ObZone> zone_set;
+  lib::ObMemAttr attr(MTL_ID(), "ServerTrace");
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", KR(ret));
+  } else if (OB_FAIL(zone_set.create(7, attr))){
+    LOG_WARN("create block id set failed", KR(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    zone_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_info_arr_.count(); i++) {
+      const ObZone& server_zone = server_info_arr_.at(i).get_zone();
+      if (OB_FAIL(zone_set.set_refactored(server_zone))) {
+        LOG_WARN("fail to set refactored", KR(ret));
+      }
+    }
+    zone_count = zone_set.size();
+  }
+  return ret;
+}
+
 int ObServerTraceMap::get_servers_of_zone(
       const ObZone &zone,
       ObIArray<ObAddr> &servers) const
@@ -1100,6 +1125,11 @@ int ObAllServerTracer::get_servers_of_zone(
 {
   // empty zone means that get all servers
   return trace_map_.get_servers_of_zone(zone, servers);
+}
+
+int ObAllServerTracer::get_zones_count(int64_t &zone_count) const
+{
+  return trace_map_.get_zones_count(zone_count);
 }
 
 int ObAllServerTracer::get_servers_of_zone(

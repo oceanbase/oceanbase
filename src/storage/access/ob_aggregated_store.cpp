@@ -85,15 +85,19 @@ int ObCGAggCells::eval_batch(
     const ObTableAccessContext *context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int32_t *row_ids,
-    const int64_t row_count,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
     const bool reserve_memory)
 {
   UNUSED(reserve_memory);
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(col_offset < 0 || !pd_row_id_ctx.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(ret), K(col_offset), K(pd_row_id_ctx));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     if (agg_cells_.at(i)->finished()) {
-    } else if (OB_FAIL(agg_cells_.at(i)->eval_micro_block(*iter_param, *context, col_offset, reader, row_ids, row_count))) {
+    } else if (OB_FAIL(agg_cells_.at(i)->eval_micro_block(*iter_param, *context, col_offset, reader,
+                                                          pd_row_id_ctx.row_ids_, pd_row_id_ctx.get_row_count()))) {
       LOG_WARN("Fail to eval micro", K(ret));
     }
   }

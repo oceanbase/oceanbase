@@ -24,7 +24,7 @@ let $tt2_table_id= query_get_value(select table_id from __all_virtual_table wher
 
 ## In tt1 table schema, there exists 4 column_group: __cg_default, __cg_all, __cg_a, __cg_b
 let $tt1_cg_cnt = query_get_value(select count(*) as cg_cnt from __all_column_group where table_id=$tt1_table_id, cg_cnt, 1);
-if ($tt1_cg_cnt != 4)
+if ($tt1_cg_cnt != 5)
 {
     --echo unexpected column_group count of table tt1, real value is $tt1_cg_cnt
 }

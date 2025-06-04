@@ -4,12 +4,12 @@ Note: In this file, existing entries can be deleted, but no new entries are allo
 SELECT a.name as para_name, b.name as var_name 
 FROM __all_sys_variable a, __all_virtual_sys_parameter_stat b 
 WHERE a.name = b.name 
-GROUP BY a.name;
+GROUP BY a.name order by para_name;
 para_name	var_name
-range_optimizer_max_mem_size	range_optimizer_max_mem_size
+connection_control_failed_connections_threshold	connection_control_failed_connections_threshold
 connection_control_max_connection_delay	connection_control_max_connection_delay
 connection_control_min_connection_delay	connection_control_min_connection_delay
-connection_control_failed_connections_threshold	connection_control_failed_connections_threshold
+range_optimizer_max_mem_size	range_optimizer_max_mem_size
 
 ######  case2: under mysql tenant  ######
 SELECT a.name as para_name, b.name as var_name 

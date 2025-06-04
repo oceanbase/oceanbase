@@ -143,7 +143,6 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
       job_info.exec_env_ = exec_env;
-      job_info.max_failures_ = 16;
       job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 
@@ -427,8 +426,12 @@ int ObMViewSchedJobUtils::calc_date_expression(
     ctx_param.set_mem_attr(common::OB_SERVER_TENANT_ID, "MVSchedTmp");
     CREATE_WITH_TEMP_CONTEXT(ctx_param) {
       ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
-      SMART_VAR(ObSQLSessionInfo, session) {
+      SMART_VARS_3((ObSQLSessionInfo, session), (ObExecContext, exec_ctx, tmp_allocator),
+                   (ObPhysicalPlanCtx, phy_plan_ctx, tmp_allocator)) {
+        LinkExecCtxGuard link_guard(session, exec_ctx);
         ObDBMSSchedJobExecutor executor;
+        exec_ctx.set_my_session(&session);
+        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
           ret = OB_INVALID_ERROR;
           LOG_WARN("null ptr", K(ret), K(GCTX.sql_proxy_), K(GCTX.schema_service_));
@@ -465,6 +468,7 @@ int ObMViewSchedJobUtils::calc_date_expression(
             THIS_WORKER.set_compatibility_mode(Worker::CompatMode::MYSQL);
           }
         }
+        exec_ctx.set_physical_plan_ctx(NULL);
       }
     }
   }

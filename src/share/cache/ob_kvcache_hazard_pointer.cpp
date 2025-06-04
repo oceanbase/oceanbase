@@ -9,14 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#define USING_LOG_PREFIX STORAGE
 
-#include "share/ob_define.h"
 #include "share/cache/ob_kvcache_struct.h"
 #include "share/cache/ob_kvcache_hazard_pointer.h"
-#include "share/cache/ob_kvcache_store.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 
 namespace oceanbase {
 namespace common {
@@ -90,6 +86,74 @@ void HazardPointer::set_next_atomic(HazardPointer* next)
 {
   HazardPointer** addr = &next_;
   ATOMIC_STORE_RLX(&this->next_, next);
+}
+
+ObMemAttr SharedHazptr::attr_ = SET_USE_500("shr_hazptr");
+
+int SharedHazptr::make(HazardPointer& hazptr, SharedHazptr& shared_hazptr)
+{
+  INIT_SUCC(ret);
+  shared_hazptr.reset();
+  if (OB_ISNULL(shared_hazptr.ctrl_ptr_ =
+                           (typeof(shared_hazptr.ctrl_ptr_))ob_malloc(sizeof(*shared_hazptr.ctrl_ptr_), attr_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "failed to allocate memory for ctrl_ptr");
+  } else {
+    new (shared_hazptr.ctrl_ptr_) ControlPointer(hazptr);
+  }
+  return ret;
+}
+
+SharedHazptr::SharedHazptr(const SharedHazptr& other)
+{
+  *this = other;
+}
+
+SharedHazptr::~SharedHazptr()
+{
+  reset();
+}
+
+SharedHazptr& SharedHazptr::operator=(const SharedHazptr& other)
+{
+  reset();
+  ctrl_ptr_ = other.ctrl_ptr_;
+  ATOMIC_INC(&ctrl_ptr_->refcnt_);
+  return *this;
+}
+
+void SharedHazptr::move_from(SharedHazptr& other)
+{
+  reset();
+  ctrl_ptr_ = other.ctrl_ptr_;
+  other.ctrl_ptr_ = nullptr;
+}
+
+void SharedHazptr::reset()
+{
+  if (nullptr != ctrl_ptr_) {
+    uint64_t refcnt = ATOMIC_SAF(&ctrl_ptr_->refcnt_, 1);
+    if (0 == refcnt) {
+      ctrl_ptr_->~ControlPointer();
+      ob_free(ctrl_ptr_);
+    }
+    ctrl_ptr_ = nullptr;
+  }
+}
+
+ObKVMemBlockHandle* SharedHazptr::get_mb_handle() const
+{
+  ObKVMemBlockHandle* mb_handle = nullptr;
+  if (nullptr != ctrl_ptr_) {
+    mb_handle = ctrl_ptr_->hazptr_->get_mb_handle();
+  }
+  return mb_handle;
+}
+
+SharedHazptr::ControlPointer::~ControlPointer()
+{
+  hazptr_->release();
+  HazptrTLCache::get_instance().release_hazptr(hazptr_);
 }
 
 };  // namespace common

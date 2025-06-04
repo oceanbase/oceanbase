@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/fts/utils/ob_ft_ngram_impl.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
 #include "ob_ngram_ft_parser.h"
@@ -23,18 +24,7 @@ namespace oceanbase
 namespace storage
 {
 
-#define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
-
-
-ObNgramFTParser::ObNgramFTParser()
-  : cs_(nullptr),
-    start_(nullptr),
-    next_(nullptr),
-    end_(nullptr),
-    c_nums_(0),
-    ngram_token_size_(plugin::ObFTParserParam::NGRAM_TOKEN_SIZE),
-    is_inited_(false)
-{}
+ObNgramFTParser::ObNgramFTParser() : ngram_impl_(), is_inited_(false) {}
 
 ObNgramFTParser::~ObNgramFTParser()
 {
@@ -43,12 +33,7 @@ ObNgramFTParser::~ObNgramFTParser()
 
 void ObNgramFTParser::reset()
 {
-  cs_ = nullptr;
-  start_ = nullptr;
-  next_ = nullptr;
-  end_ = nullptr;
-  c_nums_ = 0;
-  ngram_token_size_ = plugin::ObFTParserParam::NGRAM_TOKEN_SIZE;
+  ngram_impl_.reset();
   is_inited_ = false;
 }
 
@@ -64,13 +49,13 @@ int ObNgramFTParser::init(ObFTParserParam *param)
       || OB_UNLIKELY(0 >= param->ft_length_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param));
+  } else if (OB_FAIL(ngram_impl_.init(param->cs_,
+                                      param->fulltext_,
+                                      param->ft_length_,
+                                      param->ngram_token_size_,
+                                      param->ngram_token_size_))) {
+    LOG_WARN("fail to init ngram impl", K(ret), KPC(param));
   } else {
-    cs_ = param->cs_;
-    start_ = param->fulltext_;
-    next_ = start_;
-    end_ = start_ + param->ft_length_;
-    c_nums_ = 0;
-    ngram_token_size_ = param->ngram_token_size_;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
@@ -93,56 +78,11 @@ int ObNgramFTParser::get_next_token(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ngram ft parser isn't initialized", K(ret), K(is_inited_));
-  } else {
-    int64_t c_nums = c_nums_;
-    const char *start = start_;
-    const char *next = next_;
-    const char *end = end_;
-    const ObCharsetInfo *cs = cs_;
-    if (next >= end) {
-      ret = OB_ITER_END;
+  } else if (OB_FAIL(ngram_impl_.get_next_token(word, word_len, char_len, word_freq))) {
+    if (OB_ITER_END == ret) {
     } else {
-      do {
-        const int64_t c_len = ob_mbcharlen_ptr(cs, next, end);
-        if (next + c_len > end || 0 == c_len) { // if char is invalid, just skip the rest of doc.
-          ret = OB_ITER_END;
-          break;
-        } else {
-          int ctype;
-          cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
-          if (1 == c_len && (' ' == *next || !true_word_char(ctype, *next))) {
-            start = next + 1;
-            next = start;
-            c_nums = 0;
-            if (next == end) {
-              ret = OB_ITER_END;
-            }
-            continue;
-          }
-          next += c_len;
-          ++c_nums;
-        }
-        if (ngram_token_size_ == c_nums) {
-          word = start;
-          word_len = next - start;
-          char_len = c_nums;
-          word_freq = 1;
-          start += ob_mbcharlen_ptr(cs, start, end);
-          c_nums = ngram_token_size_ - 1;
-          break;
-        } else if (next >= end) {
-          ret = OB_ITER_END;
-          break;
-        }
-      } while (OB_SUCC(ret) && next < end);
+      LOG_WARN("fail to get next token", K(ret));
     }
-    if (OB_ITER_END == ret || OB_SUCCESS == ret) {
-      start_ = start;
-      next_ = next;
-      end_ = end;
-      c_nums_ = c_nums;
-    }
-    LOG_DEBUG("next word", K(ret), K(ObString(word_len, word)), KP(start_), KP(next_), KP(end_));
   }
   return ret;
 }

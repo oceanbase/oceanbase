@@ -34,8 +34,14 @@ select * from matrix where ST_GeomFromText('POINT(1 1)') = UDoubleType;
 TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
 select * from matrix where ST_GeomFromText('POINT(1 1)') = NumberType;
 TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: ''
 select * from matrix where ST_GeomFromText('POINT(1 1)') = UNumberType;
 TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: ''
 select * from matrix where ST_GeomFromText('POINT(1 1)') = DateTimeType;
 ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') = TimestampType;

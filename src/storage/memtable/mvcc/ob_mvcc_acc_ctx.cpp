@@ -17,6 +17,20 @@ namespace oceanbase
 using namespace transaction;
 namespace memtable
 {
+
+int ObMvccMdsFilter::init(ObMvccMdsFilter &mds_filter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!mds_filter.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(mds_filter));
+  } else {
+    truncate_part_filter_ = mds_filter.truncate_part_filter_;
+    read_info_ = mds_filter.read_info_;
+  }
+  return ret;
+}
+
 int ObMvccAccessCtx::get_write_seq(ObTxSEQ &seq) const
 {
   int ret = OB_SUCCESS;

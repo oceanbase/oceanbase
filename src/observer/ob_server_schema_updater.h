@@ -107,6 +107,11 @@ public:
   int batch_process_tasks(const common::ObIArray<ObServerSchemaTask> &batch_tasks, bool &stopped);
 private:
   int process_refresh_task(const ObServerSchemaTask &task);
+  int construct_tenants_to_refresh_schema_(
+      const share::schema::ObRefreshSchemaInfo &local_schema_info,
+      const share::schema::ObRefreshSchemaInfo &new_schema_info,
+      ObIArray<uint64_t> &tenant_ids,
+      bool &skip_refresh);
   int process_release_task();
   int process_async_refresh_tasks(const common::ObIArray<ObServerSchemaTask> &tasks);
 

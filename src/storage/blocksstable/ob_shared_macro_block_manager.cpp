@@ -578,7 +578,9 @@ int ObSharedMacroBlockMgr::update_tablet(
       if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
         LOG_WARN("fail to get storage schema");
       } else if (storage_schema->is_column_info_simplified()) {
-        // column info simplified, cannot calculate column checksum, defragment later until has full storage schema
+        /* column info simplified, cannot calculate column checksum while ObSSTableIndexBuilder::merge_index_tree
+           in ObSSTableIndexBuilder::close operation later. Therefore, the defragmentation action is deferred
+           until a complete storage schema is available. */
         ret = OB_EAGAIN;
       } else if (OB_UNLIKELY(1 != data_block_count)) {
         ret = OB_ERR_UNEXPECTED;
@@ -680,7 +682,9 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
   ObSSTableMetaHandle old_meta_handle;
   ObSSTableMetaHandle new_meta_handle;
   common::ObArenaAllocator read_allocator;
-
+  blocksstable::ObMacroSeqParam macro_seq_param;
+  macro_seq_param.start_ = 0;
+  macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
   if (OB_FAIL(old_sstable.get_meta(old_meta_handle))) {
     LOG_WARN("get meta handle fail", K(ret), K(old_sstable));
   } else if (OB_FAIL(parse_merge_type(old_sstable, merge_type))) {
@@ -697,7 +701,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to prepare data desc", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
-  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.get_key()))) {
+  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, macro_seq_param, nullptr, old_sstable.get_key()))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
   } else if (OB_FAIL(read_sstable_block(old_sstable, block_handle, read_allocator))) {
     LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));
@@ -787,6 +791,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
           tablet.get_transfer_seq(),
+          tablet.get_reorganization_scn(),
           end_scn))) {
       LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
         K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
@@ -819,6 +824,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
           tablet.get_transfer_seq(),
+          tablet.get_reorganization_scn(),
           end_scn,
           cg_schema,
           cg_idx))) {

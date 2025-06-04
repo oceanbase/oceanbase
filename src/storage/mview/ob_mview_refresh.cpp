@@ -70,6 +70,11 @@ int ObMViewRefresher::refresh()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefresher not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(OB_ISNULL(refresh_ctx_)) ||
+             (OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_)) ||
+              OB_UNLIKELY(OB_ISNULL(refresh_ctx_->trans_->get_session_info())))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh ctx is not valid", KR(ret));
   } else {
     const uint64_t tenant_id = refresh_param_.tenant_id_;
     const uint64_t mview_id = refresh_param_.mview_id_;
@@ -86,20 +91,17 @@ int ObMViewRefresher::refresh()
     }
     if (OB_SUCC(ret)) {
       const ObMVRefreshType refresh_type = refresh_ctx_->refresh_type_;
-      ObMViewOpArg arg;
-      arg.table_id_ =  mview_id;
-      arg.parallel_ = refresh_ctx_->refresh_parallelism_;
       if (ObMVRefreshType::FAST == refresh_type) {
+        ObMViewOpArg arg;
+        arg.table_id_ =  mview_id;
+        arg.parallel_ = refresh_ctx_->refresh_parallelism_;
+        arg.session_id_ = refresh_ctx_->trans_->get_session_info()->get_server_sid();
+        arg.start_ts_ = ObTimeUtil::current_time();
         arg.mview_op_type_ = MVIEW_OP_TYPE::FAST_REFRESH;
         arg.read_snapshot_ = refresh_ctx_->refresh_scn_range_.end_scn_.get_val_for_tx();
-      } else if (ObMVRefreshType::COMPLETE == refresh_type) {
-        // COMPLETE REFRESH is ddl task keep snapshot by ddl frame
-        arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
-      }
-      if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, *refresh_ctx_->trans_))) {
-        LOG_WARN("register mview mds failed", KR(ret), K(tenant_id), K(arg));
-      } else if (ObMVRefreshType::FAST == refresh_type) {
-        if (OB_FAIL(fast_refresh())) {
+        if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, *refresh_ctx_->trans_))) {
+          LOG_WARN("register mview mds failed", KR(ret), K(tenant_id), K(arg));
+        } else if (OB_FAIL(fast_refresh())) {
           LOG_WARN("fail to fast refresh", KR(ret));
         }
       } else if (ObMVRefreshType::COMPLETE == refresh_type) {
@@ -235,22 +237,20 @@ int ObMViewRefresher::prepare_for_refresh()
                                          : refresh_param_.refresh_method_;
     ObMVProvider mv_provider(tenant_id, mview_id);
     bool can_fast_refresh = false;
-    FastRefreshableNotes note;
+    const ObIArray<ObString> *operators = nullptr;
     if (ObMVRefreshMode::NEVER == mview_info.get_refresh_mode()) {
       ret = OB_ERR_MVIEW_NEVER_REFRESH;
       LOG_WARN("mview never refresh", KR(ret), K(mview_info));
-    } else if (OB_FAIL(mv_provider.init_mv_provider(refresh_scn_range.start_scn_,
-                                                    refresh_scn_range.end_scn_,
-                                                    &schema_guard,
-                                                    session_info,
-                                                    note))) {
-      LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(mv_provider.get_mv_dependency_infos(dependency_infos))) {
-      LOG_WARN("fail to get mv dependency infos", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(mv_provider.get_mlog_mv_refresh_infos(session_info,
+                                                             &schema_guard,
+                                                             refresh_scn_range.start_scn_,
+                                                             refresh_scn_range.end_scn_,
+                                                             dependency_infos,
+                                                             can_fast_refresh,
+                                                             operators))) {
+      LOG_WARN("fail to get mlog mv refresh infos", KR(ret), K(tenant_id));
     } else if (OB_FAIL(fetch_based_infos(schema_guard))) {
       LOG_WARN("fail to fetch based infos", KR(ret));
-    } else if (OB_FAIL(mv_provider.check_mv_refreshable(can_fast_refresh))) {
-      LOG_WARN("fail to check refresh type", KR(ret));
     } else if (ObMVRefreshMethod::COMPLETE == refresh_method ||
                (!can_fast_refresh && ObMVRefreshMethod::FORCE == refresh_method)) {
       refresh_type = ObMVRefreshType::COMPLETE;
@@ -258,7 +258,7 @@ int ObMViewRefresher::prepare_for_refresh()
       ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
       LOG_WARN("mv can not fast refresh", KR(ret));
       LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, mview_table_schema->get_table_name(),
-                     note.error_.ptr());
+                     mv_provider.get_error_str().ptr());
     } else if (OB_FAIL(check_fast_refreshable())) {
       if (ObMVRefreshMethod::FORCE == refresh_method &&
           OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret || OB_ERR_MLOG_IS_YOUNGER == ret)) {
@@ -271,13 +271,10 @@ int ObMViewRefresher::prepare_for_refresh()
       refresh_type = ObMVRefreshType::FAST;
     }
     if (OB_SUCC(ret) && ObMVRefreshType::FAST == refresh_type) {
-      const ObIArray<ObString> *operators = nullptr;
       ObString fast_refresh_sql;
-      if (OB_FAIL(mv_provider.get_fast_refresh_operators(operators))) {
-        LOG_WARN("fail to get operators", KR(ret));
-      } else if (OB_ISNULL(operators)) {
+      if (OB_ISNULL(operators) || OB_UNLIKELY(operators->empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", KR(ret), K(operators));
+        LOG_WARN("unexpected refresh operators", KR(ret), KPC(operators));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < operators->count(); ++i) {
         const ObString &op_sql = operators->at(i);
@@ -552,6 +549,10 @@ int ObMViewRefresher::fast_refresh()
     LOG_WARN("failed to set session dml dop", KR(ret));
   }
 
+  if (OB_SUCC(ret) && trans.is_inner_session()) {
+    exec_session_info->set_mysql_cmd(COM_QUERY);
+  }
+
   // exec sqls
   for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(ctx_->check_status()) && i < refresh_sqls.count();
        ++i) {
@@ -561,6 +562,7 @@ int ObMViewRefresher::fast_refresh()
       LOG_WARN("fail to execute write", KR(ret), K(fast_refresh_sql));
     }
     const int64_t exec_end_time = ObTimeUtil::current_time();
+    LOG_INFO("mview_refresh", K(tenant_id), K(mview_id), K(parallelism), K(i), K(fast_refresh_sql), "time", exec_end_time - exec_start_time);
     // collect stmt stats
     if (OB_SUCC(ret) && nullptr != refresh_stats_collection_) {
       const int64_t execution_time = (exec_end_time - exec_start_time) / 1000 / 1000;
@@ -570,6 +572,8 @@ int ObMViewRefresher::fast_refresh()
       }
     }
   }
+
+  DEBUG_SYNC(BEFORE_MV_FINISH_RUNNING_JOB);
 
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(restore_session_dml_dop_(tenant_id, data_version, has_updated_dml_dop,
@@ -615,13 +619,18 @@ int ObMViewRefresher::fast_refresh()
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans)
     {
-      mview_info.set_last_refresh_scn(refresh_scn_range.end_scn_.get_val_for_inner_table_field());
+      const uint64_t last_refresh_scn = refresh_scn_range.end_scn_.get_val_for_inner_table_field();
+      mview_info.set_last_refresh_scn(last_refresh_scn);
       mview_info.set_last_refresh_type(ObMVRefreshType::FAST);
       mview_info.set_last_refresh_date(start_time);
       mview_info.set_last_refresh_time((end_time - start_time) / 1000 / 1000);
       char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last refresh trace id", KR(ret));
+      } else if (data_version >= DATA_VERSION_4_3_5_2 &&
+                 OB_FAIL(ObMViewInfo::update_mview_data_sync_scn(trans, tenant_id, mview_info,
+                                                                 last_refresh_scn))) {
+        LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info), K(last_refresh_scn));
       } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
       }
@@ -718,7 +727,7 @@ int ObMViewRefresher::calc_mv_refresh_parallelism(int64_t explict_parallelism,
   }
 
   LOG_INFO("calc mv refresh parallelism", KR(ret), K(explict_parallelism), K(session_parallelism),
-           K(final_parallelism), K(session_info->get_sessid()));
+           K(final_parallelism), K(session_info->get_server_sid()));
 
   return ret;
 }

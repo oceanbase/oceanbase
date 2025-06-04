@@ -328,7 +328,7 @@ int ObTransformLateMaterialization::get_accessible_index(const ObSelectStmt &sel
       OB_ISNULL(query_hint = select_stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_vaild_index_id(schema_guard, &select_stmt, &table_item,
+  } else if (OB_FAIL(ObTransformUtils::get_valid_index_id(schema_guard, &select_stmt, &table_item,
                                                           index_ids))) {
     LOG_WARN("fail to get vaild index id", K(ret));
   } else {
@@ -505,6 +505,9 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to fill eval cost helper", K(ret));
   } else if (OB_FAIL(prepare_eval_cost_stmt(parent_stmts, *stmt, root_stmt, is_trans_stmt))) {
     LOG_WARN("failed to prepare eval cost stmt", K(ret));
+  } else if (OB_NOT_NULL(root_stmt) && OB_FAIL(root_stmt->formalize_stmt(ctx_->session_info_, true))) {
+    // jinmao TODO: defensive code, remove it later
+    LOG_WARN("failed to formalize stmt", K(ret));
   } else {
     ctx_->eval_cost_ = true;
     lib::ContextParam param;
@@ -572,10 +575,9 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt));
-  } else if (ctx_->in_accept_transform_) {
+  } else if (ctx_->eval_cost_) {
     LOG_TRACE("not accept transform because already in one accepct transform");
   } else {
-    ctx_->in_accept_transform_ = true;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_trans_helper.fill_helper(stmt->get_query_ctx()))) {
         LOG_WARN("failed to fill try trans helper", K(ret));
@@ -605,7 +607,6 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
         LOG_WARN("failed to finish try trans helper", K(ret));
       }
     }
-    ctx_->in_accept_transform_ = false;
   }
   END_OPT_TRACE_EVA_COST;
 
@@ -701,7 +702,7 @@ int ObTransformLateMaterialization::generate_late_materialization_stmt(
     LOG_WARN("failed generate pk join condition", K(ret));
   } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*select_stmt))) {
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-  } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(select_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
@@ -1065,6 +1066,26 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         if (OB_FAIL(view_stmt.get_stmt_hint().merge_hint(*index_hint,
                                                         HINT_DOMINATED_EQUAL,
                                                         conflict_hints))) {
+          LOG_WARN("merge index hint failed", K(ret));
+        }
+      }
+    }
+    // index back full hint
+    if (OB_SUCC(ret)) {
+      ObTableInHint table_in_hint(table_item.qb_name_,
+                                  table_item.database_name_,
+                                  table_item.get_object_name());
+      ObIndexHint *index_hint = NULL;
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_FULL_HINT, index_hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_FAIL(index_hint->get_table().assign(table_in_hint))) {
+        LOG_WARN("assign table in hint failed", K(ret));
+      } else {
+        index_hint->set_qb_name(parent_qb_name);
+        index_hint->set_trans_added(true);
+        if (OB_FAIL(select_stmt.get_stmt_hint().merge_hint(*index_hint,
+                                                           HINT_DOMINATED_EQUAL,
+                                                           conflict_hints))) {
           LOG_WARN("merge index hint failed", K(ret));
         }
       }

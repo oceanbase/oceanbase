@@ -21,13 +21,14 @@ namespace rootserver
 
 int ObLSReplicaTaskTableOperator::delete_task(
     common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
     const ObDRTask &task)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
   char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
+  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
   if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
@@ -54,6 +55,7 @@ int ObLSReplicaTaskTableOperator::delete_task(
 
 int ObLSReplicaTaskTableOperator::insert_task(
     common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
     const ObDRTask &task,
     const bool record_history)
 {
@@ -61,7 +63,7 @@ int ObLSReplicaTaskTableOperator::insert_task(
   share::ObDMLSqlSplicer dml;
   ObSqlString sql;
   int64_t affected_rows = 0;
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
+  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
   const char *table_name = record_history
                          ? share::OB_ALL_LS_REPLICA_TASK_HISTORY_TNAME
                          : share::OB_ALL_LS_REPLICA_TASK_TNAME;
@@ -73,7 +75,7 @@ int ObLSReplicaTaskTableOperator::insert_task(
   } else if (OB_FAIL(dml.splice_insert_sql(table_name, sql))) {
     LOG_WARN("fail to splice insert update sql", KR(ret), K(task));
   } else if (OB_FAIL(sql_proxy.write(sql_tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("execute sql failed", KR(ret), K(task.get_tenant_id()), K(sql_tenant_id), K(sql));
+    LOG_WARN("execute sql failed", KR(ret), K(sql_tenant_id), K(sql));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("insert is not single row", KR(ret), K(affected_rows));
@@ -129,6 +131,8 @@ int ObLSReplicaTaskTableOperator::read_task_from_result_(
         BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObRemoveLSReplicaTask)
       } else if (common::ObString("MODIFY PAXOS REPLICA NUMBER") == task_type) {
         BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObLSModifyPaxosReplicaNumberTask)
+      } else if (common::ObString("REPLACE REPLICA") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObReplaceLSReplicaTask)
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("unexpected task type", KR(ret), K(task_type));

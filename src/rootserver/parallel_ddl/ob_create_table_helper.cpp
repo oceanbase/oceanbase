@@ -18,12 +18,14 @@
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "share/inner_table/ob_sslog_table_schema.h"
 #include "share/ob_index_builder_util.h"
 #include "share/sequence/ob_sequence_option_builder.h" // ObSequenceOptionBuilder
 #include "share/schema/ob_table_sql_service.h"
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/ob_dynamic_partition_manager.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 
@@ -59,7 +61,7 @@ ObCreateTableHelper::ObCreateTableHelper(
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
     obrpc::ObCreateTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id),
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create table]"),
     arg_(arg),
     res_(res),
     replace_mock_fk_parent_table_id_(common::OB_INVALID_ID),
@@ -78,6 +80,7 @@ ObCreateTableHelper::~ObCreateTableHelper()
 int ObCreateTableHelper::init_()
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
   const int64_t BUCKET_NUM = 100;
   if (OB_FAIL(new_mock_fk_parent_table_map_.create(BUCKET_NUM, "MockFkPMap", "MockFkPMap"))) {
     LOG_WARN("fail to init mock fk parent table map", KR(ret));
@@ -85,105 +88,6 @@ int ObCreateTableHelper::init_()
   return ret;
 }
 
-int ObCreateTableHelper::execute()
-{
-  RS_TRACE(create_table_begin);
-  int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(init_())) {
-    LOG_WARN("fail to init struct", KR(ret));
-  } else if (OB_FAIL(start_ddl_trans_())) {
-    LOG_WARN("fail to start ddl trans", KR(ret));
-  } else if (OB_FAIL(lock_objects_())) {
-    LOG_WARN("fail to lock objects", KR(ret));
-  } else if (OB_FAIL(generate_schemas_())) {
-    LOG_WARN("fail to generate schemas", KR(ret));
-  } else if (OB_FAIL(calc_schema_version_cnt_())) {
-    LOG_WARN("fail to calc schema version cnt", KR(ret));
-  } else if (OB_FAIL(gen_task_id_and_schema_versions_())) {
-    LOG_WARN("fail to gen task id and schema versions", KR(ret));
-  } else if (OB_FAIL(create_schemas_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(create_tablets_())) {
-    LOG_WARN("fail create schemas", KR(ret));
-  } else if (OB_FAIL(serialize_inc_schema_dict_())) {
-    LOG_WARN("fail to serialize inc schema dict", KR(ret));
-  } else if (OB_FAIL(wait_ddl_trans_())) {
-    LOG_WARN("fail to wait ddl trans", KR(ret));
-  } else if (OB_FAIL(add_index_name_to_cache_())) {
-    LOG_WARN("fail to add index name to cache", KR(ret));
-  }
-
-  const bool commit = OB_SUCC(ret);
-  if (OB_FAIL(end_ddl_trans_(ret))) { // won't overwrite ret
-    LOG_WARN("fail to end ddl trans", KR(ret));
-    if (commit && has_index_) {
-      // Because index name is added to cache before trans commit,
-      // it will remain garbage in cache when trans commit failed and false alarm will occur.
-      //
-      // To solve this problem:
-      // 1. check_index_name_exist() will double check by inner_sql and erase garbage if index name conflicts.
-      // 2. (Fully unnecessary) clean up index name cache when trans commit failed.
-      int tmp_ret = OB_SUCCESS;
-      if (OB_ISNULL(ddl_service_)) {
-        tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl_service_ is null", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
-        LOG_ERROR("fail to reset cache", K(ret), KR(tmp_ret), K_(tenant_id));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
-    int64_t last_schema_version = OB_INVALID_VERSION;
-    int64_t end_schema_version = OB_INVALID_VERSION;
-    if (OB_UNLIKELY(new_tables_.count() <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table cnt is invalid", KR(ret));
-    } else if (OB_ISNULL(tsi_generator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tsi schema version generator is null", KR(ret));
-    } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
-    } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too much schema versions may be allocated", KR(ret), KPC(tsi_generator));
-    } else {
-      res_.table_id_ = new_tables_.at(0).get_table_id();
-      res_.schema_version_ = last_schema_version;
-    }
-  }
-
-  if (OB_ERR_TABLE_EXIST == ret) {
-    const ObTableSchema &table = arg_.schema_;
-    //create table xx if not exist (...)
-    if (arg_.if_not_exist_) {
-      res_.do_nothing_ = true;
-      ret = OB_SUCCESS;
-      LOG_INFO("table is exist, no need to create again",
-               "tenant_id", table.get_tenant_id(),
-               "database_id", table.get_database_id(),
-               "table_name", table.get_table_name());
-    } else {
-      LOG_WARN("table is exist, cannot create it twice", KR(ret),
-               "tenant_id", table.get_tenant_id(),
-               "database_id", table.get_database_id(),
-               "table_name", table.get_table_name());
-      LOG_USER_ERROR(OB_ERR_TABLE_EXIST,
-                     table.get_table_name_str().length(),
-                     table.get_table_name_str().ptr());
-    }
-  }
-
-  RS_TRACE(create_table_end);
-  FORCE_PRINT_TRACE(THE_RS_TRACE, "[parallel create table]");
-  return ret;
-}
 
 int ObCreateTableHelper::lock_objects_()
 {
@@ -627,6 +531,41 @@ int ObCreateTableHelper::check_and_set_database_id_()
   return ret;
 }
 
+int ObCreateTableHelper::check_sslog_table_exist_(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || table_name.empty()
+               || OB_INVALID_ID == database_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_name), K(database_id));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    LOG_TRACE("not in shared storage mode, skip", K(tenant_id), K(database_id), K(table_name));
+  } else {
+    // use the same name_case_mode
+    const ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
+    const share::schema::ObSysTableChecker::TableNameWrapper input_table(database_id, mode, table_name);
+    const share::schema::ObSysTableChecker::TableNameWrapper sslog_table(OB_SYS_DATABASE_ID, mode, share::OB_ALL_SSLOG_TABLE_TNAME);
+    if (!is_user_tenant(tenant_id) && sslog_table == input_table) {
+      /*
+      The current table creation defaults to parallel mode, which directly query table_schema in the inner table
+      to determine whether there is a table with the same name.
+      For __all_sslog_table, we do not record its schema in the inner table, so special treatment is needed.
+      (in serial table creation mode, directly use schema_mgr in memory for judgment, which has the table_schema of __all_sslog_table).
+      1.For sys and meta tenant, because they have pre-built __all_sslog_table internally in the oceanbase(201001) database,
+        so it is forbidden to create a table named __all_sslog_table in oceanbase(201001) database.
+      2.For user tenant, no __all_sslog_table is pre-built internally, so there is no such limitation.
+      */
+      ret = OB_ERR_TABLE_EXIST;
+      LOG_WARN("sslog table exist", KR(ret), K(sslog_table), K(input_table));
+    }
+  }
+  return ret;
+}
+
 int ObCreateTableHelper::check_table_name_()
 {
   int ret = OB_SUCCESS;
@@ -659,6 +598,8 @@ int ObCreateTableHelper::check_table_name_()
       ret = OB_ERR_EXIST_OBJECT;
       LOG_WARN("Name is already used by an existing object",
                KR(ret), K_(tenant_id), K(database_id), K(table_name), K(synonym_id));
+    } else if (OB_FAIL(check_sslog_table_exist_(tenant_id_, database_id, table_name))) {
+      LOG_WARN("fail to check sslog table", KR(ret), K_(tenant_id), K(table_name));
     } else if (OB_FAIL(latest_schema_guard_.get_table_id(
                database_id, session_id, table_name, table_id, table_type, schema_version))) {
       LOG_WARN("fail to get table_id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));
@@ -883,11 +824,26 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
              KR(ret), K(tenant_id_), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 &&
+            !is_storage_cache_policy_default(arg_.schema_.get_storage_cache_policy())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support storage_cache_policy for this version",
+             KR(ret), K(tenant_id_), K(compat_version), K(arg_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support storage_cache_policy");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && arg_.schema_.is_delete_insert_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K_(tenant_id), K(compat_version), K_(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support delete insert merge engine");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",
              KR(ret), K_(tenant_id), "table_id", arg_.schema_.get_table_id());
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create table with id is");
+  } else if (compat_version < DATA_VERSION_4_3_5_2 && arg_.schema_.get_semistruct_encoding_flags() != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
+             KR(ret), K(tenant_id_), K(compat_version), K(arg_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support semistruct encoding");
   } else if (arg_.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {
@@ -1025,6 +981,24 @@ int ObCreateTableHelper::generate_table_schema_()
   // check auto_partition validity
   if (FAILEDx(new_table.check_validity_for_auto_partition())) {
     LOG_WARN("fail to check auto partition setting", KR(ret), K(new_table), K(arg_));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(new_table.set_storage_cache_policy(arg_.schema_.get_storage_cache_policy()))) {
+      LOG_WARN("fail to set storage_cache_policy", K(ret), K(arg_.schema_.get_storage_cache_policy()));
+    }
+  }
+
+  if (OB_SUCC(ret) && !new_table.get_dynamic_partition_policy().empty()) {
+    bool is_supported = false;
+    if (compat_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dynamic partition less than 4.3.5.2 not support", KR(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic partition less than 4.3.5.2");
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_supported(new_table))) {
+      LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(new_table));
+    } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(new_table))) {
+      LOG_WARN("fail to check dynamic partition is valid", KR(ret), K(new_table));
+    }
   }
 
   if (FAILEDx(new_tables_.push_back(new_table))) {
@@ -2359,6 +2333,83 @@ int ObCreateTableHelper::add_index_name_to_cache_()
         }
       }
     } // end for
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::operate_schemas_() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(create_schemas_())) {
+    LOG_WARN("fail create schemas", KR(ret));
+  } else if (OB_FAIL(create_tablets_())) {
+    LOG_WARN("fail create schemas", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::clean_on_fail_commit_()
+{
+  int ret = OB_SUCCESS;
+  if (has_index_) {
+    // Because index name is added to cache before trans commit,
+    // it will remain garbage in cache when trans commit failed and false alarm will occur.
+    //
+    // To solve this problem:
+    // 1. check_index_name_exist() will double check by inner_sql and erase garbage if index name conflicts.
+    // 2. (Fully unnecessary) clean up index name cache when trans commit failed.
+    if (OB_ISNULL(ddl_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl_service_ is null", KR(ret));
+    } else if (OB_FAIL(ddl_service_->get_index_name_checker().reset_cache(tenant_id_))) {
+      LOG_ERROR("fail to reset cache", K(ret), KR(ret), K_(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::operation_before_commit_() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(add_index_name_to_cache_())) {
+    LOG_WARN("fail to add index name to cache", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::construct_and_adjust_result_(int &return_ret) {
+  int ret = return_ret;
+  ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+  if (FAILEDx(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_ISNULL(tsi_generator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tsi generator is null", KR(ret));
+  } else {
+    res_.table_id_ = new_tables_.at(0).get_table_id();
+    tsi_generator->get_current_version(res_.schema_version_);
+  }
+  if (OB_ERR_TABLE_EXIST == ret) {
+    const ObTableSchema &table = arg_.schema_;
+    //create table xx if not exist (...)
+    if (arg_.if_not_exist_) {
+      res_.do_nothing_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("table is exist, no need to create again",
+               "tenant_id", table.get_tenant_id(),
+               "database_id", table.get_database_id(),
+               "table_name", table.get_table_name());
+    } else {
+      LOG_WARN("table is exist, cannot create it twice", KR(ret),
+               "tenant_id", table.get_tenant_id(),
+               "database_id", table.get_database_id(),
+               "table_name", table.get_table_name());
+      LOG_USER_ERROR(OB_ERR_TABLE_EXIST,
+                     table.get_table_name_str().length(),
+                     table.get_table_name_str().ptr());
+    }
   }
   return ret;
 }

@@ -25,7 +25,8 @@ namespace oceanbase
 namespace storage
 {
 ObMdsSchemaHelper::ObMdsSchemaHelper()
-  : allocator_(),
+  : is_inited_(false),
+    allocator_(),
     table_schema_(),
     storage_schema_(),
     rowkey_read_info_()

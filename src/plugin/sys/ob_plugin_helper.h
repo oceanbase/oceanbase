@@ -12,8 +12,9 @@
 
 #pragma once
 
-#include "plugin/sys/ob_plugin_utils.h"
+#include "lib/allocator/ob_malloc.h"
 #include "oceanbase/ob_plugin_ftparser.h"
+#include "plugin/sys/ob_plugin_utils.h"
 
 namespace oceanbase {
 

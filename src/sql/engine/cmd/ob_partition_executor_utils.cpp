@@ -368,11 +368,7 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
           auto &list_row_values = is_subpart
                                   ? subpartition_array[i]->list_row_values_
                                   : partition_array[i]->list_row_values_;
-          InnerPartListVectorCmp part_list_vector_op;
-          lib::ob_sort(list_row_values.begin(),  list_row_values.end(), part_list_vector_op);
-          if (OB_FAIL(part_list_vector_op.get_ret())) {
-            LOG_WARN("fail to sort list row values", K(ret));
-          }
+          ret = list_row_values.sort_array();
         }
       }
     }
@@ -690,7 +686,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
     const stmt::StmtType &stmt_type,
     bool is_list_part,
     ObExecContext &ctx,
-    const sql::ObExprResType &dst_res_type,
+    const sql::ObRawExprResType &dst_res_type,
     const ObCollationType fun_collation_type,
     ObRawExpr *expr,
     ObObj &value_obj)
@@ -786,7 +782,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
     const stmt::StmtType &stmt_type,
     bool is_list_part,
     ObExecContext &ctx,
-    const ObExprResType &dst_res_type,
+    const ObRawExprResType &dst_res_type,
     ObRawExpr *expr,
     ObObj &value_obj)
 {
@@ -1199,11 +1195,7 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
             auto &list_row_values = is_subpart
                                     ? subpartition_array[i]->list_row_values_
                                     : partition_array[i]->list_row_values_;
-            InnerPartListVectorCmp part_list_vector_op;
-            lib::ob_sort(list_row_values.begin(), list_row_values.end(), part_list_vector_op);
-            if (OB_FAIL(part_list_vector_op.get_ret())) {
-              LOG_WARN("fail to sort list row values", K(ret));
-            }
+            ret = list_row_values.sort_array();
           }
         }
       }

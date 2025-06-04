@@ -104,10 +104,12 @@ protected:
       base_iter_ = nullptr;
     }
   }
+  int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
   static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
-private:
+protected:
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) = 0;
-  virtual int close() = 0;
+  int close();
+  virtual int inner_close() = 0;
 protected:
   compaction::ObLocalArena &merger_arena_;
   ObBasicTabletMergeCtx *merge_ctx_;
@@ -117,6 +119,7 @@ protected:
   ObPartitionMergeHelper *merge_helper_;
   ObPartitionMergeIter *base_iter_;
   ObCachedTransStateMgr trans_state_mgr_;
+  ObICompactionFilter::ObFilterStatistics filter_statistics_;
   int64_t start_time_;
   bool force_flat_format_;
 };
@@ -133,7 +136,7 @@ public:
     K_(minimum_iters), KP_(validator));
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) = 0;
-  virtual int close() override;
+  virtual int inner_close() override;
   virtual int process(const blocksstable::ObMicroBlock &micro_block);
   virtual int process(
       const blocksstable::ObMacroBlockDesc &macro_meta,
@@ -144,7 +147,6 @@ protected:
   virtual int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) = 0;
   int check_row_columns(const blocksstable::ObDatumRow &row);
-  int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
 
 private:
   int inner_open_macro_writer(ObBasicTabletMergeCtx &ctx, ObMergeParameter &merge_param);
@@ -158,7 +160,6 @@ protected:
   blocksstable::ObMacroBlockWriter *macro_writer_;
   MERGE_ITER_ARRAY minimum_iters_;
   ObProgressiveMergeHelper progressive_merge_helper_;
-  ObICompactionFilter::ObFilterStatistics filter_statistics_;
   ObIMacroBlockValidator *validator_;
 };
 
@@ -227,9 +228,20 @@ private:
                       const bool rowkey_first_row,
                       const bool add_shadow_row,
                       const bool need_check_last);
+  int move_and_remove_unused_iter(MERGE_ITER_ARRAY &merge_iters,
+                                  ObPartitionMergeIter *merge_iter,
+                                  int64_t iter_idx,
+                                  bool &need_remove);
+  int compact_delete_insert_iters(MERGE_ITER_ARRAY &merge_iters,
+                                  MERGE_ITER_ARRAY &minimum_iters,
+                                  const ObIArray<int64_t> &iter_idxs,
+                                  bool need_add_shadow_row);
 
 protected:
   common::ObSEArray<int64_t, DEFAULT_ITER_COUNT> minimum_iter_idxs_;
+  common::ObArenaAllocator obj_copy_allocator_;
+  storage::ObNopPos *nop_pos_[ObRowQueue::QI_MAX];
+  blocksstable::ObRowQueue row_queue_;
 };
 
 class ObPartitionMergeDumper

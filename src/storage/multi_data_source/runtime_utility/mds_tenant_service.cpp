@@ -367,7 +367,7 @@ int ObTenantMdsTimer::try_recycle_mds_table_(ObTablet &tablet,
   #define PRINT_WRAPPER KR(ret), K(tablet.get_tablet_meta().tablet_id_), K(tablet_oldest_scn), KPC(this)
   int ret = OB_SUCCESS;
   const ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletBasePointer *tablet_pointer = pointer_handle.get_resource_ptr();
   MDS_TG(5_ms);
   if (OB_ISNULL(tablet_pointer)) {
     ret = OB_BAD_NULL_ERROR;
@@ -386,7 +386,7 @@ int ObTenantMdsTimer::try_gc_mds_table_(ObTablet &tablet)
   #define PRINT_WRAPPER KR(ret), K(tablet.get_tablet_meta().tablet_id_), KPC(this)
   int ret = OB_SUCCESS;
   const ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
-  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
+  ObTabletBasePointer *tablet_pointer = pointer_handle.get_resource_ptr();
   MDS_TG(5_ms);
   if (OB_ISNULL(tablet_pointer)) {
     ret = OB_BAD_NULL_ERROR;

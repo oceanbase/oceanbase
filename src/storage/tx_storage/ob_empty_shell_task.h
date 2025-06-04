@@ -63,6 +63,10 @@ private:
   int check_transfer_out_deleted_tablet_(const ObTablet &tablet, const ObTabletCreateDeleteMdsUserData &user_data, bool &can, bool &need_retry);
 
   static int get_readable_scn(share::SCN &readable_scn);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int get_ss_checkpoint_scn_(
+    share::SCN &ss_checkpoint_scn);
+#endif
 
 public:
   obsys::ObRWLock wait_lock_;

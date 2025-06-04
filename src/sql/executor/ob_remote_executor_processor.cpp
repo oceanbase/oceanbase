@@ -16,6 +16,8 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "sql/ob_sql_mock_schema_utils.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -66,6 +68,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_schema_version and sys_schema_version", K(ret),
         K(tenant_schema_version), K(sys_schema_version));
+  } else if (FALSE_IT(session_info->set_current_trace_id(ObCurTraceId::get_trace_id()))) {
   } else if (FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
     // record tanent_id
   } else if (tenant_id == 0) {
@@ -534,7 +537,7 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
           LOG_INFO("query retry in remote", K(retry_times), K(last_err));
           ++retry_times;
           int64_t base_sleep_us = 1000;
-          ob_usleep(base_sleep_us * retry_times);
+          ob_throttle_usleep(base_sleep_us * retry_times, err);
         }
       }
     }
@@ -651,6 +654,20 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     enable_sql_audit = enable_sql_audit && session->get_local_ob_enable_sql_audit();
   }
 
+  const common::ObDetectableId &detectable_id = task.get_detectable_id();
+  const common::ObAddr &control_addr = task.get_ctrl_server();
+  uint64_t node_sequence_id;
+  bool has_reg_dm = false;
+  if (OB_FAIL(ret)) {
+  } else if (session->get_exec_min_cluster_version() < CLUSTER_VERSION_4_3_5_2
+             || !GCONF._enable_px_fast_reclaim) {
+  } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
+                 detectable_id, control_addr, session, node_sequence_id))) {
+    LOG_WARN("failed to register check item into dm");
+  } else {
+    has_reg_dm = true;
+  }
+
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
@@ -661,9 +678,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     // 执行ObTask, 处理结果通过Result返回
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      uint64_t min_data_version = 0;
       share::ObLSArray new_ls_list;
 
       if (enable_perf_event) {
@@ -683,17 +702,20 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
       } else if (OB_ISNULL(plan)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("plan is null", K(ret));
-      } else if (OB_FAIL(DAS_CTX(exec_ctx_).get_all_lsid(new_ls_list))) {
-        LOG_WARN("get ls list failed", K(ret));
-      } else if(!task.check_ls_list(new_ls_list)) {
-        ret = OB_LOCATION_NOT_EXIST;
-        LOG_WARN("check ls list failed", K(ret),  K(new_ls_list), K(task.get_all_ls()));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), min_data_version))) {
+        LOG_WARN("GET_MIN_DATA_VERSION failed", K(ret));
+      } else if (OB_LIKELY(min_data_version >= DATA_VERSION_4_3_5_1)) {
+        if (OB_FAIL(DAS_CTX(exec_ctx_).get_all_lsid(new_ls_list))) {
+          LOG_WARN("get ls list failed", K(ret));
+        } else if(!task.check_ls_list(new_ls_list)) {
+          ret = OB_LOCATION_NOT_EXIST;
+          LOG_WARN("check ls list failed", K(ret),  K(new_ls_list), K(task.get_all_ls()));
+        }
       }
 
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       exec_ctx_.set_plan_start_time(exec_start_timestamp_);
-      ObAuditRecordData &audit_record = session->get_raw_audit_record();
 
       if (OB_SUCC(ret)) {
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
@@ -744,24 +766,23 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
       record_exec_timestamp(true, exec_timestamp);
       audit_record.exec_timestamp_ = exec_timestamp;
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        exec_record.record_end();
-        exec_record.max_wait_event_ = max_wait_desc;
-        exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-        exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.exec_record_ = exec_record;
-        audit_record.update_event_stage_state();
-      }
-
-      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
-      }
-      //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
-      record_sql_audit_and_plan_stat(plan, session);
     }
+    if (enable_perf_event) {
+      exec_record.record_end();
+      exec_record.max_wait_event_ = max_wait_desc;
+      exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+      exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.exec_record_ = exec_record;
+      audit_record.update_event_stage_state();
+    }
+
+    if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
+    }
+    //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
+    record_sql_audit_and_plan_stat(plan, session);
   }
   if (OB_NOT_NULL(plan)) {
     if (plan->is_limited_concurrent_num()) {
@@ -770,6 +791,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   }
   NG_TRACE(exec_remote_plan_end);
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
+
+  if (has_reg_dm) {
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id, node_sequence_id);
+  }
+
   return ret;
 }
 
@@ -964,6 +990,21 @@ int ObRpcRemoteExecuteP::process()
     LOG_DEBUG("des_plan", K(task.get_des_phy_plan()));
   }
 
+
+  const common::ObDetectableId &detectable_id = task.get_detectable_id();
+  const common::ObAddr &control_addr = task.get_ctrl_server();
+  uint64_t node_sequence_id;
+  bool has_reg_dm = false;
+  if (OB_FAIL(ret)) {
+  } else if (phy_plan_.get_min_cluster_version() < CLUSTER_VERSION_4_3_5_2
+             || !GCONF._enable_px_fast_reclaim) {
+  } else if (OB_FAIL(RemoteExecutionDMUtils::register_check_item(
+                 detectable_id, control_addr, session, node_sequence_id))) {
+    LOG_WARN("failed to register check item into dm");
+  } else {
+    has_reg_dm = true;
+  }
+
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
@@ -976,9 +1017,11 @@ int ObRpcRemoteExecuteP::process()
     ObPhysicalPlanCtx *plan_ctx = NULL;
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      ObSQLMockSchemaGuard mock_schema_guard;
       if (enable_perf_event) {
         exec_record.record_start();
       }
@@ -997,7 +1040,6 @@ int ObRpcRemoteExecuteP::process()
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       exec_ctx->set_plan_start_time(exec_start_timestamp_);
-      ObAuditRecordData &audit_record = session->get_raw_audit_record();
 
       if (OB_SUCC(ret)) {
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), task.get_des_phy_plan().get_stmt_type());
@@ -1042,30 +1084,32 @@ int ObRpcRemoteExecuteP::process()
       record_exec_timestamp(true, exec_timestamp);
       audit_record.exec_timestamp_ = exec_timestamp;
       audit_record.exec_timestamp_.update_stage_time();
-
-      if (enable_perf_event) {
-        exec_record.record_end();
-        exec_record.max_wait_event_ = max_wait_desc;
-        exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-        exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-        audit_record.exec_record_ = exec_record;
-        audit_record.update_event_stage_state();
-      }
-      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
-        sqlstat_record.record_sqlstat_end_value();
-        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
-        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
-      }
-
-      //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
-      record_sql_audit_and_plan_stat(&phy_plan_, session);
     }
+    if (enable_perf_event) {
+      exec_record.record_end();
+      exec_record.max_wait_event_ = max_wait_desc;
+      exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+      exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.exec_record_ = exec_record;
+      audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
+    }
+
+    //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
+    record_sql_audit_and_plan_stat(&phy_plan_, session);
   }
 
   //vt_iter_factory_.reuse();
   phy_plan_.destroy();
   NG_TRACE(exec_remote_plan_end);
   //执行相关的错误信息记录在exec_errcode_中，通过scanner向控制端返回，所以这里给RPC框架返回成功
+  if (has_reg_dm) {
+    (void)RemoteExecutionDMUtils::unregister_check_item(detectable_id, node_sequence_id);
+  }
   return OB_SUCCESS;
 }
 

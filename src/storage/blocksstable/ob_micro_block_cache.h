@@ -316,6 +316,7 @@ public:
   virtual int64_t size() const;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual const char *get_data() override;
+  virtual const char *get_cb_name() const override { return "SingleMicroBlockIOCB"; }
   int process_without_tl_reader(const char *data_buffer, const int64_t size);
   TO_STRING_KV("callback_type:", "ObAsyncSingleMicroBlockIOCallback", KP_(micro_block), K_(cache_handle), K_(offset), K_(block_des_meta));
 private:
@@ -336,6 +337,7 @@ public:
   virtual int64_t size() const;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual const char *get_data() override;
+  virtual const char *get_cb_name() const override { return "MultiDataBlockIOCB"; }
   int process_without_tl_reader(const char *data_buffer, const int64_t size);
   TO_STRING_KV("callback_type:", "ObMultiDataBlockIOCallback", K_(io_ctx), K_(offset));
 private:
@@ -358,6 +360,7 @@ public:
   virtual int64_t size() const;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual const char *get_data() override;
+  const char *get_cb_name() const override { return "SyncSingleMicroBLockIOCallback"; }
   TO_STRING_KV("callback_type:", "ObSyncSingleMicroBLockIOCallback", KP_(macro_reader), KP_(block_data), K_(is_data_block));
   DISALLOW_COPY_AND_ASSIGN(ObSyncSingleMicroBLockIOCallback);
 protected:

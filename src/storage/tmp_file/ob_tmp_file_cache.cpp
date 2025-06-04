@@ -752,7 +752,9 @@ ObTmpPageCache::ObTmpCachedReadPageIOCallback::~ObTmpCachedReadPageIOCallback()
 int ObTmpPageCache::ObTmpCachedReadPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpCachedReadPageIOCallback");
   ObTimeGuard time_guard("TmpCachedReadPage_Callback_Process", 100000); //100ms
+
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback allocator", KR(ret), KP(cache_), KP(allocator_));
@@ -769,8 +771,9 @@ int ObTmpPageCache::ObTmpCachedReadPageIOCallback::inner_process(const char *dat
     for (int32_t i = 0; OB_SUCC(ret) && i < page_keys_.count(); i++) {
       ObTmpPageCacheValue value(nullptr);
       value.set_buffer(data_buf_ + i * ObTmpFileGlobal::PAGE_SIZE);
-      if (OB_FAIL(process_page(page_keys_.at(i), value))) {
-        STORAGE_LOG(WARN, "fail to process tmp page cache in callback", KR(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(process_page(page_keys_.at(i), value))) {
+        STORAGE_LOG(WARN, "fail to process tmp page cache in callback", KR(tmp_ret));
       }
     }
     time_guard.click("process_page");
@@ -797,6 +800,7 @@ ObTmpPageCache::ObTmpAggregatePageIOCallback::~ObTmpAggregatePageIOCallback()
 int ObTmpPageCache::ObTmpAggregatePageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpAggregatePageIOCallback");
   ObTimeGuard time_guard("TmpPrefetchPage_Callback_Process", 100000); //100ms
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -811,8 +815,9 @@ int ObTmpPageCache::ObTmpAggregatePageIOCallback::inner_process(const char *data
     for (int32_t i = 0; OB_SUCC(ret) && i < page_infos_.count(); i++) {
       ObTmpPageCacheValue value(nullptr);
       value.set_buffer(data_buf_ + page_infos_.at(i).second);
-      if (OB_FAIL(process_page(page_infos_.at(i).first, value))) {
-        STORAGE_LOG(WARN, "fail to process tmp page cache in callback", KR(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(process_page(page_infos_.at(i).first, value))) {
+        STORAGE_LOG(WARN, "fail to process tmp page cache in callback", KR(tmp_ret));
       }
     }
     time_guard.click("process_page");
@@ -828,6 +833,7 @@ int ObTmpPageCache::ObTmpAggregatePageIOCallback::inner_process(const char *data
 int ObTmpPageCache::ObTmpDirectReadPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpDirectReadPageIOCallback");
   ObTimeGuard time_guard("ObTmpDirectReadPageIOCallback", 100000); //100ms
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;

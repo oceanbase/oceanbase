@@ -18,6 +18,7 @@
 #include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
 #include "hdfs/ob_storage_hdfs_jni_base.h"
+#include "ob_storage_obdal_base.h"
 #include "common/storage/ob_io_device.h"
 
 namespace oceanbase
@@ -45,6 +46,7 @@ int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
 bool is_object_storage_type(const ObStorageType &type);
+bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info);
 
 class ObExternalIOCounter final
 {
@@ -228,7 +230,6 @@ public:
   ////////////////////// READY //// TO //// DROP ///// BELOW ////////////////////////////////
   int is_exist(const common::ObString &uri, bool &exist);
   int is_directory(const common::ObString &uri, const bool is_adaptive, bool &is_directory);
-  int get_file_length(const common::ObString &uri, int64_t &file_length);
   int del_file(const common::ObString &uri);
   int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   int list_directories(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
@@ -246,6 +247,7 @@ public:
   // 'SIMULATE_APPEND' object, please set @is_adaptive as TRUE.
   int is_exist(const common::ObString &uri, const bool is_adaptive, bool &exist);
   int get_file_length(const common::ObString &uri, const bool is_adaptive, int64_t &file_length);
+  int get_file_stat(const common::ObString &uri, const bool is_adaptive, ObIODFileStat &statbuf);
   int list_appendable_file_fragments(const common::ObString &uri, ObStorageObjectMeta &obj_meta);
 
   int del_file(const common::ObString &uri, const bool is_adaptive);
@@ -327,7 +329,7 @@ private:
   // If there also exists 'SIMULATE_APPEND' type object in this uri, this function will just list
   // this 'appendable-dir' name, not include its children objects' name.
   //
-  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_S3_APPENDABLE_FRAGMENT_PREFIX).
+  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIXT_PREFIX).
   //         If there exists some children objects not have this prefix, these objects will also be listed.
   //         Cuz we think these objects are just some common objects.
   //
@@ -362,6 +364,7 @@ private:
   ObStorageCosUtil cos_util_;
   ObStorageS3Util s3_util_;
   ObStorageHdfsJniUtil hdfs_util_;
+  ObStorageObDalUtil obdal_util_;
   ObIStorageUtil* util_;
   common::ObObjectStorageInfo* storage_info_;
   bool init_state;
@@ -435,6 +438,7 @@ protected:
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   bool has_meta_;
@@ -466,6 +470,7 @@ private:
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -486,6 +491,8 @@ protected:
   ObStorageOssWriter oss_writer_;
   ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
+  ObStorageHdfsWriter hdfs_writer_;
+  ObStorageObDalWriter obdal_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -521,6 +528,8 @@ private:
   ObStorageOssAppendWriter oss_appender_;
   ObStorageCosAppendWriter cos_appender_;
   ObStorageS3AppendWriter s3_appender_;
+  ObStorageHdfsAppendWriter hdfs_appender_;
+  ObStorageObDalAppendWriter obdal_appender_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -554,6 +563,7 @@ protected:
   ObStorageCosMultiPartWriter cos_multipart_writer_;
   ObStorageOssMultiPartWriter oss_multipart_writer_;
   ObStorageS3MultiPartWriter s3_multipart_writer_;
+  ObStorageObDalMultiPartWriter obdal_multipart_writer_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -577,11 +587,11 @@ protected:
   ObStorageParallelCosMultiPartWriter cos_multipart_writer_;
   ObStorageParallelOssMultiPartWriter oss_multipart_writer_;
   ObStorageParallelS3MultiPartWriter s3_multipart_writer_;
+  ObStorageParallelObDalMultiPartWriter obdal_multipart_writer_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
   common::ObObjectStorageInfo *storage_info_;
-
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageParallelMultiPartWriterBase);

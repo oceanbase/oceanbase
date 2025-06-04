@@ -100,16 +100,16 @@ int ObRedisRKey::key_length_to_hex(ObString &key_length_str)
 // rowkey: (db, rkey)
 // part_key: list, string: (db, rkey)
 //           zset, set, list: (db, vk)
-int ObRedisRKeyUtil::gen_partition_key_by_rowkey(ObRedisModel model,
+int ObRedisRKeyUtil::gen_partition_key_by_rowkey(ObRedisDataModel model,
                                                  ObIAllocator &allocator,
                                                  const ObRowkey &rowkey,
                                                  ObRowkey &partition_key)
 {
   int ret = OB_SUCCESS;
-  if (!rowkey.is_valid() || rowkey.get_obj_cnt() < 2 || model == ObRedisModel::INVALID) {
+  if (!rowkey.is_valid() || rowkey.get_obj_cnt() < 2 || model == ObRedisDataModel::MODEL_MAX) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument rowkey", K(ret), K(rowkey), K(model));
-  } else if (model == ObRedisModel::STRING || model == ObRedisModel::LIST) {
+  } else if (model == ObRedisDataModel::STRING || model == ObRedisDataModel::LIST) {
     partition_key = rowkey;
   } else {
     ObString rkey;

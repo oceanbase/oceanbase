@@ -21,6 +21,7 @@
 #include "storage/compaction/ob_tablet_refresh_dag.h"
 #include "storage/compaction/ob_verify_ckm_dag.h"
 #include "storage/compaction/ob_update_skip_major_tablet_dag.h"
+#include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "lib/utility/ob_sort.h"
 #endif
 
@@ -207,6 +208,7 @@ int ObScheduleDagFunc::schedule_update_skip_major_tablet_dag(
   }
   return ret;
 }
+
 #endif
 
 int ObDagParamFunc::fill_param(
@@ -232,6 +234,7 @@ int ObDagParamFunc::fill_param(
     param.merge_version_ = merge_snapshot_version;
     param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
+    param.reorganization_scn_ = tablet.get_reorganization_scn();
   }
   return ret;
 }
@@ -261,6 +264,7 @@ int ObDagParamFunc::fill_param(
     param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
     param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
+    param.reorganization_scn_ = tablet.get_reorganization_scn();
     if (OB_UNLIKELY(nullptr != dag_net_id)) {
       param.dag_net_id_ = *dag_net_id;
     }

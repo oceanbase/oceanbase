@@ -273,7 +273,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
 }
 
 TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
@@ -307,7 +307,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
                                       arg.get_replica_type(),
@@ -345,7 +345,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
                                       arg.get_replica_type(),
@@ -385,14 +385,14 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
                                       arg.get_replica_type(),
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.commit_create_ls(ls->get_ls_id(), ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.commit_create_ls(ls->get_ls_id(), ls_epoch));
 }
 
 // this ls will be offlined state after restart
@@ -428,14 +428,14 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
                                       arg.get_replica_type(),
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.commit_create_ls(ls->get_ls_id(), ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.commit_create_ls(ls->get_ls_id(), ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
   ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
 
@@ -476,14 +476,14 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
   ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
                                       arg.get_replica_type(),
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_PERSISTER.commit_create_ls(ls->get_ls_id(), ls_epoch));
+  ASSERT_EQ(OB_SUCCESS, TENANT_STORAGE_META_SERVICE.commit_create_ls(ls->get_ls_id(), ls_epoch));
   ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
   ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
 

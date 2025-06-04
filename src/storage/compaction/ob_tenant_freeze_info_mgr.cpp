@@ -20,7 +20,9 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#endif
 namespace oceanbase
 {
 
@@ -40,7 +42,8 @@ const char *ObStorageSnapshotInfo::ObSnapShotTypeStr[] = {
     "SNAPSHOT_ON_TABLET",
     "LS_RESERVED",
     "MIN_MEDIUM",
-    "SPLIT"
+    "SPLIT",
+    "SS_GC"
 };
 
 ObStorageSnapshotInfo::ObStorageSnapshotInfo()
@@ -202,10 +205,10 @@ int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(ObFreezeInfo &freeze_in
 
 int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
     const int64_t major_snapshot_version,
+    const bool include_equal,
     ObIArray<ObFreezeInfo> &freeze_infos)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<share::ObFreezeInfo, 8> info_list;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
   RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
@@ -217,7 +220,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
   } else if (OB_UNLIKELY(major_snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to get freeze info", K(ret), K(major_snapshot_version));
-  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(major_snapshot_version, freeze_infos, true/*need_all*/))) {
+  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_behind_snapshot_version(major_snapshot_version, include_equal, freeze_infos))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "failed to get frozen status behind given snapshot version", K(ret), K(major_snapshot_version));
     }
@@ -230,7 +233,6 @@ int ObTenantFreezeInfoMgr::get_freeze_info_by_snapshot_version(
     ObFreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObFreezeInfo, 1> freeze_infos;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
   RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
@@ -242,27 +244,8 @@ int ObTenantFreezeInfoMgr::get_freeze_info_by_snapshot_version(
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(snapshot_version, freeze_infos, false/*need_all*/))) {
+  } else if (OB_FAIL(freeze_info_mgr_.get_freeze_info_by_major_snapshot(snapshot_version, freeze_info))) {
     STORAGE_LOG(WARN, "failed to get frozen status by snapshot", K(ret), K(snapshot_version));
-  } else {
-    freeze_info = freeze_infos.at(0);
-  }
-  return ret;
-}
-
-int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
-    const int64_t snapshot_version,
-    ObFreezeInfo &freeze_info)
-{
-  int ret = OB_SUCCESS;
-  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
-  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
-  if (OB_FAIL(ret)) {
-    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
-  } else if (OB_FAIL(get_freeze_info_compare_with_snapshot_version_(snapshot_version, share::ObFreezeInfoManager::CmpType::GREATER_THAN, freeze_info))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
-    }
   }
   return ret;
 }
@@ -476,6 +459,32 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  /* FIXME: should change to function and consider about other modules */
+  } else if (GCTX.is_shared_storage_mode() && OB_ALL_SSLOG_TABLE_TID == tablet_id.id()) {
+    ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+    SCN last_succ_scn = SCN::min_scn();
+    // get last_succ_scn from meta_tenant
+    if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
+    } else {
+      last_succ_scn = ss_gc_srv->get_last_succ_gc_scn();
+    }
+    // get last_succ_scn from user_tenant
+    uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+    ss_gc_srv = nullptr;
+    MTL_SWITCH(user_tenant_id) {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
+      } else {
+        last_succ_scn = SCN::min(last_succ_scn, ss_gc_srv->get_last_succ_gc_scn());
+      }
+    }
+    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
+    LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(user_tenant_id), K(snapshot_info));
+#endif
   } else if (OB_FAIL(get_multi_version_duration(duration))) {
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {

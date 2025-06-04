@@ -70,7 +70,6 @@ public:
   TO_STRING_KV(K(""));
 
 private:
-  static int find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found);
   static int find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *expected,
                                         bool &found);
   static int replace_expr_with_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *from, ObRawExpr *to);

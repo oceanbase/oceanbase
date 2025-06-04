@@ -77,8 +77,8 @@ int TestBlockManager::init_multi_tenant()
 
 void TestBlockManager::SetUp()
 {
-  TestDataFilePrepare::SetUp();
   ASSERT_EQ(OB_SUCCESS, init_multi_tenant());
+  TestDataFilePrepare::SetUp();
   OB_SERVER_BLOCK_MGR.block_map_.reset();
   SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }

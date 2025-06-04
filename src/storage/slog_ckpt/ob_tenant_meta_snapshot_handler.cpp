@@ -628,7 +628,7 @@ int ObTenantMetaSnapshotHandler::batch_write_slog(
 int ObTenantMetaSnapshotHandler::do_write_slog(ObIArray<ObUpdateTabletLog> &slog_arr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.batch_update_tablet(slog_arr))) {
+  if (OB_FAIL(TENANT_STORAGE_META_SERVICE.batch_update_tablet(slog_arr))) {
     LOG_WARN("fail to batch update tablet", K(ret));
   }
   return ret;

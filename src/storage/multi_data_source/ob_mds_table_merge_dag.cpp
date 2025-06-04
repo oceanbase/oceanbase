@@ -76,7 +76,7 @@ int ObMdsTableMergeDag::fill_compat_mode_()
 {
   int ret = OB_SUCCESS;
   // Mds dump should not access mds data to avoid potential dead lock
-  // between mds table lock on ObTabletPointer and other mds component
+  // between mds table lock on ObTabletBasePointer and other mds component
   // inner locks. So here use no_lock to get tablet.
 
   ObLSHandle tmp_ls_handle;

@@ -57,6 +57,49 @@ private:
   ObDiagnosticInfoContainer *dic_;
 };
 
+class ObDIActionGuard
+{
+public:
+  enum ActionNameSpace
+  {
+    NS_INVALID = 0,
+    NS_PROGRAM = 1,
+    NS_MODULE = 2,
+    NS_ACTION = 3,
+    NS_MAX
+  };
+public:
+  ObDIActionGuard(const char *program, const char *module, const char *action);
+  ObDIActionGuard(const char *module, const char *action);
+  ObDIActionGuard(const char *action);
+  ObDIActionGuard(const ObString &action);
+  ObDIActionGuard(const std::type_info &type_info);
+  ObDIActionGuard(ActionNameSpace action_ns, const char *action_format, ...);
+  ~ObDIActionGuard();
+private:
+  void save_prev_action_info(bool has_program, bool has_module, bool has_action);
+  struct SaveInfo
+  {
+    char program_[ASH_PROGRAM_STR_LEN];
+    char module_[ASH_MODULE_STR_LEN];
+    char action_[ASH_ACTION_STR_LEN];
+  };
+private:
+  SaveInfo *prev_info_;
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t pre_guard_ref_                 :1;
+      uint64_t reset_program_                 :1;
+      uint64_t save_program_                  :1;
+      uint64_t reset_module_                  :1;
+      uint64_t save_module_                   :1;
+      uint64_t reset_action_                  :1;
+      uint64_t save_action_                   :1;
+    };
+  };
+};
+
 class ObLocalDiagnosticInfo
 {
 public:
@@ -72,7 +115,8 @@ public:
     return get_instance().get_diagnostic_ptr();
   }
   static int aggregate_diagnostic_info_summary(ObDiagnosticInfo *di);
-  static int revert_diagnostic_info(ObDiagnosticInfo *di);
+  static int revert_diagnostic_info(ObDiagnosticInfo *di)
+      __attribute__((deprecated("pls use inc_ref/dec_ref instead")));
   static int return_diagnostic_info(ObDiagnosticInfo *di);
   static inline void add_stat(ObStatEventIds::ObStatEventIdEnum stat_no, int64_t value)
       __attribute__((always_inline))
@@ -91,16 +135,28 @@ public:
   static ObLatchStat *get_latch_stat(int64_t latch_id);
   static void set_thread_name(const char *name);
   static void set_thread_name(uint64_t tenant_id, const char *name);
-  static void set_service_action(const char *program, const char *module, const char *action);
+  static void set_service_name(uint64_t tenant_id, const char *name);
+  static void set_program_name(const char *name);
+  static void set_service_module(const char *module);
+  static void set_service_action(const char *service, const char *module, const char *action);
+  static void set_service_action(const char *action);
   static inline int inc_ref(ObDiagnosticInfo *di) __attribute__((always_inline))
   {
     int ret = OB_SUCCESS;
     if (OB_NOT_NULL(di)) {
-      ATOMIC_INC(&di->ref_cnt_);
+      const int64_t cur_ref = ATOMIC_AAF(&di->ref_cnt_, 1);
+      // 1 for rpc layer and 1 for this function
+      if (2 == cur_ref) {
+        di->get_ash_stat().set_sess_active();
+      }
+      if (OB_UNLIKELY(cur_ref >= 10)) {
+        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "inc di ref overflow", K(cur_ref), KPC(di));
+      }
     }
     return ret;
   }
-  static int dec_ref(ObDiagnosticInfo *di);
+  static int dec_ref(ObDiagnosticInfo *&di);
+  static void set_io_time(int64_t enqueue_time, int64_t device_time, int64_t callback_time);
 private:
   ObLocalDiagnosticInfo();
   ~ObLocalDiagnosticInfo() = default;
@@ -131,6 +187,7 @@ private:
       get_instance().get_diagnostic_ptr() = di;
       di->get_ash_stat().tid_ = GETTID();
     } else {
+      get_instance().get_diagnostic_ptr() = nullptr;
       COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set nullptr to local diagnostic info", K(lbt()));
     }
   }
@@ -169,6 +226,35 @@ private:
   bool prev_value_;
 };
 
+#define DEF_ASH_ITEM_ATTACH_GUARD(item_name, item_type)                           \
+class ObAshStat_##item_name##_AttachGuard                                         \
+{                                                                                 \
+public:                                                                           \
+  ObAshStat_##item_name##_AttachGuard(const item_type &item_val)                  \
+  {                                                                               \
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();                          \
+    if (OB_NOT_NULL(di)) {                                                        \
+      pre_item_val_ = di->get_ash_stat().item_name##_;                            \
+      di->get_ash_stat().item_name##_ = item_val;                                 \
+    }                                                                             \
+  }                                                                               \
+  ~ObAshStat_##item_name##_AttachGuard()                                          \
+  {                                                                               \
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();                          \
+    if (OB_NOT_NULL(di)) {                                                        \
+      di->get_ash_stat().item_name##_ = pre_item_val_;                            \
+    }                                                                             \
+  }                                                                               \
+private:                                                                          \
+  item_type pre_item_val_;                                                        \
+  DISALLOW_COPY_AND_ASSIGN(ObAshStat_##item_name##_AttachGuard);                  \
+};
+
+DEF_ASH_ITEM_ATTACH_GUARD(plan_line_id, int32_t);
+
+#define ASH_ITEM_ATTACH_GUARD(item_name, item_val)                                \
+  ObAshStat_##item_name##_AttachGuard _ash_item_attach_guard(item_val);
+
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                \
   class ObActiveSession_##ash_flag_type##_FlagSetterGuard                        \
   {                                                                              \
@@ -196,13 +282,18 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_sequence_load)
 DEF_ASH_FLAGS_SETTER_GUARD(in_committing)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_read)
 DEF_ASH_FLAGS_SETTER_GUARD(in_storage_write)
+DEF_ASH_FLAGS_SETTER_GUARD(in_das_remote_exec)
 DEF_ASH_FLAGS_SETTER_GUARD(in_filter_rows)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_encode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_decode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_connection_mgr)
 DEF_ASH_FLAGS_SETTER_GUARD(in_check_row_confliction)
+DEF_ASH_FLAGS_SETTER_GUARD(in_deadlock_row_register)
+DEF_ASH_FLAGS_SETTER_GUARD(in_check_tx_status)
 DEF_ASH_FLAGS_SETTER_GUARD(in_resolve)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rewrite)
+DEF_ASH_FLAGS_SETTER_GUARD(in_foreign_key_cascading)
+DEF_ASH_FLAGS_SETTER_GUARD(in_extract_query_range)
 
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD

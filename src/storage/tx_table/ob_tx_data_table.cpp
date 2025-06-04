@@ -205,6 +205,7 @@ int ObTxDataTable::online()
   ObTablet *tablet;
   ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
 
+  CreateMemtableArg arg;
   if (OB_ISNULL(ls_tablet_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get ls tablet svr failed", K(ret));
@@ -212,8 +213,7 @@ int ObTxDataTable::online()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
-                 LS_TX_DATA_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_DATA_TABLET, arg/* use default arg */))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     // load tx data table succeed
@@ -705,9 +705,9 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     min_end_scn = std::min(min_end_scn, min_end_scn_from_major_dag);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
-      //Regardless of whether the primary or standby tenant is unified, refer to GTS.
-      //If the tenant role in memory is deferred,
-      //it may cause the standby tenant to commit and recycle when the primary is switched to standby.
+      // Regardless of whether the primary or standby tenant is unified, refer to GTS.
+      // If the tenant role in memory is deferred,
+      // it may cause the standby tenant to commit and recycle when the primary is switched to standby.
       SCN snapshot_version;
       MonotonicTs unused_ts(0);
       int tmp_ret = OB_SUCCESS;
@@ -738,15 +738,28 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
 // memory.
 // 2. The tenant remain memory is than (1 - freeze_trigger_percentage) and the tx data uses more
 // than TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE% memory in total tenant memory.
+// 3. FastFreeze would trigger this freeze task more frequently but freeze_freq_controller would slow down freeze
+// frequency
 int ObTxDataTable::self_freeze_task()
 {
   int ret = OB_SUCCESS;
+  const ObLSID ls_id = get_ls_id();
 
-  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(get_ls_id()));
+  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(ls_id));
 
-  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, true))) {
-    share::ObLSID ls_id = get_ls_id();
-    STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+  const int64_t current_time = ObClockGenerator::getClock();
+  int64_t last_freeze_ts = 0;
+  if (freeze_freq_controller_.can_freeze(current_time, last_freeze_ts)) {
+    if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
+      if (OB_NO_NEED_MERGE == ret) {
+        STORAGE_LOG(INFO, "tx data table no need merge", KR(ret), K(ls_id));
+      } else {
+        (void)freeze_freq_controller_.rollback_freeze_ts(current_time, last_freeze_ts);
+        STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+      }
+    }
+  } else {
+    // skip freeze tx data this time
   }
 
   STORAGE_LOG(DEBUG, "finish tx data table self freeze task", KR(ret), K(get_ls_id()));
@@ -755,7 +768,9 @@ int ObTxDataTable::self_freeze_task()
 
 // The main steps in calculating upper_trans_version. For more details, see :
 //
-int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
+int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn,
+                                                            SCN &upper_trans_version,
+                                                            const bool force_print_log)
 {
   int ret = OB_SUCCESS;
   bool skip_calc = false;
@@ -766,7 +781,7 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
-  } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
+  } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn, force_print_log))) {
     // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
     TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
@@ -774,6 +789,7 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
       STORAGE_LOG(WARN, "update cache failed.", KR(ret));
     }
   }
+
 
   if (OB_FAIL(ret)) {
   } else if (skip_calc) {
@@ -920,7 +936,17 @@ int ObTxDataTable::DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
   return ret;
 }
 
-bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
+#define CALC_UPPER_DEBUG_LOG(LOG_LEVEL)            \
+  STORAGE_LOG(LOG_LEVEL,                           \
+              "do calculate upper trans version.", \
+              K(get_ls_id()),                      \
+              K(need_skip),                        \
+              K(sstable_end_scn),                  \
+              K(max_decided_scn),                  \
+              K(min_start_scn_in_ctx),             \
+              K(effective_scn),                    \
+              K(min_start_scn_in_tx_data_memtable));
+bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn, const bool force_print_log)
 {
   int ret = OB_SUCCESS;
   bool need_skip = false;
@@ -949,28 +975,20 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
     STORAGE_LOG(WARN, "check min start in tx data failed", KR(ret), KP(this), K(sstable_end_scn));
   }
 
-  if (!need_skip) {
-    STORAGE_LOG(INFO,
-                "do calculate upper trans version.",
-                K(need_skip),
-                K(sstable_end_scn),
-                K(max_decided_scn),
-                K(min_start_scn_in_ctx),
-                K(effective_scn),
-                K(min_start_scn_in_tx_data_memtable));
+  const int64_t CALC_FAIL_WARN_THREASHOLD = 30LL * 60LL * 1000LL* 1000LL; // 30 minutes
+  bool need_print_log = force_print_log || (!need_skip) ||
+                        (TC_REACH_TIME_INTERVAL(5LL * 1000LL * 1000LL /* 5 seconds */) &&
+                         (ObClockGenerator::getClock() - sstable_end_scn.convert_to_ts()) > CALC_FAIL_WARN_THREASHOLD);
+
+  if (need_print_log) {
+    CALC_UPPER_DEBUG_LOG(INFO);
   } else {
-    STORAGE_LOG(TRACE,
-                "do calculate upper trans version.",
-                K(need_skip),
-                K(sstable_end_scn),
-                K(max_decided_scn),
-                K(min_start_scn_in_ctx),
-                K(effective_scn),
-                K(min_start_scn_in_tx_data_memtable));
+    CALC_UPPER_DEBUG_LOG(TRACE);
   }
 
   return need_skip;
 }
+#undef CALC_UPPER_DEBUG_LOG
 
 int ObTxDataTable::check_min_start_in_ctx_(const SCN &sstable_end_scn,
                                            const SCN &max_decided_scn,
@@ -1306,7 +1324,88 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
+bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
+{
+  // Inject logic to modify default freeze interval
+  int tmp_ret = OB_SUCCESS;
+  int64_t max_freeze_interval = MAX_FREEZE_TX_DATA_INTERVAL;
+  if (OB_TMP_FAIL(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)) {
+    max_freeze_interval = abs(tmp_ret) * 1000LL * 1000LL;
+  }
+
+  bool need_re_freeze = false;
+  const int64_t last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
+  const int64_t last_request_ts = ATOMIC_LOAD(&last_request_ts_);
+  const int64_t current_time = ObClockGenerator::getClock();
+  // This condition can be confusing. For details, see
+  bool condition1_satisfied =
+      last_request_ts > last_freeze_ts && current_time - last_freeze_ts > 2 * MIN_FREEZE_TX_DATA_INTERVAL;
+  // Trigger TxData Freeze every 5 minutes
+  bool condition2_satisfied = (last_freeze_ts != 0) && (current_time - last_freeze_ts > max_freeze_interval);
+  if (condition1_satisfied || condition2_satisfied) {
+    need_re_freeze = true;
+    STORAGE_LOG(INFO,
+                "tx data table need refreeze",
+                K(ls_id),
+                K(max_freeze_interval),
+                KTIME(last_request_ts),
+                KTIME(last_freeze_ts),
+                KTIME(current_time));
+  }
+
+  return need_re_freeze;
+}
+
 share::ObLSID ObTxDataTable::get_ls_id() { return ls_id_; }
+
+int ObTxDataTable::get_sstable_recycle_scn(share::SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  recycle_scn.set_max();
+  ObTableStoreIterator iter;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tx data table is not init.", KR(ret), KP(this));
+  } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id_, tablet_handle))) {
+    STORAGE_LOG(WARN, "get tablet from ls tablet service fail.", KR(ret), KP(this), K(tablet_id_));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+  } else if (OB_FAIL(tablet->get_all_minor_sstables(iter))) {
+    LOG_WARN("failed to get all minor sstables", K(ret), KPC(tablet));
+  } else if (0 == iter.count()) {
+    recycle_scn.set_min();
+  } else {
+    bool is_first_sstable = true;
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      if (OB_FAIL(iter.get_next(table))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to iterate minor tables", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(table) || !table->is_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("minor sstable should not be NULL or table type is unexpected", K(ret), KP(table), K(iter));
+      } else {
+        ObSSTable *sstable = static_cast<ObSSTable *>(table);
+        if (is_first_sstable) {
+          recycle_scn = sstable->get_filled_tx_scn();
+          is_first_sstable = false;
+        } else if (sstable->get_filled_tx_scn() > sstable->get_start_scn()) {
+          recycle_scn = MAX(recycle_scn, sstable->get_filled_tx_scn());
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 }  // namespace storage
 

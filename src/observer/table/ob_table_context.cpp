@@ -299,41 +299,23 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
-  credential_ = &credential;
-  tenant_id_ = credential.tenant_id_;
-  database_id_ = credential.database_id_;
-  if (OB_FAIL(init_schema_info_from_cache())) {
-    LOG_WARN("fail to init schema info from cache", K(ret), K(tenant_id_), K(database_id_));
-  } else {
-    if (OB_ISNULL(simple_table_schema_) || OB_ISNULL(schema_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema or schema guard is NULL", K(ret), KP(simple_table_schema_), KP(schema_guard_));
-    } else if (OB_FAIL(inner_init_common(arg_tablet_id, simple_table_schema_->get_table_name(), timeout_ts))) {
-      LOG_WARN("fail to inner init common", KR(ret), K(credential), K(timeout_ts));
-    }
+
+  if (OB_FAIL(init_common_without_check(credential, timeout_ts))) {
+    LOG_WARN("fail to init common without check", K(ret), K(credential), K(timeout_ts));
+  } else if (OB_FAIL(check_legality(arg_tablet_id))) {
+    LOG_WARN("fail to check legality", K(ret), K(arg_tablet_id));
   }
 
   return ret;
 }
 
-int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
-                                  const ObString &table_name,
-                                  const int64_t &timeout_ts)
+int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
-  const ObTenantSchema *tenant_schema = nullptr;
   ObTabletID tablet_id = arg_tablet_id;
-  bool is_tablet_exists = true;
 
-  if (OB_ISNULL(simple_table_schema_) || OB_ISNULL(schema_guard_)) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table schema or schema guard is null", K(ret), K(table_name), K(simple_table_schema_), K(schema_guard_));
-  } else if (OB_FAIL(schema_guard_->get_schema_version(tenant_id_, tenant_schema_version_))) {
-    LOG_WARN("fail to get tenant schema", K(ret), K_(tenant_id));
-  } else if (FALSE_IT(init_physical_plan_ctx(timeout_ts, tenant_schema_version_))) {
-    LOG_WARN("fail to init physical plan ctx", K(ret));
-  } else if (!arg_tablet_id.is_valid() && !is_scan_) {
+  if (!arg_tablet_id.is_valid() && !is_scan_) {
     // for scan scene, we will process it in init_scan when tablet_id is invalid
     // because we need to know if use index and index_type
     if (!simple_table_schema_->is_partitioned_table()) {
@@ -348,26 +330,47 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!is_scan_ && !ls_id_.is_valid() && OB_FAIL(GCTX.location_service_->get(tenant_id_,
-                                                                                    tablet_id,
-                                                                                    0, /* expire_renew_time */
-                                                                                    is_cache_hit,
-                                                                                    ls_id_))) {
-    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(table_name));
-  } else if (has_auto_inc_ && OB_FAIL(add_auto_inc_param())) {
-    LOG_WARN("fail to add auto inc param", K(ret));
+  } else if (!is_scan_ && !ls_id_.is_valid() && tablet_id.is_valid()
+      && OB_FAIL(GCTX.location_service_->get(tenant_id_,
+                                             tablet_id,
+                                             0, /* expire_renew_time */
+                                             is_cache_hit,
+                                             ls_id_))) {
+    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K_(tenant_id));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
-  } else if (OB_ISNULL(sess_guard_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sess guard is NULL", K(ret));
   } else {
-    binlog_row_image_type_ = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
-    table_name_ = table_name;
-    ref_table_id_ = simple_table_schema_->get_table_id();
-    index_table_id_ = ref_table_id_;
     tablet_id_ = tablet_id;
     index_tablet_id_ = tablet_id_;
+  }
+
+  return ret;
+}
+
+int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
+                                          const int64_t &timeout_ts)
+{
+  int ret = OB_SUCCESS;
+
+  credential_ = &credential;
+  tenant_id_ = credential.tenant_id_;
+  database_id_ = credential.database_id_;
+  if (OB_FAIL(init_schema_info_from_cache())) {
+    LOG_WARN("fail to init schema info from cache", K(ret), K(tenant_id_), K(database_id_));
+  } else if (OB_ISNULL(simple_table_schema_) || OB_ISNULL(schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema or schema guard is NULL", K(ret), KP(simple_table_schema_), KP(schema_guard_));
+  } else if (OB_FAIL(schema_guard_->get_schema_version(tenant_id_, tenant_schema_version_))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K_(tenant_id));
+  } else if (FALSE_IT(init_physical_plan_ctx(timeout_ts, tenant_schema_version_))) {
+    LOG_WARN("fail to init physical plan ctx", K(ret));
+  } else if (has_auto_inc_ && OB_FAIL(add_auto_inc_param())) {
+    LOG_WARN("fail to add auto inc param", K(ret));
+  } else {
+    binlog_row_image_type_ = TABLEAPI_OBJECT_POOL_MGR->get_binlog_row_image();
+    table_name_ = simple_table_schema_->get_table_name();
+    ref_table_id_ = simple_table_schema_->get_table_id();
+    index_table_id_ = ref_table_id_;
     timeout_ts_ = timeout_ts;
   }
 
@@ -498,7 +501,7 @@ int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
 int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const ObExprResType &column_type = column_info.type_;
+  const ObRawExprResType &column_type = column_info.type_;
   const ObCollationType cs_type = column_type.get_collation_type();
 
   // 1. check nullable
@@ -752,6 +755,11 @@ int ObTableCtx::adjust_entity()
   if (OB_ISNULL(entity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
+  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema cache guard is invalid", K(ret), KP(schema_cache_guard_));
+  } else if (schema_cache_guard_->get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+    // do nothing
   } else if (OB_FAIL(adjust_rowkey())) {
     LOG_WARN("fail to adjust rowkey", K(ret));
   } else if (OB_FAIL(adjust_properties())) {
@@ -888,8 +896,9 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
             } else if (OB_ISNULL(columns_infos.at(k))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column info is NULL", K(ret), K(k));
-            } else if (OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
-              LOG_WARN("fail to adjust column type", K(ret), K(columns_infos.at(k)), K(obj));
+            } else if (schema_cache_guard_->get_hbase_mode_type() != ObHbaseModeType::OB_HBASE_SERIES_TYPE
+                      && OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
+              LOG_WARN("fail to adjust column type", K(ret), K(*columns_infos.at(k)), K(obj));
             } else if (ob_is_mysql_date_tc(columns_infos.at(k)->type_.get_type()) && ob_is_date_tc(obj.get_type())) {
               ObMySQLDate mdate = 0;
               if (OB_FAIL(ObTimeConverter::date_to_mdate(obj.get_date(), mdate))) {
@@ -988,6 +997,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
                           const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
+  query_ = &query;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
@@ -1824,7 +1834,7 @@ int ObTableCtx::init_fts_schema()
   return ret;
 }
 
-int ObTableCtx::init_exec_ctx()
+int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
 {
   int ret = OB_SUCCESS;
   /*
@@ -1833,7 +1843,7 @@ int ObTableCtx::init_exec_ctx()
   */
   sql_ctx_.schema_guard_ = schema_guard_;
   exec_ctx_.get_das_ctx().set_sql_ctx(&sql_ctx_);
-  if (OB_FAIL(init_das_context(exec_ctx_.get_das_ctx()))) {
+  if (need_das_ctx && OB_FAIL(init_das_context(exec_ctx_.get_das_ctx()))) {
     LOG_WARN("fail to init das context", K(ret));
   } else {
     // init exec_ctx_.my_session_
@@ -1889,9 +1899,10 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
    if (OB_ISNULL(local_table_loc = exec_ctx_.get_das_ctx().get_table_loc_by_id(ref_table_id_, index_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("local_table_loc is NULL", K(ret));
-   } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
-                                                                  index_tablet_id_,
-                                                                  tablet_loc))) {
+   } else if (index_tablet_id_.is_valid()
+      &&OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
+                                                            index_tablet_id_,
+                                                            tablet_loc))) {
       LOG_WARN("fail to extend tablet loc", K(ret), K(index_tablet_id_));
     }
   }
@@ -2035,8 +2046,9 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
     }
 
     if (OB_SUCC(ret) && !is_found) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_WRONG_NAME_FOR_INDEX;
       LOG_WARN("invalid index name", K(ret), K(index_name));
+      LOG_USER_ERROR(OB_WRONG_NAME_FOR_INDEX, index_name.length(), index_name.ptr());
     }
   }
 
@@ -2210,6 +2222,9 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
     if (OB_ISNULL(simple_table_schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret));
+    } else if (!tablet_id_.is_valid()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     } else if (OB_FAIL(simple_table_schema_->get_part_idx_by_tablet(tablet_id_, part_idx, subpart_idx))) {
       LOG_WARN("fail to get part idx", K(ret), K_(tablet_id));
     } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx,

@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_redef_table.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "storage/tablelock/ob_table_lock_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -87,6 +88,24 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     DISABLE_SQL_MEMLEAK_GUARD;
     execute_ctx_ = execute_ctx;
     allocator_ = execute_ctx->get_allocator();
+
+    int64_t db_id = -1;
+    ObString query_sql;
+    if (execute_ctx_ != nullptr) {
+      ObSQLSessionInfo *session = execute_ctx_->get_session_info();
+      if (session != nullptr) {
+        db_id = session->get_database_id();
+        query_sql = session->get_current_query_string();
+      }
+    }
+
+    SERVER_EVENT_ADD("direct_load", "start",
+                     "tenant_id", MTL_ID(),
+                     "trace_id", *ObCurTraceId::get_trace_id(),
+                     K(db_id),
+                     K(query_sql),
+                     K(param));
+
     if (OB_FAIL(param.normalize())) {
       LOG_WARN("fail to normalize param", KR(ret));
     }
@@ -236,6 +255,11 @@ int ObTableLoadInstance::end_stmt(const bool commit)
   }
   stmt_ctx_.is_started_ = false;
   LOG_INFO("end stmt succeed", KR(ret));
+
+  SERVER_EVENT_ADD("direct_load", "end",
+                 "tenant_id", MTL_ID(),
+                 "trace_id", *ObCurTraceId::get_trace_id(),
+                 "ret_code", ret);
   return ret;
 }
 
@@ -296,9 +320,10 @@ int ObTableLoadInstance::start_sql_tx()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("trans already exist", KR(ret), KPC(tx_desc));
     } else if (OB_ISNULL(tx_desc) && OB_FAIL(txs->acquire_tx(tx_desc,
-                                                             session_info->get_sessid(),
+                                                             session_info->get_server_sid(),
+                                                             session_info->get_sid(),
                                                              session_info->get_data_version()))) {
-      LOG_WARN("failed to acquire tx", KR(ret), K(session_info->get_sessid()),
+      LOG_WARN("failed to acquire tx", KR(ret), K(session_info->get_server_sid()),
                K(session_info->get_data_version()));
     } else if (OB_FAIL(txs->start_tx(*tx_desc, stmt_ctx_.tx_param_))) {
       LOG_WARN("failed to start tx", KR(ret), K(stmt_ctx_));
@@ -456,6 +481,7 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
   ObCommonID raw_id;
   share::SCN current_scn;
   int64_t schema_version = 0;
@@ -466,8 +492,11 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   if (OB_ISNULL(schema_guard = execute_ctx_->exec_ctx_->get_sql_ctx()->schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard in exe ctx is nullptr", KR(ret));
-  } else if (OB_FAIL(schema_guard->get_schema_version(tenant_id, schema_version))) {
-    LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
     LOG_WARN("failed to gen unique id by rpc", KR(ret), K(tenant_id));
   } else if (OB_FAIL(share::ObLSAttrOperator::get_tenant_gts(tenant_id, current_scn))) {
@@ -475,11 +504,11 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
   } else {
-    ddl_param.schema_version_ = schema_version;
+    ddl_param.dest_table_id_ = table_id;
     ddl_param.task_id_ = raw_id.id();
+    ddl_param.schema_version_ = table_schema->get_schema_version();
     ddl_param.snapshot_version_ = current_scn.convert_to_ts();
     ddl_param.data_version_ = tenant_data_version;
-    ddl_param.dest_table_id_ = table_id;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     LOG_INFO("init ddl param for inc direct load succeed", K(ddl_param));
   }

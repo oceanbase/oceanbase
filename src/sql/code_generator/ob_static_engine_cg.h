@@ -213,7 +213,9 @@ public:
                                        ObLogicalOperator *op,
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                                 const bool is_column_store_tbl, bool &found);
+                                                 const bool is_column_store_tbl,
+                                                 const bool need_return_lob_locator,
+                                                 bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
   // detect physical operator type from logic operator.
@@ -507,9 +509,11 @@ private:
 
   int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
   int get_query_compress_type(const ObLogPlan &log_plan, ObCompressorType &compress_type);
+  int check_not_support_cmp_type(const ObExpr *expr);
   int check_not_support_cmp_type(
     const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);
+  bool use_single_col_compare(ObSortVecSpec &spec);
   int recursive_get_column_expr(const ObColumnRefRawExpr *&column, const TableItem &table_item);
   int fill_aggr_infos(ObLogGroupBy &op,
                       ObGroupBySpec &spec,
@@ -604,8 +608,7 @@ private:
                           const uint64_t root_column_id,
                           ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns,
                           bool &is_dup);
-  int check_fk_self_ref_upd(const ObIArray<uint64_t> &table_list,
-                            const ObTableUpdateSpec &spec, bool &self_ref_update);
+
   bool table_exists_in_list(DASTableIdList &parent_tables, const uint64_t table_id);
 
   bool column_exists_in_list(const ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns, const uint64_t table_id, const uint64_t column_id);

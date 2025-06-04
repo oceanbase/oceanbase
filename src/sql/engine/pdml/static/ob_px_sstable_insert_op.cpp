@@ -313,7 +313,8 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         if (OB_SUCC(ret)) {
           ObDDLSliceRowIterator slice_row_iter(
               this, notify_tablet_id, is_current_slice_empty,
-              table_schema->is_index_table(), table_schema->get_rowkey_column_num(), table_schema->get_lob_inrow_threshold(),
+              table_schema->is_index_table() && !is_vec_data_complement_,
+              table_schema->get_rowkey_column_num(), table_schema->get_lob_inrow_threshold(),
               snapshot_version_, tablet_slice_param, need_idempotent_autoinc_val, table_all_slice_count_,
               table_level_slice_idx, autoinc_range_interval_);
           ObDDLInsertRowIterator row_iter;

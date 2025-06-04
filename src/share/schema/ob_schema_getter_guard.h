@@ -23,6 +23,7 @@
 #include "share/schema/ob_udt_info.h"
 #include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_udt_mgr.h"
+#include "share/schema/ob_catalog_schema_struct.h"
 
 namespace oceanbase
 {
@@ -476,6 +477,28 @@ public:
                         common::ObIArray<uint64_t> &enable_role_id_array,
                         SSL *ssl_st,
                         const ObUserInfo *&sel_user_info);
+  int check_catalog_access(const ObSessionPrivInfo &session_priv,
+                           const common::ObIArray<uint64_t> &enable_role_id_array,
+                           const common::ObString &catalog_name);
+  int check_catalog_access(const ObSessionPrivInfo &session_priv,
+                           const common::ObIArray<uint64_t> &enable_role_id_array,
+                           const uint64_t catalog_id);
+  int check_catalog_db_access(const ObSessionPrivInfo &session_priv,
+                              const common::ObIArray<uint64_t> &enable_role_id_array,
+                              const common::ObString &catalog_name,
+                              const common::ObString &database_name);
+  int check_catalog_db_access(const ObSessionPrivInfo &session_priv,
+                              const common::ObIArray<uint64_t> &enable_role_id_array,
+                              const uint64_t catalog_id,
+                              const common::ObString &database_name);
+  int check_catalog_show(const ObSessionPrivInfo &session_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
+                         const common::ObString &catalog_name,
+                         bool &allow_show);
+  int check_db_access(ObSessionPrivInfo &s_priv,
+                      const common::ObIArray<uint64_t> &enable_role_id_array,
+                      const uint64_t catalog_id,
+                      const common::ObString &database_name);
   int check_db_access(ObSessionPrivInfo &s_priv,
                       const common::ObIArray<uint64_t> &enable_role_id_array,
                       const common::ObString& database_name);
@@ -483,6 +506,12 @@ public:
                     const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,
                     bool &allow_show);
+  int check_table_show(const ObSessionPrivInfo &session_priv,
+                       const common::ObIArray<uint64_t> &enable_role_id_array,
+                       const uint64_t catalog_id,
+                       const common::ObString &db,
+                       const common::ObString &table,
+                       bool &allow_show);
   int check_table_show(const ObSessionPrivInfo &session_priv,
                        const common::ObIArray<uint64_t> &enable_role_id_array,
                        const common::ObString &db,
@@ -559,6 +588,11 @@ public:
                                     const uint64_t user_id,
                                     common::ObIArray<const ObColumnPriv*> &column_privs);
   int get_column_priv_set(const ObColumnPrivSortKey &column_priv_key, ObPrivSet &priv_set);
+  int get_catalog_priv_set(const ObCatalogPrivSortKey &catalog_priv_key,
+                           ObPrivSet &priv_set);
+  int get_catalog_priv_with_user_id(const uint64_t tenant_id,
+                                    const uint64_t user_id,
+                                    common::ObIArray<const ObCatalogPriv *> &catalog_privs);
   int get_db_priv_with_user_id(const uint64_t tenant_id,
                                const uint64_t user_id,
                                common::ObIArray<const ObDBPriv*> &db_privs);
@@ -1029,6 +1063,15 @@ public:
                                        common::ObIArray<const ObRlsContextSchema *> &schemas);
   // rls function end
 
+  // catalog function begin
+  int get_catalog_schema_by_name(const uint64_t tenant_id,
+                                 const common::ObString &name,
+                                 const ObCatalogSchema *&schema);
+  int get_catalog_schema_by_id(const uint64_t tenant_id,
+                               const uint64_t catalog_id,
+                               const ObCatalogSchema *&schema);
+  // catalog function end
+
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
                        const common::ObString &host_name,
@@ -1128,7 +1171,13 @@ private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);
   int check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st);
-
+  int check_catalog_priv(const ObSessionPrivInfo &session_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
+                         const ObNeedPriv &need_priv);
+  int check_catalog_priv(const ObSessionPrivInfo &session_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
+                         const ObNeedPriv &need_priv,
+                         ObPrivSet &user_catalog_priv_set);
   int check_db_priv(const ObSessionPrivInfo &session_priv,
                     const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,

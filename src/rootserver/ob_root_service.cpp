@@ -48,11 +48,14 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "share/ob_ddl_common.h" // for ObDDLUtil
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/restore/ob_recover_table_util.h"
 #include "rootserver/backup/ob_backup_proxy.h" //ObBackupServiceProxy
+#include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/restore/ob_recover_table_initiator.h"
+#include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
@@ -610,7 +613,6 @@ ObRootService::ObRootService()
                             task_queue_),
     inspector_task_(*this),
     purge_recyclebin_task_(*this),
-    ddl_scheduler_(),
     snapshot_manager_(),
     core_meta_table_version_(0),
     update_rs_list_timer_task_(*this),
@@ -815,15 +817,15 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(root_minor_freeze_.init(rpc_proxy_, unit_manager_))) {
     // init root minor freeze
     FLOG_WARN("init root_minor_freeze_ failed", KR(ret));
-  } else if (OB_FAIL(ddl_service_.init(rpc_proxy_, common_proxy_, sql_proxy_, *schema_service,
-                                       lst_operator, snapshot_manager_, tenant_ddl_service_))) {
+  } else if (OB_FAIL(ddl_service_.init(*GCTX.srv_rpc_proxy_, *GCTX.rs_rpc_proxy_,*GCTX.sql_proxy_, *GCTX.schema_service_,
+                                       *GCTX.lst_operator_, snapshot_manager_, tenant_ddl_service_))) {
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
   } else if (OB_FAIL(tenant_ddl_service_.init(unit_manager_, ddl_service_, rpc_proxy_,
           common_proxy_, sql_proxy_, *schema_service, lst_operator, zone_manager_))) {
     // init tenant ddl service
     FLOG_WARN("init tenant_ddl_service_ failed", KR(ret));
-  } else if (OB_FAIL(unit_manager_.init(sql_proxy_, *config_, rpc_proxy_, *schema_service,
+  } else if (OB_FAIL(unit_manager_.init(*GCTX.sql_proxy_, *config_, *GCTX.srv_rpc_proxy_, *GCTX.schema_service_,
                                         root_balancer_, *this))) {
     // init unit manager
     FLOG_WARN("init unit_manager failed", KR(ret));
@@ -857,8 +859,6 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init rootservice event history failed", KR(ret));
   } else if (OB_FAIL(THE_RS_JOB_TABLE.init(&sql_proxy, self_addr_))) {
     FLOG_WARN("init THE_RS_JOB_TABLE failed", KR(ret));
-  } else if (OB_FAIL(ddl_scheduler_.init(this))) {
-    FLOG_WARN("init ddl task scheduler failed", KR(ret));
   } else if (OB_FAIL(ObRsAutoSplitScheduler::get_instance().init())) {
     FLOG_WARN("init auto split task scheduler failed", K(ret));
   } else if (OB_FAIL(schema_history_recycler_.init(*schema_service_,
@@ -941,8 +941,6 @@ void ObRootService::destroy()
   FLOG_INFO("inner queue destroy");
   inspect_task_queue_.destroy();
   FLOG_INFO("inspect queue destroy");
-  ddl_builder_.destroy();
-  FLOG_INFO("ddl builder destroy");
   if (OB_FAIL(hb_checker_.destroy())) {
     FLOG_WARN("heartbeat checker destroy failed", KR(ret));
     fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
@@ -955,9 +953,6 @@ void ObRootService::destroy()
 
   dbms_job::ObDBMSJobMaster::get_instance().destroy();
   FLOG_INFO("ObDBMSJobMaster destroy");
-
-  ddl_scheduler_.destroy();
-  FLOG_INFO("ddl task scheduler destroy");
 
 #ifdef OB_BUILD_TDE_SECURITY
   if (OB_FAIL(master_key_mgr_.destroy())) {
@@ -984,6 +979,7 @@ void ObRootService::destroy()
   }
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RS_START_SERVICE_ERROR);
 int ObRootService::start_service()
 {
   int ret = OB_SUCCESS;
@@ -995,6 +991,9 @@ int ObRootService::start_service()
     FLOG_WARN("rootservice not inited", KR(ret));
   } else if (OB_FAIL(rs_status_.set_rs_status(status::STARTING))) {
     FLOG_WARN("fail to set rs status", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_RS_START_SERVICE_ERROR)) {
+    ret = ERRSIM_RS_START_SERVICE_ERROR;
+    LOG_INFO("ERRSIM here", KR(ret));
   } else if (!ObRootServiceRoleChecker::is_rootserver()) {
     ret = OB_NOT_MASTER;
     FLOG_WARN("not master", KR(ret));
@@ -1004,7 +1003,6 @@ int ObRootService::start_service()
     const bool rpc_active = true;
     common_proxy_.active(rpc_active);
     rpc_proxy_.active(rpc_active);
-    ddl_service_.restart();
     tenant_ddl_service_.restart();
     server_manager_.reset();
     zone_manager_.reset();
@@ -1017,8 +1015,6 @@ int ObRootService::start_service()
       FLOG_WARN("inner queue start failed", KR(ret));
     } else if (OB_FAIL(inspect_task_queue_.start())) {
       FLOG_WARN("inspect queue start failed", KR(ret));
-    } else if (OB_FAIL(ddl_builder_.start())) {
-      FLOG_WARN("start ddl builder failed", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::GlobalCtxTimer))) {
       FLOG_WARN("init global ctx timer fail", KR(ret));
     } else if (OB_FAIL(global_ctx_task_.schedule(lib::TGDefIDs::GlobalCtxTimer))) {
@@ -1031,8 +1027,6 @@ int ObRootService::start_service()
       FLOG_WARN("failed to schedule refresh_server task", KR(ret));
     } else if (OB_FAIL(schedule_restart_timer_task(0))) {
       FLOG_WARN("failed to schedule restart task", KR(ret));
-    } else if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().remove_all_ddl_epoch())) {
-      FLOG_WARN("fail to remove ddl epoch", KR(ret));
     } else if (debug_) {
       if (OB_FAIL(init_debug_database())) {
         FLOG_WARN("init_debug_database failed", KR(ret));
@@ -1075,6 +1069,7 @@ int ObRootService::stop_service()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RS_STOP_ERROR);
 int ObRootService::stop()
 {
   int ret = OB_SUCCESS;
@@ -1136,6 +1131,12 @@ int ObRootService::stop()
       FLOG_INFO("create_inner_schema_executor stop finished");
     }
 
+    // let RS stop failed after proxy inactive
+    if (OB_UNLIKELY(ERRSIM_RS_STOP_ERROR)) {
+      ret = ERRSIM_RS_STOP_ERROR;
+      LOG_INFO("ERRSIM here", KR(ret));
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(stop_timer_tasks())) {
         FLOG_WARN("stop timer tasks failed", KR(ret));
@@ -1147,7 +1148,6 @@ int ObRootService::stop()
 
     if (OB_SUCC(ret)) {
       // ddl_service may be trying refresh schema, stop it
-      ddl_service_.stop();
       tenant_ddl_service_.stop();
       FLOG_INFO("ddl service stop");
       root_minor_freeze_.stop();
@@ -1156,8 +1156,6 @@ int ObRootService::stop()
       FLOG_INFO("root inspection stop");
     }
     if (OB_SUCC(ret)) {
-      ddl_builder_.stop();
-      FLOG_INFO("ddl builder stop");
       task_queue_.stop();
       FLOG_INFO("task_queue stop");
       inspect_task_queue_.stop();
@@ -1174,8 +1172,6 @@ int ObRootService::stop()
       FLOG_INFO("schema_history_recycler stop");
       hb_checker_.stop();
       FLOG_INFO("hb_checker stop");
-      ddl_scheduler_.stop();
-      FLOG_INFO("ddl task scheduler stop");
       dbms_job::ObDBMSJobMaster::get_instance().stop();
       FLOG_INFO("dbms job master stop");
 #ifdef OB_BUILD_TDE_SECURITY
@@ -1216,8 +1212,6 @@ void ObRootService::wait()
   FLOG_INFO("task queue exit success");
   inspect_task_queue_.wait();
   FLOG_INFO("inspect queue exit success");
-  ddl_scheduler_.wait();
-  FLOG_INFO("ddl task scheduler exit success");
 #ifdef OB_BUILD_TDE_SECURITY
   master_key_mgr_.wait();
   FLOG_INFO("master key mgr exit success");
@@ -1225,10 +1219,6 @@ void ObRootService::wait()
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer exit success");
-  ddl_service_.get_index_name_checker().reset_all_cache();
-  FLOG_INFO("reset index name checker success");
-  ddl_service_.get_non_partitioned_tablet_allocator().reset_all_cache();
-  FLOG_INFO("reset non partitioned tablet allocator success");
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
   int64_t cost = ObTimeUtility::current_time() - start_time;
@@ -1275,8 +1265,8 @@ int ObRootService::submit_ddl_single_replica_build_task(ObAsyncTask &task)
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRootService has not been inited", K(ret));
-  } else if (OB_FAIL(ddl_builder_.push_task(task))) {
-    LOG_WARN("add task to ddl builder failed", K(ret));
+  } else if (OB_FAIL(ObSysDDLReplicaBuilderUtil::push_task(task))) {
+    LOG_WARN("fail to push task to ddl builder", KR(ret));
   }
   return ret;
 }
@@ -3441,13 +3431,6 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           if ((simple_table_schema->get_table_type() == SYSTEM_VIEW && GCONF.enable_sys_table_ddl)
                      || simple_table_schema->get_table_type() == USER_VIEW
                      || simple_table_schema->get_table_type() == MATERIALIZED_VIEW) {
-            if (GCTX.is_shared_storage_mode() && simple_table_schema->get_table_type() == MATERIALIZED_VIEW) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "in share storage mode, create materialized view is");
-            } else {
-              ret = OB_SUCCESS;
-            }
           } else if (simple_table_schema->get_table_type() == SYSTEM_VIEW) {
             ret = OB_OP_NOT_ALLOW;
             LOG_WARN("not allowed to replace sys view when enable_sys_table_ddl is false", KR(ret), KPC(simple_table_schema));
@@ -4427,7 +4410,7 @@ int ObRootService::update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiv
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.update_ddl_task_active_time(ObDDLTaskID(tenant_id, task_id)))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::update_ddl_task_active_time(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("fail to set RegTaskTime map", K(ret), K(tenant_id), K(task_id));
   }
   return ret;
@@ -4455,7 +4438,7 @@ int ObRootService::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg)
     LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, ABORT_REDEF_TABLE_RPC_SLOW))) {
     LOG_WARN("ddl sim failure", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.abort_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::abort_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("cancel task failed", K(ret), K(tenant_id), K(task_id));
   }
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "abort redef table",
@@ -4489,7 +4472,7 @@ int ObRootService::finish_redef_table(const obrpc::ObFinishRedefTableArg &arg)
     LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, FINISH_REDEF_TABLE_RPC_SLOW))) {
     LOG_WARN("ddl sim failure", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.finish_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::finish_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("failed to finish redef table", K(ret), K(task_id), K(tenant_id));
   }
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "finish redef table",
@@ -4528,7 +4511,7 @@ int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &
     LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, COPY_TABLE_DEPENDENTS_RPC_SLOW))) {
     LOG_WARN("ddl sim failure", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.copy_table_dependents(ObDDLTaskID(tenant_id, task_id),
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::copy_table_dependents(ObDDLTaskID(tenant_id, task_id),
                                                           is_copy_constraints,
                                                           is_copy_indexes,
                                                           is_copy_triggers,
@@ -4562,7 +4545,7 @@ int ObRootService::start_redef_table(const obrpc::ObStartRedefTableArg &arg, obr
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.start_redef_table(arg, res))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::start_redef_table(arg, res))) {
     LOG_WARN("start redef table failed", K(ret));
   }
   char tenant_id_buffer[128];
@@ -4678,6 +4661,10 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
         ddl_type = ObDDLType::DDL_RENAME_PARTITION;
       } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == nonconst_arg.alter_part_type_) {
         ddl_type = ObDDLType::DDL_RENAME_SUB_PARTITION;
+      } else if (obrpc::ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_ALTER_PARTITION_POLICY;
+      } else if (obrpc::ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_ALTER_SUBPARTITION_POLICY;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected ddl type", K(ret), K(nonconst_arg.alter_part_type_), K(nonconst_arg));
@@ -4716,9 +4703,9 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
                                    &allocator,
                                    &arg,
                                    0 /*parent task id*/);
-        if (OB_FAIL(ddl_scheduler_.create_ddl_task(param, sql_proxy_, task_record))) {
+        if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, sql_proxy_, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret), K(arg));
-        } else if (OB_FAIL(ddl_scheduler_.schedule_ddl_task(task_record))) {
+        } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
         } else {
           res.ddl_type_ = ddl_type;
@@ -4989,9 +4976,9 @@ int ObRootService::drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes 
     if (OB_UNLIKELY(OB_INVALID_ID == target_object_id || OB_INVALID_SCHEMA_VERSION == schema_version)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected", K(ret), K(arg), K(target_object_id), K(schema_version));
-    } else if (OB_FAIL(ddl_scheduler_.create_ddl_task(param, sql_proxy_, task_record))) {
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, sql_proxy_, task_record))) {
       LOG_WARN("submit ddl task failed", K(ret), K(arg));
-    } else if (OB_FAIL(ddl_scheduler_.schedule_ddl_task(task_record))) {
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
       LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
     } else {
       res.tenant_id_ = tenant_id;
@@ -5054,9 +5041,9 @@ int ObRootService::drop_database(const obrpc::ObDropDatabaseArg &arg, ObDropData
                                 &allocator,
                                 &arg,
                                 0 /* parent task id*/);
-    if (OB_FAIL(ddl_scheduler_.create_ddl_task(param, sql_proxy_, task_record))) {
+    if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, sql_proxy_, task_record))) {
       LOG_WARN("submit ddl task failed", K(ret), K(arg));
-    } else if (OB_FAIL(ddl_scheduler_.schedule_ddl_task(task_record))) {
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
       LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
     } else {
       drop_database_res.ddl_res_.tenant_id_ = tenant_id;
@@ -5206,6 +5193,22 @@ int ObRootService::drop_lob(const ObDropLobArg &arg)
   return ddl_service_.drop_lob(arg);
 }
 
+int ObRootService::force_drop_lonely_lob_aux_table(const ObForceDropLonelyLobAuxTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ddl_service_.force_drop_lonely_lob_aux_table(arg)))  {
+    LOG_WARN("drop fail", KR(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "force drop lonely lob table",
+                        "tenant_id", arg.get_tenant_id(),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "data_table_id", arg.get_data_table_id(),
+                        "lob_meta_table_id", arg.get_aux_lob_meta_table_id(),
+                        "lob_piece_table_id", arg.get_aux_lob_piece_table_id());
+  return ret;
+}
+
 int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -5239,7 +5242,7 @@ int ObRootService::send_auto_split_tablet_task_request(const obrpc::ObAutoSplitT
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_scheduler_.cache_auto_split_task(arg, res))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::cache_auto_split_task(arg, res))) {
     LOG_WARN("fail to cache auto split task", K(ret), K(arg), K(res));
   }
   return ret;
@@ -5391,9 +5394,9 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
                                    &allocator,
                                    &arg,
                                    0 /* parent task id*/);
-        if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, sql_proxy_, task_record))) {
+        if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, sql_proxy_, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret), K(arg));
-        } else if (OB_FAIL(ddl_scheduler_.schedule_ddl_task(task_record))) {
+        } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
         } else {
           res.tenant_id_ = tenant_id;
@@ -5587,7 +5590,6 @@ int ObRootService::optimize_table(const ObOptimizeTableArg &arg)
   } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, mode))) {
     LOG_WARN("fail to get tenant mode", K(ret));
   } else {
-    const int64_t all_core_table_id = OB_ALL_CORE_TABLE_TID;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.tables_.count(); ++i) {
       SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
         ObSqlString sql;
@@ -5606,7 +5608,7 @@ int ObRootService::optimize_table(const ObOptimizeTableArg &arg)
           LOG_WARN("fail to get table schema", K(ret));
         } else if (nullptr == table_schema) {
           // skip deleted table
-        } else if (all_core_table_id == table_schema->get_table_id()) {
+        } else if (is_hardcode_schema_table(table_schema->get_table_id())) {
           // do nothing
         } else {
           if (lib::Worker::CompatMode::MYSQL == mode) {
@@ -5650,8 +5652,8 @@ int ObRootService::calc_column_checksum_repsonse(const obrpc::ObCalcColumnChecks
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, PROCESS_COLUMN_CHECKSUM_RESPONSE_SLOW))) {
     LOG_WARN("ddl sim failure: procesc column checksum response slow", K(ret));
-  } else if (OB_FAIL(ddl_scheduler_.on_column_checksum_calc_reply(
-          arg.tablet_id_, ObDDLTaskKey(arg.tenant_id_, arg.target_table_id_, arg.schema_version_), arg.ret_code_))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::on_column_checksum_calc_reply(
+              arg.tablet_id_, ObDDLTaskKey(arg.tenant_id_, arg.target_table_id_, arg.schema_version_), arg.ret_code_))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;
@@ -6168,12 +6170,6 @@ int ObRootService::do_restart()
     FLOG_INFO("report all_core_table replica finish");
   }
 
-  if (FAILEDx(ddl_scheduler_.start())) {
-    FLOG_WARN("fail to start ddl task scheduler", KR(ret));
-  } else {
-    FLOG_INFO("success to start ddl task scheduler");
-  }
-
   if (FAILEDx(dbms_job::ObDBMSJobMaster::get_instance().start())) {
     FLOG_WARN("failed to start dbms job master", KR(ret));
   } else {
@@ -6193,12 +6189,13 @@ int ObRootService::do_restart()
 
   // to avoid increase rootservice_epoch while fail to restart RS,
   // put it and the end of restart RS.
-  if (FAILEDx(init_sequence_id())) {
-    FLOG_WARN("fail to init sequence id", KR(ret));
+  // start_ddl_service_ is compatible with old logic to increase rootservice_epoch.
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(start_ddl_service_())) {
+    FLOG_WARN("failed to start ddl service", KR(ret));
   } else {
-    FLOG_INFO("success to init sequenxe id");
+    FLOG_INFO("success to start ddl service", KR(ret));
   }
-
 
 #ifdef OB_BUILD_TDE_SECURITY
   if (FAILEDx(master_key_mgr_.start())) {
@@ -6284,43 +6281,63 @@ int ObRootService::check_parallel_ddl_conflict(
   return ddl_service_.check_parallel_ddl_conflict(schema_guard, arg);
 }
 
-int ObRootService::init_sequence_id()
+int ObRootService::increase_rs_epoch_and_get_proposal_id_(
+    int64_t &new_rs_epoch,
+    int64_t &proposal_id_to_check)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", K(ret), K(schema_service_));
+    LOG_WARN("schema_service is null", KR(ret), K(schema_service_));
   } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("trans start failed", K(ret));
   } else {
     ObGlobalStatProxy proxy(trans, OB_SYS_TENANT_ID);
     ObSchemaService *schema_service = schema_service_->get_schema_service();
-    int64_t rootservice_epoch = 0;
     int64_t schema_version = OB_INVALID_VERSION;
     ObRefreshSchemaInfo schema_info;
-    //increase sequence_id can trigger every observer refresh schema while restart RS
-    if (OB_FAIL(proxy.inc_rootservice_epoch())) {
-      LOG_WARN("fail to increase rootservice_epoch", K(ret));
-    } else if (OB_FAIL(proxy.get_rootservice_epoch(rootservice_epoch))) {
-      LOG_WARN("fail to get rootservice start times", K(ret), K(rootservice_epoch));
-    } else if (rootservice_epoch <= 0) {
+    common::ObRole role = FOLLOWER;
+    int64_t proposal_id_double_check = 0;
+    // 1. get role and proposal id from PALF to make sure local is leader
+    // ATTENTION:
+    //   start_ddl_service will check ObDDLServiceLauncher::is_ddl_service_started_
+    //   to decide whether start ddl service with old logic
+    //   we can ensure that RS try start ddl service after __all_core_table be readable
+    //   because operations like unit_manager_.load() can make sure sys leader's
+    //   switch_to_leader() successfully called.
+    //   In other words, sys leader's switch_to_leader() must before RS start_ddl_service()
+    //   Based on this reason, we can make sure RS can start with old logic by checking
+    //   ObDDLServiceLauncher::is_ddl_service_started_
+    //   So we have to check log handle leader here
+    if (OB_FAIL(ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
+                    role, proposal_id_to_check))) {
+      LOG_WARN("fail to get sys log handler role and proposal id", KR(ret));
+    } else if (OB_UNLIKELY(!is_strong_leader(role))) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("local is not sys tenant leader", KR(ret), K(role), K(proposal_id_to_check));
+    // 2. increase rootservice_epoch in __all_core_table and make sure it is valid
+    } else if (OB_FAIL(proxy.inc_rootservice_epoch())) {
+      LOG_WARN("fail to increase rootservice_epoch", KR(ret));
+    } else if (OB_FAIL(proxy.get_rootservice_epoch(new_rs_epoch))) {
+      LOG_WARN("fail to get rootservice start times", KR(ret), K(new_rs_epoch));
+    } else if (new_rs_epoch <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid rootservice_epoch", K(ret), K(rootservice_epoch));
-    } else if (OB_FAIL(schema_service->init_sequence_id(rootservice_epoch))) {
-      LOG_WARN("init sequence id failed", K(ret), K(rootservice_epoch));
-    } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(OB_SYS_TENANT_ID, schema_version))) {
-      LOG_WARN("fail to get sys tenant refreshed schema version", K(ret));
-    } else if (schema_version <= OB_CORE_SCHEMA_VERSION + 1) {
-      // in bootstrap and new schema mode, to avoid write failure while schema_version change,
-      // only actively refresh schema at the end of bootstrap, and make heartbeat'srefresh_schema_info effective.
-    } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-      LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
+      LOG_WARN("invalid rootservice_epoch", KR(ret), K(new_rs_epoch));
+    // 3. double check local is still leader and proposal id not changed before commit
+    //    it's ok to remove double check here, we just want to let it fail as soon as possible
+    } else if (OB_FAIL(ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
+                       role, proposal_id_double_check))) {
+      LOG_WARN("fail to get sys log handler role and proposal id", KR(ret));
+    } else if (OB_UNLIKELY(!is_strong_leader(role))
+               || OB_UNLIKELY(proposal_id_double_check != proposal_id_to_check)) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("local is not sys tenant leader now", KR(ret), K(role), K(proposal_id_double_check));
     }
-
+    // 4. commit transation
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCCESS == ret))) {
       LOG_WARN("trans end failed", "commit", OB_SUCCESS == ret, K(temp_ret));
@@ -6842,6 +6859,33 @@ int ObRootService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_rls");
   } else if (OB_FAIL(ddl_service_.handle_rls_context_ddl(arg))) {
     LOG_WARN("do rls context ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  ObCatalogDDLService catalog_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(catalog_ddl_service.handle_catalog_ddl(arg))) {
+    LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::revoke_catalog(const ObRevokeCatalogArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObCatalogDDLService catalog_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(catalog_ddl_service.revoke_catalog(arg))) {
+    LOG_WARN("Grant catalog error", K(ret), K(arg.tenant_id_), K(arg.user_id_));
   }
   return ret;
 }
@@ -9795,12 +9839,7 @@ ObRootService::ObLoadDDLTask::ObLoadDDLTask(ObRootService &root_service)
 
 int ObRootService::ObLoadDDLTask::process()
 {
-  int ret = OB_SUCCESS;
-  ObDDLScheduler &ddl_scheduler = root_service_.get_ddl_scheduler();
-  if (OB_FAIL(ddl_scheduler.recover_task())) {
-    LOG_WARN("load ddl task failed", K(ret));
-  }
-  return ret;
+  return ObSysDDLSchedulerUtil::recover_task();
 }
 
 ObAsyncTask *ObRootService::ObLoadDDLTask::deep_copy(char *buf, const int64_t buf_size) const
@@ -11065,8 +11104,10 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, PROCESS_BUILD_SSTABLE_RESPONSE_SLOW))) {
     LOG_WARN("ddl sim failure: procesc build sstable response slow", K(ret));
-  } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, arg.server_addr_, ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
+  } else if (OB_FAIL(ObSysDDLSchedulerUtil::on_sstable_complement_job_reply(
+          arg.tablet_id_/*source tablet id*/, arg.server_addr_,
+          ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_),
+          arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "build ddl single replica response",
@@ -11415,7 +11456,7 @@ void ObRootService::update_cpu_quota_concurrency_in_memory_()
   }
 }
 
-int ObRootService::set_config_after_bootstrap_()
+int ObRootService::set_static_config_after_bootstrap_()
 {
   // configs will be sent to other servers when set in rs, so there is no need to wait config set
   int ret = OB_SUCCESS;
@@ -11428,6 +11469,8 @@ int ObRootService::set_config_after_bootstrap_()
     {"_enable_dbms_job_package", "false"},
     {"_bloom_filter_ratio", "3"},
     {"_enable_mysql_compatible_dates", "true"},
+    {"_ob_enable_pl_dynamic_stack_check", "true"},
+    {"_system_trig_enabled", "false"},
   };
   if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
     LOG_WARN("failed to assign sql string", KR(ret));
@@ -11447,6 +11490,47 @@ int ObRootService::set_config_after_bootstrap_()
       }
     }
   }
+  return ret;
+}
+
+int ObRootService::set_dynamic_config_after_bootstrap_()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObSqlString sql;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (!GCONF.enable_logservice) { // do nothing
+  } else if (0 == GCONF.logservice_access_point.size() ||
+    0 == strlen(GCONF.logservice_access_point.str())) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("enable_logservice is true, but logservice_access_point is empty," \
+      "please check bootstrap stmt", K(ret));
+  } else if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
+    LOG_WARN("failed to assign sql string", KR(ret));
+  } else if (OB_FAIL(sql.append_fmt(" logservice_access_point = '%s'",
+    GCONF.logservice_access_point.str()))) {
+    LOG_WARN("failed to append_fmt for logservice_access_point", KR(ret), K(sql),
+      K(GCONF.logservice_access_point));
+  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to set config for logservice_access_point", KR(ret), K(sql),
+      K(GCONF.logservice_access_point));
+  } else if (OB_FAIL(check_config_result("logservice_access_point",
+    GCONF.logservice_access_point.str()))) {
+    LOG_WARN("failed to check_config_result for logservice_access_point", KR(ret),
+      K(GCONF.logservice_access_point));
+  } else { } // do nothing
+#endif
+  return ret;
+}
+
+int ObRootService::set_config_after_bootstrap_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_static_config_after_bootstrap_())) {
+    LOG_WARN("failed to set static config after bootstrap", KR(ret));
+  } else if (OB_FAIL(set_dynamic_config_after_bootstrap_())) {
+    LOG_WARN("failed to set dynamic config after bootstrap", KR(ret));
+  } else { } // do nothing
   return ret;
 }
 int ObRootService::wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list)
@@ -11612,10 +11696,10 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   ObSchemaGetterGuard guard;
   const uint64_t tenant_id = arg.tenant_id_;
   bool enable_default = false;
-  if (OB_ISNULL(schema_service_)) {
+  if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_serviece_ is null", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
     LOG_WARN("fail to get sys schema guard", KR(ret));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
     LOG_WARN("fail to get simple tenant schema", KR(ret), K(tenant_id));
@@ -11690,6 +11774,49 @@ int ObRootService::root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg)
     LOG_WARN("minor freeze failed", K(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "rebuild tablet", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::start_ddl_service_()
+{
+  int ret = OB_SUCCESS;
+  int64_t new_rs_epoch = 0;
+  int64_t proposal_id_to_check = 0;
+  if (ObDDLServiceLauncher::is_ddl_service_started()) {
+    // If ddl service already started, it means new logic is running by ObDDLServiceLauncher
+    // There is no need to increase rootservice_epoch and init sequence_id by old logic
+    // Just do nothing
+    FLOG_INFO("ddl service is already started", KR(ret));
+  } else {
+    // ddl service not started
+    // It means ObDDLServiceLauncher maybe not ready, we have to use old logic.
+    // To start ddl service by old logic, we have to avoid parallelly starting with ObDDLServiceLauncher.
+    // We use RW-lock in ObDDLServiceLauncher and leader's proposal_id to ensure this logic.
+    // 1. increase rootservice_epoch in __all_core_table in trans and save this new value in new_rs_epoch.
+    //    check role and get proposal id before trans commited.
+    if (OB_FAIL(increase_rs_epoch_and_get_proposal_id_(new_rs_epoch, proposal_id_to_check))) {
+      FLOG_WARN("fail to increase rs epoch", KR(ret));
+    } else if (OB_UNLIKELY(!GCTX.omt_->has_tenant(OB_SYS_TENANT_ID))) {
+      ret = OB_TENANT_NOT_EXIST;
+      FLOG_WARN("local server does not have SYS tenant resource", KR(ret));
+    } else {
+      MTL_SWITCH(OB_SYS_TENANT_ID) {
+        rootserver::ObDDLServiceLauncher* ddl_service_launcher = MTL(rootserver::ObDDLServiceLauncher*);
+        if (OB_ISNULL(ddl_service_launcher)) {
+          ret = OB_ERR_UNEXPECTED;
+          FLOG_WARN("ddl service is null", KR(ret), KP(ddl_service_launcher));
+        // 2. start ddl service by ObDDLServiceLauncher in old logic
+        //    use new_rs_epoch to init sequence_id as old logic
+        //    and double check proposal_id not changed with lock.
+        } else if (OB_FAIL(ddl_service_launcher->start_ddl_service_with_old_logic(
+                               new_rs_epoch, proposal_id_to_check))) {
+          FLOG_WARN("fail to start ddl service", KR(ret), K(new_rs_epoch), K(proposal_id_to_check));
+        } else {
+          FLOG_INFO("success to start ddl service", KR(ret), K(new_rs_epoch), K(proposal_id_to_check));
+        }
+      }
+    }
+  }
   return ret;
 }
 

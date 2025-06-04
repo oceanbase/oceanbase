@@ -251,7 +251,8 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     snapshot_info_(),
     is_backfill_(false),
     backfill_scn_(),
-    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ)
+    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ),
+    rec_scn_()
 {
 }
 
@@ -293,6 +294,7 @@ void ObGetMergeTablesResult::reset()
   is_backfill_ = false;
   backfill_scn_.reset();
   transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
+  rec_scn_.reset();
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -312,6 +314,7 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     backfill_scn_ = src.backfill_scn_;
     snapshot_info_ = src.snapshot_info_;
     transfer_seq_ = src.transfer_seq_;
+    rec_scn_ = src.rec_scn_;
   }
   return ret;
 }
@@ -363,8 +366,9 @@ bool ObDDLTableStoreParam::is_valid() const
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()
-  : new_upper_trans_(nullptr),
-    last_minor_end_scn_()
+: new_upper_trans_(nullptr),
+  last_minor_end_scn_(),
+  ss_new_upper_trans_(nullptr)
 {
   last_minor_end_scn_.set_min();
 }
@@ -378,6 +382,7 @@ void UpdateUpperTransParam::reset()
 {
   new_upper_trans_ = nullptr;
   last_minor_end_scn_.set_min();
+  ss_new_upper_trans_ = nullptr;
 }
 
 
@@ -423,18 +428,21 @@ ObCompactionTableStoreParam::ObCompactionTableStoreParam()
   : merge_type_(MERGE_TYPE_MAX),
     clog_checkpoint_scn_(SCN::min_scn()),
     major_ckm_info_(),
-    need_report_(false)
+    need_report_(false),
+    has_truncate_info_(false)
 {
 }
 
 ObCompactionTableStoreParam::ObCompactionTableStoreParam(
     const compaction::ObMergeType merge_type,
     const share::SCN clog_checkpoint_scn,
-    const bool need_report)
+    const bool need_report,
+    const bool has_truncate_info)
   : merge_type_(merge_type),
     clog_checkpoint_scn_(clog_checkpoint_scn),
     major_ckm_info_(),
-    need_report_(need_report)
+    need_report_(need_report),
+    has_truncate_info_(has_truncate_info)
 {
 }
 
@@ -457,6 +465,7 @@ int ObCompactionTableStoreParam::assign(
     merge_type_ = other.merge_type_;
     clog_checkpoint_scn_ = other.clog_checkpoint_scn_;
     need_report_ = other.need_report_;
+    has_truncate_info_ = other.has_truncate_info_;
   }
   return ret;
 }
@@ -735,7 +744,7 @@ void ObPartitionReadableInfo::reset()
 ObTabletSplitTscInfo::ObTabletSplitTscInfo()
   : start_partkey_(),
     end_partkey_(),
-    src_tablet_handle_(),
+    is_split_dst_(),
     split_cnt_(0),
     split_type_(ObTabletSplitType::MAX_TYPE),
     partkey_is_rowkey_prefix_(false)
@@ -746,7 +755,7 @@ bool ObTabletSplitTscInfo::is_split_dst_with_partkey() const
 {
   return start_partkey_.is_valid()
       && end_partkey_.is_valid()
-      && src_tablet_handle_.is_valid()
+      && is_split_dst_
       && split_type_ < ObTabletSplitType::MAX_TYPE;
 }
 
@@ -755,7 +764,7 @@ bool ObTabletSplitTscInfo::is_split_dst_without_partkey() const
 {
   return !start_partkey_.is_valid()
       && !end_partkey_.is_valid()
-      && src_tablet_handle_.is_valid()
+      && is_split_dst_
       && split_type_ < ObTabletSplitType::MAX_TYPE;
 }
 
@@ -763,7 +772,7 @@ void ObTabletSplitTscInfo::reset()
 {
   start_partkey_.reset();
   end_partkey_.reset();
-  src_tablet_handle_.reset();
+  is_split_dst_ = false;
   split_type_ = ObTabletSplitType::MAX_TYPE;
   split_cnt_ = 0;
   partkey_is_rowkey_prefix_ = false;

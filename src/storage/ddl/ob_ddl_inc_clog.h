@@ -14,6 +14,7 @@
 
 #include "lib/oblog/ob_log_print_kv.h"
 #include "common/ob_tablet_id.h"
+#include "storage/ddl/ob_direct_insert_define.h"
 
 namespace oceanbase
 {
@@ -26,25 +27,34 @@ public:
   ObDDLIncLogBasic();
   ~ObDDLIncLogBasic() = default;
   int init(const ObTabletID &tablet_id,
-           const ObTabletID &lob_meta_tablet_id);
+           const ObTabletID &lob_meta_tablet_id,
+           const ObDirectLoadType direct_load_type = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL);
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
   void reset()
   {
     tablet_id_.reset();
     lob_meta_tablet_id_.reset();
+    direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_INVALID;
   }
   bool operator ==(const ObDDLIncLogBasic &other) const
   {
-    return tablet_id_ == other.get_tablet_id() && lob_meta_tablet_id_ == other.get_lob_meta_tablet_id();
+    return tablet_id_ == other.get_tablet_id()
+              && lob_meta_tablet_id_ == other.get_lob_meta_tablet_id()
+              && direct_load_type_ == other.get_direct_load_type();
   }
-  bool is_valid() const { return tablet_id_.is_valid(); }
+  bool is_valid() const
+  {
+    return tablet_id_.is_valid();
+  }
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
   const ObTabletID &get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
-  TO_STRING_KV(K_(tablet_id), K_(lob_meta_tablet_id));
+  const ObDirectLoadType &get_direct_load_type() const { return direct_load_type_; }
+  TO_STRING_KV(K_(tablet_id), K_(lob_meta_tablet_id), K_(direct_load_type));
 private:
   ObTabletID tablet_id_;
   ObTabletID lob_meta_tablet_id_;
+  ObDirectLoadType direct_load_type_;
 };
 
 class ObDDLIncStartLog final

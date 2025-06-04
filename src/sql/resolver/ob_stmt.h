@@ -176,7 +176,9 @@ public:
   {
     return (stmt_type >= stmt::T_SHOW_TABLES && stmt_type <= stmt::T_SHOW_GRANTS)
            || stmt_type == stmt::T_SHOW_TRIGGERS
-           || stmt_type == stmt::T_SHOW_CREATE_USER;
+           || stmt_type == stmt::T_SHOW_CREATE_USER
+           || stmt_type == stmt::T_SHOW_CATALOGS
+           || stmt_type == stmt::T_SHOW_CREATE_CATALOG;
   }
 
   static inline bool is_dml_write_stmt(stmt::StmtType stmt_type)
@@ -392,7 +394,184 @@ public:
             // application context
             || stmt_type == stmt::T_CREATE_CONTEXT
             || stmt_type == stmt::T_DROP_CONTEXT
+            // catalog
+            || stmt_type == stmt::T_CREATE_CATALOG
+            || stmt_type == stmt::T_ALTER_CATALOG
+            || stmt_type == stmt::T_DROP_CATALOG
             );
+  }
+
+  static inline bool is_catalog_supported_ddl_stmt(stmt::StmtType stmt_type, bool has_global_variable)
+  {
+    return (
+        // tenant resource
+        stmt_type == stmt::T_CREATE_RESOURCE_POOL
+        || stmt_type == stmt::T_DROP_RESOURCE_POOL
+        || stmt_type == stmt::T_ALTER_RESOURCE_POOL
+        || stmt_type == stmt::T_SPLIT_RESOURCE_POOL
+        || stmt_type == stmt::T_MERGE_RESOURCE_POOL
+        || stmt_type == stmt::T_CREATE_RESOURCE_UNIT
+        || stmt_type == stmt::T_ALTER_RESOURCE_UNIT
+        || stmt_type == stmt::T_DROP_RESOURCE_UNIT
+        || stmt_type == stmt::T_CREATE_TENANT
+        || stmt_type == stmt::T_CREATE_STANDBY_TENANT
+        || stmt_type == stmt::T_DROP_TENANT
+        || stmt_type == stmt::T_MODIFY_TENANT
+        || stmt_type == stmt::T_LOCK_TENANT
+        // database
+        // || stmt_type == stmt::T_CREATE_DATABASE
+        // || stmt_type == stmt::T_ALTER_DATABASE
+        // || stmt_type == stmt::T_DROP_DATABASE
+        // tablegroup
+        // || stmt_type == stmt::T_CREATE_TABLEGROUP
+        // || stmt_type == stmt::T_ALTER_TABLEGROUP
+        // || stmt_type == stmt::T_DROP_TABLEGROUP
+        // table
+        // || stmt_type == stmt::T_CREATE_TABLE
+        // || stmt_type == stmt::T_DROP_TABLE
+        // || stmt_type == stmt::T_RENAME_TABLE
+        // || stmt_type == stmt::T_TRUNCATE_TABLE
+        // || stmt_type == stmt::T_CREATE_TABLE_LIKE
+        // || stmt_type == stmt::T_ALTER_TABLE
+        // || stmt_type == stmt::T_SET_TABLE_COMMENT
+        // column
+        // || stmt_type == stmt::T_SET_COLUMN_COMMENT
+        // audit and noaudit
+        || stmt_type == stmt::T_AUDIT
+        // analyze, 这个在 oracle 里属于 ddl，但是 ob 判定其为 ddl 时会有一些问题
+        // TODO:待溪峰处理完 analyze 的问题后放开
+        //|| stmt_type == stmt::T_ANALYZE
+        // optimize
+        // || stmt_type == stmt::T_OPTIMIZE_TABLE
+        // || stmt_type == stmt::T_OPTIMIZE_TENANT
+        // || stmt_type == stmt::T_OPTIMIZE_ALL
+        // view
+        // || stmt_type == stmt::T_CREATE_VIEW
+        // || stmt_type == stmt::T_ALTER_VIEW
+        // || stmt_type == stmt::T_DROP_VIEW
+        // index
+        // || stmt_type == stmt::T_CREATE_INDEX
+        // || stmt_type == stmt::T_DROP_INDEX
+        // materialized view log
+        // || stmt_type == stmt::T_CREATE_MLOG
+        // || stmt_type == stmt::T_DROP_MLOG
+        // flashback
+        // || stmt_type == stmt::T_FLASHBACK_TENANT
+        // || stmt_type == stmt::T_FLASHBACK_DATABASE
+        // || stmt_type == stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN
+        // || stmt_type == stmt::T_FLASHBACK_TABLE_TO_SCN
+        // || stmt_type == stmt::T_FLASHBACK_INDEX
+        // purge
+        // || stmt_type == stmt::T_PURGE_RECYCLEBIN
+        // || stmt_type == stmt::T_PURGE_TENANT
+        // || stmt_type == stmt::T_PURGE_DATABASE
+        // || stmt_type == stmt::T_PURGE_TABLE
+        // || stmt_type == stmt::T_PURGE_INDEX
+        // outline
+        // || stmt_type == stmt::T_CREATE_OUTLINE
+        // || stmt_type == stmt::T_ALTER_OUTLINE
+        // || stmt_type == stmt::T_DROP_OUTLINE
+        // sequence
+        // || stmt_type == stmt::T_CREATE_SEQUENCE
+        // || stmt_type == stmt::T_ALTER_SEQUENCE
+        // || stmt_type == stmt::T_DROP_SEQUENCE
+
+        // grant and revoke
+        || stmt_type == stmt::T_GRANT
+        || stmt_type == stmt::T_REVOKE
+
+        // synonym
+        //  || stmt_type == stmt::T_CREATE_SYNONYM
+        //  || stmt_type == stmt::T_DROP_SYNONYM
+
+        // variable
+        // 目前只有set global variable才是DDL操作，session级别的variable变更不是DDL
+        || (stmt_type == stmt::T_VARIABLE_SET && has_global_variable)
+
+        // stored procedure
+        // || stmt_type == stmt::T_CREATE_ROUTINE
+        // || stmt_type == stmt::T_DROP_ROUTINE
+        // || stmt_type == stmt::T_ALTER_ROUTINE
+
+        // package
+        // || stmt_type == stmt::T_CREATE_PACKAGE
+        // || stmt_type == stmt::T_CREATE_PACKAGE_BODY
+        // || stmt_type == stmt::T_ALTER_PACKAGE
+        // || stmt_type == stmt::T_DROP_PACKAGE
+
+        // trigger
+        // || stmt_type == stmt::T_CREATE_TRIGGER
+        // || stmt_type == stmt::T_DROP_TRIGGER
+        // || stmt_type == stmt::T_ALTER_TRIGGER
+
+        // user define type
+        // || stmt_type == stmt::T_CREATE_TYPE
+        // || stmt_type == stmt::T_DROP_TYPE
+
+        // trigger
+        // || stmt_type == stmt::T_CREATE_TRIGGER
+        // || stmt_type == stmt::T_DROP_TRIGGER
+        // || stmt_type == stmt::T_ALTER_TRIGGER
+        // || stmt_type == stmt::T_CREATE_DBLINK
+        // || stmt_type == stmt::T_DROP_DBLINK
+
+        // keystore
+        // || stmt_type == stmt::T_CREATE_KEYSTORE
+        // || stmt_type == stmt::T_ALTER_KEYSTORE
+        // tablespace
+        // || stmt_type == stmt::T_CREATE_TABLESPACE
+        // || stmt_type == stmt::T_ALTER_TABLESPACE
+        // || stmt_type == stmt::T_DROP_TABLESPACE
+        // user function
+        // || stmt_type == stmt::T_CREATE_FUNC
+        // || stmt_type == stmt::T_DROP_FUNC
+        // || (stmt_type == stmt::T_CREATE_USER && lib::is_oracle_mode())
+        // directory
+        // || stmt_type == stmt::T_CREATE_DIRECTORY
+        // || stmt_type == stmt::T_DROP_DIRECTORY
+        // application context
+        // || stmt_type == stmt::T_CREATE_CONTEXT
+        // || stmt_type == stmt::T_DROP_CONTEXT
+        // catalog
+        || stmt_type == stmt::T_CREATE_CATALOG
+        || stmt_type == stmt::T_ALTER_CATALOG
+        || stmt_type == stmt::T_DROP_CATALOG);
+  }
+
+  static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type)
+  {
+    return stmt_type == stmt::T_SELECT
+           // || stmt_type == stmt::T_INSERT
+           // || stmt_type == stmt::T_INSERT_ALL
+           // || stmt_type == stmt::T_REPLACE
+           // || stmt_type == stmt::T_MERGE
+           // || stmt_type == stmt::T_DELETE
+           // || stmt_type == stmt::T_UPDATE
+           || stmt_type == stmt::T_EXPLAIN
+           // show stmt
+           || stmt_type == stmt::T_SHOW_TABLES
+           || stmt_type == stmt::T_SHOW_DATABASES
+           || stmt_type == stmt::T_SHOW_COLUMNS
+           || stmt_type == stmt::T_SHOW_VARIABLES
+           || stmt_type == stmt::T_SHOW_TABLE_STATUS
+           || stmt_type == stmt::T_SHOW_SCHEMA
+           || stmt_type == stmt::T_SHOW_PARAMETERS
+           || stmt_type == stmt::T_SHOW_SERVER_STATUS
+           || stmt_type == stmt::T_SHOW_WARNINGS
+           || stmt_type == stmt::T_SHOW_ERRORS
+           || stmt_type == stmt::T_SHOW_PROCESSLIST
+           || stmt_type == stmt::T_SHOW_CHARSET
+           || stmt_type == stmt::T_SHOW_COLLATION
+           || stmt_type == stmt::T_SHOW_STATUS
+           || stmt_type == stmt::T_SHOW_TENANT
+           || stmt_type == stmt::T_SHOW_CREATE_TENANT
+           || stmt_type == stmt::T_SHOW_TRACE
+           || stmt_type == stmt::T_SHOW_ENGINES
+           || stmt_type == stmt::T_SHOW_PRIVILEGES
+           || stmt_type == stmt::T_SHOW_GRANTS
+           || stmt_type == stmt::T_SHOW_CREATE_USER
+           || stmt_type == stmt::T_SHOW_CATALOGS
+           || stmt_type == stmt::T_SHOW_CREATE_CATALOG;
   }
 
   static inline bool is_ddl_stmt_allowed_in_dropping_tenant(stmt::StmtType stmt_type, bool has_global_variable)
@@ -654,6 +833,7 @@ public:
    * @return query_ctx_
    */
   ObQueryCtx *get_query_ctx();
+  const ObQueryCtx *get_query_ctx() const { return query_ctx_; }
   inline common::ObIAllocator &get_allocator() { return allocator_; }
 private:
   common::ObIAllocator &allocator_;

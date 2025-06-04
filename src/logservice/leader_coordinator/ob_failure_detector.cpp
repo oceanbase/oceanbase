@@ -15,6 +15,8 @@
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_io_device_helper.h"
+#include "logservice/ipalf/ipalf_env.h"
+#include "logservice/ipalf/ipalf_handle.h"
 
 namespace oceanbase
 {
@@ -522,18 +524,20 @@ void ObFailureDetector::detect_election_silent_()
   int ret = OB_SUCCESS;
 
   logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
-  if (OB_ISNULL(log_service)) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+  } else if (OB_ISNULL(log_service)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG(ERROR, "ptr is null, unexpected error", K(ret));
   } else {
     bool is_election_silent = false;
     FailureEvent election_silent_event(FailureType::ENTER_ELECTION_SILENT, FailureModule::LOG, FailureLevel::FATAL);
     GetElectionSilentFunctor functor(is_election_silent);
-    PalfEnv *palf_env = log_service->get_palf_env();
+    ipalf::IPalfEnv *palf_env = log_service->get_palf_env();
     if (OB_ISNULL(palf_env)) {
       ret = OB_ERR_UNEXPECTED;
       COORDINATOR_LOG(ERROR, "palf_env is null, unexpected error", K(ret));
-    } else if (OB_FAIL(palf_env->for_each(functor))){
+    } else if (OB_FAIL(static_cast<palf::PalfEnv*>(palf_env)->for_each_derived(functor))){
       COORDINATOR_LOG(WARN, "GetElectionSilentFunctor failed", K(ret));
     } else {
     }

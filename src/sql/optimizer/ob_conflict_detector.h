@@ -54,9 +54,9 @@ struct JoinInfo
                 K_(where_conditions),
                 K_(equal_join_conditions));
   ObRelIds table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer join
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer join，则是join filter，如果是inner join，则是join condition
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_conditions_;//是连接条件（outer的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的mergejoin所需的序的时候使用
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer/semi join
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
   ObJoinType join_type_;
 };
 
@@ -168,8 +168,10 @@ public:
                               bool should_deduce_conds,
                               bool should_pushdown_filters,
                               const common::ObIArray<TableDependInfo> &table_depend_infos,
+                              const common::ObIArray<ObRawExpr*> &push_subq_exprs,
                               common::ObIArray<ObRelIds> &bushy_tree_infos,
-                              common::ObIArray<ObRawExpr*> &new_or_quals) :
+                              common::ObIArray<ObRawExpr*> &new_or_quals,
+                              ObQueryCtx *ctx) :
     allocator_(allocator),
     expr_factory_(expr_factory),
     session_info_(session_info),
@@ -177,8 +179,10 @@ public:
     should_deduce_conds_(should_deduce_conds),
     should_pushdown_const_filters_(should_pushdown_filters),
     table_depend_infos_(table_depend_infos),
+    push_subq_exprs_(push_subq_exprs),
     bushy_tree_infos_(bushy_tree_infos),
-    new_or_quals_(new_or_quals)
+    new_or_quals_(new_or_quals),
+    query_ctx_(ctx)
     {}
 
   virtual ~ObConflictDetectorGenerator() {}
@@ -285,8 +289,10 @@ private:
   bool should_deduce_conds_;
   bool should_pushdown_const_filters_;
   const common::ObIArray<TableDependInfo> &table_depend_infos_;
+  const common::ObIArray<ObRawExpr*> &push_subq_exprs_;
   common::ObIArray<ObRelIds> &bushy_tree_infos_;
   common::ObIArray<ObRawExpr*> &new_or_quals_;
+  ObQueryCtx *query_ctx_;
 };
 
 

@@ -356,8 +356,8 @@ int ObSubPlanFilterVecOp::prepare_onetime_exprs_inner()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.onetime_exprs_.count(); ++i) {
-    char mock_skip_data[1] = {0};
-    sql::ObBitVector &skip = *sql::to_bit_vector(mock_skip_data);
+    int64_t mock_skip_data = 0;
+    sql::ObBitVector &skip = *sql::to_bit_vector(&mock_skip_data);
     const ObDynamicParamSetter &setter = MY_SPEC.onetime_exprs_.at(i);
     if (OB_FAIL(setter.set_dynamic_param_vec2(eval_ctx_, skip))) {
       LOG_WARN("failed to prepare onetime expr", K(ret), K(i));

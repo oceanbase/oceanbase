@@ -1667,7 +1667,7 @@ int ObLogFormatter::build_binlog_record_(
 
       if (current_dml_flag.is_delete()) {
         ret = format_dml_delete_(br_data, rv);
-      } else if (current_dml_flag.is_delete_insert()) {
+      } else if (current_dml_flag.is_upsert()) {
         ret = format_dml_put_(br_data, rv);
       } else if (current_dml_flag.is_insert()) {
         ret = format_dml_insert_(br_data, rv);

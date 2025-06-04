@@ -144,6 +144,7 @@ echo "/usr/lib/debug/usr/bin/ob_error.debug" >> %{buildroot}/utils_debuginfo_fil
 %{_prefix}/etc/default_srs_data_mysql.sql
 %{_prefix}/etc/fill_help_tables-ob.sql
 %{_prefix}/etc/oceanbase_upgrade_dep.yml
+%{_prefix}/etc/deps_compat.yml
 %{_prefix}/etc/timezone_V1.log
 %{_prefix}/etc/upgrade_checker.py
 %{_prefix}/etc/upgrade_health_checker.py

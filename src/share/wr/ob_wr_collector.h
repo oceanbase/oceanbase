@@ -35,6 +35,20 @@ public:
   int64_t value_;
 };
 
+struct ObWrResMgrSysstat
+{
+  ObWrResMgrSysstat() : svr_ip_("\0"), svr_port_(0), group_id_(0), stat_id_(0), value_(0)
+  {}
+
+public:
+  TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(group_id), K_(stat_id), K_(value));
+  char svr_ip_[OB_IP_STR_BUFF];
+  int64_t svr_port_;
+  int64_t group_id_;
+  int64_t stat_id_;
+  int64_t value_;
+};
+
 struct ObWrSystemEvent
 {
 public:
@@ -92,6 +106,10 @@ public:
     tablet_id_ = -1;
     blocking_session_id_ = -1;
     proxy_sid_ = 0;
+    delta_read_io_requests_ = 0;
+    delta_read_io_bytes_ = 0;
+    delta_write_io_requests_ = 0;
+    delta_write_io_bytes_ = 0;
   };
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time),
@@ -100,7 +118,8 @@ public:
       K_(module), K_(action), K_(client_id), K_(plan_id), K_(top_level_sql_id),
       K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id), K_(plsql_entry_subprogram_name),
       K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name), K_(plan_hash),
-      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid));
+      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid),
+      K_(delta_read_io_requests), K_(delta_read_io_bytes), K_(delta_write_io_requests), K_(delta_write_io_bytes));
   char svr_ip_[OB_IP_STR_BUFF];
   int64_t svr_port_;
   int64_t sample_id_;
@@ -138,9 +157,14 @@ public:
   uint64_t plan_hash_;
   int64_t thread_id_;
   int64_t stmt_type_;
+  int64_t tx_id_;
   int64_t tablet_id_;
   int64_t blocking_session_id_;
   int64_t proxy_sid_;
+  int64_t delta_read_io_requests_;
+  int64_t delta_read_io_bytes_;
+  int64_t delta_write_io_requests_;
+  int64_t delta_write_io_bytes_;
 };
 
 
@@ -410,7 +434,7 @@ public:
   static int exec_write_sql_with_retry(const uint64_t tenant_id, const char *sql, int64_t &affected_rows);
   template <typename T>
   static int exec_sql_with_retry(const uint64_t tenant_id, const char * sql, T function);
-
+  static bool is_can_retry(const int err);
   TO_STRING_KV(K_(snap_id), K_(snapshot_begin_time), K_(snapshot_end_time), K_(timeout_ts));
 
 private:
@@ -422,12 +446,14 @@ private:
   int update_sqlstat();
   int collect_sqltext();
   int collect_sql_plan();
+  int collect_res_mgr_sysstat();
   int write_to_wr(ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id, bool ignore_error=false);
+  int write_to_wr_sql_plan_and_aux(ObDMLSqlSplicer &dml_splicer, ObDMLSqlSplicer &dml_splicer_aux,
+      const char *table_name, const char *table_name_aux, int64_t tenant_id, bool ignore_error = false);
   int fetch_snapshot_id_sequence_curval(int64_t &snap_id);
   int get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id);
   int get_begin_interval_time(int64_t &begin_interval_time);
   int update_last_snapshot_end_time();
-  static bool is_can_retry(const int err);
 
   int check_if_ignore_errorcode(int error_code);
   int64_t snap_id_;
@@ -456,6 +482,8 @@ private:
   // @snap_id [in] the id of snapshot
   // @return the error code.
   int delete_expired_data_from_wr_table(const char *const table_name, const uint64_t tenant_id,
+      const int64_t cluster_id, const int64_t snap_id, const int64_t query_timeout);
+  int delete_expired_data_from_wr_sql_plan_and_aux(const char *const table_name, const char *const table_name_aux, const uint64_t tenant_id,
       const int64_t cluster_id, const int64_t snap_id, const int64_t query_timeout);
   int modify_snapshot_status(const uint64_t tenant_id, const int64_t cluster_id,
     const int64_t snap_id, const int64_t query_timeout, const ObWrSnapshotStatus status);

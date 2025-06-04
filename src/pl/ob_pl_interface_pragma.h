@@ -80,6 +80,8 @@
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
+#include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
+#include "pl/sys_package/ob_dbms_partition.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -177,6 +179,7 @@
   INTERFACE_DEF(INTERFACE_DBMS_SQL_IS_OPEN, "DBMS_SQL_IS_OPEN", (ObPLDbmsSql::is_open))
   INTERFACE_DEF(INTERFACE_DBMS_SQL_EXECUTE_AND_FETCH, "DBMS_SQL_EXECUTE_AND_FETCH", (ObPLDbmsSql::execute_and_fetch))
   INTERFACE_DEF(INTERFACE_DBMS_SQL_TO_CURSOR_NUMBER, "DBMS_SQL_TO_CURSOR_NUMBER", (ObPLDbmsSql::to_cursor_number))
+  INTERFACE_DEF(INTERFACE_DBMS_SQL_TO_REFCURSOR, "DBMS_SQL_TO_REFCURSOR", (ObPLDbmsSql::to_refcursor))
   INTERFACE_DEF(INTERFACE_DBMS_SQL_DEFINE_COLUMN_LONG, "DBMS_SQL_DEFINE_COLUMN_LONG", (ObPLDbmsSql::define_column_long))
   INTERFACE_DEF(INTERFACE_DBMS_SQL_COLUMN_VALUE_LONG, "DBMS_SQL_COLUMN_VALUE_LONG", (ObPLDbmsSql::column_value_long))
   INTERFACE_DEF(INTERFACE_DBMS_SQL_VARIABLE_VALUE, "DBMS_SQL_VARIABLE_VALUE", (ObPLDbmsSql::variable_value))
@@ -297,6 +300,7 @@
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
   INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
+  INTERFACE_DEF(INTERFACE_RECOMPILE, "PL_RECOMPILE", (ObPLRecompileTaskHelper::recompile_pl_objs))
   // end dbms_utility
 
 #endif
@@ -862,6 +866,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VA, "DBMS_DDL_CREATE_WRAPPED_VA", (ObDbmsDDL::create_wrapped))
 #endif
   // end of dbms_ddl
+
+  // start of dbms_partition
+  INTERFACE_DEF(INTERFACE_DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION, "DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION", (ObDBMSPartition::manage_dynamic_partition))
+  // end of dbms_partition
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

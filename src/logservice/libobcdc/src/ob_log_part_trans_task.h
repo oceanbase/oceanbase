@@ -525,7 +525,7 @@ public:
   bool is_insert() const { return row_.get_dml_flag().is_insert(); }
   bool is_update() const { return row_.get_dml_flag().is_update(); }
   bool is_delete() const { return row_.get_dml_flag().is_delete(); }
-  bool is_put() const { return row_.get_dml_flag().is_delete_insert(); }
+  bool is_put() const { return row_.get_dml_flag().is_upsert(); }
 
   // Parse the column data
   // If obj2str_helper is empty, then no conversion of obj to string

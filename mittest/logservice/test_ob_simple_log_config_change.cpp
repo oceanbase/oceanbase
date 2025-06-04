@@ -849,15 +849,15 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_lock)
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
 
   //ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->remove_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->remove_member(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->remove_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->remove_member(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->add_member(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->add_member(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_EAGAIN, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 4, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(palf_list[2]->palf_handle_impl_->self_, 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_LOCK_NOT_MATCH, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 4, CONFIG_CHANGE_TIMEOUT));
 
 
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->unlock_config_change(3, CONFIG_CHANGE_TIMEOUT));

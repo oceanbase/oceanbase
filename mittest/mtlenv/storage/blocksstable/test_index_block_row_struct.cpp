@@ -164,8 +164,9 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   ObDatumRowkey row_key;
   EXPECT_EQ(OB_SUCCESS, row_key.assign(obj, 2));
 
-  ObDatumRow agg_row;
-  ASSERT_EQ(OB_SUCCESS, agg_row.init(allocator_, desc_.get_col_desc().agg_meta_array_.count()));
+  ObSkipIndexAggResult agg_res;
+  ASSERT_EQ(OB_SUCCESS, agg_res.init(desc_.get_col_desc().agg_meta_array_.count(), allocator_));
+  ObDatumRow &agg_row = agg_res.agg_row_;
   for (int64_t i = 0; i < agg_row.get_column_count(); ++i) {
     agg_row.storage_datums_[i].set_int(0);
   }
@@ -180,7 +181,7 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   row_desc.is_data_block_ = true;
   row_desc.is_macro_node_ = false;
   row_desc.micro_block_count_ = 1;
-  row_desc.aggregated_row_ = &agg_row;
+  row_desc.aggregated_row_ = &agg_res;
   row_desc.is_serialized_agg_row_ = false;
 
   // row_desc.data_store_desc_ = &desc_.get_desc();

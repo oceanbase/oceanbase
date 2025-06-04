@@ -511,6 +511,20 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
       ObObj casted_cell;
       uint64_t cell_idx = 0;
       const int64_t col_count = output_column_ids_.count();
+      bool has_primary_key = false;
+      const common::ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+      if (rowkey_info.get_size() > 0) {
+        // if rowkey_info[0] is pk_increment, means there is no primary key
+        uint64_t cid = OB_INVALID_ID;
+        if (OB_FAIL(rowkey_info.get_column_id(0, cid))) {
+          LOG_WARN("failed to column id");
+        } else {
+          if (cid != OB_HIDDEN_PK_INCREMENT_COLUMN_ID &&
+              cid >= OB_APP_MIN_COLUMN_ID) {
+            has_primary_key = true;
+          }
+        }
+      }
       for (int64_t k = 0; OB_SUCC(ret) && k < col_count; ++k) {
         uint64_t col_id = output_column_ids_.at(k);
         switch (col_id) {
@@ -779,9 +793,34 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                     ObCharset::get_default_charset()));
             } else {
               // TODO: if (column_schema->is_index_column())
-              cells[cell_idx].set_varchar("");
-              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                  ObCharset::get_default_charset()));
+              bool is_unique = false;
+              bool is_multiple = false;
+              bool is_first_not_null_unique = true;
+              if (!is_oracle_mode && OB_FAIL(table_schema->
+                  is_unique_key_column(*schema_guard_, column_schema->get_column_id(),
+                                        is_unique, is_first_not_null_unique))) {
+                LOG_WARN("judge unique key fail", K(ret));
+              } else if (is_unique) {
+                if (column_schema->is_nullable() || has_primary_key || !is_first_not_null_unique) {
+                  cells[cell_idx].set_varchar("UNI");
+                } else {
+                  // is mysql mode && is unique key && no_primary_key && is_first_not_null_unique, set as PRI
+                  cells[cell_idx].set_varchar("PRI");
+                }
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                ObCharset::get_default_charset()));
+              } else if (!is_oracle_mode && OB_FAIL(table_schema->
+                  is_multiple_key_column(*schema_guard_, column_schema->get_column_id(), is_multiple))) {
+                LOG_WARN("judge multiple key fail", K(ret));
+              } else if (is_multiple) {
+                cells[cell_idx].set_varchar("MUL");
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
+              } else {
+                cells[cell_idx].set_varchar("");
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
+              }
             }
             break;
           }
@@ -1087,8 +1126,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
               } else {
                 ObArray<common::ObString> extended_type_info;
                 const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-                if (OB_FAIL(extended_type_info.assign(select_item.expr_->get_enum_set_values()))) {
-                  SERVER_LOG(WARN, "failed to assign enum values", K(ret));
+                if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
+                                                                       session_,
+                                                                       extended_type_info))) {
+                  SERVER_LOG(WARN, "failed to extract extended type info", K(ret));
                 } else if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
                   SERVER_LOG(WARN, "fail to print plain str literal", K(buf), K(buf_len), K(pos), K(ret));
                 } else {

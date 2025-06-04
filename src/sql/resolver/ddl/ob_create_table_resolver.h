@@ -142,6 +142,7 @@ private:
   int resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema, bool &process_heap_table_primary_key, ObString &first_column_name);
   int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index);  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
+  int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
 
 private:
   // data members
@@ -156,6 +157,7 @@ private:
   common::hash::ObHashSet<share::schema::ObIndexNameHashWrapper> index_aux_name_set_;
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
+  common::ObSEArray<ObString, 16> cols_with_nullable_specified_;//store cols with explicitly specified defination for CTAS
 
   uint64_t cur_udt_set_id_;
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;

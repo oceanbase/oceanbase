@@ -17,6 +17,7 @@
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+#include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 
 namespace oceanbase
 {
@@ -784,6 +785,70 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
     assigned_idx.at(sorted_files.at(i).file_idx_) = cur_min_set.sqc_idx_;
     OZ (heap.pop());
     OZ (heap.push(cur_min_set));
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::assigned_files_to_sqcs_by_load_balancer(
+  const common::ObIArray<ObExternalFileInfo> &files, const ObIArray<ObPxSqcMeta *> &sqcs,
+  common::ObIArray<int64_t> &assigned_idx)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), "AddrMap");
+  common::hash::ObHashMap<ObAddr, int64_t> worker_map;
+  ObSEArray<ObAddr, 8> target_servers;
+  ObDefaultLoadBalancer load_balancer;
+  OZ (assigned_idx.prepare_allocate(files.count()));
+  OZ (worker_map.create(common::hash::cal_next_prime(100), attr, attr));
+  for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
+    ObPxSqcMeta *sqc_meta = sqcs.at(i);
+    OZ (target_servers.push_back(sqc_meta->get_sqc_addr()));
+    OZ (worker_map.set_refactored(sqc_meta->get_sqc_addr(), i));
+  }
+  OZ (load_balancer.add_server_list(target_servers));
+  ObAddr addr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+    int64_t server_idx = 0;
+    const ObExternalFileInfo &file_info = files.at(i);
+    if (OB_FAIL(load_balancer.select_server(file_info.file_url_, addr))) {
+      LOG_WARN("failed to select server", K(ret));
+    } else if (OB_FAIL(worker_map.get_refactored(addr, server_idx))) {
+      LOG_WARN("failed to get server idx", K(ret), K(addr));
+    } else {
+      assigned_idx.at(i) = server_idx;
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::select_external_table_loc_by_load_balancer(
+  const common::ObIArray<ObExternalFileInfo> &files,
+  const ObIArray<ObAddr> &all_locations,
+  ObIArray<ObAddr> &target_locations)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), "AddrMap");
+  common::hash::ObHashSet<ObAddr> worker_set;
+  ObDefaultLoadBalancer load_balancer;
+  OZ (worker_set.create(common::hash::cal_next_prime(100), attr, attr));
+  OZ (load_balancer.add_server_list(all_locations));
+  ObAddr addr;
+  for (int64_t i = 0; OB_SUCC(ret) && target_locations.count() < all_locations.count()
+      && i < files.count(); ++i) {
+    const ObExternalFileInfo &file_info = files.at(i);
+    if (OB_FAIL(load_balancer.select_server(file_info.file_url_, addr))) {
+      LOG_WARN("failed to select server", K(ret));
+    } else if (OB_FAIL(worker_set.exist_refactored(addr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        OZ (worker_set.set_refactored(addr));
+        OZ (target_locations.push_back(addr));
+      } else if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to select addr", K(ret));
+      }
+    }
   }
   return ret;
 }

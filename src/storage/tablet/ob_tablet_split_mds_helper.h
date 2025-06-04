@@ -206,14 +206,15 @@ public:
     ObIArray<ObTabletSplitMdsUserData> &datas);
 
   static int get_valid_timeout(const int64_t abs_timeout_us, int64_t &valid_timeout_us);
-  static int get_split_data_with_timeout(ObTablet &tablet, ObTabletSplitMdsUserData &split_data, const int64_t abs_timeout_us);
-  static int get_is_spliting(ObTablet &tablet, bool &is_split_dst);
-  static int get_split_info(ObTablet &tablet, common::ObIAllocator &allocator, ObTabletSplitTscInfo &split_info);
+  static int get_split_data_with_timeout(const ObTablet &tablet, ObTabletSplitMdsUserData &split_data, const int64_t abs_timeout_us);
+  static int get_is_spliting(const ObTablet &tablet, bool &is_split_dst);
+  static int get_split_info_with_cache(const ObTablet &tablet, common::ObIAllocator &allocator, ObTabletSplitTscInfo &split_info);
   static int prepare_calc_split_dst(ObLS &ls, ObTablet &tablet, const int64_t abs_timeout_us, ObTabletSplitMdsUserData &src_split_data, ObIArray<ObTabletSplitMdsUserData> &dst_split_datas);
   static int calc_split_dst(ObLS &ls, ObTablet &tablet, const blocksstable::ObDatumRowkey &rowkey, const int64_t abs_timeout_us, ObTabletID &dst_tablet_id);
   static int calc_split_dst_lob(ObLS &ls, ObTablet &tablet, const blocksstable::ObDatumRow &data_row, const int64_t abs_timeout_us, ObTabletID &dst_tablet_id);
 
 private:
+  static int get_split_info(const ObTablet &tablet, common::ObIAllocator &allocator, ObTabletSplitTscInfo &split_info);
   template<typename F>
   static int modify_tablet_split_(
     const uint64_t tenant_id,

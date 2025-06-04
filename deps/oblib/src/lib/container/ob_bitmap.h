@@ -142,7 +142,7 @@ public:
       const int64_t size,
       uint8_t *skip);
 
-  TO_STRING_KV(K_(is_inited), K_(valid_bytes), K_(capacity), KP_(data));
+  TO_STRING_KV(K_(is_inited), K_(valid_bytes), K_(capacity), KPHEX_(data, valid_bytes_));
 
 private:
   OB_INLINE void set_(const size_type pos, const bool value = true);

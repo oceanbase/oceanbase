@@ -66,10 +66,11 @@ public:
       K(index_snapshot_data_task_submitted_), K(rowkey_vid_task_id_),
       K(vid_rowkey_task_id_), K(delta_buffer_task_id_),
       K(index_id_task_id_), K(index_snapshot_task_id_), K(drop_index_task_id_), K(is_rebuild_index_),
-      K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
+      K(drop_index_task_submitted_), K(schema_version_), K(execution_id_), K(is_offline_rebuild_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
 public:
+  static bool is_rebuild_dense_vec_index_task(const share::schema::ObTableSchema &index_schema);
   void set_rowkey_vid_aux_table_id(const uint64_t id) { rowkey_vid_aux_table_id_ = id; }
   void set_vid_rowkey_aux_table_id(const uint64_t id) { vid_rowkey_aux_table_id_ = id; }
   void set_delta_buffer_table_id(const uint64_t id) { delta_buffer_table_id_ = id; }
@@ -202,6 +203,7 @@ private:
   bool drop_index_task_submitted_;
   int64_t drop_index_task_id_;
   bool is_rebuild_index_;
+  bool is_offline_rebuild_;
   ObRootService *root_service_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   obrpc::ObCreateIndexArg create_index_arg_;

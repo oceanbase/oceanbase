@@ -27,6 +27,7 @@ namespace storage
 {
 class ObBackfillTabletsTableMgr;
 class ObBackfillMdsTableHandle;
+class ObTabletBackfillTXDag;
 
 struct ObBackfillTXCtx
 {
@@ -75,11 +76,13 @@ public:
       common::ObArenaAllocator &allocator);
   virtual ~ObTabletBackfillMergeCtx();
   int init(
+      ObTabletBackfillTXDag *dag,
       const SCN &backfill_scn,
       const int64_t ls_rebuild_seq,
       const int64_t dest_transfer_seq,
       ObTabletHandle &tablet_handle,
       storage::ObTableHandleV2 &backfill_table_handle);
+  virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const override;
 protected:
   virtual int get_ls_and_tablet() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
@@ -91,6 +94,7 @@ private:
   storage::ObTableHandleV2 backfill_table_handle_;
   share::SCN backfill_scn_;
   int64_t ls_rebuild_seq_;
+  ObTabletBackfillTXDag *dag_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillMergeCtx);
 };
 

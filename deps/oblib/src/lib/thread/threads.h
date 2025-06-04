@@ -19,6 +19,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "lib/signal/ob_signal_struct.h"
 
 extern int64_t global_thread_stack_size;
 namespace oceanbase {
@@ -36,7 +37,8 @@ public:
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
-        run_wrapper_(nullptr)
+        run_wrapper_(nullptr),
+        numa_info_()
   {}
   virtual ~Threads();
   static IRunWrapper *&get_expect_run_wrapper();
@@ -72,11 +74,28 @@ public:
   {
     return run_wrapper_;
   }
+
+
+  struct NumaInfo {
+  public:
+    NumaInfo(): numa_node_(OB_NUMA_SHARED_INDEX), num_nodes_(UINT32_MAX), interleave_(false) {}
+    ~NumaInfo()
+    {
+      numa_node_ = OB_NUMA_SHARED_INDEX;
+      interleave_ = false;
+      num_nodes_ = UINT32_MAX;
+    }
+  public:
+    int32_t numa_node_;
+    uint32_t num_nodes_;
+    bool interleave_;
+  };
   virtual int start();
   virtual void stop();
   virtual void wait();
   void destroy();
   virtual void run(int64_t idx);
+   void set_numa_info(uint64_t tenant_id, bool enable_numa_aware, int32_t group_index);
 
 public:
   template <class Functor>
@@ -114,7 +133,7 @@ private:
 
   int do_thread_recycle(bool try_mode);
   /// \brief Create thread
-  int create_thread(Thread *&thread, int64_t idx);
+  int create_thread(Thread *&thread, int64_t idx, int32_t numa_node = OB_NUMA_SHARED_INDEX);
 
   /// \brief Destroy thread.
   void destroy_thread(Thread *thread);
@@ -130,6 +149,7 @@ private:
   common::SpinRWLock lock_ __attribute__((__aligned__(16)));
   // tenant ctx
   IRunWrapper *run_wrapper_;
+  NumaInfo numa_info_;
 };
 
 class ObPThread : public Threads
@@ -149,6 +169,10 @@ private:
 };
 
 using ThreadPool = Threads;
+
+OB_INLINE int64_t calc_available_stack_size(int64_t size) {
+  return size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+}
 
 }  // lib
 }  // oceanbase

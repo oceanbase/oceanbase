@@ -96,8 +96,9 @@ public:
   ObPhysicalPlan* get_first_plan();
 
 private:
-  int is_same_plan(const ObPhysicalPlan *l_plan, const ObPhysicalPlan *r_plan,
-                   bool &is_same) const;
+  bool is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx) const;
+  bool is_same_plan(const ObPhysicalPlan &plan, const ObPhysicalPlan &compare_plan,
+                    ObPlanCacheCtx &pc_ctx) const;
 
   /**
    * @brief 为pc_ctx.exec_ctx设置table location

@@ -23,6 +23,44 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+struct ObMinMaxFilterParam {
+  ObMinMaxFilterParam() : null_count_(), min_datum_(),
+                          max_datum_(), is_min_prefix_(false),
+                          is_max_prefix_(false) {}
+  ObMinMaxFilterParam(blocksstable::ObStorageDatum &null_count,
+                   blocksstable::ObStorageDatum &min_datum,
+                   blocksstable::ObStorageDatum &max_datum,
+                   bool is_min_prefix,
+                   bool is_max_prefix) : null_count_(null_count), min_datum_(min_datum),
+                                         max_datum_(max_datum), is_min_prefix_(is_min_prefix),
+                                         is_max_prefix_(is_max_prefix) {}
+  ObMinMaxFilterParam(blocksstable::ObStorageDatum &null_count,
+                   blocksstable::ObStorageDatum &min_datum,
+                   blocksstable::ObStorageDatum &max_datum)
+                   : null_count_(null_count), min_datum_(min_datum),
+                     max_datum_(max_datum), is_min_prefix_(false),
+                     is_max_prefix_(false) {}
+
+  OB_INLINE void set_uncertain()
+  {
+    // reset datum ptr to local buffer and set datum as null (uncertain)
+    null_count_.reuse();
+    min_datum_.reuse();
+    max_datum_.reuse();
+    null_count_.set_null();
+    min_datum_.set_null();
+    max_datum_.set_null();
+  }
+  OB_INLINE bool is_uncertain() const
+  {
+    return null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
+  }
+  blocksstable::ObStorageDatum null_count_;
+  blocksstable::ObStorageDatum min_datum_;
+  blocksstable::ObStorageDatum max_datum_;
+  bool is_min_prefix_;
+  bool is_max_prefix_;
+};
 class ObAggRowReader;
 class ObSkipIndexFilterExecutor final
 {
@@ -50,11 +88,18 @@ public:
                                   sql::ObPhysicalFilterExecutor &filter,
                                   common::ObIAllocator &allocator,
                                   const bool use_vectorize);
+  int falsifiable_pushdown_filter(const uint32_t col_idx,
+                                  const ObSkipIndexType index_type,
+                                  const int64_t row_count,
+                                  ObMinMaxFilterParam &param,
+                                  sql::ObPhysicalFilterExecutor &filter,
+                                  common::ObIAllocator &allocator,
+                                  const bool use_vectorize);
 
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
-                        const ObObjMeta &obj_meta,
+                        const ObMinMaxFilterParam &param,
                         sql::ObWhiteFilterExecutor &filter,
                         common::ObIAllocator &allocator);
 
@@ -63,9 +108,7 @@ private:
                    const share::schema::ObColumnParam *col_param,
                    const ObObjMeta &obj_meta,
                    const bool is_padding_mode,
-                   ObStorageDatum &null_count,
-                   ObStorageDatum &min_datum,
-                   ObStorageDatum &max_datum);
+                   ObMinMaxFilterParam &param);
   int pad_column(const ObObjMeta &obj_meta,
                  const share::schema::ObColumnParam *col_param,
                  const bool is_padding_mode,
@@ -75,46 +118,62 @@ private:
   // *_operator args are the same
   int eq_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int ne_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
   int gt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int ge_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int lt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int le_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int bt_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int in_operator(const sql::ObWhiteFilterExecutor &filter,
                   const common::ObDatum &min_datum,
+                  const bool &is_min_prefix,
                   const common::ObDatum &max_datum,
+                  const bool &is_max_prefix,
                   sql::ObBoolMask &fal_desc);
 
   int black_filter_on_min_max(const uint32_t col_idx,
                               const uint64_t row_count,
-                              const ObObjMeta &obj_meta,
+                              ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
                               common::ObIAllocator &allocator,
                               const bool use_vectorize);

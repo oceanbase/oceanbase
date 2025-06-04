@@ -1,9 +1,11 @@
 ob_set_subtarget(ob_rootserver ALONE
   ob_ddl_service.cpp
+  ob_ddl_service_launcher.cpp
   ob_root_service.cpp
   ddl_task/ob_ddl_redefinition_task.cpp
   ob_unit_manager.cpp
   ob_heartbeat_service.cpp
+  ob_lonely_table_cleaner.cpp
 )
 
 ob_set_subtarget(ob_rootserver backup
@@ -106,10 +108,13 @@ ob_set_subtarget(ob_rootserver common
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
+  ob_catalog_ddl_operator.cpp
+  ob_catalog_ddl_service.cpp
   ob_tenant_ddl_service.cpp
   ob_tenant_parallel_create_executor.cpp
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
+  ob_alter_table_constraint_checker.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -144,6 +149,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_drop_vec_ivf_index_task.cpp
   ddl_task/ob_rebuild_index_task.cpp
   ddl_task/ob_vec_index_build_task.cpp
+  ddl_task/ob_sys_ddl_util.cpp
   ddl_task/ob_vec_ivf_index_build_task.cpp
   ddl_task/ob_drop_lob_task.cpp
 )
@@ -229,6 +235,10 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp
   standby/ob_tenant_role_transition_service.cpp
+)
+
+ob_set_subtarget(ob_rootserver truncate_info
+  truncate_info/ob_truncate_info_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver pl_ddl

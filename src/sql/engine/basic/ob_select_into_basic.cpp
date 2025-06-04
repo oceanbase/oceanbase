@@ -55,7 +55,7 @@ void ObStorageAppender::reset()
   is_opened_ = false;
 }
 
-int ObStorageAppender::open(const share::ObBackupStorageInfo *storage_info,
+int ObStorageAppender::open(const common::ObObjectStorageInfo *storage_info,
     const ObString &uri, const ObStorageAccessType &access_type)
 {
   int ret = OB_SUCCESS;

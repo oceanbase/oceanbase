@@ -20,6 +20,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_package.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "pl/ob_pl_exception_handling.h"
@@ -718,6 +719,47 @@ int ObSPIService::spi_pad_binary(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObSPIService::spi_cast_enum_set_to_string(pl::ObPLExecCtx *ctx,
+                                              uint64_t type_info_id,
+                                              ObObj &src,
+                                              ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  ObRawExprFactory *expr_factory = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObConstRawExpr *c_expr = NULL;
+  ObSysFunRawExpr *out_expr = NULL;
+  ObExprResType result_type;
+  ObIArray<common::ObString>* type_info = NULL;
+  uint16_t subschema_id = 0;
+  ObObj obj = src;
+  CK (OB_INVALID_ID != type_info_id);
+  CK (OB_NOT_NULL(ctx));
+  OX (exec_ctx = ctx->exec_ctx_);
+  CK (OB_NOT_NULL(ctx->func_));
+  OZ (ctx->func_->get_enum_set_ctx().get_enum_type_info(type_info_id, type_info));
+  CK (OB_NOT_NULL(type_info));
+  CK (OB_NOT_NULL(exec_ctx));
+  OX (expr_factory = exec_ctx->get_expr_factory());
+  OX (session_info = exec_ctx->get_my_session());
+  CK (OB_NOT_NULL(expr_factory));
+  CK (OB_NOT_NULL(session_info));
+  OZ (expr_factory->create_raw_expr(static_cast<ObItemType>(src.get_type()), c_expr));
+  CK (OB_NOT_NULL(c_expr));
+  OZ (ObRawExprUtils::get_subschema_id(src.get_meta(), *type_info, *session_info, subschema_id));
+  OX (obj.set_subschema_id(subschema_id));
+  OX (c_expr->set_value(obj));
+  OX (result_type.reset());
+  OX (result_type.set_meta(obj.get_meta()));
+  OX (result_type.mark_pl_enum_set_with_subschema());
+  OX (c_expr->set_result_type(result_type));
+  OZ (ObRawExprUtils::create_type_to_str_expr(*expr_factory, c_expr, out_expr, session_info, true));
+  CK (OB_NOT_NULL(out_expr));
+  OZ (ObSPIService::spi_calc_raw_expr(session_info, &(exec_ctx->get_allocator()), out_expr, &result));
+  return ret;
+}
+
 int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
                                           const ObIArray<ObString> &enum_set_values,
                                           ObObjParam &src,
@@ -729,16 +771,19 @@ int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
   ObConstRawExpr *c_expr = NULL;
   ObSysFunRawExpr *out_expr = NULL;
   ObExprResType result_type;
+  uint16_t subschema_id = 0;
+  ObObj obj = src;
   CK (OB_NOT_NULL(expr_factory));
   CK (OB_NOT_NULL(session_info));
   OZ (expr_factory->create_raw_expr(static_cast<ObItemType>(src.get_type()), c_expr));
   CK (OB_NOT_NULL(c_expr));
-  OZ (c_expr->set_enum_set_values(enum_set_values));
-  OX (c_expr->set_value(src));
-  OX (result_type.set_meta(src.get_meta()));
+  OZ (ObRawExprUtils::get_subschema_id(src.get_meta(), enum_set_values, *session_info, subschema_id));
+  OX (obj.set_subschema_id(subschema_id));
+  OX (c_expr->set_value(obj));
+  OX (result_type.set_meta(obj.get_meta()));
   OX (result_type.set_accuracy(src.get_accuracy()));
+  OX (result_type.mark_pl_enum_set_with_subschema());
   OX (c_expr->set_result_type(result_type));
-  OX (c_expr->mark_enum_set_skip_build_subschema());
   OZ (ObRawExprUtils::create_type_to_str_expr(*expr_factory, c_expr, out_expr, session_info, true));
   CK (OB_NOT_NULL(out_expr));
   OZ (ObSPIService::spi_calc_raw_expr(session_info, &(ctx.get_allocator()), out_expr, &result));
@@ -751,11 +796,16 @@ int ObSPIService::spi_calc_raw_expr(ObSQLSessionInfo *session,
                                     ObObj *result)
 {
   int ret = OB_SUCCESS;
-  ObExecContext *exec_ctx = NULL;
   ParamStore param_store((ObWrapperAllocator(*allocator)));
+  CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(result));
-  OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, exec_ctx, *result));
+  OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, session->get_cur_exec_ctx(), *result));
   OX (result->set_collation_level(expr->get_result_type().get_collation_level()));
+  if (OB_SUCC(ret) && expr->is_enum_set_with_subschema()) {
+    ObObjMeta org_obj_meta;
+    OZ (ObRawExprUtils::extract_enum_set_collation(expr->get_result_type(), session, org_obj_meta));
+    OX (result->set_collation(org_obj_meta));
+  }
   OZ (spi_pad_char_or_varchar(session, expr, allocator, result));
   return ret;
 }
@@ -796,13 +846,14 @@ int ObSPIService::spi_convert(ObSQLSessionInfo *session,
                               ObIAllocator *allocator,
                               ObObjParam &src,
                               const ObExprResType &result_type,
-                              ObObjParam &result)
+                              ObObjParam &result,
+                              const ObIArray<ObString> *type_info)
 {
   int ret = OB_SUCCESS;
   ObObj dst;
   CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(allocator));
-  OZ (spi_convert(*session, *allocator, src, result_type, dst));
+  OZ (spi_convert(*session, *allocator, src, result_type, dst, false, type_info));
   OX (src.set_param_meta());
   OX (result.set_accuracy(result_type.get_accuracy()));
   OX (result.set_meta_type(result_type.get_obj_meta()));
@@ -853,7 +904,9 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
       }
     } else {
       ObObjParam value;
-      OZ (spi_convert(ctx->exec_ctx_->get_my_session(), &tmp_alloc, *src, result_type, value));
+      ObIArray<common::ObString> *type_info = NULL;
+      OZ (expected_type->get_type_info(type_info));
+      OZ (spi_convert(ctx->exec_ctx_->get_my_session(), &tmp_alloc, *src, result_type, value, type_info));
       OZ (deep_copy_obj(*ctx->allocator_, value, result_value));
       if (OB_SUCC(ret) && need_set) {
         void *ptr = ctx->params_->at(result_idx).get_deep_copy_obj_ptr();
@@ -1036,9 +1089,10 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
           if (has_lob_header) {
             result->ObObj::set_has_lob_header();
           }
-          if (is_ref_cursor &&
-              param.get_ext() != 0 && result->is_null()) {
+          if (is_ref_cursor && result->is_null()) {
             OZ (spi_add_ref_cursor_refcount(ctx, &param, -1));
+            OX (result->set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE));
+            OX (result->set_param_meta());
           }
           if (OB_SUCC(ret)) {
             void *ptr = param.get_deep_copy_obj_ptr();
@@ -1100,16 +1154,8 @@ int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
   if (OB_SUCC(ret)) {
     ExecCtxBak exec_ctx_bak;
     OX (exec_ctx_bak.backup(*exec_ctx));
-    OX (exec_ctx->set_physical_plan_ctx(&(state->get_physical_plan_ctx())));
-    if (OB_SUCC(ret) && state->get_function().get_expr_op_size() > 0)  {
-      OZ (exec_ctx->init_expr_op(state->get_function().get_expr_op_size()));
-    }
-    OZ (state->get_function().get_frame_info().pre_alloc_exec_memory(*exec_ctx));
+    OX (state->get_exec_ctx_bak().restore(*exec_ctx));
     OZ (spi_calc_expr(&(state->get_exec_ctx()), expr, OB_INVALID_ID, result), KPC(expr));
-    if (state->get_function().get_expr_op_size() > 0) {
-      exec_ctx->reset_expr_op();
-      exec_ctx->get_allocator().free(exec_ctx->get_expr_op_ctx_store());
-    }
     exec_ctx_bak.restore(*exec_ctx);
   }
   return ret;
@@ -1261,8 +1307,7 @@ int ObSPIService::check_and_deep_copy_result(ObIAllocator &alloc,
 int ObSPIService::spi_set_package_variable(
   ObExecContext *exec_ctx,
   ObPLPackageGuard *guard,
-  uint64_t package_id, int64_t var_idx, const ObObj &value,
-  ObIAllocator *allocator, bool need_deep_copy)
+  uint64_t package_id, int64_t var_idx, const ObObj &value)
 {
   int ret = OB_SUCCESS;
   ObPL *pl_engine = NULL;
@@ -1295,24 +1340,19 @@ int ObSPIService::spi_set_package_variable(
 }
 
 int ObSPIService::spi_set_package_variable(
-  ObPLExecCtx *ctx, uint64_t package_id, int64_t var_idx, const ObObj &value,
-  bool need_deep_copy)
+  ObPLExecCtx *ctx, uint64_t package_id, int64_t var_idx, const ObObj &value)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator *allocator = NULL;
-  if (need_deep_copy) {
-    OZ (spi_get_package_allocator(ctx, package_id, allocator));
-  }
+
   OZ (spi_set_package_variable(
-    ctx->exec_ctx_, ctx->guard_, package_id, var_idx, value, allocator, need_deep_copy));
+    ctx->exec_ctx_, ctx->guard_, package_id, var_idx, value));
   return ret;
 }
 
 int ObSPIService::spi_set_variable_to_expr(ObPLExecCtx *ctx,
                                           const int64_t expr_idx,
                                            const ObObjParam *value,
-                                          bool is_default,
-                                          bool need_copy)
+                                          bool is_default)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(ctx));
@@ -1321,15 +1361,14 @@ int ObSPIService::spi_set_variable_to_expr(ObPLExecCtx *ctx,
   CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
   const ObSqlExpression *expr = nullptr;
   OX (expr = ctx->func_->get_expressions().at(expr_idx));
-  OZ (spi_set_variable(ctx, expr, value, is_default, need_copy));
+  OZ (spi_set_variable(ctx, expr, value, is_default));
   return ret;
 }
 
 int ObSPIService::spi_set_variable(ObPLExecCtx *ctx,
                                    const ObSqlExpression* expr,
                                    const ObObjParam *value,
-                                   bool is_default,
-                                   bool need_copy)
+                                   bool is_default)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx) || OB_ISNULL(expr) || OB_ISNULL(value)) {
@@ -1364,8 +1403,7 @@ int ObSPIService::spi_set_variable(ObPLExecCtx *ctx,
           ctx,
           expr->get_expr_items().at(1).get_obj().get_uint64(), // pkg id
           expr->get_expr_items().at(2).get_obj().get_int(), // var idx
-          *value, // value
-          need_copy));
+          *value));
     } else if (T_OP_GET_SUBPROGRAM_VAR == expr_type) {
       ObSQLSessionInfo *session_info = NULL;
       uint64_t package_id = OB_INVALID_ID;
@@ -1828,9 +1866,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             }
             ret = OB_SUCCESS == ret ? close_ret : ret;
           }
-          if (!is_dbms_sql) {
-            spi_result.destruct_exec_params(*session);
-          }
+          spi_result.destruct_exec_params(*session);
 
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
       }
@@ -2094,31 +2130,73 @@ int ObSPIService::spi_prepare(common::ObIAllocator &allocator,
                               const ObString &sql,
                               bool is_cursor,
                               pl::ObPLBlockNS *secondary_namespace,
-                              ObSPIPrepareResult &prepare_result)
+                              ObSPIPrepareResult &prepare_result,
+                              pl::ObPLCompileUnitAST &func)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_prepare);
+  ObPLPrepareEnvGuard prepareEnvGuard(session, func, ret);
   FLT_SET_TAG(pl_prepare_sql_text, sql);
   CHECK_COMPATIBILITY_MODE(&session);
-  ret = is_oracle_mode() ?
-      spi_resolve_prepare(allocator,
-                          session,
-                          sql_proxy,
-                          schema_guard,
-                          expr_factory,
-                          sql,
-                          is_cursor,
-                          secondary_namespace,
-                          prepare_result)
-      : spi_parse_prepare(allocator,
-                          session,
-                          sql_proxy,
-                          schema_guard,
-                          expr_factory,
-                          sql,
-                          secondary_namespace,
-                          prepare_result);
+  if (OB_SUCC(ret)) {
+    ret = is_oracle_mode() ?
+        spi_resolve_prepare(allocator,
+                            session,
+                            sql_proxy,
+                            schema_guard,
+                            expr_factory,
+                            sql,
+                            is_cursor,
+                            secondary_namespace,
+                            prepare_result)
+        : spi_parse_prepare(allocator,
+                            session,
+                            sql_proxy,
+                            schema_guard,
+                            expr_factory,
+                            sql,
+                            secondary_namespace,
+                            prepare_result);
+  }
   return ret;
+}
+
+ObPLPrepareEnvGuard::ObPLPrepareEnvGuard(ObSQLSessionInfo &session_info,
+                                         pl::ObPLCompileUnitAST &func,
+                                         int &ret)
+  : ret_(ret), session_info_(session_info)
+{
+  ret = OB_SUCCESS;
+  bool invoker_set_db = false;
+  uint64_t compat_version = 0;
+  need_reset_default_database_ = false;
+  OZ (session_info.get_compatibility_version(compat_version));
+  OZ (ObCompatControl::check_feature_enable(compat_version, ObCompatFeatureType::INVOKER_RIGHT_COMPILE, invoker_set_db));
+
+  if (OB_SUCC(ret)
+      && invoker_set_db
+      && lib::is_oracle_mode()   //only oracle mode need set default_database during spi_prepare
+      && func.get_compile_flag().compile_with_invoker_right()
+      && func.get_invoker_db_id() != session_info_.get_database_id()) {
+      OX (old_db_id_ = session_info_.get_database_id());
+      OZ (old_db_name_.append(session_info_.get_database_name()));
+      OZ (session_info_.set_default_database(func.get_invoker_db_name()));
+      OX (session_info_.set_database_id(func.get_invoker_db_id()));
+      OX (need_reset_default_database_ = true);
+  }
+}
+
+ObPLPrepareEnvGuard::~ObPLPrepareEnvGuard()
+{
+  int ret = OB_SUCCESS;
+  if (need_reset_default_database_) {
+   if ((ret = session_info_.set_default_database(old_db_name_.string())) != OB_SUCCESS) {
+      ret_ = OB_SUCCESS == ret_ ? ret : ret_;
+      LOG_WARN("failed to reset default database in pl env guard", K(ret), K(ret_), K(old_db_name_));
+   } else {
+    session_info_.set_database_id(old_db_id_);
+   }
+  }
 }
 
 int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
@@ -2255,7 +2333,18 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
-      } else {
+      } else if (columns->at(i).type_.is_null_oracle()) {
+        ObDataType data_type;
+        ObCollationType collation_type = session.get_nls_collation();
+        ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
+        data_type.set_obj_type(ObVarcharType);
+        data_type.set_charset_type(charset_type);
+        data_type.set_collation_type(collation_type);
+        data_type.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+        data_type.set_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE);
+        data_type.set_length_semantics(LS_BYTE);
+        pl_type.set_data_type(data_type);
+      }else {
         ObDataType data_type;
         data_type.set_meta_type(columns->at(i).type_.get_meta());
         data_type.set_accuracy(columns->at(i).accuracy_);
@@ -2290,11 +2379,7 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
       }
     }
     if (OB_SUCC(ret) && 1 == hidden_column_count) {
-        const common::ObField &field = columns->at(columns->count() - 1);
-        uint64_t table_id = OB_INVALID_ID;
-        OZ (schema_guard.get_table_id(session.get_effective_tenant_id(), field.dname_, field.org_tname_,
-                                      false, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
-        OX (rowid_table_id = table_id);
+      rowid_table_id = result_set.get_rowid_table_id();
     } else {
       rowid_table_id = OB_INVALID_ID;
     }
@@ -2498,7 +2583,14 @@ int ObSPIService::calc_dynamic_sqlstr(
     ObString user_sql;
     ObCharsetType client_cs_type = CHARSET_INVALID;
 
-    OZ (result.get_string(tmp_sql));
+    if (OB_SUCC(ret) && result.is_lob_storage()) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator, result, tmp_sql))) {
+        LOG_WARN("fail to read lob data", K(ret), K(result));
+      }
+    } else {
+      OZ (result.get_string(tmp_sql));
+    }
+
     if (OB_SUCC(ret) && tmp_sql.length() > 1 && ';' == tmp_sql[tmp_sql.length() - 1]) {
       tmp_sql.assign_ptr(tmp_sql.ptr(), tmp_sql.length() - 1);
     }
@@ -2826,6 +2918,49 @@ int ObSPIService::check_dynamic_sql_legal(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::deep_copy_dynamic_param(ObPLExecCtx *ctx,
+                                            ObSPIResultSet &spi_result,
+                                            ObIAllocator &allocator,
+                                            ObObjParam *param,
+                                            ParamStore *&exec_params)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(param));
+  if (OB_SUCC(ret)) {
+    bool need_free_on_fail = false;
+    ObObjParam new_param = *param;
+    if (param->is_pl_extend()) {
+      if (param->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+        new_param.set_int_value(0);
+        if (!ob_is_xml_pl_type(param->get_type(), param->get_udt_id())) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *param, new_param, true));
+          OX (need_free_on_fail = true);
+        } else {
+          uint64_t udt_id = param->get_udt_id();
+          const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
+          ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+          cast_ctx.exec_ctx_ = ctx->exec_ctx_;
+          uint16_t subschema_id = ObInvalidSqlType;
+          OZ (cast_ctx.exec_ctx_->get_subschema_id_by_udt_id(udt_id, subschema_id, &spi_result.get_scheme_guard()));
+          OX (new_param.set_subschema_id(subschema_id));
+          OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *param, new_param));
+          // sql udt params need original udt id for plan choose
+          OX (new_param.set_udt_id(udt_id));
+          OX (new_param.set_param_meta()); // param meta also changed
+        }
+      }
+    } else {
+      OZ (deep_copy_obj(allocator, *param, new_param));
+    }
+    OX (new_param.set_need_to_check_type(true));
+    OZ (exec_params->push_back(new_param), K(new_param));
+    if (OB_FAIL(ret) && need_free_on_fail) {
+      int tmp = pl::ObUserDefinedType::destruct_obj(new_param, ctx->exec_ctx_->get_my_session());
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::prepare_dynamic_sql_params(ObPLExecCtx *ctx,
                                              ObSPIResultSet &spi_result,
                                              ObIAllocator &allocator,
@@ -2842,43 +2977,28 @@ int ObSPIService::prepare_dynamic_sql_params(ObPLExecCtx *ctx,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < exec_param_cnt; ++i) {
     CK (OB_NOT_NULL(params[i]));
-    if (OB_SUCC(ret)) {
-      bool need_free_on_fail = false;
-      ObObjParam new_param = *params[i];
-      if (params[i]->is_pl_extend()) {
-        if (params[i]->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-          new_param.set_int_value(0);
-          if (!ob_is_xml_pl_type(params[i]->get_type(), params[i]->get_udt_id())) {
-            OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
-            OX (need_free_on_fail = true);
-          } else {
-            uint64_t udt_id = params[i]->get_udt_id();
-            const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
-            ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
-            cast_ctx.exec_ctx_ = ctx->exec_ctx_;
-            uint16_t subschema_id = ObInvalidSqlType;
-            if (OB_FAIL(cast_ctx.exec_ctx_->get_subschema_id_by_udt_id(udt_id,
-                                                                       subschema_id,
-                                                                       &spi_result.get_scheme_guard()))) {
-              LOG_WARN("failed to get subschema id by udt_id", K(ret), K(params[i]));
-            } else if (FALSE_IT(new_param.set_subschema_id(subschema_id))) {
-            } else if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *params[i], new_param))) {
-              LOG_WARN("failed to_type", K(ret), K(new_param));
-            } else { // sql udt params need original udt id for plan choose
-              new_param.set_udt_id(udt_id);
-              new_param.set_param_meta(); // param meta also changed
-            }
-          }
-        }
-      } else {
-        OZ (deep_copy_obj(allocator, *params[i], new_param));
-      }
-      OX (new_param.set_need_to_check_type(true));
-      OZ (exec_params->push_back(new_param), K(new_param));
-      if (OB_FAIL(ret) && need_free_on_fail) {
-        int tmp = pl::ObUserDefinedType::destruct_obj(new_param, ctx->exec_ctx_->get_my_session());
-      }
-    }
+    OZ (deep_copy_dynamic_param(ctx, spi_result, allocator, params[i], exec_params));
+  }
+  OZ (store_params_string(ctx, spi_result, exec_params));
+  return ret;
+}
+
+int ObSPIService::prepare_dbms_sql_params(ObPLExecCtx *ctx,
+                                          ObSPIResultSet &spi_result,
+                                          ObIAllocator &allocator,
+                                          int64_t exec_param_cnt,
+                                          ParamStore *params,
+                                          ParamStore *&exec_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_params = reinterpret_cast<ParamStore*>(allocator.alloc(sizeof(ParamStore))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for exec params", K(ret));
+  } else {
+    new (exec_params) ParamStore((ObWrapperAllocator(allocator)));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exec_param_cnt; ++i) {
+    OZ (deep_copy_dynamic_param(ctx, spi_result, allocator, &params->at(i), exec_params));
   }
   OZ (store_params_string(ctx, spi_result, exec_params));
   return ret;
@@ -3057,9 +3177,9 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
     LOG_DEBUG("spi cursor init", K(cursor_index), K(obj), K(obj.is_ref_cursor_type()), K(obj.is_null()));
     // ref cursor is pointer to cursor, we don't have to alloc here
     // we should alloc it in open stmt
+    ObPLCursorInfo *cursor_info = NULL;
     if (obj.is_ref_cursor_type()) {
       if (!obj.is_null()) {
-        ObPLCursorInfo *cursor_info = NULL;
         CK (obj.is_pl_extend());
         CK (PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type());
         if (OB_SUCC(ret)
@@ -3075,8 +3195,16 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
       }
     } else {
       if (obj.is_null()) {
-        //OZ (spi_cursor_alloc(*ctx->allocator_, obj));
-        OZ (spi_cursor_alloc(ctx->exec_ctx_->get_allocator(), obj));
+        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
+        //OZ (spi_cursor_alloc(ctx->exec_ctx_->get_allocator(), obj));
+      } else {
+        CK (obj.is_pl_extend());
+        if (OB_SUCC(ret)
+            && obj.get_ext() != 0
+            && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
+          OX (cursor_info->reset());
+          OX (cursor_info->set_ref_count(1));  //resue cursorInfo, set ref_count to 1
+        }
       }
     }
   }
@@ -3181,7 +3309,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
          *       server cursor 的 close 全部都使用 reuse， cursor_id 不会被 清空， 所以暂时没有出现问题
         */
         if (cursor->is_session_cursor()) {
-          //OZ (session->make_cursor(cursor));
+          OX (session->inc_session_cursor());
           OX (cursor->set_is_session_cursor());
         } else {
           // local ref cursor, just reset
@@ -3591,7 +3719,9 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   OZ (cursor.prepare_spi_result(ctx, spi_result));
   CK (OB_NOT_NULL(spi_result));
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
-  OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+  if (!cursor.is_ps_cursor()) {
+    OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+  }
 
   // in a streaming cursor, lifetime of ps_sql may be shorter than the cursor itself,
   // so we need to open it with a deep copy.
@@ -3629,7 +3759,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
                            spi_result->get_out_params(),
                            false, /*is_forall*/
                            false, /*is_dynamic_sql*/
-                           is_dbms_cursor /*is_dbms_sql*/));
+                           is_dbms_cursor || cursor.is_ps_cursor() /*is_dbms_sql*/));
           }
         } else {
           OZ (inner_open(ctx,
@@ -3678,7 +3808,9 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         }
       }
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
-    spi_result->end_cursor_stmt(ctx, ret);
+    if (!cursor.is_ps_cursor()) {
+      spi_result->end_cursor_stmt(ctx, ret);
+    }
     cursor.set_last_execute_time(ObTimeUtility::current_time());
   }
   if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
@@ -3723,7 +3855,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
 
   DISABLE_SQL_MEMLEAK_GUARD;
-
+  cursor.set_unstreaming();
   HEAP_VAR(ObSPIResultSet, spi_result) {
     ObSPICursor* spi_cursor = NULL;
     OZ (spi_result.init(session_info));
@@ -3768,7 +3900,10 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         (for_update && !is_server_cursor && !is_dbms_cursor),
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
-          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), orc_max_ret_rows));
+          bool is_iter_end = false;
+          CK (OB_NOT_NULL(spi_result.get_result_set()->get_field_columns()));
+          OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
+          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
           OZ (spi_cursor->row_store_.finish_add_row());
           if (OB_FAIL(ret)) {
           } else if (is_dbms_cursor) {
@@ -3802,9 +3937,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
         }
-        if (!is_dbms_cursor) {
-          spi_result.destruct_exec_params(session_info);
-        }
+        spi_result.destruct_exec_params(session_info);
 
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
     }
@@ -3895,6 +4028,10 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
 
     bool is_server_cursor = false;
     bool use_stream = false;
+    bool force_unstreaming = false;
+    if (OB_SUCC(ret) && cursor_var.is_ref_cursor_type() && ctx->func_->should_init_as_session_cursor()) {
+      force_unstreaming = true;
+    }
     if (OB_SUCC(ret)) {
       is_server_cursor = OB_INVALID_ID != cursor->get_id()
         || (package_id != OB_INVALID_ID && OB_INVALID_ID == routine_id);
@@ -3908,7 +4045,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     if (OB_FAIL(ret)) {
     } else if (lib::is_oracle_mode() // streaming cursor
                && ((is_server_cursor && use_stream) || !is_server_cursor)
-               && (!for_update || (for_update && skip_locked))) {
+               && (!for_update || (for_update && skip_locked))
+               && !force_unstreaming) {
       FLT_SET_TAG(pl_spi_streaming_cursor, true);
       OZ (streaming_cursor_open(ctx,
                                 *cursor,
@@ -4291,7 +4429,31 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::cursor_close_impl(ObPLExecCtx *ctx,
+int ObSPIService::cursor_release(ObSQLSessionInfo *session,
+                                ObPLCursorInfo *cursor,
+                                bool is_refcursor,
+                                uint64_t package_id,
+                                uint64_t routine_id,
+                                bool ignore)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(cursor));
+  CK (OB_NOT_NULL(session));
+  if (OB_SUCC(ret)) {
+    if (cursor->is_session_cursor()) {  //session cursor need to release cursor info source
+      if (OB_FAIL(session->close_cursor(cursor->get_id()))) {
+        LOG_WARN("fail to close session cursor source", K(ret), K(cursor));
+      }
+    } else {
+      if (OB_FAIL(cursor_close_impl(session, cursor, is_refcursor, package_id, routine_id, ignore))) {
+        LOG_WARN("fail to close non session cursor", K(ret), K(cursor));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::cursor_close_impl(ObSQLSessionInfo *session,
                                         ObPLCursorInfo *cursor,
                                         bool is_refcursor,
                                         uint64_t package_id,
@@ -4319,7 +4481,8 @@ int ObSPIService::cursor_close_impl(ObPLExecCtx *ctx,
       }
       is_server_cursor ? cursor->reuse() : cursor->reset();
     } else {
-      OZ (cursor->close(*ctx->exec_ctx_->get_my_session(), is_server_cursor));
+      CK (OB_NOT_NULL(session))
+      OZ (cursor->close(*session, is_server_cursor));
     }
   }
   return ret;
@@ -4350,7 +4513,7 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
   if (OB_NOT_NULL(cursor)) {
     FLT_SET_TAG(pl_spi_streaming_cursor, cursor->is_streaming());
   }
-  OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
+  OZ (cursor_close_impl(ctx->exec_ctx_->get_my_session(), cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
       package_id, routine_id, cursor_index, cur_var);
   if (OB_SUCC(ret) && DECL_PKG == loc) {
     OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
@@ -4366,7 +4529,7 @@ int ObSPIService::dbms_cursor_close(ObExecContext &exec_ctx, ObPLCursorInfo &cur
   // 2. 但只有执行过dbms_sql.execute接口后，cursor.is_open()才返回true。
   if (cursor.isopen()) {
     OV (OB_NOT_NULL(exec_ctx.get_my_session()));
-    OZ (cursor.close(*exec_ctx.get_my_session(),
+    OZ (cursor.ObPLCursorInfo::close(*exec_ctx.get_my_session(),
                      OB_NOT_NULL(cursor.get_cursor_entity()) ? true : false));
   }
   return ret;
@@ -4526,14 +4689,15 @@ int ObSPIService::spi_pipe_row_to_result(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(coll = reinterpret_cast<ObPLNestedTable *>(ctx->result_->get_ext())));
   OX (coll->is_inited() ? (void)NULL : coll->set_inited());
   OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                           ctx, *(ctx->allocator_), *coll, 1, true));
+                           ctx, *coll, 1, true));
   CK (coll->get_count() >= 1);
   CK (coll->get_column_count() > 0);
   if (OB_SUCC(ret)) {
     ObObj *copied = coll->get_data() + coll->get_count() - 1;
     OZ (spi_copy_datum(ctx, coll->get_allocator(), single_row, copied,
                        const_cast<ObDataType *>(&coll->get_element_type()),
-                       OB_INVALID_ID /* package_id */));
+                       OB_INVALID_ID /* package_id */,
+                       OB_INVALID_ID));
     //OZ (coll->set_row(copied, coll->get_count() - 1));
   }
 
@@ -4675,7 +4839,6 @@ int ObSPIService::spi_construct_collection(
       CK (OB_NOT_NULL(coll = reinterpret_cast<ObPLCollection *>(ptr)));
       OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                              ctx,
-                             *allocator,
                              *coll,
                              0,
                              false));
@@ -4795,18 +4958,9 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
       ret = OB_READ_NOTHING;
       LOG_WARN("element already deleted!", K(ret), K(i), K(is_deleted));
     } else if (n > 0) {
-      ObIAllocator *allocator = NULL;
-      if (OB_INVALID_ID != package_id) {
-        OZ (spi_get_package_allocator(ctx, package_id, allocator));
-      } else {
-        allocator = ctx->allocator_;
-      }
       if (OB_SUCC(ret)) {
-        if (OB_ISNULL(allocator)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("allocator is NULL", K(ctx), K(column_count), K(n), K(i), K(package_id), K(ret));
-        } else if (OB_FAIL(spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                                ctx, *allocator, *table, n, true))) {
+        if (OB_FAIL(spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
+                                                ctx, *table, n, true))) {
           LOG_WARN("failed to spi_set_collection_data", K(ctx), K(column_count), K(n), K(i), K(package_id), K(ret));
         } else if (OB_SUCC(ret) && OB_NOT_NULL(i_expr)){
           // fill i'th elem into the extended pos;
@@ -5466,14 +5620,13 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
 
 int ObSPIService::spi_set_collection(int64_t tenant_id,
                                        const ObPLINS *ns,
-                                       ObIAllocator &allocator,
                                        ObPLCollection &coll,
                                        int64_t n,
                                        bool extend_mode)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(tenant_id, ns, allocator, coll, n, extend_mode);
+  UNUSEDx(tenant_id, ns, coll, n, extend_mode);
 #else
 #define CHECK_VARRAY_CAPACITY \
   do { \
@@ -5679,7 +5832,7 @@ int ObSPIService::spi_reset_composite(ObPLComposite *composite,
       * */
       ObPLCollection *coll = static_cast<ObPLCollection *>(composite);
       if (OB_NOT_NULL(coll->get_allocator())) {
-        OZ (spi_set_collection(MTL_ID(), NULL, *(coll->get_allocator()), *coll, 0, false));
+        OZ (spi_set_collection(MTL_ID(), NULL, *coll, 0, false));
         OX (coll->set_count(OB_INVALID_COUNT));
       } else {
         CK (coll->get_count() == 0 || coll->get_count() == OB_INVALID_COUNT);
@@ -5700,7 +5853,7 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
   int ret = OB_SUCCESS;
   int64_t old_capacity = assoc_array.get_inner_capacity();
   assoc_array.is_inited() ? (void)NULL : assoc_array.set_inited();
-  if (OB_FAIL(spi_set_collection(tenant_id, ns, allocator, assoc_array, n, true))) {
+  if (OB_FAIL(spi_set_collection(tenant_id, ns, assoc_array, n, true))) {
     LOG_WARN("failed to spi_reset_composite", K(assoc_array), K(ret));
   } else if (OB_ISNULL(assoc_array.get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
@@ -5859,25 +6012,21 @@ int ObSPIService::spi_get_package_allocator(
 
 int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, int64_t addend)
 {
-  UNUSED(ctx);
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor_info = NULL;
   CK (OB_NOT_NULL(cursor));
   OX (cursor_info = reinterpret_cast<ObPLCursorInfo *>(cursor->get_ext()));
   if (OB_NOT_NULL(cursor_info)) {
     CK (1 == addend || -1 == addend);
+    CK (0 <= cursor_info->get_ref_count());
     if (OB_SUCC(ret)) {
-      if (cursor_info->isopen()) {
-        (1 == addend) ? cursor_info->inc_ref_count() : cursor_info->dec_ref_count();
-        if (0 == cursor_info->get_ref_count()) {
-          OZ (cursor_close_impl(ctx, cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
-        }
-      } else {
-        // cursor maybe closed already
-        if (-1 == addend) {
-          OX (cursor_info->dec_ref_count());
-        }
-        LOG_DEBUG("spi process return ref cursor, cursor not open", K(cursor_info->get_ref_count()));
+      (1 == addend) ? cursor_info->inc_ref_count() : cursor_info->dec_ref_count();
+      bool is_session_cursor = cursor_info->is_session_cursor();
+      if (0 == cursor_info->get_ref_count()) {
+        CK (OB_NOT_NULL(ctx));
+        CK (OB_NOT_NULL(ctx->exec_ctx_));
+        OZ (cursor_release(ctx->exec_ctx_->get_my_session(), cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
+        OX (is_session_cursor ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL); //session cursorInfo is released, so set cursor obj null
       }
     }
   } else {
@@ -5916,11 +6065,19 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
 #else
   ObPLCursorInfo *cursor_info = NULL;
   ObObjParam cursor_var;
-  ObCusorDeclareLoc odc;
+  ObCusorDeclareLoc loc;
   LOG_DEBUG("spi handle ref cursor", K(package_id), K(routine_id), K(index), K(addend));
-  OZ (spi_get_cursor_info(ctx, package_id, routine_id, index, cursor_info, cursor_var, odc));
+  OZ (spi_get_cursor_info(ctx, package_id, routine_id, index, cursor_info, cursor_var, loc));
   if (OB_NOT_NULL(cursor_info)) {
     OZ (spi_add_ref_cursor_refcount(ctx, &cursor_var, addend));
+    if (OB_SUCC(ret)) {  //reassign the cursor_var back to actual cursor
+      if (DECL_SUBPROG == loc) { //package cursor cannot be a ref cursor
+        OZ (spi_set_subprogram_cursor_var(ctx, package_id, routine_id, index, cursor_var));
+      } else if (DECL_LOCAL == loc) {
+        OX (cursor_var.copy_value_or_obj(ctx->params_->at(index), true));
+        OX (ctx->params_->at(index).set_param_meta());
+      }
+    }
   } else {
     // do nothing
     // for example:
@@ -5945,16 +6102,13 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
 int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
                                  ObIAllocator *allocator,
                                  ObObj *src,
-                                 ObObj *dest,
-                                 ObDataType *dest_type,
-                                 uint64_t package_id)
+                                 ObObj *dest)
 {
   int ret = OB_SUCCESS;  
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, allocator, src, dest, dest_type, package_id);
+  UNUSEDx(ctx, allocator, src, dest);
 #else
-  UNUSEDx(allocator, dest_type);
-  CK (OB_INVALID_ID == package_id); // ref cursor can't define inside package
+  UNUSEDx(allocator);
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dest));
   if (OB_SUCC(ret)) {
@@ -5964,7 +6118,7 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
     // case 2: src is not null, dec src cursor ref count, if equals to 0, close cursor,
     ObPLCursorInfo *src_cursor = reinterpret_cast<ObPLCursorInfo *>(src->get_ext());
     ObPLCursorInfo *dest_cursor = reinterpret_cast<ObPLCursorInfo *>(dest->get_ext());
-    if (OB_NOT_NULL(src_cursor) && src_cursor->isopen()) {
+    if (OB_NOT_NULL(src_cursor)) {
       LOG_DEBUG("copy ref cursor, src ref count: ", K(src_cursor->get_ref_count()));
       need_inc_ref_cnt = (0 == src_cursor->get_ref_count() && src_cursor->get_is_returning());
       OV (0 < src_cursor->get_ref_count() || need_inc_ref_cnt, OB_ERR_UNEXPECTED, KPC(src_cursor), K(need_inc_ref_cnt));
@@ -5978,18 +6132,12 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
       if (need_inc_ref_cnt) {
         OX (src_cursor->inc_ref_count());
       }
-    } else if (OB_NOT_NULL(src_cursor) && !src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
-      // src cursor is already closed and do not has any ref
-      // dest cursor is null do not need copy
     } else {
-      if (OB_NOT_NULL(dest_cursor) && dest_cursor->isopen()) {
+      if (OB_NOT_NULL(dest_cursor)) {
         LOG_DEBUG("copy ref cursor, dest ref count: ",K(*dest_cursor),
                                                       K(dest_cursor->get_ref_count()));
         CK (0 < dest_cursor->get_ref_count());
-        OX (dest_cursor->dec_ref_count());
-        if (0 == dest_cursor->get_ref_count()) {
-          OZ (cursor_close_impl(ctx, dest_cursor, true, OB_INVALID_ID, OB_INVALID_ID, true));
-        }
+        OZ (spi_add_ref_cursor_refcount(ctx, dest, -1));
       }
       OX (*dest = *src);
       if (OB_NOT_NULL(src_cursor)) {
@@ -6003,6 +6151,54 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_convert_anonymous_array(pl::ObPLExecCtx *ctx,
+                                        ObObjParam *param,
+                                        uint64_t user_type_id)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  common::ObMySQLProxy *sql_proxy = NULL;
+  ObPLPackageGuard *package_guard = NULL;
+  const ObUserDefinedType *pl_user_type = NULL;
+  bool use_original_type = false;
+  uint64_t compat_version = 0;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  CK (OB_NOT_NULL(param));
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(schema_guard = ctx->exec_ctx_->get_sql_ctx()->schema_guard_));
+  CK (OB_NOT_NULL(sql_proxy = ctx->exec_ctx_->get_sql_proxy()));
+  CK (OB_NOT_NULL(package_guard = ctx->exec_ctx_->get_package_guard()));
+  // here must be dealing with the inout parameter type of the anonymous array
+  CK (is_mocked_anonymous_array_id(user_type_id));
+  CK (param->is_ext());
+  OZ (session->check_feature_enable(ObCompatFeatureType::OUT_ANONYMOUS_COLLECTION_IS_ALLOW, use_original_type));
+  // For inout anonymous array parameters, if the original type is not empty,
+  // the result is returned according to the original type.
+  if (use_original_type) {
+    OZ (ctx->get_user_type(user_type_id, pl_user_type, nullptr));
+    CK (OB_NOT_NULL(pl_user_type));
+    if (OB_SUCC(ret)) {
+      ObObj dst;
+      int64_t dst_size = 0;
+      ObObj *dst_ptr = &dst;
+      ObObj *src_ptr = param;
+      ObObj *src_table_data = nullptr;
+      ObPLResolveCtx resolve_ctx(
+        *ctx->allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
+      OZ (pl_user_type->init_obj(*(schema_guard), tmp_alloc, dst, dst_size));
+      OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
+      OZ (ObUserDefinedType::destruct_obj(*src_ptr, session, true));
+      OZ (pl_user_type->convert(resolve_ctx, dst_ptr, src_ptr));
+      OX (param->set_udt_id(pl_user_type->get_user_type_id()));
+      int tmp_ret = ObUserDefinedType::destruct_obj(dst, session);
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 /*
  * 因为有可能调用者调用本函数是为了copy一个collection里的一项，此时传入的必须是collection的allocator，所以这个参数必要。
  * 如果能保证此函数不会用来copy普通数据类型那么可以不要。
@@ -6012,7 +6208,8 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
                                  ObObj *src,
                                  ObObj *dest,
                                  ObDataType *dest_type,
-                                 uint64_t package_id)
+                                 uint64_t package_id,
+                                 uint64_t type_info_id)
 {
   int ret = OB_SUCCESS;
   ObExprResType result_type;
@@ -6033,8 +6230,9 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
     } else if (src->is_null() || ObMaxType == src->get_type()) {
       //ObMaxTC means deleted element in Collection, no need to copy
       uint8 type = dest->get_meta().get_extend_type();
-      if ((PL_CURSOR_TYPE == type || PL_REF_CURSOR_TYPE == type) && dest->get_ext() != 0) {
+      if ((PL_CURSOR_TYPE == type || PL_REF_CURSOR_TYPE == type)) {
         OZ (spi_add_ref_cursor_refcount(ctx, dest, -1));
+        OX (dest->set_extend(0, type));
       } else {
         if (!dest->is_pl_extend()) {
           OZ (ObUserDefinedType::destruct_objparam(*copy_allocator, *dest));
@@ -6043,7 +6241,7 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
       }
     } else if (PL_CURSOR_TYPE == src->get_meta().get_extend_type()
         || PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type()) {
-      OZ (spi_copy_ref_cursor(ctx, allocator, src, dest, dest_type, package_id));
+      OZ (spi_copy_ref_cursor(ctx, allocator, src, dest));
     } else if (src->is_ext() && OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
       OZ (ObPLComposite::copy_element(*src, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
     } else if (OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
@@ -6060,9 +6258,14 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
             || (ObSetType == src->get_type() && ObSetType == result_type.get_type())) {
           result = *src;
         } else {
+          ObIArray<common::ObString>* type_info = NULL;
+          if (OB_INVALID_ID != type_info_id) {
+            OZ (ctx->func_->get_enum_set_ctx().get_enum_type_info(type_info_id, type_info));
+            CK (OB_NOT_NULL(type_info));
+          }
           OX (src_tmp = *src);
           OZ (spi_convert(
-            ctx->exec_ctx_->get_my_session(), &tmp_alloc, src_tmp, result_type, result),
+            ctx->exec_ctx_->get_my_session(), &tmp_alloc, src_tmp, result_type, result, type_info),
             K(src_tmp), K(result_type),KPC(src));
         }
       }
@@ -6139,7 +6342,8 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
           }
         } else {
           if (ctx->func_->get_ret_type().is_composite_type() ||
-              ctx->func_->get_ret_type().is_obj_type()) {
+              ctx->func_->get_ret_type().is_obj_type() ||
+              ctx->func_->get_ret_type().is_cursor_type()) {
             if (tmp_result.is_pl_extend() &&
                 pl::PL_REF_CURSOR_TYPE != tmp_result.get_meta().get_extend_type()) {
               ObIAllocator *alloc = ctx->allocator_;
@@ -6566,8 +6770,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
     ObObjParam **dynamic_params = reinterpret_cast<ObObjParam **>(params);
     OZ (prepare_dynamic_sql_params(ctx, spi_result, param_allocator, param_count, dynamic_params, curr_params));
   } else if (is_dbms_sql) {
-    OX (curr_params = reinterpret_cast<ParamStore *>(params));
-    OZ (store_params_string(ctx, spi_result, curr_params));
+    ParamStore *dbms_sql_params = reinterpret_cast<ParamStore *>(params);
+    OZ (prepare_dbms_sql_params(ctx, spi_result, param_allocator, param_count, dbms_sql_params, curr_params));
   } else {
     const ObSqlExpression **static_params = reinterpret_cast<const ObSqlExpression **>(params);
     OZ (prepare_static_sql_params(ctx,
@@ -6590,7 +6794,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   OZ (inner_open(ctx, sql, ps_sql, type, *curr_params, spi_result, out_params, is_dynamic_sql));
 
   // if failed, we need release complex parameter memory in here
-  if (OB_FAIL(ret) && OB_NOT_NULL(curr_params) && !is_dbms_sql) {
+  if (OB_FAIL(ret) && OB_NOT_NULL(curr_params)) {
     int ret = OB_SUCCESS; // ignore destruct obj error
     for (int64_t i = 0; i < curr_params->count(); ++i) {
       OZ (ObUserDefinedType::destruct_obj(curr_params->at(i), ctx->exec_ctx_->get_my_session()));
@@ -6632,6 +6836,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
     } else {
       ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       bool old_client_return_rowid = session->is_client_return_rowid();
+      bool old_is_client_use_lob_locator = session->is_client_use_lob_locator();
+      bool old_is_client_support_lob_locatorv2 = session->is_client_support_lob_locatorv2();
       bool is_inner_session = session->is_inner();
       ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
       ObInnerSQLConnection *spi_conn = NULL;
@@ -6639,6 +6845,10 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       session->set_session_type(ObSQLSessionInfo::USER_SESSION);
       if (NULL != ctx->pl_ctx_) {
         session->set_client_return_rowid(false);
+      }
+      if (lib::is_oracle_mode()) {
+        session->set_client_use_lob_locator(true);
+        session->set_client_support_lob_locatorv2(true);
       }
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
@@ -6674,6 +6884,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       !is_inner_session ? session->set_user_session() : (void)NULL;
       session->set_session_type(old_session_type);
       session->set_client_return_rowid(old_client_return_rowid);
+      session->set_client_use_lob_locator(old_is_client_use_lob_locator);
+      session->set_client_support_lob_locatorv2(old_is_client_support_lob_locatorv2);
     }
   }
   return ret;
@@ -7043,7 +7255,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                   || (NULL != implicit_cursor && 0 == implicit_cursor->get_bulk_rowcount_count()))) {
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                     ctx, *allocator, *table, 0));
+                                     ctx, *table, 0));
           }
         }
       }
@@ -7296,7 +7508,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                 || (NULL != implicit_cursor && 0 == implicit_cursor->get_bulk_rowcount_count()))) {
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                     ctx, *allocator, *table, 0));
+                                     ctx, *table, 0));
           }
           OZ (get_package_var_info_by_expr(result_expr, package_var_info.first, package_var_info.second));
           if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
@@ -7484,13 +7696,13 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObSQLSessionInfo *session_info = NULL;
         ObSyncCmdDriver  *query_sender = NULL;
         CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
-        CK (OB_NOT_NULL(
-          query_sender = static_cast<ObSyncCmdDriver *>(session_info->get_pl_query_sender())));
-        OZ (query_sender->response_query_result(*ob_result_set,
-                                                session_info->is_ps_protocol(),
-                                                true,
-                                                can_retry));
-        OZ (query_sender->send_eof_packet(true));
+        if (OB_SUCC(ret) && OB_NOT_NULL(query_sender = static_cast<ObSyncCmdDriver *>(session_info->get_pl_query_sender()))) {
+          OZ (query_sender->response_query_result(*ob_result_set,
+                                                  session_info->is_ps_protocol(),
+                                                  true,
+                                                  can_retry));
+          OZ (query_sender->send_eof_packet(true));
+        }
 
         OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }
@@ -7609,40 +7821,6 @@ int ObSPIService::collect_cells(pl::ObPLExecCtx &ctx,
     }
   }
   LOG_DEBUG("spi get result", K(result), K(ret));
-  return ret;
-}
-
-int ObSPIService::check_package_dest_and_deep_copy(
-  ObPLExecCtx &ctx,
-  const ObSqlExpression &expr, ObIArray<ObObj> &src_array, ObIArray<ObObj> &dst_array)
-{
-  int ret = OB_SUCCESS;
-  if (is_obj_access_expression(expr)) {
-    if (expr.get_expr_items().count() > 1
-        && T_OP_GET_PACKAGE_VAR == expr.get_expr_items().at(1).get_item_type()
-        && OB_NOT_NULL(expr.get_expr_items().at(1).get_expr_operator())
-        && expr.get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
-      uint16_t param_pos = expr.get_expr_items().at(1).get_param_idx();
-      uint64_t package_id = OB_INVALID_ID;
-      ObIAllocator *allocator = NULL;
-      OX (package_id = expr.get_expr_items().at(param_pos).get_obj().get_uint64());
-      OZ (spi_get_package_allocator(&ctx, package_id, allocator));
-      CK (OB_NOT_NULL(allocator));
-      for (int64_t i = 0; OB_SUCC(ret) && i < src_array.count(); ++i) {
-        ObObj tmp;
-        if (src_array.at(i).is_pl_extend()) {
-          pl::ObUserDefinedType::deep_copy_obj(*allocator, src_array.at(i), tmp);
-        } else {
-          OZ (ob_write_obj(*allocator, src_array.at(i), tmp));
-        }
-        OZ (dst_array.push_back(tmp));
-      }
-    } else {
-      OZ (dst_array.assign(src_array));
-    }
-  } else {
-    OZ (dst_array.assign(src_array));
-  }
   return ret;
 }
 
@@ -7976,22 +8154,29 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         calc_array->at(i), calc_array->at(i).get_type(), pl_integer_ranges[i]));
     }
   } else if (obj_array.at(0).is_null()) { //null into extend variable，generate extend null obj
-    if (row_desc.at(0).get_meta_type().is_ext() &&
-      (PL_RECORD_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
-       PL_NESTED_TABLE_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
-       PL_VARRAY_TYPE == row_desc.at(0).get_meta_type().get_extend_type())) {
-      int64_t udt_id = row_desc.at(0).get_udt_id();
-      const ObUserDefinedType *type = nullptr;
-      int64_t ptr = 0;
-      int64_t init_size = OB_INVALID_SIZE;
-      ObObj   tmp_obj;
-      OX (tmp_obj.reset());
-      OZ (ctx->get_user_type(udt_id, type));
-      OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
-      OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
-      OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
-      OZ (tmp_obj_array.push_back(tmp_obj));
-      OX (calc_array = &tmp_obj_array);
+    if (row_desc.at(0).get_meta_type().is_ext()) {
+      if (PL_RECORD_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+          PL_NESTED_TABLE_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+          PL_VARRAY_TYPE == row_desc.at(0).get_meta_type().get_extend_type()) {
+        int64_t udt_id = row_desc.at(0).get_udt_id();
+        const ObUserDefinedType *type = nullptr;
+        int64_t ptr = 0;
+        int64_t init_size = OB_INVALID_SIZE;
+        ObObj   tmp_obj;
+        OX (tmp_obj.reset());
+        OZ (ctx->get_user_type(udt_id, type));
+        OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
+        OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+        OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
+        OZ (tmp_obj_array.push_back(tmp_obj));
+        OX (calc_array = &tmp_obj_array);
+      } else if (PL_REF_CURSOR_TYPE == row_desc.at(0).get_meta_type().get_extend_type()) {
+        ObObj tmp_obj;
+        OX (tmp_obj.reset());
+        OX (tmp_obj.set_extend(NULL, PL_REF_CURSOR_TYPE));
+        OZ (tmp_obj_array.push_back(tmp_obj));
+        OX (calc_array = &tmp_obj_array);
+      }
     }
   }
   // 向变量赋值
@@ -8002,6 +8187,16 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       ObIAllocator *pkg_allocator = NULL;
       ObIAllocator *composite_allocator = nullptr;
       ObPlCompiteWrite *composite_write = nullptr;
+      if (result_expr->get_expr_items().count() > 1
+          && T_OP_GET_PACKAGE_VAR == result_expr->get_expr_items().at(1).get_item_type()
+          && OB_NOT_NULL(result_expr->get_expr_items().at(1).get_expr_operator())
+          && result_expr->get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
+        uint16_t param_pos = result_expr->get_expr_items().at(1).get_param_idx();
+        uint64_t package_id = OB_INVALID_ID;
+        OX (package_id = result_expr->get_expr_items().at(param_pos).get_obj().get_uint64());
+        OZ (spi_get_package_allocator(ctx, package_id, pkg_allocator));
+        CK (OB_NOT_NULL(pkg_allocator));
+      }
       OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
       OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
       CK (OB_NOT_NULL(composite_write));
@@ -8016,16 +8211,6 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         OX (composite_allocator = record->get_allocator());
       }
       if (OB_SUCC(ret)) {
-        if (result_expr->get_expr_items().count() > 1
-            && T_OP_GET_PACKAGE_VAR == result_expr->get_expr_items().at(1).get_item_type()
-            && OB_NOT_NULL(result_expr->get_expr_items().at(1).get_expr_operator())
-            && result_expr->get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
-          uint16_t param_pos = result_expr->get_expr_items().at(1).get_param_idx();
-          uint64_t package_id = OB_INVALID_ID;
-          OX (package_id = result_expr->get_expr_items().at(param_pos).get_obj().get_uint64());
-          OZ (spi_get_package_allocator(ctx, package_id, pkg_allocator));
-          CK (OB_NOT_NULL(pkg_allocator));
-        }
         ObIAllocator *alloc = nullptr;
         if (OB_SUCC(ret)) {
           if (nullptr != composite_allocator) {
@@ -8074,6 +8259,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       } else {
         if (params->at(param_idx).is_pl_extend()
             && params->at(param_idx).get_ext() != 0
+            && params->at(param_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
+            && params->at(param_idx).get_meta().get_extend_type() != PL_CURSOR_TYPE
             && params->at(param_idx).get_ext() != calc_array->at(0).get_ext()) {
           OZ (ObUserDefinedType::destruct_objparam(*ctx->allocator_, params->at(param_idx), ctx->exec_ctx_->get_my_session()));
         }
@@ -8086,18 +8273,18 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           if (!calc_array->at(0).is_pl_extend()) {
             ret =OB_ERR_EXPRESSION_WRONG_TYPE;
             LOG_WARN("expr is wrong type", K(ret));
-          } else if (PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
-                    PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
+          } else if (PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type() ||
                     PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
             ObIAllocator *tmp_alloc = PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type() ? ctx->allocator_
                                                                                                        : &ctx->exec_ctx_->get_allocator();
-            OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
-            if (OB_SUCC(ret) && PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
-                ObPLCursorInfo *cursor_info = reinterpret_cast<ObPLCursorInfo*>(result.get_ext());
-                if (cursor_info->isopen() && !cursor_info->is_server_cursor()) {
-                  OZ (ctx->exec_ctx_->get_my_session()->add_non_session_cursor(cursor_info));
-                }
-              }
+            if (PL_REF_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
+              OX (result = calc_array->at(0));  //ref cursor need to shallow copy
+            } else {
+              OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
+            }
+          } else if (PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected PL_CURSOR_TYPE to store datum", K(calc_array->at(0).get_meta()), K(ret));
           } else {
             dst_id = var_type.get_user_type_id();
             ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(calc_array->at(0).get_ext());
@@ -8130,9 +8317,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           bool is_ref_cursor = false;
           is_ref_cursor = params->at(param_idx).is_ref_cursor_type();
           if (params->at(param_idx).is_pl_extend()) {
-            if (params->at(param_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-              ObUserDefinedType::destruct_objparam(*ctx->allocator_, params->at(param_idx), ctx->exec_ctx_->get_my_session());
-            }
+            //do nothing
           } else {
             void *ptr = params->at(param_idx).get_deep_copy_obj_ptr();
             if (nullptr != ptr) {
@@ -8140,7 +8325,12 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             }
             params->at(param_idx).set_null();
           }
-          OX (params->at(param_idx) = result);
+          if (is_ref_cursor   //cursor use spi_copy_ref_cursor to copy
+              || (params->at(param_idx).is_pl_extend() && (params->at(param_idx).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE || params->at(param_idx).get_meta().get_extend_type() == PL_CURSOR_TYPE))) {
+            OZ (spi_copy_ref_cursor(ctx, &ctx->exec_ctx_->get_allocator(), &result, &params->at(param_idx)));
+          } else {
+            OX (params->at(param_idx) = result);
+          }
           OX (params->at(param_idx).set_is_ref_cursor_type(is_ref_cursor));
           OX (params->at(param_idx).set_param_meta());
         }
@@ -8168,7 +8358,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           int64_t nested_count = 0;
           OX (nested_count = ctx->exec_ctx_->get_my_session()->get_nested_count());
           OZ (ctx->exec_ctx_->get_my_session()->save_session(session_value));
-          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false));
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = ctx->exec_ctx_->get_my_session()->restore_session(session_value))) {
             LOG_WARN("failed to restore session", K(tmp_ret));
@@ -8499,6 +8689,7 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
 int ObSPIService::fill_cursor(ObResultSet &result_set,
                               ObSPICursor *cursor,
                               int64_t new_query_start_time,
+                              bool &is_iter_end,
                               int64_t orc_max_ret_rows) {
   int ret = OB_SUCCESS;
   int64_t old_time_out_ts = THIS_WORKER.get_timeout_ts();
@@ -8507,26 +8698,12 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
     LOG_WARN("Argument passed in is NULL", K(cursor), K(ret));
   } else {
     const common::ObNewRow *row = NULL;
-    const common::ColumnsFieldIArray *fields = result_set.get_field_columns();
-    if (OB_ISNULL(fields)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    }
     if (OB_NOT_NULL(result_set.get_physical_plan()) && new_query_start_time > 0) {
       // fill_dbms_cursor do not need check hint , so only new_query_start_time > 0 will check hint timeout
       ObPhysicalPlan *plan = result_set.get_physical_plan();
       if (plan->get_phy_plan_hint().query_timeout_ > 0) {
         old_time_out_ts = THIS_WORKER.get_timeout_ts();
         THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < fields->count(); ++i) {
-      ObDataType type;
-      type.set_meta_type(fields->at(i).type_.get_meta());
-      type.set_accuracy(fields->at(i).accuracy_);
-      if (OB_FAIL(cursor->row_desc_.push_back(type))) {
-        LOG_WARN("push back error", K(i), K(fields->at(i).type_), K(fields->at(i).accuracy_),
-                 K(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
@@ -8536,6 +8713,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
       if (FAILEDx(result_set.get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+          is_iter_end = true;
         } else {
           LOG_WARN("read result error", K(ret));
         }
@@ -8549,13 +8727,24 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
           ObObj& obj = tmp_row.get_cell(i);
           ObObj tmp;
           if (obj.is_pl_extend()) {
-            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
-              LOG_WARN("failed to copy pl extend", K(ret));
+            if (pl::PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
+              pl::ObPLCursorInfo* cursor_info = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext());
+              if (OB_NOT_NULL(cursor_info)) {
+                if (OB_FAIL(cursor->complex_objs_.push_back(obj))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else {
+                  cursor_info->inc_ref_count();
+                }
+              }
             } else {
-              obj = tmp;
-              if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
-                int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
-                LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
+                LOG_WARN("failed to copy pl extend", K(ret));
+              } else {
+                obj = tmp;
+                if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
+                  int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
+                  LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+                }
               }
             }
           }
@@ -8777,7 +8966,7 @@ int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
                                                           expr,
                                                           out_expr,
                                                           &session,
-                                                          true))) {
+                                                          false))) {
         LOG_WARN("failed to create type to str expr", K(ret));
       } else if (OB_ISNULL(out_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -8969,7 +9158,7 @@ int ObSPIService::resolve_ref_objects(const ParseResult &parse_result,
             if (OB_SUCC(ret)) {
               ObSchemaChecker schema_checker;
               const ObRoutineInfo *func_info = NULL;
-              if (OB_FAIL(schema_checker.init(schema_guard, session.get_sessid()))) {
+              if (OB_FAIL(schema_checker.init(schema_guard, session.get_server_sid()))) {
                 LOG_WARN("fail to init schema checker", K(ret));
               } else if (OB_FAIL(schema_checker.get_standalone_function_info(
                                                   session.get_effective_tenant_id(),
@@ -9531,6 +9720,236 @@ int ObSPIService::check_system_trigger_legal(pl::ObPLExecCtx *ctx, const ObStrin
   return ret;
 }
 
+int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
+                                 ObPsCursorInfo &ps_cursor)
+{
+  int ret = OB_SUCCESS;
+  ParamStore &exec_params = ps_cursor.get_exec_params();
+  ObString sql_str;
+  ObResultSet *rs = NULL;
+  const common::ColumnsFieldIArray *fields = NULL;
+  ObSQLSessionInfo *session = NULL;
+  ObPLSubPLSqlTimeGuard guard(ctx);
+
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pointer is NULL", K(ret), K(ctx));
+  } else if (OB_ISNULL(session = ctx->exec_ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FAIL(streaming_cursor_open(ctx,
+                                        ps_cursor,
+                                        *session,
+                                        sql_str,
+                                        ps_cursor.get_ps_sql(),
+                                        stmt::T_SELECT, /*stmt_type*/
+                                        &exec_params,
+                                        exec_params.count(),
+                                        true, /*is_server_cursor*/
+                                        false, /*for_update*/
+                                        ps_cursor.has_hidden_rowid(),
+                                        false /*is_dbms_cursor*/))) {
+    LOG_WARN("streaming cursor open failed", K(ret), K(ps_cursor));
+  } else if (OB_ISNULL(ps_cursor.get_cursor_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor handler is NULL", K(ret));
+  } else if (OB_ISNULL(rs = ps_cursor.get_cursor_handler()->get_result_set())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result set is NULL", K(ret));
+  } else if (OB_ISNULL(fields = rs->get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fields is NULL", K(ret));
+  } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *fields))){
+    LOG_WARN("prepare cursor store failed", K(ret));
+  } else if (OB_ISNULL(rs->get_physical_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan is NULL", K(ret));
+  } else if (!ps_cursor.is_async()) {
+    if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
+      LOG_WARN("fill ps cursor failed", K(ret));
+    }
+  } else {
+    rs->get_physical_plan()->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
+    if (ps_cursor.is_for_update()
+        || rs->get_physical_plan()->contain_pl_udf_or_trigger()
+        || rs->get_physical_plan()->has_link_udf()) {
+      if (ps_cursor.is_async()) {
+        ps_cursor.set_is_async(false);
+        ObPsCursorInfo::reduce_async_cursor_count();
+      }
+      if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
+        LOG_WARN("fill ps cursor failed", K(ret));
+      }
+    }
+  }
+  ps_cursor.set_unstreaming();
+  return ret;
+}
+
+int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
+                                 ObPsCursorInfo &ps_cursor,
+                                 int64_t pre_store_size) {
+  int ret = OB_SUCCESS;
+  ObResultSet *rs = NULL;
+  ObSPICursor *spi_cursor = NULL;
+  bool is_iter_end = false;
+
+#define CHECK_CURSOR_HANDLER                                                  \
+  do {                                                                        \
+    CK (OB_NOT_NULL(ps_cursor.get_cursor_handler()));                         \
+    OV (OB_NOT_NULL(rs = ps_cursor.get_cursor_handler()->get_result_set()));  \
+    OV (OB_NOT_NULL(spi_cursor = ps_cursor.get_cursor_store()));              \
+  } while (0)
+
+#define CLOSE_SPI_RESULT                                                \
+  do {                                                                  \
+    ObSPIResultSet *spi_result = ps_cursor.get_cursor_handler();        \
+    if (OB_NOT_NULL(spi_result)) {                                      \
+      if (OB_NOT_NULL(spi_result->get_result_set())) {                  \
+        int close_ret = spi_result->close_result_set();                 \
+        if (OB_SUCCESS != close_ret) {                                  \
+          LOG_WARN("close mysql result failed", K(ret), K(close_ret));  \
+        }                                                               \
+        ret = (OB_SUCCESS == ret ? close_ret : ret);                    \
+        spi_result->destruct_exec_params(session);                      \
+      }                                                                 \
+      spi_result->~ObSPIResultSet();                                    \
+      ps_cursor.set_spi_cursor(NULL);                                   \
+      if (ps_cursor.is_async()) {                                       \
+        ObPsCursorInfo::reduce_async_cursor_count();                    \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+
+  if (ps_cursor.is_async()) {
+    bool store_end = false;
+    while (OB_SUCC(ret)
+           && OB_SUCCESS == ps_cursor.get_store_ret()
+           && !store_end) {
+      // NOTE: Do not delete the following log line !!!
+      LOG_INFO("async fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
+               K(session.get_effective_tenant_id()));
+      ObSpinLockGuard guard(ps_cursor.get_spin_lock());
+      if (!ps_cursor.is_client_close()) {
+        int64_t max_cnt = ps_cursor.get_fetch_size();
+        CHECK_CURSOR_HANDLER;
+        if (OB_SUCC(ret)) {
+          int64_t v = ps_cursor.get_ora_max_ret_rows() - spi_cursor->row_store_.get_row_cnt();
+          max_cnt = MIN(max_cnt, v);
+          if (pre_store_size > 0) {
+            max_cnt = pre_store_size;
+          }
+        }
+        if (FAILEDx((fill_cursor(*rs,
+                                spi_cursor,
+                                ObTimeUtility::current_time(),
+                                is_iter_end,
+                                max_cnt)))) {
+          LOG_WARN("fill cursor failed", K(ret));
+        } else {
+#ifdef ERRSIM
+          ret = OB_E(EventTable::EN_FILL_PS_CUROSR_ERROR) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            LOG_WARN("async cursor EN_FILL_PS_CUROSR_ERROR", K(ret));
+          }
+#endif
+        }
+        if (OB_FAIL(ret)) {
+          ps_cursor.set_store_ret(ret);
+        } else if (is_iter_end || (spi_cursor->row_store_.get_row_cnt() >= ps_cursor.get_ora_max_ret_rows())) {
+          if (OB_FAIL(spi_cursor->row_store_.finish_add_row())) {
+            LOG_WARN("finish add row failed", K(ret));
+            ps_cursor.set_store_ret(ret);
+          } else {
+            ps_cursor.set_store_ret(OB_ITER_END);
+          }
+        } else if (pre_store_size > 0) {
+          store_end = true;
+        }
+      } else {
+        ps_cursor.set_store_ret(OB_ITER_END);
+      }
+      if (OB_FAIL(ret) || ps_cursor.is_client_close() || OB_SUCCESS != ps_cursor.get_store_ret()) {
+        store_end = true;
+        CLOSE_SPI_RESULT;
+      }
+    }
+  } else {
+    LOG_INFO("sync fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
+             K(session.get_effective_tenant_id()));
+    CHECK_CURSOR_HANDLER;
+    if (FAILEDx(fill_cursor(*rs,
+                            spi_cursor,
+                            ObTimeUtility::current_time(),
+                            is_iter_end,
+                            ps_cursor.get_ora_max_ret_rows()))) {
+      LOG_WARN("fill cursor failed", K(ret));
+    } else {
+#ifdef ERRSIM
+      ret = OB_E(EventTable::EN_FILL_PS_CUROSR_ERROR) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("sync cursor EN_FILL_PS_CUROSR_ERROR", K(ret));
+      }
+#endif
+    }
+    if (OB_FAIL(ret)) {
+      ps_cursor.set_store_ret(ret);
+    } else if (is_iter_end) {
+      if (OB_FAIL(spi_cursor->row_store_.finish_add_row())) {
+        LOG_WARN("finish add row failed", K(ret));
+        ps_cursor.set_store_ret(ret);
+      } else {
+        ps_cursor.set_store_ret(OB_ITER_END);
+      }
+    }
+    CLOSE_SPI_RESULT;
+  }
+#undef CHECK_CURSOR_HANDLER
+#undef CLOSE_SPI_RESULT
+  return ret;
+}
+
+int ObSPIService::ps_cursor_fetch(ObPsCursorInfo &ps_cursor, ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
+  ObSPICursor *cursor = ps_cursor.get_cursor_store();
+  ObNewRow &cur_row = ps_cursor.get_current_row();
+
+  if (OB_ISNULL(cursor)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cursor store is NULL", K(ret));
+  } else if (cur_row.is_invalid()) {
+    ObIAllocator *allocator = ps_cursor.get_allocator();
+    if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret));
+    } else {
+      int64_t column_count = cursor->row_desc_.count();
+      void *ptr = allocator->alloc(column_count * sizeof(ObObj));
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for row failed", "size", column_count * sizeof(ObObj));
+      } else {
+        cur_row.cells_ = new(ptr) common::ObObj[column_count];
+        cur_row.count_ = column_count;
+      }
+    }
+  }
+  if (FAILEDx(cursor->row_store_.get_row(cursor->cur_, cur_row))) {
+    if (OB_INDEX_OUT_OF_RANGE == ret
+        && (0 > cursor->cur_ || cursor->cur_ >= cursor->row_store_.get_row_cnt())) {
+      ret = OB_ITER_END;
+    } else {
+      LOG_WARN("get row from row_store failed", K(cursor->cur_), K(ret));
+    }
+  } else {
+    ++cursor->cur_;
+  }
+  LOG_TRACE("ps cursor fetch row", K(ret), K(session.get_server_sid()), K(ps_cursor.get_id()), K(cur_row));
+  return ret;
+}
+
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
   execute_start_(ObTimeUtility::current_time()),
@@ -9662,6 +10081,39 @@ ObPLPartitionHitGuard::~ObPLPartitionHitGuard()
   }
 }
 
+int ObSPICursor::release_complex_obj(ObObj &complex_obj)
+{
+  int ret = OB_SUCCESS;
+  if (complex_obj.is_pl_extend() && pl::PL_REF_CURSOR_TYPE == complex_obj.get_meta().get_extend_type()) {
+    pl::ObPLCursorInfo* cursor = reinterpret_cast<pl::ObPLCursorInfo*>(complex_obj.get_ext());
+    if (OB_NOT_NULL(cursor) && OB_NOT_NULL(session_info_)) {
+      cursor->dec_ref_count();
+      if (0 == cursor->get_ref_count()) {
+        if (OB_FAIL(ObSPIService::cursor_release(session_info_, cursor, true, OB_INVALID_ID, OB_INVALID_ID, true))) {
+          LOG_WARN("failed to release cursor", K(ret), K(complex_obj), K(session_info_));
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(pl::ObUserDefinedType::destruct_obj(complex_obj, session_info_))) {
+      LOG_WARN("failed to destruct obj", K(ret));
+    }
+  }
+  return ret;
+}
+int ObSPICursor::init_row_desc(const common::ColumnsFieldIArray &fields)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); i++) {
+    ObDataType type;
+    type.set_meta_type(fields.at(i).type_.get_meta());
+    type.set_accuracy(fields.at(i).accuracy_);
+    if (OB_FAIL(row_desc_.push_back(type))) {
+      LOG_WARN("push back error", K(ret), K(i), K(fields.at(i)));
+    }
+  }
+  return ret;
+}
 
 }
 }

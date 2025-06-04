@@ -89,7 +89,9 @@ class ObDASFuncLookupIter : public ObDASLocalLookupIter
 public:
   ObDASFuncLookupIter()
     : ObDASLocalLookupIter(ObDASIterType::DAS_ITER_FUNC_LOOKUP),
-      cap_(0)
+      index_scan_rowsize_(0),
+      data_scan_read_rowsize_(0),
+      start_table_scan_(false)
   {}
   virtual ~ObDASFuncLookupIter() {}
   void set_index_scan_param(storage::ObTableScanParam &scan_param) { static_cast<ObDASScanIter *>(index_table_iter_)->set_scan_param(scan_param);}
@@ -120,7 +122,8 @@ protected:
   virtual int check_index_lookup() override;
   virtual void reset_lookup_state() override;
 protected:
-  int64_t cap_;
+  int64_t index_scan_rowsize_;
+  int64_t data_scan_read_rowsize_;
   bool start_table_scan_;
 };
 

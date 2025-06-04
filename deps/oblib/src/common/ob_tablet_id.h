@@ -42,6 +42,7 @@ public:
   static const uint64_t LS_TX_CTX_TABLET_ID    = MIN_LS_INNER_TABLET_ID + 1;
   static const uint64_t LS_TX_DATA_TABLET_ID   = MIN_LS_INNER_TABLET_ID + 2;
   static const uint64_t LS_LOCK_TABLET_ID      = MIN_LS_INNER_TABLET_ID + 3;
+  static const uint64_t LS_MEMBER_TABLET_ID    = MIN_LS_INNER_TABLET_ID + 4;
   static const uint64_t MAX_LS_INNER_TABLET_ID = OB_MAX_LS_INNER_TABLE_ID;
 
 public:
@@ -67,6 +68,7 @@ public:
   bool is_ls_tx_data_tablet() const { return (LS_TX_DATA_TABLET_ID == id_); }
   bool is_ls_tx_ctx_tablet() const { return (LS_TX_CTX_TABLET_ID == id_); }
   bool is_ls_lock_tablet() const { return (LS_LOCK_TABLET_ID == id_); }
+  bool is_ls_member_tablet() const {return (LS_MEMBER_TABLET_ID == id_); }
   // interface for compaction schedule
   bool is_only_mini_merge_tablet() const
   { // only do mini merge
@@ -74,7 +76,7 @@ public:
   }
   bool is_mini_and_minor_merge_tablet() const
   { // only do mini merge and minor merge
-    return is_ls_tx_data_tablet();
+    return is_ls_tx_data_tablet() || is_ls_member_tablet();
   }
   bool is_special_merge_tablet() const
   {
@@ -98,6 +100,11 @@ public:
   bool is_user_extended_rowid_table_tablet() const {
     return MIN_USER_EXTENDED_ROWID_TABLE_TABLET_ID < id_
         && id_ < MAX_USER_EXTENDED_ROWID_TABLE_TABLET_ID;
+  }
+
+  bool is_special_memtable_tablet() const
+  {
+    return is_ls_tx_ctx_tablet() || is_ls_tx_data_tablet() || is_ls_lock_tablet();
   }
 
   // compare operator
@@ -130,8 +137,9 @@ private:
 static const ObTabletID LS_TX_CTX_TABLET(ObTabletID::LS_TX_CTX_TABLET_ID);
 static const ObTabletID LS_TX_DATA_TABLET(ObTabletID::LS_TX_DATA_TABLET_ID);
 static const ObTabletID LS_LOCK_TABLET(ObTabletID::LS_LOCK_TABLET_ID);
+static const ObTabletID LS_MEMBER_TABLET(ObTabletID::LS_MEMBER_TABLET_ID);
 
-static const int64_t OB_DEFAULT_TABLET_ID_COUNT = 3;
+static const int64_t OB_DEFAULT_TABLET_ID_COUNT = 4;
 typedef ObSEArray<ObTabletID, OB_DEFAULT_TABLET_ID_COUNT> ObTabletIDArray;
 typedef ObFixedArray<ObTabletID, ObIAllocator> ObTabletIDFixedArray;
 

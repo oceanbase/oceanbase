@@ -770,6 +770,7 @@ public:
     ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     VectorFormat fmt = aggr_info.param_exprs_.at(0)->get_format(eval_ctx);
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SumVector", common::ObCtxIds::WORK_AREA));
     if (OB_LIKELY(!is_null)) {
       if (not_nulls.at(agg_col_idx)) {
         // add single row is full lob no matter what VectorFormat is
@@ -778,7 +779,7 @@ public:
         if (!lob_comm->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected data", K(ret), K(*lob_comm));
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,
@@ -789,12 +790,10 @@ public:
           const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(agg_cell));
           ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
           ObString agg_array_data(agg_cell_len, agg_data);
-          ObLobLocatorV2 locator(agg_array_data, true/*has_lob_header*/);
-          bool is_outrow = !locator.has_inrow_data();
           if (!agg_lob_comm->is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
-          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                   ObLongTextType,
                                                                   CS_TYPE_BINARY,
                                                                   true,
@@ -815,7 +814,7 @@ public:
                 SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
               }
             }
-            if (OB_SUCC(ret) && is_outrow) {
+            if (OB_SUCC(ret)) {
               ObString res;
               if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, agg_array_data.length(), agg_ctx.allocator_, res, agg_array_data.ptr()))) {
                 SQL_LOG(WARN, "failed to set array res", K(ret));
@@ -854,32 +853,27 @@ public:
     const char* param_payload = nullptr;
     int32_t param_len = 0;
     columns.get_payload(row_num, param_payload, param_len);
+    common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SumVector", common::ObCtxIds::WORK_AREA));
     if (not_nulls.at(agg_col_id)) {
       ObString array_data(param_len, param_payload);
-      if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
-        ObLobCommon *lob_comm = (ObLobCommon*)(param_payload);
-        if (!lob_comm->is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_LOG(WARN, "unexpected data", K(ret), K(*lob_comm));
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+      if (!ObCollectionExprUtil::is_compact_fmt_cell(param_payload)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected data format", K(ret));
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,
                                                                 array_data))) {
-          SQL_LOG(WARN, "fail to get real data.", K(ret), K(array_data));
-        }
-      }
-      if (OB_SUCC(ret)) {
+        SQL_LOG(WARN, "fail to get real data.", K(ret), K(array_data));
+      } else {
         int32_t agg_cell_len = *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *));
         const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(aggr_cell));
         ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
         ObString agg_array_data(agg_cell_len, agg_data);
-        ObLobLocatorV2 locator(agg_array_data, true/*has_lob_header*/);
-        bool is_outrow = !locator.has_inrow_data();
         if (!agg_lob_comm->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&agg_ctx.allocator_,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                                 ObLongTextType,
                                                                 CS_TYPE_BINARY,
                                                                 true,
@@ -900,7 +894,7 @@ public:
               SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
             }
           }
-          if (OB_SUCC(ret) && is_outrow) {
+          if (OB_SUCC(ret)) {
             ObString res;
             if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, agg_array_data.length(), agg_ctx.allocator_, res, agg_array_data.ptr()))) {
               SQL_LOG(WARN, "failed to set array res", K(ret));
@@ -913,7 +907,10 @@ public:
       }
     } else if (is_add) {
       ObString res;
-      if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+      if (!ObCollectionExprUtil::is_compact_fmt_cell(param_payload)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected data format", K(ret));
+      } else {
         char *res_ptr = nullptr;
         if (OB_ISNULL(res_ptr = (char*)agg_ctx.allocator_.alloc(param_len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -921,14 +918,10 @@ public:
         } else {
           MEMCPY(res_ptr, param_payload, param_len);
           res.assign(res_ptr, param_len);
+          *reinterpret_cast<int64_t *>(aggr_cell) = reinterpret_cast<int64_t>(res.ptr());
+          *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *)) = res.length();
+          not_nulls.set(agg_col_id);
         }
-      } else if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, param_len, agg_ctx.allocator_, res, param_payload))) {
-        SQL_LOG(WARN, "failed to set array res", K(ret));
-      }
-      if (OB_SUCC(ret)) {
-        *reinterpret_cast<int64_t *>(aggr_cell) = reinterpret_cast<int64_t>(res.ptr());
-        *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *)) = res.length();
-        not_nulls.set(agg_col_id);
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1005,19 +998,12 @@ public:
     int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
     const NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
     ObIVector *output_vec = agg_expr.get_vector(agg_ctx.eval_ctx_);
-    VectorFormat fmt = output_vec->get_format();
-    ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(agg_cell));
     if (OB_LIKELY(not_nulls.at(agg_col_id))) {
       ObString res_str(agg_cell_len, agg_data);
       static_cast<ColumnFmt *>(output_vec)->set_string(output_idx, res_str);
-      if (!is_uniform_format(fmt) &&
-          OB_FAIL(ObArrayExprUtils::batch_dispatch_array_attrs(eval_ctx, const_cast<sql::ObExpr &>(agg_expr), output_idx, 1))) {
-        SQL_LOG(WARN, "Failed to dispatch nested attrs", K(ret));
-      }
     } else {
       static_cast<ColumnFmt *>(output_vec)->set_null(output_idx);
-      ObArrayExprUtils::set_expr_attrs_null(agg_expr, eval_ctx, output_idx);
     }
     return ret;
   }

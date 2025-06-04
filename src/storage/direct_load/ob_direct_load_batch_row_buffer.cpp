@@ -105,30 +105,15 @@ int ObDirectLoadBatchRowBuffer::init_vectors(const ObIArray<ObColDesc> &col_desc
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
     const ObColDesc &col_desc = col_descs.at(i);
-    const int16_t precision = col_desc.col_type_.is_decimal_int()
-                                ? col_desc.col_type_.get_stored_precision()
-                                : PRECISION_UNKNOWN_YET;
-    VecValueTypeClass value_tc = get_vec_value_tc(col_desc.col_type_.get_type(),
-                                                  col_desc.col_type_.get_scale(),
-                                                  precision);
-    const bool is_fixed = is_fixed_length_vec(value_tc);
     ObIVector *vector = nullptr;
     ObArenaAllocator *allocator = nullptr;
-    if (is_fixed) { // fixed format
-      if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_FIXED, value_tc, allocator_, vector))) {
-        LOG_WARN("fail to new fixed vector", KR(ret), K(value_tc));
-      } else if (OB_FAIL(
-                   ObDirectLoadVectorUtils::prepare_vector(vector, max_batch_size, allocator_))) {
-        LOG_WARN("fail to prepare fixed vector", KR(ret), K(value_tc));
-      }
-    } else { // discrete format
-      if (OB_FAIL(
-            ObDirectLoadVectorUtils::new_vector(VEC_DISCRETE, value_tc, allocator_, vector))) {
-        LOG_WARN("fail to new discrete vector", KR(ret), K(value_tc));
-      } else if (OB_FAIL(
-                   ObDirectLoadVectorUtils::prepare_vector(vector, max_batch_size, allocator_))) {
-        LOG_WARN("fail to prepare discrete vector", KR(ret), K(value_tc));
-      } else if (OB_ISNULL(allocator = OB_NEWx(ObArenaAllocator, &allocator_, "TLD_VecAlloc"))) {
+    if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
+      LOG_WARN("fail to new vector", KR(ret), K(col_desc));
+    } else if (OB_FAIL(
+                 ObDirectLoadVectorUtils::prepare_vector(vector, max_batch_size, allocator_))) {
+      LOG_WARN("fail to prepare vector", KR(ret), K(col_desc));
+    } else if (VEC_DISCRETE == vector->get_format()) {
+      if (OB_ISNULL(allocator = OB_NEWx(ObArenaAllocator, &allocator_, "TLD_VecAlloc"))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObArenaAllocator", KR(ret));
       } else {
@@ -138,10 +123,6 @@ int ObDirectLoadBatchRowBuffer::init_vectors(const ObIArray<ObColDesc> &col_desc
     if (OB_SUCC(ret)) {
       vector_allocators_.at(i) = allocator;
       vectors_.at(i) = vector;
-      int64_t fixed_len = 0;
-      if (is_fixed) {
-        fixed_len = vector->get_length(0);
-      }
     }
   }
   return ret;

@@ -15,6 +15,7 @@
 #include "observer/ob_server.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/oblog/ob_log_compressor.h"
+#include "lib/resource/ob_affinity_ctrl.h"
 #include "lib/task/ob_timer_monitor.h"
 #include "lib/task/ob_timer_service.h" // ObTimerService
 #include "observer/ob_server_utils.h"
@@ -33,6 +34,7 @@
 #include "storage/ob_file_system_router.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "sql/engine/px/ob_px_target_mgr.h"
+#include "sql/engine/table/ob_external_data_page_cache.h"
 #include "share/ob_device_manager.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
@@ -42,7 +44,9 @@
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
+#include "share/catalog/ob_cached_catalog_meta_getter.h"
 #include "share/ob_server_blacklist.h"
+#include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
@@ -77,6 +81,7 @@
 #include "common/ob_target_specific.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
+#include "storage/member_table/ob_member_table_schema_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -329,6 +334,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {
       LOG_ERROR("init pre setting failed", KR(ret));
+    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init())) {
+      LOG_ERROR("init affinity ctrl topology failed", KR(ret));
     } else if (OB_FAIL(init_global_context())) {
       LOG_ERROR("init global context failed", KR(ret));
     } else if (OB_FAIL(init_version())) {
@@ -436,6 +443,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
+    } else if (OB_FAIL(ObCachedCatalogSchemaMgr::get_instance().init())) {
+      LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
     } else if (OB_FAIL(startup_accel_handler_.init(SERVER_ACCEL))) {
@@ -976,6 +985,12 @@ int ObServer::start()
       LOG_ERROR("fail to init mds schema helper", K(ret));
     } else {
       FLOG_INFO("success to init mds schema helper");
+    }
+
+    if (FAILEDx(ObMemberTableSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init member table schema helper", K(ret));
+    } else {
+      FLOG_INFO("success to init member table schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {
@@ -1537,10 +1552,6 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer stopped");
 
-    FLOG_INFO("begin to stop ctas clean up timer");
-    TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
-    FLOG_INFO("ctas clean up timer stopped");
-
     FLOG_INFO("begin to stop sql conn pool");
     sql_conn_pool_.stop();
     FLOG_INFO("sql connection pool stopped");
@@ -1820,6 +1831,7 @@ int ObServer::wait()
     FLOG_INFO("begin to wait thread hung detector");
     common::occam::ObThreadHungDetector::get_instance().wait();
     FLOG_INFO("wait thread hung detector success");
+
 
 #ifdef ENABLE_IMC
     FLOG_INFO("begin to wait imc tasks");
@@ -2437,9 +2449,9 @@ int ObServer::init_pre_setting()
     }
   }
   if (OB_SUCC(ret)) {
-    const int64_t stack_size = std::max(1L << 19, static_cast<int64_t>(GCONF.stack_size));
+    const int64_t stack_size = std::max(OB_DEFAULT_STACK_SIZE, static_cast<int64_t>(GCONF.stack_size));
     LOG_INFO("set stack_size", K(stack_size));
-    global_thread_stack_size = stack_size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+    global_thread_stack_size = calc_available_stack_size(stack_size);
   }
   if (OB_SUCC(ret) && GCONF.use_ipv6) {
     enable_use_ipv6();
@@ -2498,7 +2510,7 @@ int ObServer::init_io()
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
       io_config.sync_io_thread_count_ = GCONF.sync_io_thread_count;
-      const int64_t max_io_depth = 256;
+      const int64_t max_io_depth = 512;
       if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
         LOG_ERROR("config io manager fail, ", KR(ret));
       } else {
@@ -2709,10 +2721,13 @@ int ObServer::init_loaddata_global_stat()
 int ObServer::init_network()
 {
   int ret = OB_SUCCESS;
+  const char* mysql_unix_path = "unix:run/sql.sock";
+  const char* rpc_unix_path = "unix:run/rpc.sock";
 
   obrpc::ObIRpcExtraPayload::set_extra_payload(ObRpcExtraPayload::extra_payload_instance());
 
-  if (OB_FAIL(net_frame_.init())) {
+
+  if (OB_FAIL(net_frame_.init(mysql_unix_path, rpc_unix_path))) {
     LOG_ERROR("init server network fail");
   } else if (OB_FAIL(net_frame_.get_proxy(srv_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
@@ -3140,6 +3155,8 @@ int ObServer::init_storage()
       LOG_WARN("fail to init disk usage report task", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::DiskUseReport))) {
       LOG_WARN("fail to initialize disk usage report timer", KR(ret));
+    } else if (OB_FAIL(sql::ObExternalDataPageCache::get_instance().init("ObExtPageCache", 1))) {
+      LOG_ERROR("init external_table pageCache failed", KR(ret));
     }
   }
 
@@ -3559,7 +3576,7 @@ bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key,
         ret = OB_SUCCESS;
         ATOMIC_STORE(&obs_->need_ctas_cleanup_, true); //1, The current session is in use, there is suspicion, need to continue to check in the next scheduling
         LOG_DEBUG("try lock query fail with code OB_EGAIN",
-            K(sess_info->get_sessid()), K(sess_info->get_sessid_for_table()));
+            K(sess_info->get_server_sid()), K(sess_info->get_sessid_for_table()));
       }
       set_drop_flag(false);
     } else if (ObCTASCleanUp::CTAS_RULE == get_cleanup_type()) { //2, Query build table cleanup
@@ -3613,7 +3630,7 @@ bool ObServer::ObRefreshTime::operator()(sql::ObSQLSessionMgr::Key key,
     } else {
       ret = OB_SUCCESS;
       LOG_WARN("try lock query fail with code OB_EGAIN",
-          K(sess_info->get_sessid()), K(sess_info->get_sessid_for_table()));
+          K(sess_info->get_server_sid()), K(sess_info->get_sessid_for_table()));
     }
   } else {
     sess_info->refresh_temp_tables_sess_active_time();
@@ -3771,7 +3788,10 @@ int ObServer::refresh_cpu_frequency()
   int ret = OB_SUCCESS;
   uint64_t cpu_frequency = get_cpufreq_khz();
 
-  cpu_frequency = cpu_frequency < 1 ? 1 : cpu_frequency;
+  if (0 == cpu_frequency) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
+    cpu_frequency = ObServer::DEFAULT_CPU_FREQUENCY;
+  }
   if (cpu_frequency != cpu_frequency_) {
     LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
     cpu_frequency_ = cpu_frequency;
@@ -4190,7 +4210,7 @@ int ObServer::init_server_in_arb_mode()
   LOG_INFO("io thread connection negotiation enabled!");
   arb_opts.negotiation_enable_ = 1;          // enable negotiation
   arb_opts.rpc_port_ = rpc_port;
-  const int64_t max_io_depth = 256;
+  const int64_t max_io_depth = 512;
   ObIOConfig io_config;
   io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
   const double io_memory_ratio = 0.2;

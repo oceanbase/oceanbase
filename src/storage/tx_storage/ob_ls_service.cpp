@@ -141,6 +141,7 @@ int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constr
   int64_t config_value = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   int64_t memory_value = INT64_MAX;
   int64_t clog_disk_value = INT64_MAX;
+  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
   // 1. configuration
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_LIKELY(tenant_config.is_valid())) {
@@ -154,12 +155,15 @@ int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constr
     OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
 
   // 3. clog disk
-  palf::PalfOptions palf_opts;
-  if (OB_FAIL(MTL(ObLogService*)->get_palf_options(palf_opts))) {
+  palf::PalfDiskOptions disk_opts;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (GCONF.enable_logservice) { // do nothing
+  } else
+#endif
+  if (OB_FAIL(MTL(ObLogService*)->get_palf_disk_options(disk_opts))) {
     LOG_WARN("get palf options failed", K(ret));
   } else {
-    const palf::PalfDiskOptions &disk_opts = palf_opts.disk_options_;
-    clog_disk_value = disk_opts.log_disk_usage_limit_size_ / MIN_DISK_SIZE_PER_PALF_INSTANCE;
+    clog_disk_value = disk_opts.log_disk_usage_limit_size_ / per_palf_size;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(constraint_value.set_type_value(CONFIGURATION_CONSTRAINT, config_value))) {
@@ -225,6 +229,7 @@ int ObLSService::cal_min_phy_resource_needed_(const int64_t num,
   int64_t ls_cnt = num;
   int64_t clog_disk_bytes = 0;
   int64_t memory_bytes = 0;
+  const int64_t per_palf_size = GCTX.is_shared_storage_mode() ? SHARED_STORAGE_MIN_DISK_SIZE_PER_PALF_INSTANCE : MIN_DISK_SIZE_PER_PALF_INSTANCE;
   // 1. memory
   // if the ls num is smaller than OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT,
   // just return SMALL_TENANT_MEMORY_LIMIT.
@@ -233,7 +238,7 @@ int ObLSService::cal_min_phy_resource_needed_(const int64_t num,
                   * TENANT_MEMORY_PER_LS_NEED);
   memory_bytes = ls_cnt > 0 ? memory_bytes : 0;
   // 2. clog disk
-  clog_disk_bytes = MIN_DISK_SIZE_PER_PALF_INSTANCE * OB_MAX(0, ls_cnt);
+  clog_disk_bytes = per_palf_size * OB_MAX(0, ls_cnt);
 
   if (OB_FAIL(min_phy_res.set_type_value(PHY_RESOURCE_MEMORY, memory_bytes))) {
     LOG_WARN("set type value failed", K(PHY_RESOURCE_MEMORY), K(memory_bytes));
@@ -776,7 +781,7 @@ int ObLSService::gc_ls_after_replay_slog()
         ObLSLockGuard lock_ls(ls);
         if (ls_status.is_init_state()) {
           do {
-            if (OB_TMP_FAIL(TENANT_STORAGE_META_PERSISTER.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()))) {
+            if (OB_TMP_FAIL(TENANT_STORAGE_META_SERVICE.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()))) {
               LOG_ERROR("fail to write create ls abort slog", K(tmp_ret), KPC(ls));
             }
             if (OB_TMP_FAIL(tmp_ret)) {
@@ -1188,7 +1193,7 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
     }
     if (success_step < 2 && OB_SUCC(ret)) {
       // todo zk250686_ copy tablet_id_set to tablet_free_pending_array
-      if(write_slog && OB_FAIL(TENANT_STORAGE_META_PERSISTER.delete_ls(ls_id, ls->get_ls_epoch()))) {
+      if(write_slog && OB_FAIL(TENANT_STORAGE_META_SERVICE.delete_ls(ls_id, ls->get_ls_epoch()))) {
         LOG_WARN("fail to write remove ls slog", K(ret));
       } else {
         success_step = 2;
@@ -1288,7 +1293,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
         LOG_WARN("add log stream to map failed.", K(ret));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_ADDED_TO_MAP)) {
         // do nothing
-      } else if (OB_BREAK_FAIL(TENANT_STORAGE_META_PERSISTER.prepare_create_ls(ls_meta, ls_epoch))) {
+      } else if (OB_BREAK_FAIL(TENANT_STORAGE_META_SERVICE.prepare_create_ls(ls_meta, ls_epoch))) {
         LOG_WARN("fail to write create log stream slog", K(ls_meta));
       } else if (OB_FAIL(ls->set_ls_epoch(ls_epoch))) {
         LOG_WARN("fail to set ls epoch", K(ret));
@@ -1303,7 +1308,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                                           arg.create_scn_))) {
         LOG_WARN("create ls inner tablet failed", K(ret), K(ls_meta));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_TABLET_CREATED)) {
-      } else if (OB_BREAK_FAIL(TENANT_STORAGE_META_PERSISTER.commit_create_ls(
+      } else if (OB_BREAK_FAIL(TENANT_STORAGE_META_SERVICE.commit_create_ls(
           ls->get_ls_id(), ls->get_ls_epoch()))) {
         LOG_WARN("fail to write create log stream commit slog", K(ret), K(ls_meta));
       } else if (OB_BREAK_FAIL(ls->finish_create_ls())) {
@@ -1411,7 +1416,7 @@ void ObLSService::del_ls_after_create_ls_failed_(ObLSCreateState& in_ls_create_s
           if (OB_TMP_FAIL(ls->set_remove_state())) {
             need_retry = true;
             LOG_ERROR("fail to set ls remove state", K(tmp_ret), KPC(ls));
-          } else if (OB_TMP_FAIL(TENANT_STORAGE_META_PERSISTER.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()))) {
+          } else if (OB_TMP_FAIL(TENANT_STORAGE_META_SERVICE.abort_create_ls(ls->get_ls_id(), ls->get_ls_epoch()))) {
             need_retry = true;
             LOG_ERROR("fail to write create log stream abort slog", K(tmp_ret), KPC(ls));
           } else {

@@ -298,7 +298,37 @@ bool ElectionPriorityImpl::has_fatal_failure() const
   }
   return ret;
 }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+struct FillPriorityFunctor
+{
+  FillPriorityFunctor(int &ret, libpalf::LibPalfElectionPriority *lib_priority) : ret_(ret), lib_priority_(lib_priority) {}
+  template <typename T>
+  int operator()(T &element)
+  {
+    LC_TIME_GUARD(1_s);
+    int ret = OB_SUCCESS;
+    if (CLICK_FAIL(element.fill_libpalf_priority(lib_priority_))) {
+      ret_ = ret;
+      COORDINATOR_LOG(WARN, "fill libpalf priority failed", K(ret), K(MTL_ID()), K(element));
+    }
+    return ret;
+  }
+private:
+  int &ret_;
+  libpalf::LibPalfElectionPriority *lib_priority_;
+};
 
+int ElectionPriorityImpl::fill_libpalf_priority(libpalf::LibPalfElectionPriority *lib_priority)
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  FillPriorityFunctor functor(ret, lib_priority);
+  if (CLICK_FAIL(priority_tuple_.for_each(functor))) {
+    COORDINATOR_LOG(WARN, "fill libpalf_priority failed", KR(ret), K(MTL_ID()), K_(ls_id), K(*this));
+  }
+  return ret;
+}
+#endif
 }
 }
 }

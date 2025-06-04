@@ -26,26 +26,26 @@
 */
 // USER_IO & SYSTEM_IO 10001-11999
 WAIT_EVENT_DEF(NULL_EVENT, 10000, "", "", "", "", OTHER, true, true)
-WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_DATA_INDEX_READ, 10002, "db file data `index read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_COMPACT_READ, 11001, "db file compact read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_COMPACT_WRITE, 11002, "db file compact write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_READ, 11003, "db file index build read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_WRITE, 11004, "db file index build write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_MIGRATE_READ, 11005, "db file migrate read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_MIGRATE_WRITE, 11006, "db file migrate write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(BLOOM_FILTER_BUILD_READ, 11007, "bloomfilter build read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(INTERM_RESULT_DISK_WRITE, 11008, "interm result disk write", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(INTERM_RESULT_DISK_READ, 11009, "interm result disk read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(ROW_STORE_DISK_WRITE, 11010, "row store disk write", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "fd", "offset", "size", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_DATA_INDEX_READ, 10002, "db file data `index read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_COMPACT_READ, 11001, "db file compact read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_COMPACT_WRITE, 11002, "db file compact write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_READ, 11003, "db file index build read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_WRITE, 11004, "db file index build write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_MIGRATE_READ, 11005, "db file migrate read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_MIGRATE_WRITE, 11006, "db file migrate write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(BLOOM_FILTER_BUILD_READ, 11007, "bloomfilter build read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(INTERM_RESULT_DISK_WRITE, 11008, "interm result disk write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(INTERM_RESULT_DISK_READ, 11009, "interm result disk read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(ROW_STORE_DISK_WRITE, 11010, "row store disk write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
 WAIT_EVENT_DEF(MEMSTORE_MEM_PAGE_ALLOC_WAIT, 11015, "memstore memory page alloc wait", "cur_mem_hold", "sleep_interval", "cur_ts", CONFIGURATION, false, true)
-WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, true)
-WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, true)
-WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "fd", "offset", "size", USER_IO, true, true)
-WAIT_EVENT_DEF(TMP_FILE_READ, 11021, "tmp file read", "fd", "offset", "size", USER_IO, true, true)
+WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_READ, 11021, "tmp file read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, true, true)
 
 // SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
@@ -178,7 +178,7 @@ WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sq
 WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called", "inner session id", "parent session id", "", IDLE, true, true)
 
 // CONFIGURATION 30100-30999
-WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "target_schema_version", "refreshed_schema_version", "consensus_schema_version", ADMINISTRATIVE, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
 WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", USER_IO, true, true)
 WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry: insufficient px worker wait", "degree of parallel", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, true)
@@ -193,7 +193,6 @@ WAIT_EVENT_DEF(SCHEMA_RETRY_WAIT, 32002, "retry: wait schema cache load", "error
 WAIT_EVENT_DEF(LOCATION_RETRY_WAIT, 32003, "retry: wait location cache load", "error", "ls_id", "", CLUSTER, true, true)
 WAIT_EVENT_DEF(OTHER_RETRY_WAIT, 32004, "retry: other retry wait", "error", "", "", CLUSTER, true, true)
 WAIT_EVENT_DEF(TX_PENDING_LOG_OVERFLOW_RETRY_WAIT, 32005, "retry: wait for the pending log synchronization", "error code", "ls_id", "", CLUSTER, true, true)
-WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry wait event because of insufficient px worker", "parallel level", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, false)
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)
@@ -315,6 +314,20 @@ struct ObWaitEventDesc
   inline bool operator==(const ObWaitEventDesc &other) const;
   inline bool operator!=(const ObWaitEventDesc &other) const;
   inline int add(const ObWaitEventDesc &other);
+  inline void assign(const ObWaitEventDesc &other)
+  {
+    event_no_ = other.event_no_;
+    p1_ = other.p1_;
+    p2_ = other.p2_;
+    p3_ = other.p3_;
+    wait_begin_time_ = other.wait_begin_time_;
+    wait_end_time_ = other.wait_end_time_;
+    wait_time_ = other.wait_time_;
+    timeout_ms_ = other.timeout_ms_;
+    level_ = other.level_;
+    parent_ = other.parent_;
+    is_phy_ = other.is_phy_;
+  }
   bool is_valid();
   void reset()
   {

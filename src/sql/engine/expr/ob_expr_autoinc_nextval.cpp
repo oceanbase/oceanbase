@@ -518,7 +518,7 @@ int ObAutoincNextvalExtra::init_autoinc_nextval_extra(common::ObIAllocator *allo
     autoinc_nextval_extra->autoinc_column_name_ = autoinc_column_name;
   }
   if (OB_SUCC(ret)) {
-    expr->set_extra(reinterpret_cast<uint64_t>(autoinc_nextval_extra));
+    expr->set_autoinc_nextval_extra(reinterpret_cast<uint64_t>(autoinc_nextval_extra));
     LOG_DEBUG("succ init_autoinc_nextval_extra", KPC(autoinc_nextval_extra));
   }
   return ret;
@@ -542,7 +542,7 @@ int ObAutoincNextvalInfo::init_autoinc_nextval_info(common::ObIAllocator *alloca
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_ISNULL(autoinc_nextval_extra =
-          reinterpret_cast<ObAutoincNextvalExtra *>(raw_expr.get_extra()))) {
+          reinterpret_cast<ObAutoincNextvalExtra *>(raw_expr.get_autoinc_nextval_extra()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw_expr.extra_ is null", K(ret));
   } else {

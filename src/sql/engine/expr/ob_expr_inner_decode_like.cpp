@@ -144,8 +144,11 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
                                                static_cast<char*>(max_str_buf),
                                                &max_str_len,
                                                &prefix_len))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("calc like range failed", K(ret), K(pattern_str), K(escape_str), K(cs_type));
+        if (OB_EMPTY_RANGE == ret) {
+          expr_datum.set_null();
+          ret = OB_SUCCESS;
+        }
       } else {
         if (prefix_len >= col_len && ObCharset::strlen_char(cs_type, min_str_buf, prefix_len) >= col_len) {
           int32_t pattern_prefix_len = 0; // strlen_char of prefix

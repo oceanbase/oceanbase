@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS_LB
 
 #include "ob_disaster_recovery_worker.h"
-#include "ob_disaster_recovery_task_utils.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "rootserver/ob_root_service.h"
@@ -41,7 +40,8 @@ ObLSReplicaTaskDisplayInfo::ObLSReplicaTaskDisplayInfo()
     source_replica_type_(REPLICA_TYPE_FULL),
     source_replica_paxos_replica_number_(OB_INVALID_COUNT),
     execute_server_(),
-    comment_("LSReplicaTask")
+    comment_("LSReplicaTask"),
+    config_version_()
 {
 }
 
@@ -63,12 +63,13 @@ void ObLSReplicaTaskDisplayInfo::reset()
   source_replica_paxos_replica_number_ = OB_INVALID_COUNT;
   execute_server_.reset();
   comment_.reset();
+  config_version_.reset();
 }
 
 int ObLSReplicaTaskDisplayInfo::init(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     const ObDRTaskPriority &task_priority,
     const common::ObAddr &target_server,
     const common::ObReplicaType &target_replica_type,
@@ -77,7 +78,8 @@ int ObLSReplicaTaskDisplayInfo::init(
     const common::ObReplicaType &source_replica_type,
     const int64_t &source_replica_paxos_replica_number,
     const common::ObAddr &execute_server,
-    const ObString &comment)
+    const ObString &comment,
+    const palf::LogConfigVersion &config_version)
 {
   int ret = OB_SUCCESS;
   if (!ls_id.is_valid_with_tenant(tenant_id)) {
@@ -98,6 +100,7 @@ int ObLSReplicaTaskDisplayInfo::init(
     source_replica_type_ = source_replica_type;
     source_replica_paxos_replica_number_ = source_replica_paxos_replica_number;
     execute_server_ = execute_server;
+    config_version_ = config_version;
   }
   return ret;
 }
@@ -134,6 +137,7 @@ int ObLSReplicaTaskDisplayInfo::assign(const ObLSReplicaTaskDisplayInfo &other)
       source_replica_type_ = other.source_replica_type_;
       source_replica_paxos_replica_number_ = other.source_replica_paxos_replica_number_;
       execute_server_ = other.execute_server_;
+      config_version_ = other.config_version_;
     }
   }
   return ret;
@@ -155,7 +159,8 @@ int64_t ObLSReplicaTaskDisplayInfo::to_string(char *buf, const int64_t buf_len) 
       K_(source_replica_type),
       K_(source_replica_paxos_replica_number),
       K_(execute_server),
-      K_(comment));
+      K_(comment),
+      K_(config_version));
   J_OBJ_END();
   return pos;
 }
@@ -1842,8 +1847,9 @@ int ObDRWorker::LATaskCmp::execute_sort()
     }                                                                        \
   }                                                                          \
 
-ObDRWorker::ObDRWorker()
-  : service_epoch_(0),
+ObDRWorker::ObDRWorker(const int64_t service_epoch, const uint64_t tenant_id)
+  : service_epoch_(service_epoch),
+    tenant_id_(tenant_id),
     task_count_statistic_(),
     display_tasks_(),
     display_tasks_rwlock_(ObLatchIds::DISPLAY_TASKS_LOCK),
@@ -1976,7 +1982,7 @@ int ObDRWorker::check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant
   return ret;
 }
 
-int ObDRWorker::try_tenant_disaster_recovery(
+int ObDRWorker::try_tenant_common_dr_task(
     const uint64_t tenant_id,
     const bool only_for_display,
     int64_t &acc_dr_task)
@@ -1991,7 +1997,7 @@ int ObDRWorker::try_tenant_disaster_recovery(
   } else if (OB_FAIL(check_whether_the_tenant_role_can_exec_dr_(tenant_id))) {
     LOG_INFO("fail to check_whether_the_tenant_role_can_exec_dr_", KR(ret), K(tenant_id));
   } else {
-    LOG_INFO("start try tenant disaster recovery", K(tenant_id), K(only_for_display));
+    FLOG_INFO("start try tenant disaster recovery", K(tenant_id), K(only_for_display));
     share::ObLSStatusOperator ls_status_operator;
     common::ObArray<share::ObLSStatusInfo> ls_status_info_array;
     if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(tenant_id, ls_status_info_array, *GCTX.sql_proxy_))) {
@@ -2054,7 +2060,7 @@ int ObDRWorker::try_ls_disaster_recovery(
       LOG_WARN("fail to init dr log stream info with flag", KR(ret));
     } else if (OB_FAIL(dr_ls_info_with_flag.build_disaster_ls_info(ls_info, ls_status_info, false/*filter_readonly_replica_with_flag*/))) {
       LOG_WARN("fail to generate dr log stream info with flag", KR(ret), K(ls_info), K(ls_status_info));
-    } else if (OB_FAIL(check_ls_disaster_recovery_tasks_(only_for_display,
+    } else if (OB_FAIL(check_ls_common_dr_tasks_(only_for_display,
                                                dr_ls_info_without_flag,
                                                dr_ls_info_with_flag,
                                                ls_acc_dr_task))) {
@@ -2070,7 +2076,7 @@ int ObDRWorker::try_ls_disaster_recovery(
   return ret;
 }
 
-int ObDRWorker::check_ls_disaster_recovery_tasks_(
+int ObDRWorker::check_ls_common_dr_tasks_(
     const bool only_for_display,
     DRLSInfo &dr_ls_info,
     DRLSInfo &dr_ls_info_with_flag,
@@ -2159,6 +2165,209 @@ int ObDRWorker::check_ls_disaster_recovery_tasks_(
   return ret;
 }
 
+int ObDRWorker::try_tenant_single_replica_task(
+    const uint64_t tenant_id,
+    const bool only_for_display,
+    int64_t &acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.config_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema svr or sql proxy or config_ is null",
+              KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_), KP(GCTX.config_));
+  } else if (!GCTX.config_->is_rereplication_enabled()) {
+    LOG_TRACE("config_ enable rereplication is false");
+  } else {
+    FLOG_INFO("start try tenant single replica", K(tenant_id), K(only_for_display));
+    share::ObLSStatusOperator ls_status_operator;
+    common::ObArray<share::ObLSStatusInfo> ls_status_info_array;
+    if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(tenant_id, ls_status_info_array, *GCTX.sql_proxy_))) {
+      LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_status_info_array.count(); ++i) {
+        FREE_DISASTER_RECOVERY_WORKER_TASK_MEMORY
+        int64_t ls_acc_dr_task = 0;
+        const share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
+        // reasons for using user tenant_id: get the tenant's available resources, meta tenant uses user tenant's unit
+        DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
+        if (OB_TMP_FAIL(build_disaster_ls_info_(ls_status_info_array.at(i), dr_ls_info_without_flag))) {
+          LOG_WARN("fail to init dr log stream info", KR(tmp_ret));
+        } else if (OB_TMP_FAIL(check_ls_single_replica_dr_tasks_(dr_ls_info_without_flag, only_for_display, ls_acc_dr_task))) {
+          LOG_WARN("fail to try ls disaster recovery", KR(tmp_ret), K(dr_ls_info_without_flag));
+        } else if (only_for_display || is_zero_row(dr_tasks_.count())) { // skip
+          LOG_INFO("skip persist dr_task", K(only_for_display), "task_count", dr_tasks_.count());
+        } else if (OB_TMP_FAIL(persist_tasks_into_inner_table_(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
+          LOG_WARN("fail to do end generated dr tasks", KR(ret), K(tenant_id), K(ls_status_info));
+        }
+        acc_dr_task += ls_acc_dr_task;
+        FREE_DISASTER_RECOVERY_WORKER_TASK_MEMORY
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::build_disaster_ls_info_(
+    const share::ObLSStatusInfo &ls_status_info,
+    DRLSInfo &dr_ls_info)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSInfo ls_info;
+  if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst_operator_ is nullptr", KR(ret), KP(GCTX.lst_operator_));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
+                                          ls_status_info.tenant_id_,
+                                          ls_status_info.ls_id_,
+                                          share::ObLSTable::COMPOSITE_MODE,
+                                          ls_info))) {
+    LOG_WARN("fail to get log stream info", KR(ret), K(ls_status_info));
+  } else if (OB_FAIL(dr_ls_info.init())) {
+    LOG_WARN("fail to init dr log stream info", KR(ret));
+  } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(ls_info, ls_status_info, true/*filter_readonly_replica_with_flag*/))) {
+    LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info), K(ls_status_info));
+  }
+  return ret;
+}
+
+int ObDRWorker::check_ls_single_replica_dr_tasks_(
+    DRLSInfo &dr_ls_info,
+    const bool only_for_display,
+    int64_t &ls_acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  common::ObAddr server;
+  ObServerInfoInTable cur_replica_server;
+  palf::LogConfigVersion config_version;
+  common::ObMemberList member_list;
+  common::ObZone dest_zone;
+  bool found = false;
+  bool pass_check = false;
+  const common::ObIArray<share::ObZoneReplicaAttrSet> &cur_locality = dr_ls_info.get_locality();
+  if (1 != cur_locality.count()) {
+    LOG_TRACE("locality count not 1", K(cur_locality));
+  } else if (0 == cur_locality.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("locality count is 0", KR(ret), K(cur_locality));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info(dr_ls_info.get_tenant_id(),
+                                                            dr_ls_info.get_ls_id(),
+                                                            config_version,
+                                                            member_list))) {
+    LOG_WARN("failed to get member info", KR(ret), K(dr_ls_info));
+  } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list, pass_check))) {
+    LOG_WARN("failed to check member list", KR(ret), K(member_list));
+  } else if (!pass_check) {
+    LOG_INFO("not all server is inactive", K(member_list));
+  } else if (0 == member_list.get_member_number()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("member list count not 1", KR(ret), K(member_list));
+  } else if (OB_FAIL(member_list.get_server_by_index(0, server))) {
+    LOG_WARN("failed to get server by index", KR(ret), K(server));
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(server, cur_replica_server))) {
+    LOG_WARN("failed to get server info", KR(ret), K(server));
+  } else if (OB_FAIL(dest_zone.assign(cur_locality.at(0).zone_))) {
+    LOG_WARN("failed to assign zone", KR(ret), K(cur_locality));
+  } else if (cur_replica_server.get_zone() == dest_zone) {
+    LOG_INFO("current replica is same zone with current locality, skip", K(dest_zone), K(cur_replica_server), K(member_list));
+  } else {
+    found = true;
+  }
+  if (OB_SUCC(ret) && found) {
+    UnitProvider unit_provider;
+    share::ObUnit dest_unit;
+    const share::ObLSStatusInfo *ls_status_info = nullptr;
+    if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
+      LOG_WARN("fail to init unit provider", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(dr_ls_info.get_ls_status_info(ls_status_info))) {
+      LOG_WARN("fail to get log stream status info", KR(ret));
+    } else if (OB_UNLIKELY(nullptr == ls_status_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
+    } else if (OB_TMP_FAIL(unit_provider.allocate_unit(dest_zone, ls_status_info->unit_group_id_, dest_unit))) {
+      // OB_ITER_END
+      LOG_WARN("can not allocate valid unit", KR(tmp_ret), K(dest_zone), K(*ls_status_info));
+    } else if (OB_FAIL(generate_single_replica_task_(only_for_display,
+                                                     config_version,
+                                                     cur_replica_server,
+                                                     dest_unit,
+                                                     dr_ls_info,
+                                                     ls_acc_dr_task))) {
+      LOG_WARN("failed to generate single replica task", KR(ret), K(only_for_display), K(cur_replica_server), K(dest_unit));
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::generate_single_replica_task_(
+    const bool only_for_display,
+    const palf::LogConfigVersion &config_version,
+    const share::ObServerInfoInTable &src_server_info,
+    const share::ObUnit &dest_unit,
+    DRLSInfo &dr_ls_info,
+    int64_t &acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  ObReplicaMember dst_member(dest_unit.server_, ObTimeUtility::current_time(), REPLICA_TYPE_FULL);
+  const char* task_comment = drtask::REPLACE_LOCALITY_REPLACE_REPLIACE;
+  ObDRTaskKey task_key;
+  uint64_t tenant_id = 0;
+  share::ObLSID ls_id;
+  share::ObTaskId task_id;
+  bool can_generate = false;
+  ObReplaceLSReplicaTask replace_task;
+  if (OB_UNLIKELY(!dest_unit.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(dest_unit));
+  } else if (OB_FAIL(dr_ls_info.get_ls_id(tenant_id, ls_id))) {
+    LOG_WARN("failed to get tenant and ls id", KR(ret));
+  } else if (only_for_display) {
+    ObLSReplicaTaskDisplayInfo display_info;
+    if (OB_FAIL(display_info.init(
+                  tenant_id,
+                  ls_id,
+                  ObDRTaskType::LS_REPLACE_REPLICA,
+                  ObDRTaskPriority::HIGH_PRI,
+                  dest_unit.server_,
+                  REPLICA_TYPE_FULL,
+                  1/*target_replica_paxos_replica_number*/,
+                  src_server_info.get_server(),
+                  REPLICA_TYPE_FULL,
+                  1/*source_replica_paxos_replica_number*/,
+                  dest_unit.server_,
+                  task_comment,
+                  config_version))) {
+      LOG_WARN("fail to init a ObLSReplicaTaskDisplayInfo", KR(ret));
+    } else if (OB_FAIL(add_display_info(display_info))) {
+      LOG_WARN("fail to add display info", KR(ret), K(display_info));
+    } else {
+      LOG_INFO("success to add display info", KR(ret), K(display_info));
+    }
+  } else if (FALSE_IT(task_id.init(GCONF.self_addr_))) {
+  } else if (OB_FAIL(generate_task_key(dr_ls_info, dest_unit.server_, ObDRTaskType::LS_REPLACE_REPLICA, task_key))) {
+    LOG_WARN("fail to generate task key", KR(ret), K(dr_ls_info), K(dest_unit));
+  } else if (OB_FAIL(check_can_generate_task(
+                          acc_dr_task,
+                          false/*need_check_has_leader_while_remove_replica*/,
+                          dest_unit.server_,
+                          dr_ls_info,
+                          ObDRTaskType::LS_REPLACE_REPLICA,
+                          can_generate))) {
+    LOG_WARN("fail to check can generate replicate to unit task", KR(ret));
+  } else if (can_generate) {
+    if (OB_FAIL(replace_task.build(task_key, task_id, task_comment, dst_member, config_version))) {
+      LOG_WARN("fail to build replace task", KR(ret), K(task_key), K(task_id), K(task_comment), K(dst_member), K(config_version));
+    } else if (OB_FAIL(add_task_(replace_task, acc_dr_task))) {
+      LOG_WARN("fail to add task", KR(ret), K(replace_task));
+    }
+  }
+  return ret;
+}
+
 int ObDRWorker::persist_tasks_into_inner_table_(
     const ObIArray<ObDRTask*> &dr_tasks,
     const uint64_t tenant_id,
@@ -2170,27 +2379,38 @@ int ObDRWorker::persist_tasks_into_inner_table_(
   ObSqlString sql;
   ObMySQLTransaction trans;
   ObArray<ObDRTaskKey> task_keys;
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
-  int64_t service_epoch_to_check = is_manual ? DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE : service_epoch_;
+  int64_t service_epoch = OB_INVALID_ID;
+  uint64_t service_epoch_tenant = OB_INVALID_TENANT_ID;
+  uint64_t persistent_tenant = OB_INVALID_TENANT_ID;
+  ObDRTask* task = nullptr;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
                || !ls_id.is_valid_with_tenant(tenant_id))
                || is_zero_row(dr_tasks.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), "task_count", dr_tasks.count());
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(dr_tasks.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is nullptr", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, sql_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
+  } else if (FALSE_IT(task = dr_tasks.at(0))) {
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_value_to_check(*task, tenant_id_, service_epoch_, service_epoch))) {
+    LOG_WARN("failed to get service epoch and tenant id", KR(ret), KPC(task), K_(service_epoch));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+                                              task->get_tenant_id(),
+                                              task->get_disaster_recovery_task_type(),
+                                              service_epoch_tenant,
+                                              persistent_tenant))) {
+  LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(task));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, persistent_tenant))) {
+    LOG_WARN("failed to start trans", KR(ret), KPC(task), K(persistent_tenant));
   } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %ld AND ls_id = %ld",
                                       share::OB_ALL_LS_REPLICA_TASK_TNAME,
                                       tenant_id,
                                       ls_id.id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, tenant_id, service_epoch_to_check))) {
-    LOG_WARN("failed to lock server epoch", KR(ret), K(tenant_id), K(service_epoch_to_check));
-  } else if (OB_FAIL(table_operator_.load_task_key_from_inner_table(*GCTX.sql_proxy_, sql, tenant_id, task_keys))) {
-    LOG_WARN("failed to load task from inner table", KR(ret), K(tenant_id), K(sql));
+  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, service_epoch_tenant, service_epoch))) {
+    LOG_WARN("failed to lock server epoch", KR(ret), KPC(task), K(service_epoch_tenant), K(service_epoch));
+  } else if (OB_FAIL(table_operator_.load_task_key_from_inner_table(*GCTX.sql_proxy_, sql, persistent_tenant, task_keys))) {
+    LOG_WARN("failed to load task from inner table", KR(ret), KPC(task), K(persistent_tenant), K(sql));
   } else {
     bool is_conflict = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < dr_tasks.count(); ++i) {
@@ -2218,7 +2438,7 @@ int ObDRWorker::persist_tasks_into_inner_table_(
         LOG_WARN("dest server permanent offline, can't execute", K(*task), K(server_info));
       } else if (OB_FAIL(task_keys.push_back(task->get_task_key()))) {
         LOG_WARN("failed to push task_key", KR(ret), K(*task));
-      } else if (OB_FAIL(check_clone_status_and_insert_task_(*task, trans))) {
+      } else if (OB_FAIL(check_clone_status_and_insert_task_(*task, persistent_tenant, trans))) {
         LOG_WARN("failed to insert task", KR(ret), K(*task));
       }
     }
@@ -2327,26 +2547,31 @@ int ObDRWorker::check_whether_task_conflict_(
 
 int ObDRWorker::check_clone_status_and_insert_task_(
     const ObDRTask &task,
+    const uint64_t persistent_tenant,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   observer::ObInnerSQLConnection *conn = NULL;
   const int64_t timeout = GCONF.internal_sql_execute_timeout;
-  const uint64_t task_tenant_id = task.get_tenant_id();
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(task_tenant_id);
-  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_REPLICA);
-  if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("conn_ is NULL", KR(ret));
-  } else if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(sql_tenant_id,
-                                                           OB_ALL_LS_REPLICA_TASK_TID,
-                                                           transaction::tablelock::EXCLUSIVE,
-                                                           timeout,
-                                                           conn))) {
-    LOG_WARN("lock dest table failed", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(task_tenant_id, case_to_check))) {
-    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret));
-  } else if (OB_FAIL(table_operator_.insert_task(trans, task, false/*record_history*/))) {
+  if (ObDRTaskType::LS_REPLACE_REPLICA == task.get_disaster_recovery_task_type()) {
+    // replace replace task no need check clone status
+  } else {
+    ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_REPLICA);
+    if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("conn_ is NULL", KR(ret));
+    } else if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(persistent_tenant,
+                                                             OB_ALL_LS_REPLICA_TASK_TID,
+                                                             transaction::tablelock::EXCLUSIVE,
+                                                             timeout,
+                                                             conn))) {
+      LOG_WARN("lock dest table failed", KR(ret), K(persistent_tenant));
+    } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(task.get_tenant_id(), case_to_check))) {
+      LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_operator_.insert_task(trans, persistent_tenant, task, false/*record_history*/))) {
     LOG_WARN("failed to insert task", KR(ret), K(task));
   } else {
     LOG_INFO("succeed to insert task", K(task));
@@ -2513,7 +2738,7 @@ int ObDRWorker::do_cancel_ls_replica_task(
     LOG_WARN("some ptr is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, sql_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, tenant_id, DisasterRecoveryUtils::INVALID_DR_SERVICE_EPOCH_VALUE))) {
+  } else if (OB_FAIL(DisasterRecoveryUtils::lock_service_epoch(trans, tenant_id, service_epoch_))) {
     LOG_WARN("failed to lock server epoch", KR(ret), K(arg));
   } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = %ld AND task_id = '%s'",
                         share::OB_ALL_LS_REPLICA_TASK_TNAME, tenant_id, arg.get_task_id().ptr()))) {
@@ -2534,7 +2759,7 @@ int ObDRWorker::do_cancel_ls_replica_task(
   } else if (task->get_task_status().is_waiting_status()) {
     // check task status and delete task need in trans lock
     FLOG_INFO("cancel migrate task in wait status", K(task));
-    if (OB_FAIL(table_operator_.delete_task(trans, *task))) {
+    if (OB_FAIL(table_operator_.delete_task(trans, tenant_id, *task))) {
       LOG_WARN("fail to delete task", KR(ret), K(*task));
     }
   }
@@ -3390,7 +3615,7 @@ int ObDRWorker::check_other_inactive_server_count_(
 int ObDRWorker::generate_task_key(
     const DRLSInfo &dr_ls_info,
     const common::ObAddr &task_exe_server,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     ObDRTaskKey &task_key) const
 {
   int ret = OB_SUCCESS;
@@ -3519,7 +3744,7 @@ int ObDRWorker::check_can_generate_task(
     const bool need_check_has_leader_while_remove_replica,
     const ObAddr &server_addr,
     DRLSInfo &dr_ls_info,
-    const ObDRTaskType &task_type,
+    const obrpc::ObDRTaskType &task_type,
     bool &can_generate)
 {
   int ret = OB_SUCCESS;
@@ -5679,21 +5904,43 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
     LOG_WARN("invalid argument", KR(ret), K(member_list_cnt), K(curr_paxos_replica_number),
              K(locality_paxos_replica_number));
   } else if (MEMBER_CHANGE_ADD == member_change_type) {
-    // 1. ADD MEMBER_LIST operation
-    //    When current paxos_replica_number >= locality paxos_replica_number
-    //         we do not change paxos_replica_number and ensure that paxos_replica_number no less than new member_list count
-    //    When current paxos_replica_number < locality paxos_replica_number
-    //         we try to increase paxos_replica_number towards locality and ensure that majority is satisfied
     const int64_t member_list_cnt_after = member_list_cnt + 1;
-    if (curr_paxos_replica_number >= locality_paxos_replica_number) {
-      if (curr_paxos_replica_number >= member_list_cnt_after) {
+    if (curr_paxos_replica_number == locality_paxos_replica_number) {
+      if (locality_paxos_replica_number >= member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2,F@z3, suppose a member is permanently offline, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 2, member_list_cnt_after = 3, locality_paxos_replica_number = 3.
+        // set new paxos_replica_number = 3(do not change curr_paxos_replica_number).
         new_paxos_replica_number = curr_paxos_replica_number;
         found = true;
+      } else if (locality_paxos_replica_number + 1 == member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2,F@z3, current replica distribution is F@z2, F@z3, F@z4, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 3, member_list_cnt_after = 4. locality_paxos_replica_number = 3.
+        // set new paxos_replica_number = 4(curr_paxos_replica_number + 1).
+        // in this scenario, replica in F@z1 is added first and then replica in F@z4 is deleted.
+        new_paxos_replica_number = curr_paxos_replica_number + 1;
+        found = true;
+      } else {
+        // No need process this scenario.
+        // For example: locality is F@z1,F@z2, current replica distribution is F@z2, F@z3, F@z4, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 3, member_list_cnt_after = 4. locality_paxos_replica_number = 2.
+        // in this scenario, first we remove replica in F@z3 or F@z4(for example z3), then add replica in F@z1, finally remove replica in F@z4.
       }
-    } else {
+    } else if (curr_paxos_replica_number > locality_paxos_replica_number) {
+      if (curr_paxos_replica_number >= member_list_cnt_after) {
+        // For example: locality is F@z1,F@z2, current replica distribution is F@z2, F@z3, curr_paxos_replica_number = 3.
+        // current member_list_cnt = 2, member_list_cnt_after = 3. locality_paxos_replica_number = 2.
+        // set new paxos_replica_number = 3(do not change curr_paxos_replica_number).
+        new_paxos_replica_number = curr_paxos_replica_number;
+        found = true;
+      } else {
+        // new member cnt greater than paxos_replica_number, not good
+      }
+    } else { // curr_paxos_replica_number < locality_paxos_replica_number
       if (majority(curr_paxos_replica_number + 1) <= member_list_cnt_after) {
         new_paxos_replica_number = curr_paxos_replica_number + 1;
         found = true;
+      } else {
+        // majority not satisfied
       }
     }
   } else if (MEMBER_CHANGE_NOP == member_change_type) {

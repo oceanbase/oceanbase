@@ -16,11 +16,25 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+namespace tablelock
+{
+int ObTableLockOwnerID::get_data_version_(uint64_t &data_version) const
+{
+  int ret = OB_SUCCESS;
+  data_version = DATA_CURRENT_VERSION;
+  return ret;
+}
+}
+}
+
 namespace unittest
 {
 using namespace common;
 using namespace transaction;
 using namespace transaction::tablelock;
+
 #define CHECK_SERIALIZE_AND_DESERIALIZE(T)                                                                            \
   ret = replace_req.serialize(buf, LEN, pos);                                                                         \
   ASSERT_EQ(ret, OB_SUCCESS);                                                                                         \
@@ -149,14 +163,14 @@ TEST(ObReplaceLockRequest, test_replace_table_lock)
   int64_t pos = 0;
   int64_t orig_pos = 0;
 
-  unlock_req.owner_id_.convert_from_value(1001);
+  unlock_req.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1001);
   unlock_req.lock_mode_ = EXCLUSIVE;
   unlock_req.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req.timeout_us_ = 1000;
   unlock_req.table_id_ = 998;
 
   replace_req.new_lock_mode_ = SHARE;
-  replace_req.new_lock_owner_.convert_from_value(1002);
+  replace_req.new_lock_owner_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1002);
   replace_req.unlock_req_ = &unlock_req;
   CHECK_SERIALIZE_AND_DESERIALIZE(ObUnLockTableRequest);
 }
@@ -171,7 +185,7 @@ TEST(ObReplaceLockRequest, test_replace_alone_tablet)
   int64_t pos = 0;
   int64_t orig_pos = 0;
 
-  unlock_req.owner_id_.convert_from_value(1001);
+  unlock_req.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1001);
   unlock_req.lock_mode_ = EXCLUSIVE;
   unlock_req.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req.timeout_us_ = 1000;
@@ -182,7 +196,7 @@ TEST(ObReplaceLockRequest, test_replace_alone_tablet)
   unlock_req.tablet_ids_.push_back(ObTabletID(789));
 
   replace_req.new_lock_mode_ = SHARE;
-  replace_req.new_lock_owner_.convert_from_value(1002);
+  replace_req.new_lock_owner_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1002);
   replace_req.unlock_req_ = &unlock_req;
   CHECK_SERIALIZE_AND_DESERIALIZE(ObUnLockAloneTabletRequest);
 }
@@ -197,7 +211,7 @@ TEST(ObReplaceLockRequest, test_replace_objs)
   int64_t pos = 0;
   int64_t orig_pos = 0;
 
-  unlock_req.owner_id_.convert_from_value(1001);
+  unlock_req.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1001);
   unlock_req.lock_mode_ = EXCLUSIVE;
   unlock_req.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req.timeout_us_ = 1000;
@@ -212,7 +226,7 @@ TEST(ObReplaceLockRequest, test_replace_objs)
   unlock_req.objs_.push_back(lock_id3);
 
   replace_req.new_lock_mode_ = SHARE;
-  replace_req.new_lock_owner_.convert_from_value(1002);
+  replace_req.new_lock_owner_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1002);
   replace_req.unlock_req_ = &unlock_req;
   CHECK_SERIALIZE_AND_DESERIALIZE(ObUnLockTableRequest);
 }
@@ -234,20 +248,20 @@ TEST(ObReplaceLockRequest, test_replace_all_locks)
   bool is_equal = false;
 
   unlock_req1.type_ = ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ;
-  unlock_req1.owner_id_.convert_from_value(1001);
+  unlock_req1.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1001);
   unlock_req1.lock_mode_ = ROW_SHARE;
   unlock_req1.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req1.timeout_us_ = 1000;
   unlock_req1.table_id_ = 998;
 
   unlock_req2.type_ = ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ;
-  unlock_req2.owner_id_.convert_from_value(1002);
+  unlock_req2.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1002);
   unlock_req2.lock_mode_ = ROW_EXCLUSIVE;
   unlock_req2.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req2.timeout_us_ = 1000;
   unlock_req2.table_id_ = 998;
 
-  lock_req.owner_id_.convert_from_value(1003);
+  lock_req.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, 1003);
   lock_req.lock_mode_ = EXCLUSIVE;
   lock_req.op_type_ = OUT_TRANS_LOCK;
   lock_req.timeout_us_ = 1000;

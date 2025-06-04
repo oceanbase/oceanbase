@@ -149,7 +149,7 @@ public:
   {
     return DF_TYPE_INSERT_DELETE == flag_type_ && DF_DELETE == flag_;
   }
-  OB_INLINE bool is_delete_insert() const
+  OB_INLINE bool is_upsert() const
   {
     return DF_TYPE_INSERT_DELETE == flag_type_ && DF_INSERT == flag_;
   }
@@ -333,6 +333,15 @@ public:
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
   OB_INLINE bool is_valid() const { return nullptr != storage_datums_ && get_capacity() > 0; }
+  OB_INLINE bool check_has_nop_col() const
+  {
+    for (int64_t i = 0; i < get_column_count(); i++) {
+      if (storage_datums_[i].is_nop()) {
+        return true;
+      }
+    }
+    return false;
+  }
   /*
    *multi version row section
    */
@@ -350,25 +359,50 @@ public:
   OB_INLINE void set_first_multi_version_row() { mvcc_row_flag_.set_first_multi_version_row(true); }
   OB_INLINE void set_last_multi_version_row() { mvcc_row_flag_.set_last_multi_version_row(true); }
   OB_INLINE void set_shadow_row() { mvcc_row_flag_.set_shadow_row(true); }
+  OB_INLINE void set_uncommitted_row() { mvcc_row_flag_.set_uncommitted_row(true); }
   OB_INLINE void set_multi_version_flag(const ObMultiVersionRowFlag &multi_version_flag) { mvcc_row_flag_ = multi_version_flag; }
   /*
    *row estimate section
    */
   OB_INLINE int32_t get_delta() const { return row_flag_.get_delta(); }
+  /*
+   *delete_insert section
+   */
+  OB_INLINE bool is_di_delete() const { return !is_delete_filtered_ && (delete_version_ > 0 || row_flag_.is_delete()); }
+  OB_INLINE bool is_filtered() const
+  {
+    return is_insert_filtered_ || (row_flag_.is_delete() && is_delete_filtered_);
+  }
+  int fuse_delete_insert(const ObDatumRow &former);
 
   DECLARE_TO_STRING;
 
 public:
   common::ObArenaAllocator local_allocator_;
   uint16_t count_;
-  bool fast_filter_skipped_;
-  bool have_uncommited_row_;
+  union {
+    struct {
+      uint32_t have_uncommited_row_: 1;
+      uint32_t fast_filter_skipped_: 1;
+      // the followings added for delete_insert scan, row must be projected for delete_insert,
+      // is_filtered_ means whether or not filtered by the pushdown filter
+      uint32_t is_insert_filtered_:  1;
+      uint32_t is_delete_filtered_:  1;
+      uint32_t reserved_ : 28;
+    };
+    uint32_t read_flag_;
+  };
   ObDmlRowFlag row_flag_;
   ObMultiVersionRowFlag mvcc_row_flag_;
   transaction::ObTransID trans_id_;
   int64_t scan_index_;
   int64_t group_idx_;
   int64_t snapshot_version_;
+  // insert_version is meaningfull when the newest insert row is not filtered
+  int64_t insert_version_;
+  // delete_version is meaningfull when the oldest delete row is not filtered
+  int64_t delete_version_;
+
   ObStorageDatum *storage_datums_;
   // do not need serialize
   ObStorageDatumBuffer datum_buffer_;

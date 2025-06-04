@@ -147,7 +147,7 @@ ob_set_subtarget(obcdc_object_list common
 ob_add_new_object_target(obcdc_objects obcdc_object_list)
 
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
-target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
+# target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
 if (OB_STRICT_COMPILE_FLAGS)
   target_compile_options(obcdc_objects PRIVATE)
 else()

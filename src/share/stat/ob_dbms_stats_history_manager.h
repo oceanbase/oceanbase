@@ -77,10 +77,9 @@ private:
                                        const int64_t specify_time,
                                        ObIArray<ObOptColumnStat*> &all_cstats);
 
-  static int fill_column_stat_history(ObIAllocator &allocator,
+  static int fill_column_stat_history(const ObTableStatParam &param,
                                       common::sqlclient::ObMySQLResult &result,
-                                      ObOptColumnStat *&col_stat,
-                                      bool need_cg_info);
+                                      ObOptColumnStat *&col_stat);
 
   static int fetch_histogram_stat_histroy(ObExecContext &ctx,
                                           ObIAllocator &allocator,

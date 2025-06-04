@@ -49,7 +49,7 @@ public:
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
     const blocksstable::ObDmlFlag dml_flag,
-    bool is_need_row_datum_utils = false);
+    const bool is_need_check_old_row = false);
   ~ObDMLRunningCtx();
 
   int init(
@@ -99,12 +99,12 @@ public:
   bool is_need_check_old_row_;
   bool is_udf_;
   bool has_lob_rowkey_;
+  bool is_delete_insert_table_;
   ObLobTabletDmlCtx lob_dml_ctx_;
   common::ObFixedArray<bool, common::ObIAllocator> main_table_rowkey_col_flag_;
 
 private:
   share::schema::ObSchemaGetterGuard schema_guard_;
-  bool is_need_row_datum_utils_;
   bool is_inited_;
 };
 } // namespace storage

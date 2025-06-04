@@ -104,7 +104,8 @@ public:
   // MEMORY_SIZE * FACTOR = DATA_DISK_SIZE
   static const int64_t MEMORY_TO_DATA_DISK_FACTOR = 2;
   // 0 is the default value in ObUnitResource and __all_unit table.
-  // it also means data_disk_size is not effective, for example in Shared-Nothing mode.
+  // In SN mode, 0 means not effective;
+  // In SS mode, 0 means no restriction by tenant. or no data_disk_size for virtual tenant.
   static const int64_t DEFAULT_DATA_DISK_SIZE = 0;
   static const int64_t INVALID_DATA_DISK_SIZE = -1;
 
@@ -396,9 +397,15 @@ public:
   // generate meta tenant data disk by unit data disk
   static int64_t gen_meta_tenant_data_disk_size(const int64_t unit_data_disk)
   {
-    int64_t meta_data_disk = unit_data_disk * META_TENANT_DATA_DISK_SIZE_PERCENTAGE / 100;
-    return min(max(meta_data_disk, META_TENANT_MIN_DATA_DISK_SIZE),
+    int64_t meta_data_disk = DEFAULT_DATA_DISK_SIZE;
+    if (0 == unit_data_disk) {
+      meta_data_disk = 0;
+    } else {
+      meta_data_disk = unit_data_disk * META_TENANT_DATA_DISK_SIZE_PERCENTAGE / 100;
+      meta_data_disk = min(max(meta_data_disk, META_TENANT_MIN_DATA_DISK_SIZE),
                META_TENANT_MAX_DATA_DISK_SIZE);
+    }
+    return meta_data_disk;
   }
   // generate meta tenant iops by unit iops
   static int64_t gen_meta_tenant_iops(const int64_t unit_iops)
@@ -428,13 +435,12 @@ private:
   int init_and_check_cpu_(const ObUnitResource &user_spec);
   int init_and_check_mem_(const ObUnitResource &user_spec);
   int init_and_check_log_disk_(const ObUnitResource &user_spec);
-  int init_and_check_data_disk_(const ObUnitResource &user_spec);
+  int init_update_and_check_data_disk_(const ObUnitResource &user_spec, const bool is_update);
   int init_and_check_iops_(const ObUnitResource &user_spec);
   int init_and_check_net_bandwidth_(const ObUnitResource &user_spec);
   int update_and_check_cpu_(const ObUnitResource &user_spec);
   int update_and_check_mem_(const ObUnitResource &user_spec);
   int update_and_check_log_disk_(const ObUnitResource &user_spec);
-  int update_and_check_data_disk_(const ObUnitResource &user_spec);
   int update_and_check_iops_(const ObUnitResource &user_spec);
   int update_and_check_net_bandwidth_(const ObUnitResource &user_spec);
 

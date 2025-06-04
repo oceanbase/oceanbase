@@ -38,6 +38,7 @@ void ObTmpFileWriteBlockTask::runTimerTask()
 
 ObTmpFileFlushInfo::ObTmpFileFlushInfo()
   : fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD),
+    type_(Type::INVALID),
     batch_flush_idx_(0),
     has_last_page_lock_(false),
     insert_meta_tree_done_(false),
@@ -46,15 +47,14 @@ ObTmpFileFlushInfo::ObTmpFileFlushInfo()
     flush_data_page_disk_begin_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
     flush_data_page_num_(-1),
     flush_virtual_page_id_(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID),
-    file_size_(0),
-    flush_meta_page_array_()
+    file_size_(0)
 {
-  flush_meta_page_array_.set_attr(ObMemAttr(MTL_ID(), "TFFlushMetaArr"));
 }
 
 void ObTmpFileFlushInfo::reset()
 {
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
+  type_ = Type::INVALID;
   batch_flush_idx_ = 0;
   has_last_page_lock_ = false;
   insert_meta_tree_done_ = false;
@@ -64,13 +64,13 @@ void ObTmpFileFlushInfo::reset()
   flush_data_page_num_ = -1;
   flush_virtual_page_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
   file_size_ = 0;
-  flush_meta_page_array_.reset();
 }
 
 int ObTmpFileFlushInfo::assign(const ObTmpFileFlushInfo &other)
 {
   int ret = OB_SUCCESS;
   fd_ = other.fd_;
+  type_ = other.type_;
   batch_flush_idx_ = other.batch_flush_idx_;
   has_last_page_lock_ = other.has_last_page_lock_;
   insert_meta_tree_done_ = other.insert_meta_tree_done_;
@@ -80,9 +80,6 @@ int ObTmpFileFlushInfo::assign(const ObTmpFileFlushInfo &other)
   flush_data_page_num_ = other.flush_data_page_num_;
   flush_virtual_page_id_ = other.flush_virtual_page_id_;
   file_size_ = other.file_size_;
-  if (OB_FAIL(flush_meta_page_array_.assign(other.flush_meta_page_array_))) {
-    LOG_WARN("failed to assign flush meta page array", KR(ret), KPC(this));
-  }
   return ret;
 }
 

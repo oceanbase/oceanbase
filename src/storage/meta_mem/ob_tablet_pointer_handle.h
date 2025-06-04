@@ -20,6 +20,7 @@ namespace oceanbase
 namespace storage
 {
 
+class ObTabletBasePointer;
 class ObTabletPointer;
 class ObTabletPointerMap;
 
@@ -31,14 +32,18 @@ public:
   ObTabletPointerHandle(
       ObResourceValueStore<ObTabletPointer> *ptr,
       ObTabletPointerMap *map);
+  ObTabletPointerHandle(
+    ObResourceValueStore<ObTabletBasePointer> *ptr,
+    ObIAllocator *alloc):base_pointer_(ptr), base_pointer_alloc_(alloc)
+    {}
   virtual ~ObTabletPointerHandle();
 
 public:
   virtual void reset() override;
   bool is_valid() const;
   int assign(const ObTabletPointerHandle &other);
-
-  TO_STRING_KV("ptr", ObResourceHandle<ObTabletPointer>::ptr_, KP_(map));
+  ObTabletBasePointer *get_resource_ptr() const;
+  TO_STRING_KV("ptr", ObResourceHandle<ObTabletPointer>::ptr_, KP_(map), KPC_(base_pointer), KP_(base_pointer_alloc));
 private:
   int set(
       ObResourceValueStore<ObTabletPointer> *ptr,
@@ -46,7 +51,11 @@ private:
 
 private:
   ObTabletPointerMap *map_;
-
+  // Base_pointer_ is designed for SS_Tablet in local;
+  // Allocated by task_allocator(base_pointer_alloc_);
+  // should be nullptr for local_tablet (in is_valid());
+  ObResourceValueStore<ObTabletBasePointer> *base_pointer_;
+  ObIAllocator *base_pointer_alloc_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointerHandle);
 };
 

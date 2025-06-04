@@ -59,17 +59,23 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
       ret = OB_RESOURCE_OUT;
     } else if (free_conn_count_ > 0) {
       if (OB_FAIL(connection_pool_ptr_->get_cached(connection, sessid))) {
-        ATOMIC_DEC(&free_conn_count_);
-        LOG_WARN("fail get conn", K(free_conn_count_), K(busy_conn_count_), K(ret));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // cached connection consumed by other session concurrently.
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get conn", K(free_conn_count_), K(busy_conn_count_), K(ret));
+        }
       } else {
         connection->init(this);
         ATOMIC_INC(&busy_conn_count_);
         ATOMIC_DEC(&free_conn_count_);
       }
+    }
+    if (OB_FAIL(ret) || NULL != connection) {
+      // do nothing.
     } else if (busy_conn_count_ < max_allowed_conn_count_) {
       ret = connection_pool_ptr_->alloc(connection, sessid);
       if (OB_ERR_ALREADY_EXISTS == ret) {
-
         connection->init(this);
         ATOMIC_INC(&busy_conn_count_);
         ATOMIC_DEC(&free_conn_count_);

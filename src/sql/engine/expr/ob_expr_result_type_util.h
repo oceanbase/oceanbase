@@ -233,6 +233,11 @@ public:
                                  ObExprResType &calc_type,
                                  ObObjMeta &element_meta);
   static int get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type);
+  static int assign_type_array(const ObIArray<ObRawExprResType> &src, ObIArray<ObExprResType> &dest);
+  static int get_collection_calc_type(ObExecContext *exec_ctx,
+                                      const ObExprResType &type1,
+                                      const ObExprResType &type2,
+                                      ObExprResType &calc_type);
 };
 
 

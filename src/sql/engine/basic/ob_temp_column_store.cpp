@@ -128,54 +128,6 @@ int ObTempColumnStore::ColumnBlock::vector_from_buf(char *buf,
   return ret;
 }
 
-int ObTempColumnStore::ColumnBlock::calc_nested_size(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                                                     const ObArray<ObLength> &lengths, const int64_t size,
-                                                     int64_t &batch_mem_size)
-{
-  int ret = OB_SUCCESS;
-  ObIVector *vec = expr.get_vector(ctx);
-  const VectorFormat format = vec->get_format();
-  if (is_uniform_format(format) && OB_FAIL(distribute_uniform_nested_batch(expr, ctx, selector, format, size))) {
-    SQL_LOG(WARN, "Failed to add batch nested attrs", K(ret), K(format), K(size));
-  }
-  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
-    if (OB_FAIL(calc_vector_size(vec, selector, UNFIXED_LENGTH, size, batch_mem_size))) {
-      LOG_WARN("fail to calc vector size", KR(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTempColumnStore::ColumnBlock::distribute_uniform_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                                                                    const VectorFormat format, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(expr.attrs_[i]->init_vector_for_write(ctx, i == 0 ? VEC_FIXED : format, size))) {
-      SQL_LOG(WARN, "Failed to init vector", K(ret), K(i), K(format), K(size));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObArrayExprUtils::batch_dispatch_array_attrs(ctx, expr, 0, size, selector))) {
-    SQL_LOG(WARN, "Failed to dispatch nested attrs", K(ret), K(format), K(size));
-  }
-  return ret;
-}
-
-int ObTempColumnStore::ColumnBlock::add_nested_batch(ObExpr &expr, ObEvalCtx &ctx, const uint16_t *selector,
-                                                     const int64_t size, char *head, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
-    if (OB_FAIL(vector_to_buf(vec, selector, UNFIXED_LENGTH, size, head, pos))) {
-      LOG_WARN("vector to buf failed", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTempColumnStore::ColumnBlock::calc_rows_size(ObEvalCtx &ctx,
                                                    const ObExprPtrIArray &exprs,
                                                    const IVectorPtrs &vectors,
@@ -188,14 +140,8 @@ int ObTempColumnStore::ColumnBlock::calc_rows_size(ObEvalCtx &ctx,
   batch_mem_size = get_header_size(vectors.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
     const ObIVector *vec = vectors.at(i);
-    if (exprs.at(i)->is_nested_expr()) {
-      if (OB_FAIL(ColumnBlock::calc_nested_size(*exprs.at(i), ctx, selector, lengths, size, batch_mem_size))) {
-        LOG_WARN("calc nested expr size failed", K(ret), K(size));
-      }
-    } else {
-      if (OB_FAIL(calc_vector_size(vec, selector, lengths[i], size, batch_mem_size))) {
-        LOG_WARN("fail to calc vector size", KR(ret));
-      }
+    if (OB_FAIL(calc_vector_size(vec, selector, lengths[i], size, batch_mem_size))) {
+      LOG_WARN("fail to calc vector size", KR(ret));
     }
   }
   return ret;
@@ -239,14 +185,8 @@ int ObTempColumnStore::ColumnBlock::add_batch(ObEvalCtx &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
       const ObIVector *vec = vectors.at(i);
       vec_offsets[i] = pos;
-      if (exprs.at(i)->is_nested_expr()) {
-        if (OB_FAIL(ColumnBlock::add_nested_batch(*exprs.at(i), ctx, selector, size, head, pos))) {
-          LOG_WARN("calc nested expr size failed", K(ret), K(size));
-        }
-      } else {
-        if (OB_FAIL(vector_to_buf(vec, selector, lengths[i], size, head, pos))) {
-          LOG_WARN("vector to buf failed", KR(ret));
-        }
+      if (OB_FAIL(vector_to_buf(vec, selector, lengths[i], size, head, pos))) {
+        LOG_WARN("vector to buf failed", KR(ret));
       }
     }
     vec_offsets[vectors.count()] = pos; // last offset, the size of vector
@@ -298,28 +238,6 @@ int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
   return ret;
 }
 
-int ObTempColumnStore::ColumnBlock::get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const
-{
-  int ret = OB_SUCCESS;
-  ObIVector *root_vec = expr.get_vector(ctx);
-  int64_t pos_save = pos;
-  // get null/flag for root vector
-  if (root_vec->get_format() == VEC_CONTINUOUS &&
-      OB_FAIL(from_buf(buf, pos, size, static_cast<ObBitmapNullVectorBase*>(root_vec)))) {
-    LOG_WARN("failed to get null value", K(ret), K(expr));
-  } else {
-    pos = pos_save;
-  }
-  for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-    ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
-    if (OB_FAIL(vector_from_buf(buf, pos ,size, vec))) {
-      LOG_WARN("vector from buf failed", KR(ret));
-    }
-  }
-
-  return ret;
-}
-
 int ObTempColumnStore::ColumnBlock::get_next_batch(const ObExprPtrIArray &exprs,
                                                    ObEvalCtx &ctx,const IVectorPtrs &vectors,
                                                    const int32_t start_read_pos,
@@ -332,14 +250,10 @@ int ObTempColumnStore::ColumnBlock::get_next_batch(const ObExprPtrIArray &exprs,
   const int32_t *vec_offsets = reinterpret_cast<int32_t *>(buf + sizeof(int32_t));
   for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
     ObIVector *vec = vectors.at(i);
-    int64_t pos = vec_offsets[i];
     if (NULL == vec || (VEC_UNIFORM_CONST == vec->get_format())) {
       // if vector is null or uniform const, skip read vector
-    } else if (exprs.at(i)->is_nested_expr()) {
-      if (OB_FAIL(ColumnBlock::get_nested_batch(*exprs.at(i), ctx, buf, pos, size))) {
-        LOG_WARN("calc nested expr size failed", K(ret), K(size));
-      }
     } else {
+      int64_t pos = vec_offsets[i];
       if (OB_FAIL(vector_from_buf(buf, pos ,size, vec))) {
         LOG_WARN("vector from buf failed", KR(ret));
       }
@@ -382,35 +296,6 @@ int ObTempColumnStore::Iterator::init(ObTempColumnStore *store, const bool async
   return BlockReader::init(store, async);
 }
 
-int ObTempColumnStore::Iterator::nested_from_vector(ObExpr &expr, ObEvalCtx &ctx, const int64_t start_pos, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  ObIVector *root_vec = expr.get_vector(ctx);
-  if (root_vec->get_format() != VEC_CONTINUOUS) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected format", K(ret), K(root_vec->get_format()));
-  } else if (OB_FAIL(from_vector(static_cast<ObContinuousBase*>(root_vec), &expr, ctx, start_pos, size))) {
-     LOG_WARN("from vector failed", K(ret), K(root_vec->get_format()));
-  } else {
-    for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
-      ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
-      const VectorFormat format = vec->get_format();
-      switch (format) {
-        case VEC_FIXED:
-          ret = from_vector(static_cast<ObFixedLengthBase*>(vec), expr.attrs_[i], ctx, start_pos, size);
-          break;
-        case VEC_CONTINUOUS:
-          ret = from_vector(static_cast<ObContinuousBase*>(vec), expr.attrs_[i], ctx, start_pos, size);
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected format", K(ret), K(format));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
                                                 ObEvalCtx &ctx,
                                                 const int64_t max_rows,
@@ -444,10 +329,6 @@ int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
       ObIVector *vec = NULL;
       if (OB_ISNULL(e) || ((is_uniform_format((vec = e->get_vector(ctx))->get_format())))) {
         // skip null input expr and uniform expr
-      } else if (e->is_nested_expr()) {
-        if (OB_FAIL(nested_from_vector(*e, ctx, begin, batch_rows))) {
-          LOG_WARN("failed to get nested expr", K(ret), K(begin), K(batch_rows));
-        }
       } else {
         const VectorFormat format = vec->get_format();
         switch (format) {

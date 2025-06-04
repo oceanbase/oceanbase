@@ -1000,11 +1000,11 @@ int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, Ob
 
   if (OB_ISNULL(arr_obj) || arr_obj->is_null(idx)) {
     res_datum.set_null();
-  } else if (arr_obj->is_nested_array()) {
+  } else if (arr_obj->get_format() == Nested_Array) {
     ObArrayNested *arr = static_cast<ObArrayNested*>(arr_obj);
     ObIArrayType* child_arr = NULL;
     ObString res_str;
-    if (OB_FAIL(ObArrayTypeObjFactory::construct(*ctx->op_exec_alloc_, *arr_obj->get_array_type()->element_type_, child_arr))) {
+    if (OB_FAIL(ObArrayTypeObjFactory::construct(*ctx->op_exec_alloc_, *dynamic_cast<const ObCollectionArrayType*>(arr_obj->get_array_type())->element_type_, child_arr))) {
       LOG_WARN("failed to add null to array", K(ret));
     } else if (OB_FAIL(arr->at(idx, *child_arr))) {
       LOG_WARN("failed to get elem", K(ret), K(idx));

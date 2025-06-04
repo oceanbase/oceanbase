@@ -124,16 +124,19 @@ public:
 struct ObJsonBinDocHeader
 {
   uint64_t type_ : 8;
-  uint64_t reserved_ : 14;
+  uint64_t use_lexicographical_order_ : 1;
+  uint64_t reserved_ : 13;
   uint64_t extend_seg_offset_ : 42;
 
   TO_STRING_KV(
     K(type_),
+    K(use_lexicographical_order_),
     K(reserved_),
     K(extend_seg_offset_));
 
   ObJsonBinDocHeader() :
       type_(J_DOC_HEADER_V0),
+      use_lexicographical_order_(0),
       reserved_(0),
       extend_seg_offset_(0)
   {}
@@ -170,17 +173,27 @@ public:
   ObJsonBinCtx():
     extend_seg_offset_(0),
     update_ctx_(nullptr),
-    is_update_ctx_alloc_(false)
+    is_update_ctx_alloc_(false),
+    use_lexicographical_order_(false)
   {}
 
   ~ObJsonBinCtx();
 
+  void reset()
+  {
+    extend_seg_offset_ = 0;
+    update_ctx_ = nullptr;
+    is_update_ctx_alloc_ = false;
+    use_lexicographical_order_ = false;
+  }
+
   TO_STRING_KV(
-    K(extend_seg_offset_), K(is_update_ctx_alloc_));
+    K(extend_seg_offset_), K(is_update_ctx_alloc_), K(use_lexicographical_order_));
 
   int64_t extend_seg_offset_;
   ObJsonBinUpdateCtx *update_ctx_;
   bool is_update_ctx_alloc_;
+  bool use_lexicographical_order_;
 };
 
 struct ObJsonBinMeta
@@ -602,7 +615,8 @@ public:
   int set_current(const ObString &data, int64_t offset);
   int set_obj_size(uint64_t obj_size);
   static int add_doc_header_v0(ObJsonBuffer &buffer);
-  static int set_doc_header_v0(ObJsonBuffer &buffer,int64_t extend_seg_offset);
+  static int set_doc_header_v0(ObJsonBuffer &buffer, const int64_t extend_seg_offset, const bool use_lexicographical_order);
+  static int set_doc_header_v0(ObString &buffer, const int64_t extend_seg_offset, const bool use_lexicographical_order);
 public:
   static OB_INLINE ObJBVerType get_null_vertype() { return J_NULL_V0; }
   static OB_INLINE ObJBVerType get_decimal_vertype() { return J_DECIMAL_V0; } 
@@ -640,7 +654,6 @@ public:
 private:
   static OB_INLINE bool is_forward_v0(uint8_t type) { return J_FORWARD_V0 == type; }
   static OB_INLINE bool is_doc_header_v0(uint8_t type) { return J_DOC_HEADER_V0 == type; }
-  static int set_doc_header_v0(ObString &buffer, int64_t extend_seg_offset);
 public:
   TO_STRING_KV(
     K(meta_),
@@ -858,6 +871,12 @@ public:
   // set flag for json doc
   OB_INLINE void set_seek_flag(bool is_seek_only) { is_seek_only_ = is_seek_only; }
   int clone_new_node(ObJsonBin*& res, common::ObIAllocator *allocator) const;
+  int try_update_inline(
+      const int index,
+      const ObJsonNode *value,
+      bool &is_update_inline);
+  bool use_lexicographical_order() const { return OB_ISNULL(ctx_) ? false : ctx_->use_lexicographical_order_; }
+
 private:
   // used as stack
   struct ObJBNodeMeta {
@@ -945,10 +964,6 @@ private:
     uint8_t &new_entry_var_type,
     uint64_t &new_size) const;
 
-  int try_update_inline(
-      const int index,
-      const ObJsonNode *value,
-      bool &is_update_inline);
   int try_update_inline(
       const int index,
       const ObJsonBin *value,
@@ -1122,11 +1137,25 @@ public:
     bin_ctx_()
   {}
   int serialize(ObJsonNode *json_tree, ObString &result);
-  int serialize_json_object(ObJsonObject* object, ObJsonBuffer &result, uint32_t depth = 0);
-  int serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, uint32_t depth = 0);
-  int serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result);
+  static int serialize_json_object(ObJsonNode* object, ObJsonBuffer &result, const bool enable_reserialize = true, uint32_t depth = 0);
+  static int serialize_json_container(ObJsonNode* object, ObJsonBuffer &result, const bool enable_reserialize, uint32_t depth = 0);
+  static int serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result, const bool enable_reserialize = true);
+  static int set_key_entry(
+      const ObJsonBinMeta &meta, char* buf_ptr,
+      int index, uint64_t key_offset, uint64_t key_len, const bool check=true);
+  static int set_value_entry(
+    const ObJsonBinMeta &meta, char* buf_ptr,
+    int index, uint64_t value_offset, uint8_t value_type, const bool check=true);
+  static int set_obj_size(ObJsonBinMeta &meta, char* buf_ptr, uint64_t obj_size);
+  static int set_element_count(ObJsonBinMeta &meta, char* buf_ptr, uint64_t count);
+  static int try_update_inline(
+      ObJsonBinMeta &meta, char* buf_ptr,
+      const int index,
+      const ObIJsonBase *value,
+      bool &is_update_inline);
 
 public:
+  static int serialize_json_integer(ObIJsonBase *j_base, ObJsonBuffer &result);
   static int serialize_json_integer(int64_t value, ObJsonBuffer &result);
   static int serialize_json_decimal(ObJsonDecimal *json_dec, ObJsonBuffer &result);
   static int serialize_json_double(double value, ObJsonBuffer &result);

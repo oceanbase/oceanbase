@@ -713,8 +713,7 @@ int ObIntegerColumnDecoder::tranverse_datum_all_op(
 
 int ObIntegerColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &ctx,
-    const int32_t *row_ids,
-    const int64_t row_cap,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
     storage::ObAggCellBase &agg_cell) const
 {
   int ret = OB_SUCCESS;
@@ -722,29 +721,35 @@ int ObIntegerColumnDecoder::get_aggregate_result(
   bool is_col_signed = false;
   const ObObjType store_col_type = integer_ctx.col_header_->get_store_obj_type();
   const bool can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
-  if (OB_UNLIKELY(nullptr == row_ids || row_cap <= 0)) {
+  if (OB_UNLIKELY(!pd_row_id_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid arguments to get aggregate result", KR(ret), KP(row_ids), K(row_cap));
+    LOG_WARN("Invalid arguments to get aggregate result", KR(ret), K(pd_row_id_ctx));
   } else {
-    const bool is_reverse = row_cap > 1 && row_ids[1] < row_ids[0];
-    int64_t row_id_start = is_reverse ? row_ids[row_cap - 1] : row_ids[0];
-    if (integer_ctx.has_null_bitmap()) {
-      if (OB_FAIL(agg_cell.reserve_bitmap(row_cap))) {
-        LOG_WARN("Failed to reserve memory for null bitmap", KR(ret));
-      } else {
-        ObBitmap &null_bitmap = agg_cell.get_bitmap();
-        for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-          const int64_t row_id = is_reverse ? row_ids[row_cap - 1 - i] : row_ids[i];
-          if (ObCSDecodingUtil::test_bit(integer_ctx.null_bitmap_, row_id) &&
-              OB_FAIL(null_bitmap.set(i))) {
-            LOG_WARN("Fail to set null bitmap", KR(ret), K(i), K(row_id));
+    int64_t base_idx = 0;
+    const int64_t row_count = pd_row_id_ctx.get_row_count();
+    while (OB_SUCC(ret) && base_idx < row_count) {
+      int64_t row_id_start = pd_row_id_ctx.get_row_id(base_idx);
+      int64_t batch_size = MIN(AGGREGATE_STORE_BATCH_SIZE, row_count - base_idx);
+      if (integer_ctx.has_null_bitmap()) {
+        if (OB_FAIL(agg_cell.reserve_bitmap(batch_size))) {
+          LOG_WARN("Failed to reserve memory for null bitmap", KR(ret));
+        } else {
+          ObBitmap &null_bitmap = agg_cell.get_bitmap();
+          for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+            const int64_t row_id = pd_row_id_ctx.get_row_id(base_idx + i);
+            if (ObCSDecodingUtil::test_bit(integer_ctx.null_bitmap_, row_id) &&
+                OB_FAIL(null_bitmap.set(i))) {
+              LOG_WARN("Fail to set null bitmap", KR(ret), K(i), K(base_idx), K(row_id));
+            }
           }
         }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(traverse_integer_in_agg(integer_ctx, is_col_signed, row_id_start, row_cap, agg_cell))){
-      LOG_WARN("Failed to traverse integer to aggregate", KR(ret), K(integer_ctx), K(is_col_signed));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(traverse_integer_in_agg(integer_ctx, is_col_signed, row_id_start, batch_size, agg_cell))){
+        LOG_WARN("Failed to traverse integer to aggregate", KR(ret), K(integer_ctx), K(is_col_signed));
+      } else {
+        base_idx += batch_size;
+      }
     }
   }
   return ret;

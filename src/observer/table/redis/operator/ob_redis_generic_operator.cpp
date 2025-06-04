@@ -31,12 +31,12 @@ int GenericCommandOperator::update_model_expire(
   int64_t db,
   const ObString &key,
   int64_t expire_ts,
-  ObRedisModel model,
+  ObRedisDataModel model,
   ExpireStatus &expire_status)
 {
   int ret = OB_SUCCESS;
   expire_status = ExpireStatus::INVALID;
-  if (model == ObRedisModel::STRING) {
+  if (model == ObRedisDataModel::STRING) {
     ObObj expire_obj;
     if (expire_ts != OB_INVALID_TIMESTAMP) {
       expire_obj.set_timestamp(expire_ts);
@@ -106,11 +106,11 @@ int GenericCommandOperator::do_expire_at_us(int64_t db, const ObString &key, int
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));
   }
   bool is_existed = false;
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     redis_ctx_.cur_table_idx_ = i;
-    model_ = static_cast<ObRedisModel>(i);
+    model_ = static_cast<ObRedisDataModel>(i);
     ExpireStatus cur_status = ExpireStatus::INVALID;
-    if (OB_FAIL(update_model_expire(db, key, expire_ts, static_cast<ObRedisModel>(i), cur_status))) {
+    if (OB_FAIL(update_model_expire(db, key, expire_ts, static_cast<ObRedisDataModel>(i), cur_status))) {
       LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(expire_ts));
     } else if (cur_status != ExpireStatus::NOT_EXISTS) {
       is_existed = true;
@@ -146,7 +146,7 @@ int GenericCommandOperator::do_expire(int64_t db, const ObString &key, int64_t e
 {
   int ret = OB_SUCCESS;
   int64_t cur_ts = ObTimeUtility::fast_current_time();
-  ObRedisModel model;
+  ObRedisDataModel model;
 
   if (conv_unit <= 0 || (INT64_MAX - cur_ts) / conv_unit < expire_diff) {
     RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::EXPIRE_TIME_ERR);
@@ -160,7 +160,7 @@ int GenericCommandOperator::do_expire(int64_t db, const ObString &key, int64_t e
   return ret;
 }
 
-int GenericCommandOperator::do_model_ttl(int64_t db, const ObString &key, ObRedisModel model,
+int GenericCommandOperator::do_model_ttl(int64_t db, const ObString &key, ObRedisDataModel model,
                                          int64_t conv_unit, int64_t &status)
 {
   int ret = OB_SUCCESS;
@@ -170,7 +170,7 @@ int GenericCommandOperator::do_model_ttl(int64_t db, const ObString &key, ObRedi
   if (conv_unit <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to do model ttl", K(ret));
-  } else if (model == ObRedisModel::STRING) {
+  } else if (model == ObRedisDataModel::STRING) {
     StringCommandOperator string_op(redis_ctx_);
     ObString value;
     bool is_existed = true;
@@ -217,12 +217,12 @@ int GenericCommandOperator::do_ttl(int64_t db, const ObString &key, int64_t conv
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));
   }
   int64_t ttl = -2;
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     redis_ctx_.cur_table_idx_ = i;
-    model_ = static_cast<ObRedisModel>(i);
+    model_ = static_cast<ObRedisDataModel>(i);
     int64_t status = 0;
-    if (OB_FAIL(do_model_ttl(db, key, static_cast<ObRedisModel>(i), conv_unit, status))) {
-      LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(static_cast<ObRedisModel>(i)));
+    if (OB_FAIL(do_model_ttl(db, key, static_cast<ObRedisDataModel>(i), conv_unit, status))) {
+      LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(static_cast<ObRedisDataModel>(i)));
     } else {
       ttl = OB_MAX(status, ttl);
     }
@@ -242,13 +242,13 @@ int GenericCommandOperator::get_subkey_count_by_meta(
   int64_t db,
   const ObString &key,
   const ObRedisMeta *meta,
-  ObRedisModel model,
+  ObRedisDataModel model,
   int64_t &row_cnt)
 {
   int ret = OB_SUCCESS;
   ObTableQuery query;
   row_cnt = 0;
-  if (model == ObRedisModel::LIST) {
+  if (model == ObRedisDataModel::LIST) {
     const ObRedisListMeta *list_meta = reinterpret_cast<const ObRedisListMeta *>(meta);
     row_cnt = list_meta->count_;
   } else {
@@ -261,11 +261,11 @@ int GenericCommandOperator::get_subkey_count_by_meta(
   return ret;
 }
 
-int GenericCommandOperator::is_key_exists(int64_t db, const ObString &key, ObRedisModel model,
+int GenericCommandOperator::is_key_exists(int64_t db, const ObString &key, ObRedisDataModel model,
                                           bool &exists)
 {
   int ret = OB_SUCCESS;
-  if (model == ObRedisModel::STRING) {
+  if (model == ObRedisDataModel::STRING) {
     StringCommandOperator string_op(redis_ctx_);
     if (OB_FAIL(string_op.is_key_exists(db, key, exists))) {
       LOG_WARN("fail to check is key exists", K(ret), K(db), K(key));
@@ -298,14 +298,14 @@ int GenericCommandOperator::do_exists(int64_t db, const common::ObIArray<common:
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));
   }
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     redis_ctx_.cur_table_idx_ = i;
-    model_ = static_cast<ObRedisModel>(i);
+    model_ = static_cast<ObRedisDataModel>(i);
     for (int j = 0; OB_SUCC(ret) && j < keys.count(); ++j) {
       redis_ctx_.cur_rowkey_idx_ = j;
       bool is_existed = false;
-      if (OB_FAIL(is_key_exists(db, keys.at(j), static_cast<ObRedisModel>(i), is_existed))) {
-        LOG_WARN("fail to check is key exists", K(ret), K(db), K(j), K(keys.at(j)), K(static_cast<ObRedisModel>(i)));
+      if (OB_FAIL(is_key_exists(db, keys.at(j), static_cast<ObRedisDataModel>(i), is_existed))) {
+        LOG_WARN("fail to check is key exists", K(ret), K(db), K(j), K(keys.at(j)), K(static_cast<ObRedisDataModel>(i)));
       } else if (is_existed) {
         ++exists_cnt;
       }
@@ -331,12 +331,12 @@ int GenericCommandOperator::do_type(int64_t db, const ObString &key)
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));
   }
   ObStringBuffer buffer(&redis_ctx_.allocator_);
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     bool is_existed = false;
     redis_ctx_.cur_table_idx_ = i;
-    model_ = static_cast<ObRedisModel>(i);
-    if (OB_FAIL(is_key_exists(db, key, static_cast<ObRedisModel>(i), is_existed))) {
-      LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(static_cast<ObRedisModel>(i)));
+    model_ = static_cast<ObRedisDataModel>(i);
+    if (OB_FAIL(is_key_exists(db, key, static_cast<ObRedisDataModel>(i), is_existed))) {
+      LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(static_cast<ObRedisDataModel>(i)));
     } else if (is_existed) {
       if (!buffer.empty()) {
         if (OB_FAIL(buffer.append(", "))) {
@@ -345,7 +345,7 @@ int GenericCommandOperator::do_type(int64_t db, const ObString &key)
       }
       if (OB_SUCC(ret)) {
         ObString model_str;
-        if (OB_FAIL(ObRedisHelper::model_to_string(static_cast<ObRedisModel>(i), model_str))) {
+        if (OB_FAIL(ObRedisHelper::model_to_string(static_cast<ObRedisDataModel>(i), model_str))) {
           LOG_WARN("fail to get table name by model", K(ret));
         } else if (OB_FAIL(buffer.append(model_str))) {
           LOG_WARN("fail to append buffer", K(ret), K(model_str));
@@ -382,14 +382,14 @@ int GenericCommandOperator::do_persist(int64_t db, const ObString &key)
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));
   }
   bool is_existed = false;
-  for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+  for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
     redis_ctx_.cur_table_idx_ = i;
-    model_ = static_cast<ObRedisModel>(i);
-    ObRedisModel model = static_cast<ObRedisModel>(i);
+    model_ = static_cast<ObRedisDataModel>(i);
+    ObRedisDataModel model = static_cast<ObRedisDataModel>(i);
     ExpireStatus cur_status = ExpireStatus::INVALID;
     if (OB_FAIL(update_model_expire(db,
                                     key,
-                                    model == ObRedisModel::STRING ? OB_INVALID_TIMESTAMP : INT64_MAX /*expire_ts*/,
+                                    model == ObRedisDataModel::STRING ? OB_INVALID_TIMESTAMP : INT64_MAX /*expire_ts*/,
                                     model,
                                     cur_status))) {
       LOG_WARN("fail to update expire", K(ret), K(db), K(key), K(model));
@@ -408,24 +408,24 @@ int GenericCommandOperator::do_persist(int64_t db, const ObString &key)
   return ret;
 }
 
-int GenericCommandOperator::del_key(int64_t db, const ObString &key, ObRedisModel model,
+int GenericCommandOperator::del_key(int64_t db, const ObString &key, ObRedisDataModel model,
                                           bool &exists)
 {
   int ret = OB_SUCCESS;
   switch (model) {
-    case ObRedisModel::STRING: {
+    case ObRedisDataModel::STRING: {
       StringCommandOperator string_op(redis_ctx_);
       ret = string_op.del_key(db, key, exists);
       break;
     }
-    case ObRedisModel::LIST: {
+    case ObRedisDataModel::LIST: {
       ListCommandOperator list_op(redis_ctx_);
       ret = list_op.do_del(db, key, exists);
       break;
     }
-    case ObRedisModel::ZSET:
-    case ObRedisModel::SET:
-    case ObRedisModel::HASH: {
+    case ObRedisDataModel::ZSET:
+    case ObRedisDataModel::SET:
+    case ObRedisDataModel::HASH: {
       ret = del_complex_key(model, db, key, true/*del_meta*/, exists);
       break;
     }
@@ -462,11 +462,11 @@ int GenericCommandOperator::do_del(int64_t db, const common::ObIArray<common::Ob
         LOG_WARN("fail to add key to set", K(ret), K(j), K(keys.at(j)));
       }
     }
-    for (int i = ObRedisModel::STRING; OB_SUCC(ret) && i < ObRedisModel::INVALID; ++i) {
+    for (int i = ObRedisDataModel::STRING; OB_SUCC(ret) && i < ObRedisDataModel::MODEL_MAX; ++i) {
       redis_ctx_.cur_table_idx_ = i;
-      model_ = static_cast<ObRedisModel>(i);
-      if (OB_FAIL(del_key(db, keys.at(j), static_cast<ObRedisModel>(i), is_existed))) {
-        LOG_WARN("fail to check is key exists", K(ret), K(db), K(j), K(keys.at(j)), K(static_cast<ObRedisModel>(i)));
+      model_ = static_cast<ObRedisDataModel>(i);
+      if (OB_FAIL(del_key(db, keys.at(j), static_cast<ObRedisDataModel>(i), is_existed))) {
+        LOG_WARN("fail to check is key exists", K(ret), K(db), K(j), K(keys.at(j)), K(static_cast<ObRedisDataModel>(i)));
       } else if (is_existed) {
         ++del_cnt;
       }

@@ -23,7 +23,8 @@ namespace oceanbase
 {
 namespace sql
 {
-  class ObExecEnv;
+class ObExecEnv;
+class ObSqlSchemaGuard;
 }
 namespace common
 {
@@ -237,9 +238,7 @@ public:
                                      char* buf,
                                      const int64_t& buf_len,
                                      int64_t& pos) const;
-  int print_rowkey_info(const common::ObRowkeyInfo& rowkey_info,
-                        const uint64_t tenant_id,
-                        const uint64_t table_id,
+  int print_rowkey_info(const ObTableSchema &table_schema,
                         char* buf,
                         const int64_t& buf_len,
                         int64_t& pos) const;
@@ -529,6 +528,15 @@ public:
                                char* buf,
                                const int64_t& buf_len,
                                int64_t& pos) const;
+  int print_semistruct_encodng_options(const ObTableSchema &table_schema,
+                                       char* buf,
+                                       const int64_t& buf_len,
+                                       int64_t& pos) const;
+  int print_dynamic_partition_policy(const ObTableSchema &table_schema,
+                                     char* buf,
+                                     const int64_t& buf_len,
+                                     int64_t& pos) const;
+  void set_sql_schema_guard(sql::ObSqlSchemaGuard *sql_schema_guard);
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {
@@ -538,6 +546,8 @@ private:
     ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
     return is_hash_like_part(sub_type) && !is_hash_like_part(type);
   }
+  int get_database_schema_(const uint64_t tenant_id, const uint64_t database_id, const ObDatabaseSchema *&database_schema) const;
+  int get_table_schema_(const uint64_t tenant_id, const uint64_t table_id, const ObTableSchema *&table_schema) const;
 #ifdef OB_BUILD_ORACLE_PL
   int print_base64_cipher(ObIAllocator &allocator,
                           const ObString &cipher,
@@ -545,6 +555,7 @@ private:
 #endif  // OB_BUILD_ORACLE_PL
 
   ObSchemaGetterGuard &schema_guard_;
+  sql::ObSqlSchemaGuard *sql_schema_guard_;
   bool strict_compat_;
   bool sql_quote_show_create_;
   bool ansi_quotes_;

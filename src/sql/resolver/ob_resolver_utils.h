@@ -147,10 +147,26 @@ public:
 
   static int resolve_extended_type_info(const ParseNode &str_list_node,
                                         ObIArray<ObString>& type_info_array);
-  static int resolve_collection_type_info(const ParseNode &type_node,
+  static int resolve_collection_type_info(const uint64_t tenant_data_version,
+                                          const ParseNode &type_node,
                                           ObStringBuffer &buf,
-                                          uint8_t &depth,
-                                          bool is_vector_child = false);
+                                          uint8_t &depth);
+  static int resolve_basic_type_info(const ParseNode &type_node,
+                                     ObStringBuffer &buf);
+  static int resolve_array_type_info(const uint64_t tenant_data_version,
+                                     const ParseNode &type_node,
+                                     ObStringBuffer &buf,
+                                     uint8_t &depth);
+  static int resolve_vector_type_info(const ParseNode &type_node,
+                                          ObStringBuffer &buf,
+                                          uint8_t &depth);
+  static int resolve_map_type_info(const uint64_t tenant_data_version,
+                                   const ParseNode &type_node,
+                                   ObStringBuffer &buf,
+                                   uint8_t &depth);
+  static int resolve_sparse_vector_type_info(const ParseNode &type_node,
+                                      ObStringBuffer &buf,
+                                      uint8_t &depth);
   inline static bool is_collection_support_type(const ObObjType type);
   // type_infos is %ori_cs_type, need convert to %cs_type first
   static int check_extended_type_info(common::ObIAllocator &alloc,
@@ -464,7 +480,8 @@ public:
                                                 ObRawExpr *&part_value_expr,
                                                 const bool &in_tablegroup = false,
                                                 const bool interval_check = false);
-  static int resolve_columns_for_partition_expr(ObRawExpr *&expr,
+  static int resolve_columns_for_partition_expr(ObResolverParams &params,
+                                                ObRawExpr *&expr,
                                                 common::ObIArray<ObQualifiedName> &columns,
                                                 const share::schema::ObTableSchema &tbl_schema,
                                                 share::schema::ObPartitionFuncType part_func_type,
@@ -773,7 +790,7 @@ public:
   //  check column is from the base table of updatable view
   static bool in_updatable_view_path(const TableItem &table_item, const ObColumnRefRawExpr &col);
   static int check_partition_range_value_result_type(const ObPartitionFuncType part_type,
-                                                     const ObExprResType &column_type,
+                                                     const ObRawExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
   static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
@@ -911,8 +928,9 @@ public:
                                    uint16_t &subschema_id);
   static bool is_external_pseudo_column(const ObRawExpr &expr);
   static int cnt_external_pseudo_column(const ObRawExpr &expr, bool &contain);
+  static bool is_pseudo_partition_column_name(const ObString name);
 private:
-  static int try_convert_to_unsiged(const ObExprResType restype,
+  static int try_convert_to_unsiged(const ObRawExprResType &restype,
                                     ObRawExpr& src_expr,
                                     bool& is_out_of_range);
 

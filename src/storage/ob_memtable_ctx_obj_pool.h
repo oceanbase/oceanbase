@@ -31,6 +31,7 @@ public:
 #ifdef OB_ENABLE_MEMTABLE_CTX_OBJ_CACHE_DEBUG
   ObMemtableCtxObjPool(common::ObIAllocator &allocator)
       : lock_op_node_pool_(allocator),
+        prio_op_node_pool_(allocator),
         lock_callback_pool_(allocator),
         mvcc_callback_pool_(allocator),
         hit_mvcc_cb_cache_cnt_(0),
@@ -38,10 +39,13 @@ public:
         hit_lock_cb_cache_cnt_(0),
         alloc_lock_cb_cnt_(0),
         hit_lock_op_cache_cnt_(0),
-        alloc_lock_op_cnt_(0) {}
+        alloc_lock_op_cnt_(0),
+        hit_prio_op_cache_cnt_(0),
+        alloc_prio_op_cnt_(0) {}
 #else
   ObMemtableCtxObjPool(common::ObIAllocator &allocator)
       : lock_op_node_pool_(allocator),
+        prio_op_node_pool_(allocator),
         lock_callback_pool_(allocator),
         mvcc_callback_pool_(allocator),
         ext_info_callback_pool_(allocator) {}
@@ -64,6 +68,21 @@ public:
     }
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       STORAGE_LOG(INFO, "cache statistic", K(alloc_lock_op_cnt_), K(hit_lock_op_cache_cnt_));
+    }
+    return res;
+  }
+
+  template <>
+  void *alloc<tablelock::ObMemCtxLockPrioOpLinkNode>()
+  {
+    bool hit_cache = false;
+    void *res = prio_op_node_pool_.alloc(hit_cache);
+    ATOMIC_INC(&alloc_prio_op_cnt_);
+    if (hit_cache) {
+      ATOMIC_INC(&hit_prio_op_cache_cnt_);
+    }
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      STORAGE_LOG(INFO, "cache statistic", K(alloc_prio_op_cnt_), K(hit_prio_op_cache_cnt_));
     }
     return res;
   }
@@ -105,6 +124,12 @@ public:
   }
 
   template <>
+  void *alloc<tablelock::ObMemCtxLockPrioOpLinkNode>()
+  {
+    return prio_op_node_pool_.alloc();
+  }
+
+  template <>
   void *alloc<tablelock::ObOBJLockCallback>()
   {
     return lock_callback_pool_.alloc();
@@ -134,6 +159,12 @@ public:
   }
 
   template <>
+  void free<tablelock::ObMemCtxLockPrioOpLinkNode>(void *obj)
+  {
+    prio_op_node_pool_.free(obj);
+  }
+
+  template <>
   void free<tablelock::ObOBJLockCallback>(void *obj)
   {
     lock_callback_pool_.free(obj);
@@ -154,6 +185,7 @@ public:
   void reset()
   {
     lock_op_node_pool_.reset();
+    prio_op_node_pool_.reset();
     lock_callback_pool_.reset();
     mvcc_callback_pool_.reset();
   }
@@ -161,6 +193,7 @@ public:
 private:
   static constexpr int64_t OBJ_NUM = 1;
   ObArenaObjPool<tablelock::ObMemCtxLockOpLinkNode, OBJ_NUM> lock_op_node_pool_;
+  ObArenaObjPool<tablelock::ObMemCtxLockPrioOpLinkNode, OBJ_NUM> prio_op_node_pool_;
   ObArenaObjPool<tablelock::ObOBJLockCallback, OBJ_NUM> lock_callback_pool_;
   ObArenaObjPool<memtable::ObMvccRowCallback, OBJ_NUM> mvcc_callback_pool_;
   ObArenaObjPool<storage::ObExtInfoCallback, OBJ_NUM> ext_info_callback_pool_;
@@ -172,6 +205,8 @@ private:
   int64_t alloc_lock_cb_cnt_;
   int64_t hit_lock_op_cache_cnt_;
   int64_t alloc_lock_op_cnt_;
+  int64_t hit_prio_op_cache_cnt_;
+  int64_t alloc_prio_op_cnt_;
 #endif
 
 };

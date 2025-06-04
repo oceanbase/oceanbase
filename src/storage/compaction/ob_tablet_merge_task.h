@@ -66,6 +66,7 @@ struct ObMergeParameter {
   {
     return nullptr != mview_merge_param_;
   }
+  bool is_delete_insert_merge() const;
 
   const ObStaticMergeParam &static_param_;
   /* rest variables are different for MergeTask */
@@ -119,7 +120,7 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
   virtual bool is_valid() const override;
   VIRTUAL_TO_STRING_KV(K_(skip_get_tablet), "merge_type", merge_type_to_str(merge_type_), K_(merge_version),
      K_(ls_id), K_(tablet_id), "exec_mode", exec_mode_to_str(exec_mode_),
-     K_(need_swap_tablet_flag), K_(is_reserve_mode), K_(schedule_transfer_seq));
+     K_(need_swap_tablet_flag), K_(is_reserve_mode), K_(schedule_transfer_seq), K(reorganization_scn_));
 
   bool skip_get_tablet_;
   bool need_swap_tablet_flag_;
@@ -128,6 +129,7 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
   compaction::ObMergeType merge_type_;
   int64_t merge_version_;
   int64_t schedule_transfer_seq_; // only affect minor and major now
+  share::SCN reorganization_scn_; // for shared storage merge
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   ObCompactionParam compaction_param_; // used for adaptive compaction dag scheduling
@@ -156,6 +158,9 @@ public:
   int init();
   int report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx);
   virtual int process() override;
+
+  void report_checkpoint_info(ObTabletMergeCtx &ctx);
+  void record_tx_data_info(ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;
   ObTabletMergeDag *merge_dag_;

@@ -30,6 +30,12 @@ namespace sql
 
 namespace pl
 {
+  #define HANDLE_PL_CACHE_RET_VALUE(ret) \
+  do { \
+    if ((ret) != OB_ERR_UNEXPECTED && (ret) != OB_REACH_MAX_CONCURRENT_NUM) { \
+      (ret) = OB_SUCCESS; \
+    } \
+  } while (0)
 
 struct ObGetPLKVEntryOp : public sql::ObKVEntryTraverseOp
 {
@@ -176,6 +182,9 @@ public:
                                   uint64_t db_id,
                                   uint64_t tenant_id,
                                   share::schema::ObMultiVersionSchemaService & schema_service);
+  static int get_sys_var_in_pl_cache_str(ObBasicSessionInfo &session,
+                                          ObIAllocator &allocator,
+                                          ObString &sys_var_str);
 
 private:
   static int add_pl_object(ObPlanCache *lib_cache,

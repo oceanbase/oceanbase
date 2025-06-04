@@ -185,6 +185,88 @@ bool ObCollectionArrayType::check_is_valid_vector() const
   return is_valid;
 }
 
+int ObCollectionMapType::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(key_type_) || OB_ISNULL(value_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid array type for serialize", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE, type_id_);
+    if (OB_FAIL(key_type_->serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize array key type failed", K(ret));
+    } else if (OB_FAIL(value_type_->serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize array value type failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCollectionMapType::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, type_id_);
+  if (OB_FAIL(ObSqlCollectionInfo::collection_type_deserialize(allocator_, buf, data_len, pos, key_type_))) {
+    LOG_WARN("deserialize key type failed", K(ret));
+  } else if (OB_FAIL(ObSqlCollectionInfo::collection_type_deserialize(allocator_, buf, data_len, pos, value_type_))) {
+    LOG_WARN("deserialize value type failed", K(ret));
+  }
+  return ret;
+}
+
+int64_t ObCollectionMapType::get_serialize_size() const
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, type_id_);
+  len += key_type_->get_serialize_size();
+  len += value_type_->get_serialize_size();
+  return len;
+}
+
+int ObCollectionMapType::deep_copy(ObIAllocator &allocator, ObCollectionTypeBase *&dst) const
+{
+  int ret = OB_SUCCESS;
+  ObCollectionMapType *buf = OB_NEWx(ObCollectionMapType, &allocator, allocator);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc collection map type memory failed", K(ret));
+  } else if (OB_FAIL(key_type_->deep_copy(allocator, buf->key_type_))) {
+    LOG_WARN("do key type deep copy failed", K(ret));
+  } else if (OB_FAIL(value_type_->deep_copy(allocator, buf->value_type_))) {
+    LOG_WARN("do value type deep copy failed", K(ret));
+  } else {
+    buf->type_id_ = type_id_;
+    dst = buf;
+  }
+  return ret;
+}
+
+bool ObCollectionMapType::has_same_super_type(const ObCollectionMapType &other) const
+{
+  bool key_ret = false;
+  bool value_ret = false;
+  if (other.type_id_ != ObNestedType::OB_MAP_TYPE) {
+    // return false
+  } else if (OB_NOT_NULL(key_type_) && OB_NOT_NULL(value_type_)
+             && OB_NOT_NULL(other.key_type_) && OB_NOT_NULL(other.value_type_)) {
+    if (key_type_->get_compatiable_type_id() != other.key_type_->get_compatiable_type_id()) {
+      // return false
+    } else if (key_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+      key_ret = static_cast<ObCollectionBasicType*>(key_type_)->has_same_super_type(*static_cast<ObCollectionBasicType*>(other.key_type_));
+    } else {
+      key_ret = static_cast<ObCollectionArrayType*>(key_type_)->has_same_super_type(*static_cast<ObCollectionArrayType*>(other.key_type_));
+    }
+    if (value_type_->get_compatiable_type_id() != other.value_type_->get_compatiable_type_id()) {
+      // return false
+    } else if (value_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+      value_ret = static_cast<ObCollectionBasicType*>(value_type_)->has_same_super_type(*static_cast<ObCollectionBasicType*>(other.value_type_));
+    } else {
+      value_ret = static_cast<ObCollectionArrayType*>(value_type_)->has_same_super_type(*static_cast<ObCollectionArrayType*>(other.value_type_));
+    }
+  }
+  return key_ret && value_ret;
+}
+
 OB_DEF_SERIALIZE(ObSqlCollectionInfo)
 {
   int ret = OB_SUCCESS;
@@ -273,7 +355,15 @@ int ObSqlCollectionInfo::collection_type_deserialize(ObIAllocator &allocator, co
     }
   } else if (type_id_tmp == ObNestedType::OB_ARRAY_TYPE
              || type_id_tmp == ObNestedType::OB_VECTOR_TYPE) {
-   if (OB_ISNULL(collection_meta = OB_NEWx(ObCollectionArrayType, &allocator, allocator))) {
+    if (OB_ISNULL(collection_meta = OB_NEWx(ObCollectionArrayType, &allocator, allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc element type failed", K(ret));
+    } else if (OB_FAIL(collection_meta->deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize element type failed", K(ret));
+    }
+  } else if (type_id_tmp == ObNestedType::OB_MAP_TYPE
+             || type_id_tmp == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+    if (OB_ISNULL(collection_meta = OB_NEWx(ObCollectionMapType, &allocator, allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc element type failed", K(ret));
     } else if (OB_FAIL(collection_meta->deserialize(buf, data_len, pos))) {
@@ -374,191 +464,364 @@ int ObSqlCollectionInfo::set_element_meta_info(const std::string &name, uint8_t 
   return ret;
 }
 
-int ObSqlCollectionInfo::create_meta_info_by_name(const std::string &name, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth)
+int ObSqlCollectionInfo::set_element_meta(const std::string &name, ObCollectionBasicType *meta_info)
 {
   int ret = OB_SUCCESS;
-  if (0 == name.compare("ARRAY") || 0 == name.compare("VECTOR")) {
-    if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to create array type meta", K(ret));
-    } else {
-      const uint8_t OB_ARRAY_MAX_NESTED_LEVEL = 6;/* constistent with pg*/
-      meta_info->type_id_ = (0 == name.compare("ARRAY")) ?
-                            ObNestedType::OB_ARRAY_TYPE : ObNestedType::OB_VECTOR_TYPE;
-      if (++arr_depth > OB_ARRAY_MAX_NESTED_LEVEL) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported array depth", K(ret), K(arr_depth), K(OB_ARRAY_MAX_NESTED_LEVEL));
-      }
-    }
+  if (OB_ISNULL(meta_info) || meta_info->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid meta info", K(ret), K(meta_info));
   } else {
-    if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to create basic element type meta", K(ret));
+    ObDataType &basic_meta = static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_;
+    if (0 == name.compare("NULL")) {
+      basic_meta.meta_.set_null();
+    } else if (0 == name.compare("UTINYINT")) {
+      basic_meta.meta_.set_utinyint();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].precision_);
+    } else if (0 == name.compare("TINYINT")) {
+      basic_meta.meta_.set_tinyint();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].precision_);
+    } else if (0 == name.compare("SMALLINT")) {
+      basic_meta.meta_.set_smallint();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].precision_);
+    } else if (0 == name.compare("MEDIUMINT")) {
+      basic_meta.meta_.set_mediumint();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].precision_);
+    } else if (0 == name.compare("INT")) {
+      basic_meta.meta_.set_int32();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].precision_);
+    } else if (0 == name.compare("BIGINT")) {
+      basic_meta.meta_.set_int();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
+    } else if (0 == name.compare("FLOAT")) {
+      basic_meta.meta_.set_float();
+    } else if (0 == name.compare("DOUBLE")) {
+      basic_meta.meta_.set_double();
+    } else if (0 == name.compare("DECIMAL")) {
+      basic_meta.meta_.set_number();
+      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
+      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
+    } else if (0 == name.compare("DATETIME")) {
+      basic_meta.meta_.set_datetime();
+    } else if (0 == name.compare("MYSQL_DATETIME")) {
+      basic_meta.meta_.set_mysql_datetime();
+    } else if (0 == name.compare("TIMESTAMP")) {
+      basic_meta.meta_.set_timestamp();
+    } else if (0 == name.compare("DATE")) {
+      basic_meta.meta_.set_date();
+    } else if (0 == name.compare("MYSQL_DATE")) {
+      basic_meta.meta_.set_mysql_date();
+    } else if (0 == name.compare("TIME")) {
+      basic_meta.meta_.set_time();
+    } else if (0 == name.compare("YEAR")) {
+      basic_meta.meta_.set_year();
+    } else if (0 == name.compare("VARCHAR")) {
+      basic_meta.meta_.set_varchar();
+      // use default CS
+      basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
+    } else if (0 == name.compare("VARBINARY")) {
+      basic_meta.meta_.set_varbinary();
+    } else if (0 == name.compare("CHAR")) {
+      basic_meta.meta_.set_char();
+    } else if (0 == name.compare("BINARY")) {
+      basic_meta.meta_.set_binary();
+    } else if (0 == name.compare("BIT")) {
+      basic_meta.meta_.set_bit();
+    } else if (0 == name.compare("JSON")) {
+      basic_meta.meta_.set_json();
+    } else if (0 == name.compare("GEOMETRY")) {
+      basic_meta.meta_.set_geometry();
+    } else if (0 == name.compare("DECIMAL_INT")) {
+      basic_meta.meta_.set_decimal_int();
     } else {
-      meta_info->type_id_ = ObNestedType::OB_BASIC_TYPE;
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported element type", K(ret), K(ObString(name.length(), name.c_str())));
     }
   }
-
-  ObDataType &basic_meta = static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_;
-  if (OB_FAIL(ret)) {
-  } else if (0 == name.compare("NULL")) {
-    basic_meta.meta_.set_null();
-  } else if (0 == name.compare("UTINYINT")) {
-    basic_meta.meta_.set_utinyint();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUTinyIntType].precision_);
-  } else if (0 == name.compare("TINYINT")) {
-    basic_meta.meta_.set_tinyint();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].precision_);
-  } else if (0 == name.compare("SMALLINT")) {
-    basic_meta.meta_.set_smallint();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].precision_);
-  } else if (0 == name.compare("MEDIUMINT")) {
-    basic_meta.meta_.set_mediumint();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].precision_);
-  } else if (0 == name.compare("INT")) {
-    basic_meta.meta_.set_int32();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].precision_);
-  } else if (0 == name.compare("BIGINT")) {
-    basic_meta.meta_.set_int();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  } else if (0 == name.compare("FLOAT")) {
-    basic_meta.meta_.set_float();
-  } else if (0 == name.compare("DOUBLE")) {
-    basic_meta.meta_.set_double();
-  } else if (0 == name.compare("DECIMAL")) {
-    basic_meta.meta_.set_number();
-    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
-    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
-  } else if (0 == name.compare("DATETIME")) {
-    basic_meta.meta_.set_datetime();
-  } else if (0 == name.compare("MYSQL_DATETIME")) {
-    basic_meta.meta_.set_mysql_datetime();
-  } else if (0 == name.compare("TIMESTAMP")) {
-    basic_meta.meta_.set_timestamp();
-  } else if (0 == name.compare("DATE")) {
-    basic_meta.meta_.set_date();
-  } else if (0 == name.compare("MYSQL_DATE")) {
-    basic_meta.meta_.set_mysql_date();
-  } else if (0 == name.compare("TIME")) {
-    basic_meta.meta_.set_time();
-  } else if (0 == name.compare("YEAR")) {
-    basic_meta.meta_.set_year();
-  } else if (0 == name.compare("VARCHAR")) {
-    basic_meta.meta_.set_varchar();
-    // use default CS
-    basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
-  } else if (0 == name.compare("VARBINARY")) {
-    basic_meta.meta_.set_varbinary();
-  } else if (0 == name.compare("CHAR")) {
-    basic_meta.meta_.set_char();
-  } else if (0 == name.compare("BINARY")) {
-    basic_meta.meta_.set_binary();
-  } else if (0 == name.compare("BIT")) {
-    basic_meta.meta_.set_bit();
-  } else if (0 == name.compare("JSON")) {
-    basic_meta.meta_.set_json();
-  } else if (0 == name.compare("GEOMETRY")) {
-    basic_meta.meta_.set_geometry();
-  } else if (0 == name.compare("DECIMAL_INT")) {
-    basic_meta.meta_.set_decimal_int();
-  } else if (0 == name.compare("ARRAY") || 0 == name.compare("VECTOR")) {
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupported element type", K(ret), K(ObString(name.length(), name.c_str())));
-  }
-
   return ret;
 }
 
-int ObSqlCollectionInfo::parse_type_info()
+int ObSqlCollectionInfo::parse_type_info() {
+  int ret = OB_SUCCESS;
+  const std::string type_info(name_def_, name_len_);
+  ObCollectionTypeBase *meta_info = NULL;
+  uint8_t arr_depth = 0;
+  if (OB_FAIL(parse_collection_info(type_info, meta_info, arr_depth))) {
+    LOG_WARN("parse type info failed", K(ret), K(ObString(type_info.length(), type_info.data())));
+  } else if (OB_ISNULL(meta_info) && OB_FAIL(parse_element_info(type_info, meta_info, true))) {
+    LOG_WARN("parse basic element info failed", K(ret), K(ObString(type_info.length(), type_info.data())));
+  } else {
+    collection_meta_ = meta_info;
+  }
+  return ret;
+}
+int ObSqlCollectionInfo::parse_collection_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth)
 {
   int ret = OB_SUCCESS;
-  bool is_root = true;
-  uint8_t idx = 0;
-  ObCollectionTypeBase *curr_meta = NULL;
-  const std::string type_info(name_def_, name_len_);
-  const std::regex pattern(R"(\d+|\w+)");
-  std::smatch matches;
-  uint8_t arr_depth = 0;
 
-  std::string::const_iterator searchStart(type_info.cbegin());
-  while (OB_SUCC(ret) && std::regex_search(searchStart, type_info.cend(), matches, pattern)) {
-    for (std::smatch::iterator it = matches.begin(); it != matches.end() && OB_SUCC(ret); ++it) {
-      const auto& match = *it;
-      std::string type_name = match.str();
-      if (is_root) {
-        // vector element is float
-        std::string root_elem = isNumber(type_name) ? "FLOAT" : type_name;
-        if (OB_FAIL(create_meta_info_by_name(root_elem, collection_meta_, arr_depth))) {
-          LOG_WARN("get type by name failed", K(ret));
-        } else {
-          is_root = false;
-          curr_meta = collection_meta_;
-        }
-      } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE
-                && OB_FAIL(create_meta_info_by_name(type_name, static_cast<ObCollectionArrayType *>(curr_meta)->element_type_, arr_depth))) {
-        LOG_WARN("create meta info failed", K(ret));
-      } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
-        curr_meta = static_cast<ObCollectionArrayType *>(curr_meta)->element_type_;
-      } else if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        // vector(4, float) -> "vector" "4" "float"
-        if (isNumber(type_name)) {
-          int32_t dim = std::stoi(type_name);
-          if (dim <= 0) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid vector meta", K(ret));
-          } else {
-            static_cast<ObCollectionArrayType *>(curr_meta)->dim_cnt_ = dim;
-          }
-        } else if (0 == type_name.compare("UNSIGNED")) {
-          // to parse vector(dim, tinyint unsigned)
-          ObCollectionTypeBase *elem_type = static_cast<ObCollectionArrayType *>(curr_meta)->element_type_;
-          if (OB_ISNULL(elem_type)) {
-            ret = OB_ERR_NULL_VALUE;
-            LOG_WARN("invalid null elem_type", K(ret));
-          } else if (OB_FAIL(set_element_meta_unsigned(static_cast<ObCollectionBasicType *>(elem_type)))) {
-            LOG_WARN("set element meta unsighed failed", K(ret));
-          }
-        } else {
-          if (0 != type_name.compare("UTINYINT") && 0 != type_name.compare("FLOAT")
-            && 0 != type_name.compare("TINYINT")) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("vector only support utinyint/float elem type", K(ret));
-          } else if (OB_FAIL(create_meta_info_by_name(type_name, static_cast<ObCollectionArrayType *>(curr_meta)->element_type_, arr_depth))) {
-            LOG_WARN("create meta info failed", K(ret));
-          }
-        }
-      } else if (isNumber(type_name) && OB_FAIL(set_element_meta_info(type_name, idx++, static_cast<ObCollectionBasicType *>(curr_meta)))) {
-        LOG_WARN("set element meta info failed", K(ret));
-      } else if (0 == type_name.compare("UNSIGNED") && OB_FAIL(set_element_meta_unsigned(static_cast<ObCollectionBasicType *>(curr_meta)))) {
-        LOG_WARN("set element meta unsighed failed", K(ret));
+  if (0 == type_info.compare("SPARSEVECTOR")) {
+    if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionMapType, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to create array type meta", K(ret));
+    } else {
+      meta_info->type_id_ = ObNestedType::OB_SPARSE_VECTOR_TYPE;
+      if (OB_FAIL(parse_sparse_vector_element_info(static_cast<ObCollectionMapType *>(meta_info)->key_type_,
+              static_cast<ObCollectionMapType *>(meta_info)->value_type_))) {
+        LOG_WARN("parse sparse value failed", K(ret));
       }
     }
-    searchStart = matches.suffix().first;
+  } else {
+    const uint8_t OB_ARRAY_MAX_NESTED_LEVEL = 6;/* constistent with pg*/
+    const std::regex pattern(R"((ARRAY|VECTOR|MAP)\((.*)\))", std::regex_constants::icase);
+    std::smatch matches;
+    if (!std::regex_search(type_info, matches, pattern)) {
+      // not collection type, do nothing
+    } else {
+      // is collection type
+      if (matches.size() != 3) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid matches size", K(ret), K(matches.size()), K(ObString(type_info.length(), type_info.data())));
+      } else if (++arr_depth > OB_ARRAY_MAX_NESTED_LEVEL) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported array depth", K(ret), K(arr_depth), K(OB_ARRAY_MAX_NESTED_LEVEL));
+      } else {
+        std::string type_name = matches[1];
+        std::string type_value = matches[2];
+        if (0 == type_name.compare("ARRAY")) {
+          if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to create array type meta", K(ret));
+          } else {
+            meta_info->type_id_ = ObNestedType::OB_ARRAY_TYPE;
+            ObCollectionTypeBase *&elem_meta_info =static_cast<ObCollectionArrayType *>(meta_info)->element_type_;
+            if (OB_FAIL(parse_collection_info(type_value, elem_meta_info, arr_depth))) {
+              LOG_WARN("parse array value failed", K(ret), K(ObString(type_value.length(), type_value.data())));
+            } else if (OB_NOT_NULL(elem_meta_info)) {
+              // array type
+              if (elem_meta_info->type_id_ == ObNestedType::OB_MAP_TYPE || elem_meta_info->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+                // currently not support
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("not supported nested map type", K(ret));
+              }
+            } else if (OB_FAIL(parse_element_info(type_value, elem_meta_info))) {
+              LOG_WARN("parse element info failed", K(ret), K(ObString(type_info.length(), type_info.data())));
+            }
+          }
+        } else if (0 == type_name.compare("VECTOR")) {
+          if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to create array type meta", K(ret));
+          } else {
+            meta_info->type_id_ = ObNestedType::OB_VECTOR_TYPE;
+            if (OB_FAIL(parse_vec_element_info(type_value,
+                    static_cast<ObCollectionArrayType *>(meta_info)->element_type_,
+                    static_cast<ObCollectionArrayType *>(meta_info)->dim_cnt_))) {
+              LOG_WARN("parse vector value failed", K(ret), K(ObString(type_value.length(), type_value.data())));
+            } else if (!static_cast<ObCollectionArrayType *>(meta_info)->check_is_valid_vector()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not supported vector meta", K(ret), KPC(meta_info));
+            }
+          }
+        } else if (0 == type_name.compare("MAP")) {
+          if (OB_ISNULL(meta_info = OB_NEWx(ObCollectionMapType, &allocator_, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to create array type meta", K(ret));
+          } else {
+            meta_info->type_id_ = ObNestedType::OB_MAP_TYPE;
+            if (OB_FAIL(parse_map_element_info(type_value,
+                    static_cast<ObCollectionMapType *>(meta_info)->key_type_,
+                    static_cast<ObCollectionMapType *>(meta_info)->value_type_,
+                    arr_depth))) {
+              LOG_WARN("parse map value failed", K(ret), K(ObString(type_value.length(), type_value.data())));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid type name", K(ret), K(ObString(type_info.length(), type_info.data())));
+        }
+      }
+    }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(curr_meta) && curr_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-      ObCollectionArrayType *vec_meta = static_cast<ObCollectionArrayType *>(curr_meta);
-      if (OB_ISNULL(vec_meta->element_type_)) {
-        // vector(4) -> use default float type
-        if (OB_FAIL(create_meta_info_by_name("FLOAT", vec_meta->element_type_, arr_depth))) {
+int ObSqlCollectionInfo::parse_vec_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, uint32_t &dim)
+{
+  int ret = OB_SUCCESS;
+  ObCollectionBasicType *basic_meta_info = NULL;
+  if (OB_ISNULL(basic_meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create basic element type meta", K(ret));
+  } else {
+    meta_info = basic_meta_info;
+    meta_info->type_id_ = ObNestedType::OB_BASIC_TYPE;
+    basic_meta_info->basic_meta_.meta_.set_float(); // set default type
+    const std::regex pattern(R"(\d+|\w+)");
+    std::smatch matches;
+    while (OB_SUCC(ret) && std::regex_search(type_info, matches, pattern)) {
+      std::string type_name = matches[0];
+      type_info = matches.suffix().str();
+      if (isNumber(type_name)) {
+        int32 get_dim = std::stoi(type_name);
+        if (get_dim <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector meta", K(ret));
+        } else {
+          dim = static_cast<uint32_t>(get_dim);
+        }
+      } else if (0 == type_name.compare("UNSIGNED")) {
+        // to parse vector(dim, tinyint unsigned)
+        if (OB_FAIL(set_element_meta_unsigned(basic_meta_info))) {
+          LOG_WARN("set element meta unsighed failed", K(ret));
+        }
+      } else if (0 == type_name.compare("UTINYINT")
+                 || 0 == type_name.compare("TINYINT")
+                 || 0 == type_name.compare("FLOAT")) {
+        if (OB_FAIL(set_element_meta(type_name, basic_meta_info))) {
+          LOG_WARN("create meta info failed", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("vector only support utinyint/float elem type", K(ret));
+      }
+    } // end while
+  }
+  return ret;
+}
+
+int ObSqlCollectionInfo::parse_element_info(std::string type_info, ObCollectionTypeBase *&meta_info, bool is_root)
+{
+  int ret = OB_SUCCESS;
+  ObCollectionBasicType *basic_meta_info = NULL;
+  if (OB_ISNULL(basic_meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create basic element type meta", K(ret));
+  } else {
+    meta_info = basic_meta_info;
+    meta_info->type_id_ = ObNestedType::OB_BASIC_TYPE;
+    const std::regex pattern(R"(\d+|\w+)");
+    std::smatch matches;
+    uint8_t idx = 0;
+    while (OB_SUCC(ret) && std::regex_search(type_info, matches, pattern)) {
+      std::string type_name = matches[0];
+      type_info = matches.suffix().str(); // 更新 text 为剩余未匹配的部分
+      if (is_root && isNumber(type_name)) {
+        // vector element is float
+        basic_meta_info->basic_meta_.meta_.set_float();
+      } else if (isNumber(type_name)) {
+        if (OB_FAIL(set_element_meta_info(type_name, idx++, basic_meta_info))) {
+          LOG_WARN("set element meta info failed", K(ret));
+        }
+      } else if (0 == type_name.compare("UNSIGNED")) {
+        if (OB_FAIL(set_element_meta_unsigned(basic_meta_info))) {
+          LOG_WARN("set element meta unsighed failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(set_element_meta(type_name, basic_meta_info))) {
           LOG_WARN("create meta info failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && !vec_meta->check_is_valid_vector()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported vector meta", K(ret), KPC(vec_meta));
-      }
-    }
+    } // end while
   }
+  return ret;
+}
+
+int ObSqlCollectionInfo::parse_map_element_info(std::string type_info,
+                                                ObCollectionTypeBase *&key_meta_info,
+                                                ObCollectionTypeBase *&value_meta_info,
+                                                uint8_t &arr_depth)
+{
+  int ret = OB_SUCCESS;
+  std::string key_type_info;
+  std::string value_type_info;
+  size_t comma_pos = type_info.find(',');
+  uint8_t key_depth;
+
+  if (arr_depth > 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("nested map is not support", K(ret));
+  } else if (comma_pos == std::string::npos) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid map element info", K(ret), K(ObString(type_info.length(), type_info.data())));
+  } else {
+    key_type_info = type_info.substr(0, comma_pos);
+    value_type_info = type_info.substr(comma_pos + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(key_meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create array type meta", K(ret));
+  } else if (OB_ISNULL(value_meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create array type meta", K(ret));
+  } else {
+    key_meta_info->type_id_ = ObNestedType::OB_ARRAY_TYPE;
+    value_meta_info->type_id_ = ObNestedType::OB_ARRAY_TYPE;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(parse_element_info(key_type_info, static_cast<ObCollectionArrayType *>(key_meta_info)->element_type_))) {
+    LOG_WARN("parse element info failed", K(ret), K(ObString(key_type_info.length(), key_type_info.data())));
+  } else if (OB_FAIL(parse_collection_info(value_type_info, static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_, arr_depth))) {
+    LOG_WARN("parse array value failed", K(ret), K(ObString(value_type_info.length(), value_type_info.data())));
+  } else if (OB_NOT_NULL(static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_)) {
+    // array type
+    if (static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_->type_id_ == ObNestedType::OB_MAP_TYPE
+        || static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+      // currently not support
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported nested map type", K(ret));
+    }
+  } else if (OB_FAIL(parse_element_info(value_type_info, static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_))) {
+    LOG_WARN("parse element info failed", K(ret), K(ObString(value_type_info.length(), value_type_info.data())));
+  }
+  return ret;
+}
+
+int ObSqlCollectionInfo::parse_sparse_vector_element_info(ObCollectionTypeBase *&key_meta_info, ObCollectionTypeBase *&value_meta_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(key_meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create array type meta", K(ret));
+  } else if (OB_ISNULL(value_meta_info = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create array type meta", K(ret));
+  } else {
+    key_meta_info->type_id_ = ObNestedType::OB_ARRAY_TYPE;
+    value_meta_info->type_id_ = ObNestedType::OB_ARRAY_TYPE;
+  }
+
+  ObCollectionBasicType *key_basic_meta_info = NULL;
+  ObCollectionBasicType *value_basic_meta_info = NULL;
+  if (OB_ISNULL(key_basic_meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create key basic element type meta", K(ret));
+  } else if (OB_ISNULL(value_basic_meta_info = OB_NEWx(ObCollectionBasicType, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create value basic element type meta", K(ret));
+  } else {
+    static_cast<ObCollectionArrayType *>(key_meta_info)->element_type_ = key_basic_meta_info;
+    key_basic_meta_info->basic_meta_.meta_.set_uint32();
+    const ObAccuracy &key_default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObUInt32Type];
+    key_basic_meta_info->basic_meta_.set_precision(key_default_accuracy.get_precision());
+    key_basic_meta_info->basic_meta_.set_scale(0);
+
+    static_cast<ObCollectionArrayType *>(value_meta_info)->element_type_ = value_basic_meta_info;
+    value_basic_meta_info->basic_meta_.meta_.set_float();
+    const ObAccuracy &value_default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObFloatType];
+    value_basic_meta_info->basic_meta_.set_precision(value_default_accuracy.get_precision());
+    value_basic_meta_info->basic_meta_.set_scale(value_default_accuracy.get_scale());
+  }
+
   return ret;
 }
 
@@ -572,6 +835,8 @@ bool ObSqlCollectionInfo::has_same_super_type(const ObSqlCollectionInfo &other) 
   } else {
      if (collection_meta_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       b_ret = static_cast<ObCollectionBasicType*>(collection_meta_)->has_same_super_type(*static_cast<ObCollectionBasicType*>(other.collection_meta_));
+    } else if (collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE || collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
+      b_ret = static_cast<ObCollectionMapType*>(collection_meta_)->has_same_super_type(*static_cast<ObCollectionMapType*>(other.collection_meta_));
     } else {
       b_ret = static_cast<ObCollectionArrayType*>(collection_meta_)->has_same_super_type(*static_cast<ObCollectionArrayType*>(other.collection_meta_));
     }
@@ -589,6 +854,40 @@ int ObSqlCollectionInfo::get_child_def_string(ObString &child_def) const
     child_def = ObString(name_len_ - 7, name_def_ + 6);
   } else if (ObString(7, name_def_).compare("VECTOR(") == 0) {
     child_def = ObString(name_len_ - 8, name_def_ + 7);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(*this));
+  }
+  return ret;
+}
+
+int ObSqlCollectionInfo::get_map_attr_def_string(ObIAllocator &allocator, ObString &def, bool is_values) const
+{
+  int ret = OB_SUCCESS;
+  if (name_len_ <= 5) { // map()
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(*this));
+  } else if (ObString(4, name_def_).compare("MAP(") == 0) {
+    ObStringBuffer tmp_buf(&allocator);
+    if (OB_FAIL(tmp_buf.append("ARRAY("))) {
+      LOG_WARN("failed to append prefix to tmp_buf", K(ret), K(*this));
+    } else {
+      ObString kv_def = ObString(name_len_ - 5, name_def_ + 4);
+      if (!is_values) {
+        // key_def
+        kv_def = kv_def.split_on(',');
+      } else {
+        // value_def
+        kv_def = kv_def.after(',');
+      }
+      if (OB_FAIL(tmp_buf.append(kv_def))) {
+        LOG_WARN("failed to append subschema to tmp_buf", K(ret), K(*this));
+      } else if (OB_FAIL(tmp_buf.append(")"))) {
+        LOG_WARN("failed to append postfix to tmp_buf", K(ret), K(*this));
+      } else {
+        def = tmp_buf.string();
+      }
+    }
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(*this));

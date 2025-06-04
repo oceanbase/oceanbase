@@ -34,12 +34,9 @@ class TestMicroBlockDecoder : public ::testing::Test
 public:
   TestMicroBlockDecoder(): tenant_ctx_(500)
   {
-    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool();
-    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
     encoder_.data_buffer_.allocator_.set_tenant_id(500);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
-    decode_res_pool_->init();
   }
   static const int64_t ROWKEY_CNT = 1;
   static const int64_t COLUMN_CNT = ObExtendType - 1 + 7;
@@ -56,7 +53,6 @@ protected:
   ObArenaAllocator allocator_;
   ObObjType *col_obj_types_;
   share::ObTenantBase tenant_ctx_;
-  ObDecodeResourcePool *decode_res_pool_;
   int64_t extra_rowkey_cnt_;
   int64_t column_cnt_;
   int64_t full_column_cnt_;

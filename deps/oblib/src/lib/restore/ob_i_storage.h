@@ -20,6 +20,7 @@
 #include "common/storage/ob_device_common.h"
 #include "ob_storage_info.h"
 #include "ob_object_storage_base.h"
+#include <opendal.h>
 
 namespace oceanbase
 {
@@ -82,13 +83,19 @@ public:
   ObStorageObjectMetaBase() : type_(ObStorageObjectMetaType::OB_OBJ_INVALID) { reset(); }
   ~ObStorageObjectMetaBase() { reset(); }
 
-  void reset() { is_exist_ = false; length_ = -1; }
+  void reset()
+  {
+    is_exist_ = false;
+    length_ = -1;
+    mtime_s_ = -1;
+  }
 
-  TO_STRING_KV(K_(is_exist), K_(length));
+  TO_STRING_KV(K_(is_exist), K_(length), K(type_), K(mtime_s_));
 
   bool is_exist_;
   int64_t length_;
   ObStorageObjectMetaType type_;
+  int64_t mtime_s_; // time of last modification, aligned with ObIODFileStat
 };
 
 // Each fragment meta corresponds to a normal object in a 'dir'.
@@ -164,7 +171,7 @@ public:
 
   static bool fragment_meta_cmp_func(const ObAppendableFragmentMeta &left, const ObAppendableFragmentMeta &right);
 
-  TO_STRING_KV(K_(is_exist), K_(length), K_(type), K_(fragment_metas));
+  INHERIT_TO_STRING_KV("ObStorageObjectMetaBase", ObStorageObjectMetaBase, K(fragment_metas_));
 
   ObSEArray<ObAppendableFragmentMeta, 10> fragment_metas_;
 };
@@ -181,11 +188,13 @@ public:
   int64_t *size_arr_; // save all the length of each object/file (the order is the same with name_arr)
   int64_t cur_listed_count_;
   int64_t total_list_limit_;  // The maximum number of objects required to be listed. <= 0 means there is no limit
+  opendal_lister *opendal_lister_; // The intermediate state of the list is kept in opendal, and we save opendal_lister to access the next page
 
   ObStorageListCtxBase()
     : max_list_num_(0), name_arr_(NULL), max_name_len_(0), rsp_num_(0),
       has_next_(false), need_size_(false), size_arr_(NULL),
-      cur_listed_count_(0), total_list_limit_(-1)
+      cur_listed_count_(0), total_list_limit_(-1),
+      opendal_lister_(nullptr)
   {}
 
   virtual ~ObStorageListCtxBase() { reset(); }
@@ -254,13 +263,6 @@ public:
   INHERIT_TO_STRING_KV("ObStorageListCtxBase", ObStorageListCtxBase, K_(already_open_dir));
 };
 
-enum ObStorageDeleteMode: uint8_t
-{
-  NONE = 0,
-  STORAGE_DELETE_MODE = 1,
-  STORAGE_TAGGING_MODE = 2,
-  MAX
-};
 
 class ObIStorageUtil
 {

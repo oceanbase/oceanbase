@@ -12,6 +12,7 @@
 
 #ifndef OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_
+#include "share/ob_compute_property.h"
 #include "sql/das/ob_das_task.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -105,6 +106,7 @@ public:
       external_file_format_str_(alloc),
       partition_infos_(alloc),
       external_object_ctx_(alloc),
+      external_pushdown_filters_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
       rowkey_exprs_(alloc),
@@ -119,7 +121,8 @@ public:
       domain_id_idxs_(alloc),
       domain_types_(alloc),
       domain_tids_(alloc),
-      pre_range_graph_(alloc)
+      pre_range_graph_(alloc),
+      aggregate_param_props_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -190,6 +193,7 @@ public:
   ObExternalFileFormat::StringData external_file_format_str_;
   share::ObExternalTablePartInfoArray partition_infos_; // FARM COMPAT WHITELIST
   share::ObExternalObjectCtx external_object_ctx_;
+  ObExternalFileFormat::StringList external_pushdown_filters_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup
@@ -212,6 +216,7 @@ public:
   ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
   ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
   ObPreRangeGraph pre_range_graph_;
+  ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -387,6 +392,10 @@ public:
       common::ObTabletID &snapshot_tid,
       common::ObTabletID &com_aux_vec_tid,
       common::ObTabletID &rowkey_vid_tid);
+  int get_spiv_ir_tablet_ids(
+      common::ObTabletID &vec_row_tid,
+      common::ObTabletID &dim_docid_value_tid,
+      common::ObTabletID &rowkey_doc_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
   int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
@@ -503,7 +512,8 @@ public:
       ls_id_(),
       scan_param_(),
       lookup_memctx_(),
-      status_(0)
+      status_(0),
+      index_tablet_id_()
   {}
 
   virtual ~ObLocalIndexLookupOp();
@@ -537,6 +547,7 @@ public:
   void set_is_group_scan(bool v) { is_group_scan_ = v; }
   bool is_group_scan() const { return is_group_scan_; }
   void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+  void set_index_tablet_id(const common::ObTabletID &tablet_id) { index_tablet_id_ = tablet_id; }
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   void set_rowkey_iter(common::ObNewRowIterator *rowkey_iter) {rowkey_iter_ = rowkey_iter;}
   common::ObNewRowIterator *get_rowkey_iter() { return rowkey_iter_; }
@@ -579,6 +590,7 @@ protected:
       //add status here
     };
   };
+  common::ObTabletID index_tablet_id_;
 };
 
 // NOTE: ObDASGroupScanOp defined here is For cross-version compatibility， and it will be removed in future barrier-version;

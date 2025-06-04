@@ -176,6 +176,10 @@ enum ObLogBaseType
 #ifdef  OB_BUILD_SHARED_STORAGE
   // storage cache policy
   STORAGE_CACHE_POLICY_LOG_BASE_TYPE = 55,
+  // for sslog gts service
+  SSLOG_GTS_LOG_BASE_TYPE = 56,
+  // for sslog uid service
+  SSLOG_UID_LOG_BASE_TYPE = 57,
 #endif
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -290,6 +294,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (log_type == SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"PUBLIC_BLOCK_GC_SERVICE", str_len);
+  } else if (log_type == SHARED_STORAGE_SSWRITER_LOG_BASE_TYPE) {
+    strncpy(str ,"SSWRITER_LS_HANDLER", str_len);
 #endif
   } else if (log_type == TABLE_LOCK_LOG_BASE_TYPE) {
     strncpy(str, "TABLE_LOCK_LOG_BASE_TYPE", str_len);
@@ -309,6 +315,12 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"DISASTER_RECOVERY_SERVICE", str_len);
   } else if (log_type == DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE) {
     strncpy(str ,"DDL_SERVICE_LAUNCHER", str_len);
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (log_type == SSLOG_GTS_LOG_BASE_TYPE) {
+    strncpy(str ,"SSLOG_GTS", str_len);
+  } else if (log_type == SSLOG_UID_LOG_BASE_TYPE) {
+    strncpy(str ,"SSLOG_UID", str_len);
+#endif
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

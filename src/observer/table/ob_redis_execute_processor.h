@@ -54,7 +54,6 @@ private:
   int check_tenant_version();
 
 private:
-  common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;

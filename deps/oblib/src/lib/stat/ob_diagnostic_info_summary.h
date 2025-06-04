@@ -143,15 +143,29 @@ public:
   void get_all_add_stats(ObStatEventAddStatArray &arr) const;
   void get_all_latch_stat(ObLatchStatArray &arr) const;
   ObDiagnosticInfoSlot *get_slot(int64_t session_id);
+  void reuse()__attribute__((deprecated("reuse of di collector is not implemented."))) {}
 
   TO_STRING_KV(K_(tenant_id), K_(group_id), K_(slot_mask), K_(is_inited), K(get_uref()), K(get_href()));
 
+  void set_using_cache()
+  {
+    using_cache_ = true;
+  }
+  void unset_using_cache()
+  {
+    using_cache_ = false;
+  }
+  bool is_using_cache() const
+  {
+    return using_cache_;
+  }
 private:
   int64_t tenant_id_;
   int64_t group_id_;
   int64_t slot_mask_;
   int64_t slot_count_;
   bool is_inited_;
+  bool using_cache_;
   ObDiagnosticInfoSlot *di_info_bundle_;
 };
 

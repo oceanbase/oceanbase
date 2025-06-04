@@ -1474,7 +1474,7 @@ int ObODPSJNITableRowIterator::fill_column_(ObEvalCtx &ctx, const ObExpr &expr,
             number::ObNumber nmb;
             ObNumStackOnceAlloc tmp_alloc;
             if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(
-                    expr, in_str, tmp_alloc, nmb))) {
+                    expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
               LOG_WARN("cast string to number failed", K(ret), K(row_idx),
                        K(column_idx));
             } else {

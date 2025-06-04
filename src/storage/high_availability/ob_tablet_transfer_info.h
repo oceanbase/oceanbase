@@ -37,13 +37,15 @@ public:
   bool is_valid() const;
   bool has_transfer_table() const;
   void reset_transfer_table();
+  bool is_transfer_out_deleted() const;
 
-  TO_STRING_KV(K_(ls_id), K_(transfer_start_scn), K_(transfer_seq), K_(has_transfer_table));
+  TO_STRING_KV(K_(ls_id), K_(transfer_start_scn), K_(transfer_seq), K_(has_transfer_table), K_(is_transfer_out_deleted));
 public:
   share::ObLSID ls_id_;
   share::SCN transfer_start_scn_;
   int64_t transfer_seq_;
   bool has_transfer_table_;
+  bool is_transfer_out_deleted_;
   static const int64_t TRANSFER_INIT_SEQ = 0;
 private:
   static const int64_t TRANSFER_INIT_LS_ID = 0;

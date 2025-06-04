@@ -428,8 +428,7 @@ int ObHybridSampleFilterExecutor::check_sample_block(
     blocksstable::ObMicroIndexInfo &index_info,
     const int64_t level,
     const int64_t parent_fetch_idx,
-    const int64_t child_prefetch_idx,
-    const bool has_lob_out)
+    const int64_t child_prefetch_idx)
 {
   int ret = OB_SUCCESS;
   int64_t start_row_id = 0;
@@ -440,11 +439,11 @@ int ObHybridSampleFilterExecutor::check_sample_block(
     LOG_WARN("The ObHybridSampleFilter has not been inited", K(ret));
   } else if (OB_UNLIKELY(level < 0 || level > index_tree_height_ || parent_fetch_idx < 0 || child_prefetch_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to check sample block", K(ret), K(level), K(parent_fetch_idx), K(child_prefetch_idx), K(has_lob_out));
+    LOG_WARN("Invalid argument to check sample block", K(ret), K(level), K(parent_fetch_idx), K(child_prefetch_idx));
   } else if (OB_FAIL(update_row_id_handle(level, parent_fetch_idx, child_prefetch_idx, index_info.get_row_count()))) {
     LOG_WARN("Failed to update row id in sample", K(ret), K(level), K(parent_fetch_idx), K(child_prefetch_idx), K(index_info.get_row_count()));
-  } else if (!index_info.can_blockscan(has_lob_out) || !pd_row_range_.is_valid()) {
-    LOG_DEBUG("Can not filter micro block in sample", K_(pd_row_range), K(index_info), K(has_lob_out));
+  } else if (!index_info.can_blockscan() || !pd_row_range_.is_valid()) {
+    LOG_DEBUG("Can not filter micro block in sample", K_(pd_row_range), K(index_info));
   } else {
     if (level == index_tree_height_) {
       start_row_id = data_row_id_handle_[child_prefetch_idx % data_prefetch_depth_];
@@ -458,7 +457,7 @@ int ObHybridSampleFilterExecutor::check_sample_block(
       start_row_num = row_num_ + start_row_id - pd_row_range_.begin();
       end_row_num = start_row_num + index_info.get_row_count() - 1;
       block_statistic_.inc_block_count(index_info, end_row_num >= interval_infos_[EXPAND_INTERVAL_INDEX].start_);
-      if (!can_sample_skip(index_info, has_lob_out)) {
+      if (!can_sample_skip(index_info)) {
       } else if (OB_FAIL(check_range_filtered(index_info, start_row_num))) {
         LOG_WARN("Failed to check range filtered in sample", K(ret), K(start_row_num), K(end_row_num));
       } else if (index_info.is_filter_always_false()) {

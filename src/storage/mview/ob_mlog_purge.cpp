@@ -58,7 +58,7 @@ int ObMLogPurger::purge()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogPurger not init", KR(ret), KP(this));
-  } else if (OB_ISNULL(ctx_)) {
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_my_session())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ctx can not be NULL", KR(ret));
   } else {
@@ -78,6 +78,8 @@ int ObMLogPurger::purge()
       arg.table_id_ =  mlog_info_.get_mlog_id();
       arg.mview_op_type_ = MVIEW_OP_TYPE::PURGE_MLOG;
       arg.parallel_ = purge_param_.purge_log_parallel_;
+      arg.session_id_ = ctx_->get_my_session()->get_server_sid();
+      arg.start_ts_ = ObTimeUtil::current_time();
       share::SCN curr_scn;
       if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(curr_scn))) {
         LOG_WARN("get current_scn failed", KR(ret));
@@ -191,7 +193,12 @@ int ObMLogPurger::prepare_for_purge()
             } else {
               ret = OB_SUCCESS;
             }
-          } else if (OB_INVALID_SCN_VAL != mview_info.get_last_refresh_scn()) {
+          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn()) {
+            // do nothing
+          } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
+              || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
+              || table_schema->mv_on_query_computation()) {
+            // for fast refresh mv or real-query mv
             min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
           }
         }
@@ -233,6 +240,7 @@ int ObMLogPurger::do_purge()
     LOG_WARN("fail to execute sql", KR(ret), K(purge_sql_));
   }
   const int64_t end_time = ObTimeUtil::current_time();
+  LOG_INFO("do_purge", K(tenant_id), K_(purge_sql), "time", end_time - start_time);
   // 2. update mlog last purge info
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)

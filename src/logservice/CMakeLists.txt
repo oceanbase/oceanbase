@@ -95,6 +95,12 @@ ob_set_subtarget(ob_logservice logrouteservice
   logrouteservice/ob_server_priority.cpp
 )
 
+ob_set_subtarget(ob_logservice ipalf
+  ipalf/ipalf_env.cpp
+  ipalf/ipalf_iterator.cpp
+  ipalf/ipalf_log_entry.cpp
+)
+
 ob_set_subtarget(ob_logservice palf
   palf/block_gc_timer_task.cpp
   palf/fetch_log_engine.cpp

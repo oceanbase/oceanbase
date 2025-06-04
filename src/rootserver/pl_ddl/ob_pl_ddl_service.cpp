@@ -2068,6 +2068,7 @@ int ObPLDDLService::get_object_info(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("table is in recyclebin", K(ret), K(object_name), K(object_name));
     } else if (!table_schema->is_user_table() && !table_schema->is_user_view()) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not create on user table or user view in trigger now");
       LOG_WARN("trigger only support create on user table or user view now", K(ret));
     } else {
       object_type = table_schema->is_user_table() ? TABLE_SCHEMA : VIEW_SCHEMA;

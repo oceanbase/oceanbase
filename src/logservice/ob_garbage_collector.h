@@ -167,7 +167,8 @@ public:
     INVALID_GC_REASON = 0,          //不需要GC
     NOT_IN_LEADER_MEMBER_LIST = 1,  //不在成员列表中
     LS_STATUS_ENTRY_NOT_EXIST = 2,  //日志流状态表已删除该日志流
-    MAX_GC_REASON = 3,
+    MIGRATION_FAILED = 3,           //迁移复制相关场景失败的日志流
+    MAX_GC_REASON = 4,
   };
 
   struct GCCandidate
@@ -270,6 +271,8 @@ public:
     }
     inline bool is_succeed() const { return CbState::STATE_SUCCESS == ATOMIC_LOAD(&state_); }
     inline bool is_failed() const { return CbState::STATE_FAILED == ATOMIC_LOAD(&state_); }
+    const char *get_cb_name() const override { return "GCLSLogCb"; }
+
     TO_STRING_KV(K(state_), K(scn_), KP(handler_));
   public:
     CbState state_;
@@ -314,6 +317,14 @@ public:
                K(block_log_debug_time_),
                K(log_sync_stopped_),
                K(rec_scn_));
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  // for share storage
+private:
+  int update_ss_ls_meta_(const share::ObLSID &ls_id,
+                         const logservice::LSGCState &gc_state,
+                         const share::SCN &offline_scn);
+#endif
 
 private:
   typedef common::SpinRWLock RWLock;

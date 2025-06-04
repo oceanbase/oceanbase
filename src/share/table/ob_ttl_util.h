@@ -279,9 +279,13 @@ public:
       ttl_(0),
       max_version_(0),
       is_redis_ttl_(false),
-      redis_model_(table::ObRedisModel::INVALID)
+      redis_model_(table::ObRedisDataModel::MODEL_MAX)
   {}
   bool is_ttl_table() const;
+  OB_INLINE bool is_max_versions_valid() const
+  {
+    return type_ == ObTTLTableType::HBASE && max_version_ > 0;
+  }
   OB_INLINE bool is_empty() const { return type_ == ObTTLTableType::INVALID; }
   TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_redis_ttl), K_(redis_model));
 
@@ -293,7 +297,7 @@ public:
 
   // for redis
   bool is_redis_ttl_;
-  table::ObRedisModel redis_model_;
+  table::ObRedisDataModel redis_model_;
 };
 
 class ObTTLUtil
@@ -367,8 +371,8 @@ public:
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
 
-  static int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
-  static int check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);
   static int check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
                                               const uint64_t& task_id, const uint64_t& table_id,
@@ -381,14 +385,17 @@ public:
 
   static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
   static bool is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns);
-
+  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema);
+  static int check_kv_attributes(const ObString &kv_attributes,
+                                 const share::schema::ObTableSchema &table_schema,
+                                 ObPartitionLevel part_level);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
   const static uint64_t TTL_ROWKEY_TASK_TABLE_ID = -2;
   const static uint64_t TTL_THREAD_MAX_SCORE = 100;
 private:
-  static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table);
 private:
   static bool extract_val(const char* ptr, uint64_t len, int& val);
   static bool valid_digit(const char* ptr, uint64_t len);
@@ -398,7 +405,7 @@ private:
                                      const ObSimpleTTLInfo &ttl_info);
   static int get_all_user_tenant_ttl(common::ObIArray<ObSimpleTTLInfo> &ttl_info_array);
   static int parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live);
-  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisModel &redis_model_);
+  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisDataModel &redis_model_);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };

@@ -421,8 +421,6 @@ int ObExprIntDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
   const common::ObObjType right = rt_expr.args_[1]->datum_meta_.type_;
   const ObObjTypeClass left_tc = ob_obj_type_class(left);
   const ObObjTypeClass right_tc = ob_obj_type_class(right);
-  OB_ASSERT(left == input_types_[0].get_calc_type());
-  OB_ASSERT(right == input_types_[1].get_calc_type());
 
   rt_expr.inner_functions_ = NULL;
   LOG_DEBUG("arrive here cg_expr", K(ret), K(rt_expr), K(left), K(right));

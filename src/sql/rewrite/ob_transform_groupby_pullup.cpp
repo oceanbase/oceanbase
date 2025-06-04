@@ -42,6 +42,7 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
     TableItem *view = NULL;
     StmtUniqueKeyProvider unique_key_provider;
     try_trans_helper.unique_key_provider_ = &unique_key_provider;
+    bool partial_cost_check = false;
     LOG_DEBUG("begin pull up", K(valid_views.count()), K(valid_views.at(i).need_merge_));
     if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_,
                                                  *ctx_->expr_factory_,
@@ -56,9 +57,12 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to get transform view", K(ret));
     } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i), unique_key_provider))) {
       LOG_WARN("failed to do pull up group by", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::partial_cost_eval_validity_check(*ctx_, parent_stmts, stmt,
+                                                                          false, partial_cost_check))) {
+      LOG_WARN("failed to check partial cost eval validity", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                         valid_views.at(i).need_merge_, true,
-                                        trans_happened, &pullup_ctx))) {
+                                        trans_happened, partial_cost_check, &pullup_ctx))) {
       LOG_WARN("failed to accept transform", K(ret));
     } else if (OB_FAIL(try_trans_helper.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
       LOG_WARN("failed to finish try trans helper", K(ret));
@@ -898,7 +902,7 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt,
       subquery->get_having_exprs().reset();
       if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt, table_item))) {
         LOG_WARN("failed to generate select list", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       }
     }
@@ -991,19 +995,18 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
     ObRawExpr *null_expr = NULL;
     ObRawExpr *cast_expr = NULL;
     ObRawExpr *case_when_expr = NULL;
+    ObRawExpr *case_when_with_cast = NULL;
     ObRawExprFactory *factory = ctx_->expr_factory_;
     if (OB_FAIL(ObRawExprUtils::build_null_expr(*factory, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
     } else if (OB_ISNULL(null_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                          ctx_->expr_factory_,
-                          ctx_->session_info_,
-                          *null_expr,
-                          expr->get_result_type(),
-                          cast_expr))) {
-      LOG_WARN("try add cast expr above failed", K(ret));
+    } else if (OB_FALSE_IT(cast_expr = null_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, cast_expr,
+                                                                      ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
     } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(child_stmt,
                                                               not_null_column,
                                                               expr,
@@ -1014,12 +1017,13 @@ int ObTransformGroupByPullup::wrap_case_when(ObSelectStmt &child_stmt,
     } else if (OB_ISNULL(case_when_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("case when expr is null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                               ctx_->session_info_,
-                                                               *case_when_expr,
-                                                               expr->get_result_type(),
-                                                               expr))) {
-      LOG_WARN("failed to add cast expr", K(ret));
+    } else if (OB_FALSE_IT(case_when_with_cast = case_when_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr, case_when_with_cast,
+                                                                      ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
+    } else {
+      expr = case_when_with_cast;
     }
   }
   return ret;
@@ -1142,8 +1146,14 @@ int ObTransformGroupByPullup::need_transform(const common::ObIArray<ObParentDMLS
   UNUSED(current_level);
   const ObQueryHint *query_hint = NULL;
   const ObHint *trans_hint = NULL;
-  if (!stmt.is_sel_del_upd() || stmt.has_instead_of_trigger() || stmt.is_set_stmt()
-      || stmt.is_hierarchical_query()) {
+  bool bypass = false;
+  if (OB_FAIL(check_rule_bypass(stmt, bypass))) {
+    LOG_WARN("fail check stmt validity", K(ret));
+  } else if (bypass) {
+    need_trans = false;
+    OPT_TRACE("transform rule bypassed");
+  } else if (!stmt.is_sel_del_upd() || stmt.has_instead_of_trigger() || stmt.is_set_stmt()
+             || stmt.is_hierarchical_query()) {
     need_trans = false;
   } else if (stmt.get_from_item_size() == 0) {
     need_trans = false;

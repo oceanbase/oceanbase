@@ -23,7 +23,6 @@ ob_define(ENABLE_SMART_VAR_CHECK OFF)
 ob_define(ENABLE_COMPILE_DLL_MODE OFF)
 ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
-ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
 ob_define(LTO_JOBS all)
 ob_define(LTO_CACHE_DIR "${CMAKE_BINARY_DIR}/cache")
@@ -55,6 +54,9 @@ ob_define(USE_LTO_CACHE OFF)
 # odps jni
 ob_define(OB_BUILD_JNI_ODPS ON)
 
+ob_define(ASAN_DISABLE_STACK ON)
+
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
@@ -70,7 +72,13 @@ endif()
 
 ob_define(AUTO_FDO_OPT "")
 if(ENABLE_AUTO_FDO)
-  set(AUTO_FDO_OPT "-finline-functions -fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof")
+  if( ${ARCHITECTURE} STREQUAL "x86_64" )
+    set(AUTO_FDO_PATH "${CMAKE_SOURCE_DIR}/profile/observer-x86_64.prof")
+  elseif( ${ARCHITECTURE} STREQUAL "aarch64" )
+    set(AUTO_FDO_PATH "${CMAKE_SOURCE_DIR}/profile/observer-aarch64.prof")
+  endif()
+  set(AUTO_FDO_OPT "-finline-functions -fprofile-sample-use=${AUTO_FDO_PATH}")
+  message(STATUS "auto fdo path: " ${AUTO_FDO_PATH})
 endif()
 
 ob_define(THIN_LTO_OPT "")
@@ -86,12 +94,17 @@ endif()
 
 set(HOTFUNC_OPT "")
 if(ENABLE_HOTFUNC)
+  if( ${ARCHITECTURE} STREQUAL "x86_64" )
+    set(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/profile/hotfuncs-x86_64.txt")
+  elseif( ${ARCHITECTURE} STREQUAL "aarch64" )
+    set(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/profile/hotfuncs-aarch64.txt")
+  endif()
   set(HOTFUNC_OPT "-Wl,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+  message(STATUS "hotfunc path: " ${HOTFUNC_PATH})
 endif()
 
 set(BOLT_OPT "")
 if((ENABLE_BOLT OR (NOT DEFINED ENABLE_BOLT AND ENABLE_BOLT_AUTO)) AND NOT OB_BUILD_OPENSOURCE)
-  EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
   if( ${ARCHITECTURE} STREQUAL "x86_64" )
     message(STATUS "build with bolt opt (x86_64)")
     set(BOLT_OPT "-Wl,--emit-relocs")
@@ -110,8 +123,8 @@ if(CPP_STANDARD_20)
   ob_define(CPP_STANDARD_20 ON)
   add_definitions(-DCPP_STANDARD_20)
 else()
-  message(STATUS "Using C++11 standard")
-  set(CMAKE_CXX_FLAGS "-std=gnu++11")
+  message(STATUS "Using C++17 standard")
+  set(CMAKE_CXX_FLAGS "-std=gnu++17")
 endif()
 
 if(OB_DISABLE_PIE)
@@ -156,6 +169,9 @@ if(OB_BUILD_CLOSE_MODULES)
 
   # 日志存储压缩
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
+
+  # 独立日志服务
+  ob_define(OB_BUILD_SHARED_LOG_SERVICE ON)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
@@ -218,6 +234,10 @@ if (OB_BUILD_JNI_ODPS)
  add_definitions(-DOB_BUILD_JNI_ODPS)
 endif()
 
+if(OB_BUILD_SHARED_LOG_SERVICE)
+  add_definitions(-DOB_BUILD_SHARED_LOG_SERVICE)
+endif()
+
 # should not use initial-exec for tls-model if building OBCDC.
 if(BUILD_CDC_ONLY)
   add_definitions(-DOB_BUILD_CDC_DISABLE_VSAG)
@@ -276,13 +296,17 @@ if (OB_USE_CLANG)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
 
   if (OB_USE_ASAN)
-    ob_define(CMAKE_ASAN_FLAG "-mllvm -asan-stack=0 -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
+    if (ASAN_DISABLE_STACK)
+      ob_define(CMAKE_ASAN_FLAG "-mllvm -asan-stack=0 -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
+    else()
+      ob_define(CMAKE_ASAN_FLAG "-fstack-protector-strong -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
+    endif()
   endif()
 
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld -Wno-unused-command-line-argument")
-    set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
-    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1 ${HOTFUNC_OPT}")
+    set(REORDER_COMP_OPT "-ffunction-sections -fdata-sections -fdebug-info-for-profiling")
+    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--gc-sections ${HOTFUNC_OPT}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${FILE_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")

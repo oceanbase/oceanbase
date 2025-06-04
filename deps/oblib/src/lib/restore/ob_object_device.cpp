@@ -746,12 +746,9 @@ int ObObjectDevice::inner_stat_(const char *pathname,
     ObIODFileStat &statbuf, const bool is_adaptive)
 {
   int ret = OB_SUCCESS;
-  int64_t length = 0;
   common::ObString uri(pathname);
-  if (OB_FAIL(util_.get_file_length(uri, is_adaptive, length))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), K(is_adaptive));
-  } else {
-    statbuf.size_ = length;
+  if (OB_FAIL(util_.get_file_stat(uri, is_adaptive, statbuf))) {
+    OB_LOG(WARN, "fail to get file stat!", K(ret), K(uri), K(is_adaptive));
   }
   return ret;
 }

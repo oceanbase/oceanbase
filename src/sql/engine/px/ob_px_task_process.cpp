@@ -158,30 +158,33 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());
     arg_.exec_ctx_->set_px_sqc_id(arg_.task_.get_sqc_id());
     arg_.exec_ctx_->set_branch_id(arg_.task_.get_branch_id());
-    ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
-    if (OB_NOT_NULL(di)) {
-      session->set_ash_stat_value(di->get_ash_stat());
-    }
-    if (enable_perf_event) {
-      exec_record.record_start();
-    }
-    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
-      sqlstat_record.record_sqlstat_start_value();
-      sqlstat_record.set_is_in_retry(session->get_is_in_retry());
-      session->sql_sess_record_sql_stat_start_value(sqlstat_record);
-    }
+    {
+      //统计等待事件的guard生命周期必须小于收集统计信息的逻辑，才能保证后续获取到的时间准确
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
+      ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+      if (OB_NOT_NULL(di)) {
+        session->set_ash_stat_value(di->get_ash_stat());
+      }
+      if (enable_perf_event) {
+        exec_record.record_start();
+      }
+      if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session->get_is_in_retry());
+        session->sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
 
-    //监控项统计开始
-    exec_start_timestamp_ = enqueue_timestamp_;
+      //监控项统计开始
+      exec_start_timestamp_ = enqueue_timestamp_;
 
-    if (OB_FAIL(do_process())) {
-      LOG_WARN("failed to process", K(get_tenant_id()), K(ret), K(get_qc_id()), K(get_dfo_id()));
+      if (OB_FAIL(do_process())) {
+        LOG_WARN("failed to process", K(get_tenant_id()), K(ret), K(get_qc_id()), K(get_dfo_id()));
+      }
+
+      //监控项统计结束
+      exec_end_timestamp_ = ObTimeUtility::current_time();
     }
-
-    //监控项统计结束
-    exec_end_timestamp_ = ObTimeUtility::current_time();
 
     // some statistics must be recorded for plan stat, even though sql audit disabled
     record_exec_timestamp(true, exec_timestamp);
@@ -213,6 +216,15 @@ int ObPxTaskProcess::process()
         arg_.sqc_task_ptr_->set_memstore_read_row_count(exec_record.get_memstore_read_row_count());
         arg_.sqc_task_ptr_->set_ssstore_read_row_count(exec_record.get_ssstore_read_row_count());
       }
+    }
+
+    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
+      ObString sql = ObString::make_string("");
+      sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session,
+                            sql, phy_plan, true/*is_px_remote_exec*/);
     }
 
     if (enable_sql_audit) {
@@ -500,6 +512,9 @@ int ObPxTaskProcess::do_process()
 
   // Task 和 Sqc 在两个不同线程中时，task 需要和 sqc 通信
   if (NULL != arg_.sqc_task_ptr_) {
+    if (OB_FAIL(ret)) {
+      ObInterruptUtil::update_schema_error_code(arg_.exec_ctx_, ret, arg_.task_.px_worker_execute_start_schema_version_);
+    }
     arg_.sqc_task_ptr_->set_result(ret);
     if (OB_NOT_NULL(arg_.exec_ctx_)) {
       int das_retry_rc = DAS_CTX(*arg_.exec_ctx_).get_location_router().get_last_errno();
@@ -956,6 +971,7 @@ int ObPxTaskProcess::OpPostparation::reset(ObOpSpec &op)
 
 uint64_t ObPxTaskProcess::get_session_id() const
 {
+  int ret = OB_SUCCESS;
   uint64_t session_id = 0;
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
@@ -964,7 +980,7 @@ uint64_t ObPxTaskProcess::get_session_id() const
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
-    session_id = session->get_sessid();
+    session_id = session->get_sid();
   }
   return session_id;
 }

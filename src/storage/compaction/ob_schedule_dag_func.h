@@ -51,6 +51,7 @@ struct ObBatchFreezeTabletsParam;
 struct ObTabletsRefreshSSTableParam;
 struct ObVerifyCkmParam;
 struct ObUpdateSkipMajorParam;
+struct ObTabletSSMinorMergeDagParam;
 #endif
 
 class ObScheduleDagFunc final
@@ -92,6 +93,7 @@ public:
       const bool is_emergency = false);
   static int schedule_verify_ckm_dag(ObVerifyCkmParam &param);
   static int schedule_update_skip_major_tablet_dag(const ObUpdateSkipMajorParam &param);
+  static int schedule_tablet_ss_minor_merge_dag(const ObTabletSSMinorMergeDagParam &param);
 #endif
 };
 

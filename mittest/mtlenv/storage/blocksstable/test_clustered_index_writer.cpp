@@ -81,11 +81,12 @@ void TestClusteredIndexWriter::prepare_data_store_desc(
     ObWholeDataStoreDesc &data_desc, ObSSTableIndexBuilder *sstable_index_builder)
 {
   int ret = OB_SUCCESS;
+  const SCN reorganization_scn(SCN::min_scn());
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time() /*snapshot_version*/,
                        DATA_CURRENT_VERSION,
                        table_schema_.get_micro_index_clustered(),
-                       0 /*transfer_seq*/);
+                       0 /*transfer_seq*/, reorganization_scn);
   data_desc.get_desc().sstable_index_builder_ = sstable_index_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }

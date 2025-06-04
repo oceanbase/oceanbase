@@ -2240,8 +2240,15 @@ int ObObj::print_plain_str_literal(char *buffer, int64_t length, int64_t &pos, c
 
 void ObObj::print_str_with_repeat(char *buf, int64_t buf_len, int64_t &pos) const
 {
-  const unsigned char *uptr = reinterpret_cast<const unsigned char*>(v_.string_);
+  const char *str_ptr = v_.string_;
   int32_t real_len = val_len_;
+  ObString data;
+  if (is_lob_storage()) {
+    data = get_text_print_string(buf_len - pos);
+    str_ptr = data.ptr();
+    real_len = data.length();
+  }
+  const unsigned char *uptr = reinterpret_cast<const unsigned char*>(str_ptr);
   int32_t repeats = 0;
   int8_t cnt_space = 0;//There is no space for whole multibyte character, then add trailing spaces.
   if (NULL != uptr && real_len > 0) {
@@ -2256,9 +2263,9 @@ void ObObj::print_str_with_repeat(char *buf, int64_t buf_len, int64_t &pos) cons
     }
   }
   if (0 == repeats) {
-    real_len = val_len_;
+    real_len = is_lob_storage() ? data.length() : val_len_;
   }
-  BUF_PRINTO(ObString(0, real_len, v_.string_));
+  BUF_PRINTO(ObString(0, real_len, str_ptr));
   if (repeats > 0) {
     BUF_PRINTF(" \'<%X%X%X><repeat %d times>\' ", uptr[real_len], uptr[real_len + 1], uptr[real_len + 2], repeats);
     //There is no space for whole multibyte character, then add trailing spaces.

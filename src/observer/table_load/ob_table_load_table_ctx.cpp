@@ -93,9 +93,9 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param,
   } else {
     param_ = param;
     ddl_param_ = ddl_param;
-    if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_))) {
+    if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_, ddl_param.schema_version_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(param_.tenant_id_),
-               K(param_.table_id_));
+               K(param_.table_id_), K(ddl_param.schema_version_));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", param_.tenant_id_))) {
       LOG_WARN("fail to init allocator", KR(ret));
     } else if (OB_FAIL(trans_ctx_allocator_.init("TLD_TCtxPool", param_.tenant_id_))) {

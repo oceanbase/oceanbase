@@ -396,6 +396,13 @@ public:
 
   // oss://[user_specified_path]/[s_id].file_info.obarc
   int read_single_ls_info(const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const;
+  int seal_file(
+    const int64_t dest_id,
+    const int64_t round_id,
+    const int64_t piece_id,
+    const ObLSID &ls_id,
+    const int64_t file_id) const;
+
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/file_info.obarc
   int is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;

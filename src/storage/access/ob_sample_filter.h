@@ -204,8 +204,7 @@ public:
       blocksstable::ObMicroIndexInfo &index_info,
       const int64_t level,
       const int64_t parent_fetch_idx,
-      const int64_t child_prefetch_idx,
-      const bool has_lob_out) = 0;
+      const int64_t child_prefetch_idx) = 0;
   virtual int apply_sample_filter( // for row store
       sql::PushdownFilterInfo &filter_info,
       const bool is_major,
@@ -286,10 +285,9 @@ public:
       blocksstable::ObMicroIndexInfo &index_info,
       const int64_t level,
       const int64_t parent_fetch_idx,
-      const int64_t child_prefetch_idx,
-      const bool has_lob_out) override
+      const int64_t child_prefetch_idx) override
   {
-    UNUSEDx(index_info, level, parent_fetch_idx, child_prefetch_idx, has_lob_out);
+    UNUSEDx(index_info, level, parent_fetch_idx, child_prefetch_idx);
     return OB_SUCCESS;
   }
   void set_block_row_range(
@@ -331,8 +329,7 @@ public:
       blocksstable::ObMicroIndexInfo &index_info,
       const int64_t level,
       const int64_t parent_fetch_idx,
-      const int64_t child_prefetch_idx,
-      const bool has_lob_out) override;
+      const int64_t child_prefetch_idx) override;
   int apply_sample_filter( // for row store
       sql::PushdownFilterInfo &filter_info,
       const bool is_major,
@@ -374,7 +371,7 @@ private:
       const int64_t start_row_num,
       const int64_t row_count,
       ObBitmap &result_bitmap);
-  OB_INLINE bool can_sample_skip(blocksstable::ObMicroIndexInfo &index_info, const bool has_lob_out)
+  OB_INLINE bool can_sample_skip(blocksstable::ObMicroIndexInfo &index_info)
   {
     return block_statistic_.can_skip_block_
             && !index_info.is_left_border() && !index_info.is_right_border()

@@ -193,10 +193,10 @@ int ObBatchP::handle_log_req(const common::ObAddr& sender, int type, const share
   if (OB_ISNULL(log_service)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_LOG(ERROR, "log_service is nullptr", K(ret), K(log_service));
-  } else if (OB_ISNULL(log_service->get_palf_env())) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "palf_env is nullptr", K(ret), KP(log_service));
-  } else if (FALSE_IT(palf_env_impl = log_service->get_palf_env()->get_palf_env_impl())) {
+  } else if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    RPC_LOG(ERROR, "logservice is not compatible with rpc of palf", K(ret), K(GCONF.enable_logservice));
+  } else if (FALSE_IT(palf_env_impl = static_cast<palf::PalfEnv*>(log_service->get_palf_env())->get_palf_env_impl())) {
   } else if (palf::LOG_BATCH_PUSH_LOG_REQ == type) {
     __LOG_BATCH_PROCESS_REQ(palf::LogPushReq);
   } else if (palf::LOG_BATCH_PUSH_LOG_RESP == type) {

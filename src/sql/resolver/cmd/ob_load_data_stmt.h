@@ -67,7 +67,9 @@ struct ObLoadArgument
                     table_id_(OB_INVALID_INDEX_INT64),
                     is_csv_format_(false),
                     part_level_(share::schema::PARTITION_LEVEL_MAX),
-                    compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE)
+                    compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE),
+                    is_diagnosis_enabled_(false),
+                    diagnosis_limit_num_(0)
 
   {}
 
@@ -87,7 +89,9 @@ struct ObLoadArgument
                K_(table_id),
                K_(is_csv_format),
                K_(file_iter),
-               K_(compression_format));
+               K_(compression_format),
+               K_(is_diagnosis_enabled),
+               K_(diagnosis_limit_num));
 
   int assign(const ObLoadArgument &other) {
     int ret = OB_SUCCESS;
@@ -98,6 +102,8 @@ struct ObLoadArgument
     file_cs_type_ = other.file_cs_type_;
     file_name_ = other.file_name_;
     url_spec_ = other.url_spec_;
+    diagnosis_limit_num_ = other.diagnosis_limit_num_;
+    is_diagnosis_enabled_ = other.is_diagnosis_enabled_;
     database_name_ = other.database_name_;
     table_name_ = other.table_name_;
     combined_name_ = other.combined_name_;
@@ -132,6 +138,8 @@ struct ObLoadArgument
   share::schema::ObPartitionLevel part_level_;
   ObLoadFileIterator file_iter_;
   ObCSVGeneralFormat::ObCSVCompression compression_format_;
+  bool is_diagnosis_enabled_;
+  int64_t diagnosis_limit_num_;
 };
 
 struct ObDataInFileStruct

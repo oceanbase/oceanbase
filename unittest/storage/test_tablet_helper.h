@@ -93,6 +93,7 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
   param.tx_data_recycle_scn_.set_min();
+  param.rec_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
@@ -174,7 +175,7 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id))){
       STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
     } else {
-      handle = tablet_handle;
+      handle.assign(tablet_handle);
     }
   }
   return ret;

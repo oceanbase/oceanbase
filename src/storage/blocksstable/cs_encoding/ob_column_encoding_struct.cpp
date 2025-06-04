@@ -14,6 +14,7 @@
 
 #include "ob_column_encoding_struct.h"
 #include "ob_cs_encoding_util.h"
+#include "storage/blocksstable/cs_encoding/semistruct_encoding/ob_semistruct_encoding_util.h"
 
 
 namespace oceanbase
@@ -49,6 +50,12 @@ int ObPreviousCSEncoding::init(const int32_t col_count)
     is_inited_ = true;
   }
   return ret;
+}
+
+void ObPreviousCSEncoding::reset()
+{
+  previous_encoding_of_columns_.reset();
+  is_inited_ = false;
 }
 
 int ObPreviousCSEncoding::update_column_detect_info(const int32_t column_idx,
@@ -184,8 +191,15 @@ void ObColumnCSEncodingCtx::try_set_need_sort(const ObCSColumnHeader::Type type,
                                               const bool micro_block_has_lob_out_row,
                                               const int64_t major_working_cluster_version)
 {
+  try_set_need_sort(type, encoding_ctx_->col_descs_->at(column_index).col_type_.get_type_class(), micro_block_has_lob_out_row, major_working_cluster_version);
+}
+
+void ObColumnCSEncodingCtx::try_set_need_sort(const ObCSColumnHeader::Type type,
+                                              const ObObjTypeClass col_tc,
+                                              const bool micro_block_has_lob_out_row,
+                                              const int64_t major_working_cluster_version)
+{
   if (major_working_cluster_version <= DATA_VERSION_4_3_5_0) {
-    ObObjTypeClass col_tc = encoding_ctx_->col_descs_->at(column_index).col_type_.get_type_class();
     ObObjTypeStoreClass col_sc = get_store_class_map()[col_tc];
     const bool encoding_type_need_sort = (type == ObCSColumnHeader::INT_DICT || type == ObCSColumnHeader::STR_DICT);
     const bool col_is_lob_out_row = micro_block_has_lob_out_row && store_class_might_contain_lob_locator(col_sc);

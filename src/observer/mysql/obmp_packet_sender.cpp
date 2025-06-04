@@ -151,6 +151,11 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     comp_context_.seq_ = comp_seq;
     comp_context_.sessid_ = sessid_;
     comp_context_.conn_ = conn;
+    // init compress seq
+    bool is_compress_proto = (OB_MYSQL_COMPRESS_CS_TYPE == conn->get_cs_protocol_type());
+    if (is_compress_proto) {
+      comp_context_.seq_ = conn->compressed_pkt_context_.last_pkt_seq_ + 1;
+    }
 
     // init proto20 context
     bool is_proto20_supported = (OB_2_0_CS_TYPE == conn->get_cs_protocol_type());
@@ -293,6 +298,9 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
   } else if (OB_ISNULL(session)) {
+    // do nothing
+  } else if (proto20_context_.is_proto20_used_
+             && OB_FALSE_IT(proto20_context_.is_dup_ls_modified_ = session->is_dup_ls_modified())) {
     // do nothing
   } else if (conn_->proxy_cap_flags_.is_full_link_trace_support() &&
               proto20_context_.is_proto20_used_ &&
@@ -573,7 +581,7 @@ int ObMPPacketSender::send_error_packet(int err,
           if (OB_FAIL(send_ok_packet(*session, ok_param, &epacket))) {
             LOG_WARN("failed to send ok packet", K(ok_param), K(ret));
           }
-          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag(), K(session->get_sessid()), K(session->get_proxy_sessid()));
+          LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag(), K(session->get_server_sid()), K(session->get_proxy_sessid()));
         }
       } else {  // just a basic ok packet contain nothing
         OMPKOK okp;
@@ -618,7 +626,7 @@ int ObMPPacketSender::get_session(ObSQLSessionInfo *&sess_info)
     LOG_WARN("get session fail", K(ret), "sessid", conn_->sessid_,
               "proxy_sessid", conn_->proxy_sessid_);
   } else {
-    NG_TRACE_EXT(session, OB_ID(sid), sess_info->get_sessid(),
+    NG_TRACE_EXT(session, OB_ID(sid), sess_info->get_server_sid(),
                  OB_ID(tenant_id), sess_info->get_priv_tenant_id());
   }
   return ret;
@@ -629,6 +637,16 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
   int ret = OB_SUCCESS;
   LOG_DEBUG("send-ok-packet", K(lbt()));
   ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
+  if (OB_FAIL(send_ok_packet_without_lock(session, ok_param, pkt))) {
+    LOG_WARN("send ok packet fail", K(ret));
+  }
+  return ret;
+}
+
+int ObMPPacketSender::send_ok_packet_without_lock(ObSQLSessionInfo &session,
+                                                  ObOKPParam &ok_param,
+                                                  obmysql::ObMySQLPacket* pkt) {
+  int ret = OB_SUCCESS;
   OMPKOK okp;
   if (!conn_valid_ || OB_ISNULL(conn_)) {
     ret = OB_CONNECT_ERROR;
@@ -700,6 +718,13 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
           } else if (ok_param.is_on_connect_
                      && OB_FAIL(ObMPUtils::add_min_cluster_version(okp, session))) {
             LOG_WARN("fail to add all session system variables", K(ret));
+          } else if (ok_param.is_on_change_user_) {
+            if (OB_FAIL(ObMPUtils::add_changed_session_info(okp, session))) {
+              SERVER_LOG(WARN, "fail to add changed session info", K(ret));
+            } else if (ok_param.reroute_info_ != NULL
+                       && OB_FAIL(ObMPUtils::add_client_reroute_info(okp, session, *ok_param.reroute_info_))) {
+              LOG_WARN("failed to add reroute info", K(ret));
+            }
           }
         }
       } else {
@@ -785,7 +810,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
   if (OB_SUCC(ret) && conn_->is_support_sessinfo_sync() && proto20_context_.is_proto20_used_) {
     LOG_DEBUG("calc txn free route info", K(session));
     if (OB_FAIL(session.calc_txn_free_route())) {
-      SERVER_LOG(WARN, "fail calculate txn free route info", K(ret), K(session.get_sessid()));
+      SERVER_LOG(WARN, "fail calculate txn free route info", K(ret), K(session.get_server_sid()));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1205,6 +1230,7 @@ int ObMPPacketSender::update_transmission_checksum_flag(const ObSQLSessionInfo &
 void ObMPPacketSender::finish_sql_request()
 {
   if (conn_valid_ && !req_has_wokenup_) {
+    req_->reset_diagnostic_info();
     (void)release_read_handle();
     SQL_REQ_OP.finish_sql_request(req_);
     req_has_wokenup_ = true;

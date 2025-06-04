@@ -26,7 +26,7 @@ public:
   using RedisKeySet = hash::ObHashSet<RedisKeyNode, common::hash::NoPthreadDefendMode>;
   explicit HashCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
   {
-    model_ = ObRedisModel::HASH;
+    model_ = ObRedisDataModel::HASH;
   }
   virtual ~HashCommandOperator() = default;
 

@@ -309,9 +309,7 @@ int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
-  } else if ((OB_NOT_NULL(version_iter_)
-              && version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) ||
-      OB_ISNULL(version_iter_)) {
+  } else if (OB_ISNULL(version_iter_)) {
     version_iter_ = nullptr;
     ret = OB_ITER_END;
   } else if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
@@ -336,6 +334,26 @@ int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
   return ret;
 }
 
+bool ObMultiVersionValueIterator::is_first_delete_compact_node() const
+{
+  bool ret = false;
+  if (nullptr == version_iter_ || NDT_COMPACT == version_iter_->type_) {
+  } else if (cur_trans_version_ == version_iter_->trans_version_.atomic_load() &&
+             blocksstable::ObDmlFlag::DF_DELETE == version_iter_->get_dml_flag()) {
+    const ObMvccTransNode *prev = version_iter_->prev_;
+    if (nullptr == prev || cur_trans_version_ != prev->trans_version_.atomic_load()) {
+      ret = true;
+    }
+  }
+  return ret;
+}
+
+bool ObMultiVersionValueIterator::is_last_compact_node() const
+{
+  return (nullptr == version_iter_ ||
+          cur_trans_version_ != version_iter_->trans_version_.atomic_load());
+}
+
 int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
 {
   int ret = OB_SUCCESS;
@@ -350,10 +368,7 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
     const SCN cur_trans_version = multi_version_iter_->trans_version_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
-      if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
-        multi_version_iter_ = NULL;
-        break;
-      } else if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
+      if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
         if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
           // ignore compact node
           is_compacted = true;
@@ -404,6 +419,20 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
   return ret;
 }
 
+bool ObMultiVersionValueIterator::is_first_delete_multi_version_node() const
+{
+  bool ret = false;
+  if (nullptr == multi_version_iter_ || NDT_COMPACT == multi_version_iter_->type_) {
+  } else if (cur_trans_version_ == multi_version_iter_->trans_version_ &&
+             blocksstable::ObDmlFlag::DF_DELETE == multi_version_iter_->get_dml_flag()) {
+    const ObMvccTransNode *prev = multi_version_iter_->prev_;
+    if (nullptr == prev || cur_trans_version_ != prev->trans_version_) {
+      ret = true;
+    }
+  }
+  return ret;
+}
+
 bool ObMultiVersionValueIterator::is_cur_multi_version_row_end() const
 {
   bool ret = true;
@@ -435,8 +464,7 @@ void ObMultiVersionValueIterator::reset()
 
 bool ObMultiVersionValueIterator::is_multi_version_iter_end() const
 {
-  return OB_ISNULL(multi_version_iter_)
-      || multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
+  return OB_ISNULL(multi_version_iter_);
 }
 
 bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
@@ -446,8 +474,7 @@ bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
 
 bool ObMultiVersionValueIterator::is_compact_iter_end() const
 {
-  return OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
+  return OB_ISNULL(version_iter_);
 }
 
 DEF_TO_STRING(ObMultiVersionValueIterator) {

@@ -446,6 +446,7 @@ int ObFinishBackupTabletGroupFuseTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   FLOG_INFO("start do finish tablet group fuse task");
+  bool is_writer_closed = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -459,6 +460,11 @@ int ObFinishBackupTabletGroupFuseTask::process()
     }
   } else if (OB_FAIL(close_extern_writer_())) {
     LOG_WARN("failed to close extern writer", K(ret));
+  } else {
+    is_writer_closed = true;
+  }
+  if (!is_writer_closed && OB_TMP_FAIL(abort_extern_writer_())) {
+    LOG_WARN("failed to abort extern writer", K(ret));
   }
   if (OB_FAIL(ret)) {
     if (OB_TMP_FAIL(deal_with_fo(group_ctx_, ret))) {
@@ -484,6 +490,20 @@ int ObFinishBackupTabletGroupFuseTask::close_extern_writer_()
     LOG_WARN("failed to close extern writer", K(ret));
   } else {
     LOG_INFO("close extern tablet meta writer", K(ret));
+  }
+  return ret;
+}
+
+int ObFinishBackupTabletGroupFuseTask::abort_extern_writer_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(group_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("group ctx should not be null", K(ret));
+  } else if (OB_FAIL(group_ctx_->abort_extern_writer())) {
+    LOG_WARN("failed to abort extern writer", K(ret));
+  } else {
+    LOG_INFO("abort extern tablet meta writer", K(ret));
   }
   return ret;
 }
