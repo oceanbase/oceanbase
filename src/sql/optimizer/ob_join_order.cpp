@@ -423,7 +423,7 @@ int ObJoinOrder::set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_
         || ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
       sharding_info = opt_ctx->get_distributed_sharding();
     } else {
-      sharding_info = opt_ctx->get_local_sharding();
+      sharding_info = opt_ctx->get_distributed_sharding();
     }
   } else if (OB_FAIL(table_partition_info->get_location_type(opt_ctx->get_local_server_addr(),
                                                                     location_type))) {
