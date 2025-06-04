@@ -522,6 +522,9 @@ public:
       const uint64_t tenant_id,
       const int64_t tablet_row_count,
       int64_t &estimate_memory);
+  static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
+                                         const ObColumnSchemaV2 &new_column_schema,
+                                         ObColumnSchemaV2 &new_aux_column_schema);
 
 private:
   static void save_column_schema(

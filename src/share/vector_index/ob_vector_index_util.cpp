@@ -4429,6 +4429,22 @@ int ObVectorIndexUtil::set_extra_info_actual_size_param(ObIAllocator *allocator,
   return ret;
 }
 
+int ObVectorIndexUtil::alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
+                                                   const ObColumnSchemaV2 &new_column_schema,
+                                                   ObColumnSchemaV2 &new_aux_column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (aux_table_schema.is_vec_index_snapshot_data_type()) {
+    // extra_info column in snapshot table is null
+    if (new_column_schema.get_rowkey_position() > 0 || new_column_schema.get_tbl_part_key_pos() > 0) {
+      new_aux_column_schema.set_nullable(true);
+      new_aux_column_schema.drop_not_null_cst();
+    }
+  }
+
+  return ret;
+}
+
 int ObVecExtraInfo::extra_infos_to_buf(ObIAllocator &allocator, const ObVecExtraInfoObj *extra_info_objs,
                                        int64_t extra_column_count, int64_t extra_info_actual_size, int64_t count,
                                        char *&buf)
