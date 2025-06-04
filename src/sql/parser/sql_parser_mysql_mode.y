@@ -349,7 +349,7 @@ END_P SET_VAR DELIMITER
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
-        RANK READ_ONLY RECOVERY REJECT ROLE
+        RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE
 
         SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEMISTRUCT_ENCODING_TYPE SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SETS SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
@@ -517,7 +517,7 @@ END_P SET_VAR DELIMITER
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
-%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error
+%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error opt_to_file opt_reject_limit opt_bad_file
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
 %type <node> opt_match_option
@@ -5189,21 +5189,48 @@ INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec opt_on_error
 ;
 
 opt_on_error:
-LOG ERRORS
+LOG ERRORS opt_to_file opt_reject_limit opt_bad_file
 {
-  ParseNode *params = NULL;
-  malloc_terminal_node(params, result->malloc_pool_, T_INT);
-  params->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR, 3, $3, $4, $5);
+}
+/* empty */
+| {
+  $$ = NULL;
+}
+;
 
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, params);
-}
-| LOG ERRORS REJECT LIMIT INTNUM
+opt_to_file:
+INTO STRING_VALUE
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_ERR_FILE, 1, $2);
 }
-| LOG ERRORS REJECT LIMIT UNLIMITED
+/* empty */
+| {
+  $$ = NULL;
+}
+;
+
+opt_reject_limit:
+REJECT LIMIT INTNUM
 {
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, $3);
+}
+| REJECT LIMIT UNLIMITED
+{
+  (void)($3);
   malloc_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_UNLIMITED);
+}
+/* empty */
+| {
+  $$ = NULL;
+}
+;
+
+opt_bad_file:
+BADFILE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_BAD_FILE, 1, $3);
 }
 /* empty */
 | {
@@ -14309,6 +14336,12 @@ relation_factor %prec LOWER_PARENS
     malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $2, NULL, NULL, NULL);
   }
   $$->value_ = T_EXTERNAL_FILE_LOCATION;
+}
+| READ_ERROR_LOG '(' STRING_VALUE ')'
+{
+  ParseNode *read_log_node = NULL;
+  malloc_non_terminal_node(read_log_node, result->malloc_pool_, T_READ_ERROR_LOG, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, read_log_node, NULL, NULL, NULL);
 }
 ;
 
@@ -25901,6 +25934,7 @@ ACCESS_INFO
 |       QUEUE_TIME
 |       QUICK
 |       RANK
+|       READ_ERROR_LOG
 |       READ_ONLY
 |       REBUILD
 |       RECOVER

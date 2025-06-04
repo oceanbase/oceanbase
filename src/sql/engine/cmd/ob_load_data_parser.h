@@ -631,9 +631,15 @@ public:
 
   struct HandleOneLineParam {
     HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt)
-      : fields_(fields), field_cnt_(field_cnt) {}
+      : fields_(fields), field_cnt_(field_cnt), is_file_end_(false) {}
+
+    HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt,
+                      ObString line_data, bool is_file_end)
+      : fields_(fields), field_cnt_(field_cnt), line_data_(line_data), is_file_end_(is_file_end) {}
     common::ObIArray<FieldValue> &fields_;
     int field_cnt_;
+    ObString line_data_;
+    bool is_file_end_;
   };
 
 private:
@@ -873,7 +879,9 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
-          HandleOneLineParam param(fields_per_line_, field_idx);
+          bool is_file_end = str + format_.line_term_str_.length() > end;
+          ObString line_data = ObString(str - line_begin, line_begin);
+          HandleOneLineParam param(fields_per_line_, field_idx, line_data, is_file_end && !find_new_line);
           ret = handle_one_line(param);
         }
       } else {
@@ -968,7 +976,11 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
-          HandleOneLineParam param(fields_per_line_, field_idx);
+          bool is_file_end = line_t + format_.line_term_str_.length() > end;
+          int32_t line_len = is_file_end ?  line_t - line_begin :
+                                            line_t - line_begin + format_.line_term_str_.length();
+          ObString line_data = ObString(line_len, line_begin);
+          HandleOneLineParam param(fields_per_line_, field_idx, line_data, is_file_end);
           ret = handle_one_line(param);
         }
       } else {

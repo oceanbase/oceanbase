@@ -355,7 +355,6 @@ private:
   int create_shared_buffer_for_data_writer();
   int create_the_only_data_writer(ObExternalFileWriter *&data_writer);
   int new_data_writer(ObExternalFileWriter *&data_writer);
-  int check_secure_file_path(ObString file_name);
   int get_data_writer_for_partition(const ObString &partition_str, ObExternalFileWriter *&data_writer);
   char *get_json_buf() { return json_buf_; }
   int64_t get_json_buf_len() { return json_buf_len_; }
@@ -449,6 +448,8 @@ private:
                                   const bool is_strict_mode,
                                   const ObDateSqlMode date_sql_mode);
   #endif
+public:
+  static int check_secure_file_path(ObString file_name);
 private:
   int64_t top_limit_cnt_;
   bool is_first_;

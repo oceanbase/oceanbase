@@ -1905,6 +1905,13 @@ int ObTableScanOp::inner_close()
   }
 
   if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+    if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
+      ObDiagnosisManager& diagnosis_manager = ctx_.get_diagnosis_manager();
+      diagnosis_manager.close();
+    }
+  }
+  if (OB_SUCC(ret)) {
     fts_index_.reuse();
     iter_end_ = false;
     need_init_before_get_row_ = true;
@@ -3505,11 +3512,16 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
 {
   int ret = OB_SUCCESS;
   ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
-  if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
+  const ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = ctx_.get_my_session()) || OB_ISNULL(output_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session or output is null", K(ret), K(session), K(output_));
+  } else if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get diagnosis info", K(ret));
-  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip,
-                                            exec_ctx.get_my_session()->get_diagnosis_limit_num()))){
+  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
+                                                    ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),
+                                                    ctx_.get_allocator()))){
     LOG_WARN("fail to do diagnosis", K(ret));
   }
   return ret;

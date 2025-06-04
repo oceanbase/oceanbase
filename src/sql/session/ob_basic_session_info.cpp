@@ -922,6 +922,17 @@ int ObBasicSessionInfo::set_default_catalog_db(uint64_t catalog_id,
   }
   return ret;
 }
+int ObBasicSessionInfo::set_diagnosis_log_file(const ObString &diagnosis_log_file)
+{
+  int ret = OB_SUCCESS;
+  if (diagnosis_log_file.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("diagnosis log file is empty", K(diagnosis_log_file), K(ret));
+  } else if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_log_file, &diagnosis_info_.log_file_))) {
+    LOG_WARN("failed to write diagnosis_log_file to string_buf_", K(ret));
+  }
+  return ret;
+}
 
 int ObBasicSessionInfo::set_internal_catalog_db(share::ObSwitchCatalogHelper* switch_catalog_helper)
 {
@@ -942,6 +953,17 @@ bool ObBasicSessionInfo::is_in_external_catalog()
   return get_current_default_catalog() != OB_INTERNAL_CATALOG_ID;
 }
 
+int ObBasicSessionInfo::set_diagnosis_bad_file(const ObString &diagnosis_bad_file)
+{
+  int ret = OB_SUCCESS;
+  if (diagnosis_bad_file.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("diagnosis bad file is empty", K(diagnosis_bad_file), K(ret));
+  } else if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_bad_file, &diagnosis_info_.bad_file_))) {
+    LOG_WARN("failed to write diagnosis_bad_file to string_buf_", K(ret));
+  } else {}
+  return ret;
+}
 int ObBasicSessionInfo::set_default_database(const ObString &database_name,
                                              const ObCollationType coll_type/*= CS_TYPE_INVALID */)
 {

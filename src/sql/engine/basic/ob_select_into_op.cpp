@@ -5830,6 +5830,7 @@ int ObSelectIntoOp::check_secure_file_path(ObString file_name)
   ObString file_path = file_name.split_on(file_name.reverse_find('/'));
   char full_path_buf[PATH_MAX+1];
   char *actual_path = nullptr;
+  ObArenaAllocator allocator;
   ObSqlString sql_str;
   ObString secure_file_priv;
   int64_t tenant_id = MTL_ID();
@@ -5840,7 +5841,7 @@ int ObSelectIntoOp::check_secure_file_path(ObString file_name)
     LOG_WARN("file not exist", K(ret), K(sql_str));
   } else if (OB_FAIL(ObSchemaUtils::get_tenant_varchar_variable(tenant_id,
                                                                 SYS_VAR_SECURE_FILE_PRIV,
-                                                                ctx_.get_allocator(),
+                                                                allocator,
                                                                 secure_file_priv))) {
     LOG_WARN("fail get tenant variable", K(tenant_id), K(secure_file_priv), K(ret));
   } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {

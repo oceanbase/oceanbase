@@ -162,6 +162,8 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+load_data_diagnosis_log_compression
+load_data_diagnosis_log_max_size
 lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota

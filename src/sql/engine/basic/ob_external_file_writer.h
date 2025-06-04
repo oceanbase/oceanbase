@@ -123,6 +123,7 @@ public:
   virtual int close_file() override;
   virtual int64_t get_file_size() override;
   int64_t get_curr_bytes_exclude_curr_line();
+  int64_t get_curr_file_pos();
 private:
   char *buf_;
   int64_t buf_len_;

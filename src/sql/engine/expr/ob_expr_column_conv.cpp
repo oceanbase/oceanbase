@@ -433,7 +433,8 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
@@ -488,7 +489,8 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);

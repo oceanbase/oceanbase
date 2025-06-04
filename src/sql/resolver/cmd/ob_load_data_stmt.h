@@ -104,6 +104,8 @@ struct ObLoadArgument
     url_spec_ = other.url_spec_;
     diagnosis_limit_num_ = other.diagnosis_limit_num_;
     is_diagnosis_enabled_ = other.is_diagnosis_enabled_;
+    diagnosis_log_file_ = other.diagnosis_log_file_;
+    diagnosis_bad_file_ = other.diagnosis_bad_file_;
     database_name_ = other.database_name_;
     table_name_ = other.table_name_;
     combined_name_ = other.combined_name_;
@@ -140,6 +142,8 @@ struct ObLoadArgument
   ObCSVGeneralFormat::ObCSVCompression compression_format_;
   bool is_diagnosis_enabled_;
   int64_t diagnosis_limit_num_;
+  common::ObString diagnosis_log_file_;
+  common::ObString diagnosis_bad_file_;
 };
 
 struct ObDataInFileStruct

@@ -424,6 +424,7 @@ protected:
   int resolve_mocked_table(const ParseNode *table_node,
                            TableItem *&table_item,
                            const ParseNode *alias_node = NULL);
+  int resolve_error_log_table(const ParseNode *table_node, TableItem *&table_item);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);

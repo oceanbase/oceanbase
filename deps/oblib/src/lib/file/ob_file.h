@@ -97,6 +97,7 @@ public:
   virtual int fsync() = 0;
 public:
   virtual int64_t get_file_pos() const = 0;
+  virtual int64_t get_buffered_file_pos() const = 0;
   virtual int get_open_flags() const = 0;
   virtual int get_open_mode() const = 0;
 private:
@@ -176,6 +177,7 @@ public:
   int get_open_flags() const;
   int get_open_mode() const;
   int64_t get_file_pos() const {return file_pos_;}
+  int64_t get_buffered_file_pos() const {return file_pos_ + buffer_pos_;}
 private:
   int buffer_sync_();
 private:
@@ -216,6 +218,7 @@ public:
   int get_open_flags() const;
   int get_open_mode() const;
   int64_t get_file_pos() const {return file_pos_;}
+  int64_t get_buffered_file_pos() const {return file_pos_ + buffer_pos_;}
   int set_align_size(const int64_t align_size);
 private:
   int buffer_sync_(bool *need_truncate = NULL);
@@ -356,6 +359,9 @@ public:
            const int64_t align_size = FileComponent::DirectFileAppender::DEFAULT_ALIGN_SIZE);
   void close();
   int64_t get_file_pos() const {return NULL == file_ ? -1 : file_->get_file_pos();}
+
+  int64_t get_buffered_file_pos() const {return NULL == file_ ? -1 : file_->get_buffered_file_pos();}
+
   virtual int get_fd() const { return file_->get_fd();}
 public:
   int create(const ObString &fname, const bool dio,

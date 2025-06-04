@@ -31,6 +31,7 @@
 #include "lib/udt/ob_udt_type.h"
 #include "lib/udt/ob_collection_type.h"
 #include "sql/plan_cache/ob_adaptive_auto_dop.h"
+#include "sql/engine/ob_diagnosis_manager.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -109,32 +110,6 @@ struct ObOperatorKit
   const ObOpSpec *spec_;
   ObOperator *op_;
   ObOpInput *input_;
-};
-
-struct ObDiagnosisManager
-{
-  ObDiagnosisManager() : cur_file_url_(NULL), cur_line_number_(0)
-  {
-    ObMemAttr attr(MTL_ID(), "DiagnosisMgr");
-    idxs_.set_attr(attr);
-    rets_.set_attr(attr);
-    col_names_.set_attr(attr);
-    allocator_.set_attr(attr);
-  }
-
-  void set_cur_file_url(ObString file_url) { cur_file_url_ = file_url; }
-  ObString get_cur_file_url() { return cur_file_url_; }
-  void set_cur_line_number(int64_t line_number) { cur_line_number_  = line_number; }
-  int64_t get_cur_line_number() { return cur_line_number_; }
-  int do_diagnosis(ObBitVector &skip, int64_t limit_num);
-  int add_warning_info(int err_ret, int line_idx);
-
-  common::ObArray<int64_t> idxs_;
-  common::ObArray<int64_t> rets_;
-  common::ObArray<ObString> col_names_;
-  ObString cur_file_url_;
-  int64_t cur_line_number_;
-  ObArenaAllocator allocator_;
 };
 
 // Physical operator kit store

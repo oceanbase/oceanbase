@@ -403,6 +403,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogCompressionChecker);
 };
 
+class ObConfigDiagnosisLogCompressionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigDiagnosisLogCompressionChecker() {}
+  virtual ~ObConfigDiagnosisLogCompressionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDiagnosisLogCompressionChecker);
+};
+
 class ObConfigAuditLogPathChecker
   : public ObConfigChecker
 {

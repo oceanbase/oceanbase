@@ -2765,3 +2765,11 @@ DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(ob_enable_java_udf, OB_TENANT_PARAMETER, "False",
          "Enable or disable java udf.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(load_data_diagnosis_log_compression, OB_TENANT_PARAMETER, "AUTO",
+         common::ObConfigDiagnosisLogCompressionChecker,
+         "the type of compression for the diagnosis log file, values: AUTO, NONE, ZSTD, GZIP, DEFLATE",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
+         "whenever a write to the diagnosis log file causes its size to exceed the config value, "
+         "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

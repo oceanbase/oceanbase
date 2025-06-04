@@ -125,6 +125,7 @@ ob_set_subtarget(ob_sql dtl
 
 ob_set_subtarget(ob_sql engine
   engine/ob_des_exec_context.cpp
+  engine/ob_diagnosis_manager.cpp
   engine/ob_exec_context.cpp
   engine/ob_exec_feedback_info.cpp
   engine/ob_operator.cpp

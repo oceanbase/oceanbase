@@ -276,6 +276,25 @@ int64_t ObCsvFileWriter::get_curr_bytes_exclude_curr_line()
   return curr_bytes_exclude_curr_line;
 }
 
+int64_t ObCsvFileWriter::get_curr_file_pos()
+{
+  int64_t curr_bytes = 0;
+  if (has_compress_) {
+    if (compress_stream_writer_ == NULL) {
+      // do nothing
+    } else {
+      curr_bytes = get_compress_stream_writer()->get_write_bytes();
+    }
+  } else {
+    if (IntoFileLocation::SERVER_DISK != file_location_) { //OSS,COS,S3
+      curr_bytes = storage_appender_.offset_;
+    } else { // local disk
+      curr_bytes = file_appender_.get_buffered_file_pos();
+    }
+  }
+  return curr_bytes;
+}
+
 int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
                                                   const int64_t &row_group_size,
                                                   const int64_t &compress_type_index,

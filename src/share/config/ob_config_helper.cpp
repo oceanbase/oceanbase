@@ -482,6 +482,16 @@ bool ObConfigAuditLogCompressionChecker::check(const ObConfigItem &t) const
       || 0 == tmp_string.case_compare("ZSTD");
 }
 
+bool ObConfigDiagnosisLogCompressionChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("none")
+      || 0 == tmp_string.case_compare("zstd")
+      || 0 == tmp_string.case_compare("deflate")
+      || 0 == tmp_string.case_compare("gzip")
+      || 0 == tmp_string.case_compare("auto");
+}
+
 bool ObConfigAuditLogPathChecker::check(const ObConfigItem &t) const
 {
   int ret = OB_SUCCESS;

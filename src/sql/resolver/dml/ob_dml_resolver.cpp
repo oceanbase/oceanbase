@@ -5415,6 +5415,12 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
         break;
       }
+      case T_READ_ERROR_LOG: {
+        if (OB_FAIL(resolve_error_log_table(table_node, table_item))) {
+          LOG_WARN("failed to resolve error log table", K(ret));
+        }
+        break;
+      }
       case T_SELECT: {
         bool has_flashback_query = false;
         if (OB_ISNULL(alias_node)) {
@@ -17882,6 +17888,86 @@ int ObDMLResolver::resolve_mocked_table(const ParseNode *table_node,
                                                   table_schema))) {
       LOG_WARN("failed to build mocked external table schema", K(ret));
     } else if (OB_FAIL(build_mocked_external_table_item(table_schema, table_item, alias_node))) {
+      LOG_WARN("failed to build mocked external table item", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObDMLResolver::resolve_error_log_table(const ParseNode *table_node, TableItem *&table_item)
+{
+  int ret = OB_SUCCESS;
+
+  ObTableSchema table_schema;
+  ObArenaAllocator allocator;
+  ObString table_location;
+
+  if (table_node->num_child_ != 1 || OB_ISNULL(table_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table node", K(ret), K(table_node->num_child_));
+  } else {
+    table_location = ObString(table_node->children_[0]->str_len_,
+                              table_node->children_[0]->str_value_).trim_space_only();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (table_location.ptr()[table_location.length() - 1] != '/') {
+      ObString path_without_suffix = table_location.split_on(table_location.reverse_find('/'));
+      if (OB_FAIL(table_schema.set_external_file_pattern(table_location))) {
+        LOG_WARN("failed to set external file pattern", K(ret), K(table_location));
+      } else {
+        table_location = path_without_suffix;
+      }
+    }
+  }
+
+  ObExternalFileFormat format;
+  format.format_type_ = ObExternalFileFormat::FormatType::CSV_FORMAT;
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(),
+                                              OB_MAX_COLUMN_NUMBER,
+                                              CS_TYPE_UTF8MB4_BIN))) {
+      LOG_WARN("failed to init csv format", K(ret));
+    } else {
+      format.csv_format_.parse_header_ = true;
+      format.csv_format_.skip_header_lines_ = 1;
+      format.csv_format_.field_term_str_ = ",";
+      format.csv_format_.field_enclosed_char_ = '\'';
+      format.csv_format_.compression_algorithm_ = ObCSVGeneralFormat::ObCSVCompression::AUTO;
+    }
+
+    if (OB_SUCC(ret)) {
+      bool is_valid = true;
+      ObString format_str;
+      if (OB_FAIL(ObDDLResolver::check_format_valid(format, is_valid))) {
+        LOG_WARN("check format valid failed", K(ret));
+      } else if (!is_valid) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("file format is not valid", K(ret));
+      } else if (OB_FAIL(format.to_string_with_alloc(format_str, *params_.allocator_))) {
+        LOG_WARN("failed to convert format to string", K(ret));
+      } else if (OB_FAIL(table_schema.set_external_file_format(format_str))) {
+        LOG_WARN("failed to set external file format", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_basic_info_for_mocked_table(table_schema, table_location, format))) {
+      LOG_WARN("failed to set basic info for mocked table", K(ret));
+    } else if (OB_FAIL(build_column_schemas(table_schema,
+                                            format,
+                                            table_schema.get_table_id(),
+                                            table_location,
+                                            table_schema.get_external_file_location(),
+                                            allocator))) {
+        LOG_WARN("failed to build column schemas", K(ret));
+    } else if (OB_FAIL(params_.schema_checker_->get_sql_schema_guard()
+                                              ->add_mocked_table_schema(table_schema))) {
+      LOG_WARN("failed to add mocked table schema", K(ret));
+    } else if (OB_FAIL(build_mocked_external_table_item(&table_schema, table_item, NULL))) {
       LOG_WARN("failed to build mocked external table item", K(ret));
     }
   }
