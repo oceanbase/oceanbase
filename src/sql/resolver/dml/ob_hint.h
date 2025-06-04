@@ -218,6 +218,7 @@ struct ObOptParamHint
     DEF(ENABLE_PDML_INSERT_UP,)                     \
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
+    DEF(ENABLE_INDEX_MERGE,)                        \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
