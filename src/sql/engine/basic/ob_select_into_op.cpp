@@ -4350,6 +4350,10 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
         parquet_data_writer->set_batch_written(false);
         parquet_data_writer->increase_row_batch_offset();
         if (OB_FAIL(ret)) {
+          // discard unwritten data if an error occurs
+          parquet_data_writer->set_batch_written(true);
+          parquet_data_writer->reset_row_batch_offset();
+          parquet_data_writer->reset_value_offsets();
         } else if (parquet_data_writer->reach_batch_end()) {
           if (OB_FAIL(parquet_data_writer->write_file())) {
             LOG_WARN("failed to write parquet row batch", K(ret));
@@ -4488,6 +4492,9 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
         orc_data_writer->set_batch_written(false);
         orc_data_writer->increase_row_batch_offset();
         if (OB_FAIL(ret)) {
+          // discard unwritten data if an error occurs
+          orc_data_writer->set_batch_written(true);
+          orc_data_writer->reset_row_batch_offset();
         } else if (orc_data_writer->reach_batch_end()) {
           if (OB_FAIL(orc_data_writer->write_file())) {
             LOG_WARN("failed to write parquet row batch", K(ret));
