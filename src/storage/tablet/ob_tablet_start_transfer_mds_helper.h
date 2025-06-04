@@ -179,12 +179,14 @@ private:
   static int check_transfer_src_tablets_(
       const share::SCN &scn,
       const bool for_replay,
-      const ObTXStartTransferInInfo &tx_start_transfer_in_info);
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const bool check_src_tablet_status);
   static int check_transfer_src_tablet_(
       const share::SCN &scn,
       const bool for_replay,
       const ObMigrationTabletParam &tablet_meta,
-      ObLS *src_ls);
+      ObLS *src_ls,
+      const bool check_src_tablet_status);
   static int create_transfer_in_tablets_(
       const share::SCN &scn,
       const bool for_replay,
