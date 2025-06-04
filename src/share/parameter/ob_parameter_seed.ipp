@@ -2121,7 +2121,7 @@ DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
          "if the auto-partition clause is not used"
          "this config judge whether to enable auto-partition for creating table.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common::ObConfigAutoSplitTabletSizeChecker,
+DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "2GB", common::ObConfigAutoSplitTabletSizeChecker,
         "[128M,)",
         "when create an auto-partitioned table in \"create table\" syntax or "
         "modify a table as an auto-partitioned table in \"alter table\" syntax,"
