@@ -106,32 +106,30 @@ int ObDfoSchedulerBasic::on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) c
 int ObDfoSchedulerBasic::build_data_mn_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const
 {
   int ret = OB_SUCCESS;
-  if ((parent.is_in_slave_mapping() && child.is_out_slave_mapping())
-      || ObPQDistributeMethod::Type::PARTITION == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_RANDOM == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_HASH == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_RANGE == child.get_dist_method()) {
-    // 构建对应的channel map：目前channel map分为三种类型
-    // 1. slave-mapping类型：会按照slave mapping的具体类型决定
-    // 2. affinity+pw类型(PARTITION)：pkey类型，按照partition粒度匹配
-    // 3. PARTITION_RANDOM：pkey类型，按照sqc粒度匹配
-    uint64_t tenant_id = OB_INVALID_ID;
-    if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
-    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_ch_map(
-        ctx, child, parent, tenant_id))) {
-      LOG_WARN("fail to build slave mapping group", K(ret));
+  uint64_t tenant_id = OB_INVALID_ID;
+  bool is_slave_mapping = (parent.is_in_slave_mapping() && child.is_out_slave_mapping());
+  ObPQDistributeMethod::Type child_dist_method = child.get_dist_method();
+  if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
+    LOG_WARN("failed to get tenant id");
+  } else if (is_slave_mapping) {
+    // build channel for slave mapping scenes
+    if (OB_FAIL(ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ctx, child, parent, tenant_id))) {
+      LOG_WARN("failed to build slave mapping mn channel map");
+    }
+  } else if (IS_PKEY_DIST_METHOD(child_dist_method)) {
+    // build channel for pkey related scenes, e.g. pdml && pkey
+    if (OB_FAIL(ObSlaveMapUtil::build_pkey_mn_ch_map(ctx, child, parent, tenant_id))) {
+      LOG_WARN("failed to build partition mn channel map");
     }
   } else {
-    // 其他普通场景下的channel创建
+    // build channel for other normal scenes
     int64_t child_dfo_idx = -1;
     ObPxChTotalInfos *transmit_mn_ch_info = &child.get_dfo_ch_total_infos();
-    uint64_t tenant_id = -1;
     if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
       LOG_WARN("failed to check dfo pair", K(ret));
-    } else if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
-    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_channel(
-        transmit_mn_ch_info, child, parent, tenant_id))) {
-      LOG_WARN("failed to build mn channel", K(ret));
+    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_channel(transmit_mn_ch_info, child, parent,
+                                                        tenant_id))) {
+      LOG_WARN("failed to build mn channel");
     }
   }
   return ret;

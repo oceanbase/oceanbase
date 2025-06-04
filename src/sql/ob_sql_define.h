@@ -409,6 +409,12 @@ DECLARE_ENUM(Type, type, PQ_DIST_METHOD_DEF, static);
   }
 };
 
+#define IS_PKEY_DIST_METHOD(type)                                                                  \
+  (((type) == ObPQDistributeMethod::Type::PARTITION)                                               \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANDOM)                                     \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_HASH)                                       \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANGE))
+
 struct ObNullDistributeMethod
 {
 /*

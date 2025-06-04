@@ -543,47 +543,61 @@ class ObSlaveMapUtil
 public:
   ObSlaveMapUtil() = default;
   ~ObSlaveMapUtil() = default;
-  static int build_ch_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child);
-  static int build_mn_ch_map(ObExecContext &ctx,
-                            ObDfo &child,
-                            ObDfo &parent,
-                            uint64_t tenant_id);
+
+  // build_slave_mapping_mn_ch_map and build_pkey_mn_ch_map will both build channel map
+  // and partition map
+  static int build_slave_mapping_mn_ch_map(ObExecContext &ctx,
+                                           ObDfo &child,
+                                           ObDfo &parent,
+                                           uint64_t tenant_id);
+  static int build_pkey_mn_ch_map(ObExecContext &ctx,
+                                  ObDfo &child,
+                                  ObDfo &parent,
+                                  uint64_t tenant_id);
+  // build channel map
   static int build_mn_channel(ObPxChTotalInfos *dfo_ch_total_infos,
                               ObDfo &child,
                               ObDfo &parent,
                               const uint64_t tenant_id);
-  static int build_bf_mn_channel(dtl::ObDtlChTotalInfo &transmit_ch_info,
-                                ObDfo &child,
-                                ObDfo &parent,
-                                const uint64_t tenant_id);
 private:
-  // new channel map generate
-  static int build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
-  static int build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  // ----------------- for slave mapping scenes ----------------------
+  // for SlaveMappingType::SM_PWJ_HASH_HASH, channel built inside each sqc
+  static int build_pwj_slave_map_mn_group(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  static int build_mn_channel_per_sqcs(ObPxChTotalInfos *dfo_ch_total_infos, ObDfo &child,
+                                       ObDfo &parent, int64_t sqc_count, uint64_t tenant_id);
+
+  // for SlaveMappingType::SM_PPWJ_HASH_HASH
   static int build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+
+  // for SlaveMappingType::SM_PPWJ_BCAST_NONE && SlaveMappingType::SM_PPWJ_NONE_BCAST
   static int build_ppwj_bcast_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+
+
+
+  // ----------------- for normal pkey -----------------
+  // for child with ObPQDistributeMethod::Type::PARTITION
+  static int build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+
+
+
+  // ----------------- for pdml -------------------------------------
+  // for child with ObPQDistributeMethod::Type::PARTITION_RANDOM
+  static int build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+
+  // for child with ObPQDistributeMethod::Type::PARTITION_HASH or PARTITION_RANGE
+  static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  static int build_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs,
+                                                     ObDfo &child,
+                                                     ObIArray<int64_t> &prefix_task_counts,
+                                                     int64_t total_task_count,
+                                                     ObPxPartChMapArray &map);
+
+private:
   static int build_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs,
                                          ObDfo &child,
                                          common::ObIArray<int64_t> &prefix_task_counts,
                                          ObPxPartChMapArray &map);
-  // 用于构建 slave mapping类型的partition wise join的channel map
-  // channel是在各自个SQC内部建立
-  static int build_pwj_slave_map_mn_group(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
-  static int build_mn_channel_per_sqcs(ObPxChTotalInfos *dfo_ch_total_infos,
-                                      ObDfo &child,
-                                      ObDfo &parent,
-                                      int64_t sqc_count, uint64_t tenant_id);
-  // 下面两个函数是用于 pdml，由于 3.1 之前没有 pdml，所以无需实现非 mn 版
-  static int build_pkey_affinitized_ch_mn_map(
-      ObDfo &parent,
-      ObDfo &child,
-      uint64_t tenant_id);
-  static int build_affinitized_partition_map_by_sqcs(
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
-      ObDfo &child,
-      ObIArray<int64_t> &prefix_task_counts,
-      int64_t total_task_count,
-      ObPxPartChMapArray &map);
+
   static int get_pkey_table_locations(int64_t table_location_key,
       ObPxSqcMeta &sqc,
       DASTabletLocIArray &pkey_locations);

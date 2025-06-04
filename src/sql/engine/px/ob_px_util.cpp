@@ -3299,23 +3299,6 @@ int ObSlaveMapUtil::build_mn_channel(
   return ret;
 }
 
-int ObSlaveMapUtil::build_bf_mn_channel(
-  ObDtlChTotalInfo &transmit_ch_info,
-  ObDfo &child,
-  ObDfo &parent,
-  const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs()));
-  OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs()));
-  transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.exec_addrs_.count()
-                                  * transmit_ch_info.receive_exec_server_.exec_addrs_.count();
-  transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)
-                                     - transmit_ch_info.channel_count_ + 1;
-  transmit_ch_info.tenant_id_ = tenant_id;
-  return ret;
-}
-
 int ObSlaveMapUtil::build_mn_channel_per_sqcs(
   ObPxChTotalInfos *dfo_ch_total_infos,
   ObDfo &child,
@@ -3802,12 +3785,8 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
   return ret;
 }
 
-// 这里需要2点，一点是构建channel map，一点是构建partition map，即PK场景
-int ObSlaveMapUtil::build_mn_ch_map(
-  ObExecContext &ctx,
-  ObDfo &child,
-  ObDfo &parent,
-  uint64_t tenant_id)
+int ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo &parent,
+                                                  uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   SlaveMappingType slave_type = parent.get_in_slave_mapping_type();
@@ -3816,64 +3795,67 @@ int ObSlaveMapUtil::build_mn_ch_map(
     if (OB_FAIL(build_pwj_slave_map_mn_group(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partition wise join slave mapping", K(ret));
     break;
   }
-  case SlaveMappingType::SM_PPWJ_BCAST_NONE : {
-    if (OB_FAIL(build_ppwj_bcast_slave_mn_map(parent, child, tenant_id))) {
-      LOG_WARN("fail to build pwj slave map", K(ret));
-    }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
-    break;
-  }
+  case SlaveMappingType::SM_PPWJ_BCAST_NONE :
   case SlaveMappingType::SM_PPWJ_NONE_BCAST : {
     if (OB_FAIL(build_ppwj_bcast_slave_mn_map(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
     break;
   }
   case SlaveMappingType::SM_PPWJ_HASH_HASH : {
     if (OB_FAIL(build_ppwj_slave_mn_map(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
     break;
   }
   case SlaveMappingType::SM_NONE : {
-    LOG_DEBUG("none slave mapping", K(ret));
-    if (OB_SUCC(ret)
-        && ObPQDistributeMethod::Type::PARTITION == child.get_dist_method()) {
-      if (OB_FAIL(build_ppwj_ch_mn_map(ctx, parent, child, tenant_id))) {
-        LOG_WARN("failed to build partial partition wise join channel map", K(ret));
-      } else {
-        LOG_DEBUG("partial partition wise join build ch map successfully");
-      }
-    }
-    if (OB_SUCC(ret)
-         && (ObPQDistributeMethod::Type::PARTITION_HASH == child.get_dist_method()
-           || ObPQDistributeMethod::Type::PARTITION_RANGE == child.get_dist_method())) {
-      // pdml中，pkey的方式可以发送到parent dfo中对应SQC中的任意woker中
-      if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
-        LOG_WARN("failed to build pkey random channel map", K(ret));
-      } else {
-        LOG_DEBUG("partition random build ch map successfully");
-      }
-    }
-    // PDML情况下的分区表，对应的分区内并行的channel build
-    if (OB_SUCC(ret) &&
-        ObPQDistributeMethod::Type::PARTITION_RANDOM == child.get_dist_method()) {
-      // pdml中，pkey的方式可以发送到parent dfo中对应SQC中的任意woker中
-      if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
-        LOG_WARN("failed to build pkey random channel map", K(ret));
-      } else {
-        LOG_DEBUG("partition random build ch map successfully");
-      }
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected slave mapping type", K(child.get_dfo_id()), K(parent.get_dfo_id()));
     break;
   }
   }
-  LOG_DEBUG("debug distribute type", K(slave_type), K(child.get_dist_method()));
+  LOG_DEBUG("debug distribute type", K(child.get_dfo_id()), K(parent.get_dfo_id()), K(slave_type));
+  return ret;
+}
+
+int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo &parent,
+                                         uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObPQDistributeMethod::Type child_dist_method = child.get_dist_method();
+  switch(child_dist_method) {
+  case ObPQDistributeMethod::Type::PARTITION : {
+    // for normal pkey
+    if (OB_FAIL(build_ppwj_ch_mn_map(ctx, parent, child, tenant_id))) {
+      LOG_WARN("failed to build partial partition wise join channel map", K(ret));
+    }
+    break;
+  }
+  case ObPQDistributeMethod::Type::PARTITION_HASH:
+  case ObPQDistributeMethod::Type::PARTITION_RANGE: {
+    if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
+      LOG_WARN("failed to build pkey random channel map", K(ret));
+    }
+    break;
+  }
+  case ObPQDistributeMethod::Type::PARTITION_RANDOM: {
+    // PDML: shuffle to any worker in parent dfo
+    if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
+      LOG_WARN("failed to build pkey random channel map", K(ret));
+    }
+    break;
+  }
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child dist method type", K(child.get_dfo_id()), K(parent.get_dfo_id()),
+             K(child_dist_method));
+    break;
+  }
+  }
+  LOG_DEBUG("debug distribute type", K(child.get_dfo_id()), K(parent.get_dfo_id()),
+            K(child.get_dist_method()));
   return ret;
 }
 
