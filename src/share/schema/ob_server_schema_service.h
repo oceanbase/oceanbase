@@ -169,7 +169,8 @@ struct SchemaKey
                K_(client_user_id),
                K_(proxy_user_id),
                K_(catalog_id),
-               K_(catalog_name));
+               K_(catalog_name),
+               K_(external_resource_id));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -340,6 +341,10 @@ struct SchemaKey
   {
     return ObCatalogPrivSortKey(tenant_id_, user_id_, catalog_name_);
   }
+  ObTenantExternalResourceId get_external_resource_key() const
+  {
+    return ObTenantExternalResourceId(tenant_id_, external_resource_id_);
+  }
 };
 
 struct VersionHisKey
@@ -485,6 +490,7 @@ public:
   SCHEMA_KEY_FUNC(rls_group);
   SCHEMA_KEY_FUNC(rls_context);
   SCHEMA_KEY_FUNC(catalog);
+  SCHEMA_KEY_FUNC(external_resource);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -798,6 +804,7 @@ public:
   SCHEMA_KEYS_DEF(rls_context, RlsContextKeys);
   SCHEMA_KEYS_DEF(catalog, CatalogKeys);
   SCHEMA_KEYS_DEF(catalog_priv, CatalogPrivKeys);
+  SCHEMA_KEYS_DEF(external_resource, ExternalResourceKeys);
 
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -937,6 +944,10 @@ public:
     CatalogPrivKeys new_catalog_priv_keys_;
     CatalogPrivKeys del_catalog_priv_keys_;
 
+    // external resource
+    ExternalResourceKeys new_external_resource_keys_;
+    ExternalResourceKeys del_external_resource_keys_;
+
     void reset();
     int create(int64_t bucket_size);
 
@@ -989,6 +1000,7 @@ public:
     common::ObArray<ObRlsContextSchema> simple_rls_context_schemas_;
     common::ObArray<ObCatalogSchema> simple_catalog_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
+    common::ObArray<ObSimpleExternalResourceSchema> simple_external_resource_schemas_;
     common::ObArenaAllocator allocator_;
   };
 
@@ -1153,6 +1165,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_group);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_context);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(external_resource);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -1199,6 +1212,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(rls_group, ObRlsGroupMgr);
   APPLY_SCHEMA_TO_CACHE(rls_context, ObRlsContextMgr);
   APPLY_SCHEMA_TO_CACHE(catalog, ObSchemaMgr);
+  APPLY_SCHEMA_TO_CACHE(external_resource, ObExternalResourceMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log

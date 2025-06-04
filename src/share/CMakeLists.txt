@@ -81,6 +81,7 @@ ob_set_subtarget(ob_share ALONE
   ob_ddl_args.cpp
   ob_mview_args.cpp
   ob_lonely_table_clean_rpc_struct.cpp
+  ob_external_resource_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -575,6 +576,9 @@ ob_set_subtarget(ob_share schema
   schema/ob_catalog_schema_struct.cpp
   schema/ob_catalog_mgr.cpp
   schema/ob_catalog_sql_service.cpp
+  schema/ob_external_resource_mgr.cpp
+  schema/ob_external_resource_schema_struct.cpp
+  schema/ob_external_resource_sql_service.cpp
 )
 
 ob_set_subtarget(ob_share stat

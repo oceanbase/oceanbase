@@ -46,6 +46,7 @@ class ObRoutineInfo;
 class ObPackageInfo;
 class ObTriggerInfo;
 class ObUDTTypeInfo;
+class ObSimpleExternalResourceSchema;
 
 enum ObSchemaOperationCategory
 {
@@ -425,6 +426,7 @@ IS_DDL_TYPE(RLS_POLICY, rls_policy)
 IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 IS_DDL_TYPE(CATALOG, catalog)
+IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
 
 struct ObSchemaOperation
 {
@@ -488,6 +490,7 @@ public:
     common::ObString routine_name_;
     common::ObString catalog_name_;
     common::ObString obj_name_;
+    common::ObString external_resource_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -775,6 +778,7 @@ class ObRlsSqlService;
 class ObServerSchemaService;
 class ObContextSqlService;
 class ObCatalogSqlService;
+class ObExternalResourceSqlService;
 class ObSchemaService
 {
 public:
@@ -833,6 +837,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
 
 
   /* sequence_id related */
@@ -980,6 +985,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1056,6 +1062,7 @@ public:
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
+  virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1111,6 +1118,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
 
 
   //--------------For manaing recyclebin -----//

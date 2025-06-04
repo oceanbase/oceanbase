@@ -252,6 +252,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       context_service_(*this),
       rls_service_(*this),
       catalog_service_(*this),
+      external_resource_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
       schema_service_(NULL),
@@ -1357,6 +1358,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(rls_group, ObRlsGroupSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog_priv, ObCatalogPriv);
+GET_ALL_SCHEMA_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -3187,6 +3189,7 @@ FETCH_NEW_SCHEMA_ID(RLS_POLICY, rls_policy);
 FETCH_NEW_SCHEMA_ID(RLS_GROUP, rls_group);
 FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 FETCH_NEW_SCHEMA_ID(CATALOG, catalog);
+FETCH_NEW_SCHEMA_ID(EXTERNAL_RESOURCE, external_resource);
 
 #undef FETCH_NEW_SCHEMA_ID
 
@@ -3598,6 +3601,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_policy, ObRlsPolicySchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
     const ObRefreshSchemaStatus &schema_status,
@@ -11454,6 +11458,54 @@ int ObSchemaServiceSQLImpl::get_table_index_infos(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::fetch_external_resources(ObISQLClient &sql_client,
+                                                     const ObRefreshSchemaStatus &schema_status,
+                                                     const int64_t schema_version,
+                                                     const uint64_t tenant_id,
+                                                     ObIArray<ObSimpleExternalResourceSchema> &schema_array,
+                                                     const SchemaKey *schema_keys,
+                                                     const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+
+    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id=0",
+                              OB_ALL_EXTERNAL_RESOURCE_HISTORY_TNAME))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_FAIL(sql.append_fmt(" AND schema_version <= %ld", schema_version))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_NOT_NULL(schema_keys) && schema_key_size > 0) {
+      if (OB_FAIL(sql.append(" AND resource_id IN"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(external_resource, schema_keys, schema_key_size, sql))) {
+        LOG_WARN("failed to append external resource id to sql", K(ret), K(sql));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, resource_id DESC, schema_version DESC"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL result", K(ret), K(sql));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_external_resource_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to ObSchemaRetrieveUtils::retrieve_external_resource_schema", K(ret), K(tenant_id), K(sql));
+      }
+    }
+  }
+
+  return ret;
+}
 
 }//namespace schema
 }//namespace share

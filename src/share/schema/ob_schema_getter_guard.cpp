@@ -21,6 +21,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "share/catalog/ob_catalog_utils.h"
+
+#include "ob_external_resource_schema_getter_guard.ipp"
 namespace oceanbase
 {
 using namespace common;
@@ -8826,6 +8828,7 @@ GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(package, ObSimplePackageSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 
 } //end of namespace schema
 } //end of namespace share

@@ -463,6 +463,10 @@ public:
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
   RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
+
+  template <typename T>
+  static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
+
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -565,6 +569,10 @@ public:
   // link table
   FILL_SCHEMA_FUNC_DECLARE(link_table, ObTableSchema);
   FILL_SCHEMA_FUNC_DECLARE(link_column, ObColumnSchemaV2);
+
+  // external resource
+  FILL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+
   template<typename T>
   static int fill_mock_fk_parent_table_column_info(
       const uint64_t tenant_id, T &result, uint64_t &parent_column_id, ObString &parent_column_name,

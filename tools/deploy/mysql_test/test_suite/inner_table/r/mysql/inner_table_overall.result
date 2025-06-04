@@ -332,6 +332,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 544	__all_pl_recompile_objinfo	0	201001	1
 545	__all_vector_index_task	0	201001	1
 546	__all_vector_index_task_history	0	201001	1
+554	__all_external_resource	0	201001	1
+555	__all_external_resource_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -843,6 +845,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12530	__all_virtual_tablet_local_cache	2	201001	1
 12535	__all_virtual_mview_running_job	2	201001	1
 12536	__all_virtual_dynamic_partition_table	2	201001	1
+12547	__all_virtual_external_resource	2	201001	1
+12548	__all_virtual_external_resource_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1384,6 +1388,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21655	DBA_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21656	CDB_OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21657	V$OB_DYNAMIC_PARTITION_TABLES	1	201001	1
+21658	DBA_OB_EXTERNAL_RESOURCES	1	201001	1
+21659	CDB_OB_EXTERNAL_RESOURCES	1	201001	1
 21660	V$OB_SS_SSTABLES	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success

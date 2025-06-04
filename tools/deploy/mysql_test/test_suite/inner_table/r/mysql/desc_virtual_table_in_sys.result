@@ -11382,3 +11382,35 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dynamic_partition_table limit 1;
+desc oceanbase.__all_virtual_external_resource;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+resource_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+database_id	bigint(20)	NO		NULL	
+name	varchar(256)	NO		NULL	
+type	bigint(20)	NO		NULL	
+content	longblob	NO		NULL	
+comment	varchar(4096)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_resource;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_external_resource limit 1;
+desc oceanbase.__all_virtual_external_resource_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+resource_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+database_id	bigint(20)	YES		NULL	
+name	varchar(256)	YES		NULL	
+type	bigint(20)	YES		NULL	
+content	longblob	YES		NULL	
+comment	varchar(4096)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_resource_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_external_resource_history limit 1;

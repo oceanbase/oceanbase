@@ -282,6 +282,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_java", "dbms_java_mysql.sql", "dbms_java_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

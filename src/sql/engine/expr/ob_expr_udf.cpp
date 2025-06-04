@@ -15,6 +15,7 @@
 #include "ob_expr_udf.h"
 #include "observer/ob_server.h"
 #include "pl/ob_pl_stmt.h"
+#include "pl/external_routine/ob_java_udf.h"
 
 namespace oceanbase
 {
@@ -751,7 +752,41 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
     info->is_called_in_sql_ = is_called_in_sql();
     rt_expr.extra_info_ = info;
   }
-  rt_expr.eval_func_ = eval_udf;
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != fun_sys.get_external_routine_type()) {
+    uint64_t routine_id = fun_sys.get_udf_id();
+    uint64_t tenant_id = pl::get_tenant_id_by_object_id(routine_id);
+    const ObRoutineInfo *routine_info = nullptr;
+
+    if (OB_ISNULL(expr_cg_ctx.schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL schema_guard", K(ret));
+    } else if (OB_FAIL(expr_cg_ctx.schema_guard_->get_routine_info(tenant_id, routine_id, routine_info))) {
+      LOG_WARN("failed to get_routine_info", K(ret), K(tenant_id), K(routine_id), KPC(routine_info));
+    } else if (OB_ISNULL(routine_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL routine_info", K(ret), K(tenant_id), K(routine_id));
+    } else if (routine_info->get_external_routine_type() != fun_sys.get_external_routine_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected external_routine_type", K(ret), KPC(routine_info), K(fun_sys));
+    } else if (OB_FAIL(ob_write_string(alloc, routine_info->get_external_routine_entry(), info->external_routine_entry_, true))) {
+      LOG_WARN("failed to ob_write_string", K(ret), KPC(info), KPC(routine_info));
+    } else if (OB_FAIL(ob_write_string(alloc, routine_info->get_external_routine_url(), info->external_routine_url_, true))) {
+      LOG_WARN("failed to ob_write_string", K(ret), KPC(info), KPC(routine_info));
+    } else if (OB_FAIL(ob_write_string(alloc, routine_info->get_external_routine_resource(), info->external_routine_resource_, true))) {
+      LOG_WARN("failed to ob_write_string", K(ret), KPC(info), KPC(routine_info));
+    } else {
+      info->external_routine_type_ = fun_sys.get_external_routine_type();
+      rt_expr.eval_func_ = eval_external_udf;
+      // rt_expr.eval_vector_func_ = eval_external_udf_vector;
+    }
+
+  } else {
+    rt_expr.eval_func_ = eval_udf;
+  }
+
   return ret;
 }
 
@@ -1040,6 +1075,103 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   return ret;
 }
 
+int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+
+  ObSEArray<ObObjMeta, 8> arg_types;
+  using ColumnType = ObSEArray<ObObj, 1>;
+  ObSEArray<ObIArray<ObObj>*, 8> args;
+  ObArenaAllocator alloc;
+
+  CK (OB_NOT_NULL(expr.extra_info_));
+
+  if (OB_SUCC(ret)) {
+    ObExprUDFInfo &udf_info = *static_cast<ObExprUDFInfo*>(expr.extra_info_);
+    ObEvalCtx::TempAllocGuard memory_guard(ctx);
+
+    if (OB_FAIL(SMART_CALL(expr.eval_param_value(ctx)))) {
+      LOG_WARN("failed to eval_param_value", K(ret), K(expr));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+        if (OB_ISNULL(expr.args_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL expr", K(ret), K(i), K(expr));
+        } else if (OB_FAIL(arg_types.push_back(expr.args_[i]->obj_meta_))) {
+          LOG_WARN("failed to push_back arg datum meta", K(ret), K(i), K(expr));
+        } else {
+          const ObDatum &datum = expr.args_[i]->locate_expr_datum(ctx);
+          ObObj obj;
+          ColumnType *column = nullptr;
+
+          if (OB_ISNULL(column = static_cast<ColumnType*>(alloc.alloc(sizeof(ColumnType))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory for column", K(ret), K(i));
+          } else if (OB_ISNULL(column = new(column)ColumnType())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to construct column", K(ret));
+          } else if (OB_FAIL(datum.to_obj(obj, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_))) {
+            LOG_WARN("failed to convert datum to obj", K(ret), K(datum), K(obj), K(i), K(expr.args_[i]->obj_meta_), K(expr.args_[i]->obj_datum_map_));
+          } else if (OB_FAIL(column->push_back(obj))) {
+            LOG_WARN("failed to push_back to column", K(ret), K(datum), K(obj), K(i));
+          } else if (OB_FAIL(args.push_back(column))) {
+            LOG_WARN("failed to push_back column to args", K(ret), K(i), KPC(column));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObIAllocator &result_allocator = udf_info.is_called_in_sql_ ? memory_guard.get_allocator() : ctx.exec_ctx_.get_allocator();
+      ObSEArray<ObObj, 1> res_array;
+
+      pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info);
+
+      if (OB_FAIL(executor.init())) {
+        LOG_WARN("failed to init java udf executor", K(ret));
+      } else if (OB_FAIL(executor.execute(1, arg_types, args, result_allocator, res_array))) {
+        LOG_WARN("failed to execute udf", K(ret));
+      } else if (1 != res_array.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected res_array count", K(ret), K(res_array));
+      } else if (OB_FAIL(res.from_obj(res_array.at(0), expr.obj_datum_map_))) {
+        LOG_WARN("failed to set res from result obobj", K(ret), K(res_array));
+      } else if (OB_FAIL(expr.deep_copy_datum(ctx, res))) {
+        LOG_WARN("failed to deep_copy_datum", K(ret), K(res_array), K(res));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObBitVector &skip,
+                                        const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+
+  ObVectorBase *res_vec = static_cast<ObVectorBase*>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+    if (OB_FAIL(expr.args_[i]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("failed to eval udf args", K(ret), K(i), K(expr));
+    }
+  }
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (!skip.at(idx) && !eval_flags.at(idx)) {
+      // to do
+      ret = OB_NOT_IMPLEMENT;
+      LOG_WARN("vectorized external udf is not implemented yet", K(ret), K(lbt()));
+    }
+  }
+
+  return ret;
+}
+
 int ObExprUDF::fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs)
 {
   int ret = OB_SUCCESS;
@@ -1069,7 +1201,12 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               is_udt_cons_,
               is_called_in_sql_,
               is_result_cache_,
-              is_deterministic_);
+              is_deterministic_,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return ret;
 }
 
@@ -1089,7 +1226,12 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               is_udt_cons_,
               is_called_in_sql_,
               is_result_cache_,
-              is_deterministic_);
+              is_deterministic_,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return ret;
 }
 
@@ -1109,7 +1251,12 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               is_udt_cons_,
               is_called_in_sql_,
               is_result_cache_,
-              is_deterministic_);
+              is_deterministic_,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_);
+
   return len;
 }
 
@@ -1132,6 +1279,10 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
   OZ(other.params_type_.assign(params_type_));
   OZ(other.params_desc_.assign(params_desc_));
   OZ(other.nocopy_params_.assign(nocopy_params_));
+  OX(other.external_routine_type_ = external_routine_type_);
+  OZ(ob_write_string(allocator, external_routine_entry_, other.external_routine_entry_, true));
+  OZ(ob_write_string(allocator, external_routine_url_, other.external_routine_url_, true));
+  OZ(ob_write_string(allocator, external_routine_resource_, other.external_routine_resource_, true));
   return ret;
 }
 

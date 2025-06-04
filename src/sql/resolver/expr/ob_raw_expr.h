@@ -4424,7 +4424,8 @@ public:
       params_name_(),
       params_desc_v2_(),
       dblink_name_(),
-      dblink_id_(common::OB_INVALID_ID) {
+      dblink_id_(common::OB_INVALID_ID),
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4453,7 +4454,8 @@ public:
       params_name_(),
       params_desc_v2_(),
       dblink_name_(),
-      dblink_id_(common::OB_INVALID_ID) {
+      dblink_id_(common::OB_INVALID_ID),
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4598,6 +4600,9 @@ public:
 
   void set_udf_deterministic(bool is_deterministic);
 
+  inline ObExternalRoutineType get_external_routine_type() const { return external_routine_type_; }
+  inline void set_external_routine_type(ObExternalRoutineType type) { external_routine_type_ = type; }
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4627,7 +4632,9 @@ public:
                                             K_(dblink_name),
                                             K_(dblink_id),
                                             N_CHILDREN, exprs_,
-                                            K_(expr_hash));
+                                            K_(expr_hash),
+                                            K_(external_routine_type));
+
 private:
   uint64_t udf_id_;
   uint64_t pkg_id_;
@@ -4652,6 +4659,7 @@ private:
   common::ObSEArray<ObUDFParamDesc, 5, common::ModulePageAllocator, true> params_desc_v2_;
   common::ObString dblink_name_;
   uint64_t dblink_id_;
+  ObExternalRoutineType external_routine_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };

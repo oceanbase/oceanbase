@@ -776,7 +776,8 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
                                             int64_t type_id,
                                             ObUDFInfo &udf_info,
                                             uint64_t dblink_id,
-                                            const ObString &dblink_name)
+                                            const ObString &dblink_name,
+                                            ObExternalRoutineType external_routine_type)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
@@ -795,6 +796,7 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_is_aggregate_udf(is_pl_agg));
   OX (udf_raw_expr->set_dblink_id(dblink_id));
   OX (udf_raw_expr->set_dblink_name(dblink_name));
+  OX (udf_raw_expr->set_external_routine_type(external_routine_type));
   return ret;
 }
 

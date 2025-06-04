@@ -745,6 +745,10 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_CATALOG_DDL, ObRpcHandleCatalogDDLP
 // for ob_admin
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDropLonelyLobAuxTableP, force_drop_lonely_lob_aux_table(arg_));
 
+// external resource ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
+
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR
 #undef DEFINE_LIMITED_RS_RPC_PROCESSOR

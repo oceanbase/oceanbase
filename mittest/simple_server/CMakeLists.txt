@@ -164,6 +164,7 @@ ob_unittest_observer(test_dup_table_partition_balance rootservice/test_dup_table
 ob_unittest_observer(test_transfer_task_operator rootservice/test_transfer_task_operator.cpp)
 ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_parallel_migration_mode.cpp)
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
+ob_unittest_observer(test_external_resource_schema rootservice/test_external_resource_schema.cpp)
 ####### rootservice case #########
 
 

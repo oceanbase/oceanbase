@@ -210,6 +210,7 @@ ob_compaction_schedule_interval
 ob_deterministic_udf_cache_max_size
 ob_enable_batched_multi_statement
 ob_enable_java_env
+ob_enable_java_udf
 ob_encoding_granularity
 ob_event_history_recycle_interval
 ob_java_connector_path

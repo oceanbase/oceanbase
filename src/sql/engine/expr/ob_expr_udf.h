@@ -41,7 +41,11 @@ public:
   ObExprUDFInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
       subprogram_path_(alloc), params_type_(alloc), params_desc_(alloc), nocopy_params_(alloc),
-      dblink_id_(OB_INVALID_ID), is_result_cache_(false), is_deterministic_(false)
+      dblink_id_(OB_INVALID_ID), is_result_cache_(false), is_deterministic_(false),
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+      external_routine_entry_(),
+      external_routine_url_(),
+      external_routine_resource_()
   {
   }
 
@@ -66,6 +70,10 @@ public:
   uint64_t dblink_id_;
   bool is_result_cache_;
   bool is_deterministic_;
+  ObExternalRoutineType external_routine_type_;
+  common::ObString external_routine_entry_;
+  common::ObString external_routine_url_;
+  common::ObString external_routine_resource_;
 };
 class ObSqlCtx;
 class ObUDFParamDesc;
@@ -112,6 +120,13 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  static int eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  static int eval_external_udf_vector(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound);
 
   static int build_udf_ctx(int64_t udf_ctx_id,
                            int64_t param_num,

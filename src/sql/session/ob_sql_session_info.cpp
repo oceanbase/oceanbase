@@ -29,6 +29,7 @@
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
+#include "pl/external_routine/ob_external_resource.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -183,7 +184,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       failover_mode_(false),
       service_name_(),
       executing_sql_stat_record_(),
-      unit_gc_min_sup_proxy_version_(0)
+      unit_gc_min_sup_proxy_version_(0),
+      external_resource_schema_cache_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -790,6 +792,15 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     reset(skip_sys_var);
     is_inited_ = false;
     sql_req_level_ = 0;
+
+    if (OB_NOT_NULL(external_resource_schema_cache_)) {
+      using Cache = pl::ObExternalResourceCache<pl::ObExternalSchemaJar>;
+      Cache *cache = static_cast<Cache *>(external_resource_schema_cache_);
+      cache->~Cache();
+      get_session_allocator().free(cache);
+      cache = nullptr;
+      external_resource_schema_cache_ = nullptr;
+    }
   }
 }
 

@@ -11820,5 +11820,43 @@ int ObRootService::start_ddl_service_()
   return ret;
 }
 
+int ObRootService::create_external_resource(const obrpc::ObCreateExternalResourceArg &arg, obrpc::ObCreateExternalResourceRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::create_external_resource(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::create_external_resource", K(ret), K(arg));
+  }
+
+  LOG_INFO("out create_external_resource", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObPLDDLService::drop_external_resource(arg, result, ddl_service_))) {
+    LOG_WARN("failed to ObPLDDLService::drop_external_resource", K(ret), K(arg));
+  }
+
+  LOG_INFO("out drop_external_resource", K(ret), K(arg));
+
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

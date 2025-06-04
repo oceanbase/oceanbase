@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_DDL_PL_OPERATOR_H_
 
 #include "rootserver/ob_ddl_operator.h"
+#include "share/ob_external_resource_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -140,6 +141,16 @@ public:
   //----Functions for managing trigger----
 
   //----End of functions for managing trigger----
+
+
+//----Functions for managing external resource----
+  int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg,
+                               ObSimpleExternalResourceSchema &new_schema,
+                               ObMySQLTransaction &trans);
+  int drop_external_resource(ObSimpleExternalResourceSchema &new_schema,
+                             const ObString &ddl_stmt,
+                             ObMySQLTransaction &trans);
+//----End of functions for managing external resource----
 private:
   int del_routines_in_package(const share::schema::ObPackageInfo &package_info,
                               common::ObMySQLTransaction &trans,

@@ -12023,7 +12023,8 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
                                                 common::OB_INVALID_ID,
                                                 udf_info,
                                                 sch_routine_info->get_dblink_id(),
-                                                dblink_name));
+                                                dblink_name,
+                                                sch_routine_info->get_external_routine_type()));
     OZ (ObRawExprUtils::resolve_udf_param_types(sch_routine_info,
                                                 resolve_ctx_.schema_guard_,
                                                 resolve_ctx_.session_info_,
@@ -13005,7 +13006,8 @@ int ObPLResolver::resolve_udf_info(
                                                   common::OB_INVALID_ID,
                                                   udf_info,
                                                   package_routine_info->get_dblink_id(),
-                                                  dblink_name));
+                                                  dblink_name,
+                                                  ObExternalRoutineType::INTERNAL_ROUTINE));
       OZ (ObRawExprUtils::resolve_udf_param_types(package_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
@@ -13090,7 +13092,8 @@ int ObPLResolver::resolve_udf_info(
                                                   schema_routine_info->get_type_id(),
                                                   udf_info,
                                                   schema_routine_info->get_dblink_id(),
-                                                  dblink_name));
+                                                  dblink_name,
+                                                  schema_routine_info->get_external_routine_type()));
       OZ (ObRawExprUtils::resolve_udf_param_types(schema_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
@@ -13131,7 +13134,8 @@ int ObPLResolver::resolve_udf_info(
                                                   common::OB_INVALID_ID,
                                                   udf_info,
                                                   common::OB_INVALID_ID,
-                                                  ""));
+                                                  "",
+                                                  ObExternalRoutineType::INTERNAL_ROUTINE));
       OZ (ObRawExprUtils::resolve_udf_param_types(sub_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,

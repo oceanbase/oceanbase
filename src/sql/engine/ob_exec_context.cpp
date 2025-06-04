@@ -20,6 +20,7 @@
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
+#include "pl/external_routine/ob_external_resource.h"
 
 namespace oceanbase
 {
@@ -205,7 +206,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     lob_access_ctx_(nullptr),
     auto_dop_map_(),
     force_local_plan_(false),
-    diagnosis_manager_()
+    diagnosis_manager_(),
+    external_url_resource_cache_(nullptr)
 {
 }
 
@@ -279,6 +281,14 @@ ObExecContext::~ObExecContext()
     lob_access_ctx_ = nullptr;
   }
   auto_dop_map_.destroy();
+
+  if (OB_NOT_NULL(external_url_resource_cache_)) {
+    using Cache = pl::ObExternalResourceCache<pl::ObExternalURLJar>;
+    Cache *cache = static_cast<Cache *>(external_url_resource_cache_);
+    cache->~Cache();
+    cache = nullptr;
+    external_url_resource_cache_ = nullptr;
+  }
 }
 
 void ObExecContext::clean_resolve_ctx()

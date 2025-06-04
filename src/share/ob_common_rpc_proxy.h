@@ -25,6 +25,7 @@
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 #include "share/ls/ob_ls_info.h"
+#include "share/ob_external_resource_rpc_struct.h"
 
 namespace oceanbase
 {

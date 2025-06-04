@@ -41,6 +41,7 @@
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
 #include "share/schema/ob_rls_mgr.h"
 #include "share/schema/ob_catalog_mgr.h"
+#include "share/schema/ob_external_resource_mgr.h"
 
 namespace oceanbase
 {
@@ -752,6 +753,18 @@ public:
   //   return rls_context_mgr_.get_rls_context_schema_by_id(schema_id, schema);
   // }
 
+  // external resource
+  int get_external_resource_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &external_resource_id,
+      const ObSimpleExternalResourceSchema *&external_resource_schema) const;
+    // external resource
+  int get_external_resource_schema(
+      const uint64_t &tenant_id,
+      const uint64_t &database_id,
+      const ObString &external_resource_name,
+      const ObSimpleExternalResourceSchema *&external_resource_schema) const;
+
   // other
   int get_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
    int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
@@ -980,6 +993,7 @@ private:
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;
+  ObExternalResourceMgr external_resource_mgr_;
 };
 
 }//end of namespace schema

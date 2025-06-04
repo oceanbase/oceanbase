@@ -240,7 +240,7 @@ public:
   public:
     explicit ObReportCoreTableReplicaTask(ObRootService &root_service);
     virtual ~ObReportCoreTableReplicaTask() {}
-  public:
+    public:
     // interface of AsyncTask
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
@@ -723,6 +723,11 @@ public:
   //----Functions for managing catalog----
   int handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg);
   //----End of functions for managing catalog----
+
+  //----Functions for managing external resource----
+  int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg, obrpc::ObCreateExternalResourceRes &result);
+  int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
+  //----End of functions for managing external resource----
 
   // server related
   int load_server_manager();

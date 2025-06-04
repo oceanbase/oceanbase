@@ -82,6 +82,7 @@
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
+#include "pl/sys_package/ob_dbms_java.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -870,6 +871,11 @@
   // start of dbms_partition
   INTERFACE_DEF(INTERFACE_DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION, "DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION", (ObDBMSPartition::manage_dynamic_partition))
   // end of dbms_partition
+
+  // start of dbms_java
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_LOADJAVA_MYSQL, "DBMS_JAVA_LOADJAVA_MYSQL", (ObDBMSJava::loadjava_mysql))
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_DROPJAVA_MYSQL, "DBMS_JAVA_DROPJAVA_MYSQL", (ObDBMSJava::dropjava_mysql))
+  // end of dbms_java
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

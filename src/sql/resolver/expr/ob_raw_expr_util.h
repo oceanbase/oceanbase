@@ -970,7 +970,8 @@ public:
                                      int64_t type_id,
                                      ObUDFInfo &udf_info,
                                      uint64_t dblink_id,
-                                     const ObString &dblink_name);
+                                     const ObString &dblink_name,
+                                     ObExternalRoutineType external_routine_type);
   static int resolve_udf_param_types(const share::schema::ObIRoutineInfo* func_info,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                      sql::ObSQLSessionInfo &session_info,

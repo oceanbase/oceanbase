@@ -2761,3 +2761,7 @@ DEF_INT(async_ps_cursor_max_count, OB_CLUSTER_PARAMETER, "0", "[0, 1024]",
 DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
          "Enable or disable routine call parameter defend.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_enable_java_udf, OB_TENANT_PARAMETER, "False",
+         "Enable or disable java udf.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

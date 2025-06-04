@@ -598,6 +598,9 @@ public:
 
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
 
+  void *get_external_url_resource_cache() { return external_url_resource_cache_; }
+  void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
+
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -788,6 +791,8 @@ protected:
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
+
+  void *external_url_resource_cache_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

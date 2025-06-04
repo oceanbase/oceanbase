@@ -8157,8 +8157,32 @@ def_table_schema(
 # 551: __all_tenant_location_history
 # 552: __all_tenant_objauth_mysql
 # 553: __all_tenant_objauth_mysql_history
-# 554: __all_external_resource
-# 555: __all_external_resource_history
+
+all_external_resource = dict(
+  owner = 'heyongyi.hyy',
+  table_name = '__all_external_resource',
+  table_id = '554',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int', 'false'),
+      ('resource_id', 'int', 'false'),
+  ],
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+  in_tenant_space = True,
+  normal_columns = [
+    ('database_id', 'int', 'false'),
+    ('name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+    ('type', 'int'),
+    ('content', 'longblob', 'false'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH')
+  ],
+)
+
+def_table_schema(**all_external_resource)
+
+def_table_schema(**gen_history_table_def(555, all_external_resource))
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16440,8 +16464,19 @@ def_table_schema(
 # 12544: __all_virtual_objauth_mysql_history
 # 12545: __tenant_virtual_show_create_location
 # 12546: __tenant_virtual_list_file
-# 12547: __all_virtual_external_resource
-# 12548: __all_virtual_external_resource_history
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12547',
+  table_name = '__all_virtual_external_resource',
+  keywords = all_def_keywords['__all_external_resource'])
+)
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12548',
+  table_name = '__all_virtual_external_resource_history',
+  keywords = all_def_keywords['__all_external_resource_history'])
+)
+
 # 12549: __all_virtual_ccl_rule_history
 # 12550:__all_virtual_tenant_vector_mem_info
 # 12551: __all_virtual_logservice_cluster_info
@@ -42292,8 +42327,53 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21658: DBA_OB_EXTERNAL_RESOURCES
-# 21659: CDB_OB_EXTERNAL_RESOURCES
+def_table_schema(
+      owner = 'heyongyi.hyy',
+      tablegroup_id   = 'OB_INVALID_ID',
+      table_name      = 'DBA_OB_EXTERNAL_RESOURCES',
+      table_id        = '21658',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+        SELECT
+          RESOURCE_ID,
+          DATABASE_ID,
+          NAME,
+          CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,
+          CONTENT,
+          COMMENT
+        FROM oceanbase.__all_external_resource
+        """.replace("\n", " ")
+)
+
+def_table_schema(
+      owner = 'heyongyi.hyy',
+      tablegroup_id   = 'OB_INVALID_ID',
+      table_name      = 'CDB_OB_EXTERNAL_RESOURCES',
+      table_id        = '21659',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = False,
+      view_definition =
+      """
+        SELECT
+          TENANT_ID,
+          RESOURCE_ID,
+          DATABASE_ID,
+          NAME,
+          CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,
+          CONTENT,
+          COMMENT
+        FROM oceanbase.__all_virtual_external_resource
+        """.replace("\n", " ")
+)
+
 def_table_schema(
 owner = 'yunxing.cyx',
 table_name      = 'V$OB_SS_SSTABLES',
@@ -76844,7 +76924,14 @@ def_sys_index_table(
 # 101116: idx_location_name
 # 101117: idx_objauth_mysql_user_id
 # 101118: idx_objauth_mysql_obj_name
-# 101119: idx_name_dbid_external_resource
+
+def_sys_index_table(
+  index_name = 'idx_name_dbid_external_resource',
+  index_table_id = 101119,
+  index_columns = ['name', 'database_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_external_resource'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

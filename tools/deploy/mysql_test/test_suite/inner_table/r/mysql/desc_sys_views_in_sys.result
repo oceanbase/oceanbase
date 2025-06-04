@@ -14717,6 +14717,41 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DYNAMIC_PARTITION_TABLES limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_EXTERNAL_RESOURCES;
+Field	Type	Null	Key	Default	Extra
+RESOURCE_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+NAME	varchar(256)	NO		NULL	
+TYPE	varchar(12)	NO		NULL	
+CONTENT	longblob	NO		NULL	
+COMMENT	varchar(4096)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_EXTERNAL_RESOURCES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_EXTERNAL_RESOURCES|%') then 3
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_RESOURCES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_EXTERNAL_RESOURCES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+RESOURCE_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+NAME	varchar(256)	NO		NULL	
+TYPE	varchar(12)	NO		NULL	
+CONTENT	longblob	NO		NULL	
+COMMENT	varchar(4096)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_EXTERNAL_RESOURCES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_EXTERNAL_RESOURCES|%') then 3
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_EXTERNAL_RESOURCES limit 1);
+cnt
+1
 desc oceanbase.V$OB_SS_SSTABLES;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	

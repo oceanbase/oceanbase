@@ -25,6 +25,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_package_type.h"
 #endif
+#include "share/schema/ob_external_resource_sql_service.h"
 
 namespace oceanbase
 {
@@ -1579,6 +1580,70 @@ int ObPLDDLOperator::build_flashback_object_name(const SchemaType &object_schema
   return ret;
 }
 
+int ObPLDDLOperator::create_external_resource(const obrpc::ObCreateExternalResourceArg &arg,
+                                              ObSimpleExternalResourceSchema &new_schema,
+                                              ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  uint64_t new_schema_id = OB_INVALID_ID;
+  const uint64_t tenant_id = arg.tenant_id_;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_new_external_resource_id(tenant_id, new_schema_id))) {
+    LOG_WARN("failed to fetch_new_external_resource_id", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
+  } else {
+    new_schema.set_schema_version(new_schema_version);
+    new_schema.set_tenant_id(arg.tenant_id_);
+    new_schema.set_resource_id(new_schema_id);
+    new_schema.set_database_id(arg.database_id_);
+    new_schema.set_type(arg.type_);
+    new_schema.set_name(arg.name_);
+
+    if (!new_schema.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("new schema is invalid", K(ret), K(arg), K(new_schema));
+    } else if (OB_FAIL(schema_service->get_external_resource_sql_service()
+                         .create_external_resource(new_schema, arg.content_, arg.comment_, arg.ddl_stmt_str_, trans))) {
+      LOG_WARN("failed to create_external_resource", K(ret), K(new_schema), K(arg));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLOperator::drop_external_resource(ObSimpleExternalResourceSchema &schema,
+                                            const ObString &ddl_stmt,
+                                            ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (!schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid schema arg", K(ret), K(schema));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("failed to gen_new_schema_version", K(ret), K(tenant_id));
+  } else if (FALSE_IT(schema.set_schema_version(new_schema_version))) {
+    // unreachable
+  } else if (OB_FAIL(schema_service->get_external_resource_sql_service().drop_external_resource(schema, ddl_stmt, trans))) {
+    LOG_WARN("failed to drop_external_resource", K(ret), K(schema));
+  }
+
+  return ret;
+}
 
 } // namespace rootserver
 } // namespace oceanbase

@@ -1399,7 +1399,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
   NULL, //ObExprCheckLocationAccess::eval_check_location_access        /* 849 */
-  NULL,// ObExprUDF::eval_external_udf,                                /* 850 */
+  ObExprUDF::eval_external_udf,                                        /* 850 */
   NULL,// ObExprStartUpMode::eval_startup_mode,                        /* 851 */
 };
 
@@ -1808,7 +1808,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
   ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
   NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
-  NULL, // ObExprUDF::eval_external_udf_vector,                          /* 222 */
+  ObExprUDF::eval_external_udf_vector,                                   /* 222 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

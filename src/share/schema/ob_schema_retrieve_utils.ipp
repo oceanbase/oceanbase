@@ -2692,6 +2692,10 @@ int ObSchemaRetrieveUtils::fill_routine_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, comment, routine_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, route_sql, routine_info);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type_id, routine_info, uint64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, external_routine_type, routine_info, ObExternalRoutineType, true, true, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, external_routine_entry, routine_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, external_routine_url, routine_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, external_routine_resource, routine_info);
     if (OB_SUCC(ret)
         && pl::get_tenant_id_by_object_id(routine_info.get_type_id()) != OB_SYS_TENANT_ID) {
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, type_id, routine_info, tenant_id);
@@ -6134,6 +6138,74 @@ int ObSchemaRetrieveUtils::retrieve_table_latest_schema_versions(
   } else {
     SHARE_SCHEMA_LOG(WARN, "fail to get all table latest schema version", KR(ret));
   }
+  return ret;
+}
+
+template <typename T>
+int ObSchemaRetrieveUtils::retrieve_external_resource_schema(const uint64_t tenant_id,
+                                                             T &result,
+                                                             ObIArray<ObSimpleExternalResourceSchema> &schema_array)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchExtRes"));
+  ObSimpleExternalResourceSchema schema(&allocator);
+
+  uint64_t pre_res_id = OB_INVALID_ID;
+
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    schema.reset();
+    allocator.reuse();
+
+    bool is_deleted = false;
+
+    if (OB_FAIL(fill_external_resource_schema(tenant_id, result, schema, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to fill_external_resource_schema", K(ret), K(schema));
+    } else if (schema.get_resource_id() == pre_res_id) {
+      // do nothing
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(INFO, "external resource is deleted, don't add", K(schema));
+    } else if (OB_FAIL(schema_array.push_back(schema))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret), K(schema));
+    }
+
+    if (OB_SUCC(ret)) {
+      pre_res_id = schema.get_resource_id();
+    }
+  }
+
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get all external resource schema. iter quit. ", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+    SHARE_SCHEMA_LOG(INFO, "retrieve external resource schemas succeed", K(tenant_id));
+  }
+
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_id,
+                                                         T &result,
+                                                         ObSimpleExternalResourceSchema &schema,
+                                                         bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+
+  schema.reset();
+  is_deleted = false;
+  schema.set_tenant_id(tenant_id);
+
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, resource_id, schema, tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+  if (OB_SUCC(ret) && !is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, schema, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, database_id, schema, tenant_id);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, schema);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type, schema, ObSimpleExternalResourceSchema::ResourceType);
+  }
+
   return ret;
 }
 

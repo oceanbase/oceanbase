@@ -508,7 +508,8 @@ ObSchemaMgr::ObSchemaMgr()
       catalog_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
-      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
+      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
+      external_resource_mgr_(allocator_)
 {
 }
 
@@ -565,7 +566,8 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       catalog_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
-      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
+      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
+      external_resource_mgr_(allocator_)
 {
 }
 
@@ -646,6 +648,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init context mgr failed", K(ret));
   } else if (OB_FAIL(mock_fk_parent_table_mgr_.init())) {
     LOG_WARN("init mock_fk_parent_table_mgr_ failed", K(ret));
+  } else if (OB_FAIL(external_resource_mgr_.init())) {
+    LOG_WARN("init external_resource_mgr_ failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
   }
@@ -714,6 +718,7 @@ void ObSchemaMgr::reset()
     context_mgr_.reset();
     mock_fk_parent_table_mgr_.reset();
     mlog_infos_.clear();
+    external_resource_mgr_.reset();
   }
 }
 
@@ -829,6 +834,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign rls_context mgr failed", K(ret));
       } else if (OB_FAIL(catalog_mgr_.assign(other.catalog_mgr_))) {
         LOG_WARN("assign catalog mgr failed", K(ret));
+      } else if (OB_FAIL(external_resource_mgr_.assign(other.external_resource_mgr_))) {
+        LOG_WARN("assign external_resource_mgr_ failed", K(ret));
       }
     }
   }
@@ -928,6 +935,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy rls_context mgr failed", K(ret));
       } else if (OB_FAIL(catalog_mgr_.deep_copy(other.catalog_mgr_))) {
         LOG_WARN("deep copy catalog mgr failed", K(ret));
+      } else if (OB_FAIL(external_resource_mgr_.deep_copy(other.external_resource_mgr_))) {
+        LOG_WARN("deep copy external_resource mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -4543,6 +4552,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del rls_context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(catalog_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del catalog in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(external_resource_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del external_resource in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4588,6 +4599,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t rls_group_schema_count = 0;
     int64_t rls_context_schema_count = 0;
     int64_t catalog_schema_count = 0;
+    int64_t external_resource_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4640,6 +4652,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get rls_context schema count failed", K(ret));
     } else if (OB_FAIL(catalog_mgr_.get_schema_count(catalog_schema_count))) {
       LOG_WARN("get catalog schema count failed", K(ret));
+    } else if (OB_FAIL(external_resource_mgr_.get_external_resource_schema_count(external_resource_schema_count))) {
+      LOG_WARN("get external_resource schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4660,6 +4674,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
+                       + external_resource_schema_count
                       );
     }
   }
@@ -5444,6 +5459,10 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to get mock_fk_parent_table statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(external_resource_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("failed to get external_resource statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
   }
   return ret;
 }
@@ -5740,6 +5759,41 @@ int ObSchemaMgr::get_table_statistics(ObSchemaStatisticsInfo &schema_info) const
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaMgr::get_external_resource_schema(
+  const uint64_t &tenant_id,
+  const uint64_t &external_resource_id,
+  const ObSimpleExternalResourceSchema *&external_resource_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = external_resource_mgr_.get_external_resource_schema(external_resource_id, external_resource_schema);
+  }
+
+  return ret;
+}
+
+int ObSchemaMgr::get_external_resource_schema(
+  const uint64_t &tenant_id,
+  const uint64_t &database_id,
+  const ObString &external_resource_name,
+  const ObSimpleExternalResourceSchema *&external_resource_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = external_resource_mgr_.get_external_resource_schema(tenant_id, database_id, external_resource_name, external_resource_schema);
+  }
+
   return ret;
 }
 

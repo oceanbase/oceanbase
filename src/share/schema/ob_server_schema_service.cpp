@@ -364,6 +364,8 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_catalog_keys_.clear();
   new_catalog_priv_keys_.clear();
   del_catalog_priv_keys_.clear();
+  new_external_resource_keys_.clear();
+  del_external_resource_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -526,6 +528,10 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create add_catalog_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_catalog_priv_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_catalog_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_external_resource_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_external_resource_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_external_resource_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_external_resource_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -651,6 +657,9 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_catalog_priv_keys_ : schema_keys.del_catalog_priv_keys_))) {
     LOG_WARN("fail to del catalog_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_external_resource_keys_ : schema_keys.del_external_resource_keys_))) {
+    LOG_WARN("fail to del external_resource operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -4087,6 +4096,95 @@ int ObServerSchemaService::get_increment_catalog_priv_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_external_resource_keys(
+    const ObSchemaMgr &schema_guard,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+        schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t resource_id = schema_operation.external_resource_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.database_id_ = schema_operation.database_id_;
+    schema_key.external_resource_id_ = resource_id;
+    schema_key.schema_version_ = schema_version;
+
+    if (OB_DDL_DROP_EXTERNAL_RESOURCE == schema_operation.op_type_) {
+      hash_ret = schema_ids.new_external_resource_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped external_resource id", K(hash_ret), K(ret));
+      } else {
+        const ObSimpleExternalResourceSchema *schema = nullptr;
+        if (OB_FAIL(schema_guard.external_resource_mgr_.get_external_resource_schema(resource_id, schema))) {
+          LOG_WARN("failed to get external_resource schema", K(resource_id), K(ret));
+        } else if (OB_NOT_NULL(schema)) {
+          hash_ret = schema_ids.del_external_resource_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del external_resource id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_ids.new_external_resource_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new external_resource id", K(hash_ret), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_external_resource_keys_reversely(
+    const ObSchemaMgr &schema_guard,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+        schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t resource_id = schema_operation.external_resource_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.external_resource_id_ = resource_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_EXTERNAL_RESOURCE == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSimpleExternalResourceSchema *schema = nullptr;
+    if (OB_FAIL(schema_guard.external_resource_mgr_.get_external_resource_schema(resource_id, schema))) {
+      LOG_WARN("failed to get_external_resource_schema", K(resource_id), KR(ret));
+    } else if (OB_NOT_NULL(schema)) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_ids.del_external_resource_keys_,
+          schema_ids.new_external_resource_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 // Currently only the full tenant schema of the system tenant is cached
 int ObServerSchemaService::add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
                                                        ObISQLClient &sql_client)
@@ -4259,6 +4357,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(rls_group, ObRlsGroupSchema, RlsGroupKeys);
   GET_BATCH_SCHEMAS(rls_context, ObRlsContextSchema, RlsContextKeys);
   GET_BATCH_SCHEMAS(catalog, ObCatalogSchema, CatalogKeys);
+  GET_BATCH_SCHEMAS(external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -4413,7 +4512,11 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_catalog_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply catalog schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_external_resource_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.external_resource_mgr_))) {
+    LOG_WARN("fail to apply external_resource schema to cache", KR(ret), K(tenant_id));
   }
+
   return ret;
 }
 
@@ -4569,6 +4672,7 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsPolicyMgr, rls_policy, ObRlsPolicySchema, RlsPol
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsGroupMgr, rls_group, ObRlsGroupSchema, RlsGroupKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsContextMgr, rls_context, ObRlsContextSchema, RlsContextKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, catalog, ObCatalogSchema, CatalogKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObExternalResourceMgr, external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -5033,6 +5137,11 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_catalog_priv_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment catalog id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END) {
+          if (OB_FAIL(get_increment_external_resource_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment external resource keys", KR(ret));
+          }
         }
       }
     }
@@ -5245,6 +5354,11 @@ int ObServerSchemaService::replay_log_reversely(
                  && schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END) {
         if (OB_FAIL(get_increment_catalog_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment catalog keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END) {
+        if (OB_FAIL(get_increment_external_resource_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment external resource keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -6576,6 +6690,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObRlsGroupSchema, simple_rls_groups);
       INIT_ARRAY(ObRlsContextSchema, simple_rls_contexts);
       INIT_ARRAY(ObCatalogSchema, simple_catalogs);
+      INIT_ARRAY(ObSimpleExternalResourceSchema, simple_external_resources);
       #undef INIT_ARRAY
       ObSimpleSysVariableSchema simple_sys_variable;
 
@@ -6754,6 +6869,18 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_EXTERNAL_RESOURCE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_external_resources(
+          sql_client, schema_status, schema_version, tenant_id, simple_external_resources))) {
+          LOG_WARN("get all external_resources failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -6833,6 +6960,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add column privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->add_catalogs(simple_catalogs))) {
         LOG_WARN("add catalogs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->external_resource_mgr_.add_external_resources(simple_external_resources))) {
+        LOG_WARN("add external_resources failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",

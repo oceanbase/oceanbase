@@ -2106,6 +2106,8 @@ case OB_ALL_VIRTUAL_DEF_SUB_PART_HISTORY_TID:
 case OB_ALL_VIRTUAL_DEPENDENCY_TID:
 case OB_ALL_VIRTUAL_DETECT_LOCK_INFO_TID:
 case OB_ALL_VIRTUAL_ERROR_TID:
+case OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_TID:
+case OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_HISTORY_TID:
 case OB_ALL_VIRTUAL_EXTERNAL_TABLE_FILE_TID:
 case OB_ALL_VIRTUAL_FOREIGN_KEY_TID:
 case OB_ALL_VIRTUAL_FOREIGN_KEY_COLUMN_TID:
@@ -3012,6 +3014,36 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_EXTERNAL_RESOURCE_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_EXTERNAL_RESOURCE_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_EXTERNAL_TABLE_FILE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3131,7 +3163,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_HISTOGRAM_STAT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3161,9 +3195,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_INDEX_USAGE_INFO_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3433,7 +3465,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_NCOMP_DLL_V2_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3463,9 +3497,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_OBJAUTH_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3735,7 +3767,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_PLAN_BASELINE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3765,9 +3799,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_RECYCLEBIN_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4037,7 +4069,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4067,9 +4101,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SECURITY_AUDIT_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4339,7 +4371,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TABLE_PRIVILEGE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4369,9 +4403,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TABLE_STAT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4641,7 +4673,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_POLICY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4671,9 +4705,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_USER_LEVEL_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4943,7 +4975,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4973,9 +5007,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TRANSFER_TASK_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5617,6 +5649,7 @@ case OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_TYPE_TID:
 case OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TID:
 case OB_ALL_CATALOG_IDX_CATALOG_NAME_TID:
 case OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID:
+case OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID:
 case OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID:
 
 #endif
@@ -5624,126 +5657,100 @@ case OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID:
 
 #ifdef SYS_INDEX_DATA_TABLE_ID_SWITCH
 
-case OB_ALL_TABLET_TO_LS_TID:
 case OB_ALL_RLS_GROUP_TID:
-case OB_ALL_DEF_SUB_PART_TID:
-case OB_ALL_RLS_CONTEXT_HISTORY_TID:
-case OB_ALL_RLS_POLICY_HISTORY_TID:
 case OB_ALL_TENANT_OLS_USER_LEVEL_TID:
 case OB_ALL_RECYCLEBIN_TID:
-case OB_ALL_TENANT_KEYSTORE_HISTORY_TID:
-case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID:
-case OB_ALL_TABLE_STAT_HISTORY_TID:
 case OB_ALL_CONTEXT_TID:
-case OB_ALL_TABLE_PRIVILEGE_TID:
-case OB_ALL_DDL_CHECKSUM_TID:
-case OB_ALL_PKG_TYPE_TID:
 case OB_ALL_RLS_POLICY_TID:
-case OB_ALL_USER_PROXY_INFO_HISTORY_TID:
-case OB_ALL_TENANT_OBJAUTH_TID:
-case OB_ALL_PACKAGE_TID:
-case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID:
-case OB_ALL_TENANT_OLS_COMPONENT_TID:
-case OB_ALL_TENANT_TRIGGER_TID:
-case OB_ALL_TYPE_ATTR_TID:
-case OB_ALL_MVIEW_REFRESH_STATS_TID:
-case OB_ALL_TYPE_TID:
-case OB_ALL_DBLINK_TID:
+case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID:
+case OB_ALL_RLS_POLICY_HISTORY_TID:
 case OB_ALL_ROUTINE_PARAM_TID:
 case OB_ALL_DATABASE_PRIVILEGE_TID:
-case OB_ALL_TENANT_OLS_LABEL_TID:
-case OB_ALL_PKG_COLL_TYPE_TID:
-case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID:
-case OB_ALL_TENANT_KEYSTORE_TID:
-case OB_ALL_USER_PROXY_INFO_TID:
-case OB_ALL_COLUMN_TID:
-case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID:
-case OB_ALL_TABLET_REORGANIZE_HISTORY_TID:
-case OB_ALL_KV_TTL_TASK_TID:
 case OB_ALL_RLS_CONTEXT_TID:
-case OB_ALL_BACKUP_SET_FILES_TID:
 case OB_ALL_SEQUENCE_OBJECT_TID:
-case OB_ALL_DDL_OPERATION_TID:
-case OB_ALL_TABLE_TID:
 case OB_ALL_ACQUIRED_SNAPSHOT_TID:
-case OB_ALL_TENANT_PROFILE_TID:
-case OB_ALL_USER_TID:
-case OB_ALL_PKG_TYPE_ATTR_TID:
 case OB_ALL_TENANT_OLS_POLICY_TID:
-case OB_ALL_SERVER_EVENT_HISTORY_TID:
-case OB_ALL_DDL_TASK_STATUS_TID:
-case OB_ALL_PART_TID:
-case OB_ALL_HISTOGRAM_STAT_HISTORY_TID:
-case OB_ALL_DBMS_LOCK_ALLOCATED_TID:
+case OB_ALL_MVIEW_REFRESH_STATS_TID:
 case OB_ALL_CATALOG_TID:
-case OB_ALL_PLAN_BASELINE_ITEM_TID:
-case OB_ALL_COLUMN_PRIVILEGE_TID:
-case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID:
 case OB_ALL_DATABASE_TID:
-case OB_ALL_TABLE_HISTORY_TID:
-case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID:
-case OB_ALL_JOB_TID:
-case OB_ALL_TENANT_DEPENDENCY_TID:
-case OB_ALL_TABLEGROUP_TID:
-case OB_ALL_TENANT_HISTORY_TID:
 case OB_ALL_TRANSFER_PARTITION_TASK_TID:
 case OB_ALL_SUB_PART_TID:
-case OB_ALL_ROUTINE_TID:
-case OB_ALL_TENANT_DIRECTORY_TID:
-case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID:
 case OB_ALL_TENANT_SNAPSHOT_TID:
-case OB_ALL_DDL_ERROR_MESSAGE_TID:
-case OB_ALL_TENANT_TRIGGER_HISTORY_TID:
-case OB_ALL_CONSTRAINT_TID:
-case OB_ALL_COLL_TYPE_TID:
-case OB_ALL_COLUMN_STAT_HISTORY_TID:
-case OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID:
 case OB_ALL_TENANT_OBJECT_TYPE_TID:
 case OB_ALL_CATALOG_PRIVILEGE_TID:
-case OB_ALL_FOREIGN_KEY_HISTORY_TID:
-case OB_ALL_RLS_GROUP_HISTORY_TID:
-case OB_ALL_SYNONYM_TID:
+case OB_ALL_USER_PROXY_INFO_TID:
+case OB_ALL_FOREIGN_KEY_TID:
+case OB_ALL_KV_TTL_TASK_HISTORY_TID:
+case OB_ALL_DEF_SUB_PART_TID:
+case OB_ALL_DDL_CHECKSUM_TID:
+case OB_ALL_TENANT_OBJAUTH_TID:
+case OB_ALL_PACKAGE_TID:
+case OB_ALL_TYPE_TID:
+case OB_ALL_DBLINK_TID:
 case OB_ALL_MVIEW_REFRESH_RUN_STATS_TID:
+case OB_ALL_SERVER_EVENT_HISTORY_TID:
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID:
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID:
+case OB_ALL_PLAN_BASELINE_ITEM_TID:
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID:
+case OB_ALL_TENANT_DEPENDENCY_TID:
+case OB_ALL_ROUTINE_TID:
+case OB_ALL_CONSTRAINT_TID:
+case OB_ALL_SYNONYM_TID:
+case OB_ALL_PKG_TYPE_TID:
+case OB_ALL_TABLET_TO_LS_TID:
+case OB_ALL_TENANT_KEYSTORE_HISTORY_TID:
+case OB_ALL_TENANT_HISTORY_TID:
+case OB_ALL_TABLE_PRIVILEGE_TID:
+case OB_ALL_FOREIGN_KEY_HISTORY_TID:
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID:
+case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID:
+case OB_ALL_TENANT_TRIGGER_TID:
+case OB_ALL_TENANT_PROFILE_TID:
+case OB_ALL_PKG_COLL_TYPE_TID:
+case OB_ALL_TABLET_REORGANIZE_HISTORY_TID:
+case OB_ALL_KV_TTL_TASK_TID:
+case OB_ALL_DDL_OPERATION_TID:
+case OB_ALL_TABLE_TID:
+case OB_ALL_USER_TID:
+case OB_ALL_DDL_TASK_STATUS_TID:
+case OB_ALL_PART_TID:
+case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID:
+case OB_ALL_TENANT_DIRECTORY_TID:
+case OB_ALL_JOB_TID:
+case OB_ALL_COLUMN_STAT_HISTORY_TID:
+case OB_ALL_TABLEGROUP_TID:
+case OB_ALL_TYPE_ATTR_TID:
+case OB_ALL_COLL_TYPE_TID:
+case OB_ALL_RLS_CONTEXT_HISTORY_TID:
+case OB_ALL_TABLE_STAT_HISTORY_TID:
+case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID:
+case OB_ALL_TENANT_OLS_COMPONENT_TID:
+case OB_ALL_PKG_TYPE_ATTR_TID:
+case OB_ALL_TENANT_OLS_LABEL_TID:
+case OB_ALL_TENANT_KEYSTORE_TID:
+case OB_ALL_EXTERNAL_RESOURCE_TID:
+case OB_ALL_COLUMN_TID:
+case OB_ALL_BACKUP_SET_FILES_TID:
+case OB_ALL_HISTOGRAM_STAT_HISTORY_TID:
+case OB_ALL_TABLE_HISTORY_TID:
+case OB_ALL_COLUMN_PRIVILEGE_TID:
+case OB_ALL_PENDING_TRANSACTION_TID:
+case OB_ALL_DDL_ERROR_MESSAGE_TID:
+case OB_ALL_TENANT_TRIGGER_HISTORY_TID:
+case OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID:
+case OB_ALL_RLS_GROUP_HISTORY_TID:
 case OB_ALL_TENANT_SECURITY_AUDIT_TID:
 case OB_ALL_ROOTSERVICE_JOB_TID:
-case OB_ALL_PENDING_TRANSACTION_TID:
-case OB_ALL_KV_TTL_TASK_HISTORY_TID:
-case OB_ALL_FOREIGN_KEY_TID:
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID:
 
 #endif
 
 
 #ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
 
-case OB_ALL_TABLET_TO_LS_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_LS_IDX_TABLET_TO_LS_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_LS_IDX_TABLET_TO_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_RLS_GROUP_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_RLS_GROUP_IDX_RLS_GROUP_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_DEF_SUB_PART_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_DEF_SUB_PART_IDX_DEF_SUB_PART_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_RLS_CONTEXT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_RLS_POLICY_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_POLICY_HISTORY_IDX_RLS_POLICY_HIS_TABLE_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5766,50 +5773,8 @@ case OB_ALL_RECYCLEBIN_TID: {
   }
   break;
 }
-case OB_ALL_TENANT_KEYSTORE_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_KEYSTORE_HISTORY_IDX_KEYSTORE_HIS_MASTER_KEY_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_IDX_GRANTEE_HIS_ROLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TABLE_STAT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_STAT_HISTORY_IDX_TABLE_STAT_HIS_SAVTIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_CONTEXT_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_CONTEXT_IDX_CTX_NAMESPACE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TABLE_PRIVILEGE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_PRIVILEGE_IDX_TB_PRIV_DB_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_PRIVILEGE_IDX_TB_PRIV_TB_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_DDL_CHECKSUM_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_DDL_CHECKSUM_IDX_DDL_CHECKSUM_TASK_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_PKG_TYPE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_IDX_PKG_DB_TYPE_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_IDX_PKG_TYPE_NAME_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5823,8 +5788,146 @@ case OB_ALL_RLS_POLICY_TID: {
   }
   break;
 }
-case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID))) {
+case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_IDX_GRANTEE_HIS_ROLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_RLS_POLICY_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_POLICY_HISTORY_IDX_RLS_POLICY_HIS_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_ROUTINE_PARAM_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_PARAM_IDX_ROUTINE_PARAM_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DATABASE_PRIVILEGE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DATABASE_PRIVILEGE_IDX_DB_PRIV_DB_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_RLS_CONTEXT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_CONTEXT_IDX_RLS_CONTEXT_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_SEQUENCE_OBJECT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SEQUENCE_OBJECT_IDX_SEQ_OBJ_DB_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_SEQUENCE_OBJECT_IDX_SEQ_OBJ_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_ACQUIRED_SNAPSHOT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_ACQUIRED_SNAPSHOT_IDX_SNAPSHOT_TABLET_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_POLICY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_POLICY_IDX_OLS_POLICY_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_POLICY_IDX_OLS_POLICY_COL_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_MVIEW_REFRESH_STATS_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_END_TIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_MVIEW_END_TIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_CATALOG_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_CATALOG_IDX_CATALOG_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DATABASE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DATABASE_IDX_DB_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_SUB_PART_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SUB_PART_IDX_SUB_PART_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_SNAPSHOT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_SNAPSHOT_IDX_TENANT_SNAPSHOT_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_OBJECT_TYPE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OBJECT_TYPE_IDX_OBJ_TYPE_DB_OBJ_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OBJECT_TYPE_IDX_OBJ_TYPE_OBJ_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_CATALOG_PRIVILEGE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_FOREIGN_KEY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_CHILD_TID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_PARENT_TID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_KV_TTL_TASK_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DEF_SUB_PART_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DEF_SUB_PART_IDX_DEF_SUB_PART_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DDL_CHECKSUM_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DDL_CHECKSUM_IDX_DDL_CHECKSUM_TASK_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5847,48 +5950,6 @@ case OB_ALL_PACKAGE_TID: {
   }
   break;
 }
-case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROOTSERVICE_EVENT_HISTORY_IDX_RS_MODULE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROOTSERVICE_EVENT_HISTORY_IDX_RS_EVENT_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_OLS_COMPONENT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_COMPONENT_IDX_OLS_COM_POLICY_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_TRIGGER_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_TRIGGER_BASE_OBJ_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_DB_TRIGGER_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_TRIGGER_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TYPE_ATTR_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TYPE_ATTR_IDX_TYPE_ATTR_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_MVIEW_REFRESH_STATS_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_END_TIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_MVIEW_END_TIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_TYPE_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TYPE_IDX_DB_TYPE_NAME_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
@@ -5907,35 +5968,17 @@ case OB_ALL_DBLINK_TID: {
   }
   break;
 }
-case OB_ALL_ROUTINE_PARAM_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_PARAM_IDX_ROUTINE_PARAM_NAME_TID))) {
+case OB_ALL_MVIEW_REFRESH_RUN_STATS_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_RUN_STATS_IDX_MVIEW_REFRESH_RUN_STATS_NUM_MVS_CURRENT_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_DATABASE_PRIVILEGE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_DATABASE_PRIVILEGE_IDX_DB_PRIV_DB_NAME_TID))) {
+case OB_ALL_SERVER_EVENT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SERVER_EVENT_HISTORY_IDX_SERVER_MODULE_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
-  break;
-}
-case OB_ALL_TENANT_OLS_LABEL_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_POLICY_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_TAG_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_PKG_COLL_TYPE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_TYPE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TID))) {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SERVER_EVENT_HISTORY_IDX_SERVER_EVENT_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5949,29 +5992,149 @@ case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
   }
   break;
 }
-case OB_ALL_TENANT_KEYSTORE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_KEYSTORE_IDX_KEYSTORE_MASTER_KEY_ID_TID))) {
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_USER_PROXY_INFO_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID))) {
+case OB_ALL_PLAN_BASELINE_ITEM_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_PLAN_BASELINE_ITEM_IDX_SPM_ITEM_SQL_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_PLAN_BASELINE_ITEM_IDX_SPM_ITEM_VALUE_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_COLUMN_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_IDX_TB_COLUMN_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_IDX_COLUMN_NAME_TID))) {
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_IDX_CLIENT_TO_SERVER_SESSION_INFO_CLIENT_SESSION_ID_TID))) {
+case OB_ALL_TENANT_DEPENDENCY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_DEPENDENCY_IDX_DEPENDENCY_REF_OBJ_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_ROUTINE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_DB_ROUTINE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_ROUTINE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_ROUTINE_PKG_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_CONSTRAINT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_CONSTRAINT_IDX_CST_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_SYNONYM_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SYNONYM_IDX_DB_SYNONYM_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_SYNONYM_IDX_SYNONYM_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_PKG_TYPE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_IDX_PKG_DB_TYPE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_IDX_PKG_TYPE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLET_TO_LS_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_LS_IDX_TABLET_TO_LS_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLET_TO_LS_IDX_TABLET_TO_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_KEYSTORE_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_KEYSTORE_HISTORY_IDX_KEYSTORE_HIS_MASTER_KEY_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_HISTORY_IDX_TENANT_DELETED_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLE_PRIVILEGE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_PRIVILEGE_IDX_TB_PRIV_DB_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_PRIVILEGE_IDX_TB_PRIV_TB_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_FOREIGN_KEY_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_HISTORY_IDX_FK_HIS_CHILD_TID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_HISTORY_IDX_FK_HIS_PARENT_TID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROOTSERVICE_EVENT_HISTORY_IDX_RS_MODULE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_ROOTSERVICE_EVENT_HISTORY_IDX_RS_EVENT_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_TRIGGER_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_TRIGGER_BASE_OBJ_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_DB_TRIGGER_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_TRIGGER_IDX_TRIGGER_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_PROFILE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_PROFILE_IDX_PROFILE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_PKG_COLL_TYPE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_TYPE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5987,27 +6150,6 @@ case OB_ALL_TABLET_REORGANIZE_HISTORY_TID: {
 }
 case OB_ALL_KV_TTL_TASK_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_RLS_CONTEXT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_CONTEXT_IDX_RLS_CONTEXT_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_BACKUP_SET_FILES_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_SEQUENCE_OBJECT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_SEQUENCE_OBJECT_IDX_SEQ_OBJ_DB_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_SEQUENCE_OBJECT_IDX_SEQ_OBJ_NAME_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6030,47 +6172,8 @@ case OB_ALL_TABLE_TID: {
   }
   break;
 }
-case OB_ALL_ACQUIRED_SNAPSHOT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_ACQUIRED_SNAPSHOT_IDX_SNAPSHOT_TABLET_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_PROFILE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_PROFILE_IDX_PROFILE_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_USER_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_USER_IDX_UR_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_PKG_TYPE_ATTR_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_ATTR_IDX_PKG_TYPE_ATTR_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_ATTR_IDX_PKG_TYPE_ATTR_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_OLS_POLICY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_POLICY_IDX_OLS_POLICY_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_POLICY_IDX_OLS_POLICY_COL_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_SERVER_EVENT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_SERVER_EVENT_HISTORY_IDX_SERVER_MODULE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_SERVER_EVENT_HISTORY_IDX_SERVER_EVENT_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6087,110 +6190,8 @@ case OB_ALL_PART_TID: {
   }
   break;
 }
-case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_HISTOGRAM_STAT_HISTORY_IDX_HISTOGRAM_STAT_HIS_SAVTIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_CATALOG_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_CATALOG_IDX_CATALOG_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_PLAN_BASELINE_ITEM_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_PLAN_BASELINE_ITEM_IDX_SPM_ITEM_SQL_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_PLAN_BASELINE_ITEM_IDX_SPM_ITEM_VALUE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_COLUMN_PRIVILEGE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_GLOBAL_TRANSACTION_IDX_XA_TRANS_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_DATABASE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_DATABASE_IDX_DB_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TABLE_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_JOB_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_JOB_IDX_JOB_POWNER_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_DEPENDENCY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_DEPENDENCY_IDX_DEPENDENCY_REF_OBJ_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TABLEGROUP_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TABLEGROUP_IDX_TG_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TENANT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_HISTORY_IDX_TENANT_DELETED_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_SUB_PART_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_SUB_PART_IDX_SUB_PART_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_ROUTINE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_DB_ROUTINE_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_ROUTINE_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_ROUTINE_IDX_ROUTINE_PKG_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6201,14 +6202,128 @@ case OB_ALL_TENANT_DIRECTORY_TID: {
   }
   break;
 }
-case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
+case OB_ALL_JOB_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_JOB_IDX_JOB_POWNER_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_TENANT_SNAPSHOT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_SNAPSHOT_IDX_TENANT_SNAPSHOT_NAME_TID))) {
+case OB_ALL_COLUMN_STAT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_STAT_HISTORY_IDX_COLUMN_STAT_HIS_SAVTIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLEGROUP_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLEGROUP_IDX_TG_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TYPE_ATTR_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TYPE_ATTR_IDX_TYPE_ATTR_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_COLL_TYPE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_COLL_TYPE_IDX_COLL_NAME_TYPE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_RLS_CONTEXT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLE_STAT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_STAT_HISTORY_IDX_TABLE_STAT_HIS_SAVTIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_IDX_CLIENT_TO_SERVER_SESSION_INFO_CLIENT_SESSION_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_COMPONENT_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_COMPONENT_IDX_OLS_COM_POLICY_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_PKG_TYPE_ATTR_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_ATTR_IDX_PKG_TYPE_ATTR_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_PKG_TYPE_ATTR_IDX_PKG_TYPE_ATTR_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_LABEL_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_POLICY_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_TAG_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OLS_LABEL_IDX_OLS_LAB_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TENANT_KEYSTORE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_KEYSTORE_IDX_KEYSTORE_MASTER_KEY_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_EXTERNAL_RESOURCE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_COLUMN_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_IDX_TB_COLUMN_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_IDX_COLUMN_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_BACKUP_SET_FILES_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_HISTOGRAM_STAT_HISTORY_IDX_HISTOGRAM_STAT_HIS_SAVTIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TABLE_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_COLUMN_PRIVILEGE_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_PENDING_TRANSACTION_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_PENDING_TRANSACTION_IDX_PENDING_TX_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6225,71 +6340,14 @@ case OB_ALL_TENANT_TRIGGER_HISTORY_TID: {
   }
   break;
 }
-case OB_ALL_CONSTRAINT_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_CONSTRAINT_IDX_CST_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_COLL_TYPE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_COLL_TYPE_IDX_COLL_NAME_TYPE_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_COLUMN_STAT_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_COLUMN_STAT_HISTORY_IDX_COLUMN_STAT_HIS_SAVTIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_ROLE_GRANTEE_MAP_IDX_GRANTEE_ROLE_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
 }
-case OB_ALL_TENANT_OBJECT_TYPE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OBJECT_TYPE_IDX_OBJ_TYPE_DB_OBJ_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OBJECT_TYPE_IDX_OBJ_TYPE_OBJ_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_CATALOG_PRIVILEGE_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_FOREIGN_KEY_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_HISTORY_IDX_FK_HIS_CHILD_TID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_HISTORY_IDX_FK_HIS_PARENT_TID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
 case OB_ALL_RLS_GROUP_HISTORY_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_RLS_GROUP_HISTORY_IDX_RLS_GROUP_HIS_TABLE_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_SYNONYM_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_SYNONYM_IDX_DB_SYNONYM_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_SYNONYM_IDX_SYNONYM_NAME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_MVIEW_REFRESH_RUN_STATS_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_MVIEW_REFRESH_RUN_STATS_IDX_MVIEW_REFRESH_RUN_STATS_NUM_MVS_CURRENT_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6306,26 +6364,8 @@ case OB_ALL_ROOTSERVICE_JOB_TID: {
   }
   break;
 }
-case OB_ALL_PENDING_TRANSACTION_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_PENDING_TRANSACTION_IDX_PENDING_TX_ID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_KV_TTL_TASK_HISTORY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  break;
-}
-case OB_ALL_FOREIGN_KEY_TID: {
-  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_CHILD_TID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_PARENT_TID_TID))) {
-    LOG_WARN("fail to push back index tid", KR(ret));
-  }
-  if (FAILEDx(index_tids.push_back(OB_ALL_FOREIGN_KEY_IDX_FK_NAME_TID))) {
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6336,51 +6376,9 @@ case OB_ALL_FOREIGN_KEY_TID: {
 
 #ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
 
-case OB_ALL_TABLET_TO_LS_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tablet_to_ls_idx_tablet_to_ls_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tablet_to_ls_idx_tablet_to_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_RLS_GROUP_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_rls_group_idx_rls_group_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_DEF_SUB_PART_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_def_sub_part_idx_def_sub_part_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_RLS_CONTEXT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_rls_context_history_idx_rls_context_his_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_RLS_POLICY_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_rls_policy_history_idx_rls_policy_his_table_id_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6417,75 +6415,9 @@ case OB_ALL_RECYCLEBIN_TID: {
   }
   break;
 }
-case OB_ALL_TENANT_KEYSTORE_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_keystore_history_idx_keystore_his_master_key_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_role_grantee_map_history_idx_grantee_his_role_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TABLE_STAT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_table_stat_history_idx_table_stat_his_savtime_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_CONTEXT_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_context_idx_ctx_namespace_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TABLE_PRIVILEGE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_table_privilege_idx_tb_priv_db_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_table_privilege_idx_tb_priv_tb_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_DDL_CHECKSUM_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_ddl_checksum_idx_ddl_checksum_task_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_PKG_TYPE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_type_idx_pkg_db_type_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_type_idx_pkg_type_name_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6507,9 +6439,225 @@ case OB_ALL_RLS_POLICY_TID: {
   }
   break;
 }
-case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
+case OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_history_idx_user_proxy_info_proxy_user_id_history_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_tenant_role_grantee_map_history_idx_grantee_his_role_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_RLS_POLICY_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_rls_policy_history_idx_rls_policy_his_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_ROUTINE_PARAM_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_routine_param_idx_routine_param_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_DATABASE_PRIVILEGE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_database_privilege_idx_db_priv_db_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_RLS_CONTEXT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_rls_context_idx_rls_context_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_SEQUENCE_OBJECT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_sequence_object_idx_seq_obj_db_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_sequence_object_idx_seq_obj_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_ACQUIRED_SNAPSHOT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_acquired_snapshot_idx_snapshot_tablet_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_POLICY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_policy_idx_ols_policy_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_policy_idx_ols_policy_col_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_MVIEW_REFRESH_STATS_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_end_time_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_mview_end_time_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_CATALOG_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_catalog_idx_catalog_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_DATABASE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_database_idx_db_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_transfer_partition_task_idx_transfer_partition_key_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_SUB_PART_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_sub_part_idx_sub_part_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_SNAPSHOT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_snapshot_idx_tenant_snapshot_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_OBJECT_TYPE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_object_type_idx_obj_type_db_obj_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_object_type_idx_obj_type_obj_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_CATALOG_PRIVILEGE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_catalog_privilege_idx_catalog_priv_catalog_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_idx_user_proxy_info_proxy_user_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_FOREIGN_KEY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_child_tid_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_parent_tid_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_KV_TTL_TASK_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_DEF_SUB_PART_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_def_sub_part_idx_def_sub_part_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_DDL_CHECKSUM_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_ddl_checksum_idx_ddl_checksum_task_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6546,75 +6694,6 @@ case OB_ALL_PACKAGE_TID: {
   }
   break;
 }
-case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_rootservice_event_history_idx_rs_module_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_rootservice_event_history_idx_rs_event_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_OLS_COMPONENT_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_component_idx_ols_com_policy_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_TRIGGER_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_trigger_base_obj_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_db_trigger_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_trigger_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TYPE_ATTR_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_type_attr_idx_type_attr_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_MVIEW_REFRESH_STATS_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_end_time_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_mview_end_time_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_TYPE_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_type_idx_db_type_name_schema(index_schema))) {
@@ -6645,54 +6724,24 @@ case OB_ALL_DBLINK_TID: {
   }
   break;
 }
-case OB_ALL_ROUTINE_PARAM_TID: {
+case OB_ALL_MVIEW_REFRESH_RUN_STATS_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_routine_param_idx_routine_param_name_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_run_stats_idx_mview_refresh_run_stats_num_mvs_current_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   break;
 }
-case OB_ALL_DATABASE_PRIVILEGE_TID: {
+case OB_ALL_SERVER_EVENT_HISTORY_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_database_privilege_idx_db_priv_db_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_OLS_LABEL_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_policy_id_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_server_event_history_idx_server_module_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_tag_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_PKG_COLL_TYPE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_type_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_id_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_server_event_history_idx_server_event_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6714,42 +6763,240 @@ case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
   }
   break;
 }
-case OB_ALL_TENANT_KEYSTORE_TID: {
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_keystore_idx_keystore_master_key_id_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   break;
 }
-case OB_ALL_USER_PROXY_INFO_TID: {
+case OB_ALL_PLAN_BASELINE_ITEM_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_idx_user_proxy_info_proxy_user_id_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_plan_baseline_item_idx_spm_item_sql_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_plan_baseline_item_idx_spm_item_value_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   break;
 }
-case OB_ALL_COLUMN_TID: {
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_column_idx_tb_column_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_column_idx_column_name_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   break;
 }
-case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID: {
+case OB_ALL_TENANT_DEPENDENCY_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_client_to_server_session_info_idx_client_to_server_session_info_client_session_id_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_tenant_dependency_idx_dependency_ref_obj_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_ROUTINE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_routine_idx_db_routine_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_routine_idx_routine_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_routine_idx_routine_pkg_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_CONSTRAINT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_constraint_idx_cst_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_SYNONYM_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_synonym_idx_db_synonym_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_synonym_idx_synonym_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_PKG_TYPE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_type_idx_pkg_db_type_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_type_idx_pkg_type_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TABLET_TO_LS_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tablet_to_ls_idx_tablet_to_ls_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tablet_to_ls_idx_tablet_to_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_KEYSTORE_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_keystore_history_idx_keystore_his_master_key_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_history_idx_tenant_deleted_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TABLE_PRIVILEGE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_table_privilege_idx_tb_priv_db_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_table_privilege_idx_tb_priv_tb_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_FOREIGN_KEY_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_foreign_key_history_idx_fk_his_child_tid_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_foreign_key_history_idx_fk_his_parent_tid_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_history_idx_user_proxy_info_proxy_user_id_history_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_rootservice_event_history_idx_rs_module_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_rootservice_event_history_idx_rs_event_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_TRIGGER_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_trigger_base_obj_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_db_trigger_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_trigger_idx_trigger_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_PROFILE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_profile_idx_profile_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_PKG_COLL_TYPE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_type_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_id_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6774,39 +7021,6 @@ case OB_ALL_TABLET_REORGANIZE_HISTORY_TID: {
 case OB_ALL_KV_TTL_TASK_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_kv_ttl_task_idx_kv_ttl_task_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_RLS_CONTEXT_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_rls_context_idx_rls_context_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_BACKUP_SET_FILES_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_backup_set_files_idx_status_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_SEQUENCE_OBJECT_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_sequence_object_idx_seq_obj_db_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_sequence_object_idx_seq_obj_name_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6843,72 +7057,9 @@ case OB_ALL_TABLE_TID: {
   }
   break;
 }
-case OB_ALL_ACQUIRED_SNAPSHOT_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_acquired_snapshot_idx_snapshot_tablet_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_PROFILE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_profile_idx_profile_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_USER_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_user_idx_ur_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_PKG_TYPE_ATTR_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_type_attr_idx_pkg_type_attr_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pkg_type_attr_idx_pkg_type_attr_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_OLS_POLICY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_policy_idx_ols_policy_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_policy_idx_ols_policy_col_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_SERVER_EVENT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_server_event_history_idx_server_module_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_server_event_history_idx_server_event_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6933,168 +7084,9 @@ case OB_ALL_PART_TID: {
   }
   break;
 }
-case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_histogram_stat_history_idx_histogram_stat_his_savtime_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_CATALOG_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_catalog_idx_catalog_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_PLAN_BASELINE_ITEM_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_plan_baseline_item_idx_spm_item_sql_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_plan_baseline_item_idx_spm_item_value_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_COLUMN_PRIVILEGE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_column_privilege_idx_column_privilege_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_global_transaction_idx_xa_trans_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_DATABASE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_database_idx_db_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TABLE_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_table_history_idx_data_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_JOB_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_job_idx_job_powner_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_DEPENDENCY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_dependency_idx_dependency_ref_obj_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TABLEGROUP_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tablegroup_idx_tg_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TENANT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_history_idx_tenant_deleted_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_transfer_partition_task_idx_transfer_partition_key_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_SUB_PART_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_sub_part_idx_sub_part_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_ROUTINE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_routine_idx_db_routine_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_routine_idx_routine_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_routine_idx_routine_pkg_id_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -7110,18 +7102,195 @@ case OB_ALL_TENANT_DIRECTORY_TID: {
   }
   break;
 }
-case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
+case OB_ALL_JOB_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_user_proxy_role_info_history_idx_user_proxy_role_info_proxy_user_id_history_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_job_idx_job_powner_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
   break;
 }
-case OB_ALL_TENANT_SNAPSHOT_TID: {
+case OB_ALL_COLUMN_STAT_HISTORY_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_snapshot_idx_tenant_snapshot_name_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_column_stat_history_idx_column_stat_his_savtime_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TABLEGROUP_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tablegroup_idx_tg_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TYPE_ATTR_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_type_attr_idx_type_attr_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_COLL_TYPE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_coll_type_idx_coll_name_type_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_RLS_CONTEXT_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_rls_context_history_idx_rls_context_his_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TABLE_STAT_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_table_stat_history_idx_table_stat_his_savtime_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_client_to_server_session_info_idx_client_to_server_session_info_client_session_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_COMPONENT_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_component_idx_ols_com_policy_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_PKG_TYPE_ATTR_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_type_attr_idx_pkg_type_attr_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pkg_type_attr_idx_pkg_type_attr_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_OLS_LABEL_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_policy_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_tag_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_ols_label_idx_ols_lab_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TENANT_KEYSTORE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_tenant_keystore_idx_keystore_master_key_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_EXTERNAL_RESOURCE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_external_resource_idx_name_dbid_external_resource_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_COLUMN_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_column_idx_tb_column_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_column_idx_column_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_BACKUP_SET_FILES_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_backup_set_files_idx_status_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_histogram_stat_history_idx_histogram_stat_his_savtime_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_TABLE_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_table_history_idx_data_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_COLUMN_PRIVILEGE_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_column_privilege_idx_column_privilege_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_PENDING_TRANSACTION_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_pending_transaction_idx_pending_tx_id_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -7146,33 +7315,6 @@ case OB_ALL_TENANT_TRIGGER_HISTORY_TID: {
   }
   break;
 }
-case OB_ALL_CONSTRAINT_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_constraint_idx_cst_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_COLL_TYPE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_coll_type_idx_coll_name_type_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_COLUMN_STAT_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_column_stat_history_idx_column_stat_his_savtime_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_role_grantee_map_idx_grantee_role_id_schema(index_schema))) {
@@ -7182,72 +7324,9 @@ case OB_ALL_TENANT_ROLE_GRANTEE_MAP_TID: {
   }
   break;
 }
-case OB_ALL_TENANT_OBJECT_TYPE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_object_type_idx_obj_type_db_obj_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_tenant_object_type_idx_obj_type_obj_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_CATALOG_PRIVILEGE_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_catalog_privilege_idx_catalog_priv_catalog_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_FOREIGN_KEY_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_foreign_key_history_idx_fk_his_child_tid_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_foreign_key_history_idx_fk_his_parent_tid_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
 case OB_ALL_RLS_GROUP_HISTORY_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_rls_group_history_idx_rls_group_his_table_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_SYNONYM_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_synonym_idx_db_synonym_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_synonym_idx_synonym_name_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_MVIEW_REFRESH_RUN_STATS_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_mview_refresh_run_stats_idx_mview_refresh_run_stats_num_mvs_current_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -7272,39 +7351,9 @@ case OB_ALL_ROOTSERVICE_JOB_TID: {
   }
   break;
 }
-case OB_ALL_PENDING_TRANSACTION_TID: {
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
   index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_pending_transaction_idx_pending_tx_id_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_KV_TTL_TASK_HISTORY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  break;
-}
-case OB_ALL_FOREIGN_KEY_TID: {
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_child_tid_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_parent_tid_schema(index_schema))) {
-    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
-    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
-  }
-  index_schema.reset();
-  if (FAILEDx(ObInnerTableSchema::all_foreign_key_idx_fk_name_schema(index_schema))) {
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_role_info_history_idx_user_proxy_role_info_proxy_user_id_history_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -7554,6 +7603,8 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_CATALOG_IDX_CATALOG_NAME_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));

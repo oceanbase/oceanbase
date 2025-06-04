@@ -24,6 +24,7 @@
 #include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_udt_mgr.h"
 #include "share/schema/ob_catalog_schema_struct.h"
+#include "share/schema/ob_external_resource_mgr.h"
 
 namespace oceanbase
 {
@@ -1072,6 +1073,20 @@ public:
                                const ObCatalogSchema *&schema);
   // catalog function end
 
+  // external resource function begin
+  int get_external_resource_schema(const uint64_t &tenant_id,
+                                   const uint64_t &database_id,
+                                   const ObString &name,
+                                   const ObSimpleExternalResourceSchema *&schema);
+  int get_external_resource_schema(const uint64_t &tenant_id,
+                                   const uint64_t &external_resource_id,
+                                   const ObSimpleExternalResourceSchema *&schema);
+  int check_external_resource_exist(uint64_t tenant_id,
+                                    uint64_t database_id,
+                                    ObString name,
+                                    bool &is_exist);
+  // external resource function end
+
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
                        const common::ObString &host_name,
@@ -1160,6 +1175,7 @@ public:
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(package, ObSimplePackageSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
 
   int check_routine_priv(const ObSessionPrivInfo &session_priv,
                          const common::ObIArray<uint64_t> &enable_role_id_array,

@@ -311,3 +311,8 @@
   //Rebuild Tablet
   RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
   RPC_S(PRD force_drop_lonely_lob_aux_table, OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));
+
+  //----Functions for managing external resource----
+  RPC_S(PRD create_external_resource, obrpc::OB_CREATE_EXTERNAL_RESOURCE, (ObCreateExternalResourceArg), obrpc::ObCreateExternalResourceRes);
+  RPC_S(PRD drop_external_resource, obrpc::OB_DROP_EXTERNAL_RESOURCE, (ObDropExternalResourceArg), obrpc::ObDropExternalResourceRes);
+  //----End of functions for managing external resource----
