@@ -38,7 +38,9 @@ class ObExternalTablePartInfoArray;
 namespace sql {
 class ObExprRegexpSessionVariables;
 class ObDecompressor;
-
+// help.aliyun.com   maxcompute user-guide time-zone-configuration-operations
+// 后续应该优化为系统配置项
+const int32_t ODPS_JAVA_SDK_NO_OVERSEA_OFFSET = (8 * 60 * 60);
 class ObExternalDataAccessDriver
 {
 public:

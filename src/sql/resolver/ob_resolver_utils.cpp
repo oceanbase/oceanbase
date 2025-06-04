@@ -5372,7 +5372,19 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
     }
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
     file_column_expr->set_accuracy(column_schema->get_accuracy());
-    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+    if (column_schema->is_collection()) {
+      uint16_t subschema_id = 0;
+      if (OB_FAIL(generate_subschema_id(const_cast<ObSQLSessionInfo&>(session_info),
+                                        column_schema->get_extended_type_info(),
+                                        subschema_id))) {
+        LOG_WARN("generate subschema id failed", K(ret));
+      } else {
+        file_column_expr->set_subschema_id(subschema_id);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
       expr = file_column_expr;
@@ -10015,6 +10027,35 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
       }
       case ObItemType::T_COLLECT_STATISTICS_ON_CREATE: {
         format.odps_format_.collect_statistics_on_create_ = node->children_[0]->value_;
+        break;
+      }
+      case ObItemType::T_SPLIT_ACTION: {
+        uint64_t data_version = 0;
+        uint64_t tenant_id = OB_INVALID_ID;
+        if (OB_ISNULL(params.session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexcepted null ptr", K(ret));
+        } else if (FALSE_IT(tenant_id = params.session_info_->get_effective_tenant_id())) {
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("failed to get data version", K(ret));
+        } else if (data_version < DATA_VERSION_4_4_0_0 || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support odps external table under CLUSTER_VERSION_4_4_0_0 or data version uner DATA_VERSION_4_4_0_0", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
+        } else {
+          ObString temp_split_mode = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+          if (temp_split_mode.empty()) {
+            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::TUNNEL_API;
+          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::TUNNEL_API)) {
+            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::TUNNEL_API;
+          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::BYTE)) {
+            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::BYTE;
+          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::ROW)) {
+            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+          }
+        }
         break;
       }
       case T_PROJECT: {

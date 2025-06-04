@@ -563,7 +563,7 @@ int JniWriter::do_close()
 
 JNIWriterPtr create_odps_jni_writer()
 {
-  const char *writer_factory_class = "com/oceanbase/odps/utils/OdpsTunnelConnectorFactory";
+  const char *writer_factory_class = "com/oceanbase/external/odps/utils/OdpsTunnelConnectorFactory";
   return std::make_shared<JniWriter>(writer_factory_class);
 }
 

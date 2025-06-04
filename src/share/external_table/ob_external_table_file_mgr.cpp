@@ -38,6 +38,8 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_write_string(allocator, other.file_url_, this->file_url_))) {
     LOG_WARN("fail to write string", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.session_id_, this->session_id_))) {
+    LOG_WARN("failed to write session id string", K(ret));
   } else {
     this->file_id_ = other.file_id_;
     this->part_id_ = other.part_id_;
@@ -48,6 +50,8 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
@@ -239,6 +243,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
   if (!is_odps_table) {
     OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
     OZ (ObExternalTableUtils::collect_external_file_list(
+                                                        ctx.get_my_session(),
                                                         tenant_id,
                                                         das_ctdef.ref_table_id_,
                                                         das_ctdef.external_file_location_.str_,
@@ -1582,6 +1587,7 @@ int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
   CK (GCTX.location_service_);
   OZ (exec_ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
   OZ (ObExternalTableUtils::collect_external_file_list(
+              exec_ctx.get_my_session(),
               tenant_id,
               table_schema->get_table_id(),
               table_schema->get_external_file_location(),
@@ -1729,7 +1735,6 @@ int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, cons
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
 
 }
 }

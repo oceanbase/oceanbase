@@ -28,7 +28,9 @@ namespace sql
 
 class ObJavaEnv {
 public:
-  ObJavaEnv() : is_inited_(false) {}
+  ObJavaEnv() : is_inited_(false) {
+    arena_alloc_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(OB_SYS_TENANT_ID, "JavaHomeEnv")));
+  }
 
 public:
   static ObJavaEnv &getInstance();

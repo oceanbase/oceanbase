@@ -1124,6 +1124,28 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
 };
+class ObConfigJniTransDataParamsChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigJniTransDataParamsChecker() {}
+  virtual ~ObConfigJniTransDataParamsChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  static const ObString arrow_table_str_;
+  static const ObString off_heap_table_str_;
+  DISALLOW_COPY_AND_ASSIGN(ObConfigJniTransDataParamsChecker);
+};
+class ObConfigStorageAPIParamsChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigStorageAPIParamsChecker() {}
+  virtual ~ObConfigStorageAPIParamsChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigStorageAPIParamsChecker);
+};
 
 class ObConfigEnableAutoSplitChecker : public ObConfigChecker
 {

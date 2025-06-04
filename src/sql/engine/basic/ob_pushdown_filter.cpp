@@ -302,6 +302,26 @@ int ObPushdownWhiteFilterNode::get_filter_val_meta(common::ObObjMeta &obj_meta) 
   return ret;
 }
 
+int ObPushdownWhiteFilterNode::get_filter_in_val_meta(int64_t arg_idx, common::ObObjMeta &obj_meta) const
+{
+  int ret = OB_SUCCESS;
+  const ObExpr *expr = nullptr;
+  if (OB_UNLIKELY(op_type_ != WHITE_OP_IN) || OB_UNLIKELY(nullptr == expr_ || 2 != expr_->arg_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected filter expr", K(ret), K_(op_type), KP_(expr));
+  } else if (OB_ISNULL(expr = expr_->args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null child expr", K(ret));
+  } else {
+    obj_meta = expr->args_[arg_idx]->obj_meta_;
+    if (obj_meta.is_decimal_int()) {
+      obj_meta.set_stored_precision(MIN(OB_MAX_DECIMAL_PRECISION,
+                                        expr->args_[arg_idx]->datum_meta_.precision_));
+    }
+  }
+  return ret;
+}
+
 bool ObPushdownFilterConstructor::can_pushdown_json_expr(const ObRawExpr &json_expr) const
 {
   bool res = false;

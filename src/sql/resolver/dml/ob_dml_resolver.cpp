@@ -4857,7 +4857,11 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
   oceanbase::sql::ObExprRegexpSessionVariables regexp_vars;
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+    if (OB_ISNULL(THIS_WORKER.get_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexeception null session");
+    } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+              THIS_WORKER.get_session(),
               MTL_ID(),
               table_schema.get_table_id(),
               table_schema.get_external_file_location(),
@@ -4947,6 +4951,7 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
     } else if (OB_FAIL(session_info_->get_regexp_session_vars(regexp_vars))) {
       LOG_WARN("failed to get regexp session vars", K(ret));
     } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+              session_info_,
               session_info_->get_effective_tenant_id(),
               table_schema.get_table_id(),
               table_schema.get_external_file_location(),

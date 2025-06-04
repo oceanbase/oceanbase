@@ -1068,6 +1068,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_odps_table_row_iter.cpp
   engine/table/ob_file_prefetch_buffer.cpp
   engine/table/ob_odps_jni_table_row_iter.cpp
+  engine/table/ob_odps_table_utils.cpp
   engine/table/ob_file_prebuffer.cpp
 )
 

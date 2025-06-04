@@ -586,6 +586,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     ObSqlString tmp;
     OZ (my_session->get_regexp_session_vars(regexp_vars));
     OZ (ObExternalTableUtils::collect_external_file_list(
+              ctx.get_my_session(),
               table_schema.get_tenant_id(), -1 /*table id(UNUSED)*/,
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
@@ -1022,6 +1023,7 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
       CK (GCTX.location_service_);
       OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
       OZ (ObExternalTableUtils::collect_external_file_list(
+                  ctx.get_my_session(),
                   stmt.get_tenant_id(),
                   arg.alter_table_schema_.get_table_id(),
                   arg.alter_table_schema_.get_external_file_location(),
@@ -1158,6 +1160,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
           }
           OZ (my_session->get_regexp_session_vars(regexp_vars));
           OZ (ObExternalTableUtils::collect_external_file_list(
+                    ctx.get_my_session(),
                     alter_table_arg.alter_table_schema_.get_tenant_id(), alter_table_arg.alter_table_schema_.get_table_id(),
                     alter_table_arg.alter_table_schema_.get_external_file_location(),
                     alter_table_arg.alter_table_schema_.get_external_file_location_access_info(),

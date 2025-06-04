@@ -30,8 +30,18 @@ class ObColumnSchemaV2;
 namespace sql
 {
 class ObDataInFileStruct;
+struct ObODPSGeneralFormatParam {
+  const static ObString TUNNEL_API;
+  const static ObString BYTE;
+  const static ObString ROW;
+};
 
 struct ObODPSGeneralFormat {
+  enum ApiMode {
+    TUNNEL_API = 0,
+    BYTE,
+    ROW,
+  };
   ObODPSGeneralFormat() :
     access_type_(),
     access_id_(),
@@ -45,10 +55,10 @@ struct ObODPSGeneralFormat {
     quota_(),
     compression_code_(),
     collect_statistics_on_create_(false),
-    region_()
+    region_(),
+    api_mode_(ApiMode::TUNNEL_API)
   {
   }
-
   int deep_copy_str(const ObString &src,
                     ObString &dest);
   int deep_copy(const ObODPSGeneralFormat &src);
@@ -70,6 +80,7 @@ struct ObODPSGeneralFormat {
     "COMPRESSION_CODE",
     "COLLECT_STATISTICS_ON_CREATE",
     "REGION",
+    "API_MODE",
   };
   common::ObString access_type_;
   common::ObString access_id_;
@@ -84,12 +95,13 @@ struct ObODPSGeneralFormat {
   common::ObString compression_code_;
   bool collect_statistics_on_create_;
   common::ObString region_;
+  ApiMode api_mode_;
   common::ObArenaAllocator arena_alloc_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
                K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
-               K_(compression_code), K_(collect_statistics_on_create), K_(region));
+               K_(compression_code), K_(collect_statistics_on_create), K_(region), K(api_mode_));
   OB_UNIS_VERSION(1);
 };
 

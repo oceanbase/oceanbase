@@ -653,6 +653,7 @@ int ObExternalTableAccessService::table_scan(
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(row_iter->init(&scan_param))) {
+      row_iter->~ObExternalTableRowIterator();
       LOG_WARN("fail to open iter", K(ret));
     } else {
       result = row_iter;

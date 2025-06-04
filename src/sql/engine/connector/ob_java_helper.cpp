@@ -235,7 +235,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
   int ret = OB_SUCCESS;
   const char *env_var_name = "LD_LIBRARY_PATH";
   char *env_str = getenv(env_var_name);
-  LOG_WARN("LD_LIBRARY_PATH: ", K(ObString(env_str)));
+  LOG_INFO("LD_LIBRARY_PATH: ", K(ObString(env_str)));
   bool found = false;
   if (OB_ISNULL(env_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -703,10 +703,8 @@ int JVMFunctionHelper::do_init_() {
     LOG_WARN("already inited jni env, but it is null", K(ret));
   } else if (OB_FAIL(init_classes())) {
     LOG_WARN("failed to init useful classes", K(ret));
-  } else { /* do nothing */}
-
-  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
+    ret = OB_JNI_JAVA_EXCEPTION_ERROR;
     LOG_WARN("current env loaded with unexpected jar version", K(ret));
   }
 

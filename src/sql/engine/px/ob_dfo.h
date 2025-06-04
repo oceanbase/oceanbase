@@ -730,6 +730,7 @@ public:
   }
   const ObString &query_sql() const { return query_sql_; }
   void set_query_sql(const ObString &query_sql) { query_sql_ = query_sql; }
+  ObIAllocator& get_allocator() { return allocator_; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
