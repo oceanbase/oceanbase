@@ -669,6 +669,13 @@ int ObPxCleanDtlIntermResP::process()
 {
   int ret = OB_SUCCESS;
   dtl::ObDTLIntermResultKey key;
+#ifdef ERRSIM
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("rpc not erase_dtl_interm_result by design", K(ret));
+    return OB_SUCCESS;
+  }
+#endif
   int64_t batch_size = 0 == arg_.batch_size_ ? 1 : arg_.batch_size_;
   for (int64_t i = 0; i < arg_.info_.count(); i++) {
     ObPxCleanDtlIntermResInfo &info = arg_.info_.at(i);

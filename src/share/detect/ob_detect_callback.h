@@ -79,7 +79,7 @@ public:
   TO_STRING_KV(K_(detectable_id), K_(activate_tm));
 };
 
-class ObIDetectCallback
+class ObIDetectCallback : public common::ObDLinkBase<ObIDetectCallback>
 {
 public:
   // constructor for pass peer_states from derived class
@@ -109,6 +109,10 @@ public:
   const common::ObCurTraceId::TraceId & get_trace_id() { return trace_id_; }
 
   bool alloc_succ() { return alloc_succ_; }
+  uint64_t get_sequence_id() { return sequence_id_; }
+  void set_sequence_id(uint64_t v) { sequence_id_ = v; }
+  void set_executed() { executed_ = true; }
+  bool is_executed() { return executed_; }
   inline int64_t to_string(char *buf, const int64_t len) const { return 0; }
 private:
   int64_t ref_count_;
@@ -117,6 +121,8 @@ protected:
   common::ObAddr from_svr_addr_; // in which server the task is detected as finished
   common::ObCurTraceId::TraceId trace_id_;
   bool alloc_succ_;
+  uint64_t sequence_id_;
+  bool executed_;
 public:
   ObDetectableIdDNode d_node_; // used for delay detect
 };
