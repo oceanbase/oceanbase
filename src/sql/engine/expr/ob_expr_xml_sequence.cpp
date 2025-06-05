@@ -142,7 +142,6 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
     OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                          ns,
-                                         allocator,
                                          *coll,
                                          xml_tree->size()));
 

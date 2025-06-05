@@ -58,6 +58,7 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
       }
       OX (new (allocator_)ObVSliceAlloc(memattr_, BLOCK_SIZE, alloc_mgr_));
     }
+    OX (use_malloc_ = (-EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH)) > 0);
     OX (is_inited_ = true);
   }
 
@@ -77,8 +78,7 @@ void* ObPLAllocator1::alloc(const int64_t size, const ObMemAttr &attr)
     if (OB_UNLIKELY(OB_FAIL(ret))) {
       // do nothing
     } else {
-      int64_t use_ob_malloc = -EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH);
-      if (use_ob_malloc > 0) {
+      if (use_malloc_) {
         ptr = ob_malloc(size, attr);
       } else {
         SMART_CALL(OB_NOT_NULL(ptr = allocator_->alloc(size, attr)));
@@ -102,8 +102,7 @@ void* ObPLAllocator1::realloc(const void *ptr, const int64_t size, const ObMemAt
     if (OB_UNLIKELY(OB_FAIL(ret))) {
       // do nothing
     } else {
-      int64_t use_ob_malloc = -EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH);
-      if (use_ob_malloc > 0) {
+      if (use_malloc_) {
         newptr = ob_realloc(const_cast<void *>(ptr), size, attr);
       } else {
         SMART_CALL(OB_NOT_NULL(newptr = allocator_->realloc(ptr, size, attr)));
@@ -122,8 +121,7 @@ void ObPLAllocator1::free(void *ptr)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("must be init ObPLAllocator1, before using it to free", K(ret));
   } else {
-    int64_t use_ob_malloc = -EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH);
-    if (use_ob_malloc > 0) {
+    if (use_malloc_) {
       ob_free(ptr);
     } else {
       SMART_CALL(FALSE_IT(allocator_->free(ptr)));

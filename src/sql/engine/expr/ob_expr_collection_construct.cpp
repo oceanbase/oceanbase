@@ -268,7 +268,6 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     // recursive construction is not needed
     OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                          ns,
-                                         alloc,
                                          *coll,
                                          expr.arg_cnt_));
     if (OB_SUCC(ret)) {

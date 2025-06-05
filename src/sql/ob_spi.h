@@ -446,28 +446,23 @@ public:
   static int spi_set_package_variable(pl::ObPLExecCtx *ctx,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value,
-                             bool need_deep_copy = false);
+                             const ObObj &value);
   static int spi_set_package_variable(ObExecContext *exec_ctx,
                              pl::ObPLPackageGuard *guard,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value,
-                             ObIAllocator *allocator = NULL,
-                             bool need_deep_copy = false);
+                             const ObObj &value);
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);
   static int spi_set_variable_to_expr(pl::ObPLExecCtx *ctx,
                                       const int64_t expr_idx,
                                       const ObObjParam *value,
-                                      bool is_default = false,
-                                      bool need_copy = false);
+                                      bool is_default = false);
   static int spi_set_variable(pl::ObPLExecCtx *ctx,
                               const ObSqlExpression* expr,
                               const ObObjParam *value,
-                              bool is_default = false,
-                              bool need_copy = false);
+                              bool is_default = false);
   static int spi_query_into_expr_idx(pl::ObPLExecCtx *ctx,
                                      const char* sql,
                                      int64_t type,
@@ -733,7 +728,6 @@ public:
 
   static int spi_set_collection(int64_t tenant_id,
                                   const pl::ObPLINS *ns,
-                                  ObIAllocator &allocator,
                                   pl::ObPLCollection &coll,
                                   int64_t n,
                                   bool extend_mode = false);
@@ -1267,12 +1261,6 @@ private:
                                      const ObDataType *return_types = nullptr,
                                      int64_t return_type_count = 0,
                                      bool is_type_record = false);
-
-
-  static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
-                                    const ObSqlExpression &expr,
-                                    ObIArray<ObObj> &src_array,
-                                    ObIArray<ObObj> &dst_array);
 
   static int prepare_cursor_parameters(pl::ObPLExecCtx *ctx,
                                     ObSQLSessionInfo &session_info,

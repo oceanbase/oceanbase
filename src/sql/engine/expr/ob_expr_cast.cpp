@@ -1024,7 +1024,6 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                                       ns,
-                                                      alloc,
                                                       *coll,
                                                       data_arr.count()))) {
     LOG_WARN("failed to set collection", K(ret));

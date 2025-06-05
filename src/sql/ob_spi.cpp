@@ -1297,8 +1297,7 @@ int ObSPIService::check_and_deep_copy_result(ObIAllocator &alloc,
 int ObSPIService::spi_set_package_variable(
   ObExecContext *exec_ctx,
   ObPLPackageGuard *guard,
-  uint64_t package_id, int64_t var_idx, const ObObj &value,
-  ObIAllocator *allocator, bool need_deep_copy)
+  uint64_t package_id, int64_t var_idx, const ObObj &value)
 {
   int ret = OB_SUCCESS;
   ObPL *pl_engine = NULL;
@@ -1331,24 +1330,19 @@ int ObSPIService::spi_set_package_variable(
 }
 
 int ObSPIService::spi_set_package_variable(
-  ObPLExecCtx *ctx, uint64_t package_id, int64_t var_idx, const ObObj &value,
-  bool need_deep_copy)
+  ObPLExecCtx *ctx, uint64_t package_id, int64_t var_idx, const ObObj &value)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator *allocator = NULL;
-  if (need_deep_copy) {
-    OZ (spi_get_package_allocator(ctx, package_id, allocator));
-  }
+
   OZ (spi_set_package_variable(
-    ctx->exec_ctx_, ctx->guard_, package_id, var_idx, value, allocator, need_deep_copy));
+    ctx->exec_ctx_, ctx->guard_, package_id, var_idx, value));
   return ret;
 }
 
 int ObSPIService::spi_set_variable_to_expr(ObPLExecCtx *ctx,
                                           const int64_t expr_idx,
                                            const ObObjParam *value,
-                                          bool is_default,
-                                          bool need_copy)
+                                          bool is_default)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(ctx));
@@ -1357,15 +1351,14 @@ int ObSPIService::spi_set_variable_to_expr(ObPLExecCtx *ctx,
   CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
   const ObSqlExpression *expr = nullptr;
   OX (expr = ctx->func_->get_expressions().at(expr_idx));
-  OZ (spi_set_variable(ctx, expr, value, is_default, need_copy));
+  OZ (spi_set_variable(ctx, expr, value, is_default));
   return ret;
 }
 
 int ObSPIService::spi_set_variable(ObPLExecCtx *ctx,
                                    const ObSqlExpression* expr,
                                    const ObObjParam *value,
-                                   bool is_default,
-                                   bool need_copy)
+                                   bool is_default)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx) || OB_ISNULL(expr) || OB_ISNULL(value)) {
@@ -1400,8 +1393,7 @@ int ObSPIService::spi_set_variable(ObPLExecCtx *ctx,
           ctx,
           expr->get_expr_items().at(1).get_obj().get_uint64(), // pkg id
           expr->get_expr_items().at(2).get_obj().get_int(), // var idx
-          *value, // value
-          need_copy));
+          *value));
     } else if (T_OP_GET_SUBPROGRAM_VAR == expr_type) {
       ObSQLSessionInfo *session_info = NULL;
       uint64_t package_id = OB_INVALID_ID;
@@ -4593,7 +4585,7 @@ int ObSPIService::spi_pipe_row_to_result(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(coll = reinterpret_cast<ObPLNestedTable *>(ctx->result_->get_ext())));
   OX (coll->is_inited() ? (void)NULL : coll->set_inited());
   OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                           ctx, *(ctx->allocator_), *coll, 1, true));
+                           ctx, *coll, 1, true));
   CK (coll->get_count() >= 1);
   CK (coll->get_column_count() > 0);
   if (OB_SUCC(ret)) {
@@ -4743,7 +4735,6 @@ int ObSPIService::spi_construct_collection(
       CK (OB_NOT_NULL(coll = reinterpret_cast<ObPLCollection *>(ptr)));
       OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                              ctx,
-                             *allocator,
                              *coll,
                              0,
                              false));
@@ -4863,18 +4854,9 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
       ret = OB_READ_NOTHING;
       LOG_WARN("element already deleted!", K(ret), K(i), K(is_deleted));
     } else if (n > 0) {
-      ObIAllocator *allocator = NULL;
-      if (OB_INVALID_ID != package_id) {
-        OZ (spi_get_package_allocator(ctx, package_id, allocator));
-      } else {
-        allocator = ctx->allocator_;
-      }
       if (OB_SUCC(ret)) {
-        if (OB_ISNULL(allocator)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("allocator is NULL", K(ctx), K(column_count), K(n), K(i), K(package_id), K(ret));
-        } else if (OB_FAIL(spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                                ctx, *allocator, *table, n, true))) {
+        if (OB_FAIL(spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
+                                                ctx, *table, n, true))) {
           LOG_WARN("failed to spi_set_collection_data", K(ctx), K(column_count), K(n), K(i), K(package_id), K(ret));
         } else if (OB_SUCC(ret) && OB_NOT_NULL(i_expr)){
           // fill i'th elem into the extended pos;
@@ -5536,14 +5518,13 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
 
 int ObSPIService::spi_set_collection(int64_t tenant_id,
                                        const ObPLINS *ns,
-                                       ObIAllocator &allocator,
                                        ObPLCollection &coll,
                                        int64_t n,
                                        bool extend_mode)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(tenant_id, ns, allocator, coll, n, extend_mode);
+  UNUSEDx(tenant_id, ns, coll, n, extend_mode);
 #else
 #define CHECK_VARRAY_CAPACITY \
   do { \
@@ -5749,7 +5730,7 @@ int ObSPIService::spi_reset_composite(ObPLComposite *composite,
       * */
       ObPLCollection *coll = static_cast<ObPLCollection *>(composite);
       if (OB_NOT_NULL(coll->get_allocator())) {
-        OZ (spi_set_collection(MTL_ID(), NULL, *(coll->get_allocator()), *coll, 0, false));
+        OZ (spi_set_collection(MTL_ID(), NULL, *coll, 0, false));
         OX (coll->set_count(OB_INVALID_COUNT));
       } else {
         CK (coll->get_count() == 0 || coll->get_count() == OB_INVALID_COUNT);
@@ -5770,7 +5751,7 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
   int ret = OB_SUCCESS;
   int64_t old_capacity = assoc_array.get_inner_capacity();
   assoc_array.is_inited() ? (void)NULL : assoc_array.set_inited();
-  if (OB_FAIL(spi_set_collection(tenant_id, ns, allocator, assoc_array, n, true))) {
+  if (OB_FAIL(spi_set_collection(tenant_id, ns, assoc_array, n, true))) {
     LOG_WARN("failed to spi_reset_composite", K(assoc_array), K(ret));
   } else if (OB_ISNULL(assoc_array.get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7111,7 +7092,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                   || (NULL != implicit_cursor && 0 == implicit_cursor->get_bulk_rowcount_count()))) {
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                     ctx, *allocator, *table, 0));
+                                     ctx, *table, 0));
           }
         }
       }
@@ -7364,7 +7345,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                 || (NULL != implicit_cursor && 0 == implicit_cursor->get_bulk_rowcount_count()))) {
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                                     ctx, *allocator, *table, 0));
+                                     ctx, *table, 0));
           }
           OZ (get_package_var_info_by_expr(result_expr, package_var_info.first, package_var_info.second));
           if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
@@ -7677,40 +7658,6 @@ int ObSPIService::collect_cells(pl::ObPLExecCtx &ctx,
     }
   }
   LOG_DEBUG("spi get result", K(result), K(ret));
-  return ret;
-}
-
-int ObSPIService::check_package_dest_and_deep_copy(
-  ObPLExecCtx &ctx,
-  const ObSqlExpression &expr, ObIArray<ObObj> &src_array, ObIArray<ObObj> &dst_array)
-{
-  int ret = OB_SUCCESS;
-  if (is_obj_access_expression(expr)) {
-    if (expr.get_expr_items().count() > 1
-        && T_OP_GET_PACKAGE_VAR == expr.get_expr_items().at(1).get_item_type()
-        && OB_NOT_NULL(expr.get_expr_items().at(1).get_expr_operator())
-        && expr.get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
-      uint16_t param_pos = expr.get_expr_items().at(1).get_param_idx();
-      uint64_t package_id = OB_INVALID_ID;
-      ObIAllocator *allocator = NULL;
-      OX (package_id = expr.get_expr_items().at(param_pos).get_obj().get_uint64());
-      OZ (spi_get_package_allocator(&ctx, package_id, allocator));
-      CK (OB_NOT_NULL(allocator));
-      for (int64_t i = 0; OB_SUCC(ret) && i < src_array.count(); ++i) {
-        ObObj tmp;
-        if (src_array.at(i).is_pl_extend()) {
-          pl::ObUserDefinedType::deep_copy_obj(*allocator, src_array.at(i), tmp);
-        } else {
-          OZ (ob_write_obj(*allocator, src_array.at(i), tmp));
-        }
-        OZ (dst_array.push_back(tmp));
-      }
-    } else {
-      OZ (dst_array.assign(src_array));
-    }
-  } else {
-    OZ (dst_array.assign(src_array));
-  }
   return ret;
 }
 
@@ -8069,6 +8016,16 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       ObIAllocator *pkg_allocator = NULL;
       ObIAllocator *composite_allocator = nullptr;
       ObPlCompiteWrite *composite_write = nullptr;
+      if (result_expr->get_expr_items().count() > 1
+          && T_OP_GET_PACKAGE_VAR == result_expr->get_expr_items().at(1).get_item_type()
+          && OB_NOT_NULL(result_expr->get_expr_items().at(1).get_expr_operator())
+          && result_expr->get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
+        uint16_t param_pos = result_expr->get_expr_items().at(1).get_param_idx();
+        uint64_t package_id = OB_INVALID_ID;
+        OX (package_id = result_expr->get_expr_items().at(param_pos).get_obj().get_uint64());
+        OZ (spi_get_package_allocator(ctx, package_id, pkg_allocator));
+        CK (OB_NOT_NULL(pkg_allocator));
+      }
       OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
       OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
       CK (OB_NOT_NULL(composite_write));
@@ -8083,16 +8040,6 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         OX (composite_allocator = record->get_allocator());
       }
       if (OB_SUCC(ret)) {
-        if (result_expr->get_expr_items().count() > 1
-            && T_OP_GET_PACKAGE_VAR == result_expr->get_expr_items().at(1).get_item_type()
-            && OB_NOT_NULL(result_expr->get_expr_items().at(1).get_expr_operator())
-            && result_expr->get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
-          uint16_t param_pos = result_expr->get_expr_items().at(1).get_param_idx();
-          uint64_t package_id = OB_INVALID_ID;
-          OX (package_id = result_expr->get_expr_items().at(param_pos).get_obj().get_uint64());
-          OZ (spi_get_package_allocator(ctx, package_id, pkg_allocator));
-          CK (OB_NOT_NULL(pkg_allocator));
-        }
         ObIAllocator *alloc = nullptr;
         if (OB_SUCC(ret)) {
           if (nullptr != composite_allocator) {
@@ -8238,7 +8185,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           int64_t nested_count = 0;
           OX (nested_count = ctx->exec_ctx_->get_my_session()->get_nested_count());
           OZ (ctx->exec_ctx_->get_my_session()->save_session(session_value));
-          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false));
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = ctx->exec_ctx_->get_my_session()->restore_session(session_value))) {
             LOG_WARN("failed to restore session", K(tmp_ret));

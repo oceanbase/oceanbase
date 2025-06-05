@@ -2791,7 +2791,6 @@ int ObCollectionType::init_session_var(const ObPLResolveCtx &resolve_ctx,
       CK (OB_NOT_NULL(exec_ctx.get_my_session()));
       OZ (ObSPIService::spi_set_collection(exec_ctx.get_my_session()->get_effective_tenant_id(),
                                             &resolve_ctx,
-                                            obj_allocator,
                                             *coll,
                                             0,
                                             false));
@@ -2944,7 +2943,7 @@ int ObCollectionType::deserialize(
       }
       OX (table->set_count(0));
       OZ (ObSPIService::spi_set_collection(
-        OB_INVALID_ID, &resolve_ctx, *table->get_allocator(), *table, count, true));
+        OB_INVALID_ID, &resolve_ctx, *table, count, true));
     }
 
     if (OB_SUCC(ret)) {
@@ -4857,7 +4856,7 @@ int ObPLCollection::deserialize(common::ObIAllocator &allocator,
       OB_INVALID_ID, NULL, *get_allocator(), *assoc_table, count));
   } else {
     OZ (ObSPIService::spi_set_collection(
-      OB_INVALID_ID, NULL, *get_allocator(), *this, count, true));
+      OB_INVALID_ID, NULL, *this, count, true));
   }
   CK (OB_NOT_NULL(get_data()));
 

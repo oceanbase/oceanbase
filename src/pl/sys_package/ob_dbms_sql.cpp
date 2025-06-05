@@ -1369,7 +1369,6 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     CK (OB_NOT_NULL(table));
     OZ (ObSPIService::spi_set_collection(exec_ctx.get_my_session()->get_effective_tenant_id(),
                                              NULL,
-                                             exec_ctx.get_allocator(),
                                              *table,
                                              cursor->get_field_columns().count(),
                                              true));

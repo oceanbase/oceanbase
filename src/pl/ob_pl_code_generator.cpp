@@ -4055,8 +4055,6 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
-      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_set_variable_to_expr"), ft, spi_service_.spi_set_variable_to_expr_))) {
@@ -7361,7 +7359,7 @@ int ObPLCodeGenerator::generate_set_variable(int64_t expr,
   int ret = OB_SUCCESS;
   ObSEArray<ObLLVMValue, 5> args;
   ObLLVMValue expr_idx;
-  ObLLVMValue is_default_value, need_copy;
+  ObLLVMValue is_default_value;
   ObLLVMValue result;
   if (OB_FAIL(args.push_back(get_vars().at(CTX_IDX)))) { //PL的执行环境
     LOG_WARN("push_back error", K(ret));
@@ -7374,10 +7372,6 @@ int ObPLCodeGenerator::generate_set_variable(int64_t expr,
   } else if (OB_FAIL(helper_.get_int8(is_default, is_default_value))) {
     LOG_WARN("failed tio get int8", K(is_default), K(ret));
   } else if (OB_FAIL(args.push_back(is_default_value))) { //is_default
-    LOG_WARN("push_back error", K(ret));
-  } else if (OB_FAIL(helper_.get_int8(false, need_copy))) {
-    LOG_WARN("failed tio get int8", K(ret));
-  } else if (OB_FAIL(args.push_back(need_copy))) {
     LOG_WARN("push_back error", K(ret));
   } else if (OB_FAIL(get_helper().create_call(ObString("spi_set_variable_to_expr"), get_spi_service().spi_set_variable_to_expr_, args, result))) {
     LOG_WARN("failed to create call", K(ret));
