@@ -273,8 +273,10 @@ int ObSharedNothingTmpFileMetaTree::try_to_insert_items_to_array_(
   } else if (!data_item_array_.empty()) {
     const ObSharedNothingTmpFileDataItem &last_item = data_item_array_.at(data_item_array_.count() - 1);
     if (OB_UNLIKELY(data_items.at(0).virtual_page_id_ != last_item.virtual_page_id_ + last_item.physical_page_num_)) {
+      // This error may occur due to a failure in the previous flush task's insert_item,
+      // flush mgr will automatically retry to resolve the issue.
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "unexpected data_items or data_item_array_", KR(ret), K(fd_), K(data_items), K(last_item));
+      STORAGE_LOG(WARN, "unexpected data_items or data_item_array_", KR(ret), K(fd_), K(data_items), K(last_item));
     }
   }
   if (OB_SUCC(ret)) {
