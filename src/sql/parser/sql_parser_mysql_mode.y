@@ -21506,6 +21506,16 @@ ALL
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = CACHE_TYPE_LIB_CACHE;
 }
+| NAME_OB
+{
+  if (0 == strcasecmp($1->str_value_, "RESULT")) {
+    malloc_terminal_node($$, result->malloc_pool_, T_INT);
+    $$->value_ = CACHE_TYPE_RESULT;
+  } else {
+    yyerror(&@1, result, "get unexpected error");
+    YYABORT_PARSE_SQL_ERROR;
+  }
+}
 ;
 
 balance_task_type:

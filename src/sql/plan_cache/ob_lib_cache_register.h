@@ -24,6 +24,7 @@ LIB_CACHE_OBJ_DEF(NS_SPM, "SPM", ObBaselineKey, ObSpmSet, ObPlanBaselineItem, "O
 #endif /*OB_BUILD_SPM*/
 LIB_CACHE_OBJ_DEF(NS_SQLSTAT, "SQLSTAT", sql::ObSqlStatRecordKey, sql::ObSqlStatRecordNode, sql::ObSqlStatRecordObj, "OB_SQLSTAT_OBJ")  // sql stat cache
 LIB_CACHE_OBJ_DEF(NS_KV_SCHEMA, "KV_SCHEMA_INFO", table::ObKvSchemaCacheKey, table::ObTableApiCacheNode, table::ObKvSchemaCacheObj, "OB_KVSCHEMA_OBJ")    // OBKV schema cache
+LIB_CACHE_OBJ_DEF(NS_UDF_RESULT_CACHE, "UDF_RESULT_CACHE", pl::ObPLUDFResultCacheKey, pl::ObPLUDFResultCacheSet, pl::ObPLUDFResultCacheObject, "OB_RESULT_CACHE")  // udf result cache
 #endif /*LIB_CACHE_OBJ_DEF*/
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_

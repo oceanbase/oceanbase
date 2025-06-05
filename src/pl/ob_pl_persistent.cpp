@@ -267,6 +267,7 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                   CK (sub_id == routine_idx + 1);
                   OZ (cg.prepare_expression(*routine));
                   OZ (cg.final_expression(*routine));
+                  OZ (cg.codegen_expression(*routine));
                   OZ (routine->get_enum_set_ctx().assgin(routine_ast->get_enum_set_ctx()));
                   OZ (routine->set_variables(routine_ast->get_symbol_table()));
                   OZ (routine->get_dependency_table().assign(routine_ast->get_dependency_table()));

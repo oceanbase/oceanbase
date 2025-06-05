@@ -807,7 +807,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             common::ObMySQLProxy &sql_proxy,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLDbLinkGuard &dblink_guard,
-                                            pl::ObPLEnumSetCtx &enum_set_ctx)
+                                            pl::ObPLEnumSetCtx &enum_set_ctx,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
 
@@ -851,7 +852,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   sql_proxy,
                                                   ret_pl_type,
                                                   NULL,
-                                                  &dblink_guard));
+                                                  &dblink_guard,
+                                                  resolve_cache));
     } else {
       OX (ret_pl_type = ret_param->get_pl_data_type());
     }
@@ -904,7 +906,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   sql_proxy,
                                                   param_pl_type,
                                                   NULL,
-                                                  &dblink_guard));
+                                                  &dblink_guard,
+                                                  resolve_cache));
     } else {
       OX (param_pl_type = iparam->get_pl_data_type());
     }
@@ -930,7 +933,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
                                             ExternalParams *extern_param_info,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLEnumSetCtx &enum_set_ctx,
-                                            pl::ObPLDependencyTable &deps)
+                                            pl::ObPLDependencyTable &deps,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   ObResolverParams params;
@@ -944,7 +948,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
   if (OB_NOT_NULL(extern_param_info)) {
     params.external_param_info_.assign(*extern_param_info);
   }
-  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx, deps))) {
+  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx, deps, resolve_cache))) {
     SQL_LOG(WARN, "failed to exec resovle udf exprs", K(ret), K(udf_info));
   }
   return ret;
@@ -963,7 +967,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                                             const ObIRoutineInfo *func_info,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLEnumSetCtx &enum_set_ctx,
-                                            pl::ObPLDependencyTable &deps)
+                                            pl::ObPLDependencyTable &deps,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> param_exprs;
@@ -1219,7 +1224,10 @@ do {                                                                            
                                                           *(params.session_info_),
                                                           *(params.allocator_),
                                                           *(params.sql_proxy_),
-                                                          param_type));
+                                                          param_type,
+                                                          nullptr,
+                                                          nullptr,
+                                                          resolve_cache));
               } else {
                 param_type = iparam->get_pl_data_type();
               }

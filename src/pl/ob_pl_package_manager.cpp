@@ -378,7 +378,7 @@ int ObPLPackageManager::get_syspack_source_file_content(const char *file_name, c
     LOG_INFO("file name c string is null", K(file_name));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < syspack_source_count; i++) {
-      if (0 == ObString(file_name).case_compare(syspack_source_contents[i].first)) {
+      if (ObString(file_name).case_compare_equal(syspack_source_contents[i].first)) {
         content = syspack_source_contents[i].second;
         break;
       }
@@ -449,7 +449,7 @@ int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
     if (pack_file_info == nullptr) {                                                        \
       int sys_package_count = SIZE_OF_SYSPACK_LST(syspack_file_list);                       \
       for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {                     \
-        if (0 == package_name.case_compare(ObString(syspack_file_list[i].package_name))) {  \
+        if (package_name.case_compare_equal(ObString(syspack_file_list[i].package_name))) {  \
           pack_file_info = &syspack_file_list[i];                                           \
           break;                                                                            \
         }                                                                                   \
@@ -1101,7 +1101,7 @@ int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &reso
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
-               0 == package_spec->get_name().compare("DBMS_PROFILER")) {
+               package_spec->get_name().compare_equal("DBMS_PROFILER")) {
 #ifdef OB_BUILD_ORACLE_PL
     OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
 #endif // OB_BUILD_ORACLE_PL
@@ -1848,7 +1848,7 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
     OZ (GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard));
     OZ (schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info), pkg_var_info);
     CK (OB_NOT_NULL(package_info));
-    if (OB_SUCC(ret) && 0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
+    if (OB_SUCC(ret) && package_info->get_package_name().compare_equal("DBMS_PROFILER")) {
       ObObj value_obj;
       bool has_run_status_var = false;
       hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;

@@ -24,6 +24,7 @@
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
+#include "sql/engine/expr/ob_expr_udf/ob_udf_result_cache_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -1392,6 +1393,7 @@ template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryOp>(pl::ObGetPLK
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySchemaIdOp>(pl::ObGetPLKVEntryBySchemaIdOp &);
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySQLIDOp>(pl::ObGetPLKVEntryBySQLIDOp &);
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryByDbIdOp>(pl::ObGetPLKVEntryByDbIdOp &);
+template int ObPlanCache::foreach_cache_evict<pl::ObGetResultCacheKVEntryOp>(pl::ObGetResultCacheKVEntryOp &);
 
 // Remove all cache object in the lib cache
 int ObPlanCache::cache_evict_all_obj()
@@ -2542,6 +2544,9 @@ template int ObPlanCache::dump_deleted_objs<DUMP_SQL>(ObIArray<AllocCacheObjInfo
                                                        const int64_t) const;
 template int ObPlanCache::dump_deleted_objs<DUMP_ALL>(ObIArray<AllocCacheObjInfo> &,
                                                         const int64_t) const;
+template int ObPlanCache::dump_deleted_objs<DUMP_RESULT>(ObIArray<AllocCacheObjInfo> &,
+                                                        const int64_t) const;
+
 int ObPlanCache::mtl_init(ObPlanCache* &plan_cache)
 {
   int ret = OB_SUCCESS;
@@ -2758,6 +2763,36 @@ int ObPlanCache::flush_pl_cache()
   return ret;
 }
 
+int ObPlanCache::flush_result_cache()
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  int64_t safe_timestamp = INT64_MAX;
+  ObArray<AllocCacheObjInfo> deleted_objs;
+  if (OB_FAIL(ObPLUDFResultCacheMgr::cache_evict_all_obj(this))) {
+    SQL_PC_LOG(ERROR, "PL cache evict failed, please check", K(ret));
+  } else if (OB_FAIL(observer::ObGlobalReqTimeService::get_instance()
+                         .get_global_safe_timestamp(safe_timestamp))) {
+    SQL_PC_LOG(ERROR, "failed to get global safe timestamp", K(ret));
+  } else if (OB_FAIL(dump_deleted_objs<DUMP_RESULT>(deleted_objs, safe_timestamp))) {
+    SQL_PC_LOG(ERROR, "failed to dump deleted pl objs", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int i = 0; i < deleted_objs.count(); i++) {  // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+          LOG_WARN("failed to destroy cache obj", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 const char *plan_cache_gc_confs[3] = { "OFF", "REPORT", "AUTO" };
 
 int ObPlanCache::get_plan_cache_gc_strategy()
@@ -2807,7 +2842,9 @@ void ObPlanCacheEliminationTask::run_plan_cache_task()
   if (OB_FAIL(plan_cache_->update_memory_conf())) { //如果失败, 则不更新设置, 也不影响其他流程
     SQL_PC_LOG(WARN, "fail to update plan cache memory sys val", K(ret));
   }
-  if (OB_FAIL(plan_cache_->cache_evict())) {
+  if (OB_FAIL(ObPLUDFResultCacheMgr::result_cache_evict(plan_cache_))) {
+    SQL_PC_LOG(WARN, "result cache evict failed", K(ret));
+  } else if (OB_FAIL(plan_cache_->cache_evict())) {
     SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
   }  else if (OB_FAIL(plan_cache_->cache_evict_by_glitch_node())) {
     SQL_PC_LOG(ERROR, "Plan cache evict by glitch failed, please check", K(ret));

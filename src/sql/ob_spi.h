@@ -977,6 +977,8 @@ public:
                                       ObObj *result,
                                       ObObj &tmp_result);
 #endif
+  static int spi_internal_error(pl::ObPLExecCtx *ctx);
+
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);

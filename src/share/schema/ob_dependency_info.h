@@ -169,6 +169,8 @@ public:
                              int64_t &create_time,
                              common::ObString &ref_obj_name);
   int gen_dependency_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer &dml);
+  int get_timestamp_str(int64_t timestamp, ObSqlString &value_str);
+  int get_insert_value_str(ObSqlString &value_str);
 
   static int collect_ref_infos(uint64_t tenant_id,
                                uint64_t dep_obj_id,

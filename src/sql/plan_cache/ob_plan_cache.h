@@ -152,7 +152,7 @@ protected:
   int64_t safe_timestamp_;
 };
 
-enum DumpType { DUMP_SQL, DUMP_PL, DUMP_ALL };
+enum DumpType { DUMP_SQL, DUMP_PL, DUMP_ALL, DUMP_RESULT };
 struct ObDumpAllCacheObjByTypeOp : ObDumpAllCacheObjOp
 {
   explicit ObDumpAllCacheObjByTypeOp(common::ObIArray<AllocCacheObjInfo> *key_array,
@@ -176,6 +176,8 @@ struct ObDumpAllCacheObjByTypeOp : ObDumpAllCacheObjOp
                   || ObLibCacheNameSpace::NS_SFC == ns
                   || ObLibCacheNameSpace::NS_PKG == ns
                   || ObLibCacheNameSpace::NS_ANON == ns);
+      } else if (DUMP_RESULT == dump_type_) {
+        ret_bool = (ObLibCacheNameSpace::NS_UDF_RESULT_CACHE == ns);
       }
     }
     return ret_bool;
@@ -413,6 +415,8 @@ public:
   template<typename _callback>
   int foreach_alloc_cache_obj(_callback &callback) const;
 
+  const CacheKeyNodeMap& get_cache_key_node_map() { return cache_key_node_map_; }
+
   common::ObMemAttr get_mem_attr() {
     common::ObMemAttr attr;
     attr.label_ = ObNewModIds::OB_SQL_PLAN_CACHE;
@@ -437,6 +441,9 @@ public:
   int flush_lib_cache();
   int flush_lib_cache_by_ns(const ObLibCacheNameSpace ns);
   int flush_pl_cache();
+  int flush_result_cache();
+
+  int batch_remove_cache_node(const LCKeyValueArray &to_evict);
 
 protected:
   int ref_alloc_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
@@ -455,7 +462,6 @@ private:
                          ObILibCacheObject *cache_obj);
   bool calc_evict_num(int64_t &plan_cache_evict_num);
 
-  int batch_remove_cache_node(const LCKeyValueArray &to_evict);
   bool is_reach_memory_limit() { return get_mem_hold() > get_mem_limit(); }
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
   static int construct_plan_cache_key(ObSQLSessionInfo &session,

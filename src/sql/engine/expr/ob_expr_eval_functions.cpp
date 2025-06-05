@@ -185,7 +185,7 @@
 #include "ob_expr_collection_construct.h"
 #include "ob_expr_obj_access.h"
 #include "ob_expr_pl_associative_index.h"
-#include "ob_expr_udf.h"
+#include "ob_expr_udf/ob_expr_udf.h"
 #include "ob_expr_object_construct.h"
 #include "ob_expr_pl_get_cursor_attr.h"
 #include "ob_expr_pl_integer_checker.h"
@@ -1582,7 +1582,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayUnion::eval_array_union_batch,                           /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
-  NULL, // ObExprUDF::eval_udf_batch                                  /* 178 */
+  ObExprUDF::eval_udf_batch                                           /* 178 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1807,7 +1807,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprMapValues::eval_map_values_vector,                               /* 218 */
   ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
   ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
-  NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
+  ObExprUDF::eval_udf_vector,                                            /* 221 */
   ObExprUDF::eval_external_udf_vector,                                   /* 222 */
 };
 

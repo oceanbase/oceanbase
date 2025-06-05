@@ -7069,11 +7069,12 @@ void ObExecEnv::reset()
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
 {
-  return sql_mode_ == other.sql_mode_
+  bool is_mysql_mode = lib::is_mysql_mode();
+  return is_mysql_mode ? (sql_mode_ == other.sql_mode_) : true
       && charset_client_ == other.charset_client_
       && collation_connection_ == other.collation_connection_
       && collation_database_ == other.collation_database_
-      && plsql_ccflags_ == other.plsql_ccflags_
+      && is_mysql_mode ? true : (plsql_ccflags_ == other.plsql_ccflags_)
       && plsql_optimize_level_ == other.plsql_optimize_level_;
 }
 

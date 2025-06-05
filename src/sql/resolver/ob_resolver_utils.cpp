@@ -1462,7 +1462,8 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                   resolve_ctx.sql_proxy_,
                                                   dst_pl_type,
                                                   NULL,
-                                                  &resolve_ctx.package_guard_.dblink_guard_));
+                                                  &resolve_ctx.package_guard_.dblink_guard_,
+                                                  resolve_ctx.pl_resolve_cache_));
 #ifdef OB_BUILD_ORACLE_PL
       if (OB_SUCC(ret) && dst_pl_type.is_subtype()) {
         const ObUserDefinedType *user_type = NULL;
@@ -8415,7 +8416,9 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                  is_check_mode,
                                  is_sql_scope,
                                  params/*param store*/,
-                                 extern_param_info);
+                                 extern_param_info,
+                                 TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                 (nullptr == ns) ? nullptr : ns->get_external_ns()->get_resolve_ctx().pl_resolve_cache_);
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
       if (OB_FAIL(pl::ObPLCompiler::init_anonymous_ast(func_ast,
                                                        allocator,

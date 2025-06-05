@@ -75873,8 +75873,71 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 28275: GV$OB_RESULT_CACHE_OBJECTS
-# 28276: V$OB_RESULT_CACHE_OBJECTS
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'GV$OB_RESULT_CACHE_OBJECTS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28275',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID AS TENANT_ID,
+           SVR_IP AS SVR_IP,
+           SVR_PORT AS SVR_PORT,
+           PLAN_ID AS CACHE_OBJECT_ID,
+           STATEMENT AS UDF_NAME,
+           FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME AS LAST_ACTIVE_TIME,
+           HIT_COUNT AS HIT_COUNT,
+           PLAN_SIZE AS CACHE_OBJ_SIZE,
+           ELAPSED_TIME AS BUILD_TIME,
+           OBJECT_TYPE AS OBJECT_TYPE,
+           PL_SCHEMA_ID AS OBJECT_ID,
+           DB_ID AS DB_ID,
+           PLAN_HASH AS HASH,
+           SYS_VARS AS SYS_VARS,
+           CONFIGS AS CONFIGS
+    FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE = 11 AND is_in_pc='1'
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'V$OB_RESULT_CACHE_OBJECTS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28276',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID AS TENANT_ID,
+           SVR_IP AS SVR_IP,
+           SVR_PORT AS SVR_PORT,
+           CACHE_OBJECT_ID AS CACHE_OBJECT_ID,
+           UDF_NAME AS UDF_NAME,
+           FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME AS LAST_ACTIVE_TIME,
+           HIT_COUNT AS HIT_COUNT,
+           CACHE_OBJ_SIZE AS CACHE_OBJ_SIZE,
+           BUILD_TIME AS BUILD_TIME,
+           OBJECT_TYPE AS OBJECT_TYPE,
+           OBJECT_ID AS OBJECT_ID,
+           DB_ID AS DB_ID,
+           HASH AS HASH,
+           SYS_VARS AS SYS_VARS,
+           CONFIGS AS CONFIGS
+    FROM SYS.GV$OB_RESULT_CACHE_OBJECTS WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
 # 28277: ALL_LOCATIONS
 def_table_schema(
 owner = 'yunxing.cyx',

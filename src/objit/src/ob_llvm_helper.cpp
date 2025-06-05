@@ -1428,18 +1428,20 @@ int ObLLVMHelper::create_sub(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMVal
   return ret;
 }
 
-#define DEFINE_CREATE_ARITH_INT(name) \
-int ObLLVMHelper::create_##name(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result) \
-{ \
-  int ret = OB_SUCCESS; \
-  jit::ObLLVMValue arith_value; \
-  if (OB_FAIL(get_int_value(value1.get_type(), value2, arith_value))) { \
-    LOG_WARN("failed to get int value", K(ret)); \
-  } else if (OB_FAIL(create_##name(value1, arith_value, result))) { \
-    LOG_WARN("failed to create add", K(ret)); \
-  } else { /*do nothing*/ } \
-  return ret; \
-}
+#define DEFINE_CREATE_ARITH_INT(name)                                                              \
+  int ObLLVMHelper::create_##name(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result) \
+  {                                                                                                \
+    int ret = OB_SUCCESS;                                                                          \
+    jit::ObLLVMValue arith_value;                                                                  \
+    if (OB_FAIL(get_int_value(value1.get_type(), value2, arith_value))) {                          \
+      LOG_WARN("failed to get int value", K(ret));                                                 \
+    } else if (OB_FAIL(create_##name(value1, arith_value, result))) {                              \
+      LOG_WARN("failed to create add", K(ret));                                                    \
+    } else {                                                                                       \
+      /* do nothing */                                                                             \
+    }                                                                                              \
+    return ret;                                                                                    \
+  }
 
 DEFINE_CREATE_ARITH_INT(add)
 DEFINE_CREATE_ARITH_INT(sub)

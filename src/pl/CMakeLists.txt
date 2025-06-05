@@ -38,6 +38,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_persistent.cpp
   ob_pl_package_encode_info.cpp
   ob_pl_dependency_util.cpp
+  ob_pl_resolve_cache.cpp
 )
 
 ob_set_subtarget(ob_pl pl_cache

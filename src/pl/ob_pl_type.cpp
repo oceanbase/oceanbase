@@ -111,7 +111,8 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
                                        common::ObMySQLProxy &sql_proxy,
                                        bool is_pkg_var, // pkg var or pkg type
                                        ObPLDataType &pl_type,
-                                       ObIArray<ObSchemaObjVersion> *deps)
+                                       ObIArray<ObSchemaObjVersion> *deps,
+                                       ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObPackageInfo *package_info = NULL;
@@ -120,7 +121,9 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
   ObPLPackageManager *package_manager = NULL;
   pl::ObPLPackageGuard package_guard(session_info.get_effective_tenant_id());
   pl::ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard,
-                                package_guard, sql_proxy, false);
+                                package_guard, sql_proxy, false,
+                                false, false, nullptr, nullptr,  TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                resolve_cache);
   OZ (package_guard.init());
   CK (OB_NOT_NULL(session_info.get_pl_engine()));
   OZ (schema_guard.get_package_info(tenant_id, owner_id, pkg, share::schema::PACKAGE_TYPE,
@@ -219,13 +222,16 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          bool is_rowtype,
                                          ObPLDataType &pl_type,
-                                         ObIArray<ObSchemaObjVersion> *deps)
+                                         ObIArray<ObSchemaObjVersion> *deps,
+                                         ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_info = NULL;
   ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
   ObMySQLProxy dummy_proxy;
-  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
+  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false,
+                      false, false, nullptr, nullptr,  TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                      resolve_cache);
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
     uint64_t object_owner_id = owner_id;
@@ -255,7 +261,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     for (; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
       const ObString *record_name = record_type->get_record_member_name(i);
       CK (OB_NOT_NULL(record_name));
-      if (OB_SUCC(ret) && 0 == record_name->case_compare(type)) {
+      if (OB_SUCC(ret) && record_name->case_compare_equal(type)) {
         CK (OB_NOT_NULL(member_type = record_type->get_record_member_type(i)));
         OX (pl_type = *member_type);
         OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
@@ -280,7 +286,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         common::ObMySQLProxy &sql_proxy,
                                         pl::ObPLDataType &pl_type,
                                         ObIArray<ObSchemaObjVersion> *deps,
-                                        ObPLDbLinkGuard *dblink_guard)
+                                        ObPLDbLinkGuard *dblink_guard,
+                                        ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(iparam));
@@ -335,7 +342,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  false,
                                  pl_type,
-                                 deps));
+                                 deps,
+                                 resolve_cache));
         break;
       }
       case SP_EXTERN_PKG_VAR: {
@@ -349,7 +357,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  true,
                                  pl_type,
-                                 deps));
+                                 deps,
+                                 resolve_cache));
         break;
       }
       case SP_EXTERN_TAB_COL: {
@@ -362,7 +371,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         if (OB_SUCC(ret) && iparam->is_in_param() && ob_is_numeric_type(pl_type.get_obj_type())) {
           const ObAccuracy &default_accuracy =  ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][pl_type.get_obj_type()];
           // precision of decimal int must be equal to precision defined in schema.
@@ -382,7 +392,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         if (OB_TABLE_NOT_EXIST == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
           ret = OB_SUCCESS;
           OZ (get_pkg_type_by_name(tenant_id,
@@ -395,7 +406,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    sql_proxy,
                                    true,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         }
         break;
       }
@@ -414,7 +426,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    true,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         break;
       }
       case SP_EXTERN_LOCAL_VAR : {
@@ -1709,7 +1722,7 @@ bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
   check_ctx.need_check_deterministic_ = false;
   return elem_type_ == other.elem_type_
       && access_type_ == other.access_type_
-      && 0 == var_name_.case_compare(other.var_name_)
+      && var_name_.case_compare_equal(other.var_name_)
       && var_type_ == other.var_type_
       && var_index_ == other.var_index_
       && routine_info_ == other.routine_info_

@@ -12469,14 +12469,13 @@ int ObDMLResolver::resolve_json_table_column_item(const TableItem &table_item,
   int ret = OB_SUCCESS;
   col_item = NULL;
   ObDMLStmt *stmt = get_stmt();
-  common::ObCollationType cs_type = lib::is_oracle_mode() ? common::CS_TYPE_UTF8MB4_BIN : common::CS_TYPE_UTF8MB4_GENERAL_CI;
   CK (OB_NOT_NULL(stmt));
   CK (OB_LIKELY(table_item.is_json_table()));
   CK (OB_NOT_NULL(table_item.json_table_def_));
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
     ColumnItem &item = stmt->get_column_items().at(i);
     if (table_item.table_id_ == item.table_id_
-        && (0 == ObCharset::strcmp(cs_type, column_name, item.column_name_))) {
+        && ObCharset::case_compat_mode_equal(column_name, item.column_name_)) {
       if (OB_ISNULL(col_item)) {
         col_item = &item;
       } else {

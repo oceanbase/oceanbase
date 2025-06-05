@@ -457,7 +457,7 @@ int ObPLPackageState::is_invalid_value(const ObObj &val, bool &is_invalid)
   is_invalid = false;
 
   if (val.is_varchar_or_char()) {
-    CK (0 == val.get_string().case_compare(PL_PACKAGE_INVALID_VALUE));
+    CK (val.get_string().case_compare_equal(PL_PACKAGE_INVALID_VALUE));
     OX (is_invalid = true);
   }
   return ret;
@@ -479,7 +479,7 @@ int ObPLPackageState::is_oversize_value(const ObObj &val, bool &is_invalid)
   is_invalid = false;
 
   if (val.is_varchar_or_char()) {
-    CK (0 == val.get_string().case_compare(PL_PACKAGE_OVERSIZE_VALUE));
+    CK (val.get_string().case_compare_equal(PL_PACKAGE_OVERSIZE_VALUE));
     OX (is_invalid = true);
   }
   return ret;

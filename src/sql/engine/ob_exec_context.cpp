@@ -133,6 +133,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     auto_dop_map_(),
     force_local_plan_(false),
     diagnosis_manager_(),
+    deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     external_url_resource_cache_(nullptr)
 {
 }
@@ -240,6 +241,8 @@ void ObExecContext::reset_op_ctx()
 {
   reset_expr_op();
   op_kit_store_.destroy();
+
+  deterministic_udf_cache_allocator_.reset();
 }
 
 void ObExecContext::reset_op_env()
@@ -304,6 +307,7 @@ int ObExecContext::init_expr_op(uint64_t expr_op_size, ObIAllocator *allocator)
 void ObExecContext::reset_expr_op()
 {
   if (expr_op_ctx_store_ != NULL) {
+    int64_t ctx_store_size = expr_op_size_ * sizeof(ObExprOperatorCtx *);
     ObExprOperatorCtx **it = expr_op_ctx_store_;
     ObExprOperatorCtx **it_end = &expr_op_ctx_store_[expr_op_size_];
     for (; it != it_end; ++it) {
@@ -311,6 +315,7 @@ void ObExecContext::reset_expr_op()
         (*it)->~ObExprOperatorCtx();
       }
     }
+    MEMSET(expr_op_ctx_store_, 0, ctx_store_size);
     has_non_trivial_expr_op_ctx_ = false;
     expr_op_ctx_store_ = NULL;
     expr_op_size_ = 0;
@@ -322,6 +327,7 @@ void ObExecContext::destroy_eval_allocator()
   eval_res_allocator_.reset();
   eval_tmp_allocator_.reset();
   tmp_alloc_used_ = false;
+
 }
 
 int ObExecContext::get_temp_expr_eval_ctx(const ObTempExpr &temp_expr,

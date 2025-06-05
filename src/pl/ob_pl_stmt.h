@@ -1188,7 +1188,7 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *dep_table,
+                      ObIArray<ObSchemaObjVersion> &deps,
                       bool full_schema) const;
   int resolve_external_symbol(const common::ObString &name,
                               ExternalType &type,
@@ -1196,6 +1196,7 @@ public:
                               uint64_t &parent_id,
                               int64_t &var_idx,
                               bool full_schema = false) const;
+
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,
@@ -1219,7 +1220,8 @@ public:
                                  ExternalType &type,
                                  ObPLDataType &data_type,
                                  uint64_t &parent_id,
-                                 int64_t &var_idx) const;
+                                 int64_t &var_idx,
+                                 ObIArray<ObSchemaObjVersion> &deps) const;
   inline const ObPLBlockNS *get_parent_ns() const { return parent_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
   inline ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
@@ -1722,6 +1724,9 @@ public:
   virtual bool is_has_out_param() const { return is_has_out_param_; }
   virtual void set_external_state() { is_external_state_ = true; }
   virtual bool is_external_state() const { return is_external_state_; }
+  virtual void set_has_continue_handler(bool has_continue_handler) { has_continue_handler_ = has_continue_handler; }
+  virtual bool has_continue_handler() { return has_continue_handler_; }
+
 
   ObPLSymbolDebugInfoTable &get_symbol_debuginfo_table()
   {
@@ -1759,7 +1764,7 @@ protected:
   ObString priv_user_;
   char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
   uint64_t invoker_database_id_; //invoker database_id
-  union {
+  union {  // FARM COMPAT WHITELIST
     uint64_t analyze_flag_;
     struct {
       uint64_t is_no_sql_ : 1;
@@ -1771,7 +1776,8 @@ protected:
       uint64_t is_has_sequence_ : 1;
       uint64_t is_has_out_param_ : 1;
       uint64_t is_external_state_ : 1;
-      uint64_t reserved_:54;
+      uint64_t has_continue_handler_ : 1;
+      uint64_t reserved_:53;
     };
   };
 private:
@@ -2915,7 +2921,6 @@ public:
     virtual ~DeclareHandler() {}
 
     inline int64_t get_level() const { return level_; }
-    inline void set_level(int64_t level) { level_ = level; }
     inline HandlerDesc *get_desc() const { return desc_; }
     inline void set_desc(HandlerDesc *desc) { desc_ = desc; }
     inline bool is_original() const { return OB_INVALID_INDEX == level_; }

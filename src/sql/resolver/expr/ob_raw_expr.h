@@ -4418,6 +4418,7 @@ public:
       is_return_sys_cursor_(false),
       is_aggregate_udf_(false),
       is_aggr_udf_distinct_(false),
+      is_result_cache_(false),
       nocopy_params_(),
       loc_(0),
       is_udt_cons_(false),
@@ -4448,6 +4449,7 @@ public:
       is_return_sys_cursor_(false),
       is_aggregate_udf_(false),
       is_aggr_udf_distinct_(false),
+      is_result_cache_(false),
       nocopy_params_(),
       loc_(0),
       is_udt_cons_(false),
@@ -4555,6 +4557,9 @@ public:
   inline void set_parallel_enable(bool is_parallel_enable) { is_parallel_enable_ = is_parallel_enable; }
   inline bool is_parallel_enable() const { return is_parallel_enable_; }
 
+  inline void set_result_cache(bool is_result_cache) { is_result_cache_ = is_result_cache; }
+  inline bool is_result_cache() const { return is_result_cache_; }
+
   inline void set_is_udt_udf(bool is_udt_udf) { is_udt_udf_ = is_udt_udf; }
   inline bool get_is_udt_udf() const { return is_udt_udf_; }
   inline void set_is_return_sys_cursor(bool is_ret_cursor) { is_return_sys_cursor_ = is_ret_cursor; }
@@ -4652,6 +4657,7 @@ private:
   bool is_return_sys_cursor_;
   bool is_aggregate_udf_;
   bool is_aggr_udf_distinct_;
+  bool is_result_cache_;
   common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> nocopy_params_;
   uint64_t loc_; // line 和 column 组合，主要是为call_stack准备
   bool is_udt_cons_;

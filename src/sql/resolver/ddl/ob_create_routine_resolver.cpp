@@ -17,6 +17,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
+#include "pl/ob_pl_resolver.h"
 
 namespace oceanbase
 {
@@ -409,9 +410,6 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     }
   } else if (ObObjAccessIdx::is_udt_type(access_idxs)) {
     CK (access_idxs.count() >= 1 && access_idxs.count() <= 2);
-    OX (routine_param.set_param_type(ObExtendType));
-    OX (routine_param.set_udt_type());
-    OX (routine_param.set_type_name(access_idxs.at(access_idxs.count()-1).var_name_));
     if (OB_FAIL(ret)) {
     } else if (2 == access_idxs.count()) {
       if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(1).var_index_)) {
@@ -425,6 +423,8 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
       routine_param.set_type_owner(OB_SYS_DATABASE_ID);
     }
     if (OB_SUCC(ret)) {
+      ObDataType ext_type;
+      ObObjMeta meta_type;
       const int64_t udt_id = access_idxs.at(access_idxs.count() - 1).var_index_;
       const ObUDTTypeInfo* udt_info = nullptr;
       CK (OB_NOT_NULL(params_.schema_checker_));
@@ -433,6 +433,13 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
       CK (OB_NOT_NULL(udt_info));
       OZ (collect_ref_obj_info(udt_id, udt_info->get_schema_version(),
                                ObDependencyTableType::DEPENDENCY_TYPE));
+      OX (meta_type.set_type(ObExtendType));
+      OX (meta_type.set_extend_type(udt_info->get_extend_type()));
+      OX (ext_type.set_meta_type(meta_type));
+      OX (ext_type.set_udt_id(udt_id));
+      OX (routine_param.set_param_type(ext_type));
+      OX (routine_param.set_udt_type());
+      OX (routine_param.set_type_name(access_idxs.at(access_idxs.count()-1).var_name_));
     }
   }
   return ret;
@@ -819,7 +826,12 @@ int ObCreateRoutineResolver::resolve_clause_list(
             ObProcType::STANDALONE_PROCEDURE
               : ObProcType::INVALID_PROC_TYPE;
     ObPLDataType ret_type;
-    if (func_info.is_function()) {
+    pl::ObPLPackageGuard package_guard(session_info_->get_effective_tenant_id());
+    pl::ObPLResolveCtx resolve_ctx(*allocator_, *session_info_, *schema_checker_->get_schema_guard(),
+    package_guard, *params_.sql_proxy_, false,
+    false, false, nullptr, nullptr,  TgTimingEvent::TG_TIMING_EVENT_INVALID);
+    OZ (package_guard.init());
+    if (OB_SUCC(ret) && func_info.is_function()) {
       const ObRoutineParam *routine_param = NULL;
       pl::ObPLEnumSetCtx enum_set_ctx(*(params_.allocator_));
       CK (OB_NOT_NULL(func_info.get_ret_info()));
@@ -834,7 +846,7 @@ int ObCreateRoutineResolver::resolve_clause_list(
                                                   ret_type));
     }
     CK (proc_type != ObProcType::INVALID_PROC_TYPE);
-    OZ (ObPLResolver::resolve_sf_clause(clause_list, &func_info, proc_type, ret_type));
+    OZ (ObPLResolver::resolve_sf_clause(resolve_ctx, clause_list, &func_info, proc_type, false, ret_type));
   }
   return ret;
 }

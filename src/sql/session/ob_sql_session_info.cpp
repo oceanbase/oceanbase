@@ -2640,6 +2640,7 @@ int ObSQLSessionInfo::set_package_variable(
                                 NULL, /*param_list*/
                                 NULL, /*extern_param_info*/
                                 TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                nullptr,
                                 true /*is_sync_pacakge_var*/);
     OZ (package_guard.init());
     if (OB_SUCC(ret)) {

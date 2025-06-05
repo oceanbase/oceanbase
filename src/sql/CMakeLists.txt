@@ -727,7 +727,6 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_truncate.cpp
   engine/expr/ob_expr_type_to_str.cpp
   engine/expr/ob_expr_tz_offset.cpp
-  engine/expr/ob_expr_udf.cpp
   engine/expr/ob_expr_uid.cpp
   engine/expr/ob_expr_unhex.cpp
   engine/expr/ob_expr_unistr.cpp
@@ -927,6 +926,12 @@ ob_set_subtarget(ob_sql_extra ALONE
   engine/expr/vector_cast/vector_cast_compile/vector_cast_all.cpp
   engine/expr/vector_cast/float_to_decimal_impl.cpp
   engine/expr/vector_cast/vector_cast.cpp
+
+  engine/expr/ob_expr_udf/ob_expr_udf.cpp
+  engine/expr/ob_expr_udf/ob_expr_udf_utils.cpp
+  engine/expr/ob_expr_udf/ob_expr_udf_ctx.cpp
+  engine/expr/ob_expr_udf/ob_udf_result_cache.cpp
+  engine/expr/ob_expr_udf/ob_udf_result_cache_mgr.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

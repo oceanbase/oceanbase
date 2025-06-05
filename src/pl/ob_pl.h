@@ -728,12 +728,14 @@ public:
                 uint64_t loc = 0,
                 bool is_called_from_sql = false) :
     func_(func),
-    phy_plan_ctx_(in_allocator),
+    phy_plan_ctx_(NULL),
     eval_ctx_(ctx),
     result_(result),
     ctx_(&allocator,
          &ctx,
-         &phy_plan_ctx_.get_param_store_for_update(),
+         func.is_function()
+          ? &ctx.get_physical_plan_ctx()->get_param_store_for_update()
+            : NULL,
          &result,
          &status,
          &func_,
@@ -760,6 +762,7 @@ public:
   int check_routine_param_legal(ParamStore *params = NULL);
   int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
   int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
+  int init_params_simple(const ParamStore *params = NULL, bool is_anonymous = false);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
   int final(int ret);
@@ -767,23 +770,31 @@ public:
   int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }
-  inline const sql::ObPhysicalPlanCtx &get_physical_plan_ctx() const { return phy_plan_ctx_; }
-  inline sql::ObPhysicalPlanCtx &get_physical_plan_ctx() { return phy_plan_ctx_; }
-  inline const ParamStore &get_params() const { return phy_plan_ctx_.get_param_store(); }
-  inline ParamStore &get_params() { return phy_plan_ctx_.get_param_store_for_update(); }
+  inline const sql::ObPhysicalPlanCtx *get_physical_plan_ctx() const { return phy_plan_ctx_; }
+  inline sql::ObPhysicalPlanCtx *get_physical_plan_ctx() { return phy_plan_ctx_; }
+  inline const ParamStore &get_params() const
+  {
+    return phy_plan_ctx_ != NULL
+      ? phy_plan_ctx_->get_param_store() : ctx_.exec_ctx_->get_physical_plan_ctx()->get_param_store();
+  }
+  inline ParamStore &get_params()
+  {
+    return phy_plan_ctx_ != NULL
+      ? phy_plan_ctx_->get_param_store_for_update() : ctx_.exec_ctx_->get_physical_plan_ctx()->get_param_store_for_update();
+  }
   ObPLFunction &get_function() { return func_; }
   int get_var(int64_t var_idx, ObObjParam& result);
   int set_var(int64_t var_idx, const ObObjParam& value);
   ObPLExecCtx& get_exec_ctx() { return ctx_; }
   int check_pl_execute_priv(ObSchemaGetterGuard &guard,
-                                          const uint64_t tenant_id,
-                                          const uint64_t user_id,
-                                          const ObSchemaObjVersion &schema_obj,
-                                          const ObIArray<uint64_t> &role_id_array);
+                            const uint64_t tenant_id,
+                            const uint64_t user_id,
+                            const ObSchemaObjVersion &schema_obj,
+                            const ObIArray<uint64_t> &role_id_array);
   int check_pl_priv(share::schema::ObSchemaGetterGuard &guard,
-                        const uint64_t tenant_id,
-                        const uint64_t user_id,
-                        const sql::DependenyTableStore &dep_obj);
+                    const uint64_t tenant_id,
+                    const uint64_t user_id,
+                    const sql::DependenyTableStore &dep_obj);
 
   inline bool is_top_call() const { return top_call_; }
   inline uint64_t get_loc() const { return loc_; }
@@ -845,7 +856,7 @@ public:
 private:
 private:
   ObPLFunction &func_;
-  sql::ObPhysicalPlanCtx phy_plan_ctx_; //运行态的param值放在这里面，跟ObPLFunction里的variables_一一对应，初始化的时候需要设置default值
+  sql::ObPhysicalPlanCtx *phy_plan_ctx_; //运行态的param值放在这里面，跟ObPLFunction里的variables_一一对应，初始化的时候需要设置default值
   sql::ObEvalCtx eval_ctx_;
   common::ObObj &result_;
   ObPLExecCtx ctx_;
@@ -1032,6 +1043,7 @@ public:
 
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();
+  ObPLCallStackTrace *get_call_stack_trace_directly() { return call_stack_trace_; }
   ObIAllocator &get_allocator() { return alloc_; }
 #endif
 
@@ -1086,8 +1098,8 @@ private:
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *call_stack_trace_;
-  ObArenaAllocator alloc_;
 #endif
+  ObArenaAllocator alloc_;
   ObPLContext *parent_stack_ctx_;
   ObPLContext *top_stack_ctx_;
   sql::ObExecContext *my_exec_ctx_; //my exec context
@@ -1178,6 +1190,7 @@ public:
               ParamStore &params,
               const ObIArray<int64_t> &nocopy_params,
               common::ObObj &result,
+              ObCacheObjGuard &cacheobj_guard,
               int *status = NULL,
               bool inner_call = false,
               bool in_function = false,

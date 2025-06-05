@@ -375,6 +375,22 @@ public:
   bool is_collection() const { return UDT_TYPE_COLLECTION == typecode_; }
   bool is_varray() const {
       return UDT_TYPE_COLLECTION == typecode_ && coll_info_->is_varray(); }
+  uint8_t get_extend_type() const
+  {
+    uint8_t extend_type = 0;
+    if (is_collection()) {
+      if (is_varray()) {
+        extend_type = pl::PL_VARRAY_TYPE;
+      } else {
+        extend_type = pl::PL_NESTED_TABLE_TYPE;
+      }
+    } else if (is_opaque()) {
+      extend_type = pl::PL_OPAQUE_TYPE;
+    } else {
+      extend_type = pl::PL_RECORD_TYPE;
+    }
+    return extend_type;
+  }
   int set_coll_info(const ObUDTCollectionType& coll_info);
   const ObUDTCollectionType* get_coll_info() const { return coll_info_; }
   ObUDTCollectionType* get_coll_info() { return coll_info_; }

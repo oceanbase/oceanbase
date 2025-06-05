@@ -4550,11 +4550,9 @@ int ObSPIService::spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level)
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
-  if (OB_SUCC(ret) && OB_ISNULL(pl_ctx->get_call_stack_trace())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for call stack trace", K(ret));
+  if (OB_SUCC(ret) && OB_NOT_NULL(pl_ctx->get_call_stack_trace_directly())) {
+    OZ (pl_ctx->get_call_stack_trace_directly()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
   }
-  OZ (pl_ctx->get_call_stack_trace()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
 #endif
   return ret;
 }
@@ -6258,6 +6256,7 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
       OX (result_type.set_meta(dest_type->get_meta_type()));
       OX (result_type.set_accuracy(dest_type->get_accuracy()));
       if (OB_SUCC(ret)) {
+        result = *src;
         if ((ObEnumType == src->get_type() && ObEnumType == result_type.get_type())
             || (ObSetType == src->get_type() && ObSetType == result_type.get_type())) {
           result = *src;
@@ -9722,6 +9721,14 @@ int ObSPIService::check_system_trigger_legal(pl::ObPLExecCtx *ctx, const ObStrin
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "set system variable in system trigger");
     }
   }
+  return ret;
+}
+
+int ObSPIService::spi_internal_error(pl::ObPLExecCtx *ctx)
+{
+  int ret = OB_ERR_UNEXPECTED;
+  UNUSED(ctx);
+  LOG_USER_WARN(OB_ERR_UNEXPECTED, "unexpected stmt id for continue handler dispatcher");
   return ret;
 }
 

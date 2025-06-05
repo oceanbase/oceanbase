@@ -335,6 +335,35 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
   return ret;
 }
 
+int ObDependencyInfo::get_timestamp_str(int64_t timestamp, ObSqlString &value_str)
+{
+  int ret = OB_SUCCESS;
+  if (timestamp > 0) {
+    OZ (value_str.append_fmt("usec_to_time(%ld)", timestamp));
+  } else {
+    OZ (value_str.append_fmt("now(6)"));
+  }
+  return ret;
+}
+
+int ObDependencyInfo::get_insert_value_str(ObSqlString &value_str)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
+  ObSqlString dep_timestamp_str;
+  ObSqlString ref_timestamp_str;
+  OZ (get_timestamp_str(dep_timestamp_, dep_timestamp_str));
+  OZ (get_timestamp_str(ref_timestamp_, ref_timestamp_str));
+
+  OZ (value_str.append_fmt("(%ld,%ld,%d,%ld,%ld,%s,%ld,%d,%s,%ld,%ld,NULL,NULL,NULL,now(6),now(6))",
+                            ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_),
+                            extract_obj_id(exec_tenant_id, dep_obj_id_), dep_obj_type_, order_, schema_version_,
+                            dep_timestamp_str.ptr(), ref_obj_id_, ref_obj_type_,
+                            ref_timestamp_str.ptr(), extract_obj_id(exec_tenant_id, dep_obj_owner_id_), property_));
+
+  return ret;
+}
+
 int ObDependencyInfo::collect_dep_info(ObIArray<ObDependencyInfo> &deps,
                                        ObObjectType dep_obj_type,
                                        int64_t ref_obj_id,

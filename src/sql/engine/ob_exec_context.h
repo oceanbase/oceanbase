@@ -572,6 +572,7 @@ public:
   }
 
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
+  common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
   void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
@@ -766,6 +767,7 @@ protected:
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
+  common::ObArenaAllocator deterministic_udf_cache_allocator_;
 
   void *external_url_resource_cache_;
 private:

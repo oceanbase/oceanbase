@@ -2707,6 +2707,7 @@ DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable dynamic stack check when executing PL.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+
 DEF_CAP(result_cache_max_size, OB_TENANT_PARAMETER, "64M", "[0B,)",
         "result cache can use max size memory(in bytes) of library cache. if it's zero, disable result cache",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

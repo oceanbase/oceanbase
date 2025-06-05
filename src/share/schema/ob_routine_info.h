@@ -339,6 +339,9 @@ public:
       type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
     } else {
       type.set_data_type(get_param_type());
+      if (is_udt_type()) {
+        type.set_type_from(pl::PL_TYPE_UDT);
+      }
     }
     return type;
   }

@@ -57,8 +57,8 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
         OX (memattr_ = arena_allocator->get_arena().get_page_allocator().get_attr());
       }
       OX (new (allocator_)ObVSliceAlloc(memattr_, BLOCK_SIZE, alloc_mgr_));
+      OX (use_malloc_ = (-EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH)) > 0);
     }
-    OX (use_malloc_ = (-EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH)) > 0);
     OX (is_inited_ = true);
   }
 
@@ -144,6 +144,7 @@ void ObPLAllocator1::destroy()
 {
   if (is_inited_) {
     if (allocator_ != parent_allocator_) {
+      OB_ASSERT(typeid(*allocator_) == typeid(ObVSliceAlloc));
       static_cast<ObVSliceAlloc *>(allocator_)->~ObVSliceAlloc();
       parent_allocator_->free(allocator_);
       allocator_ = nullptr;

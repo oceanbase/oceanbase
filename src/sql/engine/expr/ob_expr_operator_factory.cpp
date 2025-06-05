@@ -213,7 +213,7 @@
 #include "sql/engine/expr/ob_expr_get_subprogram_var.h"
 #include "sql/engine/expr/ob_expr_shadow_uk_project.h"
 #include "sql/engine/expr/ob_expr_time_format.h"
-#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_week_of_func.h"
 #include "sql/engine/expr/ob_expr_userenv.h"
 #include "sql/engine/expr/ob_expr_sys_context.h"
