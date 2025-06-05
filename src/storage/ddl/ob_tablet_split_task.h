@@ -94,7 +94,9 @@ public:
   ~ObTabletSplitCtx();
   int init(const ObTabletSplitParam &param);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys));
+  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret),
+    K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys),
+    K(ls_rebuild_seq_));
 
 private:
   template <typename KEY, typename VALUE>
@@ -143,6 +145,7 @@ public:
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
   int64_t physical_row_count_;
+  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitCtx);
 };
 
@@ -275,6 +278,7 @@ public:
       const SCN &end_scn,
       ObTabletCreateSSTableParam &create_sstable_param);
   static int update_table_store_with_batch_tables(
+      const int64_t ls_rebuild_seq,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &src_tablet_handle,
       const ObTabletID &dst_tablet_id,
