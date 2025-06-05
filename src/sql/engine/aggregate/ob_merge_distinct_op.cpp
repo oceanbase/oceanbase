@@ -89,6 +89,7 @@ int ObMergeDistinctOp::inner_get_next_row()
       }
     } /* end while */
   } else { /* first row, always output */
+    clear_evaluated_flag();
     if (OB_FAIL(cmp_.init(&eval_ctx_, &MY_SPEC.cmp_funcs_))) {
       LOG_WARN("failed to init compare functions", K(ret));
     } else if (OB_FAIL(child_->get_next_row())) {
