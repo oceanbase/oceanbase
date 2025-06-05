@@ -4711,10 +4711,11 @@ int ObSPIService::spi_pipe_row_to_result(pl::ObPLExecCtx *ctx,
     // use _pipelined_table_function_memory_limit to limit pipe row
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (OB_LIKELY(tenant_config.is_valid())) {
-      if ((static_cast<ObPLAllocator1*>(coll->get_allocator()))->get_used()
-            > tenant_config->_pipelined_table_function_memory_limit) {
+      const uint64_t used = (static_cast<ObPLAllocator1*>(coll->get_allocator()))->get_used();
+      const uint64_t limit = tenant_config->_pipelined_table_function_memory_limit;
+      if (used > limit) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("pipe row use too much memory", K(ret));
+        LOG_WARN("pipe row use too much memory", K(ret), K(used), K(limit));
       }
     }
   }
