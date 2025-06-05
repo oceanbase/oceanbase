@@ -15,6 +15,7 @@ static pktc_sk_t* pktc_do_connect(pktc_t* cl, addr_t dest) {
   ef(!(sk = pktc_sk_new(&cl->sf)));
   sk->pc = cl;
   sk->dest = dest;
+  sk->peer = dest;
   ef((sk->fd = async_connect(dest, cl->dispatch_id)) < 0);
   rk_info("sk_new: sk=%p, fd=%d", sk, sk->fd);
   ef(eloop_regist(cl->ep, (sock_t*)sk, EPOLLIN|EPOLLOUT));

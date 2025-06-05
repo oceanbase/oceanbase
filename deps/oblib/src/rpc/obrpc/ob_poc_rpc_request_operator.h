@@ -26,6 +26,7 @@ public:
   virtual void* alloc_response_buffer(rpc::ObRequest* req, int64_t size) override;
   virtual void response_result(rpc::ObRequest* req, obrpc::ObRpcPacket* pkt) override;
   virtual common::ObAddr get_peer(const rpc::ObRequest* req) override;
+  virtual void set_trace_point(const rpc::ObRequest* req, int32_t trace_point) override;
 };
 
 }; // end namespace obrpc

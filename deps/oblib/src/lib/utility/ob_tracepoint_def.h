@@ -631,4 +631,8 @@ GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
 GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
 // PL end
 
+// RPC framework 2601 - 2620
+GLOBAL_ERRSIM_POINT_DEF(2601, EN_RPC_SOCKET_ERROR, "inject rpc socket error, making rpc failed");
+GLOBAL_ERRSIM_POINT_DEF(2602, EN_RPC_IO_THREAD_HANG, "make rpc io thread hang for a while");
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

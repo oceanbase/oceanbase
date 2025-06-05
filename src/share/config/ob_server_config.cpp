@@ -580,11 +580,11 @@ OB_DEF_SERIALIZE_SIZE(ObServerConfig)
 namespace obrpc {
 bool enable_pkt_nio(bool start_as_client) {
   bool bool_ret = false;
-  if (OB_UNLIKELY(start_as_client || OBSERVER.is_arbitration_mode())) {
+  if (OB_UNLIKELY(start_as_client)) {
     bool enable_client_auth = (get_client_auth_methods() != USSL_AUTH_NONE);
     bool_ret = GCONF._enable_pkt_nio && enable_client_auth;
   } else {
-    bool_ret =  GCONF._enable_pkt_nio && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+    bool_ret =  GCONF._enable_pkt_nio;
   }
   return bool_ret;
 }

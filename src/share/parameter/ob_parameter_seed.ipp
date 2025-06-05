@@ -84,7 +84,7 @@ DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 1h
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,128]",
         "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 128] in integer, 0 stands for max(6, CPU_NUM/8)",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
         "the number of rpc I/O threads for high priority messages, 0 means set off. Range: [0, 64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));

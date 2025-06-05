@@ -10,16 +10,51 @@
  * See the Mulan PubL v2 for more details.
  */
 
+extern void pn_release_ctx(pkts_req_t* req);
+extern pkts_t* locate_pn_pkts(int gid, int tid);
+extern void on_dispatch(listenfd_dispatch_t* lfd, sf_t* sf, eloop_t* ep);
+
 static void pkts_post_io(pkts_t* io, pkts_req_t* r) {
   pkts_sk_t* sk = (typeof(sk))idm_get(&io->sk_map, r->sock_id);
-  if (sk && 0 == r->errcode) {
-    if (sk->wq.cnt >= MAX_WRITE_QUEUE_COUNT && PNIO_REACH_TIME_INTERVAL(500*1000)) {
-      rk_warn("too many requests in pkts write queue, wq_cnt=%ld, wq_sz=%ld, sock_id=%ld, sk=%p", sk->wq.cnt, sk->wq.sz, r->sock_id, sk);
+  if (ENOMEM == r->errcode) {
+    rk_warn("req has err, sock_id=%ld, err=%d, alloted memory failed in pn_resp", r->sock_id, r->errcode);
+    pkts_flush_cb_on_post_fail(io, r); // release rpc ctx memory in the pn_pkts_flush_cb_error_func
+  } else if (0 == r->errcode) {
+    pn_release_ctx(r); // release rpc ctx memory and set resp_ptr
+    if (unlikely(NULL == sk)) {
+      rk_warn("sk is null, sock_id=%ld, the socket might be disconnected", r->sock_id);
+      pkts_flush_cb_on_post_fail(io, r);
+    } else if (unlikely(SOCK_RELOCATING == sk->relocate_status)) {
+      // push secondry resp
+      rk_info("[socket_relocation] send secondry resp, old_sk=%p, target_tid=%lu, target_scok_id=%lu",
+              sk, sk->id, sk->relocate_sock_id);
+      pn_comm_t* pn = get_current_pnio();
+      int gid = pn->gid;
+      pkts_t* relocate_pkts = locate_pn_pkts(gid, sk->tid);
+      if (relocate_pkts != NULL) {
+        r->sock_id = sk->relocate_sock_id;
+        pkts_resp(relocate_pkts, r);
+      } else {
+        rk_warn("[socket_relocation] failed to get relocate_pkts, gid=%d, tid=%d", gid, sk->tid);
+        pkts_flush_cb_on_post_fail(io, r);
+      }
+    } else {
+      if (sk->wq.cnt >= MAX_WRITE_QUEUE_COUNT && PNIO_REACH_TIME_INTERVAL(500*1000)) {
+        rk_warn("too many requests in pkts write queue, wq_cnt=%ld, wq_sz=%ld, sock_id=%ld, sk=%p", sk->wq.cnt, sk->wq.sz, r->sock_id, sk);
+      }
+      wq_push(&sk->wq, &r->link);
+      eloop_fire(io->ep, (sock_t*)sk);
     }
-    wq_push(&sk->wq, &r->link);
-    eloop_fire(io->ep, (sock_t*)sk);
   } else {
-    pkts_flush_cb_on_post_fail(io, r);
+    rk_warn("unexpected errcode, err=%d", r->errcode);
+  }
+  if (NULL != sk) {
+    sk->processing_cnt --;
+    if (SOCK_RELOCATING == sk->relocate_status && sk->processing_cnt == 0) {
+      rk_info("[socket_relocation] drop sk in src thread, sk=%p", sk);
+      idm_del(&io->sk_map, sk->id);
+      sfree(sk);
+    }
   }
 }
 

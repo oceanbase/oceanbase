@@ -31,6 +31,7 @@ typedef int (*handle_event_t)(struct sock_t*);
   int ep_fd;                                    \
   addr_t peer;                                  \
   uint32_t mask;                                \
+  int tid;                                      \
   uint8_t conn_ok:1
 
 typedef struct sock_t {

@@ -12,6 +12,7 @@
 
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "lib/utility/ob_tracepoint.h"
 
 #define rk_log_macro(level, ret, format, ...) _OB_LOG_RET(level, ret, "PNIO " format, ##__VA_ARGS__)
 #include "lib/lock/ob_futex.h"
@@ -83,6 +84,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       const char* pcode_label = set.label_of_idx(set.idx_of_pcode(pcode));
       const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
       int64_t tenant_id = tmp_pkt.get_tenant_id();
+      pn_set_trace_info(resp_id, tenant_id, pcode, tmp_pkt.get_trace_id());
       if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
         tenant_id = OB_SERVER_TENANT_ID;
       }
@@ -165,6 +167,7 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   char* pkt_ptr = reinterpret_cast<char*>(pkt);
   char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_resp", 10 * 1000);
+  pn_set_trace_point(resp_id_, rpc::ObRequest::OB_EASY_REQUEST_RPC_PROCESSOR_RUN_DONE);
   if (NULL == pkt) {
     // do nothing
   } else if (OB_UNLIKELY(pkt_ptr != resp_ptr_)) {
@@ -255,6 +258,11 @@ ObAddr ObPocServerHandleContext::get_peer()
   return peer_;
 }
 
+inline void ObPocServerHandleContext::set_trace_point(int32_t trace_point)
+{
+  pn_set_trace_point(resp_id_, trace_point);
+}
+
 int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
 {
   int ret = OB_SUCCESS;
@@ -340,6 +348,22 @@ int ObPocRpcServer::start_net_client(int net_thread_count)
   return ret;
 }
 
+int ObPocRpcServer::update_thread_count(int thread_count) {
+  int ret = OB_SUCCESS;
+  int rl_thread_count = max(1, thread_count/4);
+  if (!has_start_) {
+    ret = OB_NOT_INIT;
+    RPC_LOG(WARN, "rpc server is not inited", K(rl_thread_count));
+  } else if (OB_FAIL(tranlate_to_ob_error(pn_update_thread_count(DEFAULT_PNIO_GROUP, thread_count)))) {
+    RPC_LOG(WARN, "DEFAULT_PNIO_GROUP set thread count failed", K(thread_count));
+  } else if (OB_FAIL(tranlate_to_ob_error(pn_update_thread_count(RATELIMIT_PNIO_GROUP, rl_thread_count)))) {
+    RPC_LOG(WARN, "RATELIMIT_PNIO_GROUP set thread count failed", K(rl_thread_count));
+  } else {
+    RPC_LOG(INFO, "set thread count success", K(thread_count), K(rl_thread_count));
+  }
+  return ret;
+}
+
 void ObPocRpcServer::stop()
 {
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
@@ -397,16 +421,39 @@ extern "C" {
 void* pkt_nio_malloc(int64_t sz, const char* label) {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label, ObCtxIds::PKT_NIO);
   SET_USE_500(attr);
+  #ifdef ERRSIM
+    int tmp_ret = OB_E(EventTable::EN_RPC_IO_THREAD_HANG) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      int64_t sleep_us = -tmp_ret;
+      RPC_LOG_RET(WARN, OB_IO_ERROR, "inject rpc io thread hung", K(sleep_us));
+      ob_usleep(sleep_us);
+    }
+  #endif
   return oceanbase::common::ob_malloc(sz, attr);
 }
 void pkt_nio_free(void *ptr) {
   oceanbase::common::ob_free(ptr);
 }
+
 bool server_in_black(struct sockaddr* sa) {
   easy_addr_t ez_addr;
   easy_inet_atoe(sa, &ez_addr);
-  return ObNetKeepAlive::get_instance().in_black(ez_addr);
+  bool bool_ret = ObNetKeepAlive::get_instance().in_black(ez_addr);
+  return bool_ret;
 }
+
+#ifdef ERRSIM
+bool trigger_rpc_socket_errsim() {
+  bool bool_ret = false;;
+  int tmp_ret = OB_E(EventTable::EN_RPC_SOCKET_ERROR) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    bool_ret = true;
+    RPC_LOG_RET(WARN, tmp_ret, "inject rpc socket io error");
+  }
+  return bool_ret;
+}
+#endif
+
 int dispatch_to_ob_listener(int accept_fd) {
   int ret = -1;
   if (OB_NOT_NULL(ATOMIC_LOAD(&oceanbase::obrpc::global_ob_listener))) {
@@ -416,17 +463,22 @@ int dispatch_to_ob_listener(int accept_fd) {
 }
 int tranlate_to_ob_error(int err) {
   int ret = OB_SUCCESS;
+  if (err < 0) {
+    err = -err;
+  }
   if (PNIO_OK == err) {
   } else if (PNIO_STOPPED == err) {
     ret = OB_RPC_SEND_ERROR;
   } else if (PNIO_LISTEN_ERROR == err) {
     ret = OB_SERVER_LISTEN_ERROR;
-  } else if (ENOMEM == err || -ENOMEM == err) {
+  } else if (ENOMEM == err) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (EINVAL == err || -EINVAL == err) {
+  } else if (EINVAL == err) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (EIO == err || -EIO == err) {
+  } else if (EIO == err) {
     ret = OB_IO_ERROR;
+  } else if (ENOTSUP == err) {
+    ret = OB_NOT_SUPPORTED;
   } else {
     ret = OB_ERR_UNEXPECTED;
   }

@@ -101,6 +101,7 @@ int ussl_eloop_run(ussl_eloop_t *ep)
     ussl_eloop_refire(ep, epoll_timeout);
     ussl_dlink_for(&ep->ready_link, p) { ussl_eloop_handle_sock_event(ussl_structof(p, ussl_sock_t, ready_link)); }
     check_and_handle_timeout_event();
+    pn_check_thread_count();
   }
   close(ep->fd);
   return 0;
