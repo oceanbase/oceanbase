@@ -2882,6 +2882,7 @@ typedef enum ObCacheType
   CACHE_TYPE_PL_OBJ,
   CACHE_TYPE_PS_OBJ,
   CACHE_TYPE_LIB_CACHE,
+  CACHE_TYPE_RESULT,
   CACHE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 
