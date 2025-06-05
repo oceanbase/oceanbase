@@ -1404,9 +1404,15 @@ void ObLSMigrationHandler::stop()
   }
 
 #ifdef ERRSIM
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObLSID ls_id = ObLSID::INVALID_LS_ID;
+  if (OB_NOT_NULL(ls_)) {
+    tenant_id = ls_->get_tenant_id();
+    ls_id = ls_->get_ls_id();
+  }
   SERVER_EVENT_ADD("storage_ha", "migration_handler_stop",
-      "tenant_id", ls_->get_tenant_id(),
-      "ls_id", ls_->get_ls_id().id(),
+      "tenant_id", tenant_id,
+      "ls_id", ls_id.id(),
       "is_failed", ret,
       "result", result_);
 #endif
