@@ -496,6 +496,7 @@ struct ObStoreCtx
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
   bool is_read_store_ctx_;
   bool update_full_column_;
+  bool standalone_write_;
   int64_t check_seq_;
 };
 

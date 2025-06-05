@@ -4872,7 +4872,7 @@ int ObTablet::update_row(
                                  store_ctx.update_full_column_ ? nullptr : &update_idx,
                                  &old_row,
                                  1,     /*row_count*/
-                                 false, /*check_exist*/
+                                 store_ctx.standalone_write_, /*check_exist*/
                                  encrypt_meta);
 
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
