@@ -3220,7 +3220,6 @@ int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange>
 int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
                                      const ObRelIds &all_tables,
                                      const ObIArray<ObFdItem *> &fd_item_set,
-                                     const ObIArray<ObFdItem *> *candi_fd_item_set,
                                      const EqualSets &equal_sets,
                                      const ObIArray<ObRawExpr *> &const_exprs,
                                      bool &is_unique)
@@ -3244,19 +3243,12 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
     ObRelIds remain_tables = all_tables;
     ObSqlBitSet<> skip_fd;
     int64_t exprs_count = -1;
-
-    if (OB_SUCC(ret) && NULL != candi_fd_item_set
-        && OB_FAIL(is_exprs_unique(&exprs, extend_exprs, remain_tables, fd_item_set,
-                                   fd_set_parent_exprs, skip_fd, equal_sets,
-                                   const_exprs, is_unique))) {
-      LOG_WARN("failed to get fd set parent exprs ", K(ret));
-    }
     //使用 extend_exprs 判断是否 unique, 同时扩充 extend_exprs, 当 extend_exprs 数量增加且未 unique 时,
     //迭代进行检查, 暂时设定最大迭代次数为 10
     for (int64_t i = 0; OB_SUCC(ret) && !is_unique && i < 10
                         && extend_exprs.count() != exprs_count; ++i) {
       exprs_count = extend_exprs.count();
-      if (OB_FAIL(is_exprs_unique(NULL, extend_exprs, remain_tables, fd_item_set,
+      if (OB_FAIL(is_exprs_unique(extend_exprs, remain_tables, fd_item_set,
                                   fd_set_parent_exprs, skip_fd, equal_sets,
                                   const_exprs, is_unique))) {
         LOG_WARN("failed to get fd set parent exprs ", K(ret));
@@ -3266,8 +3258,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
   return ret;
 }
 
-int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
-                                     ObIArray<ObRawExpr *> &extend_exprs,
+int ObOptimizerUtil::is_exprs_unique(ObIArray<ObRawExpr *> &extend_exprs,
                                      ObRelIds &remain_tables,
                                      const ObIArray<ObFdItem *> &fd_item_set,
                                      ObIArray<ObRawExpr *> &fd_set_parent_exprs,
@@ -3279,19 +3270,15 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
   int ret = OB_SUCCESS;
   bool is_contain = false;
   ObFdItem *fd_item = NULL;
-  const bool is_candi_fd = NULL != exprs;
-  if (!is_candi_fd) {
-    exprs = &extend_exprs;
-  }
   for (int64_t i = 0; OB_SUCC(ret) && !is_unique && i < fd_item_set.count(); ++i) {
     is_contain = false;
     if (OB_ISNULL(fd_item = fd_item_set.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null fd item", K(ret));
-    } else if (!is_candi_fd && skip_fd.has_member(i)) {
+    } else if (skip_fd.has_member(i)) {
       /*do nothing*/
     } else if (fd_item->is_unique()) { //unique fd item
-      if (OB_FAIL(is_exprs_contain_fd_parent(*exprs, *fd_item, equal_sets,
+      if (OB_FAIL(is_exprs_contain_fd_parent(extend_exprs, *fd_item, equal_sets,
                                               const_exprs, is_contain))) {
         LOG_WARN("failed to check is order unique", K(ret));
       } else if (is_contain) {
@@ -3301,7 +3288,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
       ObTableFdItem *table_fd_item = static_cast<ObTableFdItem *>(fd_item);
       if (!remain_tables.overlap(table_fd_item->get_child_tables())) {
         /*do nothing*/
-      } else if (OB_FAIL(is_exprs_contain_fd_parent(*exprs, *fd_item, equal_sets,
+      } else if (OB_FAIL(is_exprs_contain_fd_parent(extend_exprs, *fd_item, equal_sets,
                                                     const_exprs, is_contain))) {
         LOG_WARN("failed to check is order unique", K(ret));
       } else if (!is_contain) {
@@ -3314,7 +3301,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
       }
       is_unique = (0 == remain_tables.num_members());
     } else { //not unique expr fd item
-      if (OB_FAIL(is_exprs_contain_fd_parent(*exprs, *fd_item, equal_sets,
+      if (OB_FAIL(is_exprs_contain_fd_parent(extend_exprs, *fd_item, equal_sets,
                                              const_exprs, is_contain))) {
         LOG_WARN("failed to check is order unique", K(ret));
       } else if (is_contain && OB_FAIL(split_child_exprs(fd_item, equal_sets, fd_set_parent_exprs,
@@ -3322,7 +3309,7 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
         LOG_WARN("failed to delete members", K(ret));
       }
     }
-    if (OB_SUCC(ret) && is_contain && !is_candi_fd && OB_FAIL(skip_fd.add_member(i))) {
+    if (OB_SUCC(ret) && is_contain && OB_FAIL(skip_fd.add_member(i))) {
       LOG_WARN("failed to add member", K(ret));
     }
   }

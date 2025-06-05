@@ -623,17 +623,6 @@ public:
                              const ObIArray<ObFdItem *> &fd_item_set,
                              const EqualSets &equal_sets,
                              const ObIArray<ObRawExpr *> &const_exprs,
-                             bool &is_unique)
-  {
-    return is_exprs_unique(exprs, all_tables, fd_item_set, NULL, equal_sets, const_exprs, is_unique);
-  }
-
-  static int is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
-                             const ObRelIds &all_tables,
-                             const ObIArray<ObFdItem *> &fd_item_set,
-                             const ObIArray<ObFdItem *> *candi_fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
                              bool &is_unique);
 
   static int is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
@@ -642,8 +631,7 @@ public:
                              const ObIArray<ObRawExpr *> &const_exprs,
                              bool &is_unique);
 
-  static int is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
-                             ObIArray<ObRawExpr *> &extend_exprs,
+  static int is_exprs_unique(ObIArray<ObRawExpr *> &extend_exprs,
                              ObRelIds &remain_tables,
                              const ObIArray<ObFdItem *> &fd_item_set,
                              ObIArray<ObRawExpr *> &fd_set_parent_exprs,

@@ -4195,12 +4195,19 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     check_helper.session_info_ = session_info;
     UniqueCheckInfo res_info;
     ObRelIds all_tables;
+    ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions, res_info))) {
       LOG_WARN("failed to compute tables property", K(ret));
     } else if (OB_FAIL(get_rel_ids_from_tables(stmt, table_items, all_tables))) {
       LOG_WARN("failed to add members", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.not_null_, exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!is_strict && OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(dummy_conds,
+                                                                          res_info.candi_fd_sets_,
+                                                                          res_info.fd_sets_,
+                                                                          res_info.not_null_))) {
+      LOG_WARN("failed to enhance fd item set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                        is_strict ? NULL : &res_info.candi_fd_sets_,
                                                         res_info.equal_sets_,
                                                         res_info.const_exprs_,
                                                         is_unique))) {
@@ -4311,12 +4318,19 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
     check_helper.session_info_ = session_info;
     UniqueCheckInfo res_info;
     ObRelIds all_tables;
+    ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(compute_stmt_property(stmt, check_helper, res_info, extra_flags))) {
       LOG_WARN("failed to compute stmt property", K(ret));
     } else if (OB_FAIL(stmt->get_from_tables(all_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.not_null_, exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!is_strict && OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(dummy_conds,
+                                                                          res_info.candi_fd_sets_,
+                                                                          res_info.fd_sets_,
+                                                                          res_info.not_null_))) {
+      LOG_WARN("failed to enhance fd item set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                        is_strict ? NULL : &res_info.candi_fd_sets_,
                                                         res_info.equal_sets_,
                                                         res_info.const_exprs_, is_unique))) {
       LOG_WARN("failed to check is exprs unique", K(ret));
