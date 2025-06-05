@@ -635,8 +635,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_mlog_table_(false),
     is_enable_semistruct_encoding_(false),
     is_safe_filter_with_di_(true),
+    access_virtual_col_cnt_(0),
     aggregate_param_props_(allocator),
-    access_virtual_col_cnt_(0)
+    plan_enable_rich_format_(false)
 {
   reset();
 }
@@ -673,8 +674,9 @@ void ObTableParam::reset()
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
   is_safe_filter_with_di_ = true;
-  aggregate_param_props_.reset();
   access_virtual_col_cnt_ = 0;
+  aggregate_param_props_.reset();
+  plan_enable_rich_format_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -735,10 +737,9 @@ OB_DEF_SERIALIZE(ObTableParam)
                 is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(access_virtual_col_cnt_);
+    OB_UNIS_ENCODE(aggregate_param_props_);
+    OB_UNIS_ENCODE(plan_enable_rich_format_);
   }
   return ret;
 }
@@ -855,10 +856,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, access_virtual_col_cnt_);
+    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
+    LST_DO_CODE(OB_UNIS_DECODE, plan_enable_rich_format_);
   }
   return ret;
 }
@@ -928,11 +928,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-                aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ADD_LEN,
-                access_virtual_col_cnt_);
+                access_virtual_col_cnt_,
+                aggregate_param_props_,
+                plan_enable_rich_format_);
   }
   return len;
 }

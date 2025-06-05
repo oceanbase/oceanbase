@@ -438,8 +438,10 @@ private:
   bool is_mlog_table_;
   bool is_enable_semistruct_encoding_;
   bool is_safe_filter_with_di_;
-  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
   int8_t access_virtual_col_cnt_;
+  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+  // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
+  bool plan_enable_rich_format_;
 };
 } //namespace schema
 } //namespace share
