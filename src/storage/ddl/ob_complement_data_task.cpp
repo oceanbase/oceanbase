@@ -1400,6 +1400,7 @@ int ObComplementWriteTask::add_extra_rowkey(const int64_t rowkey_cnt,
 int ObComplementWriteTask::append_row(ObScan *scan)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(lib::ObLabel("CompDataTaskTmp"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObComplementDataDag *current_dag = nullptr;
   const int64_t CHECK_DAG_NEED_EXIT_INTERVAL = 10000; // 1w rows.
   ObDataStoreDesc data_desc;
@@ -1425,7 +1426,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObStoreRow reshaped_row;
     reshaped_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
-    ObArenaAllocator allocator(lib::ObLabel("CompDataTaskTmp"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObRowReshape *reshape_ptr = nullptr;
     ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;
     ObDatumRow datum_row;
