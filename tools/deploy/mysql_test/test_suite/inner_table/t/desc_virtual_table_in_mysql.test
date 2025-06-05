@@ -34,7 +34,9 @@ case when "$table_name" in (
 "__tenant_virtual_show_create_procedure" ,
 "__tenant_virtual_show_create_tablegroup" ,
 "__tenant_virtual_object_definition" ,
-"__tenant_virtual_show_create_trigger") then 2
+"__tenant_virtual_show_create_trigger",
+"__tenant_virtual_show_create_location",
+"__tenant_virtual_list_file") then 2
 when "$table_name" in (
 "__all_virtual_proxy_schema" ,
 "__all_virtual_proxy_partition_info" ,

@@ -23,6 +23,7 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
 #include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -41,16 +42,44 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
 {
   int ret = OB_SUCCESS;
   // 1. print file location, pattern
-  const ObString &location = table_schema.get_external_file_location();
+  ObString location;
+  uint64_t location_id = table_schema.get_external_location_id();
   const ObString &pattern = table_schema.get_external_file_pattern();
   const ObString &format_string = table_schema.get_external_file_format();
   const ObString &properties_string = table_schema.get_external_properties();
+  const ObString &sub_path = table_schema.get_external_sub_path();
   const bool user_specified = table_schema.is_user_specified_partition_for_external_table();
   bool is_odps_external_table = false;
-  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+  ObString location_name;
+  const ObLocationSchema *location_schema = NULL;
+  if (OB_INVALID_ID != location_id) {
+    if(OB_FAIL(schema_guard_.get_location_schema_by_id(table_schema.get_tenant_id(), location_id, location_schema))) {
+      LOG_WARN("failed to get location schema", K(ret));
+    } else if (OB_ISNULL(location_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("location schema is null", K(ret));
+    } else {
+      location_name = location_schema->get_location_name();
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObExternalTableUtils::get_external_file_location(table_schema, schema_guard_, allocator, location))) {
+    LOG_WARN("failed to get external file location", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
     LOG_WARN("failed to check is odps table or not", K(ret));
-  } else if (!is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
+  }
+  if (OB_SUCC(ret) && !is_odps_external_table) {
+    if (!location_name.empty()) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION=@%.*s", location_name.length(), location_name.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION OBJ", K(ret));
+      } else if (!sub_path.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%.*s'", sub_path.length(), sub_path.ptr()))){
+        SHARE_SCHEMA_LOG(WARN, "fail to print SUB_PATH", K(ret));
+      }
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (!is_odps_external_table && !pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nAUTO_REFRESH = %s", table_schema.get_external_table_auto_refresh() == 0 ? "OFF" :

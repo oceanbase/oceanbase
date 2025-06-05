@@ -10746,6 +10746,8 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
       K_(session_id),
       "index_type", static_cast<int32_t>(index_type_),
       "table_type", static_cast<int32_t>(table_type_),
+      K_(external_location_id),
+      K_(external_sub_path),
       K_(table_mode),
       K_(tablespace_id));
   J_COMMA();

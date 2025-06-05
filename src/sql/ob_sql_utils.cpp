@@ -1458,6 +1458,24 @@ int ObSQLUtils::get_odps_api_mode(const ObString &table_format_or_properties,
   return ret;
 }
 
+int ObSQLUtils::check_location_constraint(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
+    // do nothing
+  } else if ((!table_schema.get_external_file_location().empty()
+      && OB_INVALID_ID != table_schema.get_external_location_id())
+      || (table_schema.get_external_file_location().empty()
+          && OB_INVALID_ID == table_schema.get_external_location_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("both file location and location id are valid", KR(ret), K(table_schema));
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
                                  const bool check_for_path_char, const int64_t max_ident_len)
 {

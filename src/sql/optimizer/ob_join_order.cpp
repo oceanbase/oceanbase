@@ -23,6 +23,7 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
+#include "share/external_table/ob_external_table_utils.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -419,8 +420,11 @@ int ObJoinOrder::set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (table_schema->is_external_table()) {
-    if (path->parallel_ > 1
-        || ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
+    ObString file_location;
+    CK (OB_NOT_NULL(schema_guard->get_schema_guard()));
+    if (OB_FAIL(ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard->get_schema_guard(), *allocator_, file_location))) {
+      LOG_WARN("failed to get file_location", K(ret));
+    } else if (path->parallel_ > 1 || ObSQLUtils::is_external_files_on_local_disk(file_location)) {
       sharding_info = opt_ctx->get_distributed_sharding();
     } else {
       sharding_info = opt_ctx->get_distributed_sharding();

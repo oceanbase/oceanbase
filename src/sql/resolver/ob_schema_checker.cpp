@@ -2332,6 +2332,26 @@ int ObSchemaChecker::get_directory_id(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaChecker::get_location_id(const uint64_t tenant_id,
+                                     const common::ObString &location_name,
+                                     uint64_t &location_id)
+{
+  int ret = OB_SUCCESS;
+  const ObLocationSchema *schema = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_location_schema_by_name(tenant_id, location_name, schema))) {
+    LOG_WARN("get location schema failed", K(ret));
+  } else if (OB_ISNULL(schema)) {
+    ret = OB_LOCATION_OBJ_NOT_EXIST;
+    LOG_WARN("location is not exists", K(location_name));
+  } else {
+    location_id = schema->get_location_id();
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_table_schema_inner(const uint64_t tenant_id, uint64_t table_id,
                                             const ObTableSchema *&table_schema) const
 {
@@ -2405,7 +2425,8 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     bool explicit_db,
     const common::ObString &prev_table_name,
     ObSynonymChecker &synonym_checker,
-    bool is_catalog)
+    bool is_catalog,
+    bool is_location)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2422,7 +2443,7 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog) {
+  } else if (!is_directory && !is_catalog && !is_location) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -2605,6 +2626,13 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
     ObString catalog_name = table_name;
     OZ (get_catalog_id_name(tenant_id, catalog_name, object_id));
     OX (object_type = ObObjectType::CATALOG);
+  } else if (is_location) {
+    uint64_t loc_id = 0;
+    OZ (get_location_id(tenant_id, table_name, loc_id));
+    OX (object_type = ObObjectType::LOCATION);
+    OX (object_id = loc_id);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("get_object_type_with_view_info failed",
@@ -2846,7 +2874,8 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
                                      bool explicit_db,
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
-                                     bool is_catalog)
+                                     bool is_catalog,
+                                     bool is_location)
 {
   int ret = OB_SUCCESS;
   object_type = ObObjectType::INVALID;
@@ -2860,7 +2889,7 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     if (lib::is_oracle_mode() && ret == OB_ERR_BAD_DATABASE) {
       ret = OB_TABLE_NOT_EXIST;
     }
-  } else if (!is_directory && !is_catalog) {
+  } else if (!is_directory && !is_catalog && !is_location) {
     ret = get_table_schema(tenant_id, database_name, table_name, false, table_schema);
     if (OB_TABLE_NOT_EXIST == ret) {
       if (lib::is_oracle_mode()) {
@@ -3017,6 +3046,13 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
     ObString catalog_name = table_name;
     OZ (get_catalog_id_name(tenant_id, catalog_name, object_id));
     OX (object_type = ObObjectType::CATALOG);
+  } else if (is_location) {
+    uint64_t loc_id = 0;
+    OZ (get_location_id(tenant_id, table_name, loc_id));
+    OX (object_type = ObObjectType::LOCATION);
+    OX (object_id = loc_id);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("get_object_type failed", K(tenant_id), K(database_name), K(table_name), K(ret));

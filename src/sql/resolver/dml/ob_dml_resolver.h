@@ -1110,7 +1110,9 @@ private:
                                       common::ObIAllocator &allocator);
   int set_basic_info_for_mocked_table(ObTableSchema &table_schema,
                                       common::ObString table_location,
-                                      const ObExternalFileFormat &format);
+                                      const ObExternalFileFormat &format,
+                                      common::ObString sub_path = "",
+                                      bool using_location_object = false);
   int sample_external_file_name(common::ObIAllocator &allocator,
                                 ObTableSchema &table_schema,
                                 common::ObString &sampled_file_name);

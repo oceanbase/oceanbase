@@ -18,6 +18,8 @@
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
+#include "lib/restore/ob_object_device.h"
+#include "src/share/ob_device_manager.h"
 
 namespace oceanbase
 {
@@ -1581,7 +1583,7 @@ int ObExternalTableUtils::collect_external_file_list(
         ObString &file_url = file_urls.at(i);
         OZ (tmp_file_url.append(full_path.string()));
         OZ (tmp_file_url.append(file_urls.at(i)));
-        OZ (ob_write_string(allocator, tmp_file_url.string(), file_url));
+        OZ (ob_write_string(allocator, tmp_file_url.string(), file_url, true));
       }
     }
 
@@ -1602,6 +1604,142 @@ bool ObExternalTableUtils::is_skipped_insert_column(const schema::ObColumnSchema
     is_skip = true;
   }
   return is_skip;
+}
+
+int ObExternalTableUtils::get_external_file_location(const ObTableSchema &table_schema,
+                                                     ObSchemaGetterGuard &schema_guard,
+                                                     ObIAllocator &allocator,
+                                                     ObString &file_location)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t location_id = table_schema.get_external_location_id();
+  if (OB_INVALID_ID != location_id) {
+    const ObLocationSchema *location_schema = NULL;
+    if (OB_FAIL(schema_guard.get_location_schema_by_id(tenant_id, location_id, location_schema))) {
+      LOG_WARN("fail to get location schema", K(ret), K(location_id), K(tenant_id));
+    } else if (OB_ISNULL(location_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("location schema is null", K(ret), K(location_id), K(tenant_id));
+    } else {
+      ObSqlString full_path;
+      ObString sub_path = table_schema.get_external_sub_path();
+      OZ (full_path.append(location_schema->get_location_url_str()));
+      if (OB_SUCC(ret) && full_path.length() > 0
+          && *(full_path.ptr() + full_path.length() - 1) != '/'
+          && !sub_path.empty()
+          && sub_path[0] != '/') {
+        OZ (full_path.append("/"));
+      }
+      OZ (full_path.append(sub_path));
+      if (OB_SUCC(ret)) {
+        ob_write_string(allocator, full_path.string(), file_location, true);
+      }
+    }
+  } else {
+    file_location = table_schema.get_external_file_location();
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::get_external_file_location_access_info(const ObTableSchema &table_schema,
+                                                                 ObSchemaGetterGuard &schema_guard,
+                                                                 ObString &access_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t location_id = table_schema.get_external_location_id();
+  if (OB_INVALID_ID != location_id) {
+    const ObLocationSchema *location_schema = NULL;
+    if (OB_FAIL(schema_guard.get_location_schema_by_id(tenant_id, location_id, location_schema))) {
+      LOG_WARN("fail to get location schema", K(ret), K(location_id), K(tenant_id));
+    } else if (OB_ISNULL(location_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("location schema is null", K(ret), K(location_id), K(tenant_id));
+    } else {
+      access_info = location_schema->get_location_access_info_str();
+    }
+  } else {
+    access_info = table_schema.get_external_file_location_access_info();
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::remove_external_file_list(const uint64_t tenant_id,
+                                                    const ObString &location,
+                                                    const ObString &access_info,
+                                                    const ObString &pattern,
+                                                    const sql::ObExprRegexpSessionVariables &regexp_vars,
+                                                    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (location.empty()) {
+    //do nothing
+  } else {
+    const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(location);
+    if (is_local_storage) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support local storage");
+    } else {
+      ObStorageType device_type = OB_STORAGE_MAX_TYPE;
+      OZ (get_storage_type_from_path(location, device_type));
+      // hdfs支持直接删除目录, 删除hdfs下的某个路径时不需要先获取文件
+      bool is_del_all = (pattern.empty() || pattern == "*") && (OB_STORAGE_HDFS == device_type);
+      ObArray<ObString> file_urls;
+      ObArray<int64_t> file_sizes;
+      ObSqlString full_path;
+      full_path.append(location);
+      if (!is_del_all) {
+        OZ (collect_external_file_list(nullptr, tenant_id, -1, location, access_info,
+                                       pattern, "", false, regexp_vars, allocator, full_path, file_urls, file_sizes));
+      }
+      if (OB_SUCC(ret)) {
+        ObArray<int64_t> failed_files_idx;
+        common::ObObjectStorageInfo *storage_access_info = NULL;
+        share::ObBackupStorageInfo backup_storage_info;
+        share::ObHDFSStorageInfo hdfs_storage_info;
+        if (device_type == OB_STORAGE_HDFS) {
+          storage_access_info = &hdfs_storage_info;
+        } else {
+          storage_access_info = &backup_storage_info;
+        }
+        OZ (storage_access_info->set(device_type, access_info.ptr()));
+
+        ObIODOpts opts;
+        ObIODOpt opt; //only one para
+        opts.opts_ = &(opt);
+        opts.opt_cnt_ = 1;
+        opt.key_ = "storage_info";
+        ObIODevice *dev_handle = NULL;
+        const ObStorageIdMod storage_id_mod = ObStorageIdMod::get_default_id_mod();
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (FALSE_IT(opt.value_.value_str = access_info.ptr())) {
+          // do nothing
+        } else if (OB_FAIL(ObDeviceManager::get_instance().get_device(location, *storage_access_info,
+                                                                      storage_id_mod, dev_handle))) {
+          OB_LOG(WARN, "fail to get device!", KR(ret), KPC(storage_access_info), K(location), K(storage_id_mod));
+        } else if (OB_ISNULL(dev_handle)) {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "returned device is null", KR(ret), KPC(storage_access_info), K(location), K(storage_id_mod));
+        } else if (OB_FAIL(dev_handle->start(opts))) {
+          OB_LOG(WARN, "fail to start device!", KR(ret), KPC(storage_access_info), K(location), K(storage_id_mod));
+        } else if (!is_del_all && OB_FAIL(dev_handle->batch_del_files(file_urls, failed_files_idx))) {
+          OB_LOG(WARN, "fail to del files", KR(ret), KPC(storage_access_info), K(location), K(storage_id_mod));
+        } else if (is_del_all && OB_FAIL(dev_handle->rmdir(location.ptr()))) {
+          OB_LOG(WARN, "fail to rmdir", KR(ret), KPC(storage_access_info), K(location), K(storage_id_mod));
+        }
+        if (OB_NOT_NULL(dev_handle)) {
+          if (OB_FAIL(ObDeviceManager::get_instance().release_device(dev_handle))) {
+            OB_LOG(WARN, "fail to release device", K(ret), KP(dev_handle));
+          } else {
+            dev_handle = nullptr;
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 }  // namespace share

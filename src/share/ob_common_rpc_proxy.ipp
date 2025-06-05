@@ -80,6 +80,7 @@
   RPC_S(PRD revoke_table, obrpc::OB_REVOKE_TABLE, (ObRevokeTableArg));
   RPC_S(PRD revoke_routine, obrpc::OB_REVOKE_ROUTINE, (ObRevokeRoutineArg));
   RPC_S(PRD revoke_sys_priv, obrpc::OB_REVOKE_SYSPRIV, (ObRevokeSysPrivArg));
+  RPC_S(PRD revoke_object, obrpc::OB_REVOKE_OBJECT, (ObRevokeObjMysqlArg));
   RPC_S(PRD alter_user_profile, obrpc::OB_ALTER_USER_PROFILE, (ObAlterUserProfileArg));
   RPC_S(PRD handle_security_audit, obrpc::OB_SECURITY_AUDIT, (ObSecurityAuditArg));
   //----End of definitions for managing privileges----
@@ -285,6 +286,11 @@
   //----Definitions for sync rewrite rules----
   RPC_S(PR5 admin_sync_rewrite_rules, obrpc::OB_ADMIN_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   //----End of Definitions for sync rewrite rules----
+
+  //----Definitions for location object----
+  RPC_S(PRD create_location, obrpc::OB_CREATE_LOCATION, (ObCreateLocationArg));
+  RPC_S(PRD drop_location, obrpc::OB_DROP_LOCATION, (ObDropLocationArg));
+  //----End of definitions for location object----
 
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 admin_add_arbitration_service, obrpc::OB_ADMIN_ADD_ARBITRATION_SERVICE, (ObAdminAddArbitrationServiceArg));

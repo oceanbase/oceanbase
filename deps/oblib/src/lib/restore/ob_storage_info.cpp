@@ -327,10 +327,17 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   if (is_valid()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage info init twice", K(ret));
-  } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
+  } else if (FALSE_IT(device_type_ = device_type)){
+
+  } else if (OB_ISNULL(storage_info)) {
+    // file/hdfs的storage info为空时传进来的会是个空指针
+    if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_HDFS != device_type_) {
+      ret = OB_INVALID_BACKUP_DEST;
+      LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
+    }
+  } else if (strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
-  } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
     // Only file/hdfs storage could be with empty storage_info.
     if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_HDFS != device_type_) {

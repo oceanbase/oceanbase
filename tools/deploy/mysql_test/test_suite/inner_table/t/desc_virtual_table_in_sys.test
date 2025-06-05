@@ -27,6 +27,8 @@ case when "$table_name" in (
 "__tenant_virtual_show_create_catalog" ,
 "__tenant_virtual_show_catalog_databases",
 "__tenant_virtual_show_catalog_tables",
+"__tenant_virtual_show_create_location",
+"__tenant_virtual_list_file",
 "__tenant_virtual_show_create_database" ,
 "__tenant_virtual_show_create_table" ,
 "__tenant_virtual_current_tenant" ,

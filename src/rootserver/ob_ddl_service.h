@@ -896,7 +896,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
     share::schema::ObSchemaGetterGuard &schema_guard,
     const common::ObString &grantor = "",
     const common::ObString &grantor_host = "");
-
   virtual int revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
     const ObPrivSet priv_set,

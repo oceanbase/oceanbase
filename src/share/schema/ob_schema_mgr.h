@@ -37,6 +37,7 @@
 #include "share/schema/ob_security_audit_mgr.h"
 #include "share/schema/ob_dblink_mgr.h"
 #include "share/schema/ob_directory_mgr.h"
+#include "share/schema/ob_location_mgr.h"
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
 #include "share/schema/ob_rls_mgr.h"
@@ -731,6 +732,10 @@ public:
       const uint64_t tenant_id,
       const uint64_t schema_id,
       const ObDirectorySchema *&schema) const;
+  int get_location_schema(
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      const ObLocationSchema *&schema) const;
 
   int get_keystore_schema(
       const uint64_t tenant_id,
@@ -933,6 +938,10 @@ private:
   int add_catalogs(const common::ObIArray<ObCatalogSchema> &catalog_schemas);
   int add_catalog(const ObCatalogSchema &catalog_schema);
   int del_catalog(const ObTenantCatalogId &id);
+  // location
+  int add_locations(const common::ObIArray<ObLocationSchema> &location_schemas);
+  int add_location(const ObLocationSchema &location_schema);
+  int del_location(const ObTenantLocationId &id);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -984,6 +993,7 @@ private:
   IndexNameMap built_in_index_name_map_;
   ObDbLinkMgr dblink_mgr_;
   ObDirectoryMgr directory_mgr_;
+  ObLocationMgr location_mgr_;
   ObContextMgr context_mgr_;
   ObMockFKParentTableMgr mock_fk_parent_table_mgr_;
   ObRlsPolicyMgr rls_policy_mgr_;

@@ -501,8 +501,12 @@ ob_set_subtarget(ob_share schema
   schema/ob_keystore_sql_service.cpp
   schema/ob_label_se_policy_mgr.cpp
   schema/ob_label_se_policy_sql_service.cpp
+  schema/ob_location_mgr.cpp
+  schema/ob_location_schema_struct.cpp
+  schema/ob_location_sql_service.cpp
   schema/ob_mock_fk_parent_table_mgr.cpp
   schema/ob_multi_version_schema_service.cpp
+  schema/ob_objpriv_mysql_schema_struct.cpp
   schema/ob_outline_mgr.cpp
   schema/ob_outline_sql_service.cpp
   schema/ob_package_info.cpp
@@ -562,6 +566,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_ddl_epoch.cpp
   schema/ob_ddl_trans_controller.cpp
   schema/ob_schema_getter_guard.cpp
+  schema/ob_schema_getter_guard_location.cpp
+  schema/ob_schema_getter_guard_objpriv_mysql.cpp
   schema/ob_schema_getter_guard_priv.cpp
   schema/ob_schema_struct.cpp
   schema/ob_sequence_sql_service.cpp
@@ -579,6 +585,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_external_resource_mgr.cpp
   schema/ob_external_resource_schema_struct.cpp
   schema/ob_external_resource_sql_service.cpp
+  schema/ob_location_schema_struct.cpp
+  schema/ob_schema_getter_guard_location.cpp
 )
 
 ob_set_subtarget(ob_share stat

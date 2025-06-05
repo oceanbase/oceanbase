@@ -5777,6 +5777,41 @@ OB_SERIALIZE_MEMBER((ObRevokeRoutineArg, ObDDLArg),
                     grantor_,
                     grantor_host_);
 
+
+bool ObRevokeObjMysqlArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !obj_name_.empty();
+}
+
+int ObRevokeObjMysqlArg::assign(const ObRevokeObjMysqlArg& other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    user_id_ = other.user_id_;
+    obj_name_ = other.obj_name_;
+    priv_set_ = other.priv_set_;
+    grant_ = other.grant_;
+    obj_type_ = other.obj_type_;
+    grantor_ = other.grantor_;
+    grantor_host_ = other.grantor_host_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeObjMysqlArg, ObDDLArg),
+                    tenant_id_,
+                    user_id_,
+                    obj_name_,
+                    obj_type_,
+                    priv_set_,
+                    grant_,
+                    grantor_,
+                    grantor_host_);
+
 bool ObRevokeSysPrivArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != grantee_id_;
@@ -9509,6 +9544,35 @@ int ObDropDirectoryArg::assign(const ObDropDirectoryArg &other)
 
 OB_SERIALIZE_MEMBER((ObDropDirectoryArg, ObDDLArg), tenant_id_, directory_name_);
 
+int ObCreateLocationArg::assign(const ObCreateLocationArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(schema_.assign(other.schema_))) {
+    LOG_WARN("fail to assign directory schema", KR(ret));
+  } else {
+    or_replace_ = other.or_replace_;
+    user_id_ = other.user_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObCreateLocationArg, ObDDLArg), or_replace_, user_id_, schema_);
+
+int ObDropLocationArg::assign(const ObDropLocationArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    location_name_ = other.location_name_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObDropLocationArg, ObDDLArg), tenant_id_, location_name_);
 
 #ifdef OB_BUILD_TDE_SECURITY
 int ObDumpCacheMasterKeyResultArg::ObMasterKeyVersionPair::assign(

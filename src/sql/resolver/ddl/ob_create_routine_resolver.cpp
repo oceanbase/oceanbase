@@ -14,6 +14,8 @@
 #include "ob_create_routine_resolver.h"
 #include "ob_create_routine_stmt.h"
 #include "pl/ob_pl_router.h"
+#include "pl/ob_pl_resolver.h"
+#include "pl/parser/parse_stmt_item_type.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif

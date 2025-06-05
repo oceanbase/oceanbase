@@ -16,6 +16,7 @@
 #include "share/schema/ob_partition_sql_helper.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "share/storage_cache_policy/ob_storage_cache_partition_sql_helper.h"
 
 namespace oceanbase
@@ -3344,6 +3345,10 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
+        || (data_version >= DATA_VERSION_4_4_0_0
+            && OB_FAIL(dml.add_column("external_location_id", table.get_external_location_id())))
+        || (data_version >= DATA_VERSION_4_4_0_0
+            && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(table.get_external_sub_path()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3543,6 +3548,10 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
         || (data_version >= DATA_VERSION_4_3_5_2
             && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
+        || (data_version >= DATA_VERSION_4_4_0_0
+            && OB_FAIL(dml.add_column("external_location_id", table.get_external_location_id())))
+        || (data_version >= DATA_VERSION_4_4_0_0
+            && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(table.get_external_sub_path()))))
         ) {
           LOG_WARN("add column failed", K(ret));
         }
@@ -3637,7 +3646,11 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (data_version >= DATA_VERSION_4_3_5_2
           && OB_FAIL(dml.add_column("storage_cache_policy", ObHexEscapeSqlStr(storage_cache_policy))))
       || (data_version >= DATA_VERSION_4_3_5_2
-          && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))) {
+          && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
+      || (data_version >= DATA_VERSION_4_4_0_0
+          && OB_FAIL(dml.add_column("external_location_id", new_table_schema.get_external_location_id())))
+      || (data_version >= DATA_VERSION_4_4_0_0
+          && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(new_table_schema.get_external_sub_path()))))) {
             LOG_WARN("add column failed", K(ret));
   } else {
     if (new_table_schema.is_interval_part()) {

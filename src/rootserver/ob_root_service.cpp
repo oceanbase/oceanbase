@@ -6805,6 +6805,32 @@ int ObRootService::drop_directory(const obrpc::ObDropDirectoryArg &arg)
   return ret;
 }
 
+int ObRootService::create_location(const obrpc::ObCreateLocationArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObLocationDDLService location_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(location_ddl_service.create_location(arg, &arg.ddl_stmt_str_))) {
+    LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::drop_location(const obrpc::ObDropLocationArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObLocationDDLService location_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(location_ddl_service.drop_location(arg, &arg.ddl_stmt_str_))) {
+    LOG_WARN("drop location failed", K(arg.location_name_), K(ret));
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // row level security
 ////////////////////////////////////////////////////////////////
@@ -6967,6 +6993,19 @@ int ObRootService::revoke_routine(const ObRevokeRoutineArg &arg)
   return ret;
 }
 
+int ObRootService::revoke_object(const ObRevokeObjMysqlArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObObjPrivMysqlDDLService objpriv_mysql_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObObjMysqlPrivSortKey object_key(arg.tenant_id_, arg.user_id_, arg.obj_name_, arg.obj_type_);
+    OZ (objpriv_mysql_ddl_service.revoke_object(object_key, arg.priv_set_, arg.grantor_, arg.grantor_host_));
+  }
+  return ret;
+}
 
 int ObRootService::revoke_syspriv(const ObRevokeSysPrivArg &arg)
 {

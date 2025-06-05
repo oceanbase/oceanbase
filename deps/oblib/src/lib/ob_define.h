@@ -422,6 +422,13 @@ const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
 
 const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle
+
+const int64_t OB_MAX_LOCATION_NAME_LENGTH = 128;
+
+const int64_t OB_MAX_LOCATION_URL_LENGTH = 4000;
+
+const int64_t OB_MAX_LOCATION_ACCESS_INFO_LENGTH = 8000;
+const int64_t LOCATION_DEFINE_LENGTH = 8 * 1024;
 const uint64_t OB_MAX_INTERVAL_PARTITIONS = 1048575; // interval parted table max partitions
 const int64_t OB_MAX_BALANCE_GROUP_NAME_LENGTH = 512;
 const int64_t OB_SERVICE_NAME_LENGTH = 64;
@@ -2280,6 +2287,7 @@ const char *const E_REPLICA_STR = "E";
 // columnstore replica
 const char *const COLUMNSTORE_REPLICA_STR = "COLUMNSTORE";
 const char *const C_REPLICA_STR = "C";
+const int64_t OB_LOCATION_UTILS_REMOVE = 1;
 
 class ObReplicaTypeCheck
 {

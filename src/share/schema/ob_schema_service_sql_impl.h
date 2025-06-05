@@ -44,6 +44,7 @@
 #include "share/schema/ob_rls_sql_service.h"
 #include "share/schema/ob_catalog_sql_service.h"
 #include "share/schema/ob_external_resource_sql_service.h"
+#include "share/schema/ob_location_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -136,6 +137,7 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
   GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog)
   GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource)
+  GET_DDL_SQL_SERVICE_FUNC(Location, location)
 
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
@@ -246,6 +248,8 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(location, ObLocationSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -331,6 +335,7 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id);
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id);
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id);
+  virtual int fetch_new_location_id(const uint64_t tenant_id, uint64_t &new_location_id);
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
 
@@ -398,6 +403,8 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -491,6 +498,8 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
 
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -1341,6 +1350,7 @@ private:
   ObSysVariableSqlService sys_variable_service_;
   ObDbLinkSqlService dblink_service_;
   ObDirectorySqlService directory_service_;
+  ObLocationSqlService location_service_;
   ObContextSqlService context_service_;
   ObRlsSqlService rls_service_;
   ObCatalogSqlService catalog_service_;

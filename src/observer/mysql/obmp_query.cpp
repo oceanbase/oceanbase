@@ -1596,7 +1596,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_CREATE_USER:
     case stmt::T_SET_CATALOG:
     case stmt::T_SHOW_CATALOGS:
-    case stmt::T_SHOW_CREATE_CATALOG: {
+    case stmt::T_SHOW_CREATE_CATALOG:
+    case stmt::T_SHOW_LOCATIONS:
+    case stmt::T_SHOW_CREATE_LOCATION:
+    case stmt::T_LOCATION_UTILS_LIST: {
       is_readonly = true;
       break;
     }

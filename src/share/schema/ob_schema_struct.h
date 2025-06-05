@@ -8718,7 +8718,6 @@ public:
   inline const common::ObString &get_directory_name_str() const { return directory_name_; }
   inline const char *get_directory_path() const { return extract_str(directory_path_); }
   inline const common::ObString &get_directory_path_str() const { return directory_path_; }
-
   inline ObTenantDirectoryId get_tenant_directory_id() const { return ObTenantDirectoryId(tenant_id_, directory_id_); }
 
   TO_STRING_KV(K_(tenant_id), K_(directory_id), K_(schema_version),
@@ -8730,7 +8729,6 @@ private:
   common::ObString directory_name_;
   common::ObString directory_path_;
 };
-
 
 // Add or delete an audit rule, corresponding to the audit/noaudit syntax
 enum ObSAuditModifyType : uint64_t

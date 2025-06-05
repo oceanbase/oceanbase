@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::sql;
@@ -990,7 +991,7 @@ int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
   } else if (OB_FAIL(schema_guard.get_table_schema(exec_ctx->get_my_session()->get_effective_tenant_id(),
                                                    ref_table_id, table_schema))) {
     SQL_OPT_LOG(WARN, "failed to get table schema", K(ret), K(ref_table_id));
-  } else if (OB_FAIL(init(table_schema, stmt, exec_ctx, filter_exprs, table_id,
+  } else if (OB_FAIL(init(schema_guard, table_schema, stmt, exec_ctx, filter_exprs, table_id,
                           ref_table_id, part_ids, dtc_params, is_dml_table, sort_exprs))) {
     SQL_OPT_LOG(WARN, "failed to init", K(ret), K(ref_table_id));
   }
@@ -1011,7 +1012,7 @@ int ObTableLocation::init(ObSqlSchemaGuard &schema_guard,
   const share::schema::ObTableSchema *table_schema = NULL;
   if (OB_FAIL(schema_guard.get_table_schema(ref_table_id, table_schema))) {
     SQL_OPT_LOG(WARN, "failed to get table schema", K(ret), K(ref_table_id));
-  } else if (OB_FAIL(init(table_schema, stmt, exec_ctx, filter_exprs, table_id,
+  } else if (OB_FAIL(init(*(schema_guard.get_schema_guard()), table_schema, stmt, exec_ctx, filter_exprs, table_id,
                           ref_table_id, part_ids, dtc_params, is_dml_table, sort_exprs))) {
     SQL_OPT_LOG(WARN, "failed to init", K(ret), K(ref_table_id));
   }
@@ -1032,7 +1033,7 @@ int ObTableLocation::init_location(ObSqlSchemaGuard *schema_guard,
   const share::schema::ObTableSchema *table_schema = NULL;
   if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     SQL_OPT_LOG(WARN, "failed to get table schema", K(ret), K(ref_table_id));
-  } else if (OB_FAIL(init(table_schema, stmt, exec_ctx, filter_exprs, table_id,
+  } else if (OB_FAIL(init(*(schema_guard->get_schema_guard()), table_schema, stmt, exec_ctx, filter_exprs, table_id,
                           ref_table_id, part_ids, dtc_params, is_dml_table, sort_exprs))) {
     SQL_OPT_LOG(WARN, "failed to init", K(ret), K(ref_table_id));
   }
@@ -1067,8 +1068,10 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   } else {
     table_type_ = table_schema->get_table_type();
     loc_meta_.is_external_table_ = table_schema->is_external_table();
-    loc_meta_.is_external_files_on_disk_ =
-        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
+    ObString file_location;
+    CK (OB_NOT_NULL(schema_guard.get_schema_guard()));
+    OZ (ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard.get_schema_guard(), exec_ctx.get_allocator(), file_location));
+    loc_meta_.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
   }
 
   if (OB_FAIL(ret)) {
@@ -1356,6 +1359,7 @@ int ObTableLocation::calc_not_partitioned_table_ids(ObExecContext &exec_ctx)
 }
 
 int ObTableLocation::init(
+    ObSchemaGetterGuard &schema_guard,
     const ObTableSchema *table_schema,
     const ObDMLStmt &stmt,
     ObExecContext *exec_ctx,
@@ -1389,8 +1393,9 @@ int ObTableLocation::init(
   } else {
     table_type_ = table_schema->get_table_type();
     loc_meta_.is_external_table_ = table_schema->is_external_table();
-    loc_meta_.is_external_files_on_disk_ =
-        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
+    ObString file_location;
+    OZ(ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx->get_allocator(), file_location));
+    loc_meta_.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
     loc_meta_.route_policy_ = route_policy;
   }
 

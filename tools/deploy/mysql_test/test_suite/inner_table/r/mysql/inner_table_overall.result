@@ -332,6 +332,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 544	__all_pl_recompile_objinfo	0	201001	1
 545	__all_vector_index_task	0	201001	1
 546	__all_vector_index_task_history	0	201001	1
+550	__all_tenant_location	0	201001	1
+551	__all_tenant_location_history	0	201001	1
+552	__all_tenant_objauth_mysql	0	201001	1
+553	__all_tenant_objauth_mysql_history	0	201001	1
 554	__all_external_resource	0	201001	1
 555	__all_external_resource_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
@@ -845,6 +849,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12530	__all_virtual_tablet_local_cache	2	201001	1
 12535	__all_virtual_mview_running_job	2	201001	1
 12536	__all_virtual_dynamic_partition_table	2	201001	1
+12541	__all_virtual_tenant_location	2	201001	1
+12542	__all_virtual_tenant_location_history	2	201001	1
+12543	__all_virtual_objauth_mysql	2	201001	1
+12544	__all_virtual_objauth_mysql_history	2	201001	1
+12545	__tenant_virtual_show_create_location	2	201001	1
+12546	__tenant_virtual_list_file	2	201001	1
 12547	__all_virtual_external_resource	2	201001	1
 12548	__all_virtual_external_resource_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1

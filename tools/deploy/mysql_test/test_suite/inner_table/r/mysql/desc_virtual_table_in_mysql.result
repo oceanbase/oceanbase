@@ -5929,3 +5929,15 @@ bigint_precision	varchar(1024)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dynamic_partition_table;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__tenant_virtual_show_create_location;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_name	varchar(128)	NO		NULL	
+create_location	varchar(8192)	NO		NULL	
+desc oceanbase.__tenant_virtual_list_file;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_sub_path	varchar(128)	NO	PRI	NULL	
+pattern	varchar(128)	NO	PRI	NULL	
+file_name	varchar(16384)	NO		NULL	
+file_size	bigint(20)	NO		NULL	

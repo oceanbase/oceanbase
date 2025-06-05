@@ -25,6 +25,7 @@
 #include "observer/virtual_table/ob_table_index.h"
 #include "observer/virtual_table/ob_show_create_catalog.h"
 #include "observer/virtual_table/ob_show_create_database.h"
+#include "observer/virtual_table/ob_show_create_location.h"
 #include "observer/virtual_table/ob_show_create_table.h"
 #include "observer/virtual_table/ob_show_create_tablegroup.h"
 #include "observer/virtual_table/ob_show_create_procedure.h"
@@ -239,6 +240,7 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_local_cache.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.h"
+#include "observer/virtual_table/ob_list_file.h"
 
 namespace oceanbase
 {
@@ -1220,6 +1222,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TID: {
+            ObShowCreateLocation *create_location = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowCreateLocation, create_location))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(create_location);
+            }
+            break;
+          }
           case OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_TID:
           {
             ObShowCreateTable *create_table = NULL;
@@ -1356,6 +1365,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaCheckConstraintsTable, check_constraint))) {
               check_constraint->set_tenant_id(real_tenant_id);
               vt_iter = static_cast<ObVirtualTableIterator*>(check_constraint);
+            }
+            break;
+          }
+          case OB_TENANT_VIRTUAL_LIST_FILE_TID: {
+            ObListFile *listfile = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObListFile, listfile))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(listfile);
             }
             break;
           }

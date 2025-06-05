@@ -3002,7 +3002,10 @@ typedef enum ObOutlineType
                            || (op) == T_SHOW_PROCEDURE_CODE || (op) == T_SHOW_FUNCTION_CODE \
                            || (op) == T_SHOW_ENGINE || (op) == T_SHOW_OPEN_TABLES \
                            || (op) == T_SHOW_PLUGINS || (op) == T_SHOW_CHECK_TABLE \
-                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS)
+                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS                \
+                           || (op) == T_SHOW_CREATE_LOCATION \
+                           || (op) == T_SHOW_LOCATIONS       \
+                           || (op) == T_LOCATION_UTILS_LIST)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

@@ -207,6 +207,7 @@ public:
 
   int refresh_external_table(const uint64_t tenant_id,
                               const ObTableSchema *table_schema,
+                              ObSchemaGetterGuard &schema_guard,
                               ObExecContext &exec_ctx,
                               bool &has_partition_changed);
 

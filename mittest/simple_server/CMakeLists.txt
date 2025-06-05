@@ -165,6 +165,7 @@ ob_unittest_observer(test_transfer_task_operator rootservice/test_transfer_task_
 ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_parallel_migration_mode.cpp)
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
 ob_unittest_observer(test_external_resource_schema rootservice/test_external_resource_schema.cpp)
+ob_unittest_observer(test_location_schema_refresh rootservice/test_location_schema_refresh.cpp)
 ####### rootservice case #########
 
 

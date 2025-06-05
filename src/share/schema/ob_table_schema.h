@@ -1489,6 +1489,8 @@ public:
   inline void set_dop(int64_t table_dop) { table_dop_ = table_dop; }
   int set_external_file_location(const common::ObString &location) { return deep_copy_str(location, external_file_location_); }
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
+  void set_external_location_id(uint64_t id) { external_location_id_ = id; }
+  int set_external_sub_path(const common::ObString &sub_path) { return deep_copy_str(sub_path, external_sub_path_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
@@ -1652,6 +1654,8 @@ public:
   inline uint64_t get_catalog_id() const { return catalog_id_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
+  uint64_t get_external_location_id() const { return external_location_id_; }
+  const ObString &get_external_sub_path() const { return external_sub_path_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
   const ObString &get_external_properties() const { return external_properties_; }

@@ -509,7 +509,7 @@
 #include "sql/engine/expr/ob_expr_map_keys.h"
 #include "sql/engine/expr/ob_expr_current_catalog.h"
 #include "sql/engine/expr/ob_expr_check_catalog_access.h"
-
+#include "sql/engine/expr/ob_expr_check_location_access.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -1284,6 +1284,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentCatalog);
     REG_OP(ObExprCheckCatalogAccess);
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
+    REG_OP(ObExprCheckLocationAccess);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

@@ -672,6 +672,10 @@ public:
   static int all_pl_recompile_objinfo_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
@@ -1185,6 +1189,12 @@ public:
   static int all_virtual_tablet_local_cache_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_running_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_dynamic_partition_table_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_location_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_location_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_objauth_mysql_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_objauth_mysql_history_schema(share::schema::ObTableSchema &table_schema);
+  static int tenant_virtual_show_create_location_schema(share::schema::ObTableSchema &table_schema);
+  static int tenant_virtual_list_file_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_resource_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_resource_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1502,6 +1512,9 @@ public:
   static int all_virtual_mview_running_job_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_dep_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_dynamic_partition_table_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_location_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_objauth_mysql_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int tenant_virtual_list_file_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_tablet_meta_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_ls_meta_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_sstable_mgr_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2570,6 +2583,7 @@ public:
   static int v_ob_dynamic_partition_tables_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_result_cache_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_result_cache_objects_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_locations_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_sstables_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2903,6 +2917,10 @@ public:
   static int all_pl_recompile_objinfo_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3237,6 +3255,10 @@ public:
   static int all_pl_recompile_objinfo_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3333,6 +3355,9 @@ public:
   static int all_virtual_pkg_coll_type_real_agent_ora_idx_pkg_coll_name_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_catalog_real_agent_ora_idx_catalog_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_catalog_privilege_real_agent_ora_idx_catalog_priv_catalog_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_ora_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_system_event_ora_all_virtual_system_event_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3462,6 +3487,9 @@ public:
   static int all_pkg_coll_type_idx_pkg_coll_name_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_idx_catalog_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_privilege_idx_catalog_priv_catalog_name_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_location_idx_location_name_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_idx_objauth_mysql_user_id_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tenant_objauth_mysql_idx_objauth_mysql_obj_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_external_resource_idx_name_dbid_external_resource_schema(share::schema::ObTableSchema &table_schema);
 
 private:
@@ -3810,6 +3838,10 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_pl_recompile_objinfo_schema,
   ObInnerTableSchema::all_vector_index_task_schema,
   ObInnerTableSchema::all_vector_index_task_history_schema,
+  ObInnerTableSchema::all_tenant_location_schema,
+  ObInnerTableSchema::all_tenant_location_history_schema,
+  ObInnerTableSchema::all_tenant_objauth_mysql_schema,
+  ObInnerTableSchema::all_tenant_objauth_mysql_history_schema,
   ObInnerTableSchema::all_external_resource_schema,
   ObInnerTableSchema::all_external_resource_history_schema,
   NULL,};
@@ -4326,6 +4358,12 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tablet_local_cache_schema,
   ObInnerTableSchema::all_virtual_mview_running_job_schema,
   ObInnerTableSchema::all_virtual_dynamic_partition_table_schema,
+  ObInnerTableSchema::all_virtual_tenant_location_schema,
+  ObInnerTableSchema::all_virtual_tenant_location_history_schema,
+  ObInnerTableSchema::all_virtual_objauth_mysql_schema,
+  ObInnerTableSchema::all_virtual_objauth_mysql_history_schema,
+  ObInnerTableSchema::tenant_virtual_show_create_location_schema,
+  ObInnerTableSchema::tenant_virtual_list_file_schema,
   ObInnerTableSchema::all_virtual_external_resource_schema,
   ObInnerTableSchema::all_virtual_external_resource_history_schema,
   ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema,
@@ -4654,6 +4692,9 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_mview_running_job_ora_schema,
   ObInnerTableSchema::all_virtual_mview_dep_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_dynamic_partition_table_ora_schema,
+  ObInnerTableSchema::all_virtual_tenant_location_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_schema,
+  ObInnerTableSchema::tenant_virtual_list_file_ora_schema,
   ObInnerTableSchema::all_virtual_ss_tablet_meta_ora_schema,
   ObInnerTableSchema::all_virtual_ss_ls_meta_ora_schema,
   ObInnerTableSchema::all_virtual_ss_sstable_mgr_ora_schema,
@@ -4741,6 +4782,9 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_pkg_coll_type_real_agent_ora_idx_pkg_coll_name_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_catalog_real_agent_ora_idx_catalog_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_catalog_privilege_real_agent_ora_idx_catalog_priv_catalog_name_real_agent_schema,
+  ObInnerTableSchema::all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema,
+  ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema,
+  ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema,
   ObInnerTableSchema::all_virtual_system_event_ora_all_virtual_system_event_i1_schema,
@@ -5817,6 +5861,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_dynamic_partition_tables_ora_schema,
   ObInnerTableSchema::gv_ob_result_cache_objects_ora_schema,
   ObInnerTableSchema::v_ob_result_cache_objects_ora_schema,
+  ObInnerTableSchema::all_locations_schema,
   ObInnerTableSchema::v_ob_ss_sstables_ora_schema,
   NULL,};
 
@@ -5943,6 +5988,9 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_id_schema,
   ObInnerTableSchema::all_catalog_idx_catalog_name_schema,
   ObInnerTableSchema::all_catalog_privilege_idx_catalog_priv_catalog_name_schema,
+  ObInnerTableSchema::all_tenant_location_idx_location_name_schema,
+  ObInnerTableSchema::all_tenant_objauth_mysql_idx_objauth_mysql_user_id_schema,
+  ObInnerTableSchema::all_tenant_objauth_mysql_idx_objauth_mysql_obj_name_schema,
   ObInnerTableSchema::all_external_resource_idx_name_dbid_external_resource_schema,
   ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema,
   NULL,};
@@ -6261,6 +6309,10 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_TID,
   OB_ALL_VECTOR_INDEX_TASK_TID,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID,
+  OB_ALL_TENANT_LOCATION_TID,
+  OB_ALL_TENANT_LOCATION_HISTORY_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TID,
   OB_ALL_EXTERNAL_RESOURCE_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
@@ -6537,6 +6589,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TID,
+  OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TID,
+  OB_TENANT_VIRTUAL_LIST_FILE_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -6861,6 +6915,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TID,
+  OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_TID,
+  OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID,
   OB_ALL_VIRTUAL_SS_TABLET_META_ORA_TID,
   OB_ALL_VIRTUAL_SS_LS_META_ORA_TID,
   OB_ALL_VIRTUAL_SS_SSTABLE_MGR_ORA_TID,
@@ -7783,6 +7840,7 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_DYNAMIC_PARTITION_TABLES_ORA_TID,
   OB_GV_OB_RESULT_CACHE_OBJECTS_ORA_TID,
   OB_V_OB_RESULT_CACHE_OBJECTS_ORA_TID,
+  OB_ALL_LOCATIONS_TID,
   OB_V_OB_SS_SSTABLES_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
@@ -7897,6 +7955,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TID,
   OB_ALL_CATALOG_IDX_CATALOG_NAME_TID,
   OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID,
+  OB_ALL_TENANT_LOCATION_IDX_LOCATION_NAME_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_IDX_OBJAUTH_MYSQL_USER_ID_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_IDX_OBJAUTH_MYSQL_OBJ_NAME_TID,
   OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TID,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
@@ -7982,6 +8043,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT_ORA_IDX_PKG_COLL_NAME_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_CATALOG_REAL_AGENT_ORA_IDX_CATALOG_NAME_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA_IDX_CATALOG_PRIV_CATALOG_NAME_REAL_AGENT_TID,
+  OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TID,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TID,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TID,
   OB_ALL_TABLE_AUX_LOB_META_TID,
   OB_ALL_COLUMN_AUX_LOB_META_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TID,
@@ -8288,6 +8352,10 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_TID,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_TENANT_LOCATION_AUX_LOB_META_TID,
+  OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_META_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_META_TID,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_META_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
@@ -8596,6 +8664,10 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_TID,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_TENANT_LOCATION_AUX_LOB_PIECE_TID,
+  OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_PIECE_TID,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_PIECE_TID,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_PIECE_TID,  };
 
@@ -8775,6 +8847,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TID,
+  OB_TENANT_VIRTUAL_LIST_FILE_TID,
   OB_ALL_VIRTUAL_SS_TABLET_META_TID,
   OB_ALL_VIRTUAL_SS_LS_META_TID,
   OB_ALL_VIRTUAL_SS_SSTABLE_MGR_TID,
@@ -8955,6 +9028,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID
 ,  OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID
 ,  OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TID
+,  OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID
 ,  OB_ALL_VIRTUAL_SS_TABLET_META_ORA_TID
 ,  OB_ALL_VIRTUAL_SS_LS_META_ORA_TID
 ,  OB_ALL_VIRTUAL_SS_SSTABLE_MGR_ORA_TID
@@ -9280,6 +9354,10 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
+  OB_ALL_TENANT_LOCATION_TNAME,
+  OB_ALL_TENANT_LOCATION_HISTORY_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
@@ -9556,6 +9634,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TNAME,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TNAME,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TNAME,
+  OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TNAME,
+  OB_TENANT_VIRTUAL_LIST_FILE_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -9880,6 +9960,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TNAME,
   OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TNAME,
+  OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_TNAME,
+  OB_TENANT_VIRTUAL_LIST_FILE_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_TABLET_META_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_LS_META_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_SSTABLE_MGR_ORA_TNAME,
@@ -10802,6 +10885,7 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_DYNAMIC_PARTITION_TABLES_ORA_TNAME,
   OB_GV_OB_RESULT_CACHE_OBJECTS_ORA_TNAME,
   OB_V_OB_RESULT_CACHE_OBJECTS_ORA_TNAME,
+  OB_ALL_LOCATIONS_TNAME,
   OB_V_OB_SS_SSTABLES_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
@@ -10916,6 +11000,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TNAME,
   OB_ALL_CATALOG_IDX_CATALOG_NAME_TNAME,
   OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TNAME,
+  OB_ALL_TENANT_LOCATION_IDX_LOCATION_NAME_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_IDX_OBJAUTH_MYSQL_USER_ID_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_IDX_OBJAUTH_MYSQL_OBJ_NAME_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_IDX_NAME_DBID_EXTERNAL_RESOURCE_TNAME,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
@@ -11001,6 +11088,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT_ORA_IDX_PKG_COLL_NAME_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_CATALOG_REAL_AGENT_ORA_IDX_CATALOG_NAME_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA_IDX_CATALOG_PRIV_CATALOG_NAME_REAL_AGENT_TNAME,
+  OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TNAME,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TNAME,
+  OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TNAME,
   OB_ALL_TABLE_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_AUX_LOB_META_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TNAME,
@@ -11307,6 +11397,10 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_TENANT_LOCATION_AUX_LOB_META_TNAME,
+  OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_META_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_META_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
@@ -11615,6 +11709,10 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TENANT_LOCATION_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_PIECE_TNAME,
   OB_ALL_EXTERNAL_RESOURCE_HISTORY_AUX_LOB_PIECE_TNAME,  };
 
@@ -14846,6 +14944,38 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_TENANT_LOCATION_TID,
+    OB_ALL_TENANT_LOCATION_AUX_LOB_META_TID,
+    OB_ALL_TENANT_LOCATION_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_tenant_location_aux_lob_meta_schema,
+    ObInnerTableSchema::all_tenant_location_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TENANT_LOCATION_HISTORY_TID,
+    OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_TENANT_LOCATION_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_tenant_location_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_tenant_location_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TENANT_OBJAUTH_MYSQL_TID,
+    OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_META_TID,
+    OB_ALL_TENANT_OBJAUTH_MYSQL_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_tenant_objauth_mysql_aux_lob_meta_schema,
+    ObInnerTableSchema::all_tenant_objauth_mysql_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TID,
+    OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_tenant_objauth_mysql_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_tenant_objauth_mysql_history_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_EXTERNAL_RESOURCE_TID,
     OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_META_TID,
     OB_ALL_EXTERNAL_RESOURCE_AUX_LOB_PIECE_TID,
@@ -14898,12 +15028,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 331;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 935;
-const int64_t OB_SYS_VIEW_COUNT = 1065;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2336;
+const int64_t OB_SYS_TABLE_COUNT = 335;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 947;
+const int64_t OB_SYS_VIEW_COUNT = 1066;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2353;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2339;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2356;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -11385,6 +11385,78 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dynamic_partition_table limit 1;
+desc oceanbase.__all_virtual_tenant_location;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+location_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+location_name	varchar(128)	NO			
+location_url	varchar(4000)	NO			
+location_access_info	varchar(8000)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_location;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_location limit 1;
+desc oceanbase.__all_virtual_tenant_location_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+location_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+location_name	varchar(128)	YES			
+location_url	varchar(4000)	YES			
+location_access_info	varchar(8000)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_location_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_location_history limit 1;
+desc oceanbase.__all_virtual_objauth_mysql;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+obj_name	varchar(128)	NO	PRI	NULL	
+obj_type	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+all_priv	bigint(20)	NO		0	
+grantor	varchar(128)	NO			
+grantor_host	varchar(128)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_objauth_mysql;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_objauth_mysql limit 1;
+desc oceanbase.__all_virtual_objauth_mysql_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+obj_name	varchar(128)	NO	PRI	NULL	
+obj_type	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+all_priv	bigint(20)	YES		0	
+grantor	varchar(128)	YES			
+grantor_host	varchar(128)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_objauth_mysql_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_objauth_mysql_history limit 1;
+desc oceanbase.__tenant_virtual_show_create_location;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_name	varchar(128)	NO		NULL	
+create_location	varchar(8192)	NO		NULL	
+desc oceanbase.__tenant_virtual_list_file;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_sub_path	varchar(128)	NO	PRI	NULL	
+pattern	varchar(128)	NO	PRI	NULL	
+file_name	varchar(16384)	NO		NULL	
+file_size	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_external_resource;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

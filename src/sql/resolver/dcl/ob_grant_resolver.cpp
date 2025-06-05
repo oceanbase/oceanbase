@@ -962,6 +962,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
   ParseNode *users_node = node->children_[2];
   bool is_directory = false;
   bool is_catalog = false;
+  bool is_location = false;
   bool is_owner = false;
   bool explicit_db = false;
   ObPrivLevel grant_level = OB_PRIV_INVALID_LEVEL;
@@ -996,7 +997,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                                 grant_level,
                                 is_directory,
                                 explicit_db,
-                                is_catalog))) {
+                                is_catalog,
+                                is_location))) {
       LOG_WARN("Resolve priv_level_node error", K(ret));
     } else if (OB_FAIL(check_and_convert_name(db, table))) {
       LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -1019,7 +1021,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           OZ (params_.schema_checker_->get_object_type_with_view_info(allocator_, 
               &params_, tenant_id, db, table, object_type, object_id, view_query, 
               is_directory, obj_db_name, explicit_db, ObString(""), synonym_checker,
-              is_catalog));
+              is_catalog, is_location));
           OX (grant_stmt->set_ref_query(static_cast<ObSelectStmt*>(view_query)));
           OX (grant_stmt->set_object_type(object_type));
           OX (grant_stmt->set_object_id(object_id));
@@ -1543,6 +1545,13 @@ int ObGrantResolver::resolve_priv_level_with_object_type(const ObSQLSessionInfo 
       } else {
         grant_level = OB_PRIV_CATALOG_LEVEL;
       }
+    } else if (priv_object_node->value_ == 5) {
+      if (compat_version < DATA_VERSION_4_4_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("grant on object level is not support below DATA_VERSION_4_4_0_0", K(ret));
+      } else {
+        grant_level = OB_PRIV_OBJECT_LEVEL;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
@@ -1567,6 +1576,7 @@ int ObGrantResolver::resolve_priv_level(
 {
   int ret = OB_SUCCESS;
   bool is_grant_routine = (grant_level == OB_PRIV_ROUTINE_LEVEL);
+  bool is_grant_object = (grant_level == OB_PRIV_OBJECT_LEVEL);
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(node), K(ret));
@@ -1641,7 +1651,7 @@ int ObGrantResolver::resolve_priv_level(
         //do nothing
       }
     }
-    if (OB_SUCC(ret) && is_grant_routine) {
+    if (OB_SUCC(ret) && (is_grant_routine || is_grant_object)) {
       if (grant_level != OB_PRIV_TABLE_LEVEL) {
         // tmp_grant_level == OB_PRIV_TABLE_LEVEL means sql is like:
         // grant priv on [object type] ident to user
@@ -1650,7 +1660,7 @@ int ObGrantResolver::resolve_priv_level(
         ret = OB_ILLEGAL_GRANT_FOR_TABLE;
         LOG_WARN("illegal grant", K(ret));
       } else {
-        grant_level = OB_PRIV_ROUTINE_LEVEL;
+        grant_level = is_grant_routine ? OB_PRIV_ROUTINE_LEVEL : OB_PRIV_OBJECT_LEVEL;
       }
     }
   }
@@ -1670,11 +1680,13 @@ int ObGrantResolver::resolve_obj_ora(
     ObPrivLevel &grant_level,
     bool &is_directory,
     bool &explicit_db,
-    bool &is_catalog)
+    bool &is_catalog,
+    bool &is_location)
 {
   int ret = OB_SUCCESS;
   is_directory = false;
   is_catalog = false;
+  is_location = false;
   explicit_db = false;
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1724,14 +1736,16 @@ int ObGrantResolver::resolve_obj_ora(
         explicit_db = true;
       } else if (T_PRIV_TYPE == node->children_[0]->type_ 
                  && T_IDENT == node->children_[1]->type_) {
-        grant_level = OB_PRIV_TABLE_LEVEL;
+        grant_level = OB_PRIV_TABLE_LEVEL;  // dirctory, catalog, location
         db = ObString::make_string("SYS");
         table.assign_ptr(node->children_[1]->str_value_,
                          static_cast<const int32_t>(node->children_[1]->str_len_));
         if (node->children_[0]->value_ == 1) {
           is_directory = true;
-        } else {
+        } else if (node->children_[0]->value_ == 2) {
           is_catalog = true;
+        } else if (node->children_[0]->value_ == 3) {
+          is_location = true;
         }
       } else {
         ret = OB_ERR_PARSE_SQL;
@@ -1902,6 +1916,11 @@ int ObGrantResolver::check_obj_priv_valid(
       break;
     case (ObObjectType::INDEX):
       ret = OB_ERR_BAD_TABLE;
+      break;
+    case (ObObjectType::LOCATION):
+      if (ora_obj_priv != OBJ_PRIV_ID_READ && ora_obj_priv != OBJ_PRIV_ID_WRITE) {
+        ret = OB_ERR_INVALID_PRIVILEGE_ON_DIRECTORIES;
+      }
       break;
     /* xinqi.zlm to do: */
     default:

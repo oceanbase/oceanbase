@@ -83,6 +83,7 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "rootserver/ob_alter_table_constraint_checker.h"
 #include "share/ob_domain_index_builder_util.h"
+#include "rootserver/ob_objpriv_mysql_ddl_service.h"
 
 namespace oceanbase
 {
@@ -1499,6 +1500,12 @@ int ObDDLService::generate_schema(
       LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(schema));
     } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(schema))) {
       LOG_WARN("fail to check dynamic partition policy is valid", KR(ret), K(schema));
+    }
+  }
+
+  if (OB_SUCC(ret) && schema.is_external_table()) {
+    if (OB_FAIL(ObLocationDDLService::check_location_constraint(schema))) {
+      LOG_WARN("fail to check location constraint", KR(ret), K(schema));
     }
   }
 
@@ -19266,6 +19273,12 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       }
     }
 
+    if (OB_SUCC(ret) && alter_table_arg.alter_table_schema_.is_external_table()) {
+      if (OB_FAIL(ObLocationDDLService::check_location_constraint(alter_table_arg.alter_table_schema_))) {
+        LOG_WARN("fail to check location constraint", KR(ret), K(alter_table_arg.alter_table_schema_));
+      }
+    }
+
     //do alter table in transaction
     if (OB_SUCC(ret)) {
       uint64_t data_version = 0;
@@ -32946,6 +32959,19 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
         }
         break;
       }
+      case OB_PRIV_OBJECT_LEVEL: {
+        ObObjMysqlPrivSortKey object_key(tenant_id, user_id, need_priv.table_, obj_priv_key.obj_type_);
+        ObObjPrivMysqlDDLService objpriv_mysql_ddl_service(this);
+        if (OB_FAIL(objpriv_mysql_ddl_service.grant_object(object_key,
+                                                     need_priv.priv_set_,
+                                                     option,
+                                                     schema_guard,
+                                                     grantor,
+                                                     grantor_host))) {
+          LOG_WARN("Grant object error", K(ret));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected grant level", "GrantLevel", need_priv.priv_level_);
@@ -34275,7 +34301,6 @@ int ObDDLService::revoke_routine(
   }
   return ret;
 }
-
 
 int ObDDLService::grant_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,

@@ -657,7 +657,8 @@ public:
            const common::ObDataTypeCastParams &dtc_params,
            const bool is_dml_table,
            common::ObIArray<ObRawExpr*> *sort_exprs = NULL);
-  int init(const share::schema::ObTableSchema *table_schema,
+  int init(ObSchemaGetterGuard &schema_guard,
+           const share::schema::ObTableSchema *table_schema,
            const ObDMLStmt &stmt,
            ObExecContext *exec_ctx,
            const common::ObIArray<ObRawExpr*> &filter_exprs,

@@ -964,6 +964,83 @@ int ObUpgradeForAllVersionProcessor::flush_ncomp_dll_job()
   return ret;
 }
 
+int ObUpgradeForAllVersionProcessor::finish_upgrade() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(finish_upgrade_for_add_sys_priv())) {
+    LOG_WARN("fail to finish upgrade for add sys priv", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeForAllVersionProcessor::finish_upgrade_for_add_sys_priv()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  ObSqlString grant_all_sql;
+  int64_t user_id = 0;
+  int64_t affected_rows = 0;
+  bool need_grant = true;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    need_grant = false;
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    user_id = OB_ORA_SYS_USER_ID;
+    ObSysPriv *all_priv = nullptr;
+    if (OB_FAIL(schema_guard.get_sys_priv_with_grantee_id(tenant_id_, user_id, all_priv))) {
+      LOG_WARN("failed to get sys priv", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_ISNULL(all_priv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys priv is null", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_PRIV_ALL == (all_priv->get_priv_set() & OB_PRIV_ALL)) {
+      need_grant = false;
+      LOG_INFO("don't need grant", K(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_all_sql.append("grant all on *.* to sys with grant option"))) {
+      LOG_WARN("fail to gen oracle grant sql", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, grant_all_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K_(tenant_id), K(grant_all_sql));
+    }
+  } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+    user_id = OB_SYS_USER_ID;
+    const ObUserInfo *user_info = nullptr;
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id_, user_id, user_info))) {
+      LOG_WARN("fail to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_PRIV_ALL == (user_info->get_priv_set() & OB_PRIV_ALL)) {
+      need_grant = false;
+      LOG_INFO("don't need grant", K(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_all_sql.append("grant all on *.* to root with grant option"))) {
+      LOG_WARN("fail to gen mysql grant sql", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, grant_all_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to write sql", K(ret), K(tenant_id_), K(grant_all_sql));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid compat_mode", K(ret), K(tenant_id_), K(compat_mode));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] finish upgrade for add sys failed", KR(ret), K_(tenant_id), K(user_id), K(need_grant), K(is_primary_tenant));
+  } else {
+    LOG_INFO("[UPGRADE] finish upgrade for add sys succeed", K_(tenant_id), K(user_id), K(need_grant), K(is_primary_tenant));
+  }
+  return ret;
+}
+
 int ObUpgradeFor4100Processor::post_upgrade()
 {
   int ret = OB_SUCCESS;

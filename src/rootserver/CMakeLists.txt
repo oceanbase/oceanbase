@@ -115,6 +115,11 @@ ob_set_subtarget(ob_rootserver common
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
   ob_alter_table_constraint_checker.cpp
+  ob_location_ddl_operator.cpp
+  ob_location_ddl_service.cpp
+  ob_objpriv_mysql_ddl_operator.cpp
+  ob_objpriv_mysql_ddl_service.cpp
+  ob_objpriv_mysql_schema_history_recycler.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

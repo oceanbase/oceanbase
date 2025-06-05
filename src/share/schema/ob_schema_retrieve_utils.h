@@ -423,6 +423,7 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(obj_mysql_priv);
 
   RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
@@ -455,6 +456,7 @@ public:
 
   RETRIEVE_SCHEMA_FUNC_DECLARE(dblink);
   RETRIEVE_SCHEMA_FUNC_DECLARE(directory);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(location);
   RETRIEVE_SCHEMA_FUNC_DECLARE(context);
   RETRIEVE_SCHEMA_FUNC_DECLARE(mock_fk_parent_table);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_policy);
@@ -531,6 +533,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(audit, ObSAuditSchema);
   FILL_SCHEMA_FUNC_DECLARE(dblink, ObDbLinkSchema);
   FILL_SCHEMA_FUNC_DECLARE(directory, ObDirectorySchema);
+  FILL_SCHEMA_FUNC_DECLARE(location, ObLocationSchema);
   FILL_SCHEMA_FUNC_DECLARE(context, ObContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
@@ -594,6 +597,12 @@ public:
                                   bool &is_deleted,
                                   ObRawObjPriv &raw_p_id,
                                   uint64_t &option);
+
+  template<typename T>
+  static int fill_obj_mysql_priv_schema(const uint64_t tenant_id,
+                                        T &result,
+                                        ObObjMysqlPriv &obj_mysql_priv,
+                                        bool &is_deleted);
 
   template<typename T>
   static int fill_trigger_id(const uint64_t tenant_id, T &result,

@@ -16,6 +16,7 @@
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
+#include "share/external_table/ob_external_table_utils.h"
 namespace oceanbase
 {
 
@@ -88,7 +89,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     const ObTableSchema *table_schema = nullptr;
     ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
     ObBasicSessionInfo *session_info = cg_.opt_ctx_->get_session_info();
-    if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+    ObString file_location;
+    ObString access_info;
+    if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info) || OB_ISNULL(schema_guard->get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema guard is null", K(ret));
     } else if (OB_FAIL(schema_guard->get_table_schema(op.get_table_id(),
@@ -99,7 +102,11 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null table scahem ptr", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::check_location_access_priv(table_schema->get_external_file_location(),
+    } else if (OB_FAIL(ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location))) {
+      LOG_WARN("fail to get file location", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::get_external_file_location_access_info(*table_schema, *schema_guard->get_schema_guard(), access_info))) {
+      LOG_WARN("fail to get access info", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_location_access_priv(file_location,
                                                               cg_.opt_ctx_->get_session_info()))) {
       LOG_WARN("fail to check location access priv", K(ret));
     } else {
@@ -169,9 +176,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
           LOG_WARN("table_format_or_properties is empty", K(ret));
         } else if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_format_or_properties))) {
           LOG_WARN("fail to set string", K(ret));
-        } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
+        } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(file_location))) {
           LOG_WARN("fail to set string", K(ret));
-        } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(table_schema->get_external_file_location_access_info()))) {
+        } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(access_info))) {
           LOG_WARN("fail to set access info", K(ret));
         } else if (OB_FAIL(scan_ctdef.external_file_pattern_.store_str(table_schema->get_external_file_pattern()))) {
           LOG_WARN("fail to set pattern", K(ret));
@@ -1852,6 +1859,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
 {
   int ret = OB_SUCCESS;
   const bool is_das_empty_part = loc_meta.das_empty_part_;
+  ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+  CK(OB_NOT_NULL(schema_guard));
   loc_meta.reset();
   loc_meta.das_empty_part_ = is_das_empty_part;
   loc_meta.table_loc_id_ = table_loc_id;
@@ -1862,8 +1871,10 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
   loc_meta.is_external_table_ = table_schema.is_external_table();
-  loc_meta.is_external_files_on_disk_ =
-      ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location());
+  ObString file_location;
+  CK (OB_NOT_NULL(schema_guard->get_schema_guard()));
+  OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));
+  loc_meta.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
   int64_t route_policy = 0;
   bool is_weak_read = false;
   // broadcast table (insert into select) read local for materialized view create,here three conditions:

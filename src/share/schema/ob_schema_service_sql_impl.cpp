@@ -53,6 +53,7 @@
 
 #define FETCH_ALL_COLUMN_PRIV_HISTORY_SQL       COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OBJ_PRIV_HISTORY_SQL          COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_OBJ_MYSQL_PRIV_HISTORY_SQL    COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OUTLINE_HISTORY_SQL           COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_SYNONYM_HISTORY_SQL           COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_FUNC_HISTORY_SQL              COMMON_SQL_WITH_TENANT
@@ -101,6 +102,7 @@
 
 #define FETCH_ALL_DBLINK_HISTORY_SQL                      COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_DIRECTORY_HISTORY_SQL                   COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_LOCATION_HISTORY_SQL                   COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_TENANT_CONTEXT_HISTORY_SQL              COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_TENANT_MOCK_FK_PARENT_TABLE_HISTORY_SQL COMMON_SQL_WITH_TENANT
 
@@ -249,6 +251,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       sys_variable_service_(*this),
       dblink_service_(*this),
       directory_service_(*this),
+      location_service_(*this),
       context_service_(*this),
       rls_service_(*this),
       catalog_service_(*this),
@@ -1359,6 +1362,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog_priv, ObCatalogPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(location, ObLocationSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -1430,6 +1434,25 @@ int ObSchemaServiceSQLImpl::get_all_column_privs(ObISQLClient &client,
   } else if (OB_FAIL(fetch_column_privs(client, schema_status, schema_version, tenant_id, schema_array))) {
     LOG_WARN("fetch tenants failed", K(ret));
   }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_all_obj_mysql_privs(ObISQLClient &client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObObjMysqlPriv> &schema_array)
+{
+  int ret = OB_SUCCESS;
+  schema_array.reset();
+
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", KR(ret));
+  } else if (OB_FAIL(fetch_obj_mysql_privs(client, schema_status, schema_version, tenant_id, schema_array))) {
+    LOG_WARN("fetch tenants failed", K(ret));
+  }
+
   return ret;
 }
 
@@ -2835,6 +2858,36 @@ int ObSchemaServiceSQLImpl::fetch_all_tenant_info(
     ret; \
   })
 
+#define SQL_APPEND_OBJ_MYSQL_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
+  ({                                                                 \
+    int ret = OB_SUCCESS; \
+    if (OB_FAIL(sql.append("("))) { \
+      LOG_WARN("append sql failed", K(ret)); \
+    } else { \
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; ++i) {  \
+        if (OB_FAIL(sql.append_fmt("%s(%lu, %lu, ", 0 == i ? "" : ", ", \
+                                   fill_extract_tenant_id(schema_status, tenant_id), \
+                                   fill_extract_schema_id(schema_status, schema_keys[i].user_id_)))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql_append_hex_escape_str(schema_keys[i].obj_name_, sql))) { \
+          LOG_WARN("fail to append obj name", K(ret)); \
+        } else if (OB_FAIL(sql.append(", "))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql.append_fmt("%lu ", schema_keys[i].obj_type_))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+      if (OB_SUCC(ret)) { \
+        if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+    } \
+    ret; \
+  })
+
 #define SQL_APPEND_UDF_ID(schema_keys, exec_tenant_id, schema_key_size, sql) \
   ({                                                                    \
     int ret = OB_SUCCESS;                                               \
@@ -3190,6 +3243,7 @@ FETCH_NEW_SCHEMA_ID(RLS_GROUP, rls_group);
 FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 FETCH_NEW_SCHEMA_ID(CATALOG, catalog);
 FETCH_NEW_SCHEMA_ID(EXTERNAL_RESOURCE, external_resource);
+FETCH_NEW_SCHEMA_ID(LOCATION, location);
 
 #undef FETCH_NEW_SCHEMA_ID
 
@@ -3602,6 +3656,8 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(obj_mysql_priv, ObObjMysqlPriv);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
     const ObRefreshSchemaStatus &schema_status,
@@ -5483,6 +5539,7 @@ FETCH_SCHEMAS_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema,
 FETCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema, OB_ALL_RLS_GROUP_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema, OB_ALL_RLS_CONTEXT_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema, OB_ALL_CATALOG_HISTORY_TNAME);
+FETCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema, OB_ALL_TENANT_LOCATION_HISTORY_TNAME);
 
 int ObSchemaServiceSQLImpl::fetch_all_mock_fk_parent_table_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -5936,6 +5993,52 @@ int ObSchemaServiceSQLImpl::fetch_obj_privs(
       }
     }
 
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_obj_mysql_privs(
+  ObISQLClient &sql_client,
+  const ObRefreshSchemaStatus &schema_status,
+  const int64_t schema_version,
+  const uint64_t tenant_id,
+  ObIArray<ObObjMysqlPriv> &schema_array,
+  const SchemaKey *schema_keys,
+  const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_OBJ_MYSQL_PRIV_HISTORY_SQL, OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME,
+                              fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != schema_keys && schema_key_size > 0) {
+      if (OB_FAIL(sql.append_fmt(" AND (tenant_id, user_id, obj_name, obj_type) in"))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(SQL_APPEND_OBJ_MYSQL_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql))) {
+        LOG_WARN("sql append obj priv id failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, user_id desc, obj_name desc, obj_type desc, schema_version desc"))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_obj_mysql_priv_schema(tenant_id,
+                                                *result, schema_array))) {
+        LOG_WARN("failed to retrieve obj priv schema", K(ret));
+      }
+    }
   }
   return ret;
 }

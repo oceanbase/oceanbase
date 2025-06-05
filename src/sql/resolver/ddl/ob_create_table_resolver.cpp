@@ -529,7 +529,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             }
       }
     }
-    //resolve if_not_exists
+    //resolve if_not_exists, mysql模式支持
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[1]) {
         if (T_IF_NOT_EXISTS != create_table_node->children_[1]->type_) {
@@ -935,6 +935,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
       if (OB_FAIL(check_create_stmt_storage_cache_policy(table_schema.get_storage_cache_policy(), &table_schema))) {
         LOG_WARN("fail to check storage cache policy", K(ret), K(table_schema.get_storage_cache_policy()));;
+      }
+    }
+
+    if (OB_SUCC(ret) && create_table_stmt->get_create_table_arg().schema_.is_external_table()) {
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      if (OB_FAIL(ObSQLUtils::check_location_constraint(table_schema))) {
+        LOG_WARN("fail to check location constraint", K(ret), K(table_schema));
       }
     }
 

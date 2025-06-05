@@ -500,6 +500,7 @@ ObSchemaMgr::ObSchemaMgr()
       built_in_index_name_map_(SET_USE_500("BuiltInIdxNames", ObCtxIds::SCHEMA_SERVICE)),
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
+      location_mgr_(allocator_),
       context_mgr_(allocator_),
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
@@ -558,6 +559,7 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       built_in_index_name_map_(SET_USE_500("BuiltInIdxNames", ObCtxIds::SCHEMA_SERVICE)),
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
+      location_mgr_(allocator_),
       context_mgr_(allocator_),
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
@@ -632,6 +634,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init dblink mgr failed", K(ret));
   } else if (OB_FAIL(directory_mgr_.init())) {
     LOG_WARN("init directory mgr failed", K(ret));
+  } else if (OB_FAIL(location_mgr_.init())) {
+    LOG_WARN("init location mgr failed", K(ret));
   } else if (OB_FAIL(rls_policy_mgr_.init())) {
     LOG_WARN("init rls_policy mgr failed", K(ret));
   } else if (OB_FAIL(rls_group_mgr_.init())) {
@@ -708,6 +712,7 @@ void ObSchemaMgr::reset()
     tablespace_mgr_.reset();
     dblink_mgr_.reset();
     directory_mgr_.reset();
+    location_mgr_.reset();
     rls_policy_mgr_.reset();
     rls_group_mgr_.reset();
     rls_context_mgr_.reset();
@@ -822,6 +827,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign dblink mgr failed", K(ret));
       } else if (OB_FAIL(directory_mgr_.assign(other.directory_mgr_))) {
         LOG_WARN("assign directory mgr failed", K(ret));
+      } else if (OB_FAIL(location_mgr_.assign(other.location_mgr_))) {
+        LOG_WARN("assign location mgr failed", K(ret));
       } else if (OB_FAIL(context_mgr_.assign(other.context_mgr_))) {
         LOG_WARN("assign context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.assign(other.mock_fk_parent_table_mgr_))) {
@@ -923,6 +930,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy dblink mgr failed", K(ret));
       } else if (OB_FAIL(directory_mgr_.deep_copy(other.directory_mgr_))) {
         LOG_WARN("deep copy directory mgr failed", K(ret));
+      } else if (OB_FAIL(location_mgr_.deep_copy(other.location_mgr_))) {
+        LOG_WARN("deep copy location mgr failed", K(ret));
       } else if (OB_FAIL(context_mgr_.deep_copy(other.context_mgr_))) {
         LOG_WARN("deep copy context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.deep_copy(other.mock_fk_parent_table_mgr_))) {
@@ -1545,6 +1554,20 @@ int ObSchemaMgr::get_directory_schema(
     LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
   } else {
     ret = directory_mgr_.get_directory_schema_by_id(schema_id, schema);
+  }
+  return ret;
+}
+int ObSchemaMgr::get_location_schema(
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const ObLocationSchema *&schema) const
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = location_mgr_.get_location_schema_by_id(schema_id, schema);
   }
   return ret;
 }
@@ -2178,6 +2201,42 @@ int ObSchemaMgr::del_catalog(const ObTenantCatalogId &id)
 {
   int ret = OB_SUCCESS;
   OZ(catalog_mgr_.del_catalog(id));
+  return ret;
+}
+
+int ObSchemaMgr::add_locations(const common::ObIArray<ObLocationSchema> &location_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < location_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_location(location_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_location(const ObLocationSchema &catalog_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(catalog_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", catalog_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(location_mgr_.add_location(catalog_schema, mode))) {
+    LOG_WARN("failed to add location", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_location(const ObTenantLocationId &id)
+{
+  int ret = OB_SUCCESS;
+  OZ(location_mgr_.del_location(id));
   return ret;
 }
 
@@ -4540,6 +4599,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del dblink in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(directory_mgr_.del_directory_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del directory in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(location_mgr_.del_location_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del location in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(context_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.del_schemas_in_tenant(tenant_id))) {
@@ -4593,6 +4654,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t audit_schema_count = 0;
     int64_t dblink_schema_count = 0;
     int64_t directory_schema_count = 0;
+    int64_t location_schema_count = 0;
     int64_t context_schema_count = 0;
     int64_t mock_fk_parent_table_schema_count = 0;
     int64_t rls_policy_schema_count = 0;
@@ -4640,6 +4702,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get dblink schema count failed", K(ret));
     } else if (OB_FAIL(directory_mgr_.get_directory_schema_count(directory_schema_count))) {
       LOG_WARN("get directory schema count failed", K(ret));
+    } else if (OB_FAIL(location_mgr_.get_location_schema_count(location_schema_count))) {
+      LOG_WARN("get location schema count failed", K(ret));
     } else if (OB_FAIL(context_mgr_.get_context_schema_count(context_schema_count))) {
       LOG_WARN("get context schema count failed", K(ret));
     } else if (OB_FAIL(mock_fk_parent_table_mgr_.get_mock_fk_parent_table_schema_count(mock_fk_parent_table_schema_count))) {
@@ -4667,6 +4731,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + audit_schema_count
                        + dblink_schema_count
                        + directory_schema_count
+                       + location_schema_count
                        + rls_policy_schema_count
                        + rls_group_schema_count
                        + rls_context_schema_count
@@ -5441,6 +5506,8 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(directory_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get directory statistics", K(ret));
+  } else if (OB_FAIL(location_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get location statistics", K(ret));
   } else if (OB_FAIL(rls_policy_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get rls_policy statistics", K(ret));
   } else if (OB_FAIL(rls_group_mgr_.get_schema_statistics(schema_info))) {

@@ -62,6 +62,8 @@
 #endif
 #include "rootserver/ob_catalog_ddl_service.h"
 #include "rootserver/ob_root_rebuild_tablet.h"
+#include "rootserver/ob_location_ddl_service.h"
+#include "rootserver/ob_objpriv_mysql_ddl_service.h"
 
 namespace oceanbase
 {
@@ -600,6 +602,7 @@ public:
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
+  int revoke_object(const obrpc::ObRevokeObjMysqlArg &arg);
   int revoke_syspriv(const obrpc::ObRevokeSysPrivArg &arg);
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
   int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res);
@@ -713,6 +716,11 @@ public:
   int create_directory(const obrpc::ObCreateDirectoryArg &arg);
   int drop_directory(const obrpc::ObDropDirectoryArg &arg);
   //----End of functions for directory object----
+
+  //----Functions for location object----
+  int create_location(const obrpc::ObCreateLocationArg &arg);
+  int drop_location(const obrpc::ObDropLocationArg &arg);
+  //----End of functions for location object----
 
   //----Functions for managing row level security----
   int handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg);

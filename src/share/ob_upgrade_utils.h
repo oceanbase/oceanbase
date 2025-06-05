@@ -198,9 +198,10 @@ public:
   virtual ~ObUpgradeForAllVersionProcessor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
-  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+  virtual int finish_upgrade() override;
 private:
   int flush_ncomp_dll_job();
+  int finish_upgrade_for_add_sys_priv();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)

@@ -23,6 +23,7 @@
 #include "share/schema/ob_schema_mem_mgr.h"
 #include "share/schema/ob_dblink_mgr.h"
 #include "share/schema/ob_directory_mgr.h"
+#include "share/schema/ob_location_mgr.h"
 #include "share/schema/ob_keystore_mgr.h"
 #include "share/schema/ob_label_se_policy_mgr.h"
 #include "share/schema/ob_outline_mgr.h"
@@ -109,6 +110,7 @@ struct SchemaKey
     uint64_t column_priv_id_;
     uint64_t catalog_id_;
     uint64_t external_resource_id_;
+    uint64_t location_id_;
   };
   union {
     common::ObString table_name_;
@@ -120,6 +122,7 @@ struct SchemaKey
     common::ObString context_namespace_;
     common::ObString mock_fk_parent_table_namespace_;
     common::ObString catalog_name_;
+    common::ObString obj_name_;
   };
   int64_t schema_version_;
   uint64_t col_id_;
@@ -151,6 +154,7 @@ struct SchemaKey
                K_(label_se_user_level_id),
                K_(tablespace_id),
                K_(tablespace_name),
+               K_(obj_name),
                K_(profile_id),
                K_(audit_id),
                K_(grantee_id),
@@ -159,6 +163,7 @@ struct SchemaKey
                K_(obj_type),
                K_(dblink_id),
                K_(directory_id),
+               K_(location_id),
                K_(context_id),
                K_(mock_fk_parent_table_id),
                K_(rls_policy_id),
@@ -301,6 +306,10 @@ struct SchemaKey
                             grantor_id_,
                             grantee_id_);
   }
+  ObObjMysqlPrivSortKey get_obj_mysql_priv_key() const
+  {
+    return ObObjMysqlPrivSortKey(tenant_id_, user_id_, obj_name_, obj_type_);
+  }
   ObTenantDbLinkId get_dblink_key() const
   {
     return ObTenantDbLinkId(tenant_id_, dblink_id_);
@@ -308,6 +317,10 @@ struct SchemaKey
   ObTenantDirectoryId get_directory_key() const
   {
     return ObTenantDirectoryId(tenant_id_, directory_id_);
+  }
+  ObTenantLocationId get_location_key() const
+  {
+    return ObTenantLocationId(tenant_id_, location_id_);
   }
   ObContextKey get_context_key() const
   {
@@ -486,6 +499,7 @@ public:
   SCHEMA_KEY_FUNC(audit);
   SCHEMA_KEY_FUNC(dblink);
   SCHEMA_KEY_FUNC(directory);
+  SCHEMA_KEY_FUNC(location);
   SCHEMA_KEY_FUNC(rls_policy);
   SCHEMA_KEY_FUNC(rls_group);
   SCHEMA_KEY_FUNC(rls_context);
@@ -691,6 +705,38 @@ public:
           ;
     }
   };
+
+  struct obj_mysql_priv_hash_func
+  {
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
+    {
+      hash_code = 0;
+      hash_code = common::murmurhash(&schema_key.tenant_id_,
+                                     sizeof(schema_key.tenant_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.user_id_,
+                                     sizeof(schema_key.user_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(schema_key.obj_name_.ptr(),
+                                     schema_key.obj_name_.length(),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.obj_type_,
+                                     sizeof(schema_key.obj_type_),
+                                     hash_code);
+      return OB_SUCCESS;
+    }
+  };
+  struct obj_mysql_priv_equal_to
+  {
+    bool operator()(const SchemaKey &a, const SchemaKey &b) const
+    {
+      return a.tenant_id_ == b.tenant_id_ &&
+          a.user_id_ == b.user_id_ &&
+          a.obj_name_ == b.obj_name_&&
+          a.obj_type_ == b.obj_type_;
+    }
+  };
+
   struct sys_variable_key_hash_func {
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const {
       hash_code = common::murmurhash(&schema_key.tenant_id_, sizeof(schema_key.tenant_id_), 0);
@@ -797,6 +843,7 @@ public:
   SCHEMA_KEYS_DEF(audit, AuditKeys);
   SCHEMA_KEYS_DEF(dblink, DbLinkKeys);
   SCHEMA_KEYS_DEF(directory, DirectoryKeys);
+  SCHEMA_KEYS_DEF(location, LocationKeys);
   SCHEMA_KEYS_DEF(context, ContextKeys);
   SCHEMA_KEYS_DEF(mock_fk_parent_table, MockFKParentTableKeys);
   SCHEMA_KEYS_DEF(rls_policy, RlsPolicyKeys);
@@ -819,6 +866,8 @@ public:
       sys_priv_hash_func, sys_priv_equal_to> SysPrivKeys;
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       obj_priv_hash_func, obj_priv_equal_to> ObjPrivKeys;
+  typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
+      obj_mysql_priv_hash_func, obj_mysql_priv_equal_to> ObjMysqlPrivKeys;
 
   struct AllSchemaKeys
   {
@@ -913,7 +962,9 @@ public:
     // obj_priv
     ObjPrivKeys new_obj_priv_keys_;
     ObjPrivKeys del_obj_priv_keys_;
-
+    // obj_mysql_priv
+    ObjMysqlPrivKeys new_obj_mysql_priv_keys_;
+    ObjMysqlPrivKeys del_obj_mysql_priv_keys_;
     // dblink
     DbLinkKeys new_dblink_keys_;
     DbLinkKeys del_dblink_keys_;
@@ -921,6 +972,10 @@ public:
     // directory
     DirectoryKeys new_directory_keys_;
     DirectoryKeys del_directory_keys_;
+
+    // location
+    LocationKeys new_location_keys_;
+    LocationKeys del_location_keys_;
 
     // context
     ContextKeys new_context_keys_;
@@ -992,7 +1047,9 @@ public:
     common::ObArray<ObSAuditSchema> simple_audit_schemas_;
     common::ObArray<ObSysPriv> simple_sys_priv_schemas_;
     common::ObArray<ObObjPriv> simple_obj_priv_schemas_;
+    common::ObArray<ObObjMysqlPriv> simple_obj_mysql_priv_schemas_;
     common::ObArray<ObDirectorySchema> simple_directory_schemas_;
+    common::ObArray<ObLocationSchema> simple_location_schemas_;
     common::ObArray<ObContextSchema> simple_context_schemas_;
     common::ObArray<ObSimpleMockFKParentTableSchema> simple_mock_fk_parent_table_schemas_;
     common::ObArray<ObRlsPolicySchema> simple_rls_policy_schemas_;
@@ -1157,8 +1214,10 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(audit);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sys_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(obj_priv);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(obj_mysql_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(dblink);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(directory);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(location);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(context);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(mock_fk_parent_table);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_policy);
@@ -1204,8 +1263,10 @@ private:
   APPLY_SCHEMA_TO_CACHE(audit, ObSAuditMgr);
   APPLY_SCHEMA_TO_CACHE(sys_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(obj_priv, ObPrivMgr);
+  APPLY_SCHEMA_TO_CACHE(obj_mysql_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(dblink, ObDbLinkMgr);
   APPLY_SCHEMA_TO_CACHE(directory, ObDirectoryMgr);
+  APPLY_SCHEMA_TO_CACHE(location, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(context, ObContextMgr);
   APPLY_SCHEMA_TO_CACHE(mock_fk_parent_table, ObMockFKParentTableMgr);
   APPLY_SCHEMA_TO_CACHE(rls_policy, ObRlsPolicyMgr);

@@ -488,6 +488,11 @@ public:
                                             ObTableSchema &table_schema,
                                             common::ObString table_location);
 
+  static int resolve_external_file_location_object(ObResolverParams &params,
+                                                  ObTableSchema &table_schema,
+                                                  common::ObString location_obj,
+                                                  common::ObString sub_path);
+
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             ObString &ddl_sql,
                                             ObIAllocator *allocator,

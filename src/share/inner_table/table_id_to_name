@@ -391,6 +391,12 @@
 # 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
+# 550: __all_tenant_location
+# 551: __all_tenant_location_history
+# 551: __all_tenant_location  # BASE_TABLE_NAME
+# 552: __all_tenant_objauth_mysql
+# 553: __all_tenant_objauth_mysql_history
+# 553: __all_tenant_objauth_mysql  # BASE_TABLE_NAME
 # 554: __all_external_resource
 # 555: __all_external_resource_history
 # 555: __all_external_resource  # BASE_TABLE_NAME
@@ -1250,6 +1256,18 @@
 # 12530: __all_virtual_tablet_local_cache
 # 12535: __all_virtual_mview_running_job
 # 12536: __all_virtual_dynamic_partition_table
+# 12541: __all_virtual_tenant_location
+# 12541: __all_tenant_location  # BASE_TABLE_NAME
+# 12542: __all_virtual_tenant_location_history
+# 12542: __all_tenant_location  # BASE_TABLE_NAME
+# 12542: __all_tenant_location_history  # BASE_TABLE_NAME1
+# 12543: __all_virtual_objauth_mysql
+# 12543: __all_tenant_objauth_mysql  # BASE_TABLE_NAME
+# 12544: __all_virtual_objauth_mysql_history
+# 12544: __all_tenant_objauth_mysql  # BASE_TABLE_NAME
+# 12544: __all_tenant_objauth_mysql_history  # BASE_TABLE_NAME1
+# 12545: __tenant_virtual_show_create_location
+# 12546: __tenant_virtual_list_file
 # 12547: __all_virtual_external_resource
 # 12547: __all_external_resource  # BASE_TABLE_NAME
 # 12548: __all_virtual_external_resource_history
@@ -1953,6 +1971,12 @@
 # 15508: __all_mview_dep  # BASE_TABLE_NAME
 # 15509: ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE
 # 15509: __all_virtual_dynamic_partition_table  # BASE_TABLE_NAME
+# 15511: ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT
+# 15511: __all_tenant_location  # BASE_TABLE_NAME
+# 15512: ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT
+# 15512: __all_tenant_objauth_mysql  # BASE_TABLE_NAME
+# 15516: TENANT_VIRTUAL_LIST_FILE
+# 15516: __tenant_virtual_list_file  # BASE_TABLE_NAME
 # 15517: ALL_VIRTUAL_SS_TABLET_META
 # 15517: __all_virtual_ss_tablet_meta  # BASE_TABLE_NAME
 # 15518: ALL_VIRTUAL_SS_LS_META
@@ -3025,6 +3049,7 @@
 # 28274: V$OB_DYNAMIC_PARTITION_TABLES
 # 28275: GV$OB_RESULT_CACHE_OBJECTS
 # 28276: V$OB_RESULT_CACHE_OBJECTS
+# 28277: ALL_LOCATIONS
 # 28278: V$OB_SS_SSTABLES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
@@ -3464,6 +3489,15 @@
 # 101114: __idx_539_idx_catalog_priv_catalog_name
 # 101114: idx_catalog_priv_catalog_name  # INDEX_NAME
 # 101114: __all_catalog_privilege  # DATA_BASE_TABLE_NAME
+# 101116: __idx_550_idx_location_name
+# 101116: idx_location_name  # INDEX_NAME
+# 101116: __all_tenant_location  # DATA_BASE_TABLE_NAME
+# 101117: __idx_552_idx_objauth_mysql_user_id
+# 101117: idx_objauth_mysql_user_id  # INDEX_NAME
+# 101117: __all_tenant_objauth_mysql  # DATA_BASE_TABLE_NAME
+# 101118: __idx_552_idx_objauth_mysql_obj_name
+# 101118: idx_objauth_mysql_obj_name  # INDEX_NAME
+# 101118: __all_tenant_objauth_mysql  # DATA_BASE_TABLE_NAME
 # 101119: __idx_554_idx_name_dbid_external_resource
 # 101119: idx_name_dbid_external_resource  # INDEX_NAME
 # 101119: __all_external_resource  # DATA_BASE_TABLE_NAME
@@ -3802,3 +3836,15 @@
 # 15501: idx_catalog_priv_catalog_name_real_agent  # INDEX_NAME
 # 15501: __all_catalog_privilege  # DATA_BASE_TABLE_NAME
 # 15501: ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15513: __idx_15511_idx_location_name_real_agent
+# 15513: idx_location_name_real_agent  # INDEX_NAME
+# 15513: __all_tenant_location  # DATA_BASE_TABLE_NAME
+# 15513: ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15514: __idx_15512_idx_objauth_mysql_user_id_real_agent
+# 15514: idx_objauth_mysql_user_id_real_agent  # INDEX_NAME
+# 15514: __all_tenant_objauth_mysql  # DATA_BASE_TABLE_NAME
+# 15514: ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15515: __idx_15512_idx_objauth_mysql_obj_name_real_agent
+# 15515: idx_objauth_mysql_obj_name_real_agent  # INDEX_NAME
+# 15515: __all_tenant_objauth_mysql  # DATA_BASE_TABLE_NAME
+# 15515: ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT  # DATA_BASE_TABLE_NAME1

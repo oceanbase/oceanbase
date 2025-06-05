@@ -1248,7 +1248,6 @@ int ObSchemaGetterGuard::get_directory_schema_by_id(const uint64_t tenant_id,
   return ret;
 }
 
-
 int ObSchemaGetterGuard::get_rls_policy_schema_by_name(const uint64_t tenant_id,
                                                        const uint64_t table_id,
                                                        const uint64_t rls_group_id,
@@ -2565,6 +2564,12 @@ int ObSchemaGetterGuard::verify_read_only(const uint64_t tenant_id,
           break;
         }
         case OB_PRIV_ROUTINE_LEVEL: {
+          if (OB_FAIL(verify_db_read_only(tenant_id, need_priv))) {
+            LOG_WARN("db is read only, can't not execute this statement", KR(ret));
+          }
+          break;
+        }
+        case OB_PRIV_OBJECT_LEVEL: {
           if (OB_FAIL(verify_db_read_only(tenant_id, need_priv))) {
             LOG_WARN("db is read only, can't not execute this statement", KR(ret));
           }
@@ -4584,6 +4589,7 @@ GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(udt_mgr_, udt, ObUDTTypeInfo, ObSimpl
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(tablespace_mgr_, tablespace, ObTablespaceSchema, ObTablespaceSchema, TABLESPACE_SCHEMA);
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(synonym_mgr_, synonym, ObSynonymInfo, ObSimpleSynonymSchema, SYNONYM_SCHEMA);
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(directory_mgr_, directory, ObDirectorySchema, ObDirectorySchema, DIRECTORY_SCHEMA);
+GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(location_mgr_, location, ObLocationSchema, ObLocationSchema, LOCATION_SCHEMA);
 #undef GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE
 
 int ObSchemaGetterGuard::get_outline_infos_in_tenant(const uint64_t tenant_id,

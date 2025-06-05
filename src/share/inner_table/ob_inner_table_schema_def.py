@@ -8155,10 +8155,52 @@ def_table_schema(
 # 547: __all_ccl_rule
 # 548: __all_ccl_rule_history
 # 549: __all_balance_job_description
-# 550: __all_tenant_location
-# 551: __all_tenant_location_history
-# 552: __all_tenant_objauth_mysql
-# 553: __all_tenant_objauth_mysql_history
+
+
+all_tenant_location_def = dict(
+    owner = 'cjl476581',
+    table_name     = '__all_tenant_location',
+    table_id       = '550',
+    table_type     = 'SYSTEM_TABLE',
+    gm_columns     = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('location_id', 'int'),
+    ],
+    normal_columns = [
+        ('location_name', 'varchar:OB_MAX_LOCATION_NAME_LENGTH', 'false', ''),
+        ('location_url', 'varchar:OB_MAX_LOCATION_URL_LENGTH', 'false', ''),
+        ('location_access_info', 'varchar:OB_MAX_LOCATION_ACCESS_INFO_LENGTH', 'false', ''),
+    ],
+    in_tenant_space = True,
+)
+
+def_table_schema(**all_tenant_location_def)
+def_table_schema(**gen_history_table_def(551, all_tenant_location_def))
+
+all_objauth_mysql_def = dict(
+    owner = 'cjl476581',
+    table_name     = '__all_tenant_objauth_mysql',
+    table_id       = '552',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    in_tenant_space = True,
+
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('user_id', 'int'),
+        ('obj_name', 'varchar:OB_MAX_CORE_TALBE_NAME_LENGTH'),
+        ('obj_type', 'int')
+    ],
+    normal_columns = [
+      ('all_priv', 'int', 'false', 0),
+      ('grantor', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'false', ''),
+      ('grantor_host', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'false', ''),
+  ],
+)
+
+def_table_schema(**all_objauth_mysql_def)
+def_table_schema(**gen_history_table_def(553, all_objauth_mysql_def))
 
 all_external_resource = dict(
   owner = 'heyongyi.hyy',
@@ -16461,12 +16503,57 @@ def_table_schema(
 # 12538 __all_virtual_ss_notify_tasks_stat
 # 12539 __all_virtual_ss_notify_tablets_stat
 # 12540: __all_virtual_balance_job_description
-# 12541: __all_virtual_tenant_location
-# 12542: __all_virtual_tenant_location_history
-# 12543: __all_virtual_objauth_mysql
-# 12544: __all_virtual_objauth_mysql_history
-# 12545: __tenant_virtual_show_create_location
-# 12546: __tenant_virtual_list_file
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12541',
+  table_name = '__all_virtual_tenant_location',
+  keywords = all_def_keywords['__all_tenant_location']))
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12542',
+  table_name = '__all_virtual_tenant_location_history',
+  keywords = all_def_keywords['__all_tenant_location_history']))
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12543',
+  table_name = '__all_virtual_objauth_mysql',
+  keywords = all_def_keywords['__all_tenant_objauth_mysql']))
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12544',
+  table_name = '__all_virtual_objauth_mysql_history',
+  keywords = all_def_keywords['__all_tenant_objauth_mysql_history']))
+def_table_schema(
+  owner = 'cjl476581',
+  table_name     = '__tenant_virtual_show_create_location',
+  table_id       = '12545',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ('location_id', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('location_name', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
+  ('create_location', 'varchar:LOCATION_DEFINE_LENGTH'),
+  ],
+)
+def_table_schema(
+  owner = 'cjl476581',
+  table_name     = '__tenant_virtual_list_file',
+  table_id       = '12546',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ('location_id', 'int'),
+  ('location_sub_path', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
+  ('pattern', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('file_name', 'varchar:16384'),
+  ('file_size', 'int'),
+  ],
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12547',
@@ -17033,12 +17120,12 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keyword
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
 # 15510: __all_virtual_balance_job_description
-# 15511: __all_virtual_tenant_location
-# 15512: __all_virtual_tenant_objauth_mysql
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15511', all_def_keywords['__all_tenant_location']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15512', all_def_keywords['__all_tenant_objauth_mysql']))
 # 15513: idx_location_name_real_agent
 # 15514: idx_objauth_mysql_user_id_real_agent
 # 15515: idx_objauth_mysql_obj_name_real_agent
-# 15516: __tenant_virtual_list_file
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15516', all_def_keywords['__tenant_virtual_list_file']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15517', all_def_keywords['__all_virtual_ss_tablet_meta'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15518', all_def_keywords['__all_virtual_ss_ls_meta'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15519', all_def_keywords['__all_virtual_ss_sstable_mgr'])))
@@ -75937,8 +76024,28 @@ def_table_schema(
     normal_columns = [
     ],
 )
-
-# 28277: ALL_LOCATIONS
+def_table_schema(
+  owner = 'cjl476581',
+  table_name      = 'ALL_LOCATIONS',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28277',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST('SYS' AS VARCHAR2(128)) AS OWNER,
+      t.LOCATION_NAME AS LOCATION_NAME,
+      t.LOCATION_URL AS LOCATION_URL,
+      t.TENANT_ID AS ORIGIN_CON_ID,
+      t.LOCATION_ACCESS_INFO AS ACCESS_INFO
+    FROM
+      SYS.ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT t
+      WHERE t.TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
 def_table_schema(
 owner = 'yunxing.cyx',
 table_name      = 'V$OB_SS_SSTABLES',
@@ -75978,7 +76085,6 @@ FROM
  SYS.ALL_VIRTUAL_SS_SSTABLE_MGR M
 """.replace("\n", " ")
 )
-
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -76987,9 +77093,30 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_catalog_privilege'])
 
 # 101115: __all_ccl_rule
-# 101116: idx_location_name
-# 101117: idx_objauth_mysql_user_id
-# 101118: idx_objauth_mysql_obj_name
+
+def_sys_index_table(
+  index_name = 'idx_location_name',
+  index_table_id = 101116,
+  index_columns = ['location_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_location'])
+
+def_sys_index_table(
+  index_name = 'idx_objauth_mysql_user_id',
+  index_table_id = 101117,
+  index_columns = ['user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_objauth_mysql'])
+
+def_sys_index_table(
+  index_name = 'idx_objauth_mysql_obj_name',
+  index_table_id = 101118,
+  index_columns = ['obj_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_objauth_mysql'])
 
 def_sys_index_table(
   index_name = 'idx_name_dbid_external_resource',
@@ -77884,5 +78011,34 @@ def_agent_index_table(
   real_index_name = 'idx_catalog_priv_catalog_name',
   keywords = all_def_keywords['ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA'])
 
+def_agent_index_table(
+  index_name = 'idx_location_name_real_agent',
+  index_table_id = 15513,
+  index_columns = ['location_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_location' ,
+  real_index_name = 'idx_location_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_objauth_mysql_user_id_real_agent',
+  index_table_id = 15514,
+  index_columns = ['user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth_mysql' ,
+  real_index_name = 'idx_objauth_mysql_user_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_objauth_mysql_obj_name_real_agent',
+  index_table_id = 15515,
+  index_columns = ['obj_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth_mysql' ,
+  real_index_name = 'idx_objauth_mysql_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA'])
 # End Oracle Agent table Index
 ################################################################################
