@@ -74,9 +74,14 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < paths.at(i)->root_->children_.count(); ++j) {
       ObIndexMergeNode *child = paths.at(i)->root_->children_.at(j);
-      if (OB_ISNULL(child) || OB_ISNULL(child->ap_)) {
+      if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null child node", K(ret), KPC(child));
+      } else if (child->is_merge_node()) {
+        // do nothing
+      } else if (OB_ISNULL(child->ap_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null ap", K(ret));
       } else if (OB_FAIL(selectivities.push_back(1.0 - child->ap_->est_cost_info_.prefix_filter_sel_))) {
         LOG_WARN("failed to push back selectivity", K(ret));
       } else {
@@ -86,6 +91,7 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
     }
     if (OB_FAIL(ret)) {
     } else if (sum_child_sel < OB_DOUBLE_EPSINON) {
+      paths.at(i)->est_cost_info_.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
       paths.at(i)->est_cost_info_.prefix_filter_sel_ = 0.0;
       paths.at(i)->est_cost_info_.index_back_row_count_ = 1.0;
       paths.at(i)->est_cost_info_.phy_query_range_row_count_ = 1.0;
@@ -93,6 +99,7 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
       paths.at(i)->est_cost_info_.output_row_count_ = 1.0;
       paths.at(i)->est_cost_info_.est_method_ = method;
     } else {
+      paths.at(i)->est_cost_info_.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
       paths.at(i)->est_cost_info_.prefix_filter_sel_ = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(selectivities);
       paths.at(i)->est_cost_info_.index_back_row_count_ = (paths.at(i)->est_cost_info_.prefix_filter_sel_ / sum_child_sel) * sum_child_row;
       paths.at(i)->est_cost_info_.phy_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;

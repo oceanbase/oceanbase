@@ -788,7 +788,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     // we need to pushdown full filters to lookup as much as possible to avoid
     // the transmission of large results during DAS remote execution
     // all index table scan filters are generated in @generate_das_scan_ctdef()
-    const ObIArray<ObRawExpr*> &full_filters = op.get_full_filters();
+    const ObIArray<ObRawExpr*> &full_filters = op.get_filter_exprs();
     ObDASBaseCtDef *attach_ctdef = spec.tsc_ctdef_.attach_spec_.attach_ctdef_;
 
     if (OB_ISNULL(attach_ctdef)) {
@@ -1099,7 +1099,7 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
     ObArray<ObRawExpr*> nonpushdown_filters;
     ObArray<ObRawExpr*> lookup_pushdown_filters;
     ObArray<ObRawExpr*> filter_columns;
-    const ObIArray<ObRawExpr*> &full_filters = op.get_full_filters();
+    const ObIArray<ObRawExpr*> &full_filters = op.get_filter_exprs();
     if (OB_FAIL(op.extract_nonpushdown_filters(full_filters,
                                                nonpushdown_filters,
                                                lookup_pushdown_filters))) {
@@ -1227,7 +1227,7 @@ int ObTscCgService::extract_tsc_access_columns(const ObLogTableScan &op,
   const bool need_filter_out_match_expr = op.is_text_retrieval_scan() || op.has_func_lookup() || op.use_index_merge();
   if (op.use_index_merge()) {
     // assign full filters for lookup of index merge, and extract columns as its output
-    if (OB_FAIL(tsc_exprs.assign(op.get_full_filters()))) {
+    if (OB_FAIL(tsc_exprs.assign(op.get_filter_exprs()))) {
       LOG_WARN("failed to assign full filters", K(ret));
     }
   } else if (OB_FAIL(const_cast<ObLogTableScan &>(op).extract_pushdown_filters(tsc_exprs, //non-pushdown filters
@@ -2477,7 +2477,8 @@ int ObTscCgService::generate_index_merge_ctdef(const ObLogTableScan &op,
     OB_ASSERT(op.use_index_merge());
     path = static_cast<const IndexMergePath*>(op.get_access_path());
     ObIndexMergeNode *root = path->root_;
-    if (OB_FAIL(generate_index_merge_node_ctdef(op, tsc_ctdef, root, ctdef_alloc, root_ctdef))) {
+    DASScanCGCtx cg_ctx;
+    if (OB_FAIL(generate_index_merge_node_ctdef(op, cg_ctx, tsc_ctdef, root, ctdef_alloc, root_ctdef))) {
       LOG_WARN("failed to generate index merge ctdef", K(root_ctdef));
     }
   }
@@ -2485,13 +2486,13 @@ int ObTscCgService::generate_index_merge_ctdef(const ObLogTableScan &op,
 }
 
 int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
+                                                    DASScanCGCtx &cg_ctx,
                                                     ObTableScanCtDef &tsc_ctdef,
                                                     ObIndexMergeNode *node,
                                                     common::ObIAllocator &alloc,
                                                     ObDASIndexMergeCtDef *&root_ctdef)
 {
   int ret = OB_SUCCESS;
-  DASScanCGCtx cg_ctx;
   bool has_rowscn = false;
   if (OB_ISNULL(node) || OB_UNLIKELY(!node->is_merge_node())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2510,7 +2511,6 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
     } else {
       // TODO: merge all fts nodes with priority to reduce overhead
       ObArray<ObExpr*> merge_output;
-      int64_t index_merge_fts_idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
         ObIndexMergeNode *child = node->children_.at(i);
         ObDASBaseCtDef *child_ctdef = nullptr;
@@ -2519,13 +2519,12 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
           LOG_WARN("unexpected null child", K(ret));
         } else if (child->is_merge_node()) {
           ObDASIndexMergeCtDef *child_merge_ctdef = nullptr;
-          if (OB_FAIL(SMART_CALL(generate_index_merge_node_ctdef(op, tsc_ctdef, child, alloc, child_merge_ctdef)))) {
+          if (OB_FAIL(SMART_CALL(generate_index_merge_node_ctdef(op, cg_ctx, tsc_ctdef, child, alloc, child_merge_ctdef)))) {
             LOG_WARN("failed to generate index merge node ctdef", K(ret));
           } else {
             child_ctdef = child_merge_ctdef;
           }
         } else {
-          DASScanCGCtx cg_ctx;
           ObDASScanCtDef *scan_ctdef = nullptr;
           if (OB_ISNULL(child->ap_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -2540,10 +2539,15 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
             scan_ctdef->index_merge_idx_ = child->scan_node_idx_;
             scan_ctdef->is_index_merge_ = true;
             if (child->node_type_ == INDEX_MERGE_FTS_INDEX) {
-              // Currently, only a single level of union merge is supported, thus an incremental idx can be used directly.
-              // FIXME: use a unique idx to identify the corresponding fts index precisely.
-              cg_ctx.set_curr_merge_fts_idx(index_merge_fts_idx++);
+              // NOTE: curr_merge_fts_idx_ is initialized to OB_INVALID_ID,
+              // here we make an assumption that the traversal order during retrieval info preparation is consistent with
+              // the traversal order used in ctdef construction, such that each full-text index scan node can retrieve the
+              // corresponding retrieval info with increment idx.
+              cg_ctx.incre_merge_fts_idx();
               scan_ctdef->ir_scan_type_ = ObTSCIRScanType::OB_IR_INV_IDX_SCAN;
+            } else {
+              cg_ctx.is_func_lookup_ = false;
+              cg_ctx.is_merge_fts_index_ = false;
             }
             if (OB_FAIL(generate_das_scan_ctdef(op, cg_ctx, *scan_ctdef, has_rowscn))) {
               LOG_WARN("failed to generate das scan ctdef", KPC(scan_ctdef), K(ret));

@@ -1101,7 +1101,9 @@ int ObTableScanOp::prepare_all_das_tasks()
   }
 
   if (OB_SUCC(ret)) {
-    if (MY_SPEC.gi_above_ && !MY_INPUT.key_ranges_.empty()) {
+    // if use gi schedule and index merge, need to prepare scan range at the time of the first scan
+    // or if the tasks are not all local tasks
+    if (MY_SPEC.gi_above_ && !MY_INPUT.key_ranges_.empty() && !MY_CTDEF.use_index_merge_) {
       if (OB_FAIL(prepare_das_task())) {
         LOG_WARN("prepare das task failed", K(ret));
       }
@@ -2205,8 +2207,10 @@ int ObTableScanOp::local_iter_rescan()
     LOG_WARN("assign task ranges failed", K(ret));
   } else if (OB_UNLIKELY(iter_end_)) {
     //do nothing
-  } else if (MY_INPUT.key_ranges_.empty() &&
-      OB_FAIL(prepare_scan_range())) { // prepare scan input param
+  } else if ((MY_INPUT.key_ranges_.empty() || MY_CTDEF.use_index_merge_) &&
+             OB_FAIL(prepare_scan_range())) {
+    // if use index merge but key range is not empty
+    // maybe use gi scheduler, need to prepare scan range
     LOG_WARN("fail to prepare scan param", K(ret));
   } else {
     DASTaskIter task_iter = scan_iter_->begin_task_iter();

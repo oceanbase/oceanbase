@@ -160,16 +160,20 @@ class ObRoaringBitmapIter
       : rb_(rb),
         iter_(nullptr),
         inited_(false),
+        is_reverse_(false),
         curr_val_(0),
         val_idx_(0) {}
   virtual ~ObRoaringBitmapIter() = default;
 
-  int init();
+  int init(bool is_reverse = false);
   inline uint64_t get_curr_value() { return curr_val_; };
   inline uint64_t get_val_idx() { return val_idx_; };
   int get_next();
   void deinit() {
     inited_ = false;
+    is_reverse_ = false;
+    curr_val_ = 0;
+    val_idx_ = 0;
     if (OB_NOT_NULL(iter_)) {
       roaring::api::roaring64_iterator_free(iter_);
       iter_ = nullptr;
@@ -189,6 +193,7 @@ class ObRoaringBitmapIter
   ObRoaringBitmap *rb_;
   roaring::api::roaring64_iterator_t* iter_;
   bool inited_;
+  bool is_reverse_;
   uint64_t curr_val_;
   uint64_t val_idx_;
 };

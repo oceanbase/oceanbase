@@ -863,6 +863,7 @@ class Path
     inline bool is_merge_node() const {return INDEX_MERGE_UNION == node_type_ || INDEX_MERGE_INTERSECT == node_type_; }
     inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_; }
     int get_all_index_ids(ObIArray<uint64_t> &index_ids) const;
+    int get_all_match_exprs(ObIArray<ObRawExpr*> &match_exprs, ObIArray<uint64_t> &match_index_ids) const;
 
     TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(candicate_index_tids), KPC_(ap), K_(scan_node_idx));
 
@@ -1850,6 +1851,12 @@ struct NullAwareAntiJoinInfo {
                                         ObIArray<AccessPath *> &access_paths,
                                         bool &ignore_normal_access_path);
 
+    int create_full_index_merge_path(const uint64_t table_id,
+                                     const uint64_t ref_table_id,
+                                     const PathHelper &helper,
+                                     ObIndexInfoCache &index_info_cache,
+                                     ObIArray<AccessPath *> &access_paths);
+
     int get_candi_index_merge_trees(const uint64_t table_id,
                                     const uint64_t ref_table_id,
                                     const PathHelper &helper,
@@ -1953,6 +1960,11 @@ struct NullAwareAntiJoinInfo {
                      PathHelper &helper,
                      bool &create_das_path,
                      bool &create_basic_path);
+
+    int will_index_merge_use_das(const uint64_t table_id,
+                                 const PathHelper &helper,
+                                 bool &create_das_path,
+                                 bool &create_basic_path);
 
     int check_exec_force_use_das(const uint64_t table_id,
                                  bool &create_das_path,

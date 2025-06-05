@@ -7671,7 +7671,11 @@ int ObQueryRange::direct_get_tablet_ranges(ObIAllocator &allocator,
                                           const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(table_graph_.key_part_head_->is_always_true() ||
+  if (OB_ISNULL(table_graph_.key_part_head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(all_single_value_ranges),
+                                   K(state_), K(range_size_), K(column_count_), K(contain_geo_filters_));
+  } else if (OB_UNLIKELY(table_graph_.key_part_head_->is_always_true() ||
                   table_graph_.key_part_head_->is_always_false())) {
     ObNewRange *range = NULL;
     bool is_get_range = false;

@@ -5225,38 +5225,38 @@ int ObLogTableScan::get_index_tids(ObIArray<ObTableID> &index_tids) const
 int ObLogTableScan::get_index_name_list(ObIArray<ObString> &index_name_list) const
 {
   int ret = OB_SUCCESS;
-  const ObIndexMergeNode *root_node = NULL;
-  ObSqlSchemaGuard *schema_guard = NULL;
-  const ObTableSchema *index_schema = NULL;
-  index_name_list.reuse();
+  ObIndexMergeNode *root_node = nullptr;
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  ObArray<uint64_t> index_tid_list;
   if (OB_ISNULL(access_path_) || OB_UNLIKELY(!access_path_->is_index_merge_path())
       || OB_ISNULL(root_node = static_cast<const IndexMergePath*>(access_path_)->root_)
       || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
       || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected NULL",K(ret), KPC(access_path_), KPC(root_node), K(get_plan()), K(get_stmt()), K(schema_guard));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < root_node->children_.count(); ++i) {
-    const ObIndexMergeNode *child_node = root_node->children_.at(i);
-    ObString index_name;
-    if (OB_ISNULL(child_node) || OB_ISNULL(child_node->ap_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected NULL",K(ret), KPC(child_node), K(i));
-    } else if (ref_table_id_ == child_node->ap_->index_id_) {
-      index_name = ObIndexHint::PRIMARY_KEY;
-    } else if (OB_FAIL(schema_guard->get_table_schema(table_id_,
-                                                      child_node->ap_->index_id_,
-                                                      get_stmt(),
-                                                      index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(child_node->ap_->index_id_), K(i));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null schema",K(ret), K(child_node->ap_->index_id_), K(i));
-    } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
-      LOG_WARN("failed to get index name", K(ret), K(child_node->ap_->index_id_), K(i));
-    }
-    if (OB_SUCC(ret) && OB_FAIL(index_name_list.push_back(index_name))) {
-      LOG_WARN("failed to push back index name", K(ret));
+  } else if (OB_FAIL(root_node->get_all_index_ids(index_tid_list))) {
+    LOG_WARN("failed to get index id list", K(ret));
+  } else {
+    const ObTableSchema *index_schema = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_tid_list.count(); ++i) {
+      const uint64_t index_id = index_tid_list.at(i);
+      ObString index_name;
+      if (ref_table_id_ == index_id) {
+        index_name = ObIndexHint::PRIMARY_KEY;
+      } else if (OB_FAIL(schema_guard->get_table_schema(table_id_,
+                                                        index_id,
+                                                        get_stmt(),
+                                                        index_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(index_id), K(i));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null schema",K(ret), K(index_id), K(i));
+      } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
+        LOG_WARN("failed to get index name", K(ret), K(index_id), K(i));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(index_name_list.push_back(index_name))) {
+        LOG_WARN("failed to push back index name", K(ret));
+      }
     }
   }
   return ret;

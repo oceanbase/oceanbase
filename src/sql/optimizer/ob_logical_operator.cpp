@@ -4377,7 +4377,9 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       }
       if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() ||
+            static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter() ||
+            static_cast<ObLogTableScan*>(this)->use_index_merge()) {
           gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
         }
         if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
@@ -5354,6 +5356,8 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
             LOG_WARN("failed to has_exec_param");
           } else if (has_exec_param) {
             OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
+          } else if (scan->use_index_merge()) {
+            OPT_TRACE("[TopN Filter] can not pushdown to index merge table scan");
           } else {
             scan_op = op;
             find_table_scan = true;

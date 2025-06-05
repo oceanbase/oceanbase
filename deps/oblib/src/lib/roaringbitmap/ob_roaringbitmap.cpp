@@ -701,7 +701,7 @@ int ObRoaringBitmap::convert_to_bitmap() {
   return ret;
 }
 
-int ObRoaringBitmapIter::init()
+int ObRoaringBitmapIter::init(bool is_reverse)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(rb_)) {
@@ -715,7 +715,11 @@ int ObRoaringBitmapIter::init()
   } else if (OB_FAIL(rb_->convert_to_bitmap())) {
     LOG_WARN("failed to convert roaringbitmap to bitmap type", K(ret));
   } else {
-    ROARING_TRY_CATCH(iter_ = roaring::api::roaring64_iterator_create(rb_->get_bitmap()));
+    if (OB_UNLIKELY(is_reverse)) {
+      ROARING_TRY_CATCH(iter_ = roaring::api::roaring64_iterator_create_last(rb_->get_bitmap()));
+    } else {
+      ROARING_TRY_CATCH(iter_ = roaring::api::roaring64_iterator_create(rb_->get_bitmap()));
+    }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(iter_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -726,6 +730,7 @@ int ObRoaringBitmapIter::init()
     } else {
       curr_val_= roaring::api::roaring64_iterator_value(iter_);
       inited_ = true;
+      is_reverse_ = is_reverse;
     }
   }
   return ret;
@@ -738,7 +743,12 @@ int ObRoaringBitmapIter::get_next()
   if (!inited_ && (OB_FAIL(this->init()))) {
     LOG_WARN("failed to init roaringbitmap iterator", K(ret));
   } else {
-    ROARING_TRY_CATCH(has_next = roaring::api::roaring64_iterator_advance(iter_));
+    if (OB_UNLIKELY(is_reverse_)) {
+      ROARING_TRY_CATCH(has_next = roaring::api::roaring64_iterator_previous(iter_));
+    } else {
+      ROARING_TRY_CATCH(has_next = roaring::api::roaring64_iterator_advance(iter_));
+    }
+
     if (OB_FAIL(ret)) {
     } else if (!has_next) {
       ret = OB_ITER_END;

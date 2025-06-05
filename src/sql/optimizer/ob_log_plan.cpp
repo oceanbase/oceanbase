@@ -3238,30 +3238,9 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       if (OB_ISNULL(index_merge_root)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr index merge root", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_merge_root->children_.count(); ++i) {
-        ObIndexMergeNode *child = index_merge_root->children_.at(i);
-        if (OB_ISNULL(child)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null index merge child", K(ret));
-        } else if (child->node_type_ == INDEX_MERGE_FTS_INDEX) {
-          ObRawExpr *match_expr = nullptr;
-          if (OB_ISNULL(child->ap_)
-              || OB_UNLIKELY(1 != child->filter_.count())
-              || OB_ISNULL(child->filter_.at(0))
-              || OB_UNLIKELY(0 >= child->filter_.at(0)->get_param_count())
-              || OB_ISNULL(match_expr = child->filter_.at(0)->get_param_expr(0))
-              || OB_UNLIKELY(!match_expr->has_flag(IS_MATCH_EXPR))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected match expr", K(ret), KPC(child), KPC(match_expr));
-          } else if (OB_FAIL(merge_match_exprs.push_back(match_expr))) {
-            LOG_WARN("failed to push back match expr", K(ret));
-          } else if (OB_FAIL(merge_index_ids.push_back(child->ap_->index_id_))) {
-            LOG_WARN("failed to push back index id", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(prepare_text_retrieval_merge(merge_match_exprs, merge_index_ids, scan))) {
+      } else if (OB_FAIL(index_merge_root->get_all_match_exprs(merge_match_exprs, merge_index_ids))) {
+        LOG_WARN("failed to get all match exprs", K(ret));
+      } else if (OB_FAIL(prepare_text_retrieval_merge(merge_match_exprs, merge_index_ids, scan))) {
         LOG_WARN("failed to prepare text retrieval merge", K(ret));
       }
     }

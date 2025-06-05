@@ -515,7 +515,7 @@ int ObDASScanOp::open_op()
   } else if (SUPPORTED_DAS_ITER_TREE(tree_type)) {
     ObDASIter *result = nullptr;
     if (OB_FAIL(init_related_tablet_ids(tablet_ids_))) {
-    LOG_WARN("failed to init related tablet ids", K(ret));
+      LOG_WARN("failed to init related tablet ids", K(ret));
     } else if (OB_FAIL(ObDASIterUtils::create_das_scan_iter_tree(tree_type,
                                                                  scan_param_,
                                                                  scan_ctdef_,

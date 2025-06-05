@@ -777,6 +777,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_px_ordered_coord = GCONF._enable_px_ordered_coord;
   int64_t das_batch_rescan_flag = tenant_config.is_valid() ? tenant_config->_enable_das_batch_rescan_flag : 0;
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
+  bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -841,6 +842,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param enable px ordered coord", K(ret));
   } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::DAS_BATCH_RESCAN_FLAG, das_batch_rescan_flag))) {
     LOG_WARN("failed to get das batch rescan flag", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
+    LOG_WARN("failed to get opt param enable index merge", K(ret));
   } else {
     ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
       query_ctx->optimizer_features_enable_version_, das_batch_rescan_flag);
@@ -857,6 +860,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
+    ctx_.set_enable_index_merge(enable_index_merge);
     if (query_ctx->get_query_hint().has_outline_data()) {
       ctx_.set_push_join_pred_into_view_enabled(true);
     } else {
