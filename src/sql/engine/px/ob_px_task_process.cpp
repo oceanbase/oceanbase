@@ -512,6 +512,9 @@ int ObPxTaskProcess::do_process()
 
   // Task 和 Sqc 在两个不同线程中时，task 需要和 sqc 通信
   if (NULL != arg_.sqc_task_ptr_) {
+    if (OB_FAIL(ret)) {
+      ObInterruptUtil::update_schema_error_code(arg_.exec_ctx_, ret, arg_.task_.px_worker_execute_start_schema_version_);
+    }
     arg_.sqc_task_ptr_->set_result(ret);
     if (OB_NOT_NULL(arg_.exec_ctx_)) {
       int das_retry_rc = DAS_CTX(*arg_.exec_ctx_).get_location_router().get_last_errno();
