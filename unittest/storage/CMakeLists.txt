@@ -17,7 +17,7 @@ target_link_libraries(truncate_info_helper PUBLIC ob_base mockcontainer)
 
 function(storage_unittest case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE mockcontainer -static-libstdc++)
+  target_link_libraries(${case} PRIVATE mockcontainer)
 endfunction()
 
 function(storage_unittest_longer_timeout case)
@@ -28,7 +28,7 @@ endfunction()
 
 function(storage_dml_unittest case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE mockcontainer mock_ls_tablet_service mock_access_service -static-libstdc++)
+  target_link_libraries(${case} PRIVATE mockcontainer mock_ls_tablet_service mock_access_service)
 endfunction()
 
 function(storage_fts_unittest case)

@@ -17,14 +17,14 @@ target_link_libraries(simple_replica_test PUBLIC
 
 function(ob_unittest_multi_replica case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock simple_replica_test oceanbase)
+  target_link_libraries(${case} PRIVATE gtest gmock simple_replica_test oceanbase)
   set_tests_properties(${case} PROPERTIES TIMEOUT 600)
   set_tests_properties(${case} PROPERTIES LABELS "simple_replica")
 endfunction()
 
 function(ob_unittest_multi_replica_longer_timeout case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock simple_replica_test oceanbase)
+  target_link_libraries(${case} PRIVATE gtest gmock simple_replica_test oceanbase)
   set_tests_properties(${case} PROPERTIES TIMEOUT 800)
   set_tests_properties(${case} PROPERTIES LABELS "simple_replica")
 endfunction()

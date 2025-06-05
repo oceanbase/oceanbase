@@ -14,7 +14,7 @@
 # )
 function(ob_unittest_observer case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock observer_test oceanbase)
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
   target_link_directories(${case} PUBLIC ${CMAKE_SOURCE_DIR}/mittest)
   set_tests_properties(${case} PROPERTIES TIMEOUT 3600)
 endfunction()

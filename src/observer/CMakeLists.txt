@@ -595,8 +595,11 @@ endif()
 if (OB_SO_CACHE)
   add_library(oceanbase SHARED IMPORTED GLOBAL)
   set_target_properties(oceanbase PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/liboceanbase.so"
-    IMPORTED_LINK_INTERFACE_LIBRARIES ob_base)
+    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/liboceanbase.so")
+  target_link_libraries(oceanbase
+    INTERFACE ob_base
+    ${HYPERSCAN_SHARED_LIB}
+    ${STDC_SHARED_LIB})
 else()
   add_library(oceanbase
     SHARED
@@ -604,6 +607,8 @@ else()
     ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
   target_link_libraries(oceanbase
     PUBLIC ob_base
+    ${HYPERSCAN_SHARED_LIB}
+    ${STDC_SHARED_LIB}
     PRIVATE
     -Wl,-z,notext
     -Wl,--whole-archive

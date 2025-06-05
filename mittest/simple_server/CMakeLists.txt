@@ -22,7 +22,7 @@ endfunction()
 
 function(ob_ha_unittest_observer case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock observer_test oceanbase)
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
 function(errsim_ha_unittest_observer case)
