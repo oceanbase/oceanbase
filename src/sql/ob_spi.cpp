@@ -1154,16 +1154,8 @@ int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
   if (OB_SUCC(ret)) {
     ExecCtxBak exec_ctx_bak;
     OX (exec_ctx_bak.backup(*exec_ctx));
-    OX (exec_ctx->set_physical_plan_ctx(&(state->get_physical_plan_ctx())));
-    if (OB_SUCC(ret) && state->get_function().get_expr_op_size() > 0)  {
-      OZ (exec_ctx->init_expr_op(state->get_function().get_expr_op_size()));
-    }
-    OZ (state->get_function().get_frame_info().pre_alloc_exec_memory(*exec_ctx));
+    OX (state->get_exec_ctx_bak().restore(*exec_ctx));
     OZ (spi_calc_expr(&(state->get_exec_ctx()), expr, OB_INVALID_ID, result), KPC(expr));
-    if (state->get_function().get_expr_op_size() > 0) {
-      exec_ctx->reset_expr_op();
-      exec_ctx->get_allocator().free(exec_ctx->get_expr_op_ctx_store());
-    }
     exec_ctx_bak.restore(*exec_ctx);
   }
   return ret;
