@@ -1670,37 +1670,46 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected capacity size", K(ret), K(capacity));
   } else if (OB_FAIL(check_and_prepare())) {
+    const int64_t size = ir_ctdef_->inv_scan_doc_id_col_->is_batch_result() ? ir_rtdef_->eval_ctx_->max_batch_size_ : 1;
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to prepare to get next row", K(ret));
     } else if (next_written_idx_ == rangekey_size_) {
-      // do nothing
-    } else if (next_written_idx_ != 0 ) {
+      // do nothing, scan end
+      ret = OB_ITER_END;
+    } else if (size < rangekey_size_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected next_written_idx", K(ret), K_(next_written_idx));
+      LOG_WARN("unexpected size", K(ret), K(size), K_(rangekey_size));
+    } else if (next_written_idx_ > rangekey_size_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected next_written_idx", K(ret), K_(rangekey_size), K_(next_written_idx));
     } else {
       ret = OB_SUCCESS;
       ObEvalCtx *ctx = ir_rtdef_->eval_ctx_;
       ObExpr *relevance_proj_col = ir_ctdef_->relevance_proj_col_;
-      while (OB_SUCC(ret) && next_written_idx_ < rangekey_size_) {
+      const int64_t need_read_cnt = OB_MIN(rangekey_size_ - next_written_idx_, capacity);
+      while (OB_SUCC(ret) && count < need_read_cnt) {
         // fill the remaining results with the relevance value of '0'
         // Note: if we need calculate the docid expr, fix the code and cache the hints.
         ObDocId default_docid;
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
-        guard.set_batch_idx(next_written_idx_);
+        guard.set_batch_idx(count);
         if (OB_FAIL(project_result(default_docid, 0))) {
           LOG_WARN("failed to project result", K(ret));
         }
+        count ++;
         next_written_idx_ ++;
       }
       if (OB_SUCC(ret)) {
         for (int i = 0; i < rangekey_size_; i++) {
           relevance_proj_col->get_evaluated_flags(*ctx).set(i);
         }
-        ret = OB_ITER_END;
+        relevance_proj_col->set_evaluated_projected(*ctx);
+        if (next_written_idx_ == rangekey_size_) {
+          ret = OB_ITER_END;
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
-      relevance_proj_col->set_evaluated_projected(*ctx);
-      count = OB_MIN(rangekey_size_, capacity);
-      next_written_idx_ = OB_MIN(rangekey_size_, capacity);
     }
   } else if (need_fill_doc_cnt && OB_FAIL(fill_total_doc_cnt())) {
     LOG_WARN("failed to fill total document count", K(ret), K(total_doc_cnt_));
@@ -1714,9 +1723,11 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   } else if (next_written_idx_ > rangekey_size_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected capacity size", K(ret), K(capacity));
-  } else if (next_written_idx_ == 0 && OB_FAIL(get_next_batch_rows(count, capacity))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("failed to get next rows with taat", K(ret));
+  } else if (next_written_idx_ == 0) {
+    if (OB_FAIL(get_next_batch_rows(count, capacity))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("failed to get next rows with taat", K(ret));
+      }
     }
   } else if (next_written_idx_ < rangekey_size_) {
     int remain_size = rangekey_size_ - next_written_idx_;
@@ -2241,37 +2252,46 @@ int ObDASTRDaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected capacity size", K(ret), K(capacity));
   } else if (OB_FAIL(check_and_prepare())) {
+    const int64_t size = ir_ctdef_->inv_scan_doc_id_col_->is_batch_result() ? ir_rtdef_->eval_ctx_->max_batch_size_ : 1;
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to prepare to get next rows", K(ret));
     } else if (next_written_idx_ == rangekey_size_) {
-      // do nothing
-    } else if (next_written_idx_ != 0) {
+      // do nothing, scan end
+      ret = OB_ITER_END;
+    } else if (size < rangekey_size_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected size", K(ret), K(size), K_(rangekey_size));
+    } else if (next_written_idx_ > rangekey_size_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected next_written_idx", K(ret), K_(next_written_idx));
     } else {
       ObEvalCtx *ctx = ir_rtdef_->eval_ctx_;
       ObExpr *relevance_proj_col = ir_ctdef_->relevance_proj_col_;
       ret = OB_SUCCESS;
-      while (OB_SUCC(ret) && next_written_idx_ < rangekey_size_) {
+      const int64_t need_read_cnt = OB_MIN(rangekey_size_ - next_written_idx_, capacity);
+      while (OB_SUCC(ret) && count < need_read_cnt) {
         // fill the remaining results with the relevance value of '0'
         // Note: if we need calculate the docid expr, fix the code and cache the hints.
         ObDocId default_docid;
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
-        guard.set_batch_idx(next_written_idx_);
+        guard.set_batch_idx(count);
         if (OB_FAIL(project_result(default_docid, 0))) {
           LOG_WARN("failed to project result", K(ret));
         }
+        count ++;
         next_written_idx_ ++;
       }
       if (OB_SUCC(ret)) {
-        for (int i = 0; i < rangekey_size_; i++) {
+        for (int i = 0; i < need_read_cnt; i++) {
           relevance_proj_col->get_evaluated_flags(*ctx).set(i);
         }
-        ret = OB_ITER_END;
+        relevance_proj_col->set_evaluated_projected(*ctx);
+        if (next_written_idx_ == rangekey_size_) {
+          ret = OB_ITER_END;
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
-      relevance_proj_col->set_evaluated_projected(*ctx);
-      count = OB_MIN(rangekey_size_, capacity);
-      next_written_idx_ = OB_MIN(rangekey_size_, capacity);
     }
   } else if (next_written_idx_ == rangekey_size_) {
     ret = OB_ITER_END;
