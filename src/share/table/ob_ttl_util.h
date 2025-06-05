@@ -271,7 +271,8 @@ public:
   enum ObTTLTableType {
     HBASE,
     REDIS,
-    INVALID
+    INVALID,
+    TABLE
   };
 
   explicit ObKVAttr()
