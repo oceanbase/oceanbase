@@ -962,6 +962,8 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_borde
   border_rowkey.reset();
   rowkey.reset();
   block_row_store_->disable();
+  bool is_delete_insert = iter_param_->is_delete_insert_; // save is_delete_insert_
+  const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = false;  // to avoid using the blockscan path
 
   // get next row
   if (OB_FAIL(get_next_row(row))) {
@@ -992,6 +994,7 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_borde
   if (OB_SUCC(ret) && need_set_border_rowkey) {
     border_rowkey = prefetcher_.get_border_rowkey();
   }
+  const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = is_delete_insert; // restore is_delete_insert_
   return ret;
 }
 
