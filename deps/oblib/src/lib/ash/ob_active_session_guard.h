@@ -257,7 +257,10 @@ public:
     fixup_index_ = index;
   }
   inline void check_fixup_ash_buffer() const {
-    OB_ASSERT(fixup_ash_buffer_.is_valid());
+    if (!fixup_ash_buffer_.is_valid()) {
+      int ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "fixup ash buffer is invalid", K(*this), K(ret));
+    }
   }
 
   void set_event(int64_t event_no, uint64_t p1, uint64_t p2, uint64_t p3)
