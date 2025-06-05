@@ -822,6 +822,7 @@ public:
     return need_free_.count() > i ? need_free_.at(i) : false;
   }
   ObPLContext *get_top_pl_context() { return top_context_; }
+  ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
 
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
@@ -842,6 +843,7 @@ private:
   bool top_call_;
 
   ExecCtxBak exec_ctx_bak_;
+  ExecCtxBak self_exec_ctx_bak_;
   bool need_reset_physical_plan_;
 
   ObPLContext *top_context_;
