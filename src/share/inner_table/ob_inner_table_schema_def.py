@@ -6315,7 +6315,9 @@ def_table_schema(
     ('last_refresh_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
     ('schema_version', 'int'),
     ('refresh_dop', 'int', 'false', '0'),
-    ('data_sync_scn', 'uint', 'false', '0')
+    ('data_sync_scn', 'uint', 'false', '0'),
+    ('is_synced', 'bool', 'false', '0'),
+    ('nested_refresh_mode', 'int', 'false', '0')
   ]
 )
 
@@ -16424,7 +16426,8 @@ def_table_schema(
   ('session_id', 'uint'),
   ('read_snapshot', 'int'),
   ('parallel', 'int'),
-  ('job_start_time', 'timestamp')
+  ('job_start_time', 'timestamp'),
+  ('target_data_sync_scn', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

@@ -2859,6 +2859,7 @@ typedef enum ObItemType
   T_UDF_PROPERTY_LIST = 4866,
 
   T_MICRO_BLOCK_FORMAT_VERSION = 4867,
+  T_MV_NESTED_REFRESH_CLAUSE = 4868, // placeholder for mview
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

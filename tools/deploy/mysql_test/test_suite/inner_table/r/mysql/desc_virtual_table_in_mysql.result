@@ -4371,6 +4371,8 @@ last_refresh_trace_id	varchar(64)	YES		NULL
 schema_version	bigint(20)	NO		NULL	
 refresh_dop	bigint(20)	NO		0	
 data_sync_scn	bigint(20) unsigned	NO		0	
+is_synced	tinyint(4)	NO		0	
+nested_refresh_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5903,6 +5905,7 @@ session_id	bigint(20) unsigned	NO		NULL
 read_snapshot	bigint(20)	NO		NULL	
 parallel	bigint(20)	NO		NULL	
 job_start_time	timestamp(6)	NO		NULL	
+target_data_sync_scn	bigint(20) unsigned	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_running_job;
 IF(count(*) >= 0, 1, 0)
 1

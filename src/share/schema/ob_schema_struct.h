@@ -3954,6 +3954,14 @@ enum class ObMVRefreshStatsCollectionLevel : int64_t
   MAX
 };
 
+enum class ObMVNestedRefreshMode : int64_t
+{
+  INDIVIDUAL = 0,
+  INCONSISTENT = 1,
+  CONSISTENT = 2,
+  MAX
+};
+
 struct ObVectorIndexRefreshInfo
 {
   OB_UNIS_VERSION(1);
