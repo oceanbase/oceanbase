@@ -71,7 +71,8 @@ public:
     const int64_t schema_version,
     const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    storage::ObStorageSchema &storage_schema);
+    storage::ObStorageSchema &storage_schema,
+    const bool need_trim_default_val = false);
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
     const bool is_tombstone,
