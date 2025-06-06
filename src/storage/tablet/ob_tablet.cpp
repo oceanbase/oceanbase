@@ -7352,7 +7352,6 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   attr.reset();
   attr.iter_attr_.has_transfer_table_ = tablet_meta_.has_transfer_table();
   attr.iter_attr_.is_empty_shell_ = table_store_addr_.addr_.is_none();
-  attr.iter_attr_.has_next_tablet_ = tablet_meta_.has_next_tablet_;
   // for normal tablet(except ls inner tablet), if mds_checkpoint_scn equals initial SCN(value is 1),
   // it means all kinds of mds data(including tablet status) has never been dumped to disk,
   // then we think that this tablet is in initial state

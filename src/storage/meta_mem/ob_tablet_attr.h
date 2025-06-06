@@ -35,7 +35,6 @@ public:
   TO_STRING_KV(K_(valid),
                K_(is_empty_shell),
                K_(has_transfer_table),
-               K_(has_next_tablet),
                K_(has_nested_table),
                K_(initial_state));
 
@@ -47,10 +46,9 @@ public:
       uint64_t valid_              : 1; // valid_ = true means attr is filled
       uint64_t is_empty_shell_     : 1;
       uint64_t has_transfer_table_ : 1;
-      uint64_t has_next_tablet_    : 1;
       uint64_t has_nested_table_   : 1;
       uint64_t initial_state_      : 1;
-      uint64_t reserved_           : 58;
+      uint64_t reserved_           : 59;
     };
   };
 };
@@ -77,7 +75,7 @@ public:
   bool is_valid() const { return iter_attr_.valid_; }
   bool is_empty_shell() const { return iter_attr_.is_empty_shell_; }
   bool has_transfer_table() const { return iter_attr_.has_transfer_table_; }
-  bool has_next_tablet() const { return iter_attr_.has_next_tablet_; }
+  bool has_next_tablet() const { return false; }
   bool has_nested_table() const { return iter_attr_.has_nested_table_; }
   bool initial_state() const { return iter_attr_.initial_state_; }
   void refresh_cache(
