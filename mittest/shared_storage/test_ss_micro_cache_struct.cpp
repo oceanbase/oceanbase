@@ -98,7 +98,7 @@ TEST_F(TestSSMicroCacheStruct, micro_block_meta)
   micro_meta.data_loc_ = phy_blk_idx * phy_blk_mgr.block_size_;
   micro_meta.size_ = micro_size;
   micro_meta.is_data_persisted_ = true;
-  micro_meta.access_time_ = 1;
+  micro_meta.access_time_s_ = 1;
   ASSERT_EQ(0, micro_meta.ref_cnt_);
   ASSERT_EQ(false, micro_meta.is_valid_field()); // cuz no exist valid micro_key
   MacroBlockId macro_id(0, 100, 0);
@@ -180,7 +180,7 @@ TEST_F(TestSSMicroCacheStruct, micro_block_meta_3)
   ASSERT_EQ(FALSE, micro_meta.is_valid_field());
   micro_meta.first_val_ = 1;
   micro_meta.size_ = micro_size;
-  micro_meta.access_time_ = 20;
+  micro_meta.access_time_s_ = 20;
   MacroBlockId macro_id(0, 100, 0);
   int32_t offset = 10;
   ObSSMicroBlockCacheKey micro_key;
@@ -349,7 +349,7 @@ TEST_F(TestSSMicroCacheStruct, arc_iter_info)
     micro_meta->first_val_ = 100;
     micro_meta->size_ = micro_size;
     micro_meta->micro_key_ = micro_key;
-    micro_meta->access_time_ = i;
+    micro_meta->access_time_s_ = i;
     int64_t seg_idx = -1;
 
     if (i % 4 == 0) {
@@ -426,7 +426,7 @@ TEST_F(TestSSMicroCacheStruct, reorgan_entry)
 
     micro_meta->data_loc_ = 101;
     micro_meta->size_ = 51;
-    micro_meta->access_time_ = 3;
+    micro_meta->access_time_s_ = 3;
     micro_meta->crc_ = 35;
     ObSSMicroReorganEntry entry;
     entry.idx_ = i + 1;

@@ -299,7 +299,7 @@ TEST_F(TestSSPersistMicroDataTask, persist_abnormal_micro_block)
       const ObSSMicroBlockCacheKey &micro_key = micro_key_arr[i];
       ASSERT_EQ(OB_SUCCESS, micro_map.get(&micro_key, micro_handle));
       ASSERT_EQ(false, micro_handle()->is_data_persisted_);
-      micro_handle()->access_time_ = 0;
+      micro_handle()->access_time_s_ = 0;
     }
   }
 

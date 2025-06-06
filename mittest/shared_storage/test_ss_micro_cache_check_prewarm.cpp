@@ -361,7 +361,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ObArray<ObSSMicroBlockCacheKey> tmp_micro_keys;
     ASSERT_EQ(OB_SUCCESS, tmp_micro_keys.push_back(tmp_micro_key));
     ASSERT_EQ(OB_SUCCESS, micro_cache->update_micro_block_heat(tmp_micro_keys, false, true, 1));
-    ASSERT_LT(access_time, tmp_micro_meta->access_time_);
+    ASSERT_LT(access_time, tmp_micro_meta->access_time_s_);
     ASSERT_EQ(ori_t1_cnt, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
 
     ASSERT_EQ(OB_SUCCESS, micro_cache->update_micro_block_heat(tmp_micro_keys, true, false, 1));

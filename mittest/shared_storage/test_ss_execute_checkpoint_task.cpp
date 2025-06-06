@@ -1042,7 +1042,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
   MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100000);
   micro_meta.micro_key_ = TestSSCommonUtil::gen_phy_micro_key(macro_id, 100, 4 * 1024);
   micro_meta.data_loc_ = 3 * blk_size + 100;
-  micro_meta.access_time_ = ObTimeUtility::current_time_s();
+  micro_meta.access_time_s_ = ObTimeUtility::current_time_s();
 
   const int64_t buf_size = 4096;
   char buf[buf_size];

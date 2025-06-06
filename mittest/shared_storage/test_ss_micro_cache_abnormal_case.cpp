@@ -115,7 +115,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, DISABLED_test_mem_blk_update_meta_fail)
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_handle, false));
     if (j < micro_block_cnt / 2) {
       // mock some micro_meta's abnormal, these micro_block will fail to update meta.
-      micro_handle.get_ptr()->access_time_ = 0;
+      micro_handle.get_ptr()->access_time_s_ = 0;
     }
     offset += micro_size;
   }

@@ -240,14 +240,14 @@ TEST_F(TestSSMicroMetaManager, scan_and_operate_micro_meta)
         ObSSMicroBlockMetaHandle tmp_micro_handle;
         ASSERT_EQ(OB_SUCCESS, micro_map.get(&expired_micro_key, tmp_micro_handle));
         ASSERT_EQ(true, tmp_micro_handle.is_valid());
-        tmp_micro_handle()->access_time_ = 1; // expired=true, data_persisted=true
+        tmp_micro_handle()->access_time_s_ = 1; // expired=true, data_persisted=true
       }
     } else { // data not persisted
       {
         ObSSMicroBlockMetaHandle tmp_micro_handle;
         ASSERT_EQ(OB_SUCCESS, micro_map.get(&expired_micro_key, tmp_micro_handle));
         ASSERT_EQ(true, tmp_micro_handle.is_valid());
-        tmp_micro_handle()->access_time_ = 1; // expired=true, data_persisted=false
+        tmp_micro_handle()->access_time_s_ = 1; // expired=true, data_persisted=false
       }
 
       {

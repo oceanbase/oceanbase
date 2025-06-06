@@ -111,7 +111,7 @@ TEST_F(TestSSHandleArcSegOp, test_arc_evict_delete)
       ObSSMicroBlockMetaHandle micro_meta_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta(micro_key, micro_meta_handle, false));
       ASSERT_EQ(true, micro_meta_handle.is_valid());
-      micro_meta_handle.get_ptr()->access_time_ = i * 100 + j + 1;
+      micro_meta_handle.get_ptr()->access_time_s_ = i * 100 + j + 1;
     }
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
@@ -159,7 +159,7 @@ TEST_F(TestSSHandleArcSegOp, test_arc_evict_delete)
       ObSSMicroBlockMetaHandle micro_meta_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta(micro_key, micro_meta_handle, false));
       ASSERT_EQ(true, micro_meta_handle.is_valid());
-      micro_meta_handle.get_ptr()->access_time_ = i * 100 + j + 1;
+      micro_meta_handle.get_ptr()->access_time_s_ = i * 100 + j + 1;
     }
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }

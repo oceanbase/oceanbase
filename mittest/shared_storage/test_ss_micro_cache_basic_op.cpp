@@ -464,7 +464,7 @@ TEST_F(TestSSMicroMetaBasicOp, erase_expired_micro_func)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   micro_meta_->is_meta_deleted_ = false;
-  micro_meta_->access_time_ = 1;
+  micro_meta_->access_time_s_ = 1;
   micro_meta_info.reset();
   ASSERT_EQ(true, micro_meta_->is_expired(SS_DEF_CACHE_EXPIRATION_TIME_S));
   SSMicroMapEraseExpiredMicroFunc erase_func2(SS_DEF_CACHE_EXPIRATION_TIME_S, micro_meta_info);
