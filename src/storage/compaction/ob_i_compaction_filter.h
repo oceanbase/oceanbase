@@ -64,7 +64,7 @@ public:
     MDS_MINOR_FILTER_DATA,
     MDS_MINOR_CROSS_LS,
     MDS_IN_MEDIUM_INFO,
-    MEMBER_TABLE_MINOR,
+    REORG_INFO_MINOR,
     FILTER_TYPE_MAX
   };
   const static char *ObFilterTypeStr[];

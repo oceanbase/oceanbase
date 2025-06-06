@@ -1473,6 +1473,7 @@ constexpr int OB_SEQUENCE_NOT_MATCH = -7121;
 constexpr int OB_SEQUENCE_TOO_SMALL = -7122;
 constexpr int OB_TRANSFER_CANNOT_START = -7123;
 constexpr int NEW_MV_MAJOR_VERSION_NOT_MATCH = -7125;
+constexpr int OB_TABLET_REORG_SCN_NOT_MATCH = -7126;
 constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
 constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
 constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
@@ -3708,6 +3709,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_CANNOT_START__USER_ERROR_MSG "transfer cannot start"
 #define OB_PARTITION_ALREADY_BALANCED__USER_ERROR_MSG "partitions are already balanced, %s"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__USER_ERROR_MSG "new mv major version is not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__USER_ERROR_MSG "compare tablet reorganization scn not match"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -7852,6 +7854,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PARTITION_ALREADY_BALANCED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7125, new mv major version is not match"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7125, new mv major version is not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7126, compare tablet reorganization scn not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7126, compare tablet reorganization scn not match"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_DIFFERENT_SRIDS__OBE_USER_ERROR_MSG "OBE-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
@@ -9297,7 +9301,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2430];
+extern int g_all_ob_errnos[2431];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

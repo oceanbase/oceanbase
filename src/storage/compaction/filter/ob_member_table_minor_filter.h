@@ -45,7 +45,7 @@ public:
     filter_col_idx_ = 0;
     is_inited_ = false;
   }
-  virtual CompactionFilterType get_filter_type() const override { return MEMBER_TABLE_MINOR; }
+  virtual CompactionFilterType get_filter_type() const override { return REORG_INFO_MINOR; }
   virtual int filter(const blocksstable::ObDatumRow &row, ObFilterRet &filter_ret) override;
 
   INHERIT_TO_STRING_KV("ObMemberTableFilter", ObICompactionFilter,
