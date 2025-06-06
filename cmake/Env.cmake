@@ -51,6 +51,8 @@ ob_define(OB_DISABLE_PIE OFF)
 
 ob_define(USE_LTO_CACHE OFF)
 
+ob_define(ASAN_DISABLE_STACK ON)
+
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
   # -fprofile-arcs to generate .gcda file
