@@ -136,7 +136,7 @@ public:
           if (!fake_fill) {
             ctx_.fill_count_++;
           }
-          data_size += callback->get_data_size();
+          data_size += callback->get_data_size() + callback->get_old_row_data_size();
           max_seq_no = MAX(max_seq_no, callback->get_seq_no());
           last = callback;
         }

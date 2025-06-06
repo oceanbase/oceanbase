@@ -604,14 +604,15 @@ int ObTransCallbackMgr::append(ObITransCallback *head,
 void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
   int64_t size = node->get_data_size();
+  int64_t old_row_size = node->get_old_row_data_size();
   int64_t new_size = 0;
   if (for_replay_) {
     inc_flushed_log_size(size);
   } else {
-    new_size = inc_pending_log_size(size);
+    new_size = inc_pending_log_size(size + old_row_size);
   }
   if (OB_UNLIKELY(need_merge_)) {
-    try_merge_multi_callback_lists(new_size, size, node->is_logging_blocked());
+    try_merge_multi_callback_lists(new_size, size + old_row_size, node->is_logging_blocked());
   }
 }
 
@@ -619,10 +620,11 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 {
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
+    int64_t old_row_size = node->get_old_row_data_size();
     if (for_replay_) {
       inc_flushed_log_size(-1 * size);
     } else {
-      inc_pending_log_size(-1 * size);
+      inc_pending_log_size(-1 * (size + old_row_size));
     }
   }
 }
@@ -2263,7 +2265,7 @@ int ObMvccRowCallback::rollback_callback()
   if (need_submit_log_
       && need_fill_redo_
       && SCN::max_scn() == scn_) {
-    ctx_.inc_pending_log_size(-1 * data_size_);
+    ctx_.inc_pending_log_size(-1 * (data_size_ + get_old_row_data_size()));
   }
 
   return OB_SUCCESS;

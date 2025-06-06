@@ -743,9 +743,13 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
   TRANS_LOG(DEBUG, "tx.commit", K(parts), K(trans_id_), K(ls_id_));
 
   int ret = OB_SUCCESS;
+  if (OB_FAIL(submit_parallel_redo_before_commit_())) {
+    TRANS_LOG(WARN, "submit redo before commit fail", KR(ret), K(*this));
+  }
   int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
-  if (IS_NOT_INIT) {
+  if (OB_FAIL(ret)) {
+  } else if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(0 >= expire_ts)) {
@@ -1237,6 +1241,11 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
           }
         } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
           TRANS_LOG(WARN, "submit commit log in gts callback failed", K(ret), KPC(this));
+          // log submitting will retry in handle_timeout
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+            TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KR(tmp_ret), KPC(this));
+          }
         }
       } else {
         const SCN local_prepare_version = SCN::max(gts, max_read_ts);
@@ -3099,6 +3108,34 @@ int ObPartTransCtx::submit_parallel_redo_() {
   return ret;
 }
 
+// when parallel logging, redo need submitted seperate with other txn's log
+int ObPartTransCtx::submit_parallel_redo_before_commit_() {
+  int ret = OB_SUCCESS;
+  static const int64_t SUBMIT_REDO_TIMEOUT = 30;
+  int cnt = 0;
+  do {
+    if (get_pending_log_size() > 1_MB) {
+      CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
+      if (OB_FAIL(submit_parallel_redo_())) {
+        if (ret != OB_EAGAIN) {
+          TRANS_LOG(WARN, "submit redo fail", KR(ret), K(*this));
+        }
+      }
+    }
+    if (ret == OB_EAGAIN) {
+      cnt++;
+      ob_usleep(100 * 1000);
+    }
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      TRANS_LOG(WARN, "submit redo before commit failed", KR(ret), K(*this));
+    }
+    if (cnt > SUBMIT_REDO_TIMEOUT) {
+      break;
+    }
+  } while (ret == OB_EAGAIN);
+  return ret;
+}
+
 // this function is thread safe, not need other lock's protection
 inline
 int ObPartTransCtx::init_log_block_(ObTxLogBlock &log_block,
@@ -4101,7 +4138,7 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                    log_block.get_size(),
                    base_scn,
                    log_cb,
-                   true, /*nonblock*/
+                   !is_2pc_state_log, /*nonblock*/
                    ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) ? 0 : timeout_us))) {
     busy_cbs_.add_last(log_cb);
     log_cb->set_log_size(log_block.get_size());

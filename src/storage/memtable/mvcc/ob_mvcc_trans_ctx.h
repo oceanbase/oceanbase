@@ -518,6 +518,10 @@ public:
   virtual int log_submitted() override;
   virtual void after_append_fail(const bool is_replay) override;
   virtual int get_holder_info(RowHolderInfo &holder_info) const override final;
+  virtual int64_t get_old_row_data_size() override
+  {
+    return old_row_.size_;
+  }
 
   int64_t get_data_size()
   {
