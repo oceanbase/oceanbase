@@ -155,11 +155,6 @@ int ObAllVirtualSSLSMeta::fill_in_row_(const VirtualSSLSMetaRow &row_data, commo
       cur_row_.cells_[i].set_int(v);
       break;
     }
-    case SSLOG_CHECKPOINT_SCN: {
-      int64_t v = row_data.sslog_checkpoint_scn_.get_val_for_inner_table_field();
-      cur_row_.cells_[i].set_int(v);
-      break;
-    }
     case SS_CLOG_ACCUM_CHECKSUM:
       cur_row_.cells_[i].set_int(row_data.clog_checksum_);
       break;
@@ -198,7 +193,6 @@ int ObAllVirtualSSLSMeta::generate_virtual_row_(VirtualSSLSMetaRow &row)
         palf::PalfBaseInfo palf_meta;
         (void)ls_meta.get_palf_meta(palf_meta);
         row.clog_checksum_ = palf_meta.prev_log_info_.accum_checksum_;
-        row.sslog_checkpoint_scn_ = ls_meta.get_sslog_checkpoint_scn();
         SERVER_LOG(DEBUG, "generate row succeed", K(ls_meta), K(row));
       }
     }

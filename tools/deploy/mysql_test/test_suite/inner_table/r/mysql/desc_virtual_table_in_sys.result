@@ -2133,7 +2133,6 @@ ls_id	bigint(20)	NO	PRI	NULL
 meta_version	bigint(20)	NO		NULL	
 ss_checkpoint_scn	bigint(20)	NO		NULL	
 ss_checkpoint_lsn	bigint(20)	NO		NULL	
-sslog_checkpoint_scn	bigint(20)	NO		NULL	
 ss_clog_accum_checksum	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_ss_sstable_mgr;
 Field	Type	Null	Key	Default	Extra

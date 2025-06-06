@@ -11051,7 +11051,6 @@ def_table_schema(
     ('meta_version', 'int'),
     ('ss_checkpoint_scn', 'int'),
     ('ss_checkpoint_lsn', 'int'),
-    ('sslog_checkpoint_scn', 'int'),
     ('ss_clog_accum_checksum', 'int'),
   ],
   vtable_route_policy = 'local',
@@ -16500,8 +16499,8 @@ def_table_schema(
 )
 
 # 12537: __all_virtual_ls_migration_task
-# 12538 __all_virtual_ss_notify_tasks_stat
-# 12539 __all_virtual_ss_notify_tablets_stat
+# 12538: __all_virtual_ss_notify_tasks_stat
+# 12539: __all_virtual_ss_notify_tablets_stat
 # 12540: __all_virtual_balance_job_description
 
 def_table_schema(**gen_iterate_virtual_table_def(
