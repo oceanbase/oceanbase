@@ -5978,22 +5978,41 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   // 右孩子们是否标记为px coord取决于是否需要rescan.
   // 左孩子是否标记为px, 取决于右子孩子是否有onetime expr, 原因是需要先获取expr值, 再下压至左孩子,
   // 详见issue
+  /*
+    update:
+    If an onetime expr contains at least two subqueries (e.g., subquery comparisons), the
+    scheduling sequence of these subqueries cannot be guaranteed. This uncertainty may violate PX
+    scheduling rules and lead to a hang bug. To solve this issue, we enforce marking the right
+    child branch exchange as the PX coordinator.
+  */
   if (OB_UNLIKELY(LOG_SUBPLAN_FILTER != type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected operator type", K(ret), K(type_));
   } else {
     bool has_onetime_expr = false;
     ObLogSubPlanFilter *sub_plan_filter = static_cast<ObLogSubPlanFilter*>(this);
-    for (int64_t i = get_num_of_child() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      if (i != 0) {
-        if (sub_plan_filter->get_onetime_idxs().has_member(i)) {
-          has_onetime_expr = true;
-        } else if (OB_FAIL(get_child(i)->mark_child_exchange_rescanable())) {
+
+    bool force_right_coord = false;
+    int64_t onetime_subquery_branch_cnt = sub_plan_filter->get_onetime_idxs().num_members();
+    int64_t ontime_expr_cnt = sub_plan_filter->get_onetime_exprs().count();
+    if (onetime_subquery_branch_cnt > ontime_expr_cnt) {
+      force_right_coord = true;
+    }
+
+    for (int64_t i = get_num_of_child() - 1; OB_SUCC(ret) && i >= 1; --i) {
+      bool is_onetime_expr = sub_plan_filter->get_onetime_idxs().has_member(i);
+      if (is_onetime_expr) {
+        has_onetime_expr = true;
+      }
+      if (!is_onetime_expr || force_right_coord) {
+        if (OB_FAIL(get_child(i)->mark_child_exchange_rescanable())) {
           LOG_WARN("mark child ex-receive as px op fail", K(ret));
-        } else { /*do nothing*/ }
-      } else if (has_onetime_expr && OB_FAIL(get_child(i)->mark_child_exchange_rescanable())) {
-        LOG_WARN("mark child ex-receive as px op fail", K(ret));
-      } else { /*do nothing*/ }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (has_onetime_expr && OB_FAIL(get_child(0)->mark_child_exchange_rescanable())) {
+      LOG_WARN("mark child ex-receive as px op fail", K(ret));
     }
   }
   return ret;
