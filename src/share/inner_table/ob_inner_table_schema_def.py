@@ -16570,6 +16570,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12549: __all_virtual_ccl_rule_history
 # 12550:__all_virtual_tenant_vector_mem_info
 # 12551: __all_virtual_logservice_cluster_info
+# 12552: __all_virtual_ss_gc_status
+# 12553: __all_virtual_ss_gc_detect_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
