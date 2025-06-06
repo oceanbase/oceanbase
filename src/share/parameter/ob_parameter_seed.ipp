@@ -1369,7 +1369,7 @@ DEF_BOOL(ob_enable_batched_multi_statement, OB_TENANT_PARAMETER, "False",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_bloom_filter_ratio, OB_CLUSTER_PARAMETER, "35", "[0, 100]",
-        "the px bloom filter false-positive rate.the default value is 1, range: [0,100]",
+        "The px bloom filter false-positive rate. Range: [0,100]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_restore_idle_time, OB_CLUSTER_PARAMETER, "1m", "[10s,]",
          "the time interval between the schedules of physical restore task. "
