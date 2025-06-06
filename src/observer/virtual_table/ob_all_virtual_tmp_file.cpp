@@ -14,7 +14,7 @@
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;
-using namespace oceanbase::transaction;
+using namespace oceanbase::tmp_file;
 
 namespace oceanbase
 {
@@ -66,7 +66,7 @@ bool ObAllVirtualTmpFileInfo::is_need_process(uint64_t tenant_id)
   return bool_ret;
 }
 
-int ObAllVirtualTmpFileInfo::get_next_tmp_file_info_(tmp_file::ObTmpFileInfo *tmp_file_info)
+int ObAllVirtualTmpFileInfo::get_next_tmp_file_info_(tmp_file::ObTmpFileBaseInfo *tmp_file_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 > fd_idx_)) {
@@ -100,7 +100,7 @@ int ObAllVirtualTmpFileInfo::get_next_tmp_file_info_(tmp_file::ObTmpFileInfo *tm
   return ret;
 }
 
-int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_info)
+int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileBaseInfo *tmp_file_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tmp_file_info)) {
@@ -147,38 +147,29 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
         case IS_DELETING:
           cur_row_.cells_[i].set_bool(tmp_file_info->is_deleting_);
           break;
-        case CACHED_DATA_PAGE_NUM:
-          cur_row_.cells_[i].set_int(tmp_file_info->cached_data_page_num_);
-          break;
-        case WRITE_BACK_DATA_PAGE_NUM:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_back_data_page_num_);
-          break;
-        case FLUSHED_DATA_PAGE_NUM:
-          cur_row_.cells_[i].set_int(tmp_file_info->flushed_data_page_num_);
-          break;
         case REF_CNT:
           cur_row_.cells_[i].set_int(tmp_file_info->ref_cnt_);
           break;
         case TOTAL_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.write_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_write_info().write_req_cnt_);
           break;
         case UNALIGNED_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.unaligned_write_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_write_info().unaligned_write_req_cnt_);
           break;
         case TOTAL_READS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.read_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().read_req_cnt_);
           break;
         case UNALIGNED_READS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.unaligned_read_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().unaligned_read_req_cnt_);
           break;
         case TOTAL_READ_BYTES:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_read_size_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().total_read_size_);
           break;
         case LAST_ACCESS_TIME:
-          cur_row_.cells_[i].set_timestamp(tmp_file_info->read_info_.last_access_ts_);
+          cur_row_.cells_[i].set_timestamp(tmp_file_info->get_read_info().last_access_ts_);
           break;
         case LAST_MODIFY_TIME:
-          cur_row_.cells_[i].set_timestamp(tmp_file_info->write_info_.last_modify_ts_);
+          cur_row_.cells_[i].set_timestamp(tmp_file_info->get_write_info().last_modify_ts_);
           break;
         case BIRTH_TIME:
           cur_row_.cells_[i].set_timestamp(tmp_file_info->birth_ts_);
@@ -202,49 +193,58 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
           cur_row_.cells_[i].set_default_collation_type();
           break;
         case TYPE:
+          cur_row_.cells_[i].set_int(tmp_file_info->file_type_);
           break;
         case COMPRESSIBLE_FD:
+          if (ObTmpFileGlobal::INVALID_TMP_FILE_FD != tmp_file_info->compressible_fd_) {
+            cur_row_.cells_[i].set_int(tmp_file_info->compressible_fd_);
+          } else {
+            cur_row_.cells_[i].reset();
+          }
           break;
         case PERSISTED_TAIL_PAGE_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.write_persisted_tail_page_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_write_info().write_persisted_tail_page_cnt_);
           break;
         case LACK_PAGE_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.lack_page_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_write_info().lack_page_cnt_);
           break;
         case TOTAL_TRUNCATED_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_truncated_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().total_truncated_page_read_cnt_);
           break;
         case TRUNCATED_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.truncated_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().truncated_page_read_hits_);
           break;
         case TOTAL_KV_CACHE_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_kv_cache_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().total_kv_cache_page_read_cnt_);
           break;
         case KV_CACHE_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.kv_cache_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().kv_cache_page_read_hits_);
           break;
         case TOTAL_UNCACHED_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_uncached_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().total_uncached_page_read_cnt_);
           break;
         case UNCACHED_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.uncached_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().uncached_page_read_hits_);
           break;
         case TOTAL_WBP_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_wbp_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().total_wbp_page_read_cnt_);
           break;
         case WBP_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.wbp_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->get_read_info().wbp_page_read_hits_);
           break;
         /* columns in ss modes begin */
+        case CACHED_DATA_PAGE_NUM:
+        case WRITE_BACK_DATA_PAGE_NUM:
+        case FLUSHED_DATA_PAGE_NUM:
         case AGGREGATE_READ_IO_CNT:
-      #ifdef OB_BUILD_SHARED_STORAGE
+          #ifdef OB_BUILD_SHARED_STORAGE
           if (GCTX.is_shared_storage_mode()) {
             tmp_file::ObSSTmpFileInfo *ss_tmp_file_info = static_cast<tmp_file::ObSSTmpFileInfo *>(tmp_file_info);
             if (OB_FAIL(fill_ss_column_(i, ss_tmp_file_info))) {
               SERVER_LOG(WARN, "fail to fill ss column", KR(ret), K(i), KPC(ss_tmp_file_info));
             }
           }
-      #endif
+          #endif
           break;
         /* columns in ss modes end */
         /* columns in sn modes begin */
@@ -282,23 +282,22 @@ int ObAllVirtualTmpFileInfo::fill_sn_column_(const uint64_t col_index, tmp_file:
     uint64_t col_id = output_column_ids_.at(col_index);
     switch (col_id) {
       case META_TREE_EPOCH:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->meta_tree_epoch_);
+        cur_row_.cells_[col_index].set_int(tmp_file_info->tree_info_.meta_tree_epoch_);
         break;
       case META_TREE_LEVELS:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->meta_tree_level_cnt_);
+        cur_row_.cells_[col_index].set_int(tmp_file_info->tree_info_.meta_tree_level_cnt_);
         break;
       case META_BYTES:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->meta_size_);
+        cur_row_.cells_[col_index].set_int(tmp_file_info->tree_info_.meta_size_);
         break;
       case CACHED_META_PAGE_NUM:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->cached_meta_page_num_);
+        cur_row_.cells_[col_index].set_int(tmp_file_info->tree_info_.cached_meta_page_num_);
         break;
+      /* discard columns begin */
       case WRITE_BACK_META_PAGE_NUM:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->write_back_meta_page_num_);
-        break;
       case PAGE_FLUSH_CNT:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->all_type_page_flush_cnt_);
         break;
+      /* discard columns end */
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column_id", KR(ret), K(col_id));
@@ -318,8 +317,17 @@ int ObAllVirtualTmpFileInfo::fill_ss_column_(const uint64_t col_index, tmp_file:
   } else {
     uint64_t col_id = output_column_ids_.at(col_index);
     switch (col_id) {
+      case CACHED_DATA_PAGE_NUM:
+          cur_row_.cells_[col_index].set_int(tmp_file_info->cached_data_page_num_);
+          break;
+      case WRITE_BACK_DATA_PAGE_NUM:
+        cur_row_.cells_[col_index].set_int(tmp_file_info->write_back_data_page_num_);
+        break;
+      case FLUSHED_DATA_PAGE_NUM:
+        cur_row_.cells_[col_index].set_int(tmp_file_info->flushed_data_page_num_);
+        break;
       case AGGREGATE_READ_IO_CNT:
-        cur_row_.cells_[col_index].set_int(tmp_file_info->aggregate_read_io_cnt_);
+        cur_row_.cells_[col_index].set_int(tmp_file_info->read_info_.aggregate_read_io_cnt_);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -356,7 +364,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
   }
 
   if (OB_SUCC(ret)) {
-    tmp_file::ObTmpFileInfo *tmp_file_info = nullptr;
+    tmp_file::ObTmpFileBaseInfo *tmp_file_info = nullptr;
     ObMemAttr attr(MTL_ID(), "TmpFileInfo");
     if (!GCTX.is_shared_storage_mode()) {
       tmp_file_info = OB_NEW(tmp_file::ObSNTmpFileInfo, attr);
@@ -374,7 +382,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
     }
 
     if (OB_NOT_NULL(tmp_file_info)) {
-      tmp_file_info->~ObTmpFileInfo();
+      tmp_file_info->~ObTmpFileBaseInfo();
       ob_free(tmp_file_info);
       tmp_file_info = NULL;
     }

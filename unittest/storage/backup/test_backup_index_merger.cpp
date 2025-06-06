@@ -321,7 +321,6 @@ void TestBackupIndexMerger::SetUp()
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
 
   ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
 
 
@@ -342,10 +341,10 @@ void TestBackupIndexMerger::SetUp()
 
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
-  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
-  tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
-  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->get_sn_file_manager().write_cache_.default_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
 
   ObTenantEnv::set_tenant(&tenant_ctx);
   SERVER_STORAGE_META_SERVICE.is_started_ = true;
@@ -354,7 +353,6 @@ void TestBackupIndexMerger::SetUp()
 
 void TestBackupIndexMerger::TearDown()
 {
-  tmp_file::ObTmpBlockCache::get_instance().destroy();
   tmp_file::ObTmpPageCache::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   common::ObClockGenerator::destroy();

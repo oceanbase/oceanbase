@@ -74,6 +74,7 @@ namespace blocksstable {
 }
 namespace tmp_file {
   class ObTenantTmpFileManager;
+  class ObTenantCompressTmpFileManager;
 }
 namespace storage {
 namespace mds {
@@ -361,6 +362,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
       tmp_file::ObTenantTmpFileManager*,             \
+      tmp_file::ObTenantCompressTmpFileManager*,     \
       compaction::ObTenantCompactionProgressMgr*,    \
       compaction::ObServerCompactionEventHistory*,   \
       storage::ObTenantTabletStatMgr*,               \

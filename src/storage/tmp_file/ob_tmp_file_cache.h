@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_CACHE_H_
 
 #include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/tmp_file/ob_tmp_file_write_cache_page.h"
 #include "share/cache/ob_kv_storecache.h"
 
 namespace oceanbase
@@ -27,110 +28,17 @@ namespace tmp_file
 {
 class ObTmpPageCacheReadInfo;
 
-class ObTmpBlockCacheKey final : public common::ObIKVCacheKey
-{
-public:
-  ObTmpBlockCacheKey();
-  ObTmpBlockCacheKey(const int64_t block_id, const uint64_t tenant_id);
-  ~ObTmpBlockCacheKey();
-  bool operator ==(const ObIKVCacheKey &other) const override;
-  uint64_t get_tenant_id() const override;
-  uint64_t hash() const override;
-  int64_t size() const override;
-  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
-  bool is_valid() const;
-  int64_t get_block_id() const { return block_id_; }
-  TO_STRING_KV(K(block_id_), K(tenant_id_));
-
-private:
-  int64_t block_id_;
-  uint64_t tenant_id_;
-};
-
-class ObTmpBlockCacheValue final : public common::ObIKVCacheValue
-{
-public:
-  explicit ObTmpBlockCacheValue(char *buf);
-  ~ObTmpBlockCacheValue();
-  int64_t size() const override;
-  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
-  bool is_valid() const { return NULL != buf_ && size() > 0; }
-  char *get_buffer() { return buf_; }
-  void set_buffer(char *buf) { buf_ = buf;}
-  TO_STRING_KV(KP(buf_), K(size_));
-
-private:
-  char *buf_;
-  int64_t size_;
-  DISALLOW_COPY_AND_ASSIGN(ObTmpBlockCacheValue);
-};
-
-struct ObTmpBlockValueHandle final
-{
-public:
-  ObTmpBlockValueHandle() : value_(NULL), handle_() {}
-  ~ObTmpBlockValueHandle() = default;
-  void move_from(ObTmpBlockValueHandle& other)
-  {
-    this->value_ = other.value_;
-    this->handle_.move_from(other.handle_);
-    other.reset();
-  }
-  int assign(const ObTmpBlockValueHandle& other)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(this->handle_.assign(other.handle_))) {
-      COMMON_LOG(WARN, "failed to assign handle", K(ret));
-      this->value_ = nullptr;
-    } else {
-      this->value_ = other.value_;
-    }
-    return ret;
-  }
-  bool is_valid() const { return NULL != value_ && handle_.is_valid(); }
-  void reset()
-  {
-    handle_.reset();
-    value_ = NULL;
-  }
-  TO_STRING_KV(KP(value_), K(handle_));
-  ObTmpBlockCacheValue *value_;
-  common::ObKVCacheHandle handle_;
-};
-
-class ObTmpBlockCache final : public common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue>
-{
-public:
-  typedef common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue> BasePageCache;
-  static ObTmpBlockCache &get_instance();
-  int init(const char *cache_name, const int64_t priority);
-  void destroy();
-  int get_block(const ObTmpBlockCacheKey &key, ObTmpBlockValueHandle &handle);
-  int put_block(ObKVCacheInstHandle &inst_handle,
-                ObKVCachePair *&kvpair,
-                ObTmpBlockValueHandle &block_handle);
-  int prealloc_block(const ObTmpBlockCacheKey &key,
-                     ObKVCacheInstHandle &inst_handle,
-                     ObKVCachePair *&kvpair,
-                     ObTmpBlockValueHandle &block_handle);
-private:
-  ObTmpBlockCache() {}
-  ~ObTmpBlockCache() {}
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObTmpBlockCache);
-};
-
 class ObTmpPageCacheKey final : public common::ObIKVCacheKey
 {
 public:
   ObTmpPageCacheKey();
-  // For Shared nothing mode
-  ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id, const uint64_t tenant_id);
-  // For Shared Storage mode
-  ObTmpPageCacheKey(const int64_t tmp_file_id,
-                    const uint64_t unfilled_page_length,
-                    const uint64_t virtual_page_id,
+  ObTmpPageCacheKey(const ObTmpFileWriteCacheKey &page_key, const uint64_t tenant_id);
+  ObTmpPageCacheKey(const int64_t fd,
+                    const int64_t virtual_page_id,
+                    const int64_t tenant_id);
+  ObTmpPageCacheKey(const int64_t fd,
+                    const int64_t tree_level,
+                    const int64_t level_page_index,
                     const uint64_t tenant_id);
   ~ObTmpPageCacheKey();
   bool operator ==(const ObIKVCacheKey &other) const override;
@@ -139,25 +47,12 @@ public:
   int64_t size() const override;
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
   bool is_valid() const;
-  int64_t get_page_id() const { return page_id_; }
-  int64_t get_block_id() const { return block_id_; }
   int64_t to_string(char* buf, const int64_t buf_len) const;
+  OB_INLINE ObTmpFileWriteCacheKey get_page_key() const { return page_key_; }
+  OB_INLINE void set_page_key(const ObTmpFileWriteCacheKey &page_key) { page_key_ = page_key; }
+  OB_INLINE void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
 private:
-  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS = 48;
-  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_BITS = 16;
-  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_MAX = (1 << 13);
-  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX = (1LL << PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS);
-  union {
-    int64_t block_id_;      // for sn mode
-    int64_t tmp_file_id_;   // for ss mode
-  };
-  union {
-    int64_t page_id_;       // for sn mode
-    struct {                // for ss mode
-      uint64_t unfilled_page_length_ : PAGE_CACHE_KEY_PAGE_LENGTH_BITS;
-      uint64_t virtual_page_id_      : PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS;
-    };
-  };
+  ObTmpFileWriteCacheKey page_key_;
   uint64_t tenant_id_;
 
 };
@@ -231,8 +126,11 @@ public:
                      common::ObIAllocator &callback_allocator);
   int get_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
   int load_page(const ObTmpPageCacheKey &key,
+                const int64_t block_index,
+                const int64_t physical_page_id,
                 ObIAllocator *callback_allocator,
-                ObTmpPageValueHandle &p_handle);
+                ObTmpPageValueHandle &p_handle,
+                const int64_t timeout_ms);
   void try_put_page_to_cache(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
   void destroy();
 public:

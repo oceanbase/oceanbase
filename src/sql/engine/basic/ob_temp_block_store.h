@@ -404,7 +404,7 @@ public:
   // set iteration age for inner reader.
   void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
   void set_inner_allocator_attr(const lib::ObMemAttr &attr) { inner_allocator_.set_attr(attr); }
-  void set_dir_id(int64_t dir_id) { io_.dir_id_ = dir_id; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   void set_iteration_age(IterationAge *age) { inner_reader_.set_iteration_age(age); }
   inline void set_mem_used(const int64_t mem_used) { mem_used_ = mem_used; }
   inline void inc_mem_used(const int64_t mem_used) { mem_used_ += mem_used; }
@@ -427,7 +427,7 @@ public:
   inline int64_t get_alloced_mem_size() const { return alloced_mem_size_; }
   inline int64_t get_alloced_mem_cnt() const { return alloced_mem_list_.get_size(); }
   inline int64_t get_file_fd() const { return io_.fd_; }
-  inline int64_t get_file_dir_id() const { return io_.dir_id_; }
+  inline int64_t get_file_dir_id() const { return dir_id_; }
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t get_max_blk_size() const { return max_block_size_; }
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
@@ -479,7 +479,7 @@ public:
   }
 
   TO_STRING_KV(K_(inited), K_(enable_dump), K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
-    K_(mem_hold), K_(mem_used), K_(io_.fd), K_(io_.dir_id), K_(file_size), K_(block_cnt),
+    K_(mem_hold), K_(mem_used), K_(io_.fd), K_(dir_id), K_(file_size), K_(block_cnt),
     K_(index_block_cnt), K_(block_cnt_on_disk), K_(block_id_cnt), K_(dumped_block_id_cnt),
     K_(alloced_mem_size), K_(enable_trunc), K_(last_trunc_offset), K_(cur_file_offset),
     K_(tempstore_read_alignment_size));
@@ -664,8 +664,8 @@ private:
   ObSqlMemoryCallback *mem_stat_;
   ObChunkBlockCompressor compressor_;
   ObIOEventObserver *io_observer_;
-  tmp_file::ObTmpFileIOHandle write_io_handle_;
   tmp_file::ObTmpFileIOInfo io_;
+  int64_t dir_id_;
   bool last_block_on_disk_;
   int64_t cur_file_offset_;
   int64_t tempstore_read_alignment_size_;

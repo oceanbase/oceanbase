@@ -10,11 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "mittest/mtlenv/storage/tmp_file/ob_tmp_file_test_helper.h"
+#include "mittest/mtlenv/mock_tenant_module_env.h"
+#include "mittest/shared_storage/tmp_file/ob_ss_tmp_file_test_helper.h"
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
-#include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_storage_object_rw_info.h"
@@ -110,7 +110,6 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObTmpFileIOHandle handle;
     ObTmpFileIOInfo io_info;
     ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
@@ -124,7 +123,7 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
 
     ObSSTmpFileHandle tmp_file_handle;
@@ -157,7 +156,6 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObTmpFileIOHandle handle;
     ObTmpFileIOInfo io_info;
     ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
@@ -172,7 +170,7 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
 
     // flush 1MB
@@ -195,7 +193,7 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
     ASSERT_EQ(write_buffer_size / ObTmpFileGlobal::PAGE_SIZE,
               ss_tmp_file->get_data_page_nums(false /* all pages */));
@@ -232,7 +230,6 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObTmpFileIOHandle handle;
     ObTmpFileIOInfo io_info;
     ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
@@ -245,7 +242,7 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
 
     // flush 1MB
@@ -274,7 +271,6 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObTmpFileIOHandle handle;
     ObTmpFileIOInfo io_info;
     ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
@@ -287,7 +283,7 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
 
     // flush 1MB
@@ -367,7 +363,6 @@ TEST_F(TestSSTmpFileSubModule, test_remove_in_destroy)
     ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObTmpFileIOHandle handle;
     ObTmpFileIOInfo io_info;
     ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
     std::cout << "open temporary file: " << fd << std::endl;
@@ -379,7 +374,7 @@ TEST_F(TestSSTmpFileSubModule, test_remove_in_destroy)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
 
     // flush
@@ -400,7 +395,7 @@ TEST_F(TestSSTmpFileSubModule, test_remove_in_destroy)
     io_info.io_desc_.set_wait_event(2);
     io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     io_info.buf_ = write_buffer;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->aio_write(MTL_ID(), io_info, handle));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     sleep(1);
   }
   MTL(ObTenantTmpFileManager *)->stop();

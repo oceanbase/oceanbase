@@ -172,29 +172,33 @@ ob_set_subtarget(ob_storage meta_store
 )
 
 ob_set_subtarget(ob_storage tmp_file
-  tmp_file/ob_i_tmp_file.cpp
   tmp_file/ob_i_tmp_file_manager.cpp
+  tmp_file/ob_i_tmp_file.cpp
+  tmp_file/ob_compress_tmp_file_io_handle.cpp
+  tmp_file/ob_compress_tmp_file_manager.cpp
+  tmp_file/ob_compress_tmp_file.cpp
   tmp_file/ob_shared_nothing_tmp_file.cpp
   tmp_file/ob_sn_tmp_file_manager.cpp
+  tmp_file/ob_tmp_file_block_allocating_priority_manager.cpp
+  tmp_file/ob_tmp_file_block_flush_priority_manager.cpp
   tmp_file/ob_tmp_file_block_manager.cpp
+  tmp_file/ob_tmp_file_block.cpp
   tmp_file/ob_tmp_file_cache.cpp
-  tmp_file/ob_tmp_file_eviction_manager.cpp
-  tmp_file/ob_tmp_file_flush_ctx.cpp
-  tmp_file/ob_tmp_file_flush_list_iterator.cpp
-  tmp_file/ob_tmp_file_flush_manager.cpp
-  tmp_file/ob_tmp_file_flush_priority_manager.cpp
   tmp_file/ob_tmp_file_global.cpp
+  tmp_file/ob_tmp_file_info.cpp
   tmp_file/ob_tmp_file_io_ctx.cpp
   tmp_file/ob_tmp_file_io_handle.cpp
   tmp_file/ob_tmp_file_io_info.cpp
-  tmp_file/ob_tmp_file_meta_tree.cpp
   tmp_file/ob_tmp_file_manager.cpp
-  tmp_file/ob_tmp_file_page_cache_controller.cpp
-  tmp_file/ob_tmp_file_thread_wrapper.cpp
-  tmp_file/ob_tmp_file_thread_job.cpp
-  tmp_file/ob_tmp_file_write_buffer_pool.cpp
-  tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
-  tmp_file/ob_tmp_file_write_buffer_pool_entry_array.cpp
+  tmp_file/ob_tmp_file_meta_tree.cpp
+  tmp_file/ob_tmp_file_write_cache.cpp
+  tmp_file/ob_tmp_file_write_cache_page.cpp
+  tmp_file/ob_tmp_file_write_cache_page_array.cpp
+  tmp_file/ob_tmp_file_write_cache_free_page_list.cpp
+  tmp_file/ob_tmp_file_write_cache_shrink_ctx.cpp
+  tmp_file/ob_tmp_file_write_cache_metrics.cpp
+  tmp_file/ob_tmp_file_swap_job.cpp
+  tmp_file/ob_tmp_file_flush_task.cpp
 )
 
 ob_set_subtarget(ob_storage slog

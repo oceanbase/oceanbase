@@ -423,9 +423,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
       LOG_ERROR("init tx data cache failed", KR(ret));
-    } else if (!GCTX.is_shared_storage_mode() &&
-               OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
-      LOG_ERROR("init tmp block cache failed", KR(ret));
     } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
       LOG_ERROR("init tmp page cache failed", KR(ret));
     } else if (OB_FAIL(init_log_kv_cache())) {
@@ -748,11 +745,6 @@ void ObServer::destroy()
     OB_TX_DATA_KV_CACHE.destroy();
     FLOG_INFO("tx data kv cache destroyed");
 
-    if (!GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to destroy tmp block cache");
-      tmp_file::ObTmpBlockCache::get_instance().destroy();
-      FLOG_INFO("tmp block cache destroyed");
-    }
     FLOG_INFO("begin to destroy tmp page cache");
     tmp_file::ObTmpPageCache::get_instance().destroy();
     FLOG_INFO("tmp page cache destroyed");

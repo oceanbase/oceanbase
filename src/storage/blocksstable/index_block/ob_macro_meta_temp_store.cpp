@@ -109,6 +109,7 @@ OB_DEF_SERIALIZE_SIZE(ObMacroMetaTempStore::StoreItem)
 
 ObMacroMetaTempStore::ObMacroMetaTempStore()
   : count_(0),
+    dir_id_(0),
     io_(),
     io_handle_(),
     buffer_("MacroTmpStore"),
@@ -124,7 +125,7 @@ int ObMacroMetaTempStore::init(const int64_t dir_id)
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("double initialization", K(ret));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(MTL_ID(), io_.fd_, io_.dir_id_))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(MTL_ID(), io_.fd_, dir_id_))) {
     LOG_WARN("open tmp file failed", K(ret));
   } else {
     count_ = 0;
@@ -187,7 +188,7 @@ int ObMacroMetaTempStore::append(
       const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
       io_.io_timeout_ms_ = timeout_us <= 0 ? 0 : timeout_us / 1000;
       io_.io_desc_.set_wait_event(ObWaitEventIds::INTERM_RESULT_DISK_WRITE);
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(MTL_ID(), io_, io_handle_))) {
+      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_))) {
         LOG_WARN("failed to write store item to tmp file", K(ret), K_(io));
       } else if (OB_FAIL(item_size_arr_.push_back(serialize_size))) {
         LOG_WARN("failed to append size to item size array", K(ret));

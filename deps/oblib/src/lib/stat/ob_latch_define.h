@@ -192,7 +192,7 @@ LATCH_DEF(TC_FREE_LIST_LOCK, 165, "tc free list lock", LATCH_FIFO, 2000, 0, true
 LATCH_DEF(DEDUP_QUEUE_LOCK, 166, "dedup queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SLOG_PROCESSING_MUTEX, 167, "slog processing mutex", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TABLET_TABLE_STORE_LOCK, 168, "tablet table store lock", LATCH_FIFO, INT64_MAX, 0, false)
-LATCH_DEF(TMP_FILE_LOCK, 169, "tmp file lock", LATCH_FIFO, INT64_MAX, 0, true)
+LATCH_DEF(TMP_FILE_LOCK, 169, "tmp file lock", LATCH_FIFO, 666, 0, true)
 LATCH_DEF(TMP_FILE_EXTENT_LOCK, 170, "tmp file extent lock", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TMP_FILE_MGR_LOCK, 171, "tmp file manager lock", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TMP_FILE_STORE_LOCK, 172, "tmp file store lock", LATCH_FIFO, INT64_MAX, 0, false)

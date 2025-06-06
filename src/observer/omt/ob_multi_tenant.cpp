@@ -123,6 +123,7 @@
 #include "share/io/ob_storage_io_usage_reporter.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
+#include "storage/tmp_file/ob_compress_tmp_file_manager.h"
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
@@ -428,6 +429,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(ObDiagnosticInfoContainer::mtl_new, ObDiagnosticInfoContainer::mtl_init, nullptr, nullptr, ObDiagnosticInfoContainer::mtl_wait, ObDiagnosticInfoContainer::mtl_destroy);
     MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, tmp_file::ObTenantCompressTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);

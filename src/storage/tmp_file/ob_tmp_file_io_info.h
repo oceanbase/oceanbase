@@ -26,15 +26,13 @@ struct ObTmpFileIOInfo final
   ~ObTmpFileIOInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K(fd_), K(dir_id_), KP(buf_), K(size_), K(disable_page_cache_), K(disable_block_cache_),
+  TO_STRING_KV(K(fd_), KP(buf_), K(size_), K(disable_page_cache_),
                K(prefetch_), K(io_timeout_ms_), K(io_desc_));
 
   int64_t fd_;
-  int64_t dir_id_;
   char *buf_;
   int64_t size_;
   bool disable_page_cache_;
-  bool disable_block_cache_;
   bool prefetch_;
   common::ObIOFlag io_desc_;
   int64_t io_timeout_ms_;

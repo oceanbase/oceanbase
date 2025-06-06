@@ -113,6 +113,7 @@
 #include "observer/ob_startup_accel_task_handler.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
+#include "storage/tmp_file/ob_compress_tmp_file_manager.h" // ObTenantCompressTmpFileManager
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "observer/table/ob_table_client_info_mgr.h"
@@ -820,8 +821,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
-    STORAGE_LOG(WARN, "init tmp block cache failed", KR(ret));
   } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
     STORAGE_LOG(WARN, "init sn tmp page cache failed", KR(ret));
   } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 * 1024 * 60))) {
@@ -885,6 +884,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, share::ObTenantDagScheduler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantStorageMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, tmp_file::ObTenantCompressTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObLeaderCoordinator::mtl_init, coordinator::ObLeaderCoordinator::mtl_start, coordinator::ObLeaderCoordinator::mtl_stop, coordinator::ObLeaderCoordinator::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObFailureDetector::mtl_init, coordinator::ObFailureDetector::mtl_start, coordinator::ObFailureDetector::mtl_stop, coordinator::ObFailureDetector::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, compaction::ObDiagnoseTabletMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -1068,9 +1068,6 @@ void MockTenantModuleEnv::destroy()
   net_frame_.stop();
   net_frame_.wait();
   net_frame_.destroy();
-  if (!GCTX.is_shared_storage_mode()) {
-    tmp_file::ObTmpBlockCache::get_instance().destroy();
-  }
   tmp_file::ObTmpPageCache::get_instance().destroy();
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
