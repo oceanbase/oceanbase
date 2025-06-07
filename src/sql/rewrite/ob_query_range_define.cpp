@@ -344,10 +344,11 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ObTableSchema *index_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
-      OB_UNLIKELY(range_columns.count() <= 0)) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(pre_range_graph) || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
+      OB_ISNULL(query_ctx = exec_ctx_->get_query_ctx()) || OB_UNLIKELY(range_columns.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
+    LOG_WARN("get unexpected param", K(ret), K(pre_range_graph), K(exec_ctx_), K(query_ctx));
   } else if (OB_FAIL(column_metas_.assign(pre_range_graph->get_column_metas()))) {
     LOG_WARN("failed to assign column meta");
   } else if (OB_FAIL(column_flags_.prepare_allocate(pre_range_graph->get_column_metas().count()))) {
@@ -355,6 +356,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              is_enable_range_extraction_for_not_in(enable_not_in_range_))) {
     LOG_WARN("failed to check not in range enabled", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_RANGE_EXTRACTION_FOR_NOT_IN, enable_not_in_range_))) {
+    LOG_WARN("fail to check opt param not in range enabled", K(ret));
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              get_optimizer_features_enable_version(optimizer_features_enable_version_))) {
     LOG_WARN("failed to get optimizer features enable version", K(ret));
