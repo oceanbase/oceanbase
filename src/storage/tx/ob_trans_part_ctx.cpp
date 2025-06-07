@@ -3114,7 +3114,7 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
   static const int64_t SUBMIT_REDO_TIMEOUT = 30;
   int cnt = 0;
   do {
-    if (get_pending_log_size() > 1_MB) {
+    if (get_pending_log_size() > GCONF._private_buffer_size) {
       CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
       if (OB_FAIL(submit_parallel_redo_())) {
         if (ret != OB_EAGAIN) {
