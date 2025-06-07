@@ -5832,7 +5832,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_property_str(), spec.parser_properties_));
         }
-      } else if (ddl_table_schema->is_index_table()) {
+      } else if (ddl_table_schema->is_index_table() && lib::is_mysql_mode()) {
         const bool is_vec_data_complement = (ddl_table_schema->is_vec_index_snapshot_data_type() ||
                                              ddl_table_schema->is_vec_ivfflat_index() ||
                                              ddl_table_schema->is_vec_ivfsq8_index() ||

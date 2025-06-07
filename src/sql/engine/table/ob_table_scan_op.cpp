@@ -1780,7 +1780,7 @@ int ObTableScanOp::set_need_check_outrow_lob()
     if (OB_ISNULL(e)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
-    } else if (e->obj_meta_.is_lob_storage()) {
+    } else if (ObMediumTextType == e->obj_meta_.get_type()) { // String type
       need_check_outrow_lob_ = true;
       break;
     }
