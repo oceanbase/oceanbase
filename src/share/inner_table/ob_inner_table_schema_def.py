@@ -55914,6 +55914,7 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE LOCATION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -56027,6 +56028,7 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE LOCATION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
