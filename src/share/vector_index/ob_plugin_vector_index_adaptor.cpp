@@ -78,7 +78,11 @@ OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return len;
 }
 
@@ -94,7 +98,11 @@ OB_DEF_SERIALIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return ret;
 }
 
@@ -117,7 +125,11 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return ret;
 }
 

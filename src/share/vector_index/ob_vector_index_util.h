@@ -115,8 +115,14 @@ struct ObVectorIndexAlgorithmHeader
 // TODO: opt struct
 struct ObVectorIndexParam
 {
+  static constexpr float DEFAULT_REFINE_K = 4.0;
+  static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
+
   ObVectorIndexParam() :
-    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0)
+    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
+    nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
+    refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -130,6 +136,10 @@ struct ObVectorIndexParam
     sample_per_nlist_ = 0;
     extra_info_max_size_ = 0;
     extra_info_actual_size_ = 0;
+    refine_type_ = 0;
+    bq_bits_query_ = DEFAULT_BQ_BITS_QUERY;
+    refine_k_= DEFAULT_REFINE_K;
+    bq_use_fht_ = false;
   };
   ObVectorIndexAlgorithmType type_;
   ObVectorIndexAlgorithmLib lib_;
@@ -144,10 +154,15 @@ struct ObVectorIndexParam
   // default: 1024
   int64_t extra_info_max_size_;
   int64_t extra_info_actual_size_;
+  int16_t refine_type_;
+  int16_t bq_bits_query_;
+  float refine_k_;
+  bool bq_use_fht_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
-    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size));
+    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht));
 };
 
 class ObExprVecIvfCenterIdCache
