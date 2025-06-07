@@ -207,6 +207,8 @@ public:
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id);
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
+  static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

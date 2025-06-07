@@ -120,6 +120,7 @@ public:
   void set_private() { shared_flag_ = PRIVATE; }
   void set_shared_sstable() { shared_flag_ = SHARED_SSTABLE; }
   void set_share_macro_blocks() { shared_flag_ = SHARED_MACRO_BLOCKS; }
+  void set_is_split_sstable() { is_split_sstable_ = true; }
   bool is_shared_macro_blocks() const {
     return SHARED_SSTABLE == shared_flag_
         || SHARED_MACRO_BLOCKS == shared_flag_; }
@@ -128,6 +129,7 @@ public:
     return SHARED_SSTABLE != shared_flag_
         && SHARED_MACRO_BLOCKS == shared_flag_; }
   int32_t get_flag() const { return flag_; }
+  bool is_split_sstable() const { return is_split_sstable_; }
   TO_STRING_KV(K_(shared_flag), K_(reserved));
 
 private:

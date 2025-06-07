@@ -60,7 +60,9 @@ int ObAllVirtualStorageCacheTask::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(execute(row))) {
-    SERVER_LOG(WARN, "execute fail", KR(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      SERVER_LOG(WARN, "execute fail", KR(ret));
+    }
   }
   return ret;
 }
@@ -234,7 +236,7 @@ public:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "ObStorageCacheTabletTaskHandle is invalid",
           KR(ret), K(entry.first), KPC(entry.second.get_ptr()));
-    } else if (OB_FAIL(tablet_tasks_.push_back(tmp_task_handle))) {
+    } else if (tmp_task_handle()->is_hot() && OB_FAIL(tablet_tasks_.push_back(tmp_task_handle))) {
       SERVER_LOG(WARN, "fail to copy store handle", KR(ret), K(tablet_tasks_.count()));
     }
     return ret;

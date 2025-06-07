@@ -16,6 +16,9 @@
 #include "logservice/palf/log_reader.h"
 #include "logservice/palf/palf_iterator.h"
 #include "../ob_admin_log_tool_executor.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 
 namespace oceanbase
 {
@@ -98,6 +101,72 @@ private:
   const char *block_path_;
   share::ObAdminMutatorStringArg str_arg_;
 };
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+class ObAdminLogServiceDumpBlock
+{
+public:
+  ObAdminLogServiceDumpBlock(const char *block_path,
+                             share::ObAdminMutatorStringArg &str_arg);
+  int dump();
+
+private:
+  int mmap_log_file_(char *&mmap_buf,
+                     const char *block_path_,
+                     int &fd,
+                     int64_t &body_size);
+  int do_dump_(const libpalf::LibPalfGroupEntryIteratorFFI *iter, const char *block_namt);
+  int parse_single_group_entry_(libpalf::LibPalfLogGroupEntry &group_entry,
+                                bool &has_encount_error,
+                                const char *block_name,
+                                const palf::LSN &lsn);
+  int extract_log_entries_from_group_entry_(const libpalf::LibPalfLogEntryIteratorFFI *log_iter,
+                                            share::SCN &log_upper_bound_scn,
+                                            uint64_t next_min_scn_val,
+                                            bool iterate_end_by_upper_bound,
+                                            bool &has_encount_error,
+                                            const char *block_name,
+                                            const palf::LSN &lsn);
+  int parse_single_log_entry_(const libpalf::LibPalfLogEntry &log_entry,
+                              const char *block_name,
+                              const palf::LSN &lsn);
+
+private:
+  const char *block_path_;
+  share::ObAdminMutatorStringArg str_arg_;
+};
+
+class LibPalfLogGroupEntryToString
+{
+public:
+  LibPalfLogGroupEntryToString(libpalf::LibPalfLogGroupEntryHeader &header);
+
+  TO_STRING_KV("magic", header.magic,
+               "version", header.version,
+               "group_size", header.data_size,
+               "proposal_id", header.proposal_id,
+               "committed_lsn", header.committed_end_lsn,
+               "max_scn", header.max_scn,
+               "accumulated_checksum", header.acc_crc,
+               "log_id", header.log_id,
+               "flag", header.flag);
+  libpalf::LibPalfLogGroupEntryHeader &header;
+};
+
+class LibPalfLogEntryToString
+{
+public:
+  LibPalfLogEntryToString(libpalf::LibPalfLogEntryHeader &header);
+
+  TO_STRING_KV("magic", header.magic,
+               "version", header.version,
+               "log_size", header.data_size,
+               "scn_", header.scn,
+               "data_checksum", header.data_crc,
+               "flag", header.flag);
+  libpalf::LibPalfLogEntryHeader &header;
+};
+#endif
 }
 }
 #endif

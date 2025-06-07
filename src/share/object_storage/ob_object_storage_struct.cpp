@@ -155,8 +155,6 @@ int ObStorageDestCheck::get_bucket_path(const ObString &uri, ObString &bucket_pa
   } else {
     if (OB_STORAGE_OSS == type) {
       bucket_start = static_cast<ObString::obstr_size_t>(strlen(OB_OSS_PREFIX));
-    } else if (OB_STORAGE_COS == type) {
-      bucket_start = static_cast<ObString::obstr_size_t>(strlen(OB_COS_PREFIX));
     } else if (OB_STORAGE_S3 == type) {
       bucket_start = static_cast<ObString::obstr_size_t>(strlen(OB_S3_PREFIX));
     } else {

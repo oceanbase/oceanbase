@@ -19,7 +19,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/ddl/ob_tablet_split_task.h"
+#include "storage/ddl/ob_tablet_split_util.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "deps/oblib/src/lib/charset/ob_charset.h"

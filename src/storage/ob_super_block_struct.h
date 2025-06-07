@@ -376,7 +376,7 @@ public:
 
   bool is_valid() const
   {
-    return tablet_id_.is_valid() && tablet_meta_version_ > 0 &&
+    return tablet_id_.is_valid() && tablet_meta_version_ >= 0 &&
         ObPendingFreeTabletStatus::MAX != status_ &&
         tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
   }

@@ -171,6 +171,18 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
       ObTableHandleV2 &table_handle);
+  static int create_shared_empty_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTableHandleV2 &table_handle);
+  static int create_shared_empty_co_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTableHandleV2 &table_handle);
 
   template <typename T = blocksstable::ObSSTable>
   static int create_sstable(
@@ -192,6 +204,22 @@ public:
              const char *buf,
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
+
+private:
+  static int inner_create_empty_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      const bool is_shared,
+      ObTableHandleV2 &table_handle);
+  static int inner_create_empty_co_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      const bool is_shared,
+      ObTableHandleV2 &table_handle);
 
 private:
   class ReadMdsFunctor

@@ -555,6 +555,8 @@ public:
   virtual int register_refresh_priority_cb() override final;
 
   virtual int unregister_refresh_priority_cb() override final;
+
+  virtual int set_allow_election_without_memlist(const bool allow_election_without_memlist) override final;
 #endif
 	//================= 依赖功能注册 ===========================
   int set_location_cache_cb(PalfLocationCacheCb *lc_cb);

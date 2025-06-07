@@ -53,6 +53,8 @@ RPC_F(obrpc::OB_GET_MIN_SSTABLE_SCHEMA_VERSION, obrpc::ObGetMinSSTableSchemaVers
     obrpc::ObGetMinSSTableSchemaVersionRes, ObGetMinSSTableSchemaVersionProxy);
 RPC_F(obrpc::OB_DETECT_MASTER_RS_LS, obrpc::ObDetectMasterRsArg,
       obrpc::ObDetectMasterRsLSResult, ObDetectMasterRsLSProxy);
+RPC_F(obrpc::OB_DETECT_SSLOG_LS, obrpc::ObDetectSSlogLSArg,
+      obrpc::ObDetectSSlogLSResult, ObDetectSSlogLSProxy);
 RPC_F(obrpc::OB_GET_ROOT_SERVER_ROLE, obrpc::ObDetectMasterRsArg,
       obrpc::ObGetRootserverRoleResult, ObGetRootserverRoleProxy);
 RPC_F(obrpc::OB_CREATE_LS, obrpc::ObCreateLSArg, obrpc::ObCreateLSResult, ObLSCreatorProxy);

@@ -191,7 +191,7 @@ public:
   void destroy();
   int print_old_chain(
       const ObTabletMapKey &key,
-      const ObTabletBasePointer &tablet_ptr,
+      const ObTabletPointer &tablet_ptr,
       const int64_t buf_len,
       char *buf);
   // TIPS:
@@ -328,7 +328,13 @@ public:
   int init_memtablet_mgr_for_inner_tablet(
       const ObTabletMapKey &key,
       const lib::Worker::CompatMode compat_mode);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  int get_oldest_ss_change_version(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObTabletPointerHandle &tablet_ptr_handle,
+      SCN &min_ss_change_version);
+#endif
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
   {

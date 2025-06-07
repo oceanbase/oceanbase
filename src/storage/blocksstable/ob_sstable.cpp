@@ -64,7 +64,8 @@ ObSSTableMetaCache::ObSSTableMetaCache()
     upper_trans_version_(0),
     filled_tx_scn_(share::SCN::min_scn()),
     contain_uncommitted_row_(false),
-    rec_scn_()
+    rec_scn_(),
+    ss_tablet_version_(share::SCN::min_scn())
 {
 }
 
@@ -84,6 +85,7 @@ void ObSSTableMetaCache::reset()
   filled_tx_scn_.set_min();
   contain_uncommitted_row_ = false;
   rec_scn_.reset();
+  ss_tablet_version_.set_min();
 }
 
 int ObSSTableMetaCache::init(
@@ -114,6 +116,7 @@ int ObSSTableMetaCache::init(
     filled_tx_scn_ = meta->get_filled_tx_scn();
     contain_uncommitted_row_ = meta->contain_uncommitted_row();
     rec_scn_ = meta->get_rec_scn();
+    ss_tablet_version_ = meta->get_ss_tablet_version();
   }
   return ret;
 }
@@ -125,6 +128,11 @@ void ObSSTableMetaCache::set_upper_trans_version(const int64_t upper_trans_versi
   } else {
     upper_trans_version_ = std::max(upper_trans_version, max_merged_trans_version_);
   }
+}
+
+void ObSSTableMetaCache::set_ss_tablet_version(const share::SCN &ss_tablet_version)
+{
+  ss_tablet_version_ = ss_tablet_version;
 }
 
 OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
@@ -144,7 +152,8 @@ OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
       filled_tx_scn_,
       contain_uncommitted_row_,
       data_checksum_,
-      rec_scn_);
+      rec_scn_,
+      ss_tablet_version_);
   return ret;
 }
 
@@ -181,7 +190,8 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
                 filled_tx_scn_,
                 contain_uncommitted_row_,
                 data_checksum_,
-                rec_scn_);
+                rec_scn_,
+                ss_tablet_version_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected version", K(ret), K(version_));
@@ -206,7 +216,8 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObSSTableMetaCache)
       filled_tx_scn_,
       contain_uncommitted_row_,
       data_checksum_,
-      rec_scn_);
+      rec_scn_,
+      ss_tablet_version_);
   return len;
 }
 
@@ -883,6 +894,23 @@ int ObSSTable::set_upper_trans_version(
 
   LOG_INFO("finish set upper trans version", K(ret), K(key_), K_(meta),
       K(old_val), K(upper_trans_version), K_(meta_cache));
+  return ret;
+}
+
+int ObSSTable::set_ss_tablet_version(common::ObArenaAllocator &allocator,
+                                     const share::SCN &ss_tablet_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ss_tablet_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ss_tablet_version", KR(ret), K(ss_tablet_version));
+  } else if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
+    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
+  }
+  if (OB_SUCC(ret) && is_loaded()) {
+    (void) meta_->basic_meta_.set_ss_tablet_version(ss_tablet_version);
+    (void) meta_cache_.set_ss_tablet_version(ss_tablet_version);
+  }
   return ret;
 }
 
@@ -1755,15 +1783,11 @@ int ObSSTable::get_cs_range(
 
 int ObSSTable::persist_linked_block_if_need(
     ObArenaAllocator &allocator,
-    const ObTabletID &tablet_id,
-    const int64_t tablet_transfer_seq,
-    const int64_t snapshot_version,
-    blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
+    const ObLinkedMacroInfoWriteParam &param,
     int64_t &macro_start_seq,
     ObSharedObjectsWriteCtx &linked_block_write_ctx)
 {
   int ret = OB_SUCCESS;
-  ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
 #ifdef ERRSIM
   const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
   const int64_t block_cnt_threshold = 0 == block_cnt_config_value ? ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD
@@ -1781,17 +1805,8 @@ int ObSSTable::persist_linked_block_if_need(
   } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
               < block_cnt_threshold) {
     // need not persist linked_block
-  } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
-    LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));
-  } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(tablet_id,
-                                                          tablet_transfer_seq,
-                                                          snapshot_version,
-                                                          allocator,
-                                                          &link_write_info,
-                                                          linked_block_write_ctx))) {
-    LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(tablet_id), K(snapshot_version), K(link_write_info));
-  } else {
-    macro_start_seq += link_write_info.get_written_macro_cnt();
+  } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(allocator, param, macro_start_seq, linked_block_write_ctx))) {
+    LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(param));
   }
   return ret;
 }

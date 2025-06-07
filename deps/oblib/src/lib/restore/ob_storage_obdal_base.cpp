@@ -310,7 +310,7 @@ int set_obdal_options_with_account(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(obdal_account), K(bucket));
   } else {
-    if (storage_type == ObStorageType::OB_STORAGE_S3 || storage_type == ObStorageType::OB_STORAGE_COS) {
+    if (storage_type == ObStorageType::OB_STORAGE_S3) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
         OB_LOG(WARN, "failed to set bucket", K(ret), K(bucket));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
@@ -1574,11 +1574,10 @@ int ObStorageParallelObDalMultiPartWriter::upload_part(const char *buf, const in
   int64_t obdal_part_id = part_id;
   // In obdal, the part id of the operator writer starts from 0,
   // and then each service increases by 1 according to the actual situation.
-  // Since S3, COS, OSS all require part ids to start at 1 and be continuous,
+  // Since S3, OSS all require part ids to start at 1 and be continuous,
   // and the old logic of OB, including tests, is already specified from 1,
   // 1 needs to be subtracted in advance here
   if (OB_LIKELY(storage_type_ == OB_STORAGE_S3
-                || storage_type_ == OB_STORAGE_COS
                 || storage_type_ == OB_STORAGE_OSS)) {
     obdal_part_id -= 1;
   }

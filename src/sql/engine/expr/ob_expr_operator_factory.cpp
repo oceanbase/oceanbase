@@ -448,6 +448,7 @@
 #include "sql/engine/expr/ob_expr_rb_calc_cardinality.h"
 #include "sql/engine/expr/ob_expr_rb_calc.h"
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
+#include "sql/engine/expr/ob_expr_startup_mode.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
 #include "sql/engine/expr/ob_expr_rb_select.h"
 #include "sql/engine/expr/ob_expr_rb_build.h"
@@ -1285,6 +1286,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCheckCatalogAccess);
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
     REG_OP(ObExprCheckLocationAccess);
+    REG_OP(ObExprStartUpMode);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1626,6 +1628,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprKeyValue);
   REG_OP_ORCL(ObExprCurrentCatalog);
   REG_OP_ORCL(ObExprCheckCatalogAccess);
+  REG_OP_ORCL(ObExprStartUpMode);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

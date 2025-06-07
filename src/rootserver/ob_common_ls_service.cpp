@@ -223,6 +223,7 @@ int ObCommonLSService::try_modify_ls_unit_group_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_CREATE_USER_LS)
 int ObCommonLSService::do_create_user_ls(
     const share::schema::ObTenantSchema &tenant_schema,
     const share::ObLSStatusInfo &info, const SCN &create_scn,
@@ -232,7 +233,9 @@ int ObCommonLSService::do_create_user_ls(
   int ret = OB_SUCCESS;
   LOG_INFO("[COMMON_LS_SERVICE] start to create ls", K(info), K(create_scn));
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  if (OB_UNLIKELY(!info.is_valid() || !info.ls_is_creating())) {
+  if (OB_UNLIKELY(ERRSIM_SKIP_CREATE_USER_LS)) {
+    LOG_INFO("errsim skip create user ls");
+  } else if (OB_UNLIKELY(!info.is_valid() || !info.ls_is_creating())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info not valid", KR(ret), K(info));
   } else {

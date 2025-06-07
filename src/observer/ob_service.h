@@ -105,7 +105,8 @@ public:
       share::ObTabletReplica &tablet_replica,
       share::ObTabletReplicaChecksumItem &tablet_checksum,
       const bool need_checksum = true);
-
+  int detect_sslog_ls(const obrpc::ObDetectSSlogLSArg &arg,
+                      obrpc::ObDetectSSlogLSResult &result);
   int detect_master_rs_ls(const obrpc::ObDetectMasterRsArg &arg,
                        obrpc::ObDetectMasterRsLSResult &result);
   int fill_ls_replica(const uint64_t tenant_id,
@@ -130,6 +131,9 @@ public:
   int build_split_tablet_data_finish_request(const obrpc::ObTabletSplitFinishArg &arg, obrpc::ObTabletSplitFinishResult &res);
   int freeze_split_src_tablet(const obrpc::ObFreezeSplitSrcTabletArg &arg, obrpc::ObFreezeSplitSrcTabletRes &res, const int64_t abs_timeout_us);
   int fetch_split_tablet_info(const obrpc::ObFetchSplitTabletInfoArg &arg, obrpc::ObFetchSplitTabletInfoRes &res, const int64_t abs_timeout_us);
+  #ifdef OB_BUILD_SHARED_STORAGE
+  int schedule_tablet_split(const obrpc::ObTabletSplitScheduleArg &arg, obrpc::ObLSTabletSplitScheduleRes &res);
+  #endif
   int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, obrpc::ObDDLBuildSingleReplicaRequestResult &res);
   int check_and_cancel_ddl_complement_data_dag(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist);

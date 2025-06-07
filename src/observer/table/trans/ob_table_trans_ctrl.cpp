@@ -147,7 +147,8 @@ int ObTableTransCtrl::setup_tx_snapshot(ObTableTransParam &trans_param)
     } else if (OB_FAIL(txs->get_read_snapshot(*trans_param.trans_desc_,
                                               ObTxIsolationLevel::RC,
                                               trans_param.timeout_ts_,
-                                              trans_param.tx_snapshot_))) {
+                                              trans_param.tx_snapshot_,
+                                              false))) {
       LOG_WARN("fail to get global read snapshot", K(ret));
     }
   } else {

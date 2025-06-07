@@ -1210,8 +1210,6 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
 
   if (OB_STORAGE_OSS == device_type) {
     prefix = OB_OSS_PREFIX;
-  } else if (OB_STORAGE_COS == device_type) {
-    prefix = OB_COS_PREFIX;
   } else if (OB_STORAGE_S3 == device_type) {
     prefix = OB_S3_PREFIX;
   } else if (OB_STORAGE_FILE == device_type) {
@@ -1679,6 +1677,33 @@ int ObDirPrefixEntryNameFilter::init(
     OB_LOG(WARN, "failed to init filter_str", K(ret), K(filter_str), K(filter_str_len));
   } else {
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int switch_cos_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri)
+{
+  int ret = OB_SUCCESS;
+  const ObString::obstr_size_t src_len = src_uri.length();
+  char *ptr = nullptr;
+  ObStorageType src_type = ObStorageType::OB_STORAGE_MAX_TYPE;
+  if (OB_UNLIKELY(src_uri.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(src_len));
+  } else if (src_uri.prefix_match(OB_COS_PREFIX)) {
+    int64_t cos_prefix_len = STRLEN(OB_COS_PREFIX);
+    int64_t dest_uri_len = src_len - cos_prefix_len + STRLEN(OB_S3_PREFIX);
+    if (OB_ISNULL(ptr = static_cast<char *>(allocator.alloc(dest_uri_len + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc memory", K(ret), K(src_uri));
+    } else {
+      MEMCPY(ptr, OB_S3_PREFIX, STRLEN(OB_S3_PREFIX));
+      MEMCPY(ptr + STRLEN(OB_S3_PREFIX), src_uri.ptr() + cos_prefix_len, src_len - cos_prefix_len);
+      ptr[dest_uri_len] = '\0';
+      dest_uri.assign_ptr(ptr, dest_uri_len);
+    }
+  } else {
+    dest_uri = src_uri;
   }
   return ret;
 }

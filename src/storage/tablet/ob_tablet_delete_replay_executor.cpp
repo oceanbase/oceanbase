@@ -60,7 +60,7 @@ int ObTabletDeleteReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (CLICK_FAIL(tablet->get_latest_committed(data))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(timeout));
   } else {
     data.tablet_status_ = ObTabletStatus::DELETED;

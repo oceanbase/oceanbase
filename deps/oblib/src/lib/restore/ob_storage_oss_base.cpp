@@ -314,10 +314,33 @@ ObStorageOSSRetryStrategy::~ObStorageOSSRetryStrategy()
   origin_list_entries_.reset();
 }
 
+int ob_set_retry_headers(
+    apr_pool_t *p,
+    apr_table_t *&headers,
+    apr_table_t *&origin_headers,
+    apr_table_t **&ref_headers)
+{
+  int ret = OB_SUCCESS;
+  origin_headers = nullptr;
+  ref_headers = nullptr;
+  if (OB_NOT_NULL(headers)) {
+    if (OB_ISNULL(p)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "apr pool is null", K(ret), KP(headers));
+    } else if (OB_ISNULL(origin_headers = apr_table_clone(p, headers))) {
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
+      OB_LOG(WARN, "fail to deep copy headers", K(ret), KP(p), KP(headers));
+    } else {
+      ref_headers = &headers;
+    }
+  }
+  return ret;
+}
+
 int ObStorageOSSRetryStrategy::set_retry_headers(apr_pool_t *p, apr_table_t *&headers)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(qcloud_cos::ob_set_retry_headers(p, headers, origin_headers_, ref_headers_))) {
+  if (OB_FAIL(ob_set_retry_headers(p, headers, origin_headers_, ref_headers_))) {
     OB_LOG(WARN, "fail to deep copy headers", K(ret), KP(p), KP(headers));
   }
   return ret;
@@ -414,11 +437,24 @@ bool ObStorageOSSRetryStrategy::should_retry_impl_(
   return bret;
 }
 
+int ob_copy_apr_tables(apr_table_t *dst, const apr_table_t *src)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dst) || OB_ISNULL(src)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(dst), KP(src));
+  } else {
+    apr_table_clear(dst);
+    apr_table_overlap(dst, src, APR_OVERLAP_TABLES_SET);
+  }
+  return ret;
+}
+
 int ObStorageOSSRetryStrategy::reinitialize_headers_() const
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(ref_headers_)
-      && OB_FAIL(qcloud_cos::ob_copy_apr_tables(*ref_headers_, origin_headers_))) {
+      && OB_FAIL(ob_copy_apr_tables(*ref_headers_, origin_headers_))) {
     // Note: We cannot directly set *ref_headers_ = origin_headers_.
     // For example, in the function:
     // oss_put_object_from_buffer(const oss_request_options_t *options,

@@ -644,7 +644,7 @@ int ObReplaceLSReplicaTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("is_manual", is_manual_task()))) {
     LOG_WARN("add column failed", KR(ret));
-  } else if (ObRootUtils::if_deployment_mode_match() && OB_FAIL(add_config_version_column_(dml_splicer))) {
+  } else if (ObRootUtils::is_dr_replace_deployment_mode_match() && OB_FAIL(add_config_version_column_(dml_splicer))) {
     LOG_WARN("add config version column failed", KR(ret));
   }
   return ret;
@@ -745,6 +745,7 @@ int ObReplaceLSReplicaTask::check_before_execute(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_SEND_SINGLE_REPLACE_RPC_TO_OBSERVER)
 int ObReplaceLSReplicaTask::execute(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObDRTaskRetComment &ret_comment) const
@@ -752,7 +753,9 @@ int ObReplaceLSReplicaTask::execute(
   int ret = OB_SUCCESS;
   ObLSReplaceReplicaArg arg;
   int64_t rpc_timeout = DisasterRecoveryUtils::DR_TASK_RPC_REQUEST_TIMEOUT + GCONF.rpc_timeout;
-  if (OB_FAIL(arg.init(get_task_id(),
+  if (OB_UNLIKELY(ERRSIM_SKIP_SEND_SINGLE_REPLACE_RPC_TO_OBSERVER)) {
+    LOG_INFO("errsim skip send replace replica rpc to observer");
+  } else if (OB_FAIL(arg.init(get_task_id(),
                        get_tenant_id(),
                        get_ls_id(),
                        get_dst_member(),

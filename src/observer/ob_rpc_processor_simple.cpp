@@ -60,8 +60,13 @@
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
+#include "storage/ddl/ob_ss_ddl_util.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_file_manager.h"
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
+#include "close_modules/shared_storage/storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
 #endif
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
@@ -1894,6 +1899,18 @@ int ObRpcSetMemberListP::process()
   return ret;
 }
 
+int ObRpcDetectSSlogLSP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ob_service is nullptr", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->detect_sslog_ls(arg_, result_))) {
+    LOG_WARN("failed to detect sslog ls", KR(ret), K_(arg));
+  }
+  return ret;
+}
+
 int ObRpcDetectMasterRsLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -2250,6 +2267,16 @@ int ObPreProcessServerP::process()
 }
 
 #ifdef OB_BUILD_TDE_SECURITY
+
+int ObSetMasterKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(share::ObMasterKeyGetter::instance().set_all_master_keys(arg_))) {
+    LOG_WARN("failed to set all master keys", KR(ret), K_(arg));
+  }
+  return ret;
+}
+
 int ObGetMasterKeyP::process()
 {
   int ret = OB_SUCCESS;
@@ -2431,6 +2458,71 @@ int ObRpcBatchGetTabletSplitP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObRpcTabletSplitScheduleP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = gctx_.ob_service_->schedule_tablet_split(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGetMinSSGCLastSuccScnP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+  SCN last_succ_scn;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGarbageCollectorSwitchArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(arg_.is_for_sslog_table_, last_succ_scn))) {
+        LOG_WARN("get last_succ_scn from ObSSGarbageCollectorService failed", KR(ret), K_(arg));
+      } else {
+        result_ = last_succ_scn.get_val_for_tx();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcGetSSGCLastSuccScnsP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+  LastSuccSCNs last_succ_scns;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGarbageCollectorSwitchArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_last_succ_scns(arg_.is_for_sslog_table_, last_succ_scns))) {
+        LOG_WARN("get last_succ_scn from ObSSGarbageCollectorService failed", KR(ret), K_(arg));
+      } else {
+        result_.last_succ_scns_ = last_succ_scns;
+      }
+    }
+  }
+  return ret;
+}
+#endif
+
 #ifdef OB_BUILD_TDE_SECURITY
 int ObDumpTenantCacheMasterKeyP::process()
 {
@@ -2485,10 +2577,11 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
                     ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
           LOG_WARN("failed to get tablet handle", K(ret));
-        } else if (OB_FAIL(ObDDLRedoLogWriter::write_gc_flag(tablet_handle,
-                                                             arg_.redo_info_.table_key_,
-                                                             arg_.redo_info_.parallel_cnt_,
-                                                             arg_.redo_info_.cg_cnt_))) {
+        } else if (OB_FAIL(ObSSDDLUtil::write_gc_flag(arg_.ls_id_,
+                                                      tablet_handle,
+                                                      arg_.redo_info_.table_key_,
+                                                      arg_.redo_info_.parallel_cnt_,
+                                                      arg_.redo_info_.cg_cnt_))) {
           LOG_WARN("failed to write gc flag file", K(ret), K(arg_.redo_info_));
         }
       }
@@ -2667,6 +2760,12 @@ int ObRpcRemoteWriteDDLFinishLogP::process()
       ObTabletHandle tablet_handle;
       if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("get tablet failed", K(ret), K(table_key));
+      } else if (OB_FAIL(ObSSDDLUtil::update_shared_tablet_table_store_if_absent(finish_log.get_ls_id(),
+                                                                                 tablet_handle,
+                                                                                 finish_log.get_table_key(),
+                                                                                 finish_log.get_data_format_version(),
+                                                                                 finish_log.get_data_buffer()))) {
+        LOG_WARN("update shared tablet table store fail", K(ret), K(table_key));
       } else if (OB_FAIL(sstable_redo_writer.write_finish_log(false,
                                                               finish_log,
                                                               is_remote_write))) {
@@ -2699,7 +2798,12 @@ int ObRpcSyncHotMicroKeyP::process()
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid arguments", KR(ret), K_(arg));
       } else if (OB_FAIL(ls_service->get_ls(ObLSID(ls_id), ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        LOG_WARN("get ls failed", KR(ret), K(arg_));
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_SUCCESS; // ignore ret
+          LOG_INFO("ls is not exist, maybe migrated to other server", K(ls_id));
+        } else {
+          LOG_WARN("get ls failed", KR(ret), K(arg_));
+        }
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", KR(ret), K(tenant_id), K(ls_id));
@@ -4213,14 +4317,16 @@ int ObRebuildTabletP::process()
 int ObNotifyLogServiceAccessPointP::process()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
   if (!arg_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(arg));
-  } else if (!GCONF.logservice_access_point.set_value(arg_.get_logservice_access_point())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to set logservice access point", KR(ret), K(arg_));
-  }
+  } else if (OB_FAIL(libpalf::LibPalfEnvFFIInstance::get_instance().set_logservice_access_point(
+    arg_.get_logservice_access_point().ptr()))) {
+    LOG_WARN("set logservice_access_point to LibPalfEnvFFIInstance failed", KR(ret), K_(arg));
+  } else {} // do nothing
   result_.set_ret(ret);
+#endif
   return ret;
 }
 

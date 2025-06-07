@@ -157,8 +157,17 @@ int ObTxTableGuard::cleanout_tx_node(const transaction::ObTransID tx_id,
   }
 }
 
-int ObTxTableGuard::get_recycle_scn(share::SCN &recycle_scn, const bool is_shared_minor)
-{ return tx_table_->get_recycle_scn(recycle_scn, is_shared_minor); }
+int ObTxTableGuard::get_recycle_scn(share::SCN &recycle_scn) { return tx_table_->get_recycle_scn(recycle_scn); }
+
+bool ObTxTableGuard::can_recycle_tx_data(const share::SCN current_recycle_scn, const bool is_local_exec_mode)
+{
+  return tx_table_->can_recycle_tx_data(current_recycle_scn, is_local_exec_mode);
+}
+
+void ObTxTableGuard::record_tx_data_recycle_scn(const share::SCN recycle_scn, const bool is_local_exec_mode)
+{
+  return tx_table_->record_tx_data_recycle_scn(recycle_scn, is_local_exec_mode);
+}
 
 int ObTxTableGuard::self_freeze_task()
 {
@@ -197,6 +206,12 @@ share::ObLSID ObTxTableGuard::get_ls_id() const
 {
   return tx_table_->get_ls_id();
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+
+int ObTxTableGuard::get_ss_recycle_scn(share::SCN &recycle_scn) { return tx_table_->get_ss_recycle_scn(recycle_scn); }
+
+#endif
 
 }  // namespace storage
 }  // end namespace oceanbase

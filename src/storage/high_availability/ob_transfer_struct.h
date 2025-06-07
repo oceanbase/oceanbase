@@ -174,11 +174,12 @@ struct ObTXTransferUtils
       const bool get_commit,
       const ObTablet *tablet,
       ObTabletCreateDeleteMdsUserData &user_data);
-  static int create_empty_minor_sstable(
+  static int create_empty_mini_minor_sstable(
       const common::ObTabletID &tablet_id,
       const share::SCN start_scn,
       const share::SCN end_scn,
       const ObStorageSchema &table_schema,
+      const ObITable::TableType &table_type,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &table_handle);
   static int set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet);
@@ -191,11 +192,12 @@ private:
       const bool get_commit,
       const ObTablet *tablet,
       ObTabletCreateDeleteMdsUserData &user_data);
-  static int build_empty_minor_sstable_param_(
+  static int build_empty_mini_minor_sstable_param_(
       const share::SCN start_scn,
       const share::SCN end_scn,
       const ObStorageSchema &table_schema,
       const common::ObTabletID &tablet_id,
+      const ObITable::TableType &table_type,
       ObTabletCreateSSTableParam &param);
 };
 

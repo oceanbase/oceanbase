@@ -57,7 +57,7 @@ public:
 
   // after the task is completed, report and clean up the task
   // @params[in] res, task execution results
-  static int report_to_meta_tenant(
+  static int report_to_disaster_recovery(
     const obrpc::ObDRTaskReplyResult &arg);
 
   // after the task is completed, report and clean up the task
@@ -169,7 +169,7 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObAddr& dest_server,
-      bool has_sslog);
+      bool &has_sslog);
   static int get_member_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

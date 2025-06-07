@@ -96,6 +96,8 @@
   RPC_S(PR5 update_baseline_schema_version, OB_UPDATE_BASELINE_SCHEMA_VERSION, (obrpc::Int64));
   RPC_AP(PR1 detect_master_rs_ls, OB_DETECT_MASTER_RS_LS,
         (obrpc::ObDetectMasterRsArg), obrpc::ObDetectMasterRsLSResult);
+  RPC_AP(PR1 detect_sslog_ls, OB_DETECT_SSLOG_LS,
+        (obrpc::ObDetectSSlogLSArg), obrpc::ObDetectSSlogLSResult);
   RPC_AP(PR1 get_root_server_status, OB_GET_ROOT_SERVER_ROLE,
         (obrpc::ObDetectMasterRsArg), obrpc::ObGetRootserverRoleResult);
   RPC_S(PR5 sync_partition_table, OB_SYNC_PARTITION_TABLE, (obrpc::Int64));
@@ -151,6 +153,7 @@
   RPC_S(PR5 renew_in_zone_hb, OB_RENEW_IN_ZONE_HB, (share::ObInZoneHbRequest), share::ObInZoneHbResponse);
   RPC_S(PR5 pre_process_server_status, OB_PRE_PROCESS_SERVER, (obrpc::ObPreProcessServerArg));
 #ifdef OB_BUILD_TDE_SECURITY
+  RPC_S(PR5 set_master_key, OB_SET_MASTER_KEY, (obrpc::ObSetMasterKeyArg));
   RPC_S(PR5 get_master_key, OB_GET_MASTER_KEY, (obrpc::Int64), ObGetMasterKeyResultArg);
   RPC_AP(PR5 restore_key, OB_RESTORE_KEY, (obrpc::ObRestoreKeyArg), obrpc::ObRestoreKeyResult);
   RPC_AP(PR5 set_root_key, OB_SET_ROOT_KEY, (obrpc::ObRootKeyArg), obrpc::ObRootKeyResult);
@@ -207,6 +210,9 @@
   RPC_AP(PR1 lease_request, OB_SSWRITER_LEASE_REQ, (storage::ObSSWriterLeaseRequest), Int64);
   RPC_S(PR5 set_ss_cache_size_ratio, OB_SET_SS_CACHE_SIZE_RATIO, (obrpc::ObSetSSCacheSizeRatioArg));
   RPC_S(PR5 trigger_storage_cache, OB_TRIGGER_STORAGE_CACHE, (obrpc::ObTriggerStorageCacheArg));
+  RPC_S(PR5 schedule_tablet_split, OB_TABLET_SPLIT_SCHEDULE, (obrpc::ObTabletSplitScheduleArg), obrpc::ObLSTabletSplitScheduleRes);
+  RPC_S(PR5 get_min_ss_gc_last_succ_scn, OB_GET_MIN_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCLastSuccScnArg), obrpc::Int64);
+  RPC_S(PR5 get_ss_gc_last_succ_scns, OB_GET_SS_GC_LAST_SUCC_SCNS, (obrpc::ObSSGCLastSuccScnArg), obrpc::ObSSGCLastSuccSCNsRes);
   #endif
   RPC_S(PR5 remote_write_ddl_inc_commit_log, OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLIncCommitLogArg), ObRpcRemoteWriteDDLIncCommitLogRes);
   RPC_S(PR5 check_ls_can_offline, OB_CHECK_LS_CAN_OFFLINE, (obrpc::ObCheckLSCanOfflineArg));

@@ -98,6 +98,7 @@ public:
       const ObMigrationTabletParam *tablet_meta);
 #ifdef OB_BUILD_SHARED_STORAGE
   int init_for_share_storage(const ObTabletMeta &old_tablet_meta);
+  int update_for_share_storage(const ObTabletMeta &new_tablet_meta);
   share::SCN get_acquire_scn() const;
 #endif
 
@@ -148,7 +149,6 @@ public:
                K_(tablet_id),
                K_(data_tablet_id),
                K_(ref_tablet_id),
-               K_(has_next_tablet),
                K_(create_scn),
                K_(start_scn),
                K_(clog_checkpoint_scn),
@@ -167,11 +167,13 @@ public:
                K_(ddl_data_format_version),
                K_(ddl_commit_scn),
                K_(mds_checkpoint_scn),
+               K_(min_ss_tablet_version),
                K_(transfer_info),
                K_(extra_medium_info),
                K_(last_persisted_committed_tablet_status),
                K_(create_schema_version),
                K_(space_usage),
+               K_(is_empty_shell),
                K_(micro_index_clustered),
                K_(ddl_replay_status),
                K_(split_info),
@@ -205,6 +207,7 @@ public:
   int64_t max_serialized_medium_scn_; // abandon after 4.2 // alignment: 8B, size: 8B
   share::SCN ddl_commit_scn_; // alignment: 8B, size: 8B
   share::SCN mds_checkpoint_scn_; // alignment: 8B, size: 8B
+  share::SCN min_ss_tablet_version_; // alignment: 8B, size: 8B
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
   compaction::ObExtraMediumInfo extra_medium_info_;
   ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // quick access for tablet status in sstables
@@ -236,7 +239,7 @@ public:
   // and tablet meta init interface for migration.
   // yuque :
   lib::Worker::CompatMode compat_mode_; // alignment: 1B, size: 4B
-  bool has_next_tablet_; // alignment: 1B, size: 2B
+  bool has_next_tablet_; // alignment: 1B, size: 2B (abandoned, don't use this field)
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
@@ -253,6 +256,10 @@ private:
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
   inline void set_space_usage_ (const ObTabletSpaceUsage &space_usage) { space_usage_ = space_usage; }
+  inline void set_min_ss_tablet_version_(const share::SCN &min_ss_tablet_version)
+  {
+    min_ss_tablet_version_ = min_ss_tablet_version;
+  }
 private:
   static const int32_t TABLET_META_VERSION = 1;
 private:
@@ -327,7 +334,8 @@ public:
                K_(ddl_replay_status),
                K_(is_storage_schema_cs_replica),
                K_(split_info),
-               K_(has_truncate_info));
+               K_(has_truncate_info),
+               K_(min_ss_tablet_version));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -386,6 +394,7 @@ public:
   // will never be false even after truncate info recycled
   bool has_truncate_info_;
 
+  share::SCN min_ss_tablet_version_;
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

@@ -187,6 +187,16 @@ private:
   int wait_memtable_frozen_();
   int init_tablet_handle_();
 
+  //shared_storage
+#ifdef OB_BUILD_SHARED_STORAGE
+  int generate_ss_backfill_tx_task_();
+  int generate_ss_table_backfill_tx_task_(
+      const int64_t dest_transfer_seq,
+      share::ObITask *replace_task,
+      common::ObIArray<ObTableHandleV2> &table_array,
+      share::ObITask *child);
+#endif
+
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
   int get_dest_transfer_seq_(const common::ObTabletID &tablet_id, int64_t &transfer_seq) const;
   void process_transfer_perf_diagnose_(
@@ -264,6 +274,7 @@ public:
 private:
   int prepare_merge_ctx_(const int64_t dest_transfer_seq);
   int update_merge_sstable_();
+  int update_merge_sstable_for_ss_();
 
 private:
   bool is_inited_;
@@ -338,7 +349,9 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletMdsTableBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
 private:
-  int do_backfill_mds_table_(ObTableHandleV2 &mds_sstable);
+  int do_backfill_mds_table_(
+      compaction::ObTabletMergeCtx &tablet_merge_ctx,
+      ObTableHandleV2 &mds_sstable);
   int prepare_mds_table_merge_ctx_(
       compaction::ObTabletMergeCtx &tablet_merge_ctx);
   int build_mds_table_to_sstable_(
@@ -358,6 +371,11 @@ private:
       ObTableHandleV2 &table_handle);
   int update_merge_sstable_(
       compaction::ObTabletCrossLSMdsMinorMergeCtx &tablet_merge_ctx);
+  int add_sstable_(ObTableHandleV2 &sstable);
+  int do_backfill_mds_();
+#ifdef OB_BUILD_SHARED_STORAGE
+  int do_ss_backfill_mds_();
+#endif
 
 private:
   bool is_inited_;

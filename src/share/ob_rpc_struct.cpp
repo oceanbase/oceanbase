@@ -7793,14 +7793,24 @@ int TenantServerUnitConfig::assign(const TenantServerUnitConfig &other)
 
 bool TenantServerUnitConfig::is_valid() const
 {
-  return common::OB_INVALID_ID != tenant_id_
-         && ((lib::Worker::CompatMode::INVALID != compat_mode_
-               && unit_config_.is_valid()
-               && replica_type_ != common::ObReplicaType::REPLICA_TYPE_INVALID)
+  bool bret = common::OB_INVALID_ID != tenant_id_
+              && ((lib::Worker::CompatMode::INVALID != compat_mode_
+                   && unit_config_.is_valid()
+                   && replica_type_ != common::ObReplicaType::REPLICA_TYPE_INVALID)
 #ifdef OB_BUILD_TDE_SECURITY
-               // root_key can be invalid
+                   // root_key can be invalid
 #endif
-             || (is_delete_));
+                 || (is_delete_));
+
+  if (!bret) {
+  } else if (is_sys_tenant(tenant_id_)) {
+    bret = (0 == meta_tenant_data_version_);
+  } else {
+    bret = (0 == data_version_ && 0 == meta_tenant_data_version_)
+            || (0 < data_version_ && 0 < meta_tenant_data_version_);
+  }
+
+  return bret;
 }
 
 int TenantServerUnitConfig::init(
@@ -7837,6 +7847,88 @@ int TenantServerUnitConfig::init(
     if_not_grant_ = if_not_grant;
     is_delete_ = is_delete;
   }
+  return ret;
+}
+
+int TenantServerUnitConfig::init(
+    const uint64_t tenant_id,
+    const uint64_t unit_id,
+    const lib::Worker::CompatMode compat_mode,
+    const share::ObUnitConfig &unit_config,
+    const common::ObReplicaType replica_type,
+    const bool if_not_grant,
+    const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+    , const ObRootKeyResult &root_key
+#endif
+    , const uint64_t data_version
+    )
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_sys_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (0 == data_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid data version", KR(ret), K(tenant_id), KDV(data_version));
+  } else if (OB_FAIL(init(tenant_id,
+                          unit_id,
+                          compat_mode,
+                          unit_config,
+                          replica_type,
+                          if_not_grant,
+                          is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+                          , root_key
+#endif
+                          ))) {
+    LOG_WARN("failed to init unit config", KR(ret));
+  } else {
+    data_version_ = data_version;
+  }
+
+  return ret;
+}
+
+int TenantServerUnitConfig::init(
+    const uint64_t tenant_id,
+    const uint64_t unit_id,
+    const lib::Worker::CompatMode compat_mode,
+    const share::ObUnitConfig &unit_config,
+    const common::ObReplicaType replica_type,
+    const bool if_not_grant,
+    const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+    , const ObRootKeyResult &root_key
+#endif
+    , const uint64_t data_version
+    , const uint64_t meta_tenant_data_version
+    )
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (0 == data_version || 0 == meta_tenant_data_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid data version", KR(ret), K(tenant_id), KDV(data_version), KDV(meta_tenant_data_version));
+  } else if (OB_FAIL(init(tenant_id,
+                          unit_id,
+                          compat_mode,
+                          unit_config,
+                          replica_type,
+                          if_not_grant,
+                          is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+                          , root_key
+#endif
+                          ))) {
+    LOG_WARN("failed to init unit config", KR(ret));
+  } else {
+    data_version_ = data_version;
+    meta_tenant_data_version_ = meta_tenant_data_version;
+  }
+
   return ret;
 }
 
@@ -8188,7 +8280,8 @@ int ObPrepareServerForAddingServerResult::init(
     const ObZone &zone,
     const int64_t sql_port,
     const share::ObServerInfoInTable::ObBuildVersion &build_version,
-    const share::ObServerMode startup_mode)
+    const share::ObServerMode startup_mode,
+    const bool enable_logservice)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(zone.is_empty() || sql_port <= 0 || build_version.is_empty())) {
@@ -8202,6 +8295,7 @@ int ObPrepareServerForAddingServerResult::init(
     is_server_empty_ = is_server_empty;
     sql_port_ = sql_port;
     startup_mode_ = startup_mode;
+    enable_logservice_ = enable_logservice;
   }
   return ret;
 }
@@ -8225,7 +8319,9 @@ bool ObCheckDeploymentModeArg::is_valid() const
 {
   return ObServerMode::INVALID_MODE != startup_mode_;
 }
-int ObCheckDeploymentModeArg::init(const share::ObServerMode startup_mode)
+int ObCheckDeploymentModeArg::init(
+    const share::ObServerMode startup_mode,
+    const bool enable_logservice)
 {
   int ret = OB_SUCCESS;
   if (ObServerMode::INVALID_MODE == startup_mode) {
@@ -8233,6 +8329,7 @@ int ObCheckDeploymentModeArg::init(const share::ObServerMode startup_mode)
     LOG_WARN("invalid argument", K(ret), K(startup_mode));
   } else {
     startup_mode_ = startup_mode;
+    enable_logservice_ = enable_logservice;
   }
   return ret;
 }
@@ -9235,12 +9332,51 @@ OB_DEF_SERIALIZE_SIZE(ObPrepareSplitRangesRes)
   return len;
 }
 
+bool ObTabletSplitScheduleArg::is_valid() const
+{
+  bool is_valid = (tablet_ids_.count() == tenant_ids_.count())
+      && (tablet_ids_.count() == schedule_time_.count())
+      && tablet_ids_.count() > 0;
+  for (int64_t i = 0; is_valid && i < tablet_ids_.count(); ++i)
+  {
+    is_valid &= (tablet_ids_.at(i).is_valid())
+        && (OB_INVALID_TENANT_ID != tenant_ids_.at(i))
+        && schedule_time_.at(i) > 0;
+  }
+  return is_valid;
+}
+
+int ObTabletSplitScheduleArg::assign(const ObTabletSplitScheduleArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(other));
+  } else if (OB_FAIL(tablet_ids_.assign(other.tablet_ids_))) {
+    LOG_WARN("failed to assign", K(ret), K(other.tablet_ids_));
+  } else if (OB_FAIL(tenant_ids_.assign(other.tenant_ids_))) {
+    LOG_WARN("failed to assign", K(ret), K(other.tenant_ids_));
+  } else if (OB_FAIL(schedule_time_.assign(other.schedule_time_))) {
+    LOG_WARN("failed to assign", K(ret), K(other.schedule_time_));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObTabletSplitScheduleArg, tablet_ids_, tenant_ids_, schedule_time_);
+
+int ObLSTabletSplitScheduleRes::assign(const ObLSTabletSplitScheduleRes &other)
+{
+  int ret = OB_SUCCESS;
+  ret_code_ = other.ret_code_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSTabletSplitScheduleRes, ret_code_);
 bool ObTabletSplitArg::is_valid() const
 {
   bool is_valid = ls_id_.is_valid() && OB_INVALID_ID != table_id_
       && schema_version_ > 0 && task_id_ > 0
       && source_tablet_id_.is_valid() && dest_tablets_id_.count() > 0
-      && compaction_scn_ > 0
       && data_format_version_ > 0 && consumer_group_id_ >= 0
       && split_sstable_type_ >= share::ObSplitSSTableType::SPLIT_BOTH
       && split_sstable_type_ <= share::ObSplitSSTableType::SPLIT_MINOR;
@@ -9384,6 +9520,113 @@ OB_SERIALIZE_MEMBER(ObTabletSplitStartArg, split_info_array_);
 OB_SERIALIZE_MEMBER(ObTabletSplitStartResult, ret_codes_, min_split_start_scn_);
 OB_SERIALIZE_MEMBER(ObTabletSplitFinishArg, split_info_array_);
 OB_SERIALIZE_MEMBER(ObTabletSplitFinishResult, ret_codes_);
+
+bool ObTabletSplitRegisterMdsArg::is_valid() const
+{
+  /*      exec_tenant_id_(common::OB_INVALID_TENANT_ID),*/
+  bool is_valid = OB_INVALID_TENANT_ID != exec_tenant_id_ && !split_info_array_.empty() && OB_INVALID_TENANT_ID != tenant_id_
+      && parallelism_ > 0 && ls_id_.is_valid() && is_tablet_split(task_type_);
+  for (int64_t i = 0; is_valid && i < lob_schema_versions_.count(); ++i) {
+    is_valid = is_valid && lob_schema_versions_.at(i);
+  }
+  for (int64_t i = 0; is_valid && i < split_info_array_.count(); i++) {
+    is_valid = is_valid && split_info_array_.at(i).is_valid();
+  }
+  return is_valid;
+}
+
+int ObTabletSplitRegisterMdsArg::assign(const ObTabletSplitRegisterMdsArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(split_info_array_.assign(other.split_info_array_))) {
+    LOG_WARN("assign tablet split info failed", K(ret));
+  } else if (OB_FAIL(lob_schema_versions_.assign(other.lob_schema_versions_))) {
+    LOG_WARN("assign tablet lob_schema_versions_ failed", K(ret));
+  } else {
+    parallelism_ = other.parallelism_;
+    is_no_logging_ = other.is_no_logging_;
+    tenant_id_ = other.tenant_id_;
+    src_local_index_tablet_count_ = other.src_local_index_tablet_count_;
+    ls_id_ = other.ls_id_;
+    task_type_ = other.task_type_;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObTabletSplitRegisterMdsArg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(this));
+  } else {
+    BASE_SER((, ObDDLArg));
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                is_no_logging_,
+                tenant_id_,
+                src_local_index_tablet_count_,
+                ls_id_,
+                task_type_,
+                lob_schema_versions_,
+                split_info_array_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObTabletSplitRegisterMdsArg)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  BASE_DESER((, ObDDLArg));
+  LST_DO_CODE(OB_UNIS_DECODE,
+              is_no_logging_,
+              tenant_id_,
+              src_local_index_tablet_count_,
+              ls_id_,
+              task_type_,
+              lob_schema_versions_,
+              split_info_array_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTabletSplitRegisterMdsArg)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KPC(this));
+  } else {
+    BASE_ADD_LEN((, ObDDLArg));
+    /*OB_UNIS_ADD_LEN*/
+      LST_DO_CODE(OB_UNIS_ADD_LEN,
+                  is_no_logging_,
+                  tenant_id_,
+                  src_local_index_tablet_count_,
+                  ls_id_,
+                  task_type_,
+                  lob_schema_versions_,
+                  split_info_array_);
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
+
+int ObTabletSplitRegisterMdsResult::assign(const ObTabletSplitRegisterMdsResult &other)
+{
+  ret_code_ = other.ret_code_;
+  return OB_SUCCESS;
+}
+
+OB_SERIALIZE_MEMBER(ObTabletSplitRegisterMdsResult, ret_code_);
 
 int ObFreezeSplitSrcTabletArg::assign(const ObFreezeSplitSrcTabletArg &other)
 {
@@ -11152,6 +11395,36 @@ int64_t ObDetectMasterRsArg::get_cluster_id() const
   return cluster_id_;
 }
 
+OB_SERIALIZE_MEMBER(ObDetectSSlogLSArg, addr_);
+
+int ObDetectSSlogLSArg::assign(const ObDetectSSlogLSArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    addr_ = other.addr_;
+  }
+  return ret;
+}
+
+bool ObDetectSSlogLSArg::is_valid() const
+{
+  return addr_.is_valid();
+}
+
+int ObDetectSSlogLSArg::init(
+    const ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  addr_ = addr;
+  return ret;
+}
+
+void ObDetectSSlogLSArg::reset()
+{
+  addr_.reset();
+}
+
+
 OB_SERIALIZE_MEMBER(ObDetectMasterRsLSResult, role_, master_rs_, replica_, ls_info_);
 ObDetectMasterRsLSResult::ObDetectMasterRsLSResult()
     : role_(ObRole::INVALID_ROLE),
@@ -11254,6 +11527,39 @@ const ObLSReplica &ObDetectMasterRsLSResult::get_replica() const
 const ObLSInfo &ObDetectMasterRsLSResult::get_ls_info() const
 {
   return ls_info_;
+}
+
+OB_SERIALIZE_MEMBER(ObDetectSSlogLSResult, has_sslog_, replica_);
+
+int ObDetectSSlogLSResult::assign(const ObDetectSSlogLSResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(replica_.assign(other.replica_))) {
+    LOG_WARN("fail to assign replica", KR(ret), K(other.replica_));
+  } else {
+    has_sslog_ = other.has_sslog_;
+  }
+  return ret;
+}
+
+int ObDetectSSlogLSResult::init(
+    const bool has_sslog,
+    const share::ObLSReplica &replica)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replica_.assign(replica))) {
+    LOG_WARN("fail to assign replica", KR(ret), K(replica));
+  } else {
+    has_sslog_ = has_sslog;
+  }
+  return ret;
+}
+
+void ObDetectSSlogLSResult::reset()
+{
+  replica_.reset();
+  has_sslog_ = false;
 }
 
 ObBatchBroadcastSchemaArg::ObBatchBroadcastSchemaArg()
@@ -11571,6 +11877,8 @@ OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMicroArg, tenant_id_, tablet_id_);
 OB_SERIALIZE_MEMBER(ObSetSSCkptCompressorArg, tenant_id_, block_type_, compressor_type_);
 OB_SERIALIZE_MEMBER(ObSetSSCacheSizeRatioArg, tenant_id_, micro_cache_size_ratio_, macro_cache_size_ratio_);
+OB_SERIALIZE_MEMBER(ObSSGCLastSuccScnArg, tenant_id_, is_for_sslog_table_);
+OB_SERIALIZE_MEMBER(ObSSGCLastSuccSCNsRes, last_succ_scns_);
 #endif
 
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
@@ -13508,7 +13816,8 @@ int ObNotifyLogServiceAccessPointArg::init(const common::ObString &logservice_ac
   int ret = OB_SUCCESS;
   reset();
   if (OB_FAIL(ob_write_string(allocator_, logservice_access_point, logservice_access_point_))) {
-    LOG_WARN("fail to copy str", KR(ret), K(logservice_access_point));
+    LOG_WARN("fail to copy str", KR(ret), KP(logservice_access_point.ptr()),
+      K(logservice_access_point.length()));
   }
   return ret;
 }

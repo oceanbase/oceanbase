@@ -24,6 +24,7 @@ namespace observer
 {
 
 struct VirtualSSSSTableRow {
+  share::SCN version_;
   int64_t table_type_;
   int64_t start_log_scn_;
   int64_t end_log_scn_;
@@ -41,7 +42,8 @@ struct VirtualSSSSTableRow {
   int64_t rec_scn_;
 
   VirtualSSSSTableRow()
-    : table_type_(0),
+    : version_(),
+      table_type_(0),
       start_log_scn_(0),
       end_log_scn_(0),
       upper_trans_version_(0),
@@ -58,7 +60,7 @@ struct VirtualSSSSTableRow {
       rec_scn_(0)
   { }
 
-  TO_STRING_KV(K(table_type_), K(start_log_scn_), K(end_log_scn_),
+  TO_STRING_KV(K(version_), K(table_type_), K(start_log_scn_), K(end_log_scn_),
                K(upper_trans_version_), K(size_), K(data_block_count_),
                K(index_block_count_), K(linked_block_count_),
                K(nested_offset_), K(nested_offset_), K(nested_size_),
@@ -99,7 +101,8 @@ public:
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int get_primary_key_();
-  int handle_key_range_(ObNewRange &key_range);
+  int get_first_key_(ObNewRange &key_range);
+  int check_rowkey_same_(ObNewRange &key_range);
   int get_next_tablet_();
   int get_next_table_(storage::ObITable *&table);
   int generate_virtual_row_(VirtualSSSSTableRow &row);

@@ -353,11 +353,12 @@ int ObLSRemoveMemberHandler::check_task_exist(
     mock_remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
     param.arg_ = mock_remove_member_arg;
 
+    bool unused_is_emergency = false;
     if (OB_FAIL(mock_remove_member_arg.remove_member_.init(MYADDR, OB_INVALID_TIMESTAMP, REPLICA_TYPE_FULL))) {
       LOG_WARN("failed to init remove_member_", K(ret), K(MYADDR), K(mock_remove_member_arg));
     } else if (OB_FAIL(scheduler->create_dag(&param, exist_dag))) {
       LOG_WARN("failed to create ls remove member dag", K(ret));
-    } else if (OB_FAIL(scheduler->check_dag_exist(exist_dag, is_exist))) {
+    } else if (OB_FAIL(scheduler->check_dag_exist(exist_dag, is_exist, unused_is_emergency))) {
       LOG_WARN("failed to check dag exist", K(ret), KPC(exist_dag));
     }
 

@@ -377,7 +377,8 @@ void DRLSInfo::reset_last_disaster_recovery_ls()
 int DRLSInfo::construct_filtered_ls_info_to_use_(
     const share::ObLSInfo &input_ls_info,
     share::ObLSInfo &output_ls_info,
-    const bool &filter_readonly_replicas_with_flag)
+    const bool &filter_readonly_replicas_with_flag,
+    const bool for_replace)
 {
   int ret = OB_SUCCESS;
   output_ls_info.reset();
@@ -385,15 +386,19 @@ int DRLSInfo::construct_filtered_ls_info_to_use_(
   if (OB_UNLIKELY(!input_ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(input_ls_info));
-  } else if (OB_FAIL(output_ls_info.init(
-                         input_ls_info.get_tenant_id(),
-                         input_ls_info.get_ls_id()))) {
+  } else if (OB_FAIL(output_ls_info.init(input_ls_info.get_tenant_id(), input_ls_info.get_ls_id()))) {
     LOG_WARN("fail to init ls info", KR(ret), K(input_ls_info));
-  } else if (OB_FAIL(input_ls_info.find_leader(leader_replica))) {
-    LOG_WARN("fail to find leader replica in input_ls_info", KR(ret), K(input_ls_info));
-  } else if (OB_ISNULL(leader_replica)) {
-    ret = OB_LEADER_NOT_EXIST;
-    LOG_WARN("no leader in input_ls_info", KR(ret), K(input_ls_info));
+  } else if (!for_replace) {
+    // replace replica task should not check whether there is a leader
+    // when checking replace replica task, the current LS may have no leader.
+    if (OB_FAIL(input_ls_info.find_leader(leader_replica))) {
+      LOG_WARN("fail to find leader replica in input_ls_info", KR(ret), K(input_ls_info));
+    } else if (OB_ISNULL(leader_replica)) {
+      ret = OB_LEADER_NOT_EXIST;
+      LOG_WARN("no leader in input_ls_info", KR(ret), K(input_ls_info));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else {
     uint64_t tenant_id = input_ls_info.get_tenant_id();
     ObLSID ls_id = input_ls_info.get_ls_id();
@@ -406,6 +411,7 @@ int DRLSInfo::construct_filtered_ls_info_to_use_(
         }
       } else if (ls_replica.get_in_learner_list()) {
         if (!filter_readonly_replicas_with_flag) {
+          // for replace replica task, filter_readonly_replicas_with_flag is false.
           if (OB_FAIL(output_ls_info.add_replica(ls_replica))) {
             LOG_WARN("fail to add read only replica to new ls_info", KR(ret), K(ls_replica));
           }
@@ -433,7 +439,8 @@ int DRLSInfo::construct_filtered_ls_info_to_use_(
 int DRLSInfo::build_disaster_ls_info(
     const share::ObLSInfo &ls_info,
     const share::ObLSStatusInfo &ls_status_info,
-    const bool &filter_readonly_replicas_with_flag)
+    const bool &filter_readonly_replicas_with_flag,
+    const bool for_replace)
 {
   int ret = OB_SUCCESS;
 
@@ -449,9 +456,9 @@ int DRLSInfo::build_disaster_ls_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id not match", KR(ret), K(resource_tenant_id_),
              "ls_tenant_id", ls_info.get_tenant_id());
-  } else if (OB_FAIL(construct_filtered_ls_info_to_use_(ls_info, inner_ls_info_, filter_readonly_replicas_with_flag))) {
+  } else if (OB_FAIL(construct_filtered_ls_info_to_use_(ls_info, inner_ls_info_, filter_readonly_replicas_with_flag, for_replace))) {
     LOG_WARN("fail to filter not in member/learner list replicas and learner_with_flag replicas",
-             KR(ret), K(ls_info), K(filter_readonly_replicas_with_flag));
+             KR(ret), K(ls_info), K(filter_readonly_replicas_with_flag), K(for_replace));
   } else if (OB_FAIL(ls_status_info_.assign(ls_status_info))) {
     LOG_WARN("fail to assign ls_status_info", KR(ret));
   } else if (OB_FAIL(sys_schema_guard_.get_tenant_info(

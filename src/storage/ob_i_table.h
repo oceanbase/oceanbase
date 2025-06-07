@@ -164,6 +164,7 @@ public:
     OB_INLINE bool is_tx_ctx_memtable() const { return ObITable::is_tx_ctx_memtable(table_type_); }
     OB_INLINE bool is_lock_memtable() const { return ObITable::is_lock_memtable(table_type_); }
     OB_INLINE bool is_minor_sstable() const { return ObITable::is_minor_sstable(table_type_); }
+	OB_INLINE bool is_multi_version_minor_sstable() const { return ObITable::is_multi_version_minor_sstable(table_type_); }
     OB_INLINE bool is_mini_sstable() const { return ObITable::is_mini_sstable(table_type_); }
     OB_INLINE bool is_major_sstable() const { return ObITable::is_major_sstable(table_type_) || ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_major_or_ddl_merge_sstable() const { return is_major_sstable() || ObITable::is_ddl_merge_sstable(table_type_); }

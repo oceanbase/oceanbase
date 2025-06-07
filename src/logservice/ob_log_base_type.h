@@ -181,6 +181,7 @@ enum ObLogBaseType
   // for sslog uid service
   SSLOG_UID_LOG_BASE_TYPE = 57,
 #endif
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value

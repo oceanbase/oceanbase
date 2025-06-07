@@ -270,7 +270,7 @@ int ObTabletEmptyShellHandler::check_candidate_tablet_(const ObTablet &tablet, b
     mds::TwoPhaseCommitState trans_stat; // will be removed later
     share::SCN trans_version; // will be removed later
 
-    if (OB_FAIL(tablet.get_latest(data, writer, trans_stat, trans_version))) {
+    if (OB_FAIL(tablet.get_latest_tablet_status(data, writer, trans_stat, trans_version))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_SUCCESS;
         STORAGE_LOG(INFO, "tablet status is null, may be create tx is aborted or create user data has not been written",
@@ -290,10 +290,7 @@ int ObTabletEmptyShellHandler::check_candidate_tablet_(const ObTablet &tablet, b
     } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat && data.tablet_status_.is_deleted_for_gc()) {
       STORAGE_LOG(INFO, "delete tx is committed", K(ret), K(ls_id), K(tablet_id), K(trans_stat), K(data));
 
-      if (!is_user_tenant(tenant_id)) {
-        can_become_shell = true;
-        STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(check_tablet_from_deleted_tx_(tablet, data, can_become_shell, need_retry))) {
+      if (OB_FAIL(check_tablet_from_deleted_tx_(tablet, data, can_become_shell, need_retry))) {
         STORAGE_LOG(WARN, "failed to check tablet from deleted tx", K(ret), K(ls_id), K(tablet_id));
       }
     }

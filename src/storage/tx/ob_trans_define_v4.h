@@ -210,11 +210,13 @@ struct ObTxParam
   ObTxAccessMode access_mode_;
   ObTxIsolationLevel isolation_;
   int64_t cluster_id_;
+  bool is_for_sslog_;  // FARM COMPAT WHITELIST
   TO_STRING_KV(K_(cluster_id),
                K_(timeout_us),
                K_(lock_timeout_us),
                K_(access_mode),
-               K_(isolation));
+               K_(isolation),
+               K_(is_for_sslog));
   OB_UNIS_VERSION(1);
 };
 

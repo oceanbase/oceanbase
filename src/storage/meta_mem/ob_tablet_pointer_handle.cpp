@@ -53,7 +53,13 @@ ObTabletPointerHandle::~ObTabletPointerHandle()
 
 ObTabletBasePointer* ObTabletPointerHandle::get_resource_ptr() const
 {
-  return (base_pointer_ == nullptr) ? ObResourceHandle<ObTabletPointer>::get_resource_ptr() : base_pointer_->get_value_ptr();
+  return (base_pointer_ == nullptr) ? static_cast<ObTabletBasePointer *>(ObResourceHandle<ObTabletPointer>::get_resource_ptr())
+                                    : static_cast<ObTabletBasePointer *>(base_pointer_->get_value_ptr());
+}
+
+ObTabletPointer *ObTabletPointerHandle::get_tablet_pointer() const
+{
+  return ObResourceHandle<ObTabletPointer>::get_resource_ptr();
 }
 
 void ObTabletPointerHandle::reset()
@@ -74,7 +80,8 @@ void ObTabletPointerHandle::reset()
     if (OB_FAIL(base_pointer_->dec_ref_cnt(ret_cnt))) {
       STORAGE_LOG(WARN, "fail to decrease handle reference count", K(ret));
     } else if (ret_cnt == 0) {
-      base_pointer_->~ObResourceValueStore<ObTabletBasePointer>();
+      base_pointer_->get_value_ptr()->~ObSSTabletDummyPointer();
+      base_pointer_->~ObResourceValueStore<ObSSTabletDummyPointer>();
       base_pointer_alloc_->free(base_pointer_->get_value_ptr());
     }
     base_pointer_ = nullptr;
@@ -100,6 +107,8 @@ int ObTabletPointerHandle::assign(const ObTabletPointerHandle &other)
   if (this != &other) {
     if (OB_NOT_NULL(other.base_pointer_)) {
       base_pointer_ = other.base_pointer_;
+      base_pointer_alloc_ = other.base_pointer_alloc_;
+      base_pointer_->inc_ref_cnt();
     } else {
       if (OB_FAIL(set(other.ptr_, other.map_))) {
         STORAGE_LOG(WARN, "failed to set member", K(ret), K(other));

@@ -33,7 +33,6 @@ devdeps-abseil-cpp-20211102.0-62024122014.el7.x86_64.rpm
 devdeps-s2geometry-0.10.0-122024122617.el7.x86_64.rpm
 devdeps-icu-69.1-72022112416.el7.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el7.x86_64.rpm
-devdeps-cos-c-sdk-5.0.21-202024080916.el7.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.x86_64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el7.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el7.x86_64.rpm

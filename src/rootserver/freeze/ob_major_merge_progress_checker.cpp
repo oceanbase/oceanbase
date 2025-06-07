@@ -374,6 +374,10 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
     // index table will be pushed into array by data_table
   } else if (ObChecksumValidator::SPECIAL_TABLE_ID == table_id) {
     // do nothing
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_sys_tenant(tenant_id_) && is_shared_storage_sslog_table(table_id)) {
+    // sys tenant __all_sslog_table has no tablet
+#endif
   } else if (OB_FAIL(table_ids_.push_back(table_id))) {
     LOG_WARN("failed to add table id info", KR(ret), K(table_id));
   } else if (OB_FAIL(schema_guard.get_index_schemas_with_data_table_id(

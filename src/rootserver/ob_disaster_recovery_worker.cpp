@@ -1982,6 +1982,7 @@ int ObDRWorker::check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_CHECK_TENANT_COMMON_DR_TASK)
 int ObDRWorker::try_tenant_common_dr_task(
     const uint64_t tenant_id,
     const bool only_for_display,
@@ -1994,6 +1995,8 @@ int ObDRWorker::try_tenant_common_dr_task(
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst operator ptr or sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(ERRSIM_SKIP_CHECK_TENANT_COMMON_DR_TASK)) {
+    LOG_INFO("errsim skip check tenant common dr task");
   } else if (OB_FAIL(check_whether_the_tenant_role_can_exec_dr_(tenant_id))) {
     LOG_INFO("fail to check_whether_the_tenant_role_can_exec_dr_", KR(ret), K(tenant_id));
   } else {
@@ -2040,6 +2043,10 @@ int ObDRWorker::try_ls_disaster_recovery(
     // skip, ls is creating
     LOG_TRACE("ls is creating", K(ls_status_info), K(tenant_id));
   } else {
+    common::ObZone dest_zone; // not used
+    ObServerInfoInTable source_server; // not used
+    palf::LogConfigVersion config_version; // not used
+    bool found_replace_task = false;
     share::ObLSInfo ls_info;
     // this structure is used to generate migrtion/locality alignment/shrink unit tasks
     DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
@@ -2060,10 +2067,17 @@ int ObDRWorker::try_ls_disaster_recovery(
       LOG_WARN("fail to init dr log stream info with flag", KR(ret));
     } else if (OB_FAIL(dr_ls_info_with_flag.build_disaster_ls_info(ls_info, ls_status_info, false/*filter_readonly_replica_with_flag*/))) {
       LOG_WARN("fail to generate dr log stream info with flag", KR(ret), K(ls_info), K(ls_status_info));
+    } else if (!only_for_display
+            && ObRootUtils::is_dr_replace_deployment_mode_match()
+            && OB_FAIL(check_ls_single_replica_dr_tasks(dr_ls_info_with_flag, config_version, source_server, dest_zone, found_replace_task))) {
+      LOG_WARN("fail to try ls single replica task", KR(ret), K(dr_ls_info_with_flag), K(only_for_display));
+    } else if (found_replace_task) {
+      LOG_INFO("LS need generate replace replica task, skip check common task",
+               "tenant_id", dr_ls_info_with_flag.get_tenant_id(), "ls_id", dr_ls_info_with_flag.get_ls_id());
     } else if (OB_FAIL(check_ls_common_dr_tasks_(only_for_display,
-                                               dr_ls_info_without_flag,
-                                               dr_ls_info_with_flag,
-                                               ls_acc_dr_task))) {
+                                                 dr_ls_info_without_flag,
+                                                 dr_ls_info_with_flag,
+                                                 ls_acc_dr_task))) {
       LOG_WARN("fail to try log stream disaster recovery", KR(ret), K(only_for_display));
     } else if (only_for_display || is_zero_row(dr_tasks_.count())) {
       // skip
@@ -2165,6 +2179,8 @@ int ObDRWorker::check_ls_common_dr_tasks_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_CHECK_TENANT_SINGLE_REPLACE_REPLICA_TASK)
+ERRSIM_POINT_DEF(ERRSIM_SKIP_PERSIST_REPLACE_REPLICA_TASK_INTO_INNER_TABLE)
 int ObDRWorker::try_tenant_single_replica_task(
     const uint64_t tenant_id,
     const bool only_for_display,
@@ -2179,6 +2195,8 @@ int ObDRWorker::try_tenant_single_replica_task(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema svr or sql proxy or config_ is null",
               KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_), KP(GCTX.config_));
+  } else if (OB_UNLIKELY(ERRSIM_SKIP_CHECK_TENANT_SINGLE_REPLACE_REPLICA_TASK)) {
+    LOG_INFO("errsim skip check tenant single replace replica task");
   } else if (!GCTX.config_->is_rereplication_enabled()) {
     LOG_TRACE("config_ enable rereplication is false");
   } else {
@@ -2192,14 +2210,28 @@ int ObDRWorker::try_tenant_single_replica_task(
         FREE_DISASTER_RECOVERY_WORKER_TASK_MEMORY
         int64_t ls_acc_dr_task = 0;
         const share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
+        bool found_replace_task = false;
+        common::ObZone dest_zone;
+        ObServerInfoInTable source_server;
+        palf::LogConfigVersion config_version;
         // reasons for using user tenant_id: get the tenant's available resources, meta tenant uses user tenant's unit
-        DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
-        if (OB_TMP_FAIL(build_disaster_ls_info_(ls_status_info_array.at(i), dr_ls_info_without_flag))) {
+        DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
+        if (OB_TMP_FAIL(build_ls_info_for_cross_az_dr(ls_status_info_array.at(i), dr_ls_info_with_flag))) {
           LOG_WARN("fail to init dr log stream info", KR(tmp_ret));
-        } else if (OB_TMP_FAIL(check_ls_single_replica_dr_tasks_(dr_ls_info_without_flag, only_for_display, ls_acc_dr_task))) {
-          LOG_WARN("fail to try ls disaster recovery", KR(tmp_ret), K(dr_ls_info_without_flag));
+        } else if (OB_TMP_FAIL(check_ls_single_replica_dr_tasks(dr_ls_info_with_flag, config_version, source_server, dest_zone, found_replace_task))) {
+          LOG_WARN("fail to check ls single replica tasks", KR(tmp_ret), K(dr_ls_info_with_flag));
+        } else if (found_replace_task && OB_TMP_FAIL(generate_ls_single_replica_dr_tasks_(dr_ls_info_with_flag,
+                                                                                          only_for_display,
+                                                                                          config_version,
+                                                                                          source_server,
+                                                                                          dest_zone,
+                                                                                          ls_acc_dr_task))) {
+          LOG_WARN("fail to check ls single replica tasks", KR(tmp_ret), K(dr_ls_info_with_flag), K(only_for_display),
+                    K(config_version), K(source_server), K(dest_zone));
         } else if (only_for_display || is_zero_row(dr_tasks_.count())) { // skip
           LOG_INFO("skip persist dr_task", K(only_for_display), "task_count", dr_tasks_.count());
+        } else if (OB_UNLIKELY(ERRSIM_SKIP_PERSIST_REPLACE_REPLICA_TASK_INTO_INNER_TABLE)) {
+          LOG_INFO("errsim skip persist replace replica task into inner table");
         } else if (OB_TMP_FAIL(persist_tasks_into_inner_table_(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
           LOG_WARN("fail to do end generated dr tasks", KR(ret), K(tenant_id), K(ls_status_info));
         }
@@ -2211,7 +2243,7 @@ int ObDRWorker::try_tenant_single_replica_task(
   return ret;
 }
 
-int ObDRWorker::build_disaster_ls_info_(
+int ObDRWorker::build_ls_info_for_cross_az_dr(
     const share::ObLSStatusInfo &ls_status_info,
     DRLSInfo &dr_ls_info)
 {
@@ -2228,25 +2260,30 @@ int ObDRWorker::build_disaster_ls_info_(
     LOG_WARN("fail to get log stream info", KR(ret), K(ls_status_info));
   } else if (OB_FAIL(dr_ls_info.init())) {
     LOG_WARN("fail to init dr log stream info", KR(ret));
-  } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(ls_info, ls_status_info, true/*filter_readonly_replica_with_flag*/))) {
+  } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(ls_info, ls_status_info, false/*filter_readonly_replica_with_flag*/, true/*for_replace*/))) {
+    // The read-only replica with the flag is the replica in migration,
+    // filtering this type of replica requires the leader's member list information,
+    // when checking the replace task, the LS may be no leader, and we cannot get the leader information in the LS meta table.
     LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info), K(ls_status_info));
   }
   return ret;
 }
 
-int ObDRWorker::check_ls_single_replica_dr_tasks_(
+int ObDRWorker::check_ls_single_replica_dr_tasks(
     DRLSInfo &dr_ls_info,
-    const bool only_for_display,
-    int64_t &ls_acc_dr_task)
+    palf::LogConfigVersion &config_version,
+    share::ObServerInfoInTable &source_server_info,
+    common::ObZone &dest_zone,
+    bool &found)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  common::ObAddr server;
-  ObServerInfoInTable cur_replica_server;
-  palf::LogConfigVersion config_version;
+  LOG_INFO("start check ls single replica dr task", "tenant_id", dr_ls_info.get_tenant_id(), "ls_id", dr_ls_info.get_ls_id());
+  config_version.reset();
+  source_server_info.reset();
+  dest_zone.reset();
+  found = false;
+  common::ObAddr source_server_addr;
   common::ObMemberList member_list;
-  common::ObZone dest_zone;
-  bool found = false;
   bool pass_check = false;
   const common::ObIArray<share::ObZoneReplicaAttrSet> &cur_locality = dr_ls_info.get_locality();
   if (1 != cur_locality.count()) {
@@ -2262,43 +2299,54 @@ int ObDRWorker::check_ls_single_replica_dr_tasks_(
   } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list, pass_check))) {
     LOG_WARN("failed to check member list", KR(ret), K(member_list));
   } else if (!pass_check) {
-    LOG_INFO("not all server is inactive", K(member_list));
+    LOG_INFO("not all server is inactive or same zone", K(member_list));
   } else if (0 == member_list.get_member_number()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("member list count not 1", KR(ret), K(member_list));
-  } else if (OB_FAIL(member_list.get_server_by_index(0, server))) {
-    LOG_WARN("failed to get server by index", KR(ret), K(server));
-  } else if (OB_FAIL(SVR_TRACER.get_server_info(server, cur_replica_server))) {
-    LOG_WARN("failed to get server info", KR(ret), K(server));
+  } else if (OB_FAIL(member_list.get_server_by_index(0, source_server_addr))) {
+    LOG_WARN("failed to get server by index", KR(ret), K(source_server_addr));
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(source_server_addr, source_server_info))) {
+    LOG_WARN("failed to get server info", KR(ret), K(source_server_addr));
   } else if (OB_FAIL(dest_zone.assign(cur_locality.at(0).zone_))) {
     LOG_WARN("failed to assign zone", KR(ret), K(cur_locality));
-  } else if (cur_replica_server.get_zone() == dest_zone) {
-    LOG_INFO("current replica is same zone with current locality, skip", K(dest_zone), K(cur_replica_server), K(member_list));
+  } else if (source_server_info.get_zone() == dest_zone) {
+    LOG_INFO("current replica is same zone with current locality, skip", K(dest_zone), K(source_server_info), K(member_list));
   } else {
     found = true;
   }
-  if (OB_SUCC(ret) && found) {
-    UnitProvider unit_provider;
-    share::ObUnit dest_unit;
-    const share::ObLSStatusInfo *ls_status_info = nullptr;
-    if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
-      LOG_WARN("fail to init unit provider", KR(ret), K(dr_ls_info));
-    } else if (OB_FAIL(dr_ls_info.get_ls_status_info(ls_status_info))) {
-      LOG_WARN("fail to get log stream status info", KR(ret));
-    } else if (OB_UNLIKELY(nullptr == ls_status_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
-    } else if (OB_TMP_FAIL(unit_provider.allocate_unit(dest_zone, ls_status_info->unit_group_id_, dest_unit))) {
-      // OB_ITER_END
-      LOG_WARN("can not allocate valid unit", KR(tmp_ret), K(dest_zone), K(*ls_status_info));
-    } else if (OB_FAIL(generate_single_replica_task_(only_for_display,
-                                                     config_version,
-                                                     cur_replica_server,
-                                                     dest_unit,
-                                                     dr_ls_info,
-                                                     ls_acc_dr_task))) {
-      LOG_WARN("failed to generate single replica task", KR(ret), K(only_for_display), K(cur_replica_server), K(dest_unit));
-    }
+  return ret;
+}
+
+int ObDRWorker::generate_ls_single_replica_dr_tasks_(
+    DRLSInfo &dr_ls_info,
+    const bool only_for_display,
+    const palf::LogConfigVersion &config_version,
+    const share::ObServerInfoInTable &source_server_info,
+    const common::ObZone &dest_zone,
+    int64_t &ls_acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("generate ls sinle replica task", K(config_version), K(source_server_info), K(dest_zone));
+  UnitProvider unit_provider;
+  share::ObUnit dest_unit;
+  const share::ObLSStatusInfo *ls_status_info = nullptr;
+  if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
+    LOG_WARN("fail to init unit provider", KR(ret), K(dr_ls_info));
+  } else if (OB_FAIL(dr_ls_info.get_ls_status_info(ls_status_info))) {
+    LOG_WARN("fail to get log stream status info", KR(ret));
+  } else if (OB_UNLIKELY(nullptr == ls_status_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
+  } else if (OB_FAIL(unit_provider.allocate_unit(dest_zone, ls_status_info->unit_group_id_, dest_unit))) {
+    LOG_WARN("can not allocate valid unit", KR(ret), K(dest_zone), K(*ls_status_info));
+  } else if (OB_FAIL(generate_single_replica_task_(only_for_display,
+                                                   config_version,
+                                                   source_server_info,
+                                                   dest_unit,
+                                                   dr_ls_info,
+                                                   ls_acc_dr_task))) {
+    LOG_WARN("failed to generate single replica task", KR(ret), K(only_for_display), K(config_version),
+              K(source_server_info), K(dest_unit), K(dr_ls_info));
   }
   return ret;
 }

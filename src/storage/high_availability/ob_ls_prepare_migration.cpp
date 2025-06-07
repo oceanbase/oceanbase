@@ -833,21 +833,6 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   return ret;
 }
 
-int ObStartPrepareMigrationTask::build_tablet_backfill_info_(common::ObArray<ObTabletBackfillInfo> &tablet_infos)
-{
-  int ret = OB_SUCCESS;
-  ObTabletBackfillInfo tablet_info;
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->tablet_id_array_.count(); ++i) {
-    ObTabletID tablet_id = ctx_->tablet_id_array_.at(i);
-    if (OB_FAIL(tablet_info.init(tablet_id, true/*is_committed*/))) {
-      LOG_WARN("failed to init tablet info", K(ret), K(tablet_id));
-    } else if (OB_FAIL(tablet_infos.push_back(tablet_info))) {
-      LOG_WARN("failed to push tablet info into array", K(ret), K(tablet_info));
-    }
-  }
-  return ret;
-}
-
 int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
 {
   int ret = OB_SUCCESS;

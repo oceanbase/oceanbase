@@ -1324,6 +1324,25 @@ int ObBackupStorageInfo::decrypt_access_key_(const char *buf)
 }
 #endif
 
+//***********************ObExternalTableStorageInfo***************************
+int ObExternalTableStorageInfo::set(const char *uri, const char *storage_info)
+{
+  int ret = OB_SUCCESS;
+  common::ObStorageType device_type;
+  // compatible with external table, convert cos to s3.
+  if (OB_FAIL(get_storage_type_from_path_for_external_table(uri, device_type))) {
+    LOG_WARN("failed to get storage from path", K(ret), KPC(this));
+  } else if (OB_FAIL(set(device_type, storage_info))) {
+    LOG_WARN("failed to set storage info", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+ObExternalTableStorageInfo::~ObExternalTableStorageInfo()
+{
+  reset();
+}
+
 ObBackupDest::ObBackupDest()
   : root_path_(NULL),
     storage_info_(NULL),

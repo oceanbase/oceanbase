@@ -2824,6 +2824,9 @@ int ObTenantIOManager::print_io_function_status()
                     avg_device_delay,
                     avg_total_delay);
           LOG_INFO("[IO STATUS FUNCTION]", K_(tenant_id), KCSTRING(io_status));
+          if (REACH_TIME_INTERVAL(10 * 1000L * 1000L) && avg_device_delay > 2 * 1000L * 1000L) { // 2s
+            LOG_ERROR_RET(OB_IO_LIMIT, "Disk IO is too slow.", "mode:%s", mode_str, K(tenant_id_), KCSTRING(io_status));
+          }
         }
       }
     }

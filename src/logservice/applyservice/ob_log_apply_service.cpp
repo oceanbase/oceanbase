@@ -624,6 +624,10 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
       if (is_in_stop_state_) {
         //skip
         CLOG_LOG(WARN, "apply status has been stopped", K(ret), KPC(this));
+      } else if (proposal_id < curr_proposal_id) {
+        // proposal_id can not recede
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "invalid proposal_id", K(end_lsn), K(proposal_id), K(curr_proposal_id), KPC(this));
       } else if (proposal_id == curr_proposal_id && LEADER == role_) {
         if (palf_committed_end_lsn_ > end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
@@ -636,8 +640,7 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
           }
         }
-      } else if ((proposal_id == curr_proposal_id && FOLLOWER == role_)
-                 || proposal_id < curr_proposal_id) {
+      } else if (!GCONF.enable_logservice && proposal_id == curr_proposal_id && FOLLOWER == role_) {
         // apply切为follower之后, 同proposal_id的日志不应该还能滑出
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));

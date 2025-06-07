@@ -782,6 +782,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                              const uint64_t data_format_version,
                                              const ObSSTable *first_ddl_sstable,
                                              const ObStorageSchema *storage_schema,
+                                             const share::SCN &reorganization_scn,
                                              ObWholeDataStoreDesc &data_desc)
 {
   int ret = OB_SUCCESS;
@@ -792,9 +793,11 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   const int64_t cg_idx = table_key.is_column_store_sstable() ? table_key.get_column_group_id() : -1/*negative value means row store*/;
   const SCN end_scn = table_key.get_end_scn();
   const bool micro_index_clustered = tablet.get_tablet_meta().micro_index_clustered_;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0 || OB_ISNULL(storage_schema))) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0
+      || OB_ISNULL(storage_schema) || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version), KP(storage_schema));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version),
+        KP(storage_schema), K(reorganization_scn));
   } else if (cg_idx >= 0) {
     const ObIArray<ObStorageColumnGroupSchema > &cg_schemas = storage_schema->get_column_groups();
     if (cg_idx >= cg_schemas.count()) {
@@ -809,7 +812,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
-                                 tablet.get_transfer_seq(), tablet.get_reorganization_scn(),
+                                 tablet.get_transfer_seq(), reorganization_scn,
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -828,7 +831,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
                                     tablet.get_transfer_seq(),
-                                    tablet.get_reorganization_scn(),
+                                    reorganization_scn,
                                     end_scn))) {
     // use storage schema to init ObDataStoreDesc
     // all cols' default checksum will assigned to 0
@@ -880,6 +883,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
             ddl_param.data_format_version_,
             first_ddl_sstable,
             storage_schema,
+            tablet.get_reorganization_scn(),
             data_desc))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
     } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0).block_meta_->get_meta_val().column_count_)) {

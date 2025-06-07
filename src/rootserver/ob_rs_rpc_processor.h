@@ -547,6 +547,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DO_TABLESPACE_DDL, ObRpcDoTablespaceDDLP, 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_EXECUTE_DDL_TASK, ObRpcExecuteDDLTaskP, execute_ddl_task(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_MAINTAIN_OBJ_DEPENDENCY_INFO, ObRpcMaintainObjDependencyInfoP, maintain_obj_dependency_info(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_MVIEW_COMPLETE_REFRESH, ObRpcMViewCompleteRefreshP, mview_complete_refresh(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REGISTER_SPLIT_INFO_MDS_REQUEST, ObRegisterSplitInfoMdsP, register_split_info_mds(arg_,result_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_REFRESH_CONFIG, ObRpcRefreshConfigP, refresh_config());
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ROOT_MINOR_FREEZE, ObRpcRootMinorFreezeP, root_minor_freeze(arg_));

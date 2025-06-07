@@ -73,6 +73,7 @@ int ObBlockMetaTree::init(ObTablet &tablet,
                                                               data_format_version,
                                                               static_cast<ObSSTable *>(first_ddl_sstable),
                                                               storage_schema,
+                                                              tablet.get_reorganization_scn(),
                                                               data_desc_))) {
     LOG_WARN("prepare data store desc failed", K(ret), K(table_key), K(data_format_version));
   } else {
@@ -1169,8 +1170,8 @@ int ObDDLKV::warmup_index_block(const ObDDLMacroBlock &macro_block)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("micro cache is null", KR(ret));
         } else if (OB_TMP_FAIL(micro_cache->add_micro_block_cache(micro_key, micro_data.buf_,
-                               micro_data.size_, ObSSMicroCacheAccessType::DDL_PREWARM_TYPE))) {
-          LOG_WARN("fail to add micro block cache", KR(tmp_ret), K(micro_key));
+                               micro_data.size_, tablet_id_.id(), ObSSMicroCacheAccessType::DDL_PREWARM_TYPE))) {
+          LOG_WARN("fail to add micro block cache", KR(tmp_ret), K(micro_key), K_(tablet_id));
         }
       }
     }

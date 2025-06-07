@@ -167,7 +167,8 @@ public:
   int build_disaster_ls_info(
       const share::ObLSInfo &ls_info,
       const share::ObLSStatusInfo &ls_status_info,
-      const bool &filter_readonly_replicas_with_flag);
+      const bool &filter_readonly_replicas_with_flag,
+      const bool for_replace = false);
 public:
   const common::ObIArray<share::ObZoneReplicaAttrSet> &get_locality() const {
     return zone_locality_array_;
@@ -233,7 +234,8 @@ private:
   int construct_filtered_ls_info_to_use_(
       const share::ObLSInfo &input_ls_info,
       share::ObLSInfo &output_ls_info,
-      const bool &filter_readonly_replicas_with_flag);
+      const bool &filter_readonly_replicas_with_flag,
+      const bool for_replace);
   // init related private func
   int gather_server_unit_stat();
   int fill_servers();

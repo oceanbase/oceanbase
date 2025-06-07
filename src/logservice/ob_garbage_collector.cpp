@@ -1480,6 +1480,9 @@ void ObGarbageCollector::run1()
         CLOG_LOG(INFO, "Garbage Collector is running", K(seq_), K(gc_interval));
         ObGCCandidateArray gc_candidates;
         gc_candidates.reset();
+        (void)gc_check_ls_migration_failed_(gc_candidates);
+        (void)execute_gc_(gc_candidates);
+        gc_candidates.reset();
         (void)gc_check_member_list_(gc_candidates);
         (void)execute_gc_(gc_candidates);
         gc_candidates.reset();
@@ -1553,6 +1556,53 @@ bool ObGarbageCollector::is_normal_ls_status_(const LSStatus &status)
 bool ObGarbageCollector::is_need_delete_entry_ls_status_(const LSStatus &status)
 {
   return LSStatus::LS_NEED_DELETE_ENTRY == status;
+}
+
+int ObGarbageCollector::gc_check_ls_migration_failed_(ObGCCandidateArray &gc_candidates)
+{
+  int ret = OB_SUCCESS;
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObMigrationStatus migration_status;
+  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    CLOG_LOG(WARN, "get log stream iter failed", K(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "iter is NULL", K(ret), K(iter));
+  } else {
+    ObLS *ls = NULL;
+    int tmp_ret = OB_SUCCESS;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          CLOG_LOG(WARN, "get next log stream failed", K(ret));
+        }
+      } else if (OB_ISNULL(ls)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "log stream is NULL", K(tmp_ret), KP(ls));
+      } else if (OB_UNLIKELY(!ls->is_create_committed())) {
+        CLOG_LOG(INFO, "ls is not committed, just ignore", K(ls));
+      } else if (OB_SUCCESS != (tmp_ret = ls->get_migration_status(migration_status))) {
+        CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), "ls_id", ls->get_ls_id());
+      } else if (!ObMigrationStatusHelper::can_gc_ls_without_member_verification(migration_status)) {
+        // ignore
+      } else {
+        CLOG_LOG(INFO, "ls can gc", "ls_id", ls->get_ls_id(), K(migration_status));
+        GCCandidate candidate;
+        candidate.ls_id_ = ls->get_ls_id();
+        candidate.ls_status_ = LSStatus::LS_NEED_GC;
+        candidate.gc_reason_ = MIGRATION_FAILED;
+        if (OB_SUCCESS != (tmp_ret = gc_candidates.push_back(candidate))) {
+          CLOG_LOG(WARN, "gc_candidates push_back failed", K(tmp_ret), "ls_id", ls->get_ls_id());
+        }
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
 }
 
 int ObGarbageCollector::gc_check_member_list_(ObGCCandidateArray &gc_candidates)

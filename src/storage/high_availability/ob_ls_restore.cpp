@@ -1011,14 +1011,13 @@ int ObStartLSRestoreTask::create_tablet_(
 {
   int ret = OB_SUCCESS;
   ObTablesHandleArray remote_table;
-  ObBatchUpdateTableStoreParam param;
 
   if (!tablet_meta.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create tablet get invalid argument", K(ret), K(tablet_meta), KP(ls));
   } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL, ObTabletCreateThrottlingLevel::SOFT))) {
     LOG_WARN("failed to check create new tablet", K(ret), K(tablet_meta));
-  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta, false /*keep old*/))) {
+  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta))) {
     LOG_WARN("failed to create tablet", K(ret), K(tablet_meta));
   } else {
     LOG_INFO("succeed to create tablet and table store", KPC(ls), K(tablet_meta), K(remote_table));

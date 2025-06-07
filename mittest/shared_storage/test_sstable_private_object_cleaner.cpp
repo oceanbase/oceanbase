@@ -21,7 +21,14 @@
 
 namespace oceanbase
 {
-using namespace common;
+
+namespace common
+{
+bool is_tenant_has_sslog(const uint64_t tenant_id)
+{
+  return false;
+}
+}
 
 namespace blocksstable
 {

@@ -68,10 +68,11 @@ struct ObMicroBlockDataHandle
   { return ObSSTableMicroBlockState::IN_BLOCK_CACHE == block_state_ || ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_; }
   OB_INLINE bool need_multi_io() const
   { return ObSSTableMicroBlockState::NEED_MULTI_IO == block_state_; }
-  TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(micro_info), K_(is_loaded_block),
+  TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(effective_tablet_id), K_(micro_info), K_(is_loaded_block),
                K_(block_state), K_(block_index), K_(cache_handle), K_(io_handle), K_(loaded_block_data), KP_(allocator));
   uint64_t tenant_id_;
   blocksstable::MacroBlockId macro_block_id_;
+  common::ObTabletID effective_tablet_id_;
   int32_t block_state_;
   int32_t block_index_;
   blocksstable::ObMicroBlockInfo micro_info_;
@@ -175,8 +176,11 @@ public:
   ObMicroBlockHandleMgr();
   ~ObMicroBlockHandleMgr();
   void reset();
-  int init(const bool enable_prefetch_limiting, ObTableScanStoreStat& store_stat, ObTableScanStatistic* scan_stat,
-      ObQueryFlag& query_flag);
+  int init(const bool enable_prefetch_limiting,
+           const common::ObTabletID &effective_tablet_id,
+           ObTableScanStoreStat& store_stat,
+           ObTableScanStatistic* scan_stat,
+           ObQueryFlag& query_flag);
   int get_micro_block_handle(
       ObTableAccessContext *access_ctx,
       blocksstable::ObMicroIndexInfo &index_block_info,
@@ -204,8 +208,11 @@ public:
   bool reach_hold_limit() const;
   OB_INLINE bool is_valid() const { return is_inited_; }
   void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us);
+  void set_effective_tablet_id(const common::ObTabletID &effective_tablet_id) { effective_tablet_id_ = effective_tablet_id; }
+  const common::ObTabletID &get_effective_tablet_id() { return effective_tablet_id_; }
   TO_STRING_KV(K_(is_inited), KP_(table_store_stat), KPC_(query_flag),
-               K_(cache_mem_ctrl), KP_(data_block_cache), KP_(index_block_cache));
+               K_(cache_mem_ctrl), KP_(data_block_cache), KP_(index_block_cache),
+               K_(effective_tablet_id));
 private:
   blocksstable::ObDataMicroBlockCache *data_block_cache_;
   blocksstable::ObIndexMicroBlockCache *index_block_cache_;
@@ -214,6 +221,7 @@ private:
   ObQueryFlag *query_flag_;
   ObFIFOAllocator block_io_allocator_;
   ObCacheMemController cache_mem_ctrl_;
+  common::ObTabletID effective_tablet_id_;
   bool is_inited_;
 };
 

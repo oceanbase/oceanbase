@@ -736,6 +736,8 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
     case S3_BAD_REQUEST: {
       if (exception == "InvalidRequest" && err_msg.find("x-amz-checksum") != std::string::npos) {
         ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+      } else if (exception == "InvalidRequest" && err_msg.find("Appid, Bucket") != std::string::npos) {
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
@@ -750,6 +752,8 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       else if (err_msg.find("KeyTooLongError") != std::string::npos
           || err_msg.find("InvalidObjectName") != std::string::npos
           || err_msg.find("InvalidArgument") != std::string::npos) {
+        ob_errcode = OB_INVALID_ARGUMENT;
+      } else if (exception == "InvalidURI") {
         ob_errcode = OB_INVALID_ARGUMENT;
       } else {
         ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;

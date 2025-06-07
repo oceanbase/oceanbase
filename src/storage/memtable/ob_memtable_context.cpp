@@ -603,7 +603,9 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
                   "checksum_replayed", checksum_collapsed,
                   "checksum_before_collapse", replay_checksum,
                   K(checksum_signature), KPC(this));
-        OB_SAFE_ABORT();
+        // TODO(handora.qc): use safe one later
+        // OB_SAFE_ABORT();
+        ob_abort();
       }
     }
   }

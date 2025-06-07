@@ -157,9 +157,9 @@ bool ObMetaDiskAddr::is_valid() const
   switch (type_) {
     case DiskType::FILE:
       ret = file_id_ > 0
-         && (offset_ < ObLogConstants::MAX_LOG_FILE_SIZE)
+         && (offset_ < ObLogConstants::MAX_LOG_FILE_SIZE_IN_HISTORY)
          && size_ > 0
-         && size_ <= ObLogConstants::MAX_LOG_FILE_SIZE;
+         && size_ <= ObLogConstants::MAX_LOG_FILE_SIZE_IN_HISTORY;
       break;
     case DiskType::BLOCK:
     case DiskType::RAW_BLOCK:

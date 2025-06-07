@@ -28,6 +28,7 @@ struct ObBasicScheduleTabletFunc
   ObBasicScheduleTabletFunc(const int64_t merge_version);
   virtual ~ObBasicScheduleTabletFunc() { destroy(); }
   int switch_ls(storage::ObLSHandle &ls_handle);
+  virtual int post_process_ls();
   void destroy();
   const ObLSStatusCache &get_ls_status() const { return ls_status_; }
   ObScheduleTabletCnt &get_schedule_tablet_cnt() { return tablet_cnt_; }
@@ -43,7 +44,7 @@ struct ObBasicScheduleTabletFunc
 protected:
   void update_tenant_cached_status();
   virtual void schedule_freeze_dag(const bool force);
-  int check_with_schedule_scn(
+  virtual int check_with_schedule_scn(
     const storage::ObTablet &tablet,
     const int64_t schedule_scn,
     const ObTabletStatusCache &tablet_status,
@@ -53,6 +54,13 @@ protected:
     const storage::ObTablet &tablet,
     const int64_t schedule_scn,
     bool &need_force_freeze);
+  virtual int schedule_merge_dag(
+    const ObLSID &ls_id,
+    const ObTablet &tablet,
+    const ObMergeType merge_type,
+    const int64_t schedule_scn,
+    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type,
+    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason) = 0;
 protected:
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t SCHEDULE_DAG_THREHOLD = 1000;

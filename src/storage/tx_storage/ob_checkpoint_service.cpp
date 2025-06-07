@@ -403,35 +403,47 @@ public:
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls_id_));
     } else {
+      SCN prev_ss_checkpoint_scn(ObScnRange::MAX_SCN);
       SCN ss_checkpoint_scn(ObScnRange::MAX_SCN);
-      SCN sslog_max_committed_scn(ObScnRange::MAX_SCN);
       LSN ss_checkpoint_lsn;
       PalfBaseInfo palf_meta;
+      SCN transfer_scn;
+      ObLSTransferMetaInfo transfer_meta_info;
 
       // NOTICE!!! : must get ss_rec_scn before get max_committed_meta_scn
       ObSSCheckpointExecutor &ss_ckpt_executor = ls->get_ss_checkpoint_executor();
       if (OB_FAIL(ss_ckpt_executor.get_ss_rec_scn(ss_checkpoint_scn))) {
         STORAGE_LOG(WARN, "get ss rec scn failed", KR(ret), KPC(ls));
+      } else if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id_, ss_ls_meta))) {
+        STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
+      } else if (FALSE_IT(prev_ss_checkpoint_scn = ss_ls_meta.get_ss_checkpoint_scn())) {
+      } else if (prev_ss_checkpoint_scn >= ss_checkpoint_scn) {
+        FLOG_INFO("finish update ss_checkpoint_scn: no need update because pre_ss_checkpoint_scn is larger or equal",
+                  K(ls_id_),
+                  K(prev_ss_checkpoint_scn),
+                  K(ss_checkpoint_scn));
+        ret = OB_SUCCESS;
       } else if (OB_FAIL(ls->get_log_handler()->locate_by_scn_coarsely(ss_checkpoint_scn, ss_checkpoint_lsn))) {
         STORAGE_LOG(WARN, "locate ss_checkpoint_lsn failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(ls_id_, sslog_max_committed_scn))) {
-        STORAGE_LOG(WARN, "get max comiitted meta scn failed", KR(ret), KPC(ls));
       } else if (OB_FAIL(ls->get_palf_base_info(ss_checkpoint_lsn, palf_meta))) {
         STORAGE_LOG(WARN, "get palf base info failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ss_ls_meta.set_ss_ckpt_with_sslog_snapshot(
-                     ss_checkpoint_scn, ss_checkpoint_lsn, sslog_max_committed_scn))) {
+      } else if (OB_FAIL(ls->get_transfer_meta(transfer_scn, transfer_meta_info))) {
+        STORAGE_LOG(WARN, "get transfer meta failed", KR(ret), KPC(ls));
+      } else if (OB_FAIL(ss_ls_meta.set_ss_checkpoint(ss_checkpoint_scn, ss_checkpoint_lsn))) {
         STORAGE_LOG(WARN, "set ss checkpoint failed", KR(ret), KPC(ls));
       } else if (OB_FAIL(ss_ls_meta.set_palf_meta(palf_meta))) {
         STORAGE_LOG(WARN, "set palf meta failed", KR(ret), KPC(ls));
+      } else if (OB_FAIL(ss_ls_meta.set_transfer_meta(transfer_scn, transfer_meta_info))) {
+        STORAGE_LOG(WARN, "set transfer meta failed", KR(ret), KPC(ls));
       } else {
         FLOG_INFO("finish update ss_checkpoint_scn",
                   K(ls_id_),
                   K(ss_checkpoint_scn),
-                  K(sslog_max_committed_scn),
                   K(ss_checkpoint_lsn),
-                  K(palf_meta));
+                  K(palf_meta),
+                  K(transfer_scn),
+                  K(transfer_meta_info));
       }
-
     }
     return ret;
   }
@@ -494,13 +506,32 @@ public:
     int ret = OB_SUCCESS;
     ObSSLSMeta ss_ls_meta;
     if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls.get_ls_id(), ss_ls_meta))) {
-      STORAGE_LOG(ERROR, "get ls meta failed", KR(ret), K(ss_ls_meta));
+      STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
     } else {
-      palf::LSN checkpoint_lsn = ss_ls_meta.get_ss_base_lsn();
-      if (OB_FAIL(ls.get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
-        STORAGE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
+      SCN delay_recycle_checkpoint_scn;
+      LSN ss_clog_recycle_lsn;
+
+      // Delay clog recycling to avoid rebuilding as much as possible
+      const int64_t clog_recycle_delay_time_us =
+          GCONF.server_permanent_offline_time + 30LL * 60LL * 1000LL * 1000LL;  // 30 minutes buffer
+      SCN checkpoint_scn_in_meta = ss_ls_meta.get_ss_checkpoint_scn();
+      int64_t delay_recycle_ts_us = checkpoint_scn_in_meta.convert_to_ts() - clog_recycle_delay_time_us;
+      if (delay_recycle_ts_us < 0) {
+        delay_recycle_ts_us = 0;
+      }
+
+      delay_recycle_checkpoint_scn.convert_from_ts(delay_recycle_ts_us);
+      if (OB_FAIL(ls.get_log_handler()->locate_by_scn_coarsely(delay_recycle_checkpoint_scn, ss_clog_recycle_lsn))) {
+        STORAGE_LOG(WARN, "locate lsn failed", K(ret), K(ss_clog_recycle_lsn));
+      } else if (OB_FAIL(ls.get_log_handler()->advance_base_lsn(ss_clog_recycle_lsn))) {
+        STORAGE_LOG(WARN, "advance base lsn failed", K(ret), K(ss_clog_recycle_lsn));
       } else {
-        FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully", K(checkpoint_lsn), K(ls.get_ls_id()));
+        FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
+                  K(checkpoint_scn_in_meta),
+                  KTIME(delay_recycle_ts_us),
+                  K(delay_recycle_checkpoint_scn),
+                  K(ss_clog_recycle_lsn),
+                  K(ls.get_ls_id()));
       }
     }
 

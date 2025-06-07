@@ -39,6 +39,16 @@ using namespace oceanbase::storage;
 
 static int64_t lease_epoch = 1;
 
+bool is_file_use_sslog(const ObAtomicFileType type, const ObLSID &ls_id)
+{
+  return false;
+}
+
+bool is_meta_use_sslog(const sslog::ObSSLogMetaType type, const ObLSID &ls_id)
+{
+  return false;
+}
+
 void mock_switch_sswriter()
 {
   ATOMIC_INC(&lease_epoch);

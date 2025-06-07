@@ -13,10 +13,16 @@
 #define USING_LOG_PREFIX COMMON
 #include "share/io/ob_io_manager.h"
 #include "share/redolog/ob_log_file_handler.h"
+#include "storage/blocksstable/ob_object_manager.h"
+#include "storage/meta_store/ob_storage_meta_io_util.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_file_manager.h"
+#endif
 
 namespace oceanbase
 {
 using namespace share;
+using namespace blocksstable;
 namespace common
 {
 bool ObNormalRetryWriteParam::match(const int ret_value) const
@@ -86,7 +92,7 @@ void ObLogFileHandler::destroy()
 {
   log_dir_ = nullptr;
   file_id_ = OB_INVALID_FILE_ID;
-  if (io_fd_.is_normal_file()) {
+  if (io_fd_.is_normal_file() && !GCTX.is_shared_storage_mode()) {
     LOCAL_DEVICE_INSTANCE.close(io_fd_);
   }
   io_fd_.reset();
@@ -119,7 +125,8 @@ int ObLogFileHandler::open(const int64_t file_id, const int flag)
 int ObLogFileHandler::close()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_close(io_fd_))) {
+  if (GCTX.is_shared_storage_mode()) { // nothing to do.
+  } else if (OB_FAIL(inner_close(io_fd_))) {
     LOG_WARN("fail to close", K(ret), K_(log_dir), K_(file_id), K_(io_fd));
   } else {
     io_fd_.reset();
@@ -139,6 +146,15 @@ int ObLogFileHandler::exist(const int64_t file_id, bool &is_exist)
     LOG_WARN("invalid file id", K(ret), K(file_id));
   } else if (OB_FAIL(format_file_path(file_path, sizeof(file_path), log_dir_, file_id))) {
     LOG_WARN("fail to format file path", K(ret), K_(log_dir), K(file_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+    blocksstable::ObStorageObjectOpt opt;
+    opt.set_private_slog_opt(tenant_id_, tenant_epoch_id, file_id);
+    if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, 0/*do not need ls_epoch*/, is_exist))) {
+      LOG_WARN("fail to check slog checkpoint file exist", K(ret), K(opt));
+    }
+#endif
   } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.exist(file_path, is_exist))) {
     LOG_WARN("fail to check file exists", K(ret), K(file_path));
   }
@@ -169,7 +185,13 @@ int ObLogFileHandler::write(void *buf, int64_t count, const int64_t offset)
   } else if (OB_ISNULL(buf) || count <= 0 || offset < 0 || offset >= file_size_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(buf), K(count), K(offset), K_(file_size));
-  } else if (OB_FAIL(normal_retry_write(buf, count, offset))) {
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(normal_retry_write_object(buf, count, offset))) {
+      LOG_WARN("fail to write object", K(ret), KP(buf), K(count), K(offset));
+    }
+#endif
+  } else if (OB_FAIL(normal_retry_write_file(buf, count, offset))) {
     LOG_WARN("fail to normal_retry_write", K(ret), KP(buf), K(count), K(offset));
   }
   return ret;
@@ -185,6 +207,18 @@ int ObLogFileHandler::delete_file(const int64_t file_id)
   } else if (OB_UNLIKELY(!is_valid_file_id(file_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid file id", K(ret), K(file_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+    blocksstable::MacroBlockId object_id;
+    blocksstable::ObStorageObjectOpt opt;
+    opt.set_private_slog_opt(tenant_id_, tenant_epoch_id, file_id);
+    if (OB_FAIL(ObObjectManager::ss_get_object_id(opt, object_id))) {
+      LOG_WARN("fail to get slog object id", K(ret), K(opt));
+    } else if (OB_FAIL(ObObjectManager::delete_object(object_id, 0/* needn't ls epoch id */))) {
+      LOG_WARN("fail to delete object", K(ret), K(object_id), K(opt));
+    }
+#endif
   } else if (OB_FAIL(format_file_path(file_path, sizeof(file_path), log_dir_, file_id))) {
     LOG_WARN("fail to format file path", K(ret), K_(log_dir), K(file_id));
   } else if (OB_FAIL(unlink(file_path))) {
@@ -233,7 +267,41 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
   } else if (OB_ISNULL(buf) || size <= 0 || offset < 0 || retry_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments ", K(ret), K(buf), K(size), K(offset), K(retry_cnt));
-  } else if (!io_fd.is_normal_file()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(inner_read_object(offset, size, retry_cnt, buf, read_sz))) {
+      LOG_WARN("fail to inner read object", K(ret), K(file_id_), K(read_sz));
+    }
+#endif
+  } else if (OB_FAIL(inner_read_file(io_fd, offset, size, retry_cnt, buf, read_sz))) {
+    LOG_WARN("fail to inner read file", K(ret), K(read_sz));
+  }
+  if (OB_SUCC(ret) && read_sz == size) {
+    read_size = read_sz;
+    ret = OB_SUCCESS;
+  } else if (OB_DATA_OUT_OF_RANGE == ret) {
+    read_size = read_sz;
+    ret = OB_SUCCESS;
+  } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    LOG_WARN("underlying io memory not enough", K(ret), K(buf), K(read_sz), K(size), K(offset));
+  } else {
+    int tmp_ret = ret;
+    ret = OB_IO_ERROR;
+    LOG_ERROR("fail to read", K(ret), K(tmp_ret), K(buf), K(read_sz), K(size), K(offset), K(errno));
+  }
+  return ret;
+}
+
+int ObLogFileHandler::inner_read_file(
+    const ObIOFd &io_fd,
+    const int64_t offset,
+    const int64_t size,
+    const int64_t retry_cnt,
+    void *buf,
+    int64_t &read_sz)
+{
+  int ret = OB_SUCCESS;
+  if (!io_fd.is_normal_file()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io fd is not normal file", K(ret), K(io_fd));
   } else {
@@ -270,22 +338,58 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       }
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret) && read_sz == size) {
-    read_size = read_sz;
-    ret = OB_SUCCESS;
-  } else if (OB_DATA_OUT_OF_RANGE == ret) {
-    read_size = read_sz;
-    ret = OB_SUCCESS;
-  } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-    LOG_WARN("underlying io memory not enough", K(ret), K(buf), K(read_sz), K(size), K(offset));
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLogFileHandler::inner_read_object(
+    const int64_t offset,
+    const int64_t size,
+    const int64_t retry_cnt,
+    void *buf,
+    int64_t &read_sz)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+  blocksstable::MacroBlockId object_id;
+  blocksstable::ObStorageObjectOpt opt;
+  opt.set_private_slog_opt(tenant_id_, tenant_epoch_id, file_id_);
+  if (OB_FAIL(ObObjectManager::ss_get_object_id(opt, object_id))) {
+    LOG_WARN("fail to get slog object id", K(ret), K(opt));
   } else {
-    int tmp_ret = ret;
-    ret = OB_IO_ERROR;
-    LOG_ERROR("fail to read", K(ret), K(tmp_ret), K(buf), K(read_sz), K(size), K(offset), K(errno));
+    int64_t cnt =0;
+    while (OB_SUCC(ret) && read_sz < size && cnt++ < retry_cnt) {
+      ObStorageObjectReadInfo read_info;
+      read_info.mtl_tenant_id_ = tenant_id_;
+      read_info.macro_block_id_ = object_id;
+      read_info.offset_ = offset + read_sz;
+      read_info.size_ = size - read_sz;
+      read_info.io_desc_.set_mode(ObIOMode::READ);
+      read_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
+      read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+      read_info.buf_ = reinterpret_cast<char*>(buf) + read_sz;
+      read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+
+      ObStorageObjectHandle handle;
+      handle.reset();
+      ret = ObObjectManager::read_object(read_info, handle);
+      if (OB_DATA_OUT_OF_RANGE == ret && handle.get_data_size() < read_info.size_) { // partial read
+        read_sz += handle.get_data_size();
+        break;
+      } else if (OB_SUCCESS != ret) {
+        LOG_WARN("fail to aio_read", K(ret), K(read_info));
+      } else if (handle.get_data_size() > read_info.size_) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("invalid io handle data size", K(ret),
+            "data size", handle.get_data_size(), "left buffer size", read_info.size_);
+      } else {
+        read_sz += handle.get_data_size();
+      }
+    }
   }
   return ret;
 }
+#endif
 
 int ObLogFileHandler::unlink(const char* file_path)
 {
@@ -311,7 +415,7 @@ int ObLogFileHandler::unlink(const char* file_path)
   return ret;
 }
 
-int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset)
+int ObLogFileHandler::normal_retry_write_file(void *buf, int64_t size, int64_t offset)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -359,12 +463,58 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
   return ret;
 }
 
+int ObLogFileHandler::normal_retry_write_object(
+    void *buf,
+    const int64_t size,
+    const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+  blocksstable::ObStorageObjectOpt opt;
+  opt.set_private_slog_opt(tenant_id_, tenant_epoch_id, file_id_);
+  if (OB_ISNULL(buf) || size <= 0 || offset < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments ", K(ret), K(buf), K(size), K(offset));
+  } else {
+    int64_t retry_cnt = 0;
+    do {
+      ObStorageObjectWriteInfo write_info;
+      write_info.mtl_tenant_id_ = tenant_id_;
+      write_info.offset_ = offset;
+      write_info.size_ = size;
+      write_info.io_desc_.set_write();
+      write_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
+      write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+      write_info.buffer_ = reinterpret_cast<char*>(buf);
+      write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+      ObStorageObjectHandle handle;
+      handle.reset();
+      if (OB_FAIL(ObObjectManager::write_object(opt, write_info, handle))) {
+        LOG_WARN("fail to write object", K(ret), K(write_info));
+      }
+      if (OB_FAIL(ret)) {
+        retry_cnt ++;
+        if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
+          LOG_WARN("fail to aio_write", K(ret), K(write_info), K(retry_cnt));
+        } else {
+          ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(SLEEP_TIME_US);
+        }
+      }
+    } while (OB_FAIL(ret));
+  }
+  return ret;
+}
+
 int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t mode, ObIOFd &io_fd)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(file_path) || OB_UNLIKELY(0 == STRLEN(file_path))) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid args", K(ret), K(file_path));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    // nothing to do.
+#endif
   } else {
     const int64_t MAX_RETRY_TIME = 30 * 1000 * 1000;
     const int64_t start_time = ObTimeUtility::fast_current_time();
@@ -424,43 +574,41 @@ int ObLogFileHandler::do_open(const int flag, const int64_t file_id, ObIOFd &io_
   return ret;
 }
 
-int ObLogFileHandler::TmpFileCleaner::func(const dirent *entry)
+int ObLogFileHandler::get_total_used_size(int64_t &using_space) const
 {
   int ret = OB_SUCCESS;
-  char full_path[MAX_PATH_SIZE] = { 0 };
-  int64_t p_ret = 0;
-  if (OB_ISNULL(log_dir_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log dir is null", K(ret), KP_(log_dir));
-  } else if (OB_ISNULL(entry)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(entry));
-  } else if (is_tmp_filename(entry->d_name)) {
-    p_ret = snprintf(full_path, sizeof(full_path), "%s/%s", log_dir_, entry->d_name);
-    if (p_ret < 0 || p_ret >= sizeof(full_path)) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("file name too long", K(ret), K_(log_dir), "d_name", entry->d_name);
-    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.unlink(full_path))) {
-      LOG_WARN("unlink file fail", K(ret), K(full_path));
+  if (!GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(file_group_.get_total_used_size(using_space))) {
+      LOG_WARN("fail to get total used size", K(ret));
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else {
+    const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+    if (OB_FAIL(OB_SERVER_FILE_MGR.get_slog_used_size(tenant_id_, tenant_epoch_id, using_space))) {
+      LOG_WARN("fail to get slog used size", K(ret));
+    }
+#endif
   }
   return ret;
 }
 
-bool ObLogFileHandler::TmpFileCleaner::is_tmp_filename(const char *filename) const
+int ObLogFileHandler::get_file_id_range(int64_t &min_file_id, int64_t &max_file_id)
 {
-  bool b_ret = false;
-  size_t filename_len = 0;
-  static const char *TMP_SUFFIX_STR = ".tmp";
-  static const size_t tmp_suffix_len = STRLEN(TMP_SUFFIX_STR);
-  if (OB_ISNULL(filename)) {
-    b_ret = false;
-  } else if ((filename_len = STRLEN(filename)) < tmp_suffix_len){
-    b_ret = false;
+  int ret = OB_SUCCESS;
+  if (!GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(file_group_.get_file_id_range(min_file_id, max_file_id))) {
+      LOG_WARN("fail to get file id range", K(ret));
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
   } else {
-    b_ret = (0 == STRCMP(filename + filename_len - tmp_suffix_len, TMP_SUFFIX_STR));
+    const int64_t tenant_epoch_id = OB_SERVER_TENANT_ID == tenant_id_ ? 0 : MTL_EPOCH_ID();
+    if (OB_FAIL(OB_SERVER_FILE_MGR.get_slog_id_range(tenant_id_, tenant_epoch_id, min_file_id, max_file_id))) {
+      LOG_WARN("fail to get slog id range", K(ret));
+    }
+#endif
   }
-  return b_ret;
+  return ret;
 }
+
 }
 }

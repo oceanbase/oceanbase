@@ -81,7 +81,7 @@ bool ObTabletTransferInfo::has_transfer_table() const
 void ObTabletTransferInfo::reset_transfer_table()
 {
   has_transfer_table_ = false;
-  //transfer seq, ls id, transfer start scn will not change
+  //transfer seq, ls id, transfer start scn, is transfer out deleted will not change
 }
 
 bool ObTabletTransferInfo::is_transfer_out_deleted() const

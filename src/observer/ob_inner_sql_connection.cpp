@@ -1034,11 +1034,11 @@ common::sqlclient::ObCommonServerConnectionPool *ObInnerSQLConnection::get_commo
   return NULL;
 }
 
-#define GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER                           \
-  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);                              \
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id)) {           \
-    ls_id = SSLOG_LS;                                                         \
-  }                                                                           \
+#define GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER                                                         \
+  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);                                                            \
+  if (GCTX.is_shared_storage_mode() && (is_meta_tenant(tenant_id) || is_sys_tenant(tenant_id))) {           \
+    ls_id = SSLOG_LS;                                                                                       \
+  }                                                                                                         \
 
 template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)

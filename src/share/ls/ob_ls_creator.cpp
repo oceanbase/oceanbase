@@ -362,6 +362,7 @@ int ObLSCreator::construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_i
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_PERSIST_MEMBER_LIST)
 int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
                               ObMember &arbitration_service,
                               const share::ObLSStatusInfo &info,
@@ -390,13 +391,17 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
                                compat_mode, create_with_palf, palf_base_info, member_list, arbitration_service, learner_list))) {
    LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id), K(create_with_palf),
             K(addr), K(paxos_replica_num), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info), K(learner_list));
- } else if (OB_FAIL(persist_ls_member_list_(member_list, arbitration_service, learner_list))) {
+ } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_PERSIST_MEMBER_LIST)) {
+    LOG_INFO("errsim create ls skip persist member list");
+  } else if (OB_FAIL(persist_ls_member_list_(member_list, arbitration_service, learner_list))) {
    LOG_WARN("failed to persist log stream member list", KR(ret),
             K(member_list), K(arbitration_service), K(learner_list));
  }
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)
 int ObLSCreator::process_after_has_member_list_(
     const common::ObMemberList &member_list,
     const common::ObMember &arbitration_service,
@@ -407,12 +412,16 @@ int ObLSCreator::process_after_has_member_list_(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)) {
+    LOG_INFO("errsim create ls skip set member list");
   } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num, learner_list))) {
     LOG_WARN("failed to set member list", KR(ret), K_(id), K_(tenant_id),
         K(member_list), K(arbitration_service), K(paxos_replica_num), K(learner_list));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)) {
+    LOG_INFO("errsim create ls skip update ls status");
   } else {
     //create end
     DEBUG_SYNC(BEFORE_PROCESS_AFTER_HAS_MEMBER_LIST);

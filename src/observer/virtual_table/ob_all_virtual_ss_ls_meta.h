@@ -60,6 +60,12 @@ private:
   int handle_key_range_(ObNewRange &key_range);
   int generate_virtual_row_(VirtualSSLSMetaRow &row);
   int fill_in_row_(const VirtualSSLSMetaRow &row_data, common::ObNewRow *&row);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualSSLSMetaRow &row);
+  int get_virtual_row_remote_(common::sqlclient::ObMySQLResult &res, VirtualSSLSMetaRow &row);
+  int get_virtual_row_remote_(
+    const uint64_t tenant_id,
+    const share::ObLSID ls_id,
+    VirtualSSLSMetaRow &row);
 #endif
 private:
   uint64_t tenant_id_;

@@ -113,7 +113,7 @@ TEST_F(TestWriteTabletSlog, basic)
   ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id, tablet_handle));
   ObTablet *tablet = tablet_handle.get_obj();
   ObTabletCreateDeleteMdsUserData user_data;
-  ASSERT_EQ(OB_SUCCESS, tablet->get_latest_committed(user_data));
+  ASSERT_EQ(OB_SUCCESS, tablet->get_latest_committed_tablet_status(user_data));
   ASSERT_EQ(ObTabletStatus::NORMAL, user_data.tablet_status_.status_);
 
   // persist and transform tablet

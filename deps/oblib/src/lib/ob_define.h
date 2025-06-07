@@ -2111,6 +2111,10 @@ const char *const OB_LOG_ROW_VALUE_PARTIAL_JSON = "partial_json";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_ALL = "partial_all";
 // default duplicate read consistency is strong
 const int64_t OB_DEFAULT_DUPLICATE_READ_CONSISTENCY = 0;
+
+// ss_gc
+const int64_t OB_SS_GC_TASK_TYPE_LENGTH = 32;
+
 // json partial update expr flag
 enum ObJsonPartialUpdateFlag
 {

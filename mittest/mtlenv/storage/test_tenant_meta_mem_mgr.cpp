@@ -1032,7 +1032,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletCreateSSTableParam param;
-  ret = param.init_for_empty_major_sstable(tablet_id, create_tablet_schema, 100, -1, false);
+  ret = param.init_for_empty_major_sstable(tablet_id, create_tablet_schema, 100, -1, false, false);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);

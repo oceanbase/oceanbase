@@ -11113,8 +11113,67 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 11128: __all_virtual_ss_existing_tablet_meta
-# 11129: __all_virtual_ss_existing_sstable_mgr
+def_table_schema(
+  owner = 'beity.lhy',
+  table_name = '__all_virtual_ss_existing_tablet_meta',
+  table_id = '11128',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('transfer_scn', 'int'),
+    ('meta_version', 'int'),
+  ],
+  normal_columns = [
+    ('data_tablet_id', 'int'),
+    ('create_scn', 'int'),
+    ('start_scn', 'int'),
+    ('create_schema_version', 'int'),
+    ('data_checkpoint_scn', 'int'),
+    ('mds_checkpoint_scn', 'int'),
+    ('ddl_checkpoint_scn', 'int'),
+    ('multi_version_start', 'int'),
+    ('tablet_snapshot_version', 'int'),
+  ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+    owner = 'beity.lhy',
+    table_name    = '__all_virtual_ss_existing_sstable_mgr',
+    table_id      = '11129',
+    table_type = 'VIRTUAL_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('ls_id', 'int'),
+      ('tablet_id', 'int'),
+      ('transfer_scn', 'int'),
+      ('meta_version', 'int'),
+      ('table_type', 'int'),
+      ('start_log_scn', 'int'),
+      ('end_log_scn', 'int'),
+    ],
+    in_tenant_space=True,
+    normal_columns = [
+      ('upper_trans_version', 'int'),
+      ('size', 'int'),
+      ('data_block_count', 'int'),
+      ('index_block_count', 'int'),
+      ('linked_block_count', 'int'),
+      ('contain_uncommitted_row', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
+      ('nested_offset', 'int'),
+      ('nested_size', 'int'),
+      ('cg_idx', 'int'),
+      ('data_checksum', 'int'),
+      ('table_flag', 'int'),
+      ('rec_scn', 'int'),
+    ],
+  vtable_route_policy = 'local',
+)
 
 ################################################################
 # INFORMATION SCHEMA
@@ -16498,9 +16557,95 @@ def_table_schema(
   ],
 )
 
-# 12537: __all_virtual_ls_migration_task
-# 12538: __all_virtual_ss_notify_tasks_stat
-# 12539: __all_virtual_ss_notify_tablets_stat
+def_table_schema(
+  owner = 'wangxiaohui.wxh',
+  table_name     = '__all_virtual_ls_migration_task',
+  table_id       = '12537',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('ls_id', 'int'),
+  ('type', 'varchar:OB_SYS_TASK_TYPE_LENGTH'),
+  ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+  ('task_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+  ('priority', 'int'),
+  ('config_version', 'varchar:128'),
+  ('src', 'varchar:MAX_IP_PORT_LENGTH'),
+  ('dst', 'varchar:MAX_IP_PORT_LENGTH'),
+  ('data_src', 'varchar:MAX_IP_PORT_LENGTH'),
+  ('paxos_replica_number', 'int'),
+  ('prioritize_same_zone_src', 'varchar:MAX_BOOL_STR_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'xuwang.txw',
+  table_name     = '__all_virtual_ss_notify_tasks_stat',
+  table_id       = '12538',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns     = [],
+  rowkey_columns = [
+    ('tenant_id',     'int'),
+    ('ls_id',         'int'),
+    ('tablet_id',     'int'),
+    ('id',            'int'),
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('state', 'longtext'),
+    ('type', 'longtext'),
+    ('reorganization_scn', 'int'),
+    ('acquire_sslog_scn', 'int'),
+    ('acquire_aim_ls_scn', 'int'),
+    ('sslog_kv_commit_version', 'int'),
+    ('notify_path', 'longtext'),
+    ('generate_ts', 'timestamp'),
+    ('enqueue_ts', 'timestamp'),
+    ('ready_ts', 'timestamp'),
+    ('consume_ts', 'timestamp'),
+    ('retire_reason', 'longtext'),
+    ('err_ret', 'int'),
+    ('retry_cnt', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'xuwang.txw',
+  table_name     = '__all_virtual_ss_notify_tablets_stat',
+  table_id       = '12539',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+    ('tenant_id',     'int'), # 0
+    ('ls_id',         'int'), # 1
+    ('tablet_id',     'int'), # 2
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('reorganization_scn', 'int'), # 3
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'), # 4
+    ('svr_port', 'int'), # 5
+    ('apply_ss_change_version', 'int'), # 6
+    ('notify_ss_change_version', 'int'), # 7
+    ('applying_ss_change_version', 'int'), # 8
+    ('oldest_ss_change_version', 'int'), # 9
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12540: __all_virtual_balance_job_description
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -16572,6 +16717,60 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12552: __all_virtual_ss_gc_status
 # 12553: __all_virtual_ss_gc_detect_info
 
+def_table_schema(
+  owner = 'bohou.ws',
+  table_name     = '__all_virtual_logservice_cluster_info',
+  table_id       = '12551',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+    ('cluster_id',      'uint'), # 0
+  ],
+  in_tenant_space = False,
+  normal_columns = [
+    ('cluster_version', 'varchar:128'), # 1
+    ('lm_rpc_addr',     'varchar:MAX_IP_ADDR_LENGTH'), # 2
+    ('lm_http_addr',    'varchar:MAX_IP_ADDR_LENGTH'), # 3
+  ],
+)
+
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name     = '__all_virtual_ss_gc_status',
+  table_id       = '12552',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('gc_type', 'varchar:OB_SS_GC_TASK_TYPE_LENGTH'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('last_succ_scn', 'int'),
+    ('extra_info', 'varchar:MAX_VALUE_LENGTH', 'true'),
+  ],
+)
+
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name     = '__all_virtual_ss_gc_detect_info',
+  table_id       = '12553',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id',  'int'),
+    ('transfer_scn', 'int')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('is_collected', 'bool'),
+    ('gc_end_scn', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int')
+  ],
+)
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17127,12 +17326,13 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15512', all_def_ke
 # 15514: idx_objauth_mysql_user_id_real_agent
 # 15515: idx_objauth_mysql_obj_name_real_agent
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15516', all_def_keywords['__tenant_virtual_list_file']))
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15517', all_def_keywords['__all_virtual_ss_tablet_meta'])))
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15518', all_def_keywords['__all_virtual_ss_ls_meta'])))
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15519', all_def_keywords['__all_virtual_ss_sstable_mgr'])))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15517', all_def_keywords['__all_virtual_ss_tablet_meta']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15518', all_def_keywords['__all_virtual_ss_ls_meta']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15519', all_def_keywords['__all_virtual_ss_sstable_mgr']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15520', all_def_keywords['__all_virtual_ss_ls_tablet_reorganization_info']))
-# 15522: __all_virtual_ss_existing_tablet_meta
-# 15523: __all_virtual_ss_existing_sstable_mgr
+# 15521: __all_virtual_tenant_vector_mem_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15522', all_def_keywords['__all_virtual_ss_existing_tablet_meta']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keywords['__all_virtual_ss_existing_sstable_mgr']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -21721,8 +21921,17 @@ SELECT A.TENANT_ID,
        UNIT_NUM,
        COMPATIBLE,
        (CASE
-            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
-            ELSE B.MAX_LS_ID END) AS MAX_LS_ID,
+            WHEN STARTUP_MODE() = 'shared_storage' THEN
+                CASE
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    ELSE B.MAX_LS_ID
+                END
+            ELSE
+                CASE
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
+                    ELSE B.MAX_LS_ID
+                END
+        END) AS MAX_LS_ID,
        (CASE
             WHEN A.TENANT_ID = 1 THEN 'NORMAL'
             WHEN (A.TENANT_ID & 0x1) = 1 THEN 'NORMAL'
@@ -22164,7 +22373,7 @@ def_table_schema(
            ELSE "TRUE" END) AS REBUILD
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
   WHERE
-    TENANT_ID = EFFECTIVE_TENANT_ID() AND TENANT_ID != 1
+    TENANT_ID = EFFECTIVE_TENANT_ID() AND NOT (TENANT_ID = 1 AND LS_ID = 1)
   )
   """.replace("\n", " "),
 )
@@ -22229,7 +22438,7 @@ def_table_schema(
            WHEN 0  THEN "FALSE"
            ELSE "TRUE" END) AS REBUILD
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
-  WHERE TENANT_ID != 1
+  WHERE NOT (TENANT_ID = 1 AND LS_ID = 1)
   )
   """.replace("\n", " "),
 )
@@ -60597,8 +60806,17 @@ SELECT A.TENANT_ID,
        UNIT_NUM,
        COMPATIBLE,
        (CASE
-            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
-            ELSE B.MAX_LS_ID END) AS MAX_LS_ID,
+            WHEN (SELECT STARTUP_MODE() FROM DUAL) = 'shared_storage' THEN
+                CASE
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1001
+                    ELSE B.MAX_LS_ID
+                END
+            ELSE
+                CASE
+                    WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
+                    ELSE B.MAX_LS_ID
+                END
+        END) AS MAX_LS_ID,
        (CASE
             WHEN A.TENANT_ID = 1 THEN 'NORMAL'
             WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 'NORMAL'

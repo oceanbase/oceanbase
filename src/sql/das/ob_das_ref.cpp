@@ -696,7 +696,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
       && OB_NOT_NULL(plan = plan_ctx->get_phy_plan())) {
     need_das_id = !(plan->is_local_plan() && OB_PHY_PLAN_LOCAL == plan->get_location_type());
   }
-  if (need_das_id && OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
+  if (need_das_id && OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id, tablet_loc->ls_id_))) {
     LOG_WARN("get das task id failed", KR(ret));
   } else if (OB_FAIL(das_factory.create_das_task_op(op_type, task_op))) {
     LOG_WARN("create das task op failed", K(ret), KPC(task_op));

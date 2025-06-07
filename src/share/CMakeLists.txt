@@ -343,6 +343,7 @@ ob_set_subtarget(ob_share common_mixed
   sequence/ob_sequence_dml_proxy.cpp
   sequence/ob_sequence_option.cpp
   sequence/ob_sequence_option_builder.cpp
+  shared_storage/ob_ss_local_cache_control_mode.cpp
   system_variable/ob_nls_system_variable.cpp
   system_variable/ob_system_variable.cpp
   system_variable/ob_system_variable_factory.cpp
@@ -463,7 +464,6 @@ ob_set_subtarget(ob_share redolog
   redolog/ob_clog_switch_write_callback.cpp
   redolog/ob_log_file_group.cpp
   redolog/ob_log_file_handler.cpp
-  redolog/ob_log_file_reader.cpp
   redolog/ob_log_policy.cpp
 )
 

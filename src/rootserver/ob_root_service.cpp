@@ -27,6 +27,9 @@
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
 #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
+#endif
 #include "share/backup/ob_backup_config.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 
@@ -68,6 +71,7 @@
 #include "parallel_ddl/ob_create_index_helper.h" // ObCreateIndexHelper
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
+#include "storage/ddl/ob_tablet_split_util.h"
 
 namespace oceanbase
 {
@@ -2125,49 +2129,6 @@ int ObRootService::check_sys_tenant_initial_master_key_valid()
   return ret;
 }
 #endif
-
-int ObRootService::check_config_result(const char *name, const char* value)
-{
-  int ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::current_time();
-  const uint64_t DEFAULT_WAIT_US = 120 * 1000 * 1000L; //120s
-  int64_t timeout = DEFAULT_WAIT_US;
-  if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
-    timeout = MAX(DEFAULT_WAIT_US, THIS_WORKER.get_timeout_remain());
-  }
-  ObSqlString sql;
-  HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-    common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql.assign_fmt("SELECT count(*) as count FROM %s "
-                               "WHERE name = '%s' and value != '%s'",
-                               "__all_virtual_tenant_parameter_stat", name, value))) {
-      LOG_WARN("fail to append sql", K(ret));
-    }
-    while(OB_SUCC(ret) || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret /* remote schema not ready, return -4029 on remote */) {
-      if (ObTimeUtility::current_time() - start > timeout) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("sync config info use too much time", K(ret), K(name), K(value),
-                 "cost_us", ObTimeUtility::current_time() - start);
-      } else {
-        if (OB_FAIL(sql_proxy_.read(res, sql.ptr()))) {
-          LOG_WARN("fail to execute sql", K(ret), K(sql));
-        } else if (NULL == (result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get sql result", K(ret));
-        } else if (OB_FAIL(result->next())) {
-          LOG_WARN("fail to get result", K(ret));
-        } else {
-          int32_t count = OB_INVALID_COUNT;
-          EXTRACT_INT_FIELD_MYSQL(*result, "count", count, int32_t);
-          if (OB_SUCC(ret)) {
-            if (count == 0) { break; }
-          }
-        }
-      }
-    } // while end
-  }
-  return ret;
-}
 
 // DDL exection depends on full_service & major_freeze_done state. the sequence of these two status in bootstrap is:
 // 1.rs do_restart: major_freeze_launcher start
@@ -5287,6 +5248,28 @@ int ObRootService::split_global_index_tablet(const obrpc::ObAlterTableArg &arg)
   return ret;
 }
 
+int ObRootService::register_split_info_mds(const obrpc::ObTabletSplitRegisterMdsArg &arg, obrpc::ObTabletSplitRegisterMdsResult &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret));
+  } else if (!ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("current data version doesn't support to register split info mds", K(ret), K(data_version));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(arg, ddl_service_, res))) {
+    LOG_WARN("ddl_service clean splitted tablet failed", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+
 int ObRootService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -7759,7 +7742,7 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
     ObCheckServerEmptyArg new_arg;
     ObCheckDeploymentModeArg dp_arg;
     // dp_arg.single_zone_deployment_on_ is false
-    if (OB_FAIL(dp_arg.init(GCTX.startup_mode_))) {
+    if (OB_FAIL(dp_arg.init(GCTX.startup_mode_, GCONF.enable_logservice))) {
       LOG_WARN("failed to init dp_arg", KR(ret));
     } else if (OB_FAIL(new_arg.init(ObCheckServerEmptyArg::ADD_SERVER,
                                     sys_data_version, OB_INVALID_ID /* server_id */))) {
@@ -7789,7 +7772,7 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
         LOG_WARN("add server deployment mode mot match not allowed", K(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add server deployment mode not match");
 #ifdef OB_BUILD_TDE_SECURITY
-      } else if (OB_FAIL(server_zone_op_service_.master_key_checking_for_adding_server(
+      } else if (OB_FAIL(server_zone_op_service_.check_master_key_for_adding_server(
             addr,
             arg.zone_,
             wms_in_sync_arg))) {
@@ -9200,6 +9183,11 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // TODO(mingqiao): remove this after restore tenant is supported in shared storage mode
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("restore does not support shared storage mode for now", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "restore tenant in SS mode is");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("in upgrade mode is not allowed", KR(ret));
@@ -10834,6 +10822,11 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_a
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+     // TODO(mingqiao): remove this after backup is supported in SS mode
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup does not support shared storage mode for now", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup in SS mode is");
   } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_database(in_arg))) {
     LOG_WARN("failed to handle backup database", K(ret), K(in_arg));
   }
@@ -11156,7 +11149,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
                         "task_id", arg.task_id_,
                         "tablet_id", arg.tablet_id_,
                         "dag_result", arg.ret_code_,
-                        arg.snapshot_version_);
+                        arg.server_addr_);
   LOG_INFO("finish build ddl single replica response ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
@@ -11495,83 +11488,101 @@ void ObRootService::update_cpu_quota_concurrency_in_memory_()
   }
 }
 
-int ObRootService::set_static_config_after_bootstrap_()
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObRootService::set_logservice_access_point_after_bootstrap_(
+  common::ObArray<ObSetConfigArgAfterBootstrap> &configs,
+  ObSqlString &logservice_access_point_with_quota)
+{
+  int ret = OB_SUCCESS;
+  if (!GCONF.enable_logservice) { // do nothing
+  } else {
+    int64_t out_len = 0;
+    HEAP_VAR(common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN>,
+      logservice_access_point) {
+      if (OB_FAIL(libpalf::LibPalfEnvFFIInstance::get_instance().get_logservice_access_point(
+        logservice_access_point))) {
+        LOG_ERROR("fail to get logservice_access_point from LibPalfEnvFFIInstance", K(ret));
+      } else if (0 == logservice_access_point.size()) {
+        ret = OB_INVALID_CONFIG;
+        LOG_ERROR("logservice_access_point is empty, please check bootstrap stmt", K(ret));
+      } else if (OB_FAIL(logservice_access_point_with_quota.append_fmt("'%s'",
+        logservice_access_point.ptr()))) {
+        LOG_WARN("failed to append_fmt for logservice_access_point", KR(ret));
+      } else if (OB_FAIL(configs.push_back({
+        "logservice_access_point",
+        logservice_access_point_with_quota.ptr()}))) {
+        LOG_WARN("failed to push config for logservice_access_point", KR(ret));
+      } else {
+        LOG_INFO("set logservice_access_point config after bootstrap success");
+      }
+    } else {
+      LOG_WARN("alloc buf of logservice_access_point failed", KR(ret));
+    }
+  }
+  return ret;
+}
+#endif
+
+int ObRootService::set_config_after_bootstrap_()
 {
   // configs will be sent to other servers when set in rs, so there is no need to wait config set
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObSqlString sql;
-  const char* configs[][2] = {
-    {"cpu_quota_concurrency", "10"},
-    {"_use_odps_jni_connector", "true"},
-    {"enable_record_trace_log", "false"},
-    {"_enable_dbms_job_package", "false"},
-    {"_bloom_filter_ratio", "3"},
-    {"_enable_mysql_compatible_dates", "true"},
-    {"_ob_enable_pl_dynamic_stack_check", "true"},
-    {"_system_trig_enabled", "false"},
-  };
-  if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
+  common::ObArray<ObSetConfigArgAfterBootstrap> configs;
+  if (OB_FAIL(configs.push_back({"cpu_quota_concurrency", "10"}))) {
+    LOG_WARN("push cpu_quota_concurrency failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_use_odps_jni_connector", "true"}))) {
+    LOG_WARN("push _use_odps_jni_connector failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"enable_record_trace_log", "false"}))) {
+    LOG_WARN("push enable_record_trace_log failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_enable_dbms_job_package", "false"}))) {
+    LOG_WARN("push _enable_dbms_job_package failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_bloom_filter_ratio", "3"}))) {
+    LOG_WARN("push _bloom_filter_ratio failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_enable_mysql_compatible_dates", "true"}))) {
+    LOG_WARN("push _enable_mysql_compatible_dates failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_ob_enable_pl_dynamic_stack_check", "true"}))) {
+    LOG_WARN("push _ob_enable_pl_dynamic_stack_check failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_system_trig_enabled", "false"}))) {
+    LOG_WARN("push _system_trig_enabled failed", KR(ret));
+  } else {
+    LOG_INFO("push all static configs after bootstrap success");
+  }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  ObSqlString logservice_access_point_with_quota;
+  if (OB_FAIL(ret)) { // do nothing
+  } else if (OB_FAIL(set_logservice_access_point_after_bootstrap_(
+    configs,
+    logservice_access_point_with_quota
+  ))) {
+    LOG_WARN("set logservice_access_point_after_bootstrap_ failed", KR(ret));
+  } else {} // do nothing
+#endif
+  if (OB_FAIL(ret)) { // do nothing
+  } else if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
     LOG_WARN("failed to assign sql string", KR(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(configs); i++) {
-      if (OB_FAIL(sql.append_fmt("%c %s = %s", (i == 0 ? ' ' : ','), configs[i][0], configs[i][1]))) {
-        LOG_WARN("failed to append_fmt", KR(ret), K(sql), K(configs[i][0]), K(configs[i][1]));
+    for (int64_t i = 0; OB_SUCC(ret) && i < configs.size(); i++) {
+      const ObSetConfigArgAfterBootstrap& config = configs[i];
+      if (!config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ObSetConfigArgAfterBootstrap", KR(ret), K(config));
+      } else if (OB_FAIL(sql.append_fmt("%c %s = %s", (i == 0 ? ' ' : ','),
+        config.name_, config.alter_system_set_value_))) {
+        LOG_WARN("failed to append_fmt", KR(ret), K(sql), K(config.name_),
+          K(config.alter_system_set_value_));
       }
     }
     if (FAILEDx(sql_proxy_.write(sql.ptr(), affected_rows))) {
       LOG_WARN("failed to set configs", KR(ret), K(sql));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(configs); i++) {
-        if (OB_FAIL(check_config_result(configs[i][0], configs[i][1]))) {
-          LOG_WARN("failed to check_config_result", KR(ret), K(configs[i][0]), K(configs[i][1]));
-        }
-      }
+      LOG_INFO("set_config_after_bootstrap_ success");
     }
   }
   return ret;
 }
 
-int ObRootService::set_dynamic_config_after_bootstrap_()
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  ObSqlString sql;
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
-  if (!GCONF.enable_logservice) { // do nothing
-  } else if (0 == GCONF.logservice_access_point.size() ||
-    0 == strlen(GCONF.logservice_access_point.str())) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("enable_logservice is true, but logservice_access_point is empty," \
-      "please check bootstrap stmt", K(ret));
-  } else if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
-    LOG_WARN("failed to assign sql string", KR(ret));
-  } else if (OB_FAIL(sql.append_fmt(" logservice_access_point = '%s'",
-    GCONF.logservice_access_point.str()))) {
-    LOG_WARN("failed to append_fmt for logservice_access_point", KR(ret), K(sql),
-      K(GCONF.logservice_access_point));
-  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set config for logservice_access_point", KR(ret), K(sql),
-      K(GCONF.logservice_access_point));
-  } else if (OB_FAIL(check_config_result("logservice_access_point",
-    GCONF.logservice_access_point.str()))) {
-    LOG_WARN("failed to check_config_result for logservice_access_point", KR(ret),
-      K(GCONF.logservice_access_point));
-  } else { } // do nothing
-#endif
-  return ret;
-}
-
-int ObRootService::set_config_after_bootstrap_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(set_static_config_after_bootstrap_())) {
-    LOG_WARN("failed to set static config after bootstrap", KR(ret));
-  } else if (OB_FAIL(set_dynamic_config_after_bootstrap_())) {
-    LOG_WARN("failed to set dynamic config after bootstrap", KR(ret));
-  } else { } // do nothing
-  return ret;
-}
 int ObRootService::wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list)
 {
   int ret = OB_SUCCESS;
@@ -11632,6 +11643,11 @@ int ObRootService::handle_recover_table(const obrpc::ObRecoverTableArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // TODO(mingqiao): remove this after restore tenant is supported in shared storage mode
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("recover table does not support shared storage mode for now", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "recover table in SS mode is");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("recover table in upgrade mode is not allowed", K(ret), K(arg));

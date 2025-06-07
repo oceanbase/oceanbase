@@ -316,7 +316,6 @@ const char *ObObjectStorageInfo::get_checksum_type_str() const
 }
 
 // oss:host=xxxx&access_id=xxx&access_key=xxx
-// cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx
 // s3:host=xxxx&access_id=xxx&access_key=xxx&s3_region=xxx
 // hdfs:krb5conf=xxx&principal=xxx&keytab=xxx&ticket_cache_path=xxx
 int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char *storage_info)
@@ -346,9 +345,6 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
     }
   } else if (OB_FAIL(parse_storage_info_(storage_info, has_needed_extension))) {
     LOG_WARN("parse storage info failed", K(ret), KP(storage_info), K_(device_type));
-  } else if (OB_STORAGE_COS == device_type && !has_needed_extension) {
-    ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid cos info, appid do not allow to be empty", K(ret), K_(extension));
   } else if (OB_FAIL(validate_arguments())) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid arguments after parse storage info", K(ret), KPC(this));
@@ -493,14 +489,6 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
             LOG_INFO("parse bandwidth value", K(buf), K(value));
           }
         }
-      } else if (0 == strncmp(APPID, token, strlen(APPID))) {
-        has_needed_extension = (OB_STORAGE_COS == device_type_);
-        if (OB_UNLIKELY(OB_STORAGE_COS != device_type_)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("only cos protocol can appid", K(ret), K(token), K(device_type_));
-        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
-          LOG_WARN("failed to set appid", K(ret), K(token));
-        }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (OB_STORAGE_FILE == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
@@ -636,12 +624,6 @@ bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type)
       || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
 }
 
-bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type)
-{
-  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
-}
-
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
 {
   return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
@@ -677,10 +659,6 @@ int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
   } else if (OB_UNLIKELY(OB_STORAGE_OSS == device_type_ && !is_oss_supported_checksum(checksum_type_))) {
     ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "not supported checksum type for oss",
-        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
-  } else if (OB_UNLIKELY(OB_STORAGE_COS == device_type_ && !is_cos_supported_checksum(checksum_type_))) {
-    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
-    OB_LOG(WARN, "not supported checksum type for cos",
         K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
   } else if (OB_UNLIKELY(OB_STORAGE_S3 == device_type_ && !is_s3_supported_checksum(checksum_type_))) {
     ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
@@ -732,6 +710,26 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
   MEMCPY(external_id_, storage_info.external_id_, sizeof(external_id_));
   is_assume_role_mode_ = storage_info.is_assume_role_mode_;
   enable_worm_ = storage_info.enable_worm_;
+  return ret;
+}
+
+int ObObjectStorageInfo::clone(
+    common::ObIAllocator &allocator,
+    ObObjectStorageInfo *&storage_info) const
+{
+  int ret = OB_SUCCESS;
+  storage_info = nullptr;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("storage info is invalid", K(ret), KPC(this));
+  } else if (OB_ISNULL(storage_info = OB_NEWx(ObObjectStorageInfo, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObObjectStorageInfo", K(ret), KPC(this));
+  } else if (OB_FAIL(storage_info->ObObjectStorageInfo::assign(*this))) {
+    LOG_WARN("fail to assign storage info", K(ret), KPC(this));
+    OB_DELETEx(ObObjectStorageInfo, &allocator, storage_info);
+    storage_info = nullptr;
+  }
   return ret;
 }
 

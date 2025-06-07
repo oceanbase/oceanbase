@@ -19,7 +19,9 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "observer/ob_server_event_history_table_operator.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
+#endif
 namespace oceanbase
 {
 using namespace share;
@@ -1740,9 +1742,7 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     co_merge_ctx_ = NEW_CTX(ObCOTabletMergeCtx);
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (is_output_exec_mode(basic_param_.exec_mode_)) {
-    co_merge_ctx_ = NEW_CTX(ObCOTabletOutputMergeCtx);
-  } else if (is_calc_ckm_exec_mode(basic_param_.exec_mode_)) {
-    co_merge_ctx_ = NEW_CTX(ObCOTabletValidateMergeCtx);
+    co_merge_ctx_ = NEW_CTX(ObSSCOTabletMergeCtx);
 #endif
   } else {
     ret = OB_ERR_UNEXPECTED;

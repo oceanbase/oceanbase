@@ -729,7 +729,8 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
     const bool is_mv_refresh_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
-    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type) const
+    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason) const
 {
   int ret = OB_SUCCESS;
   DLIST_FOREACH_X(info, get_list(), OB_SUCC(ret)) {
@@ -742,6 +743,7 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
         co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(info->co_major_merge_type_);
+        merge_reason = (ObAdaptiveMergePolicy::AdaptiveMergeReason)info->medium_merge_reason_;
       }
       break; // found one unfinish medium info, loop end
     }

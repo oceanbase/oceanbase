@@ -316,6 +316,7 @@
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
+#include "ob_expr_startup_mode.h"
 #include "ob_expr_zipf.h"
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
@@ -1401,7 +1402,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
   ObExprCheckLocationAccess::eval_check_location_access,               /* 849 */
   ObExprUDF::eval_external_udf,                                        /* 850 */
-  NULL,// ObExprStartUpMode::eval_startup_mode,                        /* 851 */
+  ObExprStartUpMode::eval_startup_mode,                                /* 851 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -1,6 +1,6 @@
 storage_unittest(test_tmp_file)
 storage_unittest(test_tmp_file_meta_tree)
-storage_unittest(test_tmp_file_block_manager)
+#storage_unittest(test_tmp_file_block_manager)
 storage_unittest(test_bunch_comp_tmp_file)
 storage_unittest(test_tmp_file_write_cache)
 storage_unittest(test_tmp_file_write_cache_page_array)

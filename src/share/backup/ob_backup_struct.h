@@ -925,13 +925,26 @@ public:
   int get_authorization_info(char *authorization, const int64_t length) const;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
 
-private:
+protected:
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
   virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
+};
+
+
+// After removing the cos c sdk, since external table still have the need to access the driver using cos://,
+// this class is specifically provided to convert cos:// to s3://.
+class ObExternalTableStorageInfo : public ObBackupStorageInfo
+{
+public:
+  using ObBackupStorageInfo::set;
+public:
+  ObExternalTableStorageInfo() {}
+  virtual ~ObExternalTableStorageInfo();
+  virtual int set(const char *uri, const char *storage_info) override;
 };
 
 class ObBackupDest final

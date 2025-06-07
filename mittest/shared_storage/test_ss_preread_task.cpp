@@ -118,6 +118,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     ObSSObjectStorageWriter object_storage_writer;
     ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_info_, write_object_handle));
     ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+    // Note: TMP_FILE has no effective_tablet_id
     ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.push_file_id_to_lru(macro_ids[i]));
   }
 
@@ -211,7 +212,7 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   // read file from object storage
-  ObPreReadFileMeta file_meta(file_id, 0);
+  ObPreReadFileMeta file_meta(file_id, ObTabletID(ObTabletID::INVALID_TABLET_ID), 0);
   ObSSPreReadEntry preread_entry(preread_task.allocator_);
   ASSERT_EQ(OB_SUCCESS, preread_entry.init(file_meta));
   ASSERT_EQ(OB_SUCCESS, preread_task.do_async_read_segment_file(preread_entry));

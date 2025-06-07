@@ -23,7 +23,6 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_private_block_gc_task.h"
-#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
 #endif
 

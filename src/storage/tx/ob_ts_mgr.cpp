@@ -484,7 +484,10 @@ void ObTsMgr::run1()
     ts_source_info_map_.for_each(get_obsolete_tenant_functor);
     for (int64_t i = 0; i < ids.count(); i++) {
       const uint64_t tenant_id = ids.at(i);
-      MTL_SWITCH(tenant_id) {
+      const bool is_sslog_gts = is_sslog_gts_tenant_id(tenant_id);
+      const uint64_t real_tenant_id = !is_sslog_gts
+                                      ? tenant_id : get_sslog_gts_tenant_id(tenant_id);
+      MTL_SWITCH(real_tenant_id) {
         TRANS_LOG(WARN, "gts is not used for a long time", K(tenant_id));
       } else {
         if (OB_TENANT_NOT_IN_SERVER == ret) {
@@ -929,6 +932,8 @@ int ObTsMgr::get_gts_sync(const uint64_t tenant_id,
     } else if (OB_ISNULL(ts_source = ts_source_info->get_gts_source())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "ts source is NULL", K(ret));
+    } else if (is_sslog_gts_tenant_id(tenant_id)) {
+      fall_back_to_sleep = true;
     } else if (OB_SUCC(ObTsSyncGetTsCbTaskPool::get_instance().get_task(stc, tenant_id, task))) {
       bool need_recycle_task = true;
       if (OB_FAIL(ts_source->get_gts(stc, task, gts_result, receive_gts_ts))) {
@@ -950,7 +955,11 @@ int ObTsMgr::get_gts_sync(const uint64_t tenant_id,
       fall_back_to_sleep = true;
     }
     if (fall_back_to_sleep) {
-      TRANS_LOG(WARN, "failed to get ObTsSyncGetTsCbTask, fall back to sleep", K(ret));
+      if (!is_sslog_gts_tenant_id(tenant_id)) {
+        TRANS_LOG(WARN, "failed to get ObTsSyncGetTsCbTask, fall back to sleep", K(ret));
+      } else {
+        TRANS_LOG(INFO, "get gts sync for sslog", K(ret));
+      }
       int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
       int retry_times = 0;
       const int64_t SLEEP_TIME_US = 500;

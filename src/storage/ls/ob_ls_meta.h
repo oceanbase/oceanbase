@@ -117,6 +117,9 @@ public:
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
   int check_ls_need_online(bool &need_online) const;
+  int get_transfer_meta(
+      share::SCN &transfer_scn,
+      ObLSTransferMetaInfo &transfer_meta_info) const;
   int set_transfer_meta_info(
       const share::SCN &replay_scn,
       const share::ObLSID &src_ls,

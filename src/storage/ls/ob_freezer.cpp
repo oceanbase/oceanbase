@@ -809,22 +809,24 @@ void ObFreezer::async_tablet_freeze_consumer(const int64_t trace_id)
 
 void ObFreezer::try_freeze_tx_data_()
 {
-  int ret = OB_SUCCESS;
-  const int64_t MAX_RETRY_DURATION = 1LL * 1000LL * 1000LL;  // 1 seconds
-  int64_t retry_times = 0;
-  int64_t start_freeze_ts = ObClockGenerator::getClock();
-  do {
-    if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
-      if (OB_EAGAIN == ret) {
-        // sleep 100ms and retry
-        retry_times++;
-        ob_throttle_usleep(100LL * 1000LL, ret, ls_->get_ls_id().id());
-      } else {
-        STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
+  if (is_user_tenant(MTL_ID())) {
+    int ret = OB_SUCCESS;
+    const int64_t MAX_RETRY_DURATION = 1LL * 1000LL * 1000LL;  // 1 seconds
+    int64_t retry_times = 0;
+    int64_t start_freeze_ts = ObClockGenerator::getClock();
+    do {
+      if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
+        if (OB_EAGAIN == ret) {
+          // sleep 100ms and retry
+          retry_times++;
+          ob_throttle_usleep(100LL * 1000LL, ret, ls_->get_ls_id().id());
+        } else {
+          STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
+        }
       }
-    }
-  } while (OB_EAGAIN == ret && ObClockGenerator::getClock() - start_freeze_ts < MAX_RETRY_DURATION);
-  STORAGE_LOG(INFO, "freeze tx data after logstream freeze", KR(ret), K(retry_times), KTIME(start_freeze_ts));
+    } while (OB_EAGAIN == ret && ObClockGenerator::getClock() - start_freeze_ts < MAX_RETRY_DURATION);
+    STORAGE_LOG(INFO, "freeze tx data after logstream freeze", KR(ret), K(retry_times), KTIME(start_freeze_ts));
+  }
 }
 
 // must be used under the protection of ls_lock
@@ -1153,9 +1155,10 @@ int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
     ObProtectedMemtableMgrHandle *protected_handle = NULL;
     ObTabletMiniMergeDag tmp_mini_dag;
     bool is_exist = false;
+    bool unused_is_emergency = false;
     if (OB_FAIL(tmp_mini_dag.init_by_param(&param))) {
       LOG_WARN("failed to init mini dag", K(ret), K(param));
-    } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(&tmp_mini_dag, is_exist))) {
+    } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(&tmp_mini_dag, is_exist, unused_is_emergency))) {
       LOG_WARN("failed to check dag exists", K(ret), K(ls_id), K(tablet_id));
     } else if (is_exist) {
       // we need to wait the current mini compaction dag to complete

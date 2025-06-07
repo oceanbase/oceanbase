@@ -17,6 +17,8 @@
 #include "share/ob_primary_zone_util.h"           // ObPrimaryZoneUtil
 #include "share/ob_zone_table_operation.h"
 #include "rootserver/ob_tenant_balance_service.h"    // for ObTenantBalanceService
+#include "rootserver/ob_table_creator.h"                    // for ObTableCreator
+#include "share/inner_table/ob_sslog_table_schema.h"        // for ObSSlogTableSchema
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::share;
@@ -1311,7 +1313,7 @@ int ObLocalityCheckHelp::check_replace_locality_valid(
   } else if (pre_zone == cur_zone) {
     // skip, same zone
     LOG_INFO("the zones are not different", K(pre_zone), K(cur_zone));
-  } else if (!ObRootUtils::if_deployment_mode_match()) {
+  } else if (!ObRootUtils::is_dr_replace_deployment_mode_match()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Not in shared storage and log service mode, single zone locality replacement is");
     FLOG_WARN("not in logservice or ss mode", KR(ret));
@@ -1428,6 +1430,9 @@ int ObLocalityCheckHelp::check_alter_locality_valid(
           } else {
             passed = false;
           }
+        } else if (2 == pre_paxos_num && 1 == remove_task_num) {
+          // special process: enable locality's paxos member 2 -> 1
+          LOG_INFO("support locality from 2F to 1F", KR(ret));
         } else if (cur_paxos_num >= majority(pre_paxos_num)) {
           // passed
         } else  if (OB_FAIL(message_to_user.assign("violate locality principal"))) {
@@ -1526,8 +1531,62 @@ int ObLocalityCheckHelp::check_alter_single_zone_locality_valid(
   return ret;
 }
 
+int ObRootUtils::create_sslog_tablet(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("start creating sslog table", K(tenant_id));
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is NULL", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    ObMySQLTransaction trans;
+    ObTableSchema table_schema;
+    ObTableCreator table_creator(tenant_id, SCN::base_scn(), trans);
+    common::ObArray<const share::schema::ObTableSchema*> table_schema_ptrs;
+    common::ObArray<share::ObLSID> ls_id_array;
+    common::ObArray<bool> need_create_empty_majors;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start trans", KR(ret));
+    } else if (OB_FAIL(table_creator.init(false))) {
+      LOG_WARN("fail to init tablet creator", KR(ret));
+    } else if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
+      LOG_WARN("fail to get schema", KR(ret));
+    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
+      LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(table_schema_ptrs.push_back(&table_schema))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(ls_id_array.push_back(SSLOG_LS))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
+                                table_schema_ptrs,
+                                ls_id_array,
+                                DATA_CURRENT_VERSION,
+                                need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+      LOG_WARN("fail to add create tablet arg", KR(ret));
+    } else if (OB_FAIL(table_creator.execute())) {
+      LOG_WARN("execute create partition failed", K(ret));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      bool commit = OB_SUCC(ret);
+      if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        LOG_WARN("trans end failed", K(commit), K(temp_ret));
+      }
+    }
+  }
+  FLOG_INFO("finish creating sslog table", KR(ret), K(tenant_id));
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_SKIP_CHECK_SHARED_STORAGE_AND_LOG_SERVICE_MODE);
-bool ObRootUtils::if_deployment_mode_match()
+bool ObRootUtils::is_dr_replace_deployment_mode_match()
 {
   bool deployment_mode_match = true;
   if (OB_UNLIKELY(ERRSIM_SKIP_CHECK_SHARED_STORAGE_AND_LOG_SERVICE_MODE)) {

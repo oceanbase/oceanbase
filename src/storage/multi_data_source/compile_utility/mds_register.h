@@ -83,6 +83,8 @@
   #include "src/storage/truncate_info/ob_truncate_info_mds_helper.h"
   #include "src/storage/mview/ob_mview_mds.h"
   #include "src/storage/tablet/ob_tablet_ddl_complete_mds_data.h"
+  #include "src/storage/tablet/ob_tablet_split_info_mds_helper.h"
+  #include "src/storage/tablet/ob_tablet_split_info_mds_user_data.h"
 #endif
 /**************************************************************************************************/
 
@@ -219,10 +221,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                         ::oceanbase::storage::mds::MdsCtx,\
   //                                         41,\
   //                                         DDL_COMPLETE_MDS)
-  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletSplitInfoMdsHelper,\
-  //                                         ::oceanbase::storage::mds::MdsCtx,\
-  //                                         42,\
-  //                                         TABLET_SPLIT_INFO)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletSplitInfoMdsHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          42,\
+                                          TABLET_SPLIT_INFO)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -300,9 +302,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
                     false)
-//GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
-//                  ::oceanbase::storage::ObTabletSplitInfoMdsUserData,\
-//                  false)
+  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+                    ::oceanbase::storage::ObTabletSplitInfoMdsUserData,\
+                    false)
   // # 余留位置（此行之前占位）
 #endif
 

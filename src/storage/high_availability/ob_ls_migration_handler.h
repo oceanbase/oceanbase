@@ -68,6 +68,7 @@ public:
       const ObLSMigrationHandlerStatus &curr_status,
       const int32_t result,
       ObLSMigrationHandlerStatus &next_status);
+  static const char *get_status_str(const ObLSMigrationHandlerStatus &status);
 };
 
 struct ObLSMigrationTask
@@ -107,6 +108,10 @@ public:
   bool is_cancel() const;
   bool is_complete() const;
   int set_result(const int32_t result);
+  int get_migration_task_and_handler_status(
+      ObLSMigrationTask &task,
+      ObLSMigrationHandlerStatus &status);
+
 private:
   void reuse_();
   void wakeup_();

@@ -26,6 +26,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+  class ObTabletID;
+}
 namespace storage
 {
 class ObMicroBlockDataHandle;
@@ -409,6 +413,7 @@ public:
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
       const bool use_cache,
+      const common::ObTabletID &effective_tablet_id,
       ObStorageObjectHandle &macro_handle,
       ObIAllocator *allocator,
       const bool is_preread = false);
@@ -417,6 +422,7 @@ public:
       const ObMicroBlockDesMeta &des_meta,
       const ObLogicMicroBlockId &logic_micro_id,
       const int64_t data_checksum,
+      const common::ObTabletID &effective_tablet_id,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) = 0;
@@ -450,6 +456,7 @@ protected:
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
+      const common::ObTabletID &effective_tablet_id,
       ObStorageObjectHandle &macro_handle,
       ObIMicroBlockIOCallback &callback,
       const bool is_preread = false);
@@ -458,6 +465,7 @@ protected:
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const bool use_cache,
+      const common::ObTabletID &effective_tablet_id,
       ObStorageObjectHandle &macro_handle,
       ObIMicroBlockIOCallback &callback);
 private:
@@ -479,12 +487,14 @@ public:
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const bool use_cache,
+      const common::ObTabletID &effective_tablet_id,
       ObStorageObjectHandle &macro_handle);
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
       const ObLogicMicroBlockId &logic_micro_id,
       const int64_t data_checksum,
+      const common::ObTabletID &effective_tablet_id,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
@@ -535,6 +545,7 @@ public:
       const ObMicroBlockDesMeta &des_meta,
       const ObLogicMicroBlockId &logic_micro_id,
       const int64_t data_checksum,
+      const common::ObTabletID &effective_tablet_id,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;

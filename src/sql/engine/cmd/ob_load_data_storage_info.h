@@ -38,11 +38,10 @@ public:
   DECLARE_ENUM(Type, type, LOAD_DATA_FORMAT_DEF, static);
 };
 
-class ObLoadDataStorageInfo : public share::ObBackupStorageInfo
+class ObLoadDataStorageInfo : public share::ObExternalTableStorageInfo
 {
 public:
-  using common::ObObjectStorageInfo::set;
-
+  using share::ObExternalTableStorageInfo::set;
 public:
   ObLoadDataStorageInfo();
   virtual ~ObLoadDataStorageInfo();

@@ -445,6 +445,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_server_storage.cpp
   virtual_table/ob_all_virtual_sswriter_group_stat.cpp
   virtual_table/ob_all_virtual_sswriter_lease_mgr.cpp
+  virtual_table/ob_all_virtual_ss_notify_tasks_stat.cpp
+  virtual_table/ob_all_virtual_ss_notify_tablets_stat.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
   virtual_table/ob_all_virtual_tablet_compaction_progress.cpp
   virtual_table/ob_all_virtual_io_status.cpp
@@ -466,6 +468,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp
   virtual_table/ob_gv_sql_audit.cpp
@@ -570,11 +573,16 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_tablet_meta.cpp
   virtual_table/ob_all_virtual_ss_ls_meta.cpp
   virtual_table/ob_all_virtual_ss_sstable_mgr.cpp
+  virtual_table/ob_all_virtual_ss_existing_tablet_meta.cpp
+  virtual_table/ob_all_virtual_ss_existing_sstable_mgr.cpp
   virtual_table/ob_all_virtual_dynamic_partition_table.cpp
   virtual_table/ob_all_virtual_storage_cache_task.cpp
   virtual_table/ob_all_virtual_tablet_local_cache.cpp
   virtual_table/ob_tenant_show_catalog_databases.cpp
   virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.cpp
+  virtual_table/ob_all_virtual_logservice_cluster_info.cpp
+  virtual_table/ob_all_virtual_ss_gc_status.cpp
+  virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
 )
 
 ob_server_add_target(ob_server)

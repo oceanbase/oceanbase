@@ -67,6 +67,7 @@ namespace sql {
   class ObPsCache;
   class ObAuditLogger;
   class ObAuditLogUpdater;
+  class ObPCachedExternalFileService;
   class ObExternalDataAccessMgr;
 }
 namespace blocksstable {
@@ -111,10 +112,9 @@ class ObTenantMdsService;
   class ObTenantDiskSpaceManager;
   class ObTenantFileManager;
   class ObSSMacroCacheMgr;
-  class ObSSMicroCachePrewarmService;
+  class ObSSLocalCachePrewarmService;
   class ObSSMicroCache;
   class ObSSLocalCacheService;
-  class ObPublicBlockGCService;
   class ObSSWriterService;
   class ObAtomicFileMgr;
   class ObSSMetaService;
@@ -124,7 +124,7 @@ class ObTenantMdsService;
 #endif
   class ObGlobalIteratorPool;
   class ObInnerTabletAccessService;
-  class ObMemberTableService;
+  class ObTabletReorgInfoTableService;
 } // namespace storage
 
 namespace transaction {
@@ -141,6 +141,11 @@ namespace transaction {
   namespace tablelock {
     class ObTableLockService;
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  class ObSSLogGTSService;
+  class ObSSLogUIDService;
+#else
+#endif
 }
 namespace concurrency_control {
   class ObMultiVersionGarbageCollector; // MVCC GC
@@ -268,6 +273,9 @@ class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObTabletSplitTaskCache;
+#endif
 namespace schema
 {
   class ObTenantSchemaService;
@@ -295,30 +303,31 @@ namespace detector
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
 #define SSMacroCacheMgr storage::ObSSMacroCacheMgr*,
-#define SSMicroCachePrewarmService storage::ObSSMicroCachePrewarmService*,
+#define SSLocalCachePrewarmService storage::ObSSLocalCachePrewarmService*,
 #define SSMicroCache storage::ObSSMicroCache*,
 #define SSLocalCacheService storage::ObSSLocalCacheService*,
 #define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
-#define PublicBlockGCService storage::ObPublicBlockGCService*,
 #define SSWriterService storage::ObSSWriterService*,
 #define AtomicFileMgr storage::ObAtomicFileMgr*,
 #define SSMetaService storage::ObSSMetaService*,
 #define SSGarbageCollectorService storage::ObSSGarbageCollectorService*,
 #define OBSSLOGNOTIFYSERVICE sslog::ObSSLogNotifyService*,
 #define StorageCachePolicyService storage::ObStorageCachePolicyService*,
+#define SSLogGTSService transaction::ObSSLogGTSService*,
+#define SSLogUIDService transaction::ObSSLogUIDService*,
+#define TabletSplitTaskCache share::ObTabletSplitTaskCache*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
 #define SSMacroCacheMgr
-#define SSMicroCachePrewarmService
+#define SSLocalCachePrewarmService
 #define SSMicroCache
 #define SSLocalCacheService
 #define TenantCompactionObjMgr
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
-#define PublicBlockGCService
 #define SSWriterService
 #define AtomicFileMgr
 #define SharedSSTableService
@@ -326,6 +335,9 @@ namespace detector
 #define SSGarbageCollectorService
 #define OBSSLOGNOTIFYSERVICE
 #define StorageCachePolicyService
+#define SSLogGTSService
+#define SSLogUIDService
+#define TabletSplitTaskCache
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -356,7 +368,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantFileManager                              \
       SSMacroCacheMgr                                \
       SSMicroCache                                   \
-      SSMicroCachePrewarmService                     \
+      SSLocalCachePrewarmService                     \
       SSLocalCacheService                            \
       StorageCachePolicyService                      \
       storage::ObLSService*,                         \
@@ -463,12 +475,14 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObIndexUsageInfoMgr*,                  \
       storage::ObTabletMemtableMgrPool*,            \
       rootserver::ObMViewMaintenanceService*,       \
-      PublicBlockGCService                          \
       SSWriterService                               \
       AtomicFileMgr                                 \
       SSMetaService                                 \
       SSGarbageCollectorService                     \
       OBSSLOGNOTIFYSERVICE                          \
+      SSLogGTSService                               \
+      SSLogUIDService                               \
+      TabletSplitTaskCache                          \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
@@ -481,6 +495,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
+      sql::ObPCachedExternalFileService*,            \
       sql::ObExternalDataAccessMgr*,                 \
       share::ObWorkloadRepositoryContext*,           \
       observer::ObTenantQueryRespTimeCollector*,     \
@@ -491,7 +506,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDDLServiceLauncher*,             \
       rootserver::ObDDLScheduler*,                   \
       storage::ObInnerTabletAccessService*,          \
-      storage::ObMemberTableService*                 \
+      storage::ObTabletReorgInfoTableService*        \
   )
 
 

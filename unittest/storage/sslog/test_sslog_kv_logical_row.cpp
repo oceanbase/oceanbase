@@ -16,6 +16,7 @@
 #define protected public
 // #include "test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_define.h"
+#include "src/share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,11 @@ class TestSSLogKVLogicalRow : public ::testing::Test
 public:
   TestSSLogKVLogicalRow(){};
   virtual ~TestSSLogKVLogicalRow(){};
-  virtual void SetUp() { PALF_KV.clear(); }
+  virtual void SetUp()
+  {
+    PALF_KV.clear();
+    GCONF.cluster_id = 1;
+  }
   virtual void TearDown() { PALF_KV.clear(); }
 
 private:
@@ -289,6 +294,48 @@ TEST_F(TestSSLogKVLogicalRow, basic_multi_version_read)
     ASSERT_TRUE(
         logical_rows[i]->physical_key_.user_key_.meta_key_.prefix_match(ObString("ID_META")));
   }
+}
+
+TEST_F(TestSSLogKVLogicalRow, gc_old_version_kv)
+{
+  INIT_AND_INSERT_ROW(1, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(2, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(3, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(4, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(5, OB_SUCCESS);
+
+  std::string extra_info_for_check("ID_META_EXTRA_INFO_V1");
+  ObString EXTRA_INFO_FOR_CHECK;
+  EXTRA_INFO_FOR_CHECK.assign_ptr(extra_info_for_check.c_str(), extra_info_for_check.length());
+  ObSSLogWriteParam update_param(false, false, EXTRA_INFO_FOR_CHECK);
+  INIT_AND_UPDATE_ROW(1, 2, update_param);
+
+  share::SCN max_gc_scn;
+  PALF_KV.get_gts(max_gc_scn);
+
+  INIT_AND_UPDATE_ROW(1, 3, update_param);
+
+  INIT_AND_UPDATE_ROW(1, 4, update_param);
+
+  int64_t before_gc_cnt = PALF_KV.map_.size();
+  PALF_KV.print_all_kv("BEFORE GC_OLD_VERSION_ROW");
+
+  const uint64_t tenant_id = 500;
+
+  ObMockFirstVersionIterator first_version_iter(tenant_id, &PALF_KV);
+
+  ObMockUserKeyAllVersionBaseIterator user_key_version_iter(tenant_id);
+
+  ASSERT_EQ(OB_SUCCESS, ObPhysicalRowInnerTool::gc_data_version_kv(
+                            &PALF_KV, &first_version_iter, &user_key_version_iter, max_gc_scn));
+  PALF_KV.print_all_kv("AFTER GC_OLD_VERSION_ROW");
+
+  first_version_iter.reset();
+  user_key_version_iter.reset();
+  ASSERT_EQ(OB_SUCCESS, ObPhysicalRowInnerTool::gc_data_version_kv(
+                            &PALF_KV, &first_version_iter, &user_key_version_iter, max_gc_scn));
+  int64_t after_gc_cnt = PALF_KV.map_.size();
+  ASSERT_EQ(after_gc_cnt + 1, before_gc_cnt);
 }
 
 } // namespace unittest

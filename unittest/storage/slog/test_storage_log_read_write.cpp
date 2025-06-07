@@ -138,7 +138,7 @@ TEST_F(TestStorageLogRW, test_basic)
 
   // test write single-param large-size log and read it
 
-  static const int single_large_size = 40 << 20;
+  static const int single_large_size = 30 << 20;
   // test write single-param large-size log
   SimpleObSlog simple_slog2(single_large_size, 'g');
   log_param.data_ = &simple_slog2;
@@ -380,10 +380,10 @@ TEST_F(TestStorageLogRW, test_switch_file)
   int cmp = 0;
   void *buf = nullptr;
 
-  SimpleObSlog simple_slog((32<<20) - (10<<10), 'p');
+  SimpleObSlog simple_slog((16<<20) - (10<<10), 'p');
   log_param.data_ = &simple_slog;
 
-  for (int i = 0; i < 8; i++) { // 4 * 64M slog file
+  for (int i = 0; i < 8; i++) { // 4 * 32M slog file
     slogger_->write_log(log_param);
   }
 
@@ -442,7 +442,7 @@ TEST_F(TestStorageLogRW, test_iter_read_switch_file)
   read_cursor.offset_ = 0;
 
   // write six huge single-slogs
-  SimpleObSlog huge_slog((32<<20) - (10<<10), 'p');
+  SimpleObSlog huge_slog((31<<20) - (10<<10), 'p');
   log_param.data_ = &huge_slog;
   for (int i = 0; i < 6; i++) { //  3 * 64M slog file
     ASSERT_EQ(OB_SUCCESS, slogger_->write_log(log_param));
@@ -453,7 +453,7 @@ TEST_F(TestStorageLogRW, test_iter_read_switch_file)
     ObSEArray<ObStorageLogParam, 8> param_arr;
     SimpleObSlog slog_arr[8];
     for (int j = 0; j < 8; j++) {
-      slog_arr[i].set((4<<20) - (4<<10), 'g');
+      slog_arr[i].set((2<<20) - (4<<10), 'g');
       log_param.data_ = &(slog_arr[i]);
       param_arr.push_back(log_param);
     }
@@ -472,18 +472,18 @@ TEST_F(TestStorageLogRW, test_iter_read_switch_file)
     ASSERT_EQ(OB_SUCCESS, reader.read_log(entry, read_buf, disk_addr));
     if (29 == entry.cmd_) {
       ASSERT_EQ(index + 1, entry.seq_);
-      ASSERT_EQ(0, MEMCMP(huge_slog.buf_, read_buf, (32<<20) - (10<<10)));
+      ASSERT_EQ(0, MEMCMP(huge_slog.buf_, read_buf, (31<<20) - (10<<10)));
       index++;
     }
   }
 
   // iter read four huge batch-slogs
-  SimpleObSlog tmp_slog((4<<20) - (4<<10), 'g');
+  SimpleObSlog tmp_slog((2<<20) - (4<<10), 'g');
   while (index < 46) {
     ASSERT_EQ(OB_SUCCESS, reader.read_log(entry, read_buf, disk_addr));
     if (29 == entry.cmd_) {
       ASSERT_EQ(index + 1, entry.seq_);
-      ASSERT_EQ(0, MEMCMP(tmp_slog.buf_, read_buf, (4<<20) - (4<<10)));
+      ASSERT_EQ(0, MEMCMP(tmp_slog.buf_, read_buf, (2<<20) - (4<<10)));
       index++;
     }
   }
@@ -510,7 +510,7 @@ TEST_F(TestStorageLogRW, test_iter_read_switch_file)
       ASSERT_EQ(index + 47, entry.seq_);
       ASSERT_EQ(0, MEMCMP(slog_arr[index].buf_, read_buf, data_len[index]));
       ASSERT_EQ(param_arr[index].disk_addr_, disk_addr);
-      ASSERT_EQ(6, disk_addr.file_id_);
+      ASSERT_EQ(9, disk_addr.file_id_);
       index++;
     }
   }

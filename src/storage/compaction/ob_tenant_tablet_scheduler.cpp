@@ -29,6 +29,7 @@
 #include "storage/compaction/ob_schedule_status_cache.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 
 namespace oceanbase
 {
@@ -1023,7 +1024,7 @@ int ObTenantTabletScheduler::check_ready_for_major_merge(
       LOG_WARN("need construct column store stroage schema", K(ret), K(cs_replica_status), K(tablet));
       int tmp_ret = OB_SUCCESS;
       const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
-      if (OB_TMP_FAIL(ls->update_tablet_ha_data_status(tablet.get_tablet_id(), data_status))) {
+      if (OB_TMP_FAIL(ls->update_tablet_ha_data_status(tablet.get_reorganization_scn(), tablet.get_tablet_id(), data_status))) {
         LOG_WARN("failed to update tablet data status", K(tmp_ret), K(ls_id), K(tablet));
       }
     } else {
@@ -1545,7 +1546,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
   } else if (schedule_minor_flag
              && GCTX.is_shared_storage_mode()
              && !ObTabletSSMinorMergeHelper::can_schedule_local_minor(ls_id, tablet)) {
-    LOG_INFO("disable local minor in shared storage", K(ret), K(tablet));
+    LOG_INFO("disable local minor in shared storage", K(ret), K(ls_id), K(tablet));
 #endif
   } else if (schedule_minor_flag
       && OB_TMP_FAIL(schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(ls_handle, tablet_handle))) {
@@ -1596,6 +1597,7 @@ int ObTenantTabletScheduler::schedule_ddl_tablet_merge(
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
   const ObTabletID tablet_id = tablet_handle.is_valid() ? tablet_handle.get_obj()->get_tablet_meta().tablet_id_ : ObTabletID();
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_id), K(tablet_handle));
@@ -1625,6 +1627,16 @@ int ObTenantTabletScheduler::schedule_ddl_tablet_merge(
       }
     }
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool is_ls_leader = false;
+  if (OB_FAIL(ret)) {
+  } else if (OB_TMP_FAIL(ObDDLUtil::is_ls_leader(*ls_handle.get_ls(), is_ls_leader))) {
+    LOG_WARN("failed to check if is ls leader", K(tmp_ret), K(*ls_handle.get_ls()));
+    is_ls_leader = false;
+  } else if (is_ls_leader && OB_TMP_FAIL(ObTenantTabletScheduler::schedule_task_if_split_src(tablet_handle))) {
+    LOG_WARN("failed to check if it is split src tablet", K(tmp_ret), K(tablet_handle));
+  }
+#endif
   LOG_TRACE("schedule ddl tablet merge", K(ret), K(ls_id), K(tablet_id));
   return ret;
 }
@@ -1833,6 +1845,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   ObArenaAllocator allocator(lib::ObMemAttr(MTL_ID(), "SSMinorSched"));
   ObTabletHandle tablet_handle;
   bool skip = true;
+  bool can_exec_ss_minor = false;
   if (!ObTabletSSMinorMergeHelper::can_schedule(ls_id, tablet_id)) {
     skip = true;
   } else if (OB_FAIL(MTL(ObSSMetaService*)->get_tablet(ls_id,
@@ -1844,6 +1857,11 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", K(ret));
+  } else if (OB_FAIL(ObTabletSSMinorMergeHelper::check_can_exec_minor_compact(tablet_handle/*shared_tablet_hdl*/, can_exec_ss_minor))) {
+    LOG_WARN("check can exec minor compact failed", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
+  } else if (!can_exec_ss_minor) {
+    skip = true;
+    LOG_INFO("skip ss minor compaction for the special tablet", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
   } else {
     const ObMergeType merge_types[] = { MINOR_MERGE, MDS_MINOR_MERGE };
     for (int i = 0; OB_SUCC(ret) && i < sizeof(merge_types); i++) {
@@ -1903,6 +1921,26 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
   }
   return ret;
 }
+
+int ObTenantTabletScheduler::schedule_task_if_split_src(ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  bool is_split_src_tablet = false;
+  ObSEArray<ObTabletSplitTask, 1> task_array;
+  const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
+  if (OB_FAIL(ObLSTabletSplitScheduler::is_split_src_tablet(tablet_handle, is_split_src_tablet))) {
+    LOG_WARN("failed to check if it is split src tablet", K(ret), K(tablet_handle));
+  } else if (OB_UNLIKELY(is_split_src_tablet)) {
+    ObTabletSplitTask tablet_split_task(MTL_ID(), tablet_id, ObTimeUtility::current_time(), TabletSplitTaskTatus::WAITING_SPLIT_DATA_COMPLEMENT);
+    if (OB_FAIL(task_array.push_back(tablet_split_task))) {
+      LOG_WARN("failed ot push back into task array", K(ret), K(tablet_split_task));
+    } else if (OB_FAIL(ObLSTabletSplitScheduler::get_instance().push_task(task_array))) {
+      LOG_WARN("failed to push back into task array", K(ret), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
 #endif
 
 } // namespace storage

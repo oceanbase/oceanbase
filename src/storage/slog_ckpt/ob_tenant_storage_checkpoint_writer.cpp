@@ -442,8 +442,6 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   MEMSET(slog_buf, 0, sizeof(ObUpdateTabletLog));
   ObUpdateTabletPointerParam update_pointer_param;
   bool has_slog = false;
-  int64_t transfer_seq = 0; // useless in shared_nothing
-  const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(OB_E(EventTable::EN_SLOG_CKPT_ERROR) OB_SUCCESS)) {
   } else if (OB_FAIL(ckpt_slog_handler_->check_slog(tablet_key, has_slog))) {
@@ -469,6 +467,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
       src_tablet = tmp_tablet_handle.get_obj();
     }
 
+    const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, src_tablet->get_transfer_seq());
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -524,8 +523,6 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
   MEMSET(slog_buf, 0, sizeof(ObUpdateTabletLog));
   ObUpdateTabletPointerParam update_pointer_param;
   ObMetaDiskAddr old_addr;
-  int64_t transfer_seq = 0; // useless in shared_nothing
-  const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, tablet_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -535,6 +532,7 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
     }
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (tablet->get_tablet_addr().is_file()) {
+    const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq());
     if (OB_UNLIKELY(!tablet->is_empty_shell())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("addr format normal tablet's shouldn't be file", K(ret), KPC(tablet));

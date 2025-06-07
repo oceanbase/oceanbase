@@ -24,6 +24,7 @@ namespace oceanbase
 {
 namespace share
 {
+
 /**
  * --------------------------------ObGetFileIdRangeFunctor------------------------------------
  */
@@ -414,6 +415,8 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
       SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
+  } else if (OB_FAIL(op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", KR(ret), K(dir_name), K(op));
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
       if (0 != ::readdir_r(open_dir, &entry, &result)) {

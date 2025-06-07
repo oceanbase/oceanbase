@@ -47,6 +47,9 @@ void print_usage()
          "       ob_admin ss_tool\n"
 #endif
          "       ob_admin log_tool ## './ob_admin log_tool' for more detail\n"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+         "       ob_admin log_service_log_tool ## './ob_admin log_service_log_tool' for more detail\n"
+#endif
          "       ob_admin -h127.0.0.1 -p2883 xxx\n"
          "       ob_admin -h127.0.0.1 -p2883 (-sintl/-ssm -mbkmi/-mlocal) [command]\n"
          "              ## The options in parentheses take effect when ssl enabled.\n"
@@ -150,7 +153,11 @@ int main(int argc, char *argv[])
       executor = new ObAdminSSToolExecutor();
 #endif
     } else if (0 == strcmp("log_tool", argv[1])) {
-      executor = new ObAdminLogExecutor();
+      executor = new ObAdminLogExecutor(false);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (0 == strcmp("log_service_log_tool", argv[1])) {
+      executor = new ObAdminLogExecutor(true);
+#endif
     } else if (0 == strcmp("dump_backup", argv[1])) {
       executor = new ObAdminDumpBackupDataExecutor();
     } else if (0 == strcmp("slog_tool", argv[1])) {

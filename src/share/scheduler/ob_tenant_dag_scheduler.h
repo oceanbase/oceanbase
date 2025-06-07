@@ -247,6 +247,20 @@ public:
     TASK_TYPE_DDL_SPLIT_FINISH = 92,
     TASK_TYPE_UPLOAD_MINI_SSTABLE = 93,
     TASK_TYPE_ATTACH_SHARED_SSTABLE = 94,
+    TASK_TYPE_SS_PHYSICAL_CREATE_TABLETS = 95,
+    TASK_TYPE_SS_PHYSICAL_CREATE_TABLETS_FINISH = 96,
+    TASK_TYPE_SS_MIGRATE_INIT = 97,
+    TASK_TYPE_SS_MIGRATE_START = 98,
+    TASK_TYPE_SS_MIGRATE_START_FINISH = 99,
+    TASK_TYPE_SS_MIGRATE_FINISH = 100,
+    TASK_TYPE_SS_TRANSFER_BACKFILL = 101,
+    TASK_TYPE_SS_TRANSFER_BACKFILL_SCHEDULE = 102,
+    TASK_TYPE_SS_TRANSFER_BACKFILL_UPLOAD = 103,
+    TASK_TYPE_SS_TRANSFER_BACKFILL_TX = 104,
+    TASK_TYPE_SS_TRANSFER_REPLACE_TABLE = 105,
+    TASK_TYPE_SS_TRANSFER_REFRESH_TABLE = 106,
+    TASK_TYPE_SS_TRANSFER_UPDATE_INFO = 107,
+    TASK_TYPE_MIGRATE_START_PHYSICAL = 108,
     TASK_TYPE_MAX,
   };
 
@@ -792,9 +806,9 @@ public:
   static void set_mem_ctx(compaction::ObCompactionMemoryContext *mem_ctx) { if (nullptr == mem_ctx_) { mem_ctx_ = mem_ctx; } }
   bool get_force_cancel_flag();
   bool hold_by_compaction_dag() const { return hold_by_compaction_dag_; }
+  void reset_compaction_thread_locals() { is_reserve_mode_ = false; mem_ctx_ = nullptr; hold_by_compaction_dag_ = false; }
 private:
   void notify(DagWorkerStatus status);
-  void reset_compaction_thread_locals() { is_reserve_mode_ = false; mem_ctx_ = nullptr; hold_by_compaction_dag_ = false; }
 private:
   RLOCAL_STATIC(ObTenantDagWorker *, self_);
   RLOCAL_STATIC(bool, is_reserve_mode_);
@@ -1028,7 +1042,7 @@ public:
   int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
-  int check_dag_exist(const ObIDag &dag, bool &exist);
+  int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
   int64_t get_limit();
   int64_t get_adaptive_limit();
   int64_t get_running_task_cnt();
@@ -1214,7 +1228,7 @@ public:
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int get_limit(const int64_t prio, int64_t &limit);
   int get_adaptive_limit(const int64_t prio, int64_t &limit);
-  int check_dag_exist(const ObIDag *dag, bool &exist);
+  int check_dag_exist(const ObIDag *dag, bool &exist, bool &is_emergency);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag *dag, const bool force_cancel = false);
   int get_all_dag_info(
@@ -1607,7 +1621,7 @@ inline bool is_reserve_mode()
       if (worker->hold_by_compaction_dag()) {                                  \
         mem_ctx = worker->get_mem_ctx();                                       \
       } else if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000L /*30s*/)) {      \
-        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                                \
+        COMMON_LOG_RET(WARN, OB_STATE_NOT_MATCH,                               \
                        "memctx only provided for compaction dag", K(worker),   \
                        K(lbt()));                                              \
       }                                                                        \

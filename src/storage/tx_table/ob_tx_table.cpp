@@ -47,6 +47,7 @@ int ObTxTable::init(ObLS *ls)
     mini_cache_hit_cnt_ = 0;
     kv_cache_hit_cnt_ = 0;
     read_tx_data_table_cnt_ = 0;
+    recycle_scn_cache_.reset();
     recycle_record_.reset();
 #ifdef OB_BUILD_SHARED_STORAGE
     ss_upload_scn_cache_.reset();
@@ -145,6 +146,7 @@ int ObTxTable::offline()
 #ifdef OB_BUILD_SHARED_STORAGE
     ss_upload_scn_cache_.reset();
 #endif
+    recycle_scn_cache_.reset();
     recycle_record_.reset();
     (void)disable_upper_trans_calculation();
     ATOMIC_STORE(&state_, TxTableState::OFFLINE);
@@ -172,6 +174,7 @@ int ObTxTable::online()
 #ifdef OB_BUILD_SHARED_STORAGE
     ss_upload_scn_cache_.reset();
 #endif
+    recycle_scn_cache_.reset();
     recycle_record_.reset();
     (void)reset_ctx_min_start_scn_info_();
     ATOMIC_STORE(&state_, ObTxTable::ONLINE);
@@ -935,33 +938,49 @@ int ObTxTable::lock_for_read(ObReadTxDataArg &read_tx_data_arg,
   return ret;
 }
 
-int ObTxTable::get_recycle_scn(SCN &real_recycle_scn,
-                               const bool is_shared_minor)
+int ObTxTable::get_recycle_scn(SCN &sn_recycle_scn)
 {
   int ret = OB_SUCCESS;
-  real_recycle_scn = SCN::min_scn();
+  sn_recycle_scn = SCN::min_scn();
 
   int64_t current_time_us = ObClockGenerator::getClock();
-  int64_t tx_result_retention_s = DEFAULT_TX_RESULT_RETENTION_S;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    // use config value if config is valid
-    tx_result_retention_s = tenant_config->_tx_result_retention;
+  // update recycle_scn_cache_ if needed
+  if (current_time_us - recycle_scn_cache_.update_ts_ > MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
+    int64_t tx_result_retention_s = DEFAULT_TX_RESULT_RETENTION_S;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      // use config value if config is valid
+      tx_result_retention_s = tenant_config->_tx_result_retention;
+    }
+
+    SCN new_recycle_scn = SCN::min_scn();
+    if (OB_FAIL(get_recycle_scn_(tx_result_retention_s, new_recycle_scn))) {
+      STORAGE_LOG(WARN, "get recycle scn failed", KR(ret), K(ls_id_), KP(this));
+    } else if (new_recycle_scn.is_valid_and_not_min()) {
+      recycle_scn_cache_.val_.atomic_store(new_recycle_scn);
+      recycle_scn_cache_.update_ts_ = ObClockGenerator::getClock();
+    } else {
+      ret = OB_EAGAIN;
+      STORAGE_LOG(WARN,
+                  "min_scn no need update to cache",
+                  KR(ret),
+                  K(new_recycle_scn),
+                  K(ls_id_),
+                  K(recycle_scn_cache_),
+                  K(recycle_record_));
+    }
+    FLOG_INFO("finish update recycle_scn_cache", K(ret), K(ls_id_), K(new_recycle_scn));
   }
 
-  if (current_time_us - recycle_record_.last_recycle_ts_ < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
-    // just return an error code to avoid constructing compaction filter
-    ret = OB_ENTRY_NOT_EXIST;
+  if (OB_FAIL(ret)) {
   } else {
-    ret = get_recycle_scn_(tx_result_retention_s, real_recycle_scn, is_shared_minor);
+    sn_recycle_scn = recycle_scn_cache_.val_.atomic_load();
   }
-
+  FLOG_INFO("finish get recycle_scn", K(ret), K(sn_recycle_scn));
   return ret;
 }
 
-int ObTxTable::get_recycle_scn_(const int64_t tx_result_retention_s,
-                                share::SCN &real_recycle_scn,
-                                const bool is_shared_minor)
+int ObTxTable::get_recycle_scn_(const int64_t tx_result_retention_s, share::SCN &real_recycle_scn)
 {
   int ret = OB_SUCCESS;
   TxTableState state;
@@ -984,32 +1003,10 @@ int ObTxTable::get_recycle_scn_(const int64_t tx_result_retention_s,
                 K(prev_epoch),
                 K(after_epoch));
   } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode() && is_shared_minor) {
-      if (OB_FAIL(resolve_shared_storage_upload_info_(tablet_recycle_scn))) {
-        TRANS_LOG(ERROR, "failed to resolve shared_storage_upload_info", KR(ret), K(tablet_recycle_scn));
-      }
-    }
-#endif
     SCN delay_recycle_scn = SCN::max_scn();
     const int64_t current_time_ns = ObClockGenerator::getClock() * 1000L;
     delay_recycle_scn.convert_for_tx(current_time_ns - (tx_result_retention_s * 1000L * 1000L * 1000L));
     real_recycle_scn = SCN::min(delay_recycle_scn, tablet_recycle_scn);
-
-    if (OB_FAIL(ret)) {
-    } else if (real_recycle_scn.convert_to_ts() - recycle_record_.last_recycle_scn_.convert_to_ts() <
-        MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
-      ret = OB_EAGAIN;
-      if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
-        STORAGE_LOG(INFO,
-                    "current recycle scn is close to last recycle scn, skip recycle once",
-                    KR(ret),
-                    K(ls_id_),
-                    KTIME(real_recycle_scn.convert_to_ts()),
-                    KTIME(recycle_record_.last_recycle_scn_.convert_to_ts()));
-      }
-      real_recycle_scn.set_min();
-    }
   }
 
   return ret;
@@ -1082,21 +1079,61 @@ void ObTxTable::update_min_start_scn_info(const SCN &max_decided_scn)
   STORAGE_LOG(INFO, "finish update min start scn", K(max_decided_scn), K(ctx_min_start_scn_info_));
 }
 
-void ObTxTable::recycle_tx_data_finish(const share::SCN current_recycle_scn)
+
+bool ObTxTable::can_recycle_tx_data(const share::SCN current_recycle_scn, const bool is_local_exec_mode)
+{
+  bool can_recycle = false;
+  SCN last_recycled_scn;
+  int64_t last_recycled_ts;
+  if (is_local_exec_mode) {
+    last_recycled_scn = recycle_record_.sn_recycled_scn_;
+    last_recycled_ts = recycle_record_.sn_recycled_ts_;
+  } else {
+    last_recycled_scn = recycle_record_.ss_recycled_scn_;
+    last_recycled_ts = recycle_record_.ss_recycled_ts_;
+  }
+
+  const int64_t current_time = ObClockGenerator::getClock();
+  if (current_time - last_recycled_ts < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US ||
+      current_recycle_scn.convert_to_ts() - last_recycled_scn.convert_to_ts() < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
+    can_recycle = false;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
+      FLOG_INFO("current_recycle_scn is close to last recycle scn, skip recycle once",
+                K(ls_id_),
+                KTIME(current_recycle_scn.convert_to_ts()),
+                KTIME(last_recycled_scn.convert_to_ts()));
+    }
+  } else {
+    can_recycle = true;
+  }
+
+  return can_recycle;
+}
+
+void ObTxTable::record_tx_data_recycle_scn(const share::SCN current_recycle_scn, const bool is_local_exec_mode)
 {
   int64_t const current_ts = ObClockGenerator::getClock();
+  SCN last_recycled_scn;
+  int64_t last_recycled_ts;
 
-  SCN const last_recycle_scn = recycle_record_.last_recycle_scn_;
-  int64_t const last_recycle_ts = recycle_record_.last_recycle_ts_;
+  if (is_local_exec_mode) {
+    last_recycled_scn = recycle_record_.sn_recycled_scn_;
+    last_recycled_ts = recycle_record_.sn_recycled_ts_;
+    recycle_record_.sn_recycled_scn_ = current_recycle_scn;
+    recycle_record_.sn_recycled_ts_ = current_ts;
+  } else {
+    last_recycled_scn = recycle_record_.ss_recycled_scn_;
+    last_recycled_ts = recycle_record_.ss_recycled_ts_;
+    recycle_record_.ss_recycled_scn_ = current_recycle_scn;
+    recycle_record_.ss_recycled_ts_ = current_ts;
+  }
 
-  recycle_record_.last_recycle_scn_ = current_recycle_scn;
-  recycle_record_.last_recycle_ts_ = current_ts;
-
-  FLOG_INFO("finish recycle tx data once",
+  FLOG_INFO("finish record tx data recycle scn",
+            K(is_local_exec_mode),
             K(ls_id_),
-            K(last_recycle_scn),
+            K(last_recycled_scn),
+            KTIME(last_recycled_ts),
             K(current_recycle_scn),
-            KTIME(last_recycle_ts),
             KTIME(current_ts));
 }
 
@@ -1262,7 +1299,32 @@ int ObTxTable::get_tx_data_sstable_recycle_scn(share::SCN &recycle_scn)
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_scn)
+
+/**
+ * @brief In shared storage mode, local TxData is not recycled,
+ *       leaving the RecycleRecord empty. Before retrieving the ss_recycle_scn,
+ *       first obtain the sn_recycle_scn via get_recycle_scn(), record it into
+ *       recycle_record, then read the final value from the record.
+ */
+int ObTxTable::get_ss_recycle_scn(share::SCN &ss_recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  ss_recycle_scn.set_min();
+  SCN sn_recycle_scn;
+  if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(ERROR, "invalid get ss recycle scn", KR(ret));
+  } else if (OB_FAIL(get_recycle_scn(sn_recycle_scn))) {
+    TRANS_LOG(WARN, "get recycle_scn failed", KR(ret), K(ss_recycle_scn));
+  } else if (FALSE_IT(ss_recycle_scn = sn_recycle_scn)) {
+  } else if (OB_FAIL(resolve_shared_storage_upload_info_(ss_recycle_scn))) {
+    TRANS_LOG(ERROR, "failed to resolve shared_storage_upload_info", KR(ret), K(ss_recycle_scn));
+  }
+  FLOG_INFO("finish get ss_recycle_scn", K(ret), K(sn_recycle_scn), K(ss_recycle_scn));
+  return ret;
+}
+
+int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t SHARED_STORAGE_USE_CACHE_DURATION = 1_hour;
@@ -1329,9 +1391,9 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_sc
     // rather for facilitating better troubleshooting in the future.
     if (!tx_data_table_upload_scn.is_valid()) {
       // we havenot aleady upload anything in cache
-      tablet_recycle_scn.set_min();
-    } else if (tx_data_table_upload_scn < tablet_recycle_scn) {
-      tablet_recycle_scn = tx_data_table_upload_scn;
+      ss_recycle_scn.set_min();
+    } else if (tx_data_table_upload_scn < ss_recycle_scn) {
+      ss_recycle_scn = tx_data_table_upload_scn;
     }
 
     // Tip2: we need to obtain the smallest end_scn among all tablets that have
@@ -1343,9 +1405,9 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_sc
     // storage can be interpreted properly.
     if (!data_upload_min_end_scn.is_valid()) {
       // we havenot aleady upload anything in cache
-      tablet_recycle_scn.set_min();
-    } else if (data_upload_min_end_scn < tablet_recycle_scn) {
-      tablet_recycle_scn = data_upload_min_end_scn;
+      ss_recycle_scn.set_min();
+    } else if (data_upload_min_end_scn < ss_recycle_scn) {
+      ss_recycle_scn = data_upload_min_end_scn;
     }
   }
 

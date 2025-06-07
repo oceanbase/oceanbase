@@ -30,7 +30,6 @@ devdeps-boost-1.74.0-72024092811.al8.aarch64.rpm
 devdeps-abseil-cpp-20211102.0-62024122014.al8.aarch64.rpm
 devdeps-s2geometry-0.10.0-122024122617.al8.aarch64.rpm
 devdeps-icu-69.1-232024120517.al8.aarch64.rpm
-devdeps-cos-c-sdk-5.0.21-282024102810.al8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.al8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.aarch64.rpm

@@ -90,9 +90,6 @@ int ObDASIDRequestRpc::fetch_new_range(const ObDASIDRequest &msg,
   if (is_user_tenant(tenant_id)) {
     tenant_id = gen_meta_tenant_id(tenant_id);
   }
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id)) {
-    ls_id = SSLOG_LS;
-  }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("das id request rpc not inited", KR(ret));

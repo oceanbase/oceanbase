@@ -180,13 +180,6 @@ int ObSplitPartitionHelper::check_allow_split(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "spliting of a table in a group with multiple tables");
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("split in shared storage mode not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "split in shared storage mode");
-  }
-
   return ret;
 }
 
@@ -295,7 +288,7 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
   int ret = OB_SUCCESS;
   enable_auto_split = false;
   auto_part_size = -1;
-  if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table() || GCTX.is_shared_storage_mode()) {
+  if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table()) {
     // not supported table type
   } else if (data_table_schema.is_auto_partitioned_table()) {
     enable_auto_split = true;

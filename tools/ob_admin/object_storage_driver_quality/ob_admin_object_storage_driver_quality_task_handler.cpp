@@ -311,9 +311,8 @@ bool OSDQTaskHandler::check_parallel_write_result_(
         OB_LOG(WARN, "parallel append write should succeed when storage type is s3", KR(ret),
           K(op_type1), K(ret1), K(op_type2), K(ret2));
       }
-    } else if (storage_info_->get_type() == ObStorageType::OB_STORAGE_COS
-        || storage_info_->get_type() == ObStorageType::OB_STORAGE_OSS) {
-      // if the storage type is cos or oss, the append write may fail if the append operation is performed
+    } else if (storage_info_->get_type() == ObStorageType::OB_STORAGE_OSS) {
+      // if the storage type is oss, the append write may fail if the append operation is performed
       // after the single or multi-part write operation.
       // but if two parallel operation are both append write operation, they should succeed.
       if (op_type1 == APPEND_WRITE && op_type2 == APPEND_WRITE) {

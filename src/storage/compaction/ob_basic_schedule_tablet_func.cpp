@@ -11,6 +11,9 @@
 #include "storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_compact_helper.h"
+#endif
 namespace oceanbase
 {
 using namespace storage;
@@ -32,14 +35,12 @@ ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
 
 void ObBasicScheduleTabletFunc::destroy()
 {
-  schedule_freeze_dag(true/*force*/); // schedule dag before destroy
 }
 
 int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
-  schedule_freeze_dag(true/*force*/); // schedule dag before switch to next ls
 
   if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle))) {
     if (OB_LS_NOT_EXIST != ret) {
@@ -57,6 +58,12 @@ int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
     update_tenant_cached_status();
   }
   return ret;
+}
+
+int ObBasicScheduleTabletFunc::post_process_ls()
+{
+  schedule_freeze_dag(true/*force*/);
+  return OB_SUCCESS;
 }
 
 void ObBasicScheduleTabletFunc::update_tenant_cached_status()

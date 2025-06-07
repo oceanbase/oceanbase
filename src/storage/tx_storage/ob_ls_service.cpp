@@ -1340,7 +1340,9 @@ int ObLSService::create_ls_for_ha(
   if (task_id.is_invalid() || !arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create ls for ha get invalid argument", K(ret), K(task_id), K(arg));
-  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_ && ObMigrationOpType::ADD_LS_OP != arg.type_) {
+  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_
+             && ObMigrationOpType::ADD_LS_OP != arg.type_
+             && ObMigrationOpType::REPLACE_LS_OP != arg.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create ls for migration get unexpected op type", K(ret), K(task_id), K(arg));
   } else if (OB_FAIL(ObMigrationStatusHelper::trans_migration_op(arg.type_, migration_status))) {

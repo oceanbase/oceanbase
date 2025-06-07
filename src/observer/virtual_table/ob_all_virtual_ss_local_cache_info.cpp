@@ -63,7 +63,9 @@ int ObAllVirtualSSLocalCacheInfo::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(execute(row))) {
-    SERVER_LOG(WARN, "execute fail", KR(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      SERVER_LOG(WARN, "execute fail", KR(ret));
+    }
   }
   return ret;
 }

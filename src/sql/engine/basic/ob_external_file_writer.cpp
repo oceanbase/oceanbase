@@ -26,7 +26,7 @@ int ObExternalFileWriter::open_file()
   int ret = OB_SUCCESS;
   if (IntoFileLocation::SERVER_DISK != file_location_) {//OSS,COS,S3,HDFS
     bool is_exist = false;
-    ObBackupIoAdapter adapter;
+    ObExternalIoAdapter adapter;
     ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
     // for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
     // OSS,COS can also use multipart writer. need to check performance

@@ -563,15 +563,18 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
   ASSERT_EQ(0, sstable_macro_info.linked_block_count_);
 
   ObTabletID tablet_id(200001); // fake
-  ObSSTableLinkBlockWriteInfo link_write_info(1000/*macro_start_seq*/);
+  int64_t macro_start_seq = 1000;
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = tablet_id;
+  write_param.tablet_transfer_seq_ = 0;
+  write_param.start_macro_seq_ = macro_start_seq;
   ObSharedObjectsWriteCtx linked_block_write_ctx;
   ObSArray<ObSharedObjectsWriteCtx> total_ctxs;
-  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.persist_block_ids(tablet_id,
-                                                              0, // tablet_transfer_seq
-                                                              0, // snapshot_version
-                                                              allocator_,
-                                                              &link_write_info,
-                                                              linked_block_write_ctx));
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.persist_block_ids(allocator_,
+                                                             write_param,
+                                                             macro_start_seq,
+                                                             linked_block_write_ctx));
   ASSERT_EQ(nullptr, sstable_macro_info.data_block_ids_);
   ASSERT_EQ(nullptr, sstable_macro_info.other_block_ids_);
   ASSERT_NE(nullptr, sstable_macro_info.linked_block_ids_);
@@ -641,12 +644,13 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ASSERT_EQ(1, sstable_macro_info.other_block_count_);
   ASSERT_EQ(0, sstable_macro_info.linked_block_count_);
 
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = tablet_id;
+  write_param.tablet_transfer_seq_ = 0;
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_NE(nullptr, sstable_macro_info.data_block_ids_);
@@ -660,10 +664,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   // 幂等
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_NE(nullptr, sstable_macro_info.data_block_ids_);
@@ -692,10 +693,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
 
   ASSERT_EQ(OB_SUCCESS, tmp_sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_NE(nullptr, tmp_sstable_macro_info.data_block_ids_);
@@ -729,12 +727,14 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(1, sstable_macro_info.other_block_count_);
   ASSERT_EQ(0, sstable_macro_info.linked_block_count_);
 
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = tablet_id;
+  write_param.tablet_transfer_seq_ = 0;
+  write_param.start_macro_seq_ = macro_start_seq;
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_EQ(nullptr, sstable_macro_info.data_block_ids_);
@@ -748,10 +748,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   // 幂等
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_EQ(nullptr, sstable_macro_info.data_block_ids_);
@@ -780,10 +777,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
 
   ASSERT_EQ(OB_SUCCESS, tmp_sstable.persist_linked_block_if_need(
                                   allocator_,
-                                  tablet_id,
-                                  0, // tablet_transfer_seq
-                                  snapshot_version,
-                                  nullptr,
+                                  write_param,
                                   macro_start_seq,
                                   linked_block_write_ctx));
   ASSERT_EQ(nullptr, sstable_macro_info.data_block_ids_);
@@ -1054,7 +1048,9 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   }
 
   ObTabletCreateSSTableParam dest_sstable_param;
-  ret = dest_sstable_param.init_for_ha(mig_param);
+  common::ObArray<blocksstable::MacroBlockId> data_block_ids;
+  common::ObArray<blocksstable::MacroBlockId> other_block_ids;
+  ret = dest_sstable_param.init_for_ha(mig_param, data_block_ids, other_block_ids);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);

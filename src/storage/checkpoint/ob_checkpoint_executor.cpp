@@ -191,7 +191,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
 #ifdef OB_BUILD_SHARED_STORAGE
         if (GCTX.is_shared_storage_mode()) {
           // here we can check if checkpoint is quickly changed because ss mode do advance_checkpoint each 10 minutes
-          (void)SSCkptUtil::check_ckpt_changed(ls_id, checkpoint_scn, ckpt_change_record_);
+          (void)SSCkptUtil::check_ckpt_changed(false /*is_ss_ckpt*/, ls_id, checkpoint_scn, ckpt_change_record_);
         }
 #endif
 

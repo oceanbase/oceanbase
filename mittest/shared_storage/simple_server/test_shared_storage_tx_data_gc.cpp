@@ -22,7 +22,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_dir_manager.h"
 #include "share/ob_io_device_helper.h"
-#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #include "sensitive_test/object_storage/object_storage_authorization_info.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "mittest/shared_storage/clean_residual_data.h"

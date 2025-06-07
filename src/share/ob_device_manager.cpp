@@ -13,6 +13,7 @@
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
 #include "share/external_table/ob_hdfs_table_device.h"
@@ -151,8 +152,6 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init lock", KR(ret));
     } else if (OB_FAIL(init_oss_env())) {
       OB_LOG(WARN, "fail to init oss storage", K(ret));
-    } else if (OB_FAIL(init_cos_env())) {
-      OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
     } else if (OB_FAIL(init_obdal_env())) {
@@ -177,6 +176,10 @@ int ObDeviceManager::init_devices_env()
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
       cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
+      // FIXME @fengyun 临时设置 SS 模式默认打开 obdal，后面配置到模板后需删除
+      if (GCTX.is_shared_storage_mode()) {
+        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+      }
     }
   }
 
@@ -221,7 +224,6 @@ void ObDeviceManager::destroy()
     }
     allocator_.reset();
     fin_oss_env();
-    fin_cos_env();
     fin_s3_env();
     fin_obdal_env();
     lock_.destroy();
@@ -262,10 +264,6 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)) {
     device_type = OB_STORAGE_OSS;
-    mem = allocator.alloc(sizeof(ObObjectDevice));
-    if (NULL != mem) {new(mem)ObObjectDevice;}
-  } else if (storage_type_prefix.prefix_match(OB_COS_PREFIX)) {
-    device_type = OB_STORAGE_COS;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_S3_PREFIX)) {

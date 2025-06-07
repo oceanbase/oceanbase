@@ -216,6 +216,8 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
   PURGE_OLD_MLOG = 47,
+  REGISTER_SPLIT_INFO_MDS = 48,
+  PREPARE_TABLET_SPLIT_RANGES = 49,
 
   FAIL = 99,
   SUCCESS = 100
@@ -392,6 +394,12 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::PURGE_OLD_MLOG:
       str = "PURGE_OLD_MLOG";
+      break;
+    case ObDDLTaskStatus::REGISTER_SPLIT_INFO_MDS:
+      str = "REGISTER_SPLIT_INFO_MDS";
+      break;
+    case ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES:
+      str = "PREPARE_TABLET_SPLIT_RANGES";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -1327,10 +1335,6 @@ public:
       const int64_t target_schema_version);
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
   static int is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_exist);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int upload_block_for_ss(const char* buf, const int64_t len, const blocksstable::MacroBlockId &macro_block_id);
-  static int update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t pre_snapshot_version, const int64_t new_snapshot_version);
-#endif
   static int set_tablet_autoinc_seq(const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t seq_value);
   static int check_table_compaction_checksum_error(
       const uint64_t tenant_id,
@@ -1453,6 +1457,7 @@ public:
 
   static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
 
+  static int is_ls_leader(ObLS &ls, bool &is_leader);
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,
@@ -1606,19 +1611,35 @@ class ObSplitTabletInfo final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSplitTabletInfo() : split_info_(0), split_src_tablet_id_() { }
+  ObSplitTabletInfo() :
+    split_info_(0),
+    split_src_tablet_id_(),
+    split_start_scn_() { }
   ~ObSplitTabletInfo() { reset(); }
-  void reset() { split_info_ = 0; split_src_tablet_id_.reset(); }
+  void reset() {
+    split_info_ = 0;
+    split_src_tablet_id_.reset();
+    split_start_scn_.reset();
+  }
+
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_can_not_execute_ss_minor(const bool can_not_execute_ss_minor) { cant_execute_ss_minor_ = can_not_execute_ss_minor; }
+  void set_can_not_gc_data_blks(const bool can_not_gc_data_blks) { cant_gc_macro_blks_ = can_not_gc_data_blks; }
   void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
+  void set_split_start_scn(const share::SCN &split_scn) { split_start_scn_ = split_scn; }
+
   bool is_data_incomplete() const { return is_data_incomplete_; }
+  bool can_not_execute_ss_minor() const { return cant_execute_ss_minor_; }
+  bool can_not_gc_macro_blks() const { return cant_gc_macro_blks_; }
   const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }
-  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id));
+  const share::SCN &get_split_start_scn() const { return split_start_scn_; }
+
+  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id), K_(split_start_scn));
 private:
   union {
     uint32_t split_info_;
     struct {
-      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
+      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is incomplete? default = 0 (data complete).
       uint32_t can_reuse_macro_block_: 1;
       uint32_t cant_execute_ss_minor_: 1; // can not execute ss minor compaction? default = 0(can execute ss minor).
       uint32_t cant_gc_macro_blks_: 1; // can not gc macro blocks when gc tablet? default = 0(can gc them).

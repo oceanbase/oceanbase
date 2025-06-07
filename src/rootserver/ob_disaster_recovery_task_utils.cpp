@@ -26,7 +26,7 @@
 #include "share/ob_service_epoch_proxy.h"                              // for ObServiceEpochProxy
 #include "share/ob_zone_table_operation.h"                             // for ObZoneTableOperation
 #include "share/location_cache/ob_location_service.h"                  // for ObLocationService
-#include "rootserver/ob_root_utils.h"                                  // ObTenantUtils
+#include "rootserver/ob_root_utils.h"                                  // for ObTenantUtils
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_proposer_config_mgr.h"
 #endif
@@ -102,8 +102,7 @@ int DisasterRecoveryUtils::get_dr_tasks_count(
   return ret;
 }
 
-#define DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(func_name)                                                     \
-  int ret = OB_SUCCESS;                                                                                       \
+#define DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(func_name, tenant_id)                                          \
   ObTimeoutCtx ctx;                                                                                           \
   int tmp_ret = OB_SUCCESS;                                                                                   \
   if (OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {                                  \
@@ -118,24 +117,23 @@ int DisasterRecoveryUtils::get_dr_tasks_count(
   } else {                                                                                                    \
     ObAddr leader;                                                                                            \
     int64_t retry_count = 0;                                                                                  \
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(arg.get_tenant_id());                                  \
     while (retry_count++ < MAX_REPORT_RETRY_TIMES) {                                                          \
       if (0 > ctx.get_timeout()) {                                                                            \
         ret = OB_TIMEOUT;                                                                                     \
         LOG_WARN("wait send rpc to meta tenant finished timeout", KR(ret));                                   \
         break;                                                                                                \
       } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,                                 \
-                        meta_tenant_id, SYS_LS, false/*force_renew*/, leader))) {                             \
+                        tenant_id, SYS_LS, false/*force_renew*/, leader))) {                                  \
         LOG_WARN("failed to get ls leader", KR(ret), K(arg));                                                 \
-      } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(meta_tenant_id)                                   \
+      } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(tenant_id)                                        \
                                              .timeout(GCONF.rpc_timeout).func_name(arg))) {                   \
-        LOG_WARN("fail to send rpc", KR(ret), K(arg));                                                        \
+        LOG_WARN("fail to send rpc", KR(ret), K(arg), K(leader), K(tenant_id));                               \
       }                                                                                                       \
       if (OB_SUCC(ret)) {                                                                                     \
         LOG_INFO("send rpc success", K(leader), K(arg));                                                      \
         break;                                                                                                \
       } else if (OB_TMP_FAIL(GCTX.location_service_->nonblock_renew(                                          \
-                                GCONF.cluster_id, meta_tenant_id, SYS_LS))) {                                 \
+                                GCONF.cluster_id, tenant_id, SYS_LS))) {                                      \
         LOG_WARN("failed to renew location", KR(ret), KR(tmp_ret), K(arg));                                   \
       }                                                                                                       \
       if (OB_FAIL(ret)) {                                                                                     \
@@ -195,13 +193,27 @@ int DisasterRecoveryUtils::wakeup_local_service(
 int DisasterRecoveryUtils::wakeup_tenant_service(
     const obrpc::ObNotifyTenantThreadArg &arg)
 {
-  DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(notify_tenant_thread)
+  int ret = OB_SUCCESS;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(arg.get_tenant_id());
+  DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(notify_tenant_thread, meta_tenant_id)
 }
 
-int DisasterRecoveryUtils::report_to_meta_tenant(
+int DisasterRecoveryUtils::report_to_disaster_recovery(
     const obrpc::ObDRTaskReplyResult &arg)
 {
-  DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(disaster_recovery_task_reply)
+  int ret = OB_SUCCESS;
+  uint64_t persistent_tenant = OB_INVALID_TENANT_ID;
+  uint64_t service_epoch_tenant = OB_INVALID_TENANT_ID; // not used
+  if (OB_FAIL(DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
+                                              arg.tenant_id_,
+                                              arg.task_type_,
+                                              service_epoch_tenant,
+                                              persistent_tenant))) {
+    LOG_WARN("failed to get service epoch and persistent tenant id", KR(ret), K(arg));
+  } else {
+    DR_SERVICE_SEND_RPC_TO_META_WITH_RETRY(disaster_recovery_task_reply, persistent_tenant)
+  }
+  return ret;
 }
 
 // compatibility code
@@ -776,8 +788,13 @@ int DisasterRecoveryUtils::check_member_list_for_single_replica(
       } else if (server_info.get_zone() != first_server_zone) {
         // in single replica deployment scenario
         // if member_list count is not one(migration mid-state), then they must belong to the same zone.
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("multi server is not same zone", KR(ret), K(server_info), K(first_server_zone));
+
+        // Now, this interface was called in try_common_dr_task() to check whether the current LS needs to generate a repalce task.
+        // In ss + logservice, tenants may have multiple zones, for example the sys tenant currently has 3 zones.
+        // An error here will result in the inability to check disaster recovery tasks in other scenarios later in try_common_dr_task().
+        // There should be no error here, only return pass_check = false to indicate that the check did not pass.
+        pass_check = false;
+        LOG_INFO("multi server is not same zone", K(server_info), K(first_server_zone));
       }
     }
   }
@@ -872,7 +889,7 @@ int DisasterRecoveryUtils::check_dest_has_sslog(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const common::ObAddr& dest_server,
-    bool has_sslog)
+    bool &has_sslog)
 {
   // check destination has sslog replica and sslog has leader.
   int ret = OB_SUCCESS;

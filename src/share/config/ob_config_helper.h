@@ -1005,6 +1005,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
 
+class ObSSLocalCacheControlParser : public ObConfigParser
+{
+public:
+  ObSSLocalCacheControlParser() {}
+  virtual ~ObSSLocalCacheControlParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSLocalCacheControlParser);
+};
+
 class ObConfigKvGroupCommitRWModeChecker
   : public ObConfigChecker
 {

@@ -113,12 +113,13 @@ public:
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation
-  int get_private_blocks_for_tablet(
+  int get_blocks_from_private_tablet_meta(
       const share::ObLSID &id,
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       const int64_t tablet_version,
       const int64_t tablet_transfer_seq,
+      const bool is_shared,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(
       const ObTabletID &tablet_id,

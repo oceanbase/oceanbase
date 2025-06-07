@@ -287,7 +287,8 @@ private:
       const int64_t inc_base_snapshot_version,
       const ObTabletHAStatus &ha_status,
       const UpdateUpperTransParam &upper_trans_param,
-      const bool is_mds);
+      const bool is_mds,
+      const bool allow_adjust_next_start_scn);
   int inner_process_minor_tables(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,
@@ -484,6 +485,11 @@ private:
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       int64_t &inc_base_snapshot_version);
+  static int adjust_sstable_start_scn_(
+      ObSSTable &sstable,
+      ObArenaAllocator &allocator,
+      const share::SCN start_scn,
+      ObSSTable *&copied_sstable);
 #ifdef OB_BUILD_SHARED_STORAGE
   int process_minor_sstables_for_ss_(
     ObArenaAllocator &allocator,

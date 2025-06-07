@@ -75,7 +75,6 @@ public:
   bool is_valid() const { return iter_attr_.valid_; }
   bool is_empty_shell() const { return iter_attr_.is_empty_shell_; }
   bool has_transfer_table() const { return iter_attr_.has_transfer_table_; }
-  bool has_next_tablet() const { return false; }
   bool has_nested_table() const { return iter_attr_.has_nested_table_; }
   bool initial_state() const { return iter_attr_.initial_state_; }
   void refresh_cache(
@@ -148,7 +147,6 @@ public:
   bool is_valid() const { return attr_.is_valid() && key_.is_valid() && addr_.is_valid(); }
   bool has_transfer_table() const { return attr_.has_transfer_table(); }
   bool is_empty_shell() const { return attr_.is_empty_shell(); }
-  bool has_next_tablet() const { return attr_.has_next_tablet(); }
   bool has_nested_table() const { return attr_.has_nested_table(); }
   int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
   int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }

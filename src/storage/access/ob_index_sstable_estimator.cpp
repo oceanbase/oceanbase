@@ -428,7 +428,10 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
     if (OB_FAIL(micro_index_info.row_header_->fill_micro_des_meta(true /* deep_copy_key */, micro_handle.des_meta_))) {
       STORAGE_LOG(WARN, "Failed to fill micro block deserialize meta", K(ret));
     } else if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info,
-            context_.query_flag_.is_use_block_cache(), micro_handle.io_handle_, &allocator_))) {
+                                       context_.query_flag_.is_use_block_cache(),
+                                       // Note: no need to pass effective_tablet_id for estimator
+                                       ObTabletID(ObTabletID::INVALID_TABLET_ID)/*effective_tablet_id*/,
+                                       micro_handle.io_handle_, &allocator_))) {
       STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
     } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
       micro_handle.tenant_id_ = tenant_id_;

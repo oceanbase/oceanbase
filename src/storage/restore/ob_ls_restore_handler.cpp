@@ -2297,12 +2297,13 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
       ++total_tablet_cnt_;
     } else if (!tablet->get_tablet_meta().has_transfer_table()) {
-    } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
+    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
       LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
     } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
         && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
       LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
+    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                         tablet->get_tablet_meta().tablet_id_,
                                                          restore_status,
                                                          true/* need reset tranfser flag */,
                                                          false/*need_to_set_split_data_complete*/))) {

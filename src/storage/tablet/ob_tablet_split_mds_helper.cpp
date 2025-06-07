@@ -268,7 +268,7 @@ int ObTabletSplitMdsArg::init_split_start_src(
     } else if (!src_table_schema->is_aux_lob_table()
             && OB_FAIL(get_partkey_projector(*new_data_table_schema, *src_table_schema, partkey_projector))) {
       LOG_WARN("failed to get parkey projector", K(ret));
-    } else if (OB_FAIL(data.init_range_part_split_src(dst_tablet_ids.at(i), partkey_projector, *src_table_schema, is_oracle_mode))) {
+    } else if (OB_FAIL(data.init_range_part_split_src(dst_tablet_ids.at(i), partkey_projector, *src_table_schema, is_oracle_mode, tenant_id))) {
       LOG_WARN("failed to set data", K(ret));
     } else if (OB_FAIL(split_data_tablet_ids_.push_back(src_tablet_id))) {
       LOG_WARN("failed to push back", K(ret));

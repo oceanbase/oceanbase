@@ -368,7 +368,7 @@ int ObStorageHAUtils::check_disk_space()
   int ret = OB_SUCCESS;
   const int64_t required_size = 0;
   if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
-    LOG_WARN("failed to check is disk full, cannot transfer in", K(ret));
+    LOG_WARN("failed to check is disk full, cannot do storage task", K(ret), K(required_size));
   }
   return ret;
 }
@@ -711,9 +711,9 @@ int ObStorageHAUtils::create_ls_inner_tablet_for_compat_(
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
       const ObTabletID &tablet_id = tablet_id_array.at(i);
       switch (tablet_id.id()) {
-      case ObTabletID::LS_MEMBER_TABLET_ID: {
-        if (OB_FAIL(ls->get_member_table()->init_tablet_for_compat())) {
-          LOG_WARN("failed to create member table", K(ret), KPC(ls));
+      case ObTabletID::LS_REORG_INFO_TABLET_ID: {
+        if (OB_FAIL(ls->get_reorg_info_table()->init_tablet_for_compat())) {
+          LOG_WARN("failed to create reorg info table", K(ret), KPC(ls));
         }
         break;
       }
@@ -1725,6 +1725,55 @@ bool ObTransferUtils::enable_transfer_dml_ctrl(const uint64_t data_version)
     b_ret = false;
   }
   return b_ret;
+}
+
+int ObTransferUtils::get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cluster_id = GCONF.cluster_id;
+  const uint64_t tenant_id = MTL_ID();
+  share::ObLocationService *location_service = nullptr;
+  const bool force_renew = true;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get ls leader get invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
+  } else if (OB_FAIL(location_service->get_leader(cluster_id, tenant_id, ls_id, force_renew, addr))) {
+    LOG_WARN("fail to get ls leader server", K(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObTransferUtils::get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  int64_t cluster_id = GCONF.cluster_id;
+  uint64_t tenant_id = MTL_ID();
+  ObStorageHASrcInfo src_info;
+  obrpc::ObFetchLSMemberListInfo member_info;
+  src_info.cluster_id_ = cluster_id;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get src ls member list get invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(get_ls_leader(ls_id, src_info.src_addr_))) {
+    LOG_WARN("failed to get src ls leaer", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_storage_rpc()->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
+    LOG_WARN("failed to get ls member info", K(ret), K(ls_id));
+  } else if (member_info.member_list_.get_member_number() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("member list number is unexpected", K(ret), K(member_info), K(ls_id));
+  } else if (OB_FAIL(member_list.deep_copy(member_info.member_list_))) {
+    LOG_WARN("failed to copy member list", K(ret), K(ls_id));
+  }
+  return ret;
 }
 
 } // end namespace storage

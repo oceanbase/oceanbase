@@ -20,7 +20,10 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_linear_hash_map.h"
+#include "share/config/ob_config_helper.h"
+#include "share/shared_storage/ob_ss_local_cache_control_mode.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
+#include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_struct.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 
 namespace oceanbase
@@ -42,6 +45,31 @@ public:
 private:
   static const int32_t BLOCK_SIZE = 2 * 1024 * 1024;
 };
+
+struct MockSSCkptItemHeader
+{
+public:
+  int32_t payload_size_;
+  MockSSCkptItemHeader() : payload_size_(0) {}
+  ~MockSSCkptItemHeader() {}
+  static const int64_t MOCK_VERSION = 1;
+  OB_UNIS_VERSION(MOCK_VERSION);
+};
+
+OB_SERIALIZE_MEMBER(MockSSCkptItemHeader, payload_size_);
+
+struct MockSSCkptItemChildHeader
+{
+public:
+  int32_t payload_size_;
+  int32_t crc_;
+  MockSSCkptItemChildHeader() : payload_size_(0), crc_(0) {}
+  ~MockSSCkptItemChildHeader() {}
+  static const int64_t MOCK_VERSION = 1;
+  OB_UNIS_VERSION(MOCK_VERSION);
+};
+
+OB_SERIALIZE_MEMBER(MockSSCkptItemChildHeader, payload_size_, crc_);
 
 TestSSMicroCacheCommonMeta::TestSSMicroCacheCommonMeta()
 {}
@@ -403,6 +431,165 @@ TEST_F(TestSSMicroCacheCommonMeta, aggregate_micro_info)
     ASSERT_GE(30, cur_info.tablet_id_.id());
     ASSERT_LE(1, cur_info.ls_id_.id());
     ASSERT_GE(10, cur_info.ls_id_.id());
+  }
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, item_compatibility)
+{
+  const int64_t buf_size = 512;
+  char buf[buf_size];
+  MEMSET(buf, '\0', buf_size);
+
+  MockSSCkptItemHeader mock_item_header;
+  mock_item_header.payload_size_ = 100007;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, mock_item_header.serialize(buf, buf_size, pos));
+  ASSERT_EQ(pos, mock_item_header.get_serialize_size());
+
+  MockSSCkptItemChildHeader mock_item_child_header;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, mock_item_child_header.deserialize(buf, buf_size, pos));
+  ASSERT_NE(pos, mock_item_child_header.get_serialize_size());
+  ASSERT_EQ(mock_item_header.payload_size_, mock_item_child_header.payload_size_);
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, local_cache_control_mode)
+{
+  ObSSLocalCacheControlMode cache_mode;
+  ASSERT_EQ(true, cache_mode.is_micro_cache_enable()); // default is true
+  ASSERT_EQ(true, cache_mode.is_macro_read_cache_enable());
+  ASSERT_EQ(true, cache_mode.is_macro_write_cache_enable());
+
+  cache_mode.set_micro_cache_mode(ObSSLocalCacheControlMode::MODE_ON);
+  cache_mode.set_macro_read_cache_mode(ObSSLocalCacheControlMode::MODE_ON);
+  cache_mode.set_macro_write_cache_mode(ObSSLocalCacheControlMode::MODE_ON);
+  ASSERT_EQ(true, cache_mode.is_micro_cache_enable());
+  ASSERT_EQ(true, cache_mode.is_macro_read_cache_enable());
+  ASSERT_EQ(true, cache_mode.is_macro_write_cache_enable());
+
+  cache_mode.set_micro_cache_mode(ObSSLocalCacheControlMode::MODE_OFF);
+  cache_mode.set_macro_read_cache_mode(ObSSLocalCacheControlMode::MODE_OFF);
+  cache_mode.set_macro_write_cache_mode(ObSSLocalCacheControlMode::MODE_OFF);
+  ASSERT_EQ(false, cache_mode.is_micro_cache_enable());
+  ASSERT_EQ(false, cache_mode.is_macro_read_cache_enable());
+  ASSERT_EQ(false, cache_mode.is_macro_write_cache_enable());
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, micro_sub_range_info)
+{
+  ObSSMicroSubRangeInfo sub_rng_info;
+  ASSERT_EQ(false, sub_rng_info.is_valid());
+  sub_rng_info.set_end_hval(1);
+  sub_rng_info.inc_ref_count();
+  ASSERT_EQ(2, sub_rng_info.ref_cnt_);
+  sub_rng_info.ref_cnt_ = 10; // increase the ref_cnt_ to prevent destroy_sub_range being excuted
+  ASSERT_EQ(true, sub_rng_info.contain_hval(0));
+  ObSSMicroSubRangeInfo *range_contain_hval = nullptr;
+  sub_rng_info.get_sub_range_by_hval(0, range_contain_hval);
+  ASSERT_EQ(&sub_rng_info, range_contain_hval);
+  range_contain_hval = nullptr;
+  sub_rng_info.get_sub_range_by_hval(5, range_contain_hval);
+  ASSERT_EQ(nullptr, range_contain_hval);
+  ASSERT_EQ(true, sub_rng_info.is_valid());
+  ASSERT_EQ(0, sub_rng_info.get_micro_meta_cnt());
+  ASSERT_EQ(nullptr, sub_rng_info.get_first_micro_meta());
+  ASSERT_EQ(nullptr, sub_rng_info.get_next_range());
+  ASSERT_EQ(true, sub_rng_info.is_empty());
+
+  // link a meta
+  ObSSMicroBlockMeta block_meta;
+  block_meta.ref_cnt_ = 10; // increase the ref_cnt_ to prevent core when deconstuct
+  ObSSMicroBlockMetaHandle micro_handle;
+  micro_handle.set_ptr(&block_meta);
+  ASSERT_EQ(true, micro_handle.is_valid());
+  ASSERT_EQ(OB_SUCCESS, sub_rng_info.link_micro_meta(micro_handle, 1));
+  ASSERT_EQ(true, sub_rng_info.has_micro_meta());
+
+  // link a range
+  ObSSMicroSubRangeInfo *rng1 = new ObSSMicroSubRangeInfo();
+  ASSERT_NE(nullptr, rng1);
+  rng1->set_end_hval(10);
+  ASSERT_EQ(true, rng1->is_valid());
+  ASSERT_EQ(OB_SUCCESS, sub_rng_info.link_next_range(rng1));
+  ObSSMicroSubRangeInfo *target_sub_range = nullptr;
+  sub_rng_info.get_sub_range_by_hval(9, target_sub_range);
+  ASSERT_EQ(rng1, target_sub_range);
+  ObSSMicroSubRangeInfo *rng2 = new ObSSMicroSubRangeInfo();
+  ASSERT_NE(nullptr, rng2);
+  rng2->set_end_hval(20);
+  ASSERT_EQ(true, rng2->is_valid());
+  ASSERT_EQ(OB_SUCCESS, rng1->link_next_range(rng2));
+  target_sub_range = nullptr;
+  sub_rng_info.get_sub_range_by_hval(19, target_sub_range);
+  ASSERT_EQ(rng2, target_sub_range);
+  sub_rng_info.set_next_range(nullptr);
+  ASSERT_EQ(false, sub_rng_info.has_next_range());
+  sub_rng_info.next_ = nullptr;
+  delete rng1;
+  delete rng2;
+
+  sub_rng_info.dec_ref_count();
+  ASSERT_EQ(9, sub_rng_info.ref_cnt_);
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, init_rng_info)
+{
+  ObSSMicroInitRangeInfo init_rng_info;
+  ASSERT_EQ(false, init_rng_info.has_sub_ranges());
+  ASSERT_EQ(0, init_rng_info.get_total_micro_cnt());
+  init_rng_info.end_hval_ = 100;
+
+  // init sub range info that will be inserted into init_rng_info
+  int64_t total_sub_range_cnt = 10;
+  ObSSMicroSubRangeInfo *sub_range_lst = new ObSSMicroSubRangeInfo();
+  sub_range_lst->set_end_hval(1);
+  ASSERT_EQ(true, sub_range_lst->is_valid());
+  ObSSMicroSubRangeInfo *curr_sub_range = sub_range_lst;
+  for(int64_t i = 1; i < total_sub_range_cnt; ++i){
+    ObSSMicroSubRangeInfo *micro_sub_rng_info_ptr = new ObSSMicroSubRangeInfo();
+    micro_sub_rng_info_ptr->set_end_hval(i * 10);
+    ASSERT_EQ(true, micro_sub_rng_info_ptr->is_valid());
+    curr_sub_range->set_next_range(micro_sub_rng_info_ptr);
+    curr_sub_range = curr_sub_range->get_next_range();
+  }
+  ObSSMicroSubRangeInfo *old_sub_range_list = nullptr;
+  ASSERT_EQ(OB_SUCCESS, init_rng_info.link_sub_ranges(sub_range_lst, old_sub_range_list));
+  ASSERT_EQ(true, init_rng_info.has_sub_ranges());
+  ASSERT_EQ(total_sub_range_cnt, init_rng_info.get_sub_range_cnt());
+  ASSERT_EQ(sub_range_lst, init_rng_info.get_first_sub_range());
+
+  // check sub_ranges can be access by hval
+  for(int64_t i = 0; i < total_sub_range_cnt; ++i){
+    ObSSMicroSubRangeHandle range_handle;
+    init_rng_info.get_sub_range_by_hval(i * 10, range_handle);
+    ASSERT_EQ(true, range_handle.is_valid());
+    ASSERT_LE(i * 10, range_handle.get_ptr()->end_hval_);
+  }
+
+  // insert micro meta
+  const int64_t total_meta_cnt = 10;
+  ObSSMicroBlockMeta *meta_ptr_arr[total_meta_cnt];
+  for(int64_t i = 0; i < total_meta_cnt; ++i){
+    ObSSMicroBlockMetaHandle micro_handle;
+    ObSSMicroBlockMeta *block_meta_ptr = new ObSSMicroBlockMeta();
+    meta_ptr_arr[i] = block_meta_ptr;
+    block_meta_ptr->ref_cnt_ = 10; // avoid core when be deconstructed
+    micro_handle.set_ptr(block_meta_ptr);
+    ASSERT_EQ(true, micro_handle.is_valid());
+    ASSERT_EQ(OB_SUCCESS, init_rng_info.link_micro_meta_by_hval(i * 10, micro_handle));
+  }
+  ASSERT_EQ(total_meta_cnt, init_rng_info.get_total_micro_cnt());
+
+  // release sub range info list
+  curr_sub_range = sub_range_lst;
+  while(nullptr != curr_sub_range){
+    ObSSMicroSubRangeInfo* curr = curr_sub_range;
+    curr_sub_range = curr_sub_range->get_next_range();
+    delete curr;
+  }
+  //release meta
+  for(int64_t i = 0; i < total_meta_cnt; ++i){
+    delete meta_ptr_arr[i];
   }
 }
 

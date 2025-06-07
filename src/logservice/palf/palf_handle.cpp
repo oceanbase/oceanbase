@@ -693,6 +693,11 @@ int PalfHandle::unregister_refresh_priority_cb()
 {
   return OB_NOT_SUPPORTED;
 }
+
+int PalfHandle::set_allow_election_without_memlist(const bool allow_election_without_memlist)
+{
+  return OB_NOT_SUPPORTED;
+}
 #endif
 
 int PalfHandle::set_location_cache_cb(PalfLocationCacheCb *lc_cb)

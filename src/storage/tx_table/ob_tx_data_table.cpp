@@ -686,11 +686,13 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    ret = OB_EAGAIN;
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in migration state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     STORAGE_LOG(WARN, "get restore status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObLSRestoreStatus::NONE != restore_status) {
+    ret = OB_EAGAIN;
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (FALSE_IT(tg.click("iterate tablets start"))) {
@@ -1327,6 +1329,11 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
 ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
 bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
 {
+  if (!is_user_tenant(MTL_ID())) {
+    // Non-user Tenant no need refreeze
+    return false;
+  }
+
   // Inject logic to modify default freeze interval
   int tmp_ret = OB_SUCCESS;
   int64_t max_freeze_interval = MAX_FREEZE_TX_DATA_INTERVAL;

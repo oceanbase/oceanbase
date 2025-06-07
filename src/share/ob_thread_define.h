@@ -192,10 +192,7 @@ TG_DEF(ReplicaPrewarmTimer, ReplicaPrewarmTimer, TIMER)
 TG_DEF(StorageCachePolicyMgr, StorageCachePolicyMgr, TIMER)
 TG_DEF(StorageCacheTabletScheduler, StorageCacheTabletScheduler, QUEUE_THREAD, 1, storage::ObStorageCacheTabletScheduler::MAX_TASK_NUM)
 TG_DEF(TenantDirGCTimer, TntGCTimer, TIMER)
-TG_DEF(ObPublicBlockGCThread, PubGCThread, QUEUE_THREAD,
-       ThreadCountPair(storage::ObPublicBlockGCThread::THREAD_NUM,
-       storage::ObPublicBlockGCThread::MINI_MODE_THREAD_NUM),
-       storage::ObPublicBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+TG_DEF(ServerSlogFlushTimer, SvrSlogFlushTimer, TIMER)
 TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPrivateBlockGCThread::THREAD_NUM,
        storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),

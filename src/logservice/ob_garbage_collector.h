@@ -200,6 +200,8 @@ private:
   bool is_need_gc_ls_status_(const LSStatus &status);
   bool is_normal_ls_status_(const LSStatus &status);
   bool is_need_delete_entry_ls_status_(const LSStatus &status);
+  // migration failed相关
+  int gc_check_ls_migration_failed_(ObGCCandidateArray &gc_candidates);
   //member list相关
   int gc_check_member_list_(ObGCCandidateArray &gc_candidates);
   int construct_server_ls_map_for_member_list_(ServerLSMap &server_ls_map) const;

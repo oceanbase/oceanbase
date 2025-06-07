@@ -157,7 +157,12 @@ private:
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const bool inner_table_only,
+      const bool is_for_get,
       ObLSTable *&ls_table);
+
+  int load_sys_tenant_ls_(
+      const ObLSID &ls_id,
+      ObIArray<ObLSInfo> &inner_table_ls_infos);
 
 private:
   bool inited_;                        //whether this class is inited

@@ -63,7 +63,8 @@ public:
                                    const ObStorageSchema &storage_schema,
                                    const int64_t snapshot_version,
                                    const int64_t column_group_idx,
-                                   const bool has_all_column_group);
+                                   const bool has_all_column_group,
+                                   const bool is_shared);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_small_sstable(const blocksstable::ObSSTableMergeRes &res,
@@ -103,6 +104,7 @@ public:
                      const ObITable::TableKey &src_table_key,
                      const blocksstable::ObSSTableBasicMeta &basic_meta,
                      const int64_t schema_version,
+                     const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
                      const blocksstable::ObSSTableMergeRes &res);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
@@ -127,13 +129,17 @@ public:
                   const blocksstable::ObSSTableMergeRes &res);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
-  int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
+  int init_for_ha(
+      const blocksstable::ObMigrationSSTableParam &migration_param,
+      const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+      const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
-  int init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
-                                            const share::SCN &start_scn,
-                                            const share::SCN &end_scn,
-                                            const ObStorageSchema &table_schema);
+  int init_for_transfer_empty_mini_minor_sstable(const common::ObTabletID &tablet_id,
+                                                 const share::SCN &start_scn,
+                                                 const share::SCN &end_scn,
+                                                 const ObStorageSchema &table_schema,
+                                                 const ObITable::TableType &table_type);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
@@ -144,6 +150,7 @@ public:
 
   inline const ObITable::TableKey& table_key() const { return table_key_; }
   inline const share::SCN& rec_scn() const { return rec_scn_; };
+  inline const share::SCN& ss_tablet_version() const { return ss_tablet_version_; }
   inline bool is_ready_for_read() const { return is_ready_for_read_; }
   inline int64_t data_blocks_cnt() const { return data_blocks_cnt_; }
   inline share::SCN filled_tx_scn() const { return filled_tx_scn_; }
@@ -205,11 +212,15 @@ public:
       K_(table_shared_flag),
       K_(uncommitted_tx_id),
       K_(co_base_snapshot_version),
-      K_(rec_scn));
+      K_(rec_scn),
+      K_(ss_tablet_version));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
-  int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
+  int inner_init_with_shared_sstable(
+      const blocksstable::ObMigrationSSTableParam &migration_param,
+      const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+      const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids);
   void set_init_value_for_column_store_();
 private:
   friend class blocksstable::ObSSTableMeta;
@@ -267,6 +278,7 @@ private:
   int64_t uncommitted_tx_id_;
   int64_t co_base_snapshot_version_;
   share::SCN rec_scn_;
+  share::SCN ss_tablet_version_;
 };
 
 } // namespace storage

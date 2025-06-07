@@ -13,7 +13,7 @@
 
 #define protected public
 #define private public
-#include "test_ss_common_util.h"
+#include "mittest/shared_storage/test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
@@ -153,7 +153,8 @@ TEST_F(TestSSObjectAccessUtil, test_macro_block)
   ASSERT_NE(nullptr, macro_cache_mgr);
   bool is_hit_macro_cache = false;
   ObSSFdCacheHandle fd_handle;
-  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, is_hit_macro_cache, fd_handle));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(tablet_id)/*effective_tablet_id*/,
+                                             write_info_.size_, is_hit_macro_cache, fd_handle));
   ASSERT_TRUE(is_hit_macro_cache);
   fd_handle.reset();
 
@@ -179,7 +180,8 @@ TEST_F(TestSSObjectAccessUtil, test_macro_block)
   ASSERT_EQ(used_size_after_delete, used_size_after_write - write_info_.size_);
 
   // 8. check macro cache, expect macro cache hit
-  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, is_hit_macro_cache, fd_handle));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(tablet_id)/*effective_tablet_id*/,
+                                             read_info_.size_, is_hit_macro_cache, fd_handle));
   ASSERT_FALSE(is_hit_macro_cache);
   fd_handle.reset();
 }
@@ -199,13 +201,7 @@ TEST_F(TestSSObjectAccessUtil, test_tmp_file)
   // check local cache tmp file free size is enough, so as to ensure write local cache, instead of object storage
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  ObSSMacroCacheStat tmp_file_cache_stat;
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, tmp_file_cache_stat));
-  const int64_t macro_cache_size = disk_space_mgr->get_macro_cache_size();
-  const int64_t tmp_file_max_size = macro_cache_size * tmp_file_cache_stat.get_max() / 100;
-  const int64_t tmp_file_used_size = tmp_file_cache_stat.used_;
-  const int64_t tmp_file_free_size = tmp_file_max_size - tmp_file_used_size;
-  ASSERT_LT(8192, tmp_file_free_size);
+  ASSERT_LT(8192, disk_space_mgr->get_macro_cache_free_size());
 
   MacroBlockId macro_id;
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
@@ -234,7 +230,8 @@ TEST_F(TestSSObjectAccessUtil, test_tmp_file)
   ASSERT_NE(nullptr, macro_cache_mgr);
   bool is_hit_macro_cache = false;
   ObSSFdCacheHandle fd_handle;
-  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, is_hit_macro_cache, fd_handle));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(ObTabletID::INVALID_TABLET_ID)/*effective_tablet_id*/,
+                                             write_info_.size_, is_hit_macro_cache, fd_handle));
   ASSERT_TRUE(is_hit_macro_cache);
   fd_handle.reset();
 
@@ -260,7 +257,8 @@ TEST_F(TestSSObjectAccessUtil, test_tmp_file)
   ASSERT_EQ(used_size_after_delete, used_size_after_write - write_info_.size_);
 
   // 8. check macro cache, expect macro cache hit
-  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, is_hit_macro_cache, fd_handle));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(ObTabletID::INVALID_TABLET_ID)/*effective_tablet_id*/,
+                                             read_info_.size_, is_hit_macro_cache, fd_handle));
   ASSERT_FALSE(is_hit_macro_cache);
   fd_handle.reset();
 }

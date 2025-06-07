@@ -17,6 +17,9 @@
 #include "ob_transfer_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_compact_helper.h"
+#endif
 
 namespace oceanbase
 {
@@ -109,6 +112,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
       tablet = nullptr;
       bool is_ready = false;
       ObTabletBackfillInfo tablet_info;
+      ObTabletTransferInfo src_transfer_info;
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -121,7 +125,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
         //do nothing
-      } else if (OB_FAIL(tablet->get_latest(user_data,
+      } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data,
           writer, trans_stat, trans_version))) {
         if (OB_EMPTY_RESULT == ret) {
           LOG_INFO("tablet_status does not exist", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
@@ -159,7 +163,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                                                     tablet->get_tablet_meta().tablet_id_,
                                                     tablet->get_tablet_meta().transfer_info_,
                                                     is_ready,
-                                                    src_tablet_ha_status))) {
+                                                    src_tablet_ha_status,
+                                                    src_transfer_info))) {
         LOG_WARN("fail to check source tablet ready", K(ret), "transfer_info", tablet->get_tablet_meta().transfer_info_,
             "tablet_id", tablet->get_tablet_meta().tablet_id_);
       } else if (!is_ready) {
@@ -170,7 +175,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // transfer table. Then the restore handler will schedule it to restore minor
         // without creating remote logical table.
         // Remote logical table is no longer relyed needed during physical copy, just reset has tranfser table flag.
-        if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
+        if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                           tablet->get_tablet_meta().tablet_id_,
                                                            ObTabletRestoreStatus::EMPTY,
                                                            true/* need reset tranfser flag */,
                                                            false /*need_to_set_split_data_complete*/))) {
@@ -189,8 +195,18 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                               "tablet_id", tablet->get_tablet_meta().tablet_id_,
                               "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
-        if (OB_FAIL(tablet_info.init(tablet->get_tablet_meta().tablet_id_, is_committed))) {
-          LOG_WARN("failed to init tablet info", K(ret));
+
+        tablet_info.tablet_id_ = tablet->get_tablet_meta().tablet_id_;
+        tablet_info.is_committed_ = is_committed;
+        tablet_info.backfill_scn_ = tablet->get_tablet_meta().transfer_info_.transfer_start_scn_;
+        tablet_info.is_shared_storage_ = false;
+        tablet_info.relative_ls_id_ = dest_ls_->get_ls_id();
+        tablet_info.reorganization_scn_ = src_transfer_info.transfer_start_scn_;
+        tablet_info.tablet_status_ = ObTabletStatus::TRANSFER_OUT;
+        tablet_info.transfer_seq_ = src_transfer_info.transfer_seq_;
+        if (!tablet_info.is_valid()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("tablet info should be valid", K(ret), K(tablet_info));
         } else if (OB_FAIL(param.tablet_infos_.push_back(tablet_info))) {
           LOG_WARN("failed to push tablet id into array", K(ret), KPC(tablet));
         } else if (src_ls_id.is_valid() && transfer_scn.is_valid()) {
@@ -239,7 +255,8 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
     const ObTabletID &tablet_id,
     const ObTabletTransferInfo &transfer_info,
     bool &is_ready,
-    ObTabletHAStatus &ha_status/* source tablet ha status */) const
+    ObTabletHAStatus &ha_status/* source tablet ha status */,
+    ObTabletTransferInfo &src_transer_info) const
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_service = nullptr;
@@ -251,6 +268,8 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
   ObTabletCreateDeleteMdsUserData user_data;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   bool need_check_tablet = false;
+  src_transer_info.reset();
+
   is_ready = false;
   if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -312,6 +331,7 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
              "src transfer info", tablet->get_tablet_meta().transfer_info_,
              "dest transfer info", transfer_info);
   } else {
+    src_transer_info = tablet->get_tablet_meta().transfer_info_;
     ha_status = tablet->get_tablet_meta().ha_status_;
     if (ha_status.check_ready_for_transfer()) {
       is_ready = true;
@@ -1472,8 +1492,8 @@ int ObTransferReplaceTableTask::fill_empty_minor_sstable(
         LOG_WARN("start scn is bigger or equal than end scn", K(ret), K(start_scn), K(end_scn));
       } else if (OB_FAIL(tablet->load_storage_schema(allocator, tablet_storage_schema))) {
         LOG_WARN("fail to load storage schema failed", K(ret));
-      } else if (OB_FAIL(ObTXTransferUtils::create_empty_minor_sstable(tablet->get_tablet_meta().tablet_id_, start_scn, end_scn,
-          *tablet_storage_schema, table_allocator, empty_minor_table_handle))) {
+      } else if (OB_FAIL(ObTXTransferUtils::create_empty_mini_minor_sstable(tablet->get_tablet_meta().tablet_id_, start_scn, end_scn,
+          *tablet_storage_schema, ObITable::TableType::MINOR_SSTABLE, table_allocator, empty_minor_table_handle))) {
         LOG_WARN("failed to create empty minor sstable", K(ret), K(start_scn), K(end_scn));
       } else if (OB_FAIL(tables_handle.add_table(empty_minor_table_handle))) {
         LOG_WARN("failed to add table", K(ret), K(empty_minor_table_handle));
@@ -1710,6 +1730,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     param.is_transfer_replace_ = true;
     param.tablet_meta_ = &mig_param;
     param.release_mds_scn_.set_min();
+    param.reorg_scn_ = tablet->get_reorganization_scn();
 #ifdef ERRSIM
     param.errsim_point_info_ = ctx_->errsim_point_info_;
     SERVER_EVENT_SYNC_ADD("TRANSFER", "TRANSFER_REPLACE_TABLE_WITH_LOG_REPLAY_SKIP_CHECK",
@@ -1719,7 +1740,17 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
-
+#ifdef OB_BUILD_SHARED_STORAGE
+    // need put shared major tables into shared tablet
+    // FIXME: this is a temporary impl @jyx441808
+    if (GCTX.is_shared_storage_mode() && OB_SUCC(ret)) {
+      if (OB_FAIL(put_sstables_to_shared_tablet_(param, *tablet))) {
+        LOG_WARN("failed to put sstables to shared tablet", K(ret));
+      } else {
+        LOG_INFO("success to put sstables to shared tablet");
+      }
+    }
+#endif
     if (FAILEDx(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
     } else {
@@ -2125,5 +2156,51 @@ void ObTransferReplaceTableTask::transfer_tablet_restore_stat_() const
   }
 
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+// put all sstables into shared tablet of on target ls
+int ObTransferReplaceTableTask::put_sstables_to_shared_tablet_(ObBatchUpdateTableStoreParam &batch_param, const ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  const ObMigrationTabletParam *mig_param = batch_param.tablet_meta_;
+  ObUpdateTableStoreParam param(mig_param->snapshot_version_,
+                                mig_param->multi_version_start_,
+                                &mig_param->storage_schema_,
+                                batch_param.rebuild_seq_,
+                                NULL,
+                                true/*allow_duplicate_sstable*/);
+  if (OB_FAIL(param.init_with_ha_info(
+            ObHATableStoreParam(mig_param->transfer_info_.transfer_seq_,
+                                true /*need_check_sstable*/,
+                                true /*need_check_transfer_seq*/,
+                                false,
+                                false)))) {
+    LOG_WARN("failed to init with ha info", KR(ret));
+  } else if (OB_FAIL(param.init_with_compaction_info(
+            ObCompactionTableStoreParam(
+              compaction::ObMergeType::MEDIUM_MERGE/*merge_type*/,
+              SCN::min_scn()/*clog_checkpoint_scn*/,
+              true/*need_report*/,
+              mig_param->has_truncate_info_)))) {
+    LOG_WARN("failed to init with compaction info", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < batch_param.tables_handle_.get_count(); ++i) {
+    ObITable *table = batch_param.tables_handle_.get_table(i);
+    if (table->is_major_sstable()) {
+      param.sstable_ = static_cast<ObSSTable*>(table);
+      if (OB_FAIL(share::SSCompactHelper::create_or_update_table_store(mig_param->ls_id_,
+                                                                       mig_param->tablet_id_,
+                                                                       tablet.get_reorganization_scn(),
+                                                                       ObMetaUpdateReason::TABLET_TRANSFER_ADD_SSTABLES,
+                                                                       param))) {
+        LOG_WARN("update shared tablet table store with major fail", K(ret), KPC(table));
+      } else {
+        LOG_INFO("update shared tablet with major succ", KPC(table));
+      }
+    }
+  }
+  return ret;
+}
+#endif
 }
 }

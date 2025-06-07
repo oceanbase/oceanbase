@@ -65,7 +65,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     root_macro_seq_(0),
     tx_data_recycle_scn_(SCN::min_scn()),
     co_base_snapshot_version_(0),
-    rec_scn_()
+    rec_scn_(),
+    ss_tablet_version_(SCN::min_scn())
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -123,7 +124,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && root_macro_seq_ == other.root_macro_seq_
       && tx_data_recycle_scn_ == other.tx_data_recycle_scn_
       && co_base_snapshot_version_ == other.co_base_snapshot_version_
-      && rec_scn_ == other.rec_scn_;
+      && rec_scn_ == other.rec_scn_
+      && ss_tablet_version_ == other.ss_tablet_version_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
@@ -156,7 +158,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && root_macro_seq_ >= 0
            && tx_data_recycle_scn_.is_valid()
            && co_base_snapshot_version_ >= 0
-           && rec_scn_.is_valid();
+           && rec_scn_.is_valid()
+           && ss_tablet_version_.is_valid();
   return ret;
 }
 
@@ -202,6 +205,7 @@ void ObSSTableBasicMeta::reset()
   tx_data_recycle_scn_.set_min();
   co_base_snapshot_version_ = 0;
   rec_scn_.reset();
+  ss_tablet_version_.set_min();
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -263,7 +267,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   root_macro_seq_,
                   tx_data_recycle_scn_,
                   co_base_snapshot_version_,
-                  rec_scn_);
+                  rec_scn_,
+                  ss_tablet_version_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -349,7 +354,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               root_macro_seq_,
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
-              rec_scn_);
+              rec_scn_,
+              ss_tablet_version_);
   if (!rec_scn_.is_valid()) {
     rec_scn_.set_min();
     LOG_WARN("the sstable may be an old version sstable and with no rec_scn, set it to min", KPC(this));
@@ -400,7 +406,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               root_macro_seq_,
               tx_data_recycle_scn_,
               co_base_snapshot_version_,
-              rec_scn_);
+              rec_scn_,
+              ss_tablet_version_);
   return len;
 }
 
@@ -413,6 +420,10 @@ void ObSSTableBasicMeta::set_upper_trans_version(const int64_t upper_trans_versi
   }
 }
 
+void ObSSTableBasicMeta::set_ss_tablet_version(const share::SCN &ss_tablet_version)
+{
+  ss_tablet_version_ = ss_tablet_version;
+}
 //================================== ObTxDesc & ObTxContext ==================================
 int ObTxContext::ObTxDesc::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
@@ -681,6 +692,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.tx_data_recycle_scn_ = param.tx_data_recycle_scn_;
     basic_meta_.co_base_snapshot_version_ = param.co_base_snapshot_version_;
     basic_meta_.rec_scn_ = param.rec_scn_;
+    basic_meta_.ss_tablet_version_ = param.ss_tablet_version_;
     basic_meta_.length_ = basic_meta_.get_serialize_size();
     if (OB_FAIL(column_ckm_struct_.assign(allocator, param.column_checksums_))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
@@ -989,6 +1001,12 @@ bool ObSSTableMeta::is_shared_table() const
 {
   return basic_meta_.table_shared_flag_.is_shared_sstable()
       || basic_meta_.table_backup_flag_.is_shared_sstable();
+}
+
+bool ObSSTableMeta::is_split_table() const
+{
+  //FIXME ly435438 need to consider table_backup_flag_?
+  return basic_meta_.table_shared_flag_.is_split_sstable();
 }
 
 //================================== ObMigrationSSTableParam ==================================
@@ -1446,6 +1464,9 @@ int ObSSTableMetaChecker::check_sstable_basic_meta(
              && (!old_sstable_basic_meta.rec_scn_.is_min())) {
     ret = OB_INVALID_DATA;
     LOG_WARN("rec_scn_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
+  } else if (new_sstable_basic_meta.ss_tablet_version_ != old_sstable_basic_meta.ss_tablet_version_) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("ss_tablet_version_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
   }
   return ret;
 }
@@ -1500,13 +1521,28 @@ int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
     share::SCN &filled_tx_scn)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (table_key.tablet_id_.is_ls_inner_tablet()) {
     //do nothing
   } else if (table_key.is_major_sstable()) {
     //do nothing
   } else if (filled_tx_scn.is_min() || filled_tx_scn.is_max()) {
+    uint64_t data_version = 0;
+    bool print_error = true;
+    if (OB_SUCCESS != (tmp_ret = GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("get_min_data_version failed", K(tmp_ret), K(MTL_ID()));
+    } else if (data_version < DATA_VERSION_4_4_0_0) {
+      print_error = false;
+    }
+
+    if (print_error && REACH_TIME_INTERVAL( 10 * 1000L * 1000L)) {
+      LOG_DBA_ERROR(OB_ERR_SYS, "msg", "fix filled tx scn value for compact, 4.4 should not reach here",
+          K(table_key), K(filled_tx_scn));
+    } else {
+      LOG_WARN("fix filled tx scn value for compact, 4.4 should not reach here", K(table_key), K(filled_tx_scn));
+    }
+
     filled_tx_scn = table_key.get_end_scn();
-    LOG_WARN("fix filled tx scn value for compact", K(table_key), K(filled_tx_scn));
   }
   return ret;
 }

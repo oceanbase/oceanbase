@@ -14,6 +14,7 @@ connect (connection_sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
 connect (connection_tenant,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
 let $query_type_2_str='|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V\$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|';
 let $query_type_3_str='|CDB_OB_SERVER_SPACE_USAGE|';
+let $query_type_4_str='|V\$OB_SS_SSTABLES|';
 --source mysql_test/test_suite/inner_table/t/desc_all_views.inc
 
 --disable_query_log

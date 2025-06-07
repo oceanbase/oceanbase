@@ -191,6 +191,12 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     if (create_tenant_timeout_ts < create_timestamp) {
       ret = OB_TIMEOUT;
       LOG_WARN("notify_create_tenant has timeout", K(ret), K(create_timestamp), K(create_tenant_timeout_ts));
+    } else if (0 != unit.data_version_
+        && OB_FAIL(ODV_MGR.set(unit.tenant_id_, unit.data_version_))) {
+      LOG_WARN("fail to set tenant data version", KR(ret), K(unit));
+    } else if (0 != unit.meta_tenant_data_version_
+        && OB_FAIL(ODV_MGR.set(gen_meta_tenant_id(unit.tenant_id_), unit.meta_tenant_data_version_))) {
+      LOG_WARN("fail to set meta tenant data version", KR(ret), K(unit));
     } else if (OB_FAIL(basic_tenant_unit.init(tenant_id,
                                        unit.unit_id_,
                                        ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,

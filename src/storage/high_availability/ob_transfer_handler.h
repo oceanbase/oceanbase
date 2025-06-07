@@ -29,6 +29,9 @@
 #include "observer/ob_inner_sql_connection.h"
 #include "ob_transfer_struct.h"
 #include "ob_transfer_backfill_tx.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/high_availability/ob_ss_transfer_backfill_tx.h"
+#endif
 #include "lib/thread/thread_mgr_interface.h"
 #include "logservice/ob_log_base_type.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
@@ -153,10 +156,7 @@ private:
       const share::ObLSID &dest_ls,
       common::ObMemberList &member_list,
       bool &is_same);
-  int get_ls_member_list_(
-      const share::ObLSID &ls_id,
-      common::ObMemberList &member_list);
-  int check_src_ls_has_active_trans_(
+ int check_src_ls_has_active_trans_(
       const share::ObLSID &src_ls_id,
       const int64_t expected_active_trans_count = 0);
   int get_ls_active_trans_count_(
@@ -168,9 +168,6 @@ private:
   int get_dest_ls_mv_merge_scn_(
       const share::ObTransferTaskInfo &task_info,
       share::SCN &new_mv_merge_scn);
-  int get_ls_leader_(
-      const share::ObLSID &ls_id,
-      common::ObAddr &addr);
   int do_trans_transfer_start_(
       const share::ObTransferTaskInfo &task_info,
       const palf::LogConfigVersion &config_version,
@@ -403,11 +400,11 @@ private:
       const share::ObTransferTaskInfo &task_info);
 
 #ifdef OB_BUILD_SHARED_STORAGE
-  int set_member_table_(
+  int set_reorg_info_table_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       common::ObMySQLTransaction &trans);
-  int set_member_table_data_(
+  int set_reorg_info_table_data_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       const ObTabletStatus &tablet_status,
@@ -427,7 +424,11 @@ private:
   common::ObMySQLProxy *sql_proxy_;
 
   int64_t retry_count_;
+  // TODO(jyx441808): use one base transfer worker mgr class
   ObTransferWorkerMgr transfer_worker_mgr_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSTransferWorkerMgr ss_transfer_worker_mgr_;
+#endif
   int64_t round_;
   share::SCN gts_seq_;
   ObTransferRelatedInfo related_info_;

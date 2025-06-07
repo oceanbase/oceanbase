@@ -150,21 +150,22 @@ int ObBootstrapResolver::do_resolve_logservice_access_point_(
   int ret = OB_SUCCESS;
   if (parse_tree.type_ != T_LOGSERVICE_ACCESS_POINT) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parse_tree.type_ is not T_LOGSERVICE_ACCESS_POINT", K(parse_tree.type_));
+    LOG_WARN("parse_tree.type_ is not T_LOGSERVICE_ACCESS_POINT", KR(ret), K(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.str_value_) || 0 == parse_tree.str_len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.str_value_ is NULL or 0 == parse_tree.str_len_", KR(ret));
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator_ is NULL", KR(ret));
   } else {
-    ObString logservice_access_point;
-    ObString logservice_access_point_str;
-    logservice_access_point_str.assign_ptr(parse_tree.str_value_,
-        static_cast<int32_t>(parse_tree.str_len_));
-    if (OB_FAIL(ob_write_string(*allocator_, logservice_access_point_str,
-                                logservice_access_point))) {
-      LOG_WARN("write logservice access point failed", KR(ret), K(logservice_access_point_str));
-    } else {
-      bootstrap_stmt->set_logservice_access_point(logservice_access_point);
-    }
+      ObString logservice_access_point_str;
+      ObString logservice_access_point;
+      logservice_access_point_str.assign_ptr(parse_tree.str_value_, static_cast<int32_t>(parse_tree.str_len_));
+      if (OB_FAIL(ob_write_string(*allocator_, logservice_access_point_str, logservice_access_point))) {
+        LOG_WARN("alloc buf for logservice_access_point failed", KR(ret), K(logservice_access_point_str.length()));
+      } else {
+        bootstrap_stmt->set_logservice_access_point(logservice_access_point);
+      }
   }
   return ret;
 }
@@ -176,7 +177,10 @@ int ObBootstrapResolver::do_resolve_shared_storage_info_(
   int ret = OB_SUCCESS;
   if (parse_tree.type_ != T_SHARED_STORAGE_INFO) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parse_tree.type_ is not T_SHARED_STORAGE_INFO", K(parse_tree.type_));
+    LOG_WARN("parse_tree.type_ is not T_SHARED_STORAGE_INFO", KR(ret), K(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.str_value_) || 0 == parse_tree.str_len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.str_value_ is NULL or 0 == parse_tree.str_len_", KR(ret));
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator_ is NULL", KR(ret));

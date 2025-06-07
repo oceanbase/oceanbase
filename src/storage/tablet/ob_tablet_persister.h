@@ -210,6 +210,7 @@ public:
       const share::ObLSID ls_id,
       const ObTabletID tablet_id,
       const ObMetaUpdateReason update_reason,
+      const int64_t sstable_op_id,
       const int64_t start_macro_seq,
       ObAtomicOpHandle<ObAtomicTabletMetaOp> *handle,
       ObAtomicTabletMetaFile *file,
@@ -219,15 +220,18 @@ public:
   : ls_id_(ls_id), ls_epoch_(0), tablet_id_(tablet_id), tablet_transfer_seq_(OB_INVALID_TRANSFER_SEQ),
     snapshot_version_(0), start_macro_seq_(start_macro_seq),
     ddl_redo_callback_(ddl_redo_callback), ddl_finish_callback_(ddl_finish_callback),
-    op_handle_(handle), file_(file), update_reason_(update_reason), reorganization_scn_(reorganization_scn)
+    op_handle_(handle), file_(file), update_reason_(update_reason), sstable_op_id_(sstable_op_id), reorganization_scn_(reorganization_scn)
   {}
   #endif
 
   ObTabletPersisterParam() = delete;
 
   bool is_valid() const;
-
-  bool is_major_shared_object() const { return snapshot_version_ > 0; }
+  // only used to write major sstable's meta in shared storage mode
+  bool is_major_shared_object() const
+  {
+    return snapshot_version_ > 0;
+  }
   bool is_inc_shared_object() const
   {
     #ifdef OB_BUILD_SHARED_STORAGE
@@ -240,7 +244,7 @@ public:
   TO_STRING_KV(K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(tablet_transfer_seq),
    K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
-   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(reorganization_scn)
+   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn)
    #endif
    );
 
@@ -256,6 +260,7 @@ public:
   ObAtomicOpHandle<ObAtomicTabletMetaOp> *op_handle_;
   ObAtomicTabletMetaFile *file_;
   ObMetaUpdateReason update_reason_;
+  int64_t sstable_op_id_;
   int64_t reorganization_scn_;
   #endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletPersisterParam);
@@ -316,8 +321,17 @@ public:
     const ObTabletPersisterParam &param,
     const ObTablet &old_tablet,
     ObTabletHandle &new_handle);
+  // persist sstable's some fields into linked blocks if it is too large to
+  // fit one LogEntry. the fields include MacroIds and column groups
+  static int persist_major_sstable_linked_block_if_large(
+    ObArenaAllocator &allocator,
+    const ObTabletPersisterParam &param,
+    ObSSTable &table,
+    ObCOSSTableV2 *&out_co_sstable,
+    int64_t &out_macro_seq);
 #endif
   static int persist_and_transform_only_tablet_meta(
+      const share::SCN &reorg_scn,
       const ObTabletPersisterParam &param,
       const ObTablet &old_tablet,
       ObITabletMetaModifier &modifier,
@@ -364,9 +378,6 @@ private:
       ObTabletSpaceUsage &space_usage);
   int delete_blocks_(
     const common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs);
-  static int check_macro_seq_isolation_(
-        const ObTabletPersisterParam &param,
-        const ObTablet &old_tablet);
   int check_shared_root_macro_seq_(
     const blocksstable::ObStorageObjectOpt& shared_tablet_opt,
     const ObTabletHandle &tablet_hdl);
@@ -448,6 +459,11 @@ private:
   int fetch_and_persist_large_co_sstable(
       common::ObArenaAllocator &allocator,
       ObITable *table,
+      ObSSTablePersistCtx &sstable_persist_ctx);
+  int persist_large_co_sstable_cgs(
+      ObArenaAllocator &allocator,
+      ObCOSSTableV2 &co_sstable,
+      ObCOSSTableV2 *&out_co_sstable,
       ObSSTablePersistCtx &sstable_persist_ctx);
   int fetch_and_persist_normal_co_and_normal_sstable(
     ObArenaAllocator &allocator,
@@ -559,7 +575,7 @@ int ObTabletPersister::fill_write_info(
       write_info.offset_ = 0;
       write_info.size_ = size;
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      if (!param_.is_major_shared_object()) {
+      if (!param_.is_inc_shared_object()) {
         write_info.ls_epoch_ = param_.ls_epoch_;
       } else {
         write_info.write_callback_ = param_.ddl_redo_callback_;

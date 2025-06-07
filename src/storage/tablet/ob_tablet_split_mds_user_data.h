@@ -60,7 +60,12 @@ public:
   void reset();
   int assign(const ObTabletSplitMdsUserData &other);
   int init_no_split(const int64_t auto_part_size);
-  int init_range_part_split_src(const ObIArray<ObTabletID> &dst_tablet_ids, const ObIArray<uint64_t> &partkey_projector, const share::schema::ObTableSchema &table_schema, const bool is_oracle_mode);
+  int init_range_part_split_src(
+    const ObIArray<ObTabletID> &dst_tablet_ids,
+    const ObIArray<uint64_t> &partkey_projector,
+    const share::schema::ObTableSchema &table_schema,
+    const bool is_oracle_mode,
+    const uint64_t tenant_id);
   int init_range_part_split_dst(const int64_t auto_part_size, const ObTabletID &src_tablet_id, const blocksstable::ObDatumRowkey &end_partkey);
   int modify_auto_part_size(const int64_t auto_part_size);
   bool is_split_src() const { return status_ == RANGE_PART_SPLIT_SRC; }

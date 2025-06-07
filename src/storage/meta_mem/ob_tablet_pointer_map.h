@@ -82,14 +82,14 @@ private:
   // used when tablet object and memory is hold by external allocator
   int load_meta_obj(
       const ObTabletMapKey &key,
-      ObTabletBasePointer *meta_pointer,
+      ObTabletPointer *meta_pointer,
       common::ObArenaAllocator &allocator,
       ObMetaDiskAddr &load_addr,
       ObTablet *t);
   // used when tablet object and memory is hold by t3m
   int load_meta_obj(
       const ObTabletMapKey &key,
-      ObTabletBasePointer *meta_pointer,
+      ObTabletPointer *meta_pointer,
       ObMetaDiskAddr &load_addr,
       ObTablet *&t);
   int load_and_hook_meta_obj_(const ObTabletMapKey &key, ObTabletPointerHandle &ptr_hdl, ObTabletHandle &guard);

@@ -76,8 +76,10 @@
 #include "storage/incremental/ob_sswriter_lease_mgr.h"
 #include "storage/incremental/ob_ss_checkpoint_executor.h"
 #include "storage/incremental/ob_ss_inc_meta_checkpoint.h"
+#include "storage/incremental/sslog/ob_sslog_gts_service.h"
+#include "storage/incremental/sslog/ob_sslog_uid_service.h"
 #endif
-#include "storage/member_table/ob_member_table.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table.h"
 
 namespace oceanbase
 {
@@ -594,13 +596,6 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, build_tablet_iter, int);
   // update medium compaction info for tablet
   DELEGATE_WITH_RET(ls_tablet_svr_, update_medium_compaction_info, int);
-  // trim rebuild tablet
-  // @param [in] tablet_id ObTabletID, is_rollback bool
-  // @param [out] null
-  // int trim_rebuild_tablet(
-  //    const ObTabletID &tablet_id,
-  //    const bool is_rollback = false);
-  DELEGATE_WITH_RET(ls_tablet_svr_, trim_rebuild_tablet, int);
   // remove tablets
   // @param [in] tbalet_ids ObIArray<ObTabletId>
   // @param [out] null
@@ -629,6 +624,7 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, remove_ls_inner_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, rebuild_create_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
+  DELEGATE_WITH_RET(ls_tablet_svr_, set_tablet_status_to_transfer_out_deleted, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_without_memtables, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet_without_memtables, int);
@@ -1046,6 +1042,8 @@ public:
   {
     return ls_meta_.cleanup_transfer_meta_info(replay_scn);
   }
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta, int);
+
 
   int set_ls_migration_gc(bool &allow_gc);
   int inner_check_allow_read_(
@@ -1055,19 +1053,16 @@ public:
   int set_ls_allow_to_read();
 
 #ifdef OB_BUILD_SHARED_STORAGE
-  int upload_major_compaction_tablet_meta(
-    const common::ObTabletID &tablet_id,
-    const ObUpdateTableStoreParam &param,
-    const int64_t start_macro_seq);
-
   // write tablet_id_set to pending_free_array when ls replica remove for shared storage
   DELEGATE_WITH_RET(ls_tablet_svr_, write_tablet_id_set_to_pending_free, int);
   DELEGATE_WITH_RET(inc_sstable_uploader_, prepare_register_sstable_upload, int);
+  DELEGATE_WITH_RET(inc_sstable_uploader_, register_all_sstables_upload, int);
   ObLSIncSSTableUploader &get_inc_sstable_upload_handler() { return inc_sstable_uploader_; }
+  DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_with_ss_tablet, int);
 #endif
 
   // ObMemberTable interface
-  ObMemberTable *get_member_table() { return &member_table_; }
+  ObTabletReorgInfoTable *get_reorg_info_table() { return &reorg_info_table_; }
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
@@ -1177,7 +1172,7 @@ private:
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle_;
   //for member table
-  ObMemberTable member_table_;
+  ObTabletReorgInfoTable reorg_info_table_;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObSSIncMetaCheckpoint inc_meta_ckpt_;
   // upload shared-storage sstable list

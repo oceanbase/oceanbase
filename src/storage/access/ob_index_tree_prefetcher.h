@@ -25,6 +25,7 @@
 #include "storage/access/ob_rows_info.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #endif
 
 namespace oceanbase {
@@ -793,33 +794,46 @@ protected:
           || !prefetcher.use_multi_block_prefetch_
           || prefetcher.index_tree_height_ - 1 != level
           || !index_info.has_valid_shared_macro_id()
-          || !prefetcher.sstable_->is_major_sstable()
           || prefetcher.sstable_->is_small_sstable()
           || !ObStoreRowIterator::is_scan(prefetcher.iter_type_)) {
         // do nothing
       } else if (FALSE_IT(macro_id = index_info.get_shared_data_macro_id())) {
-      } else if (OB_UNLIKELY(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != macro_id.storage_object_type()))  {
+      } else if (OB_ISNULL(prefetcher.access_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "macro id type is not SHARED_MAJOR_DATA_MACRO");
-      } else if (OB_FAIL(prefetch_macro_block(macro_id))) {
-        STORAGE_LOG(WARN, "fail to prefetch data macro block", K(ret), K(level));
+        STORAGE_LOG(WARN, "table access ctx is null", KR(ret));
+      } else if (OB_FAIL(prefetch_macro_block(macro_id, prefetcher.access_ctx_->tablet_id_))) {
+        STORAGE_LOG(WARN, "fail to prefetch data macro block", KR(ret), K(level));
       } else {
-        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id));
+        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id),
+                    "tablet_id", prefetcher.access_ctx_->tablet_id_);
       }
       return ret;
     }
 
-    OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
+    OB_INLINE int prefetch_macro_block(
+        const MacroBlockId &macro_id,
+        const common::ObTabletID &tablet_id)
     {
       int ret = OB_SUCCESS;
-      const ObStorageObjectType object_type = macro_id.storage_object_type();
+      bool is_exist = false;
+      ObTenantFileManager *tnt_file_manager = nullptr;
+      ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
       } else if (OB_UNLIKELY(!macro_id.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "get unexpected invalid macro id", K(ret), K(macro_id));
-      } else if (OB_FAIL(MTL(ObTenantFileManager*)->get_preread_cache_mgr().push_file_id_to_lru(macro_id))) {
-        STORAGE_LOG(WARN, "fail to push macro id into lru read cache", K(ret), K(macro_id));
+      } else if (OB_ISNULL(tnt_file_manager = MTL(ObTenantFileManager *)) ||
+                 OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "tenant file manager or macro cache mgr is null", KR(ret), K(macro_id),
+                    KP(tnt_file_manager), KP(macro_cache_mgr));
+      } else if (OB_FAIL(macro_cache_mgr->exist(macro_id, is_exist))) {
+        STORAGE_LOG(WARN, "fail to check if exist", KR(ret), K(macro_id));
+      } else if (is_exist) {
+        STORAGE_LOG(DEBUG, "already exists in macro cache, no need to prefetch", K(macro_id));
+      } else if (OB_FAIL(tnt_file_manager->get_preread_cache_mgr().push_file_id_to_lru(macro_id, tablet_id))) {
+        STORAGE_LOG(WARN, "fail to push macro id into lru read cache", KR(ret), K(macro_id), K(tablet_id));
       }
       return ret;
     }

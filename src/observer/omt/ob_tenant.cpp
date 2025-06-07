@@ -857,7 +857,11 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
   if (OB_ISNULL(ctx = OB_NEW(share::ObTenantModuleInitCtx, ObMemAttr(id_, "ModuleInitCtx")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ObTenantModuleInitCtx failed", K(ret));
-  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {
+  } else if (
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    !GCONF.enable_logservice &&
+#endif
+    OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {
     LOG_ERROR("get_tenant_clog_dir failed", K(ret));
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE

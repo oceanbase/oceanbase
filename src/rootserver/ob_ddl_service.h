@@ -168,7 +168,6 @@ public:
                                     const ObTabletID splitted_tablet_id,
                                     const share::schema::ObTableSchema &splitting_table_schema,
                                     share::schema::ObTableSchema *&del_table_schema);
-
   int create_inner_expr_index(ObMySQLTransaction &trans,
                               const share::schema::ObTableSchema &orig_table_schema,
                               const uint64_t tenant_data_version,

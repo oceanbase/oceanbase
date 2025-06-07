@@ -385,8 +385,7 @@ int ObTabletMdsData::init_for_evict_medium_info(
     } else if (is_major_merge_type(merge_type)) {
       extra_medium_info_.last_compaction_type_ = is_major_merge(merge_type) ? compaction::ObMediumCompactionInfo::MAJOR_COMPACTION : compaction::ObMediumCompactionInfo::MEDIUM_COMPACTION;
       extra_medium_info_.last_medium_scn_ = finish_medium_scn;
-      extra_medium_info_.wait_check_flag_ = !GCTX.is_shared_storage_mode();
-      // no need check in shared storage
+      extra_medium_info_.wait_check_flag_ = true;
     } else {
       extra_medium_info_ = other.extra_medium_info_;
     }
@@ -634,7 +633,7 @@ int ObTabletMdsData::init_single_complex_addr_and_extra_info(
     if (0 == src_data_extra_info.last_medium_scn_) {
       dst_extra_info.wait_check_flag_ = false;
     } else {
-      dst_extra_info.wait_check_flag_ = !GCTX.is_shared_storage_mode();
+      dst_extra_info.wait_check_flag_ = true;
     }
   } else {
     dst_extra_info = src_addr_extra_info;

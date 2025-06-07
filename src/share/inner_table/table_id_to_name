@@ -498,6 +498,8 @@
 # 11125: __all_virtual_ss_ls_meta
 # 11126: __all_virtual_ss_sstable_mgr
 # 11127: __all_virtual_ss_ls_tablet_reorganization_info
+# 11128: __all_virtual_ss_existing_tablet_meta
+# 11129: __all_virtual_ss_existing_sstable_mgr
 # 12001: SESSION_VARIABLES
 # 12006: GLOBAL_STATUS
 # 12008: SESSION_STATUS
@@ -1256,6 +1258,9 @@
 # 12530: __all_virtual_tablet_local_cache
 # 12535: __all_virtual_mview_running_job
 # 12536: __all_virtual_dynamic_partition_table
+# 12537: __all_virtual_ls_migration_task
+# 12538: __all_virtual_ss_notify_tasks_stat
+# 12539: __all_virtual_ss_notify_tablets_stat
 # 12541: __all_virtual_tenant_location
 # 12541: __all_tenant_location  # BASE_TABLE_NAME
 # 12542: __all_virtual_tenant_location_history
@@ -1273,6 +1278,9 @@
 # 12548: __all_virtual_external_resource_history
 # 12548: __all_external_resource  # BASE_TABLE_NAME
 # 12548: __all_external_resource_history  # BASE_TABLE_NAME1
+# 12551: __all_virtual_logservice_cluster_info
+# 12552: __all_virtual_ss_gc_status
+# 12553: __all_virtual_ss_gc_detect_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1985,6 +1993,10 @@
 # 15519: __all_virtual_ss_sstable_mgr  # BASE_TABLE_NAME
 # 15520: ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO
 # 15520: __all_virtual_ss_ls_tablet_reorganization_info  # BASE_TABLE_NAME
+# 15522: ALL_VIRTUAL_SS_EXISTING_TABLET_META
+# 15522: __all_virtual_ss_existing_tablet_meta  # BASE_TABLE_NAME
+# 15523: ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR
+# 15523: __all_virtual_ss_existing_sstable_mgr  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

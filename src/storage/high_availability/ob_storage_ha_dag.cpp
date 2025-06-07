@@ -366,7 +366,6 @@ int ObStorageHADagUtils::deal_with_fo(
 {
   int ret = OB_SUCCESS;
   ObStorageHADag *ha_dag = nullptr;
-
   if (OB_SUCCESS == err || OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("deal with fo get invalid argument", K(ret), K(err), KP(dag));

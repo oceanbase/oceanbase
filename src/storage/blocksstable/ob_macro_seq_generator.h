@@ -31,6 +31,7 @@ public:
     SEQ_TYPE_MAX,
   };
   ObMacroSeqParam() : seq_type_(SEQ_TYPE_MAX), start_(0), interval_(0), step_(0) {}
+  void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(seq_type), K_(start), K_(interval), K_(step));
 

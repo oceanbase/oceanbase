@@ -81,7 +81,7 @@
 #include "common/ob_target_specific.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
-#include "storage/member_table/ob_member_table_schema_helper.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -470,6 +470,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (gctx_.is_shared_storage_mode() &&
                OB_FAIL(init_device_manifest_task())) {
       LOG_ERROR("init device manifest task failed", KR(ret));
+    } else if (gctx_.is_shared_storage_mode() && OB_FAIL(ObLSTabletSplitScheduler::get_instance().init())) {
+      LOG_ERROR("init ObLSTabletSplitScheduler failed", KR(ret));
 #endif
     } else if (OB_FAIL(init_refresh_io_calibration())) {
       LOG_ERROR("init refresh io calibration failed", KR(ret));
@@ -675,9 +677,9 @@ void ObServer::destroy()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to destroy server gtimer");
+      FLOG_INFO("begin to destroy tenant dir gc gtimer");
       TG_DESTROY(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("server gtimer destroyed");
+      FLOG_INFO("tenant dir gc gtimer destroyed");
     }
 #endif
 
@@ -979,10 +981,10 @@ int ObServer::start()
       FLOG_INFO("success to init mds schema helper");
     }
 
-    if (FAILEDx(ObMemberTableSchemaHelper::get_instance().init())) {
-      LOG_ERROR("fail to init member table schema helper", K(ret));
+    if (FAILEDx(ObTabletReorgInfoTableSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init tablet reorg info table schema helper", K(ret));
     } else {
-      FLOG_INFO("success to init member table schema helper");
+      FLOG_INFO("success to init tablet reorg info table schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {
@@ -1523,9 +1525,9 @@ int ObServer::stop()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to stop timer");
+      FLOG_INFO("begin to stop tenant dir gc timer");
       TG_STOP(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("timer stopped");
+      FLOG_INFO("tenant dir gc timer stopped");
     }
 #endif
     FLOG_INFO("begin to stop freeze timer");
@@ -1842,9 +1844,9 @@ int ObServer::wait()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to wait server gtimer");
+      FLOG_INFO("begin to wait tenant dir gc gtimer");
       TG_WAIT(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("wait server gtimer success");
+      FLOG_INFO("wait tenant dir gc gtimer success");
     }
 #endif
 
@@ -2069,6 +2071,11 @@ int ObServer::init_config()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_local_ip_and_devname())) {
     LOG_ERROR("init local_ip and devname failed", KR(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (config_.enable_logservice && is_arbitration_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("arbitration and shared log service is not compatible", KR(ret));
+#endif
   } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
     LOG_ERROR("some config setting is not valid", KR(ret));
   } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
@@ -2323,7 +2330,7 @@ int ObServer::init_config_module()
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()
       && OB_FAIL(TG_START(lib::TGDefIDs::TenantDirGCTimer))) {
-    LOG_ERROR("init timer fail", KR(ret));
+    LOG_ERROR("init tenant dir gc timer fail", KR(ret));
 #endif
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
     LOG_ERROR("init freeze timer fail", KR(ret));

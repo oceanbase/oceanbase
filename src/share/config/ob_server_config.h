@@ -73,6 +73,7 @@ const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
 const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
 const char* const DEFAULT_TABLE_ORAGNIZATION = "default_table_organization";
+const char* const LOGSERVICE_ACCESS_POINT = "logservice_access_point";
 
 class ObServerMemoryConfig;
 

@@ -24,6 +24,7 @@
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_ss_minor_compaction.h"
+#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
 #endif
 
 namespace oceanbase
@@ -341,7 +342,8 @@ int ObTabletMergeDag::get_tablet_and_compat_mode()
   } else if (is_mini_merge(merge_type_)) {
     int64_t inc_sstable_cnt = 0;
     bool is_exist = false;
-    if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(this, is_exist))) {
+    bool unused_is_emergency = false;
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(this, is_exist, unused_is_emergency))) {
       LOG_WARN("failed to check dag exist", K(ret), K_(param));
     } else if (FALSE_IT(inc_sstable_cnt = tmp_tablet_handle.get_obj()->get_minor_table_count() + (is_exist ? 1 : 0))) {
     } else if (ObPartitionMergePolicy::is_sstable_count_not_safe(inc_sstable_cnt)) {
@@ -802,11 +804,7 @@ int ObTabletMergeDag::alloc_merge_ctx()
       ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (is_output_exec_mode(param_.exec_mode_)) {
-      ctx_ = NEW_CTX(ObTabletMajorOutputMergeCtx);
-    } else if (is_calc_ckm_exec_mode(param_.exec_mode_)) {
-      ctx_ = NEW_CTX(ObTabletMajorCalcCkmMergeCtx);
-    } else if (is_validate_exec_mode(param_.exec_mode_)) {
-      ctx_ = NEW_CTX(ObTabletMajorValidateMergeCtx);
+      ctx_ = NEW_CTX(ObSSTabletMajorMergeCtx);
 #endif
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1094,11 +1092,12 @@ void ObTabletMergeFinishTask::report_checkpoint_info(ObTabletMergeCtx &ctx)
 void ObTabletMergeFinishTask::record_tx_data_info(ObTabletMergeCtx &ctx)
 {
   int tmp_ret = OB_SUCCESS;
-  if (is_minor_merge(ctx.get_merge_type()) && LS_TX_DATA_TABLET == ctx.get_tablet_id()) {
+  if (is_minor_merge(ctx.get_merge_type()) && ctx.get_tablet_id().is_ls_tx_data_tablet()) {
     if (OB_NOT_NULL(ctx.filter_ctx_.compaction_filter_)) {
       const SCN recycle_scn =
           (static_cast<ObTxDataMinorFilter *>(ctx.filter_ctx_.compaction_filter_))->get_recycle_scn();
-      (void)ctx.get_ls()->get_tx_table()->recycle_tx_data_finish(recycle_scn);
+      (void)ctx.get_ls()->get_tx_table()->record_tx_data_recycle_scn(recycle_scn,
+                                                                     is_local_exec_mode(ctx.get_exec_mode()));
     }
 
     const int64_t tx_data_sstable_row_count = ctx.get_merge_history().block_info_.total_row_count_;
@@ -1132,7 +1131,6 @@ ObTabletMergeTask::~ObTabletMergeTask()
     merger_->~ObPartitionMerger();
     merger_ = nullptr;
   }
-  allocator_.~ObLocalArena();
 }
 
 int ObTabletMergeTask::init(const int64_t idx, ObBasicTabletMergeCtx &ctx)

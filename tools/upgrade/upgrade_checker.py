@@ -986,6 +986,79 @@ def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
   else:
     logging.info("check upgrade for arch-dependant cs_encoding format failed")
 
+# 由于 4.4 去除了 cos 驱动，不能再使用 cos:// 访问对象存储, 升级前需检查是否有使用 cos:// 前缀访问目的端的归档、备份和恢复任务
+# 后续使用 s3:// 访问 cos 对象存储
+def check_cos_archive_and_backup(query_cur):
+  can_upgrade = True
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version < get_version("4.4.0.0"):
+      # 检查是否存在 cos:// 前缀的归档任务
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVELOG WHERE STATUS != 'STOP' AND PATH LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in archive task failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist archive job with cos:// prefix in archive dest, please checkin CDB_OB_ARCHIVELOG")
+
+      # 检查是否存在 cos:// 前缀的备份任务
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_JOBS WHERE PATH LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in backup task failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist backup job with cos:// prefix in backup dest, please check CDB_OB_BACKUP_JOBS")
+
+      # 检查是否存在 cos:// 前缀的恢复任务
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_RESTORE_PROGRESS WHERE BACKUP_DEST LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in restore task failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist restore job with cos:// prefix in restore dest, please check CDB_OB_RESTORE_PROGRESS")
+
+      # 检查是否存在 cos:// 前缀的归档目的端
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_ARCHIVE_DEST WHERE VALUE LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in archive dest failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist restore dest with cos:// prefix in archive dest, please check CDB_OB_ARCHIVE_DEST")
+
+      # 检查是否存在 cos:// 前缀的备份目的端
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_BACKUP_PARAMETER WHERE VALUE LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in backup parameter failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist restore dest with cos:// prefix in backup parameter, please check CDB_OB_BACKUP_PARAMETER")
+
+      # 检查是否存在 cos:// 前缀的恢复目的端
+      (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_LOG_RESTORE_SOURCE WHERE TYPE = 'LOCATION' AND VALUE LIKE "cos://%";""")
+      if len(results) != 1 or len(results[0]) != 1:
+        can_upgrade = False
+        fail_list.append("check cos:// prefix in restore source failed")
+      elif results[0][0] != 0:
+        can_upgrade = False
+        fail_list.append("exist restore source with cos:// prefix in restore source, please check CDB_OB_LOG_RESTORE_SOURCE")
+  if can_upgrade:
+    logging.info("check upgrade for cos:// prefix in archive, backup and restore task success")
+  else:
+    logging.info("check upgrade for cos:// prefix in archive, backup and restore task failed")
+
+
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
   try:
@@ -1026,6 +1099,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_oracle_standby_replication_exist(query_cur)
       check_disk_space_for_mds_sstable_compat(query_cur)
       check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
+      check_cos_archive_and_backup(query_cur)
       # all check func should execute before check_fail_list
       check_direct_load_job_exist(cur, query_cur)
       check_fail_list()

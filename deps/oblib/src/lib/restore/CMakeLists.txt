@@ -8,8 +8,8 @@ oblib_add_library(restore OBJECT
   ob_storage.h
   ob_storage_oss_base.cpp
   ob_storage_oss_base.h
-  ob_storage_cos_base.cpp
-  ob_storage_cos_base.h
+  ob_storage_obdal_base.h
+  ob_storage_obdal_base.cpp
   ob_storage_path.cpp
   ob_storage_path.h
   ob_storage_info.cpp
@@ -18,15 +18,10 @@ oblib_add_library(restore OBJECT
   hdfs/ob_storage_hdfs_cache.h
   hdfs/ob_storage_hdfs_jni_base.cpp
   hdfs/ob_storage_hdfs_jni_base.h
-  cos/ob_cos_wrapper_handle.cpp
-  cos/ob_cos_wrapper_handle.h
-  cos/ob_singleton.h
   ob_object_device.cpp
   hmac_signature.cpp
   ob_object_device.h
-  ob_object_storage_base.cpp
-  obdal/obdal_accessor.h
-  obdal/obdal_accessor.cpp)
+  ob_object_storage_base.cpp)
 
 add_library(oss INTERFACE)
 target_include_directories(oss
@@ -66,14 +61,39 @@ target_link_libraries(s3
 )
 target_link_libraries(s3 PUBLIC oblib_base_without_pass)
 
-oblib_add_library(obdal ob_storage_obdal_base.cpp)
-target_link_directories(obdal PUBLIC ${DEP_3RD_DIR}/usr/local/oceanbase/deps/devel/lib)
-target_link_libraries(obdal
-  PUBLIC
-  libopendal_c.a
-  oblib_base_without_pass
+execute_process(
+  COMMAND sh -c "rm -rf libopendal && mkdir libopendal"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+execute_process(
+  COMMAND sh -c "cp ${DEP_DIR}/lib/libopendal_c.a libopendal"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+execute_process(
+  COMMAND sh -c "cd libopendal && ar x libopendal_c.a && ${OB_LD_BIN} -r *.o -o ../libopendal.o"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+execute_process(
+  COMMAND sh -c "cd libopendal && find . -maxdepth 1 -name '*.o' -print0 | xargs -0 -I {} nm {} | awk '$2 == \"T\" || $2 == \"D\" || $2 == \"B\" || $2 == \"R\" {print $3}' | grep -v -E 'opendal|ob_new_span|ob_drop_span' > ../symbol.txt"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-target_link_libraries(restore PUBLIC oss cos_sdk oblib_base s3 obdal)
+add_custom_command(
+  OUTPUT opendal.o
+  COMMAND ${OB_OBJCOPY_BIN} --localize-symbols=symbol.txt libopendal.o
+  COMMAND ${OB_OBJCOPY_BIN} --localize-hidden libopendal.o opendal.o
+  COMMAND rm -rf libopendal
+  DEPENDS ${DEP_DIR}/lib/libopendal_c.a
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMENT "Generating opendal.o"
+  VERBATIM
+)
 
-add_subdirectory(cos)
+add_library(opendal opendal.o)
+set_target_properties(opendal PROPERTIES LINKER_LANGUAGE CXX)
+
+oblib_add_library(obdal OBJECT obdal/obdal_accessor.cpp)
+target_link_libraries(obdal PUBLIC oblib_base_without_pass opendal)
+
+
+target_link_libraries(restore PUBLIC oss oblib_base s3 obdal)

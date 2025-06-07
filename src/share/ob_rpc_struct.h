@@ -89,7 +89,8 @@
 #include "share/ob_heartbeat_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
+#  include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
+#  include "storage/incremental/garbage_collector/ob_ss_garbage_collector_define.h"  // LastSuccSCNs
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
@@ -10095,7 +10096,8 @@ public:
       const ObZone &zone,
       const int64_t sql_port,
       const share::ObServerInfoInTable::ObBuildVersion &build_version,
-      const share::ObServerMode startup_mode);
+      const share::ObServerMode startup_mode,
+      const bool enable_logservice);
   int assign(const ObPrepareServerForAddingServerResult &other);
   bool get_is_server_empty() const
   {
@@ -10116,6 +10118,10 @@ public:
   share::ObServerMode get_startup_mode() const
   {
     return startup_mode_;
+  }
+  bool get_enable_logservice() const
+  {
+    return enable_logservice_;
   }
 private:
   bool is_server_empty_;
@@ -10373,9 +10379,10 @@ public:
                                enable_logservice_(false) {}
   TO_STRING_KV(K_(single_zone_deployment_on), K_(startup_mode), K_(enable_logservice));
   bool is_valid() const;
-  int init(const share::ObServerMode startup_mode);
+  int init(const share::ObServerMode startup_mode, const bool enable_logservice);
   int assign(const ObCheckDeploymentModeArg &other);
   share::ObServerMode get_startup_mode() const;
+  bool get_enable_logservice() const { return enable_logservice_; }
 private:
   bool single_zone_deployment_on_;  // obsolete, keep it only for compatability
   share::ObServerMode startup_mode_;
@@ -10574,6 +10581,7 @@ public:
       meta_tenant_data_version_(0)
       {}
   int assign(const TenantServerUnitConfig &other);
+  // init with no data version
   int init(const uint64_t tenant_id,
            const uint64_t unit_id,
            const lib::Worker::CompatMode compat_mode,
@@ -10584,6 +10592,33 @@ public:
 #ifdef OB_BUILD_TDE_SECURITY
            , const ObRootKeyResult &root_key
 #endif
+           );
+  // sys tenant init with data version
+  int init(const uint64_t tenant_id,
+           const uint64_t unit_id,
+           const lib::Worker::CompatMode compat_mode,
+           const share::ObUnitConfig &unit_config,
+           const common::ObReplicaType replica_type,
+           const bool if_not_grant,
+           const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+           , const ObRootKeyResult &root_key
+#endif
+          , const uint64_t data_version
+           );
+  // user tenant init with data version
+  int init(const uint64_t tenant_id,
+           const uint64_t unit_id,
+           const lib::Worker::CompatMode compat_mode,
+           const share::ObUnitConfig &unit_config,
+           const common::ObReplicaType replica_type,
+           const bool if_not_grant,
+           const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+           , const ObRootKeyResult &root_key
+#endif
+          , const uint64_t data_version
+          , const uint64_t meta_tenant_data_version
            );
   int init_for_dropping(const uint64_t tenant_id,
                         const bool is_delete);
@@ -10604,6 +10639,7 @@ public:
   // data_version of the meta tenant will be set.
   uint64_t data_version_;
   uint64_t meta_tenant_data_version_;
+
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id),
                K_(unit_id),
@@ -10952,6 +10988,35 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesRes);
 };
 
+struct ObTabletSplitScheduleArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitScheduleArg()
+    : tablet_ids_(), tenant_ids_(), schedule_time_()
+  {}
+  bool is_valid() const;
+  int assign(const ObTabletSplitScheduleArg &other);
+  TO_STRING_KV(K_(tablet_ids), K_(tenant_ids), K_(schedule_time));
+public:
+  ObSArray<ObTabletID> tablet_ids_;
+  ObSArray<uint64_t> tenant_ids_;
+  ObSArray<int64_t> schedule_time_;
+};
+
+struct ObLSTabletSplitScheduleRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSTabletSplitScheduleRes()
+    : ret_code_()
+  {}
+  int assign(const ObLSTabletSplitScheduleRes &other);
+  TO_STRING_KV(K_(ret_code));
+public:
+  int ret_code_;
+};
+
 struct ObTabletSplitArg final
 {
   OB_UNIS_VERSION(1);
@@ -11052,6 +11117,43 @@ public:
   share::ObLSID dest_ls_id_;
   int64_t dest_schema_version_;
   common::ObAddr server_addr_;
+};
+
+struct ObTabletSplitRegisterMdsArg final : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitRegisterMdsArg()
+    : ObDDLArg(), is_no_logging_(false), tenant_id_(OB_INVALID_TENANT_ID), src_local_index_tablet_count_(0),
+      ls_id_(), task_type_(), lob_schema_versions_(), split_info_array_()
+    {}
+  virtual ~ObTabletSplitRegisterMdsArg() = default;
+  virtual bool is_valid() const;
+  virtual int assign(const ObTabletSplitRegisterMdsArg &other);
+  TO_STRING_KV(K_(parallelism), K_(is_no_logging), K_(tenant_id), K_(src_local_index_tablet_count),
+      K_(ls_id), K_(task_type), K_(lob_schema_versions), K_(split_info_array));
+public:
+  bool is_no_logging_;
+  uint64_t tenant_id_;
+  int64_t src_local_index_tablet_count_;
+  share::ObLSID ls_id_;
+  share::ObDDLType task_type_;
+  ObSArray<uint64_t> lob_schema_versions_;
+  common::ObSArray<ObTabletSplitArg> split_info_array_;
+};
+
+struct ObTabletSplitRegisterMdsResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitRegisterMdsResult()
+    : ret_code_(OB_ERROR)
+  {}
+  ~ObTabletSplitRegisterMdsResult() = default;
+  int assign(const ObTabletSplitRegisterMdsResult &other);
+  TO_STRING_KV(K_(ret_code));
+public:
+  int ret_code_;
 };
 
 struct ObFreezeSplitSrcTabletArg final
@@ -11303,6 +11405,9 @@ public:
   TO_STRING_KV(K_(master_key_version_array));
   common::ObSEArray<ObMasterKeyVersionPair, 64> master_key_version_array_;
 };
+
+typedef ObDumpCacheMasterKeyResultArg ObSetMasterKeyArg;
+
 #endif
 
 struct ObDetectMasterRsArg
@@ -11325,6 +11430,23 @@ public:
 private:
   ObAddr addr_;
   int64_t cluster_id_;
+};
+
+struct ObDetectSSlogLSArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDetectSSlogLSArg() : addr_() {}
+  ~ObDetectSSlogLSArg() {}
+  int init(const ObAddr &addr);
+  int assign(const ObDetectSSlogLSArg &other);
+  void reset();
+  bool is_valid() const;
+  void set_addr(const ObAddr &addr) { addr_ = addr; }
+  const ObAddr &get_addr() const { return addr_; }
+  TO_STRING_KV(K_(addr));
+private:
+  ObAddr addr_;
 };
 
 struct ObDetectMasterRsLSResult
@@ -11363,6 +11485,26 @@ private:
   common::ObAddr master_rs_;               // local master_rs_ from ObRsMgr
   share::ObLSReplica replica_;      // it's valid if role_ is LEADER or FOLLOWER
   share::ObLSInfo ls_info_; // it's valid if role_ is LEADER
+};
+
+struct ObDetectSSlogLSResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDetectSSlogLSResult() : has_sslog_(false), replica_() {}
+  ~ObDetectSSlogLSResult() {}
+  int init(const bool has_sslog, const share::ObLSReplica &replica);
+  int assign(const ObDetectSSlogLSResult &other);
+  void reset();
+  bool is_valid() const { return has_sslog_ && replica_.is_valid(); }
+  int set_replica(const share::ObLSReplica &replica) { return replica_.assign(replica); }
+  const share::ObLSReplica &get_replica() const { return replica_; }
+  bool has_sslog() const { return has_sslog_; }
+  void set_has_sslog(const bool has_sslog) { has_sslog_ = has_sslog; }
+  TO_STRING_KV(K_(replica));
+private:
+  bool has_sslog_;
+  share::ObLSReplica replica_;
 };
 
 struct ObBatchBroadcastSchemaArg
@@ -11807,6 +11949,35 @@ public:
 public:
   int64_t tenant_id_;
 };
+
+struct ObSSGCLastSuccScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCLastSuccScnArg() : tenant_id_(OB_INVALID_TENANT_ID), is_for_sslog_table_(false) {}
+  ObSSGCLastSuccScnArg(const uint64_t tenant_id, const bool is_for_sslog_table) :
+    tenant_id_(tenant_id), is_for_sslog_table_(is_for_sslog_table)
+  {}
+  ~ObSSGCLastSuccScnArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; };
+  TO_STRING_KV(K_(tenant_id), K_(is_for_sslog_table));
+
+public:
+  uint64_t tenant_id_;
+  bool is_for_sslog_table_;
+};
+
+struct ObSSGCLastSuccSCNsRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCLastSuccSCNsRes() : last_succ_scns_() {}
+  int assign(const LastSuccSCNs &other);
+  TO_STRING_KV(K_(last_succ_scns));
+public:
+  LastSuccSCNs last_succ_scns_;
+};
+
 #endif
 struct ObRpcRemoteWriteDDLIncCommitLogArg final
 {
@@ -13824,7 +13995,7 @@ public:
   const common::ObString &get_logservice_access_point() const {
     return logservice_access_point_;
   }
-  TO_STRING_KV(K_(logservice_access_point));
+  TO_STRING_KV("logservice_access_point_is_empty", logservice_access_point_.empty());
 private:
   common::ObString logservice_access_point_;
   common::ObArenaAllocator allocator_;

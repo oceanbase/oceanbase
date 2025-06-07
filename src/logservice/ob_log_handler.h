@@ -853,6 +853,13 @@ public:
   int stat(palf::PalfStat &palf_stat) const;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   void refresh_proposer_member_info() const;
+  // @brief: whether election is allowed with ignoring proposer list.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_ERR_UNEXPECTED: ffi is null
+  // OB_INVALID_ARGUMENT: ffi is invalid
+  int set_allow_election_without_memlist(const bool allow_election_without_memlist);
 #endif
   template<typename StartPoint, typename IteratorType>
   friend int init_log_iterator(

@@ -203,7 +203,6 @@ public:
       const ObMigrationSSTableParam &param,
       const bool is_leader_restore,
       bool &need_copy);
-
 private:
   static int check_major_sstable_need_copy_(
       const ObMigrationSSTableParam &param,

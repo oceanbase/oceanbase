@@ -223,13 +223,19 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     } else if (lib::is_oracle_mode() && OB_ISNULL(scan_param.output_exprs_)
         && OB_FAIL(init_column_scale_info(scan_param))) {
       LOG_WARN("init column scale info failed", K(ret), K(scan_param));
+    } else if (micro_block_handle_mgr_.is_valid()) {
+      // Note: update effective_tablet_id for reused micro_block_handle_mgr_
+      micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
     } else if (!micro_block_handle_mgr_.is_valid()
                && OB_FAIL(micro_block_handle_mgr_.init(
                   static_cast<sql::ObStoragePushdownFlag>(scan_param.pd_storage_flag_).is_enable_prefetch_limiting(),
+                  tablet_id_,
                   table_store_stat_,
                   table_scan_stat_,
                   query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (scan_param.sample_info_.is_row_sample()
         && OB_FAIL(ObRowSampleFilterFactory::build_sample_filter(
           scan_param.sample_info_,
@@ -277,10 +283,15 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     // exist do not need lob locator
     if (!for_exist && OB_FAIL(build_lob_locator_helper(ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
+    } else if (micro_block_handle_mgr_.is_valid()) {
+      // Note: update effective_tablet_id for reused micro_block_handle_mgr_
+      micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
     } else if (!micro_block_handle_mgr_.is_valid()
-               && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_,
+               && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, tablet_id_, table_store_stat_,
                   table_scan_stat_,query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
       need_release_truncate_part_filter_ = false;
       truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
@@ -322,9 +333,14 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     tablet_id_ = ctx.tablet_id_;
     lob_locator_helper_ = nullptr;
     cached_iter_node_ = cached_iter_node;
-    if (!micro_block_handle_mgr_.is_valid()
-        && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, table_scan_stat_, query_flag_))) {
+    if (micro_block_handle_mgr_.is_valid()) {
+      // Note: update effective_tablet_id for reused micro_block_handle_mgr_
+      micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
+    } else if (!micro_block_handle_mgr_.is_valid()
+        && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, tablet_id_, table_store_stat_, table_scan_stat_, query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
       need_release_truncate_part_filter_ = false;
       truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
@@ -366,14 +382,19 @@ int ObTableAccessContext::init_for_mview(common::ObIAllocator *allocator, const 
     range_array_pos_ = nullptr;
     use_fuse_row_cache_ = true;
     lob_locator_helper_ = nullptr;
-    if (!micro_block_handle_mgr_.is_valid() &&
+    if (micro_block_handle_mgr_.is_valid()) {
+      // Note: update effective_tablet_id for reused micro_block_handle_mgr_
+      micro_block_handle_mgr_.set_effective_tablet_id(tablet_id_);
+    } else if (!micro_block_handle_mgr_.is_valid() &&
         OB_FAIL(micro_block_handle_mgr_.init(
                 false,
+                tablet_id_,
                 table_store_stat_,
                 table_scan_stat_,
                 query_flag_))) {
       LOG_WARN("Failed to init micro block handle mgr", K(ret));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       mview_scan_info_ = access_ctx.mview_scan_info_;
       need_release_mview_scan_info_ = false;
       is_inited_ = true;

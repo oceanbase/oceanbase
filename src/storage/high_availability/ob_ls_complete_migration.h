@@ -215,10 +215,12 @@ private:
       const int64_t timeout);
   int check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
       ObLS *ls,
       const int64_t timeout);
   int inner_check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
       ObLS *ls,
       bool &need_skip);
   int check_need_wait_transfer_table_replace_(
@@ -231,6 +233,22 @@ private:
   int init_timeout_ctx_(
       const int64_t timeout,
       ObTimeoutCtx &timeout_ctx);
+  int change_member_list_with_leader_();
+  // All transfer tasks should complete the replace operation in the following
+  // function check_tablet_transfer_table_ready_ whose transfer_start_scn is
+  // smaller than the returned transfer_scn. And for the last transfer, barrier
+  // condition should be matched.
+  int get_transfer_scn_and_wait_barrier_match_if_need_(
+      ObLS *ls,
+      SCN &transfer_scn);
+  int wait_src_ls_match_barrier_(
+      const share::SCN &transfer_scn,
+      const ObLSTransferMetaInfo &transfer_meta_info);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int force_elect_and_wait_become_leader_();
+  int change_member_list_with_log_service_();
+  int force_set_self_as_only_member_(ObLS *ls);
+#endif
 
 private:
   static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;

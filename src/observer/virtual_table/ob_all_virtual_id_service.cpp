@@ -63,6 +63,14 @@ int ObAllVirtualIDService::get_next_tenant_id_info_()
 {
   int ret = OB_SUCCESS;
   if (tenant_ids_index_ >= all_tenants_.count()) {
+    if (!GCTX.is_shared_storage_mode()) {
+      if (transaction::ObIDService::SSLogGTS == service_types_index_ + 1) {
+        service_types_index_++;
+      }
+      if (transaction::ObIDService::SSLogUID == service_types_index_ + 1) {
+        service_types_index_++;
+      }
+    }
     if (transaction::ObIDService::MAX_SERVICE_TYPE == service_types_index_ + 1 ||
         all_tenants_.empty()) {
       ret = OB_ITER_END;
@@ -79,6 +87,9 @@ int ObAllVirtualIDService::get_next_tenant_id_info_()
         SERVER_LOG(WARN, "check ls exist fail", K(ret), K_(cur_tenant_id));
       } else if (!exist) {
         ret = OB_LS_NOT_EXIST;
+        tenant_ids_index_++;
+      } else if (!ObIDService::is_working_service(service_type_[service_types_index_], MTL_ID())) {
+        ret = OB_NOT_IN_SERVICE;
         tenant_ids_index_++;
       } else {
         transaction::ObIDService *id_service = NULL;
@@ -143,7 +154,9 @@ int ObAllVirtualIDService::inner_get_next_row(ObNewRow *&row)
           SERVER_LOG(WARN, "ObAllVirtualIDService iter error", K(ret));
         }
       }
-    } while (OB_TENANT_NOT_IN_SERVER == ret || OB_LS_NOT_EXIST == ret);
+    } while (OB_TENANT_NOT_IN_SERVER == ret
+             || OB_LS_NOT_EXIST == ret
+             || OB_NOT_IN_SERVICE == ret);
   }
   if (OB_SUCC(ret)) {
     SERVER_LOG(INFO, "ObAllVirtualIDService iter success", K(*this));

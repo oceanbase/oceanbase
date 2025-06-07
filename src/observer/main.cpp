@@ -42,7 +42,9 @@
 #ifdef __NEED_PERF__
 #include "lib/profile/gperf.h"
 #endif
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 using namespace oceanbase::obsys;
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -91,6 +93,11 @@ static void print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  MPRINT("LIBPALF_VERSION: %s (%s)\n",
+    oceanbase::libpalf::libpalf_get_version(),
+    oceanbase::libpalf::libpalf_get_release_version());
+#endif
   MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
 }

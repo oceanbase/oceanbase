@@ -63,7 +63,8 @@ private:
       const ObTabletID &tablet_id,
       const ObTabletTransferInfo &transfer_info,
       bool &is_ready,
-      ObTabletHAStatus &ha_status /* source tablet ha status */) const;
+      ObTabletHAStatus &ha_status /* source tablet ha status */,
+      ObTabletTransferInfo &src_transer_info) const;
   void set_errsim_backfill_point_();
 private:
   bool is_inited_;
@@ -264,6 +265,9 @@ private:
       const common::ObTabletID &tablet_id,
       const share::ObStorageHACostItemName name) const;
   void transfer_tablet_restore_stat_() const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int put_sstables_to_shared_tablet_(ObBatchUpdateTableStoreParam &batch_param, const ObTablet &tablet);
+#endif
 private:
   bool is_inited_;
   ObTabletBackfillInfo tablet_info_;

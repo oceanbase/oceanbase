@@ -202,7 +202,7 @@ int ObRootServiceMonitor::try_start_root_service()
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     FLOG_WARN("GCTX.srv_rpc_proxy_ is null", KR(ret));
-  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(check_ls_service, rs_list))) {
+  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(check_ls_service, SYS_LS, rs_list))) {
     FLOG_WARN("fail to construct initial server list", KR(ret));
   } else if (rs_list.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;

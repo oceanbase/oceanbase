@@ -156,7 +156,7 @@ int TestSSCommonUtil::alloc_micro_block_meta(ObSSMicroBlockMeta *&micro_meta)
     LOG_WARN("fail to alloc micro_meta mem", KR(ret));
   } else {
     micro_meta = new(ptr) ObSSMicroBlockMeta();
-    SSMicroCacheStat.micro_stat().update_micro_pool_alloc_cnt(1);
+    SSMicroCacheStat.mem_stat().micro_alloc_cnt_ += 1;
   }
   return ret;
 }
@@ -177,6 +177,7 @@ int TestSSCommonUtil::get_micro_block(const MicroBlockInfo &micro_info, char *re
     io_info.timeout_us_ = 5 * 1000 * 1000;
     io_info.buf_ = read_buf;
     io_info.user_data_buf_ = read_buf;
+    io_info.effective_tablet_id_ = micro_info.macro_id_.second_id();
     ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
     ObSSMicroBlockId phy_micro_id(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
     ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
@@ -297,6 +298,7 @@ int TestSSCommonUtil::init_io_info(
     io_info.timeout_us_ = 5 * 1000 * 1000;
     io_info.buf_ = read_buf;
     io_info.user_data_buf_ = read_buf;
+    io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
   }
   return ret;
 }
@@ -349,13 +351,12 @@ int TestSSCommonUtil::clear_micro_cache(
     }
     // clear micro_range
     if (OB_SUCC(ret)) {
-      ObSSMicroRangeInfo **range_info_arr = micro_range_mgr->get_range_info_arr();
+      ObSSMicroInitRangeInfo **init_range_arr = micro_range_mgr->get_init_range_arr();
       const int64_t init_range_cnt = micro_range_mgr->get_init_range_cnt();
       range_micro_sum = 0;
       for (int64_t i = 0; i < init_range_cnt; ++i) {
-        range_micro_sum += range_info_arr[i]->micro_meta_cnt_;
-        range_info_arr[i]->micro_meta_cnt_ = 0;
-        range_info_arr[i]->micro_header_ = nullptr;
+        range_micro_sum += init_range_arr[i]->get_total_micro_cnt();
+        init_range_arr[i]->try_free_sub_ranges();
       }
     }
   }

@@ -70,7 +70,9 @@ int ObAllVirtualSSSSTableMgr::inner_get_next_row(common::ObNewRow *&row)
         start_to_read_ = true;
       }
     }
-    if (true == start_to_read_) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (true == start_to_read_) {
       if (OB_FAIL(generate_virtual_row_(ss_sstable_row_))) {
         if (OB_ITER_END == ret) {
         } else if (OB_TABLET_NOT_EXIST == ret) {
@@ -81,8 +83,6 @@ int ObAllVirtualSSSSTableMgr::inner_get_next_row(common::ObNewRow *&row)
       } else if (OB_FAIL(fill_in_row_(ss_sstable_row_, row))) {
         SERVER_LOG(WARN, "fill in row failed", KR(ret));
       }
-    } else {
-      ret = OB_ITER_END;
     }
   }
 #endif
@@ -93,72 +93,124 @@ int ObAllVirtualSSSSTableMgr::inner_get_next_row(common::ObNewRow *&row)
 int ObAllVirtualSSSSTableMgr::get_primary_key_()
 {
   int ret = OB_SUCCESS;
-  if (key_ranges_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "only support select a single tablet once, multiple tablet select is ");
-    SERVER_LOG(WARN, "invalid key ranges", KR(ret));
+  ObNewRange &key_range = key_ranges_.at(0);
+  if (OB_FAIL(get_first_key_(key_range))) {
+    SERVER_LOG(WARN, "handle key range faield", KR(ret));
   } else {
-    ObNewRange &key_range = key_ranges_.at(0);
-    if (OB_UNLIKELY(key_range.get_start_key().get_obj_cnt() != ROWKEY_COL_COUNT || key_range.get_end_key().get_obj_cnt() != ROWKEY_COL_COUNT)) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(ERROR,
-                 "unexpected key_ranges_ of rowkey columns",
-                 KR(ret),
-                 "size of start key",
-                 key_range.get_start_key().get_obj_cnt(),
-                 "size of end key",
-                 key_range.get_end_key().get_obj_cnt());
-    } else if (OB_FAIL(handle_key_range_(key_range))) {
-      SERVER_LOG(WARN, "handle key range faield", KR(ret));
+    int64_t idx = 0;
+    int64_t cnt = key_ranges_.count();
+    ARRAY_FOREACH_X(key_ranges_, idx, cnt, OB_SUCC(ret)) {
+      ObNewRange &key_range = key_ranges_.at(idx);
+      if (OB_FAIL(check_rowkey_same_(key_range))) {
+        SERVER_LOG(WARN, "check rowkey same faield", KR(ret), K(key_range), K(tenant_id_),
+                   K(ls_id_), K(tablet_id_), K(transfer_scn_));
+      }
     }
   }
   return ret;
 }
 
-int ObAllVirtualSSSSTableMgr::handle_key_range_(ObNewRange &key_range)
+int ObAllVirtualSSSSTableMgr::check_rowkey_same_(ObNewRange &key_range)
 {
   int ret = OB_SUCCESS;
-  ObObj tenant_obj_low = (key_range.get_start_key().get_obj_ptr()[0]);
-  ObObj tenant_obj_high = (key_range.get_end_key().get_obj_ptr()[0]);
-  ObObj ls_obj_low = (key_range.get_start_key().get_obj_ptr()[1]);
-  ObObj ls_obj_high = (key_range.get_end_key().get_obj_ptr()[1]);
-  ObObj tablet_obj_low = (key_range.get_start_key().get_obj_ptr()[2]);
-  ObObj tablet_obj_high = (key_range.get_end_key().get_obj_ptr()[2]);
-  ObObj transfer_obj_low = (key_range.get_start_key().get_obj_ptr()[3]);
-  ObObj transfer_obj_high = (key_range.get_end_key().get_obj_ptr()[3]);
-
-  uint64_t tenant_low = tenant_obj_low.is_min_value() ? 0 : tenant_obj_low.get_uint64();
-  uint64_t tenant_high = tenant_obj_high.is_max_value() ? UINT64_MAX : tenant_obj_high.get_uint64();
-  ObLSID ls_low = ls_obj_low.is_min_value() ? ObLSID(0) : ObLSID(ls_obj_low.get_int());
-  ObLSID ls_high = ls_obj_high.is_max_value() ? ObLSID(INT64_MAX) : ObLSID(ls_obj_high.get_int());
-  ObTabletID tablet_low = tablet_obj_low.is_min_value() ? ObTabletID(0) : ObTabletID(tablet_obj_low.get_int());
-  ObTabletID tablet_high = tablet_obj_high.is_max_value() ? ObTabletID(INT64_MAX) : ObTabletID(tablet_obj_high.get_int());
-
-  SCN transfer_low;
-  if (transfer_obj_low.is_min_value()) { transfer_low = SCN::min_scn(); }
-  else { transfer_low.convert_for_sql(transfer_obj_low.get_int()); }
-  SCN transfer_high;
-  if (transfer_obj_high.is_max_value()) { transfer_high = SCN::max_scn(); }
-  else { transfer_high.convert_for_sql(transfer_obj_high.get_int()); }
-
-  if (tenant_low != tenant_high
-      || ls_low != ls_high
-      || tablet_low != tablet_high
-      || transfer_low != transfer_high) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant id, ls id, tablet id and transfer scn must be specified. range select is ");
-    SERVER_LOG(WARN,
-               "only support point select.",
+  if (OB_UNLIKELY(key_range.get_start_key().get_obj_cnt() < ROWKEY_COL_COUNT || key_range.get_end_key().get_obj_cnt() < ROWKEY_COL_COUNT)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR,
+               "unexpected key_ranges_ of rowkey columns",
                KR(ret),
-               K(tenant_low),
-               K(tenant_high),
-               K(ls_low),
-               K(ls_high),
-               K(tablet_low),
-               K(tablet_high),
-               K(transfer_low),
-               K(transfer_high));
+               "size of start key",
+               key_range.get_start_key().get_obj_cnt(),
+               "size of end key",
+               key_range.get_end_key().get_obj_cnt());
   } else {
+    ObObj tenant_obj_low = (key_range.get_start_key().get_obj_ptr()[0]);
+    ObObj tenant_obj_high = (key_range.get_end_key().get_obj_ptr()[0]);
+    ObObj ls_obj_low = (key_range.get_start_key().get_obj_ptr()[1]);
+    ObObj ls_obj_high = (key_range.get_end_key().get_obj_ptr()[1]);
+    ObObj tablet_obj_low = (key_range.get_start_key().get_obj_ptr()[2]);
+    ObObj tablet_obj_high = (key_range.get_end_key().get_obj_ptr()[2]);
+    ObObj transfer_obj_low = (key_range.get_start_key().get_obj_ptr()[3]);
+    ObObj transfer_obj_high = (key_range.get_end_key().get_obj_ptr()[3]);
+
+    uint64_t tenant_low = tenant_obj_low.is_min_value() ? 0 : tenant_obj_low.get_uint64();
+    uint64_t tenant_high = tenant_obj_high.is_max_value() ? UINT64_MAX : tenant_obj_high.get_uint64();
+    ObLSID ls_low = ls_obj_low.is_min_value() ? ObLSID(0) : ObLSID(ls_obj_low.get_int());
+    ObLSID ls_high = ls_obj_high.is_max_value() ? ObLSID(INT64_MAX) : ObLSID(ls_obj_high.get_int());
+    ObTabletID tablet_low = tablet_obj_low.is_min_value() ? ObTabletID(0) : ObTabletID(tablet_obj_low.get_int());
+    ObTabletID tablet_high = tablet_obj_high.is_max_value() ? ObTabletID(INT64_MAX) : ObTabletID(tablet_obj_high.get_int());
+
+    SCN transfer_low;
+    if (transfer_obj_low.is_min_value()) { transfer_low = SCN::min_scn(); }
+    else { transfer_low.convert_for_sql(transfer_obj_low.get_int()); }
+    SCN transfer_high;
+    if (transfer_obj_high.is_max_value()) { transfer_high = SCN::max_scn(); }
+    else { transfer_high.convert_for_sql(transfer_obj_high.get_int()); }
+
+    if (tenant_low != tenant_high
+        || ls_low != ls_high
+        || tablet_low != tablet_high
+        || transfer_low != transfer_high) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant id, ls id, tablet id and transfer scn must be specified. range select is ");
+      SERVER_LOG(WARN,
+                 "only support point select.",
+                 KR(ret),
+                 K(tenant_low),
+                 K(tenant_high),
+                 K(ls_low),
+                 K(ls_high),
+                 K(tablet_low),
+                 K(tablet_high),
+                 K(transfer_low),
+                 K(transfer_high));
+    } else if (tenant_low != tenant_id_
+               || ls_low != ls_id_
+               || tablet_low != tablet_id_
+               || transfer_low != transfer_scn_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant id, ls id, tablet id and transfer scn must be specified. range select is ");
+      SERVER_LOG(WARN,
+                 "only support point select.",
+                 KR(ret),
+                 K(tenant_low),
+                 K(ls_low),
+                 K(tablet_low),
+                 K(transfer_low),
+                 K(tenant_id_),
+                 K(ls_id_),
+                 K(tablet_id_),
+                 K(transfer_scn_));
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualSSSSTableMgr::get_first_key_(ObNewRange &key_range)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(key_range.get_start_key().get_obj_cnt() < ROWKEY_COL_COUNT || key_range.get_end_key().get_obj_cnt() < ROWKEY_COL_COUNT)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR,
+               "unexpected key_ranges_ of rowkey columns",
+               KR(ret),
+               "size of start key",
+               key_range.get_start_key().get_obj_cnt(),
+               "size of end key",
+               key_range.get_end_key().get_obj_cnt());
+  } else {
+    ObObj tenant_obj_low = (key_range.get_start_key().get_obj_ptr()[0]);
+    ObObj ls_obj_low = (key_range.get_start_key().get_obj_ptr()[1]);
+    ObObj tablet_obj_low = (key_range.get_start_key().get_obj_ptr()[2]);
+    ObObj transfer_obj_low = (key_range.get_start_key().get_obj_ptr()[3]);
+
+    uint64_t tenant_low = tenant_obj_low.is_min_value() ? 0 : tenant_obj_low.get_uint64();
+    ObLSID ls_low = ls_obj_low.is_min_value() ? ObLSID(0) : ObLSID(ls_obj_low.get_int());
+    ObTabletID tablet_low = tablet_obj_low.is_min_value() ? ObTabletID(0) : ObTabletID(tablet_obj_low.get_int());
+
+    SCN transfer_low;
+    if (transfer_obj_low.is_min_value()) { transfer_low = SCN::min_scn(); }
+    else { transfer_low.convert_for_sql(transfer_obj_low.get_int()); }
+
     tenant_id_ = tenant_low;
     ls_id_ = ls_low;
     tablet_id_ = tablet_low;
@@ -179,13 +231,16 @@ int ObAllVirtualSSSSTableMgr::get_next_tablet_()
     ObSSMetaService *meta_service = MTL(ObSSMetaService *);
     ObSSMetaReadParam param;
     ObTablet *tablet = nullptr;
-    param.set_tablet_level_param(ObSSLogMetaType::SSLOG_TABLET_META,
-                                ls_id_,
-                                tablet_id_,
-                                transfer_scn_);
+    share::SCN row_scn; // useless for now.
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 ObSSLogMetaType::SSLOG_TABLET_META,
+                                 ls_id_,
+                                 tablet_id_,
+                                 transfer_scn_);
     if (OB_UNLIKELY(!param.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (OB_FAIL(meta_service->get_tablet(param, tablet_allocator_, tablet_hdl_))) {
+    } else if (OB_FAIL(meta_service->get_tablet(param, tablet_allocator_, tablet_hdl_, row_scn))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         ret = OB_ITER_END;
       } else {

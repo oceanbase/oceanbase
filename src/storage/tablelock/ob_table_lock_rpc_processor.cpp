@@ -69,7 +69,7 @@ int check_exist(const ObLockTaskBatchRequest<T> &arg,
                                     0,
                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet with timeout failed", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_latest(
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_tablet_status(
       data, unused_writer, unused_trans_stat, unused_trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
       // tablet is creating

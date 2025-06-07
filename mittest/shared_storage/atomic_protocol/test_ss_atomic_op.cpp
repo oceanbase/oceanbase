@@ -50,7 +50,12 @@ static int64_t lease_epoch = 1;
 
 using namespace common;
 
-bool is_meta_use_sslog(const sslog::ObSSLogMetaType type)
+bool is_file_use_sslog(const ObAtomicFileType type, const ObLSID &ls_id)
+{
+  return false;
+}
+
+bool is_meta_use_sslog(const sslog::ObSSLogMetaType type, const ObLSID &ls_id)
 {
   return false;
 }

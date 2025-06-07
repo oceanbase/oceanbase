@@ -394,6 +394,16 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObAlterLogExternalTableTask);
   };
 
+  struct ObSetConfigArgAfterBootstrap  final {
+    // config name: the name of config
+    const char* name_;
+    // alter_system_set_value: used for ALTER SYSTEM SET
+    const char* alter_system_set_value_;
+
+    bool is_valid() const { return NULL != name_ && NULL != alter_system_set_value_; }
+
+    TO_STRING_KV(K_(name), K_(alter_system_set_value));
+  };
 public:
   ObRootService();
   virtual ~ObRootService();
@@ -464,7 +474,6 @@ public:
   int check_sys_tenant_initial_master_key_valid();
 #endif
 
-  int check_config_result(const char *name, const char *value);
   int check_ddl_allowed();
 
   int renew_lease(const share::ObLeaseRequest &lease_request,
@@ -525,6 +534,7 @@ public:
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
   int send_auto_split_tablet_task_request(const obrpc::ObAutoSplitTabletBatchArg &arg, obrpc::ObAutoSplitTabletBatchRes &res);
   int split_global_index_tablet(const obrpc::ObAlterTableArg &arg);
+  int register_split_info_mds(const obrpc::ObTabletSplitRegisterMdsArg &arg, obrpc::ObTabletSplitRegisterMdsResult &res);
   /**
    * For recover restore table ddl, data insert into the target table is selected from another tenant.
    * The function is used to create a hidden target table without any change on the source table,
@@ -987,8 +997,11 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_config_after_bootstrap_();
-  int set_static_config_after_bootstrap_();
-  int set_dynamic_config_after_bootstrap_();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int set_logservice_access_point_after_bootstrap_(
+    common::ObArray<ObSetConfigArgAfterBootstrap > &configs,
+    ObSqlString &logservice_access_point_with_quota);
+#endif
   int wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list);
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 

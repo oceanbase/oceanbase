@@ -230,7 +230,7 @@ bool ObDeleteTabletLog::is_valid() const
   if (GCTX.is_shared_storage_mode()) {
     is_valid = is_valid
             && ls_epoch_ >= 0
-            && tablet_meta_version_ > 0
+            && tablet_meta_version_ >= 0
             && ObPendingFreeTabletStatus::MAX != status_
             && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
   }
@@ -312,7 +312,7 @@ bool ObGCTabletLog::is_valid() const
   return ls_id_.is_valid()
       && ls_epoch_ >= 0
       && tablet_id_.is_valid()
-      && tablet_meta_version_ > 0
+      && tablet_meta_version_ >= 0
       && ObPendingFreeTabletStatus::MAX != status_
       && tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
 }

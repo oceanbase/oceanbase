@@ -92,7 +92,9 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
 
 #ifdef OB_BUILD_SHARED_STORAGE
       if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
-        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(sslog::NotifyPath::MVCC_WRITE,
+                                                                                   node,
+                                                                                   dynamic_cast<ObMemtableCtx *>(this)))) {
           TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
         }
       }
@@ -177,7 +179,9 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
 
 #ifdef OB_BUILD_SHARED_STORAGE
       if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
-        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+        if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(sslog::NotifyPath::MVCC_WRITE,
+                                                                                   node,
+                                                                                   dynamic_cast<ObMemtableCtx *>(this)))) {
           TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
         }
       }
@@ -249,7 +253,9 @@ int ObIMvccCtx::register_row_replay_cb(
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode() && OB_UNLIKELY(memtable->get_key().get_tablet_id().id() == OB_ALL_SSLOG_TABLE_TID)) {
-      if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(node, dynamic_cast<ObMemtableCtx *>(this)))) {
+      if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(sslog::NotifyPath::MVCC_REPLAY,
+                                                                                 node,
+                                                                                 dynamic_cast<ObMemtableCtx *>(this)))) {
         TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
       }
     }

@@ -1423,7 +1423,32 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
 {
   int ret = OB_SUCCESS;
   const SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
-  if (snapshot <= tx_version_mgr_.get_max_commit_ts(false) ||
+  if (is_tenant_sslog_ls(tenant_id_, ls.get_ls_id())) {
+    // only for sslog
+    if (snapshot <= tx_version_mgr_for_sslog_.get_max_commit_ts(false)
+        || snapshot <= tx_version_mgr_for_sslog_.get_max_read_ts()
+        || snapshot <= ls_weak_read_ts) {
+      // do nothing
+      TRANS_LOG(INFO, "validate snapshot version for sslog", K(snapshot), K(ls_weak_read_ts));
+    } else {
+      SCN gts;
+      const int64_t timeout_us = 1 * 1000 * 1000;
+      const uint64_t gts_tenant_id = get_sslog_gts_tenant_id(tenant_id_);
+      if (OB_FAIL(ts_mgr_->get_ts_sync(gts_tenant_id,
+                                       timeout_us,
+                                       gts))) {
+        TRANS_LOG(WARN, "get gts for sslog failed", K(ret), K(timeout_us));
+      } else if (snapshot > gts) {
+        ret = OB_INVALID_QUERY_TIMESTAMP;
+        TRANS_LOG(WARN, "unexpected specified snapshot version", K(ret), K(snapshot), K(gts), K(lbt()));
+      } else {
+        // valid snapshot
+        // do nothing
+        TRANS_LOG(INFO, "use gts to validate snapshot version for sslog", K(ret),
+            K(snapshot), K(gts));
+      }
+    }
+  } else if (snapshot <= tx_version_mgr_.get_max_commit_ts(false) ||
       snapshot <= tx_version_mgr_.get_max_read_ts() ||
       snapshot <= ls_weak_read_ts) {
   } else {
@@ -1751,15 +1776,28 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
     //                                 +----------------------------------------------------------------+
     //
   }
+  const bool is_for_sslog = is_tenant_sslog_ls(tenant_id_, ls_id);
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
-  } else if (!snapshot0.is_valid_and_not_min()) {
-    ret = OB_EAGAIN;
-  } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, snapshot1))) {
+  } else if (is_for_sslog) {
+    if (FALSE_IT(snapshot0 = tx_version_mgr_for_sslog_.get_max_commit_ts(can_elr))) {
+    } else if (!snapshot0.is_valid_and_not_min()) {
+      ret = OB_EAGAIN;
+    } else if (OB_FAIL(ts_mgr_->get_gts(get_sslog_gts_tenant_id(tenant_id_), NULL, snapshot1))) {
+      TRANS_LOG(WARN, "get gts for sslog failed", K(ret), K(is_for_sslog));
+    } else {
+      snapshot = SCN::max(snapshot0, snapshot1);
+      TRANS_LOG(TRACE, "get gts for sslog succeed", K(snapshot0), K(snapshot1));
+    }
   } else {
-    snapshot = SCN::max(snapshot0, snapshot1);
+    if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
+    } else if (!snapshot0.is_valid_and_not_min()) {
+      ret = OB_EAGAIN;
+    } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, snapshot1))) {
+    } else {
+      snapshot = SCN::max(snapshot0, snapshot1);
+    }
   }
 
   if (role == FOLLOWER) {
@@ -1777,7 +1815,8 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
 int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                                   const int64_t expire_ts,
                                                   SCN &snapshot,
-                                                  int64_t &uncertain_bound)
+                                                  int64_t &uncertain_bound,
+                                                  const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   uint64_t op_sn = tx.op_sn_;
@@ -1787,7 +1826,8 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
   ret = acquire_global_snapshot__(expire_ts,
                                   GET_GTS_AHEAD_INTERVAL,
                                   snapshot,
-                                  uncertain_bound);
+                                  uncertain_bound,
+                                  is_for_sslog);
   tx.lock_.lock();
   bool interrupted = tx.flags_.INTERRUPTED_;
   if (interrupted) {
@@ -1815,7 +1855,8 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
 int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
                                               const int64_t gts_ahead,
                                               SCN &snapshot,
-                                              int64_t &uncertain_bound)
+                                              int64_t &uncertain_bound,
+                                              const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   const MonotonicTs request_time_base = get_req_receive_mts_();
@@ -1825,10 +1866,12 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   const int64_t MAX_WAIT_TIME_US = 1 * 1000 * 1000;
   MonotonicTs gts_receive_ts(0);
   const int64_t timeout_us = min(MAX_WAIT_TIME_US, expire_ts - current_time);
+  // NOTE thant sslog is only for meta tenant or sys tenant
+  const uint64_t gts_tenant_id = !is_for_sslog ? tenant_id_ : get_sslog_gts_tenant_id(tenant_id_);
   if (current_time >= expire_ts) {
     ret = OB_TIMEOUT;
     TRANS_LOG(WARN, "get gts timeout", K(ret), K(expire_ts), K(current_time));
-  } else if (OB_FAIL(ts_mgr_->get_gts_sync(tenant_id_, request_time, timeout_us, snapshot, gts_receive_ts))) {
+  } else if (OB_FAIL(ts_mgr_->get_gts_sync(gts_tenant_id, request_time, timeout_us, snapshot, gts_receive_ts))) {
     TRANS_LOG(WARN, "get gts fail", K(ret), K(timeout_us), K(request_time));
     if (OB_TIMEOUT == ret) {
       ret = OB_GTS_NOT_READY;
@@ -2495,7 +2538,12 @@ int ObTransService::update_max_read_ts_(const uint64_t tenant_id,
                                         const SCN ts)
 {
   int ret = OB_SUCCESS;
-  tx_version_mgr_.update_max_read_ts(ts);
+  if (is_tenant_sslog_ls(tenant_id, lsid)) {
+    tx_version_mgr_for_sslog_.update_max_read_ts(ts);
+    TRANS_LOG(TRACE, "update max read ts for sslog", K(tenant_id), K(ts), K(lsid));
+  } else {
+    tx_version_mgr_.update_max_read_ts(ts);
+  }
   TRANS_LOG(TRACE, "update max read ts", K(ret), K(tenant_id), K(lsid), K(ts));
   return ret;
 }
@@ -2578,6 +2626,72 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
     }
   }
   TRANS_LOG(TRACE, "gen trans id", K(ret), K(trans_id), K(retry_times));
+  return ret;
+}
+
+int ObTransService::gen_trans_id_for_sslog(ObTransID &trans_id)
+{
+  int ret = OB_SUCCESS;
+  int retry_times = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (is_tenant_has_sslog(MTL_ID())) {
+    const int MAX_RETRY_TIMES = 50;
+    int64_t tx_id = 0;
+    do {
+      if (OB_SUCC(sslog_gti_source_.get_id(tx_id))) {
+      } else if (OB_EAGAIN == ret) {
+        if (retry_times++ > MAX_RETRY_TIMES) {
+          ret = OB_GTI_NOT_READY;
+          TRANS_LOG(WARN, "get trans id not ready", K(ret), K(retry_times), KPC(this));
+        } else {
+          ob_usleep(1000);
+        }
+      } else {
+        TRANS_LOG(WARN, "get trans id fail", KR(ret));
+      }
+    } while (OB_EAGAIN == ret);
+    if (OB_SUCC(ret)) {
+      trans_id = ObTransID(tx_id);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case for sslog", KR(ret));
+  }
+#else
+  ret = OB_ERR_UNEXPECTED;
+#endif
+  TRANS_LOG(TRACE, "gen trans id for sslog", K(ret), K(trans_id), K(retry_times));
+  return ret;
+}
+
+int ObTransService::get_unique_id_for_sslog(int64_t &unique_id)
+{
+  int ret = OB_SUCCESS;
+  int retry_times = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (is_tenant_has_sslog(MTL_ID())) {
+    const int MAX_RETRY_TIMES = 50;
+    do {
+      if (OB_SUCC(sslog_gti_source_.get_id(unique_id))) {
+      } else if (OB_EAGAIN == ret) {
+        if (retry_times++ > MAX_RETRY_TIMES) {
+          ret = OB_GTI_NOT_READY;
+          TRANS_LOG(WARN, "get unique id not ready", K(ret), K(retry_times), KPC(this));
+        } else {
+          ob_usleep(1000);
+        }
+      } else {
+        TRANS_LOG(WARN, "get unique id fail", KR(ret));
+      }
+    } while (OB_EAGAIN == ret);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case for sslog", KR(ret));
+  }
+#else
+  ret = OB_ERR_UNEXPECTED;
+#endif
+  TRANS_LOG(TRACE, "get unique id for sslog", K(ret), K(unique_id), K(retry_times));
   return ret;
 }
 

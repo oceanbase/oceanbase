@@ -44,6 +44,8 @@ class ObUnitManager;
 class ObServerZoneOpService
 {
 public:
+  const static int64_t OB_SERVER_SEND_MASTER_KEY_TIMEOUT = 10 * 1000 * 1000; // 10s
+public:
   ObServerZoneOpService();
   virtual ~ObServerZoneOpService();
   int init(
@@ -170,16 +172,23 @@ public:
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);
 #ifdef OB_BUILD_TDE_SECURITY
-  int master_key_checking_for_adding_server(
+  int handle_master_key_for_adding_server(
       const common::ObAddr &server,
       const common::ObZone &zone,
       obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg);
+  int check_master_key_for_adding_server(
+      const common::ObAddr &server,
+      const common::ObZone &zone,
+      obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg);
+  int send_master_key_for_adding_server(
+      const common::ObAddr &server);
 #endif
   int stop_server_precheck(
       const ObIArray<ObAddr> &servers,
       const obrpc::ObAdminServerArg::AdminServerOp &op);
 private:
   int check_startup_mode_match_(const share::ObServerMode startup_mode);
+  int check_logservice_deployment_mode_(const bool added_server_logservice);
   int zone_checking_for_adding_server_(
       const common::ObZone &rpc_zone,
       ObZone &picked_zone);

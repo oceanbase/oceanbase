@@ -231,13 +231,15 @@ private:
       const int64_t table_id,
       const ObTabletID &src_tablet_id,
       bool &is_src_tablet_exist);
-  int prepare_tablet_split_ranges(
+  int prepare_tablet_split_ranges_inner(
       ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> &parallel_datum_rowkey_list);
   int prepare_tablet_split_infos(
       const share::ObLSID &ls_id,
       const ObAddr &leader_addr,
       ObIArray<obrpc::ObTabletSplitArg> &split_info_array);
   int update_task_message();
+  int register_split_info_mds(const share::ObDDLTaskStatus next_task_status);
+  int prepare_tablet_split_ranges(const share::ObDDLTaskStatus next_task_status);
 private:
   static const int64_t OB_PARTITION_SPLIT_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;

@@ -54,7 +54,10 @@ when "$table_name" in (
 "__all_virtual_checkpoint_diagnose_checkpoint_unit_info") then 5
 when "$table_name" in (
 "__all_virtual_ss_tablet_meta",
-"__all_virtual_ss_ls_meta") then 6
+"__all_virtual_ss_ls_meta",
+"__all_virtual_ss_sstable_mgr",
+"__all_virtual_ss_existing_tablet_meta",
+"__all_virtual_ss_existing_sstable_mgr") then 6
 else 1 end) as query_type from dual`;
 
 

@@ -123,6 +123,9 @@ bool ObStaticMergeParam::is_valid() const
   } else if (co_base_snapshot_version_ < 0) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "co_base_snapshot_version is invalid", K_(co_base_snapshot_version));
+  } else if (OB_UNLIKELY(merge_scn_ < scn_range_.end_scn_)) {
+    bret = false;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "merge scn should not less than end scn", K(ret), K_(merge_scn), K_(scn_range));
   } else {
     bret = true;
   }
@@ -1419,7 +1422,6 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   int64_t full_stored_col_cnt = 0;
   int64_t schema_version = 0;
   ObStorageSchema *storage_schema = nullptr;
-  bool is_building_index = false; // placeholder
   uint64_t min_data_version = 0;
 
   if (OB_UNLIKELY(!is_meta_major_merge(get_merge_type())
@@ -1440,8 +1442,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
                                                                                schema_version,
                                                                                min_data_version,
                                                                                mem_ctx_.get_allocator(),
-                                                                               *storage_schema,
-                                                                               is_building_index))) {
+                                                                               *storage_schema))) {
     if (OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get table schema", KR(ret), KPC(this));
     }

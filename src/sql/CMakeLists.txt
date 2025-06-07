@@ -685,6 +685,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_sdo_relate.cpp
   engine/expr/ob_expr_st_area.cpp
   engine/expr/ob_expr_st_x.cpp
+  engine/expr/ob_expr_startup_mode.cpp
   engine/expr/ob_expr_st_transform.cpp
   engine/expr/ob_expr_width_bucket.cpp
   engine/expr/ob_expr_word_count.cpp
@@ -1073,6 +1074,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_external_data_access_mgr.cpp
   engine/table/ob_external_data_page_cache.cpp
   engine/table/ob_external_table_access_service.cpp
+  engine/table/ob_pcached_external_file_service.cpp
   engine/table/ob_external_table_pushdown_filter.cpp
   engine/table/ob_csv_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp

@@ -332,6 +332,12 @@ int ObServerStorageMetaService::clear_tenant_log_dir(const uint64_t tenant_id)
   char tenant_slog_dir[MAX_PATH_SIZE] = {0};
   bool exist = true;
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  // in logservice mode, we don't need to clean tenant clog dir
+  // cause there is no clog dir in ob server`s disk
+  if (GCONF.enable_logservice) { // do nothing
+  } else
+#endif
   if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(tenant_id, tenant_clog_dir))) {
     LOG_WARN("fail to get tenant clog dir", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::is_exists(tenant_clog_dir, exist))) {

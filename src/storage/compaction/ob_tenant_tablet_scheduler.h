@@ -216,6 +216,7 @@ public:
       const ObMergeType &merge_type,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
+  static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
 #endif
   static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,

@@ -130,7 +130,15 @@ public:
   inline int64_t get_display_task_count_() const { return display_tasks_.count(); }
   int get_task_plan_display(
       common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan);
-
+  int build_ls_info_for_cross_az_dr(
+      const share::ObLSStatusInfo &ls_status_info,
+      DRLSInfo &dr_ls_info);
+  int check_ls_single_replica_dr_tasks(
+      DRLSInfo &dr_ls_info,
+      palf::LogConfigVersion &config_version,
+      share::ObServerInfoInTable &source_server_info,
+      common::ObZone &dest_zone,
+      bool &found);
 private:
 
   // check new task if conflict with task in task_keys array
@@ -784,9 +792,12 @@ private:
       DRLSInfo &dr_ls_info_with_flag,
       int64_t &acc_dr_task);
 
-  int check_ls_single_replica_dr_tasks_(
+  int generate_ls_single_replica_dr_tasks_(
       DRLSInfo &dr_ls_info,
       const bool only_for_display,
+      const palf::LogConfigVersion &config_version,
+      const share::ObServerInfoInTable &source_server_info,
+      const common::ObZone &dest_zone,
       int64_t &ls_acc_dr_task);
 
   int generate_single_replica_task_(
@@ -813,11 +824,7 @@ private:
       const common::ObAddr &server,
       DRLSInfo &dr_ls_info,
       bool &has_leader);
-
 private:
-  int build_disaster_ls_info_(
-      const share::ObLSStatusInfo &ls_status_info,
-      DRLSInfo &dr_ls_info);
   void reset_task_plans_() { display_tasks_.reset(); }
 
   int check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id);

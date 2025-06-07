@@ -22719,6 +22719,7 @@ opt_server_or_zone opt_tenant_name
 LOGSERVICE_ACCESS_POINT COMP_EQ STRING_VALUE opt_comment
 {
   ParseNode *logservice_access_point= NULL;
+  result->contain_sensitive_data_ = true;
   make_name_node(logservice_access_point, result->malloc_pool_, "logservice_access_point");
   malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_ACTION, 5,
                            logservice_access_point,    /* param_name */

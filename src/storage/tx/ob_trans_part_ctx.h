@@ -984,6 +984,7 @@ public:
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
   int handle_tx_keepalive_response(const int64_t status);
+  bool is_for_sslog() const { return is_for_sslog_(); }
 private:
   bool fast_check_need_submit_redo_for_freeze_() const;
   int check_status_();
@@ -1006,6 +1007,7 @@ private:
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
   int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
+  bool is_for_sslog_() const;
 public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,
                               ObTxLogBlock &log_block,

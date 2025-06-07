@@ -2131,7 +2131,7 @@ DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
          common::ObConfigEnableAutoSplitChecker,
-         "if the auto-partition clause is not used"
+         "if the auto-partition clause is not used, "
          "this config judge whether to enable auto-partition for creating table.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common::ObConfigAutoSplitTabletSizeChecker,
@@ -2145,7 +2145,7 @@ DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTRIBUTED",
          common::ObConfigGlobalIndexAutoSplitPolicyChecker,
-         "if the auto-partition clause is not used"
+         "if the auto-partition clause is not used, "
          "this config judge whether to enable auto-partition for creating global index."\
          "DISTRIBUTED: enable auto-partition for creating global index if tenant has multiple nodes, e.g., multiple primary zones or multiple units;"\
          "ALL: enable auto-partition for creating all global index;"\
@@ -2380,6 +2380,16 @@ DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",
          "The expiration time of local cache data in shared storage mode,"
          "Range: [0s, )",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "20", "[1, 99]",
+        "The expiration time of local cache data in shared storage mode,"
+        "Range: [1, 99]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_MODE_WITH_PARSER(_ss_local_cache_control, OB_TENANT_PARAMETER, "",
+        common::ObSSLocalCacheControlParser,
+        "switch for ss_local_cache in shared_storage mode",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
@@ -2644,10 +2654,13 @@ DEF_TIME(_ss_garbage_collect_file_expiration_time, OB_TENANT_PARAMETER, "6h", "[
          "The file expiration threshold on shared storage. The garbage collection service periodically reclaims expired files."
          "Range: [10s, 365d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(_ss_schedule_upload_interval, OB_TENANT_PARAMETER, "1m", "[1s,12h]",
+DEF_TIME(_ss_schedule_upload_interval, OB_TENANT_PARAMETER, "10m", "[1s,12h]",
          "The execution interval for the inc sstable upload task"
          "Range: [1s, 12h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_palf_kv, OB_CLUSTER_PARAMETER, "True", "specifies the observer enable palf kv",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 
 DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",
@@ -2727,6 +2740,17 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_enable_timeout_garbage_collection, OB_TENANT_PARAMETER, "False",
+         "Used to switch timeout garbage collection on shared storage.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_tablet_version_retention_time, OB_TENANT_PARAMETER, "1h", "[10s,1d]",
+         "The guaranteed retention time for the old versions of tablets on shared storage."
+         "Range: [10s, 1d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_failed_block_gc_expiration_time, OB_TENANT_PARAMETER, "10m", "[1m,365d]",
+         "failed blocks not marked as abort will be gc after _ss_failed_block_gc_expiration_time."
+         "Range: [1m, 365d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_external_table_prefetch, OB_TENANT_PARAMETER, "True",
          "enable external table prebuffer",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

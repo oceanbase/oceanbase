@@ -23,6 +23,10 @@
 #include "observer/omt/ob_tenant.h"
 #include "ob_ha_rebuild_tablet.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/high_availability/ob_ss_ls_migration.h"
+#endif
+
 namespace oceanbase
 {
 using namespace share;
@@ -163,6 +167,34 @@ int ObLSMigrationHandlerStatusHelper::get_next_change_status(
   }
   return ret;
 }
+
+//TODO(jyx441808): add unit test for this function
+const char *ObLSMigrationHandlerStatusHelper::get_status_str(
+    const ObLSMigrationHandlerStatus &status)
+{
+  static const char *status_strs[] = {
+    "INIT",
+    "PREPARE_LS",
+    "WAIT_PREPARE_LS",
+    "BUILD_LS",
+    "WAIT_BUILD_LS",
+    "COMPLETE_LS",
+    "WAIT_COMPLETE_LS",
+    "FINISH"
+  };
+  STATIC_ASSERT(ARRAYSIZEOF(status_strs) == (int64_t)ObLSMigrationHandlerStatus::MAX_STATUS,
+                "ls_migration_handler_status string array size mismatch enum ObLSMigrationHandlerStatus count");
+
+  const char *str = "UNKNOWN";
+
+  if (status < ObLSMigrationHandlerStatus::INIT || status >= ObLSMigrationHandlerStatus::MAX_STATUS) {
+    str = "UNKNOWN";
+  } else {
+    str = status_strs[static_cast<int>(status)];
+  }
+  return str;
+}
+
 
 /******************ObLSMigrationTask*********************/
 ObLSMigrationTask::ObLSMigrationTask()
@@ -539,6 +571,26 @@ int ObLSMigrationHandler::check_task_exist(const share::ObTaskId &task_id, bool 
   return ret;
 }
 
+int ObLSMigrationHandler::get_migration_task_and_handler_status(
+    ObLSMigrationTask &task,
+    ObLSMigrationHandlerStatus &status)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    if (task_list_.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      task = task_list_.at(0);
+      status = status_;
+    }
+  }
+  return ret;
+}
+
 void ObLSMigrationHandler::destroy()
 {
   if (is_inited_) {
@@ -687,6 +739,7 @@ int ObLSMigrationHandler::do_init_status_()
         //do nothing
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status
+          && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_GC != migration_status) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls migration handler in init status but ls migration status is in failed status",
@@ -946,6 +999,22 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
       if (OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
         LOG_WARN("failed to swicth next stage cancel", K(ret));
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (ObMigrationOpType::REPLACE_LS_OP == task.arg_.type_) {
+      ObTenantDagScheduler *scheduler = nullptr;
+      ObSSMigrationDagNetInitParam param;
+      param.arg_ = task.arg_;
+      param.task_id_ = task.task_id_;
+
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+      } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObSSMigrationDagNet>(&param))) {
+        LOG_WARN("failed to create and add ss migration dag net", K(ret), K(task), KPC(ls_));
+      } else {
+        LOG_INFO("success to create ss migration dag net", K(ret), K(task));
+      }
+#endif
     } else {
       ObTenantDagScheduler *scheduler = nullptr;
       ObMigrationDagNetInitParam param;
@@ -1216,7 +1285,7 @@ int ObLSMigrationHandler::report_to_disaster_recovery_()
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
     } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
-      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_meta_tenant(res))) {
+      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_disaster_recovery(res))) {
         LOG_WARN("failed to report to meta tenant", KR(ret), K(res));
       }
     } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_rs(res))) {
@@ -1280,8 +1349,10 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not inited", K(ret));
-  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_ && ObMigrationOpType::ADD_LS_OP != arg.type_) {
-    LOG_INFO("only migration or add ls need check disk space, others skip it",
+  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_
+             && ObMigrationOpType::ADD_LS_OP != arg.type_
+             && ObMigrationOpType::REPLACE_LS_OP != arg.type_) {
+    LOG_INFO("only migration or add or replace ls need check disk space, others skip it",
         K(arg));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
@@ -1301,13 +1372,13 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
             KR(ret), K(required_size));
       }
     } else {
-// #ifdef OB_BUILD_SHARED_STORAGE
-//       if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
-//         // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
-//         FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
-//             KR(ret), K(required_size));
-//       }
-// #endif
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
+        // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
+        FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
+            KR(ret), K(required_size));
+      }
+#endif
     }
   }
   return ret;

@@ -30,14 +30,23 @@ static int update_deleted_and_undefine_tablet(ObLS &ls, const ObTabletID &tablet
   int ret = OB_SUCCESS;
   const ObTabletExpectedStatus::STATUS expected_status = ObTabletExpectedStatus::DELETED;
   const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::UNDEFINED;
-  if (OB_FAIL(ls.get_tablet_svr()->update_tablet_ha_expected_status(tablet_id, expected_status))) {
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+
+  if (OB_FAIL(ls.ha_get_tablet(tablet_id, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id), K(tablet_handle));
+  } else if (OB_FAIL(ls.get_tablet_svr()->update_tablet_ha_expected_status(tablet->get_reorganization_scn(), tablet_id, expected_status))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_INFO("restore tablet maybe deleted, skip update expected status to DELETED", K(ret), K(tablet_id));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to update expected status to DELETED", K(ret), K(expected_status), K(tablet_id));
     }
-  } else if (OB_FAIL(ls.update_tablet_restore_status(tablet_id,
+  } else if (OB_FAIL(ls.update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                     tablet_id,
                                                      restore_status,
                                                      true/* need reset transfer flag */,
                                                      false/*need_to_set_split_data_complete*/))) {
@@ -3213,11 +3222,16 @@ int ObTabletFinishRestoreTask::update_restore_status_()
 {
   int ret = OB_SUCCESS;
   ObTabletRestoreStatus::STATUS tablet_restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
+  ObTablet *tablet = nullptr;
 
-  if (OB_FAIL(ObTabletRestoreAction::trans_restore_action_to_restore_status(
+  if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(ObTabletRestoreAction::trans_restore_action_to_restore_status(
       tablet_restore_ctx_->action_, tablet_restore_status))) {
     LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet_restore_ctx_->tablet_id_,
+  } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_reorganization_scn(),
+                                                       tablet_restore_ctx_->tablet_id_,
                                                        tablet_restore_status,
                                                        false /* donot reset has transfer table flag */,
                                                        false /*need_to_set_split_data_complete*/))) {
@@ -3304,7 +3318,6 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
     param.tenant_id_ = tenant_id;
     param.ha_table_info_mgr_ = ha_table_info_mgr;
-    param.need_keep_old_tablet_ = false;
 
     if (OB_FAIL(ha_tablets_builder.init(param))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), K(param));

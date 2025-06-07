@@ -25,6 +25,10 @@ namespace oceanbase
 {
 namespace share
 {
+
+/*
+ * ObGetFileIdRangeFunctor is used for geting slog min id and slog max id
+ */
 class ObGetFileIdRangeFunctor : public common::ObBaseDirEntryOperator
 {
 public:
@@ -47,6 +51,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObGetFileIdRangeFunctor);
 };
 
+/*
+ * ObGetFileSizeFunctor is used for geting slog file size
+ */
 class ObGetFileSizeFunctor : public common::ObBaseDirEntryOperator
 {
 public:

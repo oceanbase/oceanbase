@@ -106,7 +106,10 @@ public:
 
 protected:
   virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const = 0;
-  int init_create_sstable_param_(ObTabletCreateSSTableParam &param) const;
+  int init_create_sstable_param_(
+      ObTabletCreateSSTableParam &param,
+      const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+      const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids) const;
   int init_create_sstable_param_(
       const blocksstable::ObSSTableMergeRes &res,
       ObTabletCreateSSTableParam &param) const;
@@ -232,10 +235,9 @@ public:
   int get_copy_macro_range_array(const common::ObArray<ObCopyMacroRangeInfo> *&macro_range_array) const;
   int64_t get_next_copy_task_id();
   int64_t get_max_next_copy_task_id();
-
   virtual int process() override;
-
-
+  int add_macro_block_id_info(const ObCopySSTableMacroIdInfo &macro_id_info);
+  ObCopySSTableMacroIdInfo &get_macro_block_id_info() { return macro_id_info_; }
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:
@@ -297,6 +299,7 @@ private:
   ObLSTabletService *tablet_service_;
   ObSSTableIndexBuilder sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
+  ObCopySSTableMacroIdInfo macro_id_info_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 

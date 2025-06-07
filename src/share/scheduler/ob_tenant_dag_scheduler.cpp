@@ -21,10 +21,8 @@
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tablet_refresh_dag.h"
-#include "storage/compaction/ob_verify_ckm_dag.h"
-#include "storage/compaction/ob_update_skip_major_tablet_dag.h"
 #include "storage/incremental/ob_inc_sstable_upload_task.h"
+#include "storage/compaction_v2/ob_ss_skip_major_merge_dag.h"
 #endif
 
 
@@ -1861,7 +1859,6 @@ void ObTenantDagWorker::run1()
       status_ = DWS_FREE;
       cur_task = task_;
       task_ = NULL;
-      reset_compaction_thread_locals();
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*cur_task, *this, ret/*task error_code*/))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
       }
@@ -3054,17 +3051,11 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
         cancel_flag = (ls_id == static_cast<compaction::ObBatchFreezeTabletsDag *>(cur)->get_param().ls_id_);
 #ifdef OB_BUILD_SHARED_STORAGE
       } else if (GCTX.is_shared_storage_mode()
-              && ObDagType::DAG_TYPE_VERIFY_CKM == cur->get_type()) {
-        cancel_flag = ls_id == static_cast<compaction::ObVerifyCkmDag *>(cur)->get_param().ls_id_;
-      } else if (GCTX.is_shared_storage_mode()
-              && ObDagType::DAG_TYPE_REFRESH_SSTABLES == cur->get_type()) {
-        cancel_flag = ls_id == static_cast<compaction::ObTabletsRefreshSSTableDag *>(cur)->get_param().ls_id_;
-      } else if (GCTX.is_shared_storage_mode()
-              && ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == cur->get_type()) {
-        cancel_flag = ls_id == static_cast<compaction::ObUpdateSkipMajorTabletDag *>(cur)->get_param().ls_id_;
-      } else if (GCTX.is_shared_storage_mode()
                  && ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD == cur->get_type()) {
         cancel_flag = ls_id == static_cast<storage::ObIncSSTableUploadDag *>(cur)->get_param().ls_id_;
+      } else if (GCTX.is_shared_storage_mode()
+                 && ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == cur->get_type()) {
+        cancel_flag = ls_id == static_cast<compaction::ObSSSkipMajorMergeDag *>(cur)->get_param().ls_id_;
 #endif
       } else {
         cancel_flag = (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());
@@ -3262,25 +3253,6 @@ int ObDagPrioScheduler::diagnose_compaction_dags()
           tmp_ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(WARN, "get unexpected dag", K(tmp_ret), "dag_type", dag->get_type());
         } else if (!is_compaction_dag(dag->get_type())) {
-#ifdef OB_BUILD_SHARED_STORAGE
-          if (!GCTX.is_shared_storage_mode()) {
-            // do nothing
-          } else if (ObDagType::DAG_TYPE_REFRESH_SSTABLES == dag->get_type()) {
-            ObTabletsRefreshSSTableDag *refresh_dag = nullptr;
-            if (OB_ISNULL(refresh_dag = static_cast<ObTabletsRefreshSSTableDag *>(dag))) {
-              tmp_ret = OB_ERR_UNEXPECTED;
-              COMMON_LOG(WARN, "get unexpected null stored dag", K(tmp_ret), KPC(dag));
-            } else if (OB_TMP_FAIL(MTL(ObDiagnoseTabletMgr *)->add_diagnose_tablet(refresh_dag->get_param().ls_id_,
-                                                                                  refresh_dag->get_param().tablet_id_,
-                                                                                  ObIDag::get_diagnose_tablet_type(dag->get_type())))) {
-              COMMON_LOG(WARN, "failed to add diagnose tablet", K(tmp_ret), "dag_param", refresh_dag->get_param());
-            } else {
-              COMMON_LOG(TRACE, "dag maybe abormal", KPC(refresh_dag));
-            }
-          } else if (ObDagType::DAG_TYPE_VERIFY_CKM == dag->get_type()) {
-            // TODO(@DanLing) impl diagnose interface for verifying ckm
-          }
-#endif
         } else if (OB_ISNULL(merge_dag = static_cast<ObTabletMergeDag *>(dag))) {
           tmp_ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(WARN, "get unexpected null stored dag", K(tmp_ret), KPC(dag));
@@ -3410,7 +3382,7 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
   return ret;
 }
 
-int ObDagPrioScheduler::check_dag_exist(const ObIDag &dag, bool &exist)
+int ObDagPrioScheduler::check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -3430,6 +3402,8 @@ int ObDagPrioScheduler::check_dag_exist(const ObIDag &dag, bool &exist)
   } else if (stored_dag->get_priority() != dag.get_priority()) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "unexpected priority value", K(ret), K(stored_dag->get_priority()), K(dag.get_priority()));
+  } else {
+    is_emergency = stored_dag->get_emergency();
   }
   return ret;
 }
@@ -4883,6 +4857,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
     if (OB_SUCC(guard.get_ret())) {
+      worker.reset_compaction_thread_locals();
       free_workers_.add_last(&worker);
       worker.set_task(NULL);
       if (OB_FAIL(scheduler_sync_.signal())) {
@@ -5215,7 +5190,7 @@ int ObTenantDagScheduler::get_adaptive_limit(const int64_t prio, int64_t &limit)
   return ret;
 }
 
-int ObTenantDagScheduler::check_dag_exist(const ObIDag *dag, bool &exist)
+int ObTenantDagScheduler::check_dag_exist(const ObIDag *dag, bool &exist, bool &is_emergency)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -5226,7 +5201,7 @@ int ObTenantDagScheduler::check_dag_exist(const ObIDag *dag, bool &exist)
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", KP(dag));
-  } else if (OB_FAIL(prio_sche_[dag->get_priority()].check_dag_exist(*dag, exist))) {
+  } else if (OB_FAIL(prio_sche_[dag->get_priority()].check_dag_exist(*dag, exist, is_emergency))) {
     COMMON_LOG(WARN, "fail to check dag exist", K(ret));
   }
   return ret;

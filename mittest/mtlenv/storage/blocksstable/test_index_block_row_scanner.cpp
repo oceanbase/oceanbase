@@ -202,6 +202,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       idx_row_header->get_macro_id(),
       idx_row,
       query_flag.is_use_block_cache(),
+      ObTabletID(tablet_id_),
       macro_handle,
       &allocator_));
 
@@ -216,6 +217,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       idx_row_header->get_macro_id(),
       idx_row,
       false /* disable use block cache */,
+      ObTabletID(tablet_id_),
       raw_block_macro_handle,
       &allocator_));
   ASSERT_EQ(OB_SUCCESS, raw_block_macro_handle.wait());

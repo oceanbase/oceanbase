@@ -238,13 +238,17 @@ int ObAllVirtualSSTabletMeta::generate_virtual_row_(VirtualTabletMetaRow &row)
     ObSSMetaReadParam param;
     ObTablet *tablet = nullptr;
     ObTabletHandle tablet_hdl;
-    param.set_tablet_level_param(ObSSLogMetaType::SSLOG_TABLET_META,
-                                ls_id_,
-                                tablet_id_,
-                                transfer_scn_);
+    share::SCN row_scn;
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 ObSSLogMetaType::SSLOG_TABLET_META,
+                                 ls_id_,
+                                 tablet_id_,
+                                 transfer_scn_);
+
     if (OB_UNLIKELY(!param.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (OB_FAIL(meta_service->get_tablet(param, allocator, tablet_hdl))) {
+    } else if (OB_FAIL(meta_service->get_tablet(param, allocator, tablet_hdl, row_scn))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         ret = OB_ITER_END;
       } else {
@@ -255,7 +259,7 @@ int ObAllVirtualSSTabletMeta::generate_virtual_row_(VirtualTabletMetaRow &row)
       SERVER_LOG(ERROR, "get tablet failed ", KR(ret), KP(tablet), K(param));
     } else {
       const ObTabletMeta &meta = tablet->get_tablet_meta();
-      row.version_ = SCN::min_scn();   // TODO: use the real version
+      row.version_ = row_scn;
       row.data_tablet_id_ = meta.data_tablet_id_;
       row.create_scn_ = meta.create_scn_;
       row.start_scn_ = meta.start_scn_;

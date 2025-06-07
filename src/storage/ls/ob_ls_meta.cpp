@@ -960,6 +960,22 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
   return ret;
 }
 
+int ObLSMeta::get_transfer_meta(
+    share::SCN &transfer_scn,
+    ObLSTransferMetaInfo &transfer_meta_info) const
+{
+  int ret = OB_SUCCESS;
+  ObReentrantRLockGuard guard(rw_lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
+  } else {
+    transfer_scn = transfer_scn_;
+    transfer_meta_info = transfer_meta_info_;
+  }
+  return ret;
+}
+
 int ObLSMeta::set_transfer_meta_info(
     const share::SCN &replay_scn,
     const share::ObLSID &src_ls,
