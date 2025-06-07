@@ -1112,18 +1112,25 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("data size overflow", K(ret));
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
-    } else if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
+    } else if (obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_BLOB == mysql_type
+              && CS_TYPE_BINARY != get_data_type()->get_collation_type()) {
+      // Here must check collation_type which is set by request_type to distinguish clob or blob
+      mysql_type = obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
         local_allocator, (uint8_t)mysql_type, session, charset, ObCharsetType::CHARSET_INVALID,
         cs_type, ncs_type, src, tz_info, param, true, NULL,
         NULL == get_data_type() ? false : get_data_type()->get_meta_type().is_unsigned_integer()))) {
-      // get_data_type() is null, its a extend type, unsigned need false.
-      LOG_WARN("failed to parse basic param value", K(ret));
-    } else {
-      ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
-      OZ (deep_copy_obj(allocator, param, *obj));
-      OX (dst_pos += sizeof(ObObj));
-      LOG_DEBUG("deserialize ob pl data type success",
-                K(*this), K(*obj), K(obj), K(dst_pos), K(dst), K(ret));
+        // get_data_type() is null, its a extend type, unsigned need false.
+        LOG_WARN("failed to parse basic param value", K(ret));
+      } else {
+        ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
+        OZ (deep_copy_obj(allocator, param, *obj));
+        OX (dst_pos += sizeof(ObObj));
+        LOG_DEBUG("deserialize ob pl data type success",
+                  K(*this), K(*obj), K(obj), K(dst_pos), K(dst), K(ret));
+      }
     }
   } else {
     const ObUserDefinedType *user_type = NULL;
