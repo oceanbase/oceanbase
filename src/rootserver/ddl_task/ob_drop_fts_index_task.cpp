@@ -286,8 +286,8 @@ int ObDropFTSIndexTask::check_switch_succ()
     int tmp_ret = schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema);
     if (tmp_ret != OB_SUCCESS) {
     } else if (OB_ISNULL(data_table_schema)) {
-    } else if ((tmp_ret = data_table_schema->check_has_fts_index(schema_guard, has_fts_index))!= OB_SUCCESS) {
-    } else if ((tmp_ret = data_table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))!= OB_SUCCESS) {
+    } else if ((tmp_ret = data_table_schema->check_has_fts_index_aux(schema_guard, has_fts_index))!= OB_SUCCESS) {
+    } else if ((tmp_ret = data_table_schema->check_has_multivalue_index_aux(schema_guard, has_multivalue_index))!= OB_SUCCESS) {
     } else if (!has_fts_index && !has_multivalue_index
       && (tmp_ret = data_table_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id)) != OB_SUCCESS) {
     }
