@@ -187,7 +187,7 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
                                                          tmp_obj,
                                                          udf_info_.result_type_,
                                                          res_obj,
-                                                         true))) {
+                                                         false))) {
               LOG_WARN("failed to ObSPIService::spi_convert", K(ret), K(tmp_obj), K(res_obj));
             }
 

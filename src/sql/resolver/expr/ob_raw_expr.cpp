@@ -5539,6 +5539,7 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       params_desc_v2_ = tmp.params_desc_v2_;
       dblink_name_ = tmp.dblink_name_;
       dblink_id_ = tmp.dblink_id_;
+      external_routine_type_ = tmp.external_routine_type_;
     }
   }
   return ret;

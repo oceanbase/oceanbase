@@ -458,7 +458,7 @@ int ObToJavaStringTypeMapper::operator()(const ObObj &obj, jobject &java_value)
       LOG_WARN("unexpected NULL GetByteArrayElements", K(ret));
     } else if (FALSE_IT(MEMCPY(bytes, utf8_str.ptr(), utf8_str.length()))) {
       // unreachable
-    } else if (FALSE_IT(env_.ReleaseByteArrayElements(byte_array, bytes, JNI_COMMIT))) {
+    } else if (FALSE_IT(env_.ReleaseByteArrayElements(byte_array, bytes, 0))) {
       // unreachable
     } else if (OB_FAIL(ObJavaUtils::exception_check(&env_))) {
       LOG_WARN("failed to exception_check", K(ret), K(utf8_str));
