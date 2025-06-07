@@ -288,10 +288,6 @@ public:
   int add_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObILibCacheObject *cache_obj);
   int get_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObCacheObjGuard &guard);
   int cache_node_exists(ObILibCacheKey* key, bool& is_exists);
-  int add_exists_cache_obj_by_stmt_id(ObILibCacheCtx &ctx,
-                                      ObILibCacheObject *cache_obj);
-  int add_exists_cache_obj_by_sql(ObILibCacheCtx &ctx,
-                                  ObILibCacheObject *cache_obj);
   int evict_plan(uint64_t table_id);
   int evict_plan_by_table_name(uint64_t database_id, ObString tab_name);
 
@@ -478,9 +474,6 @@ private:
                                     ObILibCacheCtx &ctx,
                                     ObILibCacheObject *cache_obj,
                                     ObILibCacheNode *&node);
-  int deal_add_ps_plan_result(int add_plan_ret,
-                              ObPlanCacheCtx &pc_ctx,
-                              const ObILibCacheObject &cache_object);
   int check_after_get_plan(int tmp_ret, ObILibCacheCtx &ctx, ObILibCacheObject *cache_obj);
   int get_normalized_pattern_digest(const ObPlanCacheCtx &pc_ctx, uint64_t &pattern_digest);
 private:
