@@ -2841,7 +2841,7 @@ DEFINE_ERROR_DEP(OB_JNI_OBJECT_NOT_FOUND_ERROR, -11061, -1, "HY000", "object cou
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, -11062, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect string value for function inet", "Incorrect string value for function %s")
 DEFINE_ERROR(OB_EXTERNAL_TABLE_FORMAT_ERROR, -11063, -1, "HY000", "missing format for external table")
 DEFINE_ERROR(OB_EXTERNAL_ACCESS_PATH_ERROR, -11064, -1, "HY000", "missing access path for external table");
-DEFINE_ERROR_EXT(OB_ORC_READ_ERROR, -11065, -1, "HY000", "fair to read orc file", "fair to read orc file, message: %s");
+DEFINE_ERROR_EXT(OB_ORC_READ_ERROR, -11065, -1, "HY000", "fail to read orc file", "fail to read orc file, message: %s");
 DEFINE_ERROR_EXT(OB_JNI_JAVA_EXCEPTION_ERROR, -11066, -1, "HY000", "java occur exception", "Java exception: %.*s");
 DEFINE_ERROR_EXT(OB_JNI_ENV_SETUP_ERROR, -11067, -1, "HY000", "setup java env error", "Setup java env with error: %.*s");
 DEFINE_ERROR_EXT(OB_JNI_DETACH_THREAD_ERROR, -11068, -1, "HY000", "jni detach thread error", "Detach thread with error: %.*s");
