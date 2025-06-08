@@ -1488,7 +1488,7 @@ void ObLSMigrationHandler::stop()
 
 #ifdef ERRSIM
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
-  ObLSID ls_id = ObLSID::INVALID_LS_ID;
+  ObLSID ls_id(ObLSID::INVALID_LS_ID);
   if (OB_NOT_NULL(ls_)) {
     tenant_id = ls_->get_tenant_id();
     ls_id = ls_->get_ls_id();
