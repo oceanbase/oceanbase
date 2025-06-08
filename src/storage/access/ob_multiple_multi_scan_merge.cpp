@@ -132,7 +132,7 @@ int ObMultipleMultiScanMerge::inner_calc_scan_range(const ObIArray<blocksstable:
             if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
             {
               range.start_key_.set_min_rowkey();
-            } else if (curr_rowkey_.is_max_rowkey()) {
+            } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
               range.end_key_.set_max_rowkey();
             }
             if (OB_FAIL(cow_ranges.push_back(range))) {

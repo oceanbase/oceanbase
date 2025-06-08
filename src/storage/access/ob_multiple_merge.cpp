@@ -362,9 +362,17 @@ int ObMultipleMerge::save_curr_rowkey()
       } else if (OB_FAIL(tmp_rowkey.assign(unprojected_row_.storage_datums_,
                                            access_param_->iter_param_.get_schema_rowkey_count()))) {
         LOG_WARN("Failed to assign tmp rowkey", K(ret), K_(unprojected_row));
+      } else {
+        curr_scan_index_ = unprojected_row_.scan_index_;
       }
     } else if (ScanState::DI_BASE == scan_state_) {
       tmp_rowkey = di_base_border_rowkey;
+      if ((access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_min_rowkey()) ||
+          (!access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_max_rowkey())) {
+        curr_scan_index_ = get_range_count() - 1;
+      } else {
+        curr_scan_index_ = unprojected_row_.scan_index_;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected scan state", K(ret), K_(scan_state));
@@ -381,8 +389,6 @@ int ObMultipleMerge::save_curr_rowkey()
       LOG_WARN("Unexpected null out cols", K(ret));
     } else if (OB_FAIL(curr_rowkey_.prepare_memtable_readable(*rowkey_col_descs, *access_ctx_->allocator_))) {
       LOG_WARN("Fail to transfer store rowkey", K(ret), K(curr_rowkey_));
-    } else {
-      curr_scan_index_ = unprojected_row_.scan_index_;
     }
   }
   if (OB_SUCC(ret)) {

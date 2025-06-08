@@ -64,6 +64,8 @@ protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
+  virtual int get_range_count() const override
+  { return rowkeys_->count(); }
 private:
   const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
   common::ObSEArray<blocksstable::ObDatumRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> cow_rowkeys_;

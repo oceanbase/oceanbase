@@ -144,7 +144,7 @@ int ObMultipleScanMerge::calc_scan_range()
       if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
       {
         cow_range_.start_key_.set_min_rowkey();
-      } else if (curr_rowkey_.is_max_rowkey()) {
+      } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
         cow_range_.end_key_.set_max_rowkey();
       }
     }
