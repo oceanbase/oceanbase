@@ -1067,7 +1067,7 @@ int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
   // update the tablet addr. to resolve the dead lock, update_tablet_meta_addr is moved out of lock,
   // but this may cause t3m read a new addr which is not in the tablet_block_handle_. when this
   // happens, t3m needs to retry.
-  if (OB_FAIL(meta_writer.batch_compare_and_swap_tablet())) {
+  if (!GCTX.is_shared_storage_mode() && OB_FAIL(meta_writer.batch_compare_and_swap_tablet())) {
     LOG_WARN("fail to update_tablet_meta_addr", K(ret));
   }
 

@@ -448,6 +448,13 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     LOG_WARN("fail to check whether tablet has been written slog", K(ret), K(tablet_key));
   } else if (has_slog) {
     // tablet has been updated, skip
+  } else if (GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(t3m->get_tablet(WashTabletPriority::WTP_LOW, tablet_key, old_tablet_handle))) {
+      LOG_WARN("fail to get tablet", K(ret), K(tablet_key));
+    } else if (FALSE_IT(old_tablet = old_tablet_handle.get_obj())) {
+    } else if (OB_FAIL(old_tablet->get_updating_tablet_pointer_param(update_pointer_param))) {
+      LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(old_tablet));
+    }
   } else if (OB_FAIL(t3m->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, old_tablet_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // skip write this tablet's checkpoint
@@ -479,29 +486,31 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
     } else if (OB_FAIL(new_tablet->get_updating_tablet_pointer_param(update_pointer_param))) {
       LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(new_tablet));
-    } else {
-      ObUpdateTabletLog slog(tablet_key.ls_id_, tablet_key.tablet_id_, update_pointer_param, ls_epoch);
-      if (OB_UNLIKELY(!slog.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid slog entry", K(ret), K(slog), K(tablet_key), K(ls_epoch), K(update_pointer_param));
-      } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
-        LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
-      } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
-        LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
-      } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
-        LOG_WARN("fail to increase meta and data macro blocks' ref cnt", K(ret));
-      } else {
-        TabletItemAddrInfo addr_info;
-        addr_info.tablet_key_ = tablet_key;
-        addr_info.old_addr_ = old_addr;
-        addr_info.new_addr_ = slog.disk_addr_;
-        addr_info.need_rollback_ = true;
-        if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(new_tablet_handle.get_buf_len(), addr_info.tablet_pool_type_))) {
-          LOG_WARN("fail to get tablet pool type", K(ret), K(addr_info));
-        } else if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
-          LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
-        }
-      }
+    }
+  }
+  ObUpdateTabletLog slog(tablet_key.ls_id_, tablet_key.tablet_id_, update_pointer_param, ls_epoch);
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!slog.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid slog entry", K(ret), K(slog), K(tablet_key), K(ls_epoch), K(update_pointer_param));
+  } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
+    LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
+  } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
+    LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
+  }
+  if (OB_FAIL(ret) || GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
+    LOG_WARN("fail to increase meta and data macro blocks' ref cnt", K(ret));
+  } else {
+    TabletItemAddrInfo addr_info;
+    addr_info.tablet_key_ = tablet_key;
+    addr_info.old_addr_ = old_addr;
+    addr_info.new_addr_ = slog.disk_addr_;
+    addr_info.need_rollback_ = true;
+    if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(new_tablet_handle.get_buf_len(), addr_info.tablet_pool_type_))) {
+      LOG_WARN("fail to get tablet pool type", K(ret), K(addr_info));
+    } else if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
+      LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
     }
   }
 
