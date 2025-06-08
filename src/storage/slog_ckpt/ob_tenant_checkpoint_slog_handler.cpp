@@ -748,14 +748,27 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
-  } else if (OB_FAIL(gc_checkpoint_file())) {
-    LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
-  } else if (OB_FAIL(inner_write_checkpoint(is_force))) {
-    LOG_WARN("fail to inner write checkpoint", K(ret), K(is_force));
-  }
-  // Regardless of success or failure, gc checkpoint file
-  if (OB_TMP_FAIL(gc_checkpoint_file())) {
-    LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
+  } else {
+    bool is_writing_checkpoint_set = false;
+    while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("wait until last checkpoint finished");
+      }
+      ob_usleep(100 * 1000); // 100ms
+    }
+    is_writing_checkpoint_set = true;
+    if (OB_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
+    } else if (OB_FAIL(inner_write_checkpoint(is_force))) {
+      LOG_WARN("fail to inner write checkpoint", K(ret), K(is_force));
+    }
+    // Regardless of success or failure, gc checkpoint file
+    if (OB_TMP_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
+    }
+    if (is_writing_checkpoint_set) {
+      ATOMIC_STORE(&is_writing_checkpoint_, false);
+    }
   }
   return ret;
 }
@@ -776,7 +789,6 @@ int ObTenantCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
     int64_t broadcast_version = -1;
     int64_t frozen_version = -1;
     bool is_major_doing = false;
-    bool is_writing_checkpoint_set = false;
     const int64_t start_time = ObTimeUtility::current_time();
     int64_t cost_time = 0;
 
@@ -784,15 +796,6 @@ int ObTenantCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, merge scheduler ptr is nullptr", K(ret));
     } else {
-      // we can't just return warn, since it will clean copy status before exiting
-      // the only way is to wait without timeout
-      while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
-        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
-          LOG_INFO("wait until last checkpoint finished");
-        }
-        ob_usleep(100 * 1000); // 100ms
-      }
-      is_writing_checkpoint_set = true;
       //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
       //checkpoint after merge finish.
       // 1) avoid IO traffic between ckpt and major
@@ -876,9 +879,6 @@ int ObTenantCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
           "ret", ret, "cursor", ckpt_cursor_, "frozen_version", frozen_version, "cost_time(us)", cost_time);
     }
     clean_copy_status(); // in case fail after get_cur_cursor
-    if (is_writing_checkpoint_set) {
-      ATOMIC_STORE(&is_writing_checkpoint_, false);
-    }
   }
   return ret;
 }
