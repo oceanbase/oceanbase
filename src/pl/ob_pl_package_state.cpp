@@ -873,9 +873,6 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
   } else if (cur_state_version.header_public_syn_count_ != state_version.header_public_syn_count_ ||
              cur_state_version.body_public_syn_count_ != state_version.body_public_syn_count_) {
     match = false;
-  } else if (cur_state_version.package_version_ != state_version.package_version_ ||
-             cur_state_version.package_body_version_ != state_version.package_body_version_) {
-    match = false;
   } else {
     if (cur_state_version.header_merge_version_ != state_version.header_merge_version_) {
       if(OB_FAIL(ObRoutinePersistentInfo::check_dep_schema(schema_guard,
