@@ -134,6 +134,7 @@ public:
   bool need_remove_from_flying() const;
   bool get_initial_state() const;
   ObTabletResidentInfo get_tablet_resident_info(const ObTabletMapKey &key) const;
+  bool is_empty_shell() const { return attr_.is_empty_shell(); }
 
   // do not KPC memtable_mgr, may dead lock
   VIRTUAL_TO_STRING_KV(K_(phy_addr), K_(obj), K_(ls_handle), K_(ddl_kv_mgr_handle), K_(attr),

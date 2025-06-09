@@ -1924,12 +1924,14 @@ int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_ch
   } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
     LOG_WARN("failed to get ptr handle", K(ret), K(key));
   } else {
-    ObTabletPointer *tablet_ptr = ptr_handle.get_tablet_pointer();
+    const ObTabletPointer *tablet_ptr = ptr_handle.get_tablet_pointer();
     if (OB_ISNULL(tablet_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
+    } else if (tablet_ptr->is_empty_shell()) {
+      need_upload = false;
     } else {
-      share::SCN scn = tablet_ptr->get_tablet_max_checkpoint_scn();
+      const share::SCN &scn = tablet_ptr->get_tablet_max_checkpoint_scn();
       if (!scn.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("scn should not be invalid", K(ret), K(key), K(scn), KPC(tablet_ptr));
