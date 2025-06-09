@@ -1664,7 +1664,9 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   return ret;
 }
 
-int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters)
+int ObTableParam::check_is_safe_filter_with_di(
+    common::ObIArray<sql::ObRawExpr *> &exprs,
+    sql::ObPushdownFilterNode &pushdown_filters)
 {
   int ret = OB_SUCCESS;
   bool has_lob_column_out = false;
@@ -1677,10 +1679,22 @@ int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdo
     for (int64_t i = 0; !has_lob_column_out && i < out_cols.count(); i++) {
       has_lob_column_out = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
     }
-    if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
-                                                   has_lob_column_out,
-                                                   is_safe_filter_with_di_))) {
-      LOG_WARN("Fail to check filter info", K(ret));
+    if (has_lob_column_out) {
+      for (int64_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di_ && i < exprs.count(); i++) {
+        const sql::ObRawExpr *expr = exprs.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null filter expr", K(ret), K(exprs));
+        } else if (expr->is_topn_filter()) {
+          is_safe_filter_with_di_ = false;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && is_safe_filter_with_di_) {
+      if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
+                                                     is_safe_filter_with_di_))) {
+        LOG_WARN("Fail to check filter info", K(ret));
+      }
     }
   }
   return ret;

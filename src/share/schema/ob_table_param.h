@@ -360,7 +360,8 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
-  int check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters);
+  int check_is_safe_filter_with_di(common::ObIArray<sql::ObRawExpr *> &exprs,
+                                   sql::ObPushdownFilterNode &pushdown_filters);
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,

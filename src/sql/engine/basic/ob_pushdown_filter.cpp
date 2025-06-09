@@ -1171,19 +1171,14 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownFilter)
 
 // filter on lob or topn filter with lob column output is not safe for delete_insert scan
 int ObPushdownFilterNode::check_filter_info(const storage::ObITableReadInfo &read_info,
-                                            const bool has_lob_column_out,
                                             bool &is_safe_filter_with_di)
 {
   int ret = OB_SUCCESS;
-  is_safe_filter_with_di = true;
   if (is_logic_op_node()) {
     for (uint32_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di && i < n_child_; i++) {
-      if (OB_NOT_NULL(childs_[i])) {
-        if (childs_[i]->is_topn_filter() && has_lob_column_out) {
-          is_safe_filter_with_di = false;
-        } else if (OB_FAIL(childs_[i]->check_filter_info(read_info, has_lob_column_out, is_safe_filter_with_di))) {
-          LOG_WARN("Fail to check filter info", K(ret));
-        }
+      if (OB_NOT_NULL(childs_[i]) &&
+          OB_FAIL(childs_[i]->check_filter_info(read_info, is_safe_filter_with_di))) {
+        LOG_WARN("Fail to check filter info", K(ret));
       }
     }
   } else {

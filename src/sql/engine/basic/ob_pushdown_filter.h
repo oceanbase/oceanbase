@@ -290,7 +290,6 @@ public:
         OR_FILTER == type_ || TRUNCATE_OR_FILTER == type_;
   }
   int check_filter_info(const storage::ObITableReadInfo &read_info,
-                        const bool has_lob_column_out,
                         bool &is_safe_filter_with_di);
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));

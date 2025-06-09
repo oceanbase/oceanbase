@@ -819,6 +819,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
       } else if (OB_FAIL(scan_ctdef.table_param_.check_is_safe_filter_with_di(
+                  scan_pushdown_filters,
                   *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to check lob column pushdown", K(ret));
       }
@@ -837,6 +838,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
       } else if (OB_FAIL(lookup_ctdef->table_param_.check_is_safe_filter_with_di(
+                  lookup_pushdown_filters,
                   *lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to check lob column pushdown", K(ret));
       }
@@ -1408,6 +1410,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
   int ret = OB_SUCCESS;
   ObArray<ObExpr *> domain_id_expr;
   ObArray<uint64_t> domain_id_col_ids;
+
   // 1. add basic column
   if (OB_FAIL(generate_access_ctdef(op, cg_ctx, scan_ctdef, domain_id_expr, domain_id_col_ids, has_rowscn))) {
     LOG_WARN("generate access ctdef failed", K(ret), K(scan_ctdef.ref_table_id_));
@@ -1506,6 +1509,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
                     scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
           LOG_WARN("failed to apply filter constructor", K(ret));
         } else if (OB_FAIL(scan_ctdef.table_param_.check_is_safe_filter_with_di(
+                    scan_pushdown_filters,
                     *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
           LOG_WARN("failed to check lob column pushdown", K(ret));
         }
