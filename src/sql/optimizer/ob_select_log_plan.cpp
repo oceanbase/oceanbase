@@ -514,7 +514,8 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                       need_sort,
                                                       prefix_pos))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (((!need_sort || prefix_pos > 0) && use_part_sort) ||
+  } else if (OB_FALSE_IT(prefix_pos = (use_part_sort && need_sort) ? 0 : prefix_pos)) {
+  } else if ((!need_sort && use_part_sort) ||
              (need_sort && can_ignore_merge && OrderingFlag::NOT_MATCH == interesting_order_info)) {
     // 1. need generate partition sort plan, but need not sort
     // 2. if need sort and no further op needs the output order, not generate merge groupby
@@ -1398,7 +1399,8 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                       need_sort,
                                                       prefix_pos))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (((!need_sort || prefix_pos > 0) && use_part_sort) ||
+  } else if (OB_FALSE_IT(prefix_pos = (use_part_sort && need_sort) ? 0 : prefix_pos)) {
+  } else if ((!need_sort && use_part_sort) ||
              (need_sort && can_ignore_merge_plan && OrderingFlag::NOT_MATCH == interesting_order_info)) {
     // 1. need generate partition sort plan, but need not sort
     // 2. if need sort and no further op needs the output order, not generate merge groupby
@@ -6152,6 +6154,12 @@ int ObSelectLogPlan::calc_win_func_helper_with_hint(const ObLogicalOperator *op,
     } else if (!win_func_helper.enable_topn_) {
       is_valid = false;
     }
+    if (OB_SUCC(ret) && (WinDistAlgo::WIN_DIST_RANGE == option.algo_
+                         || WinDistAlgo::WIN_DIST_LIST == option.algo_)) {
+      for (int64_t i = 1; is_valid && OB_SUCC(ret) && i < temp_pby_oby_prefixes.count(); ++i) {
+        is_valid = temp_pby_oby_prefixes.at(0) == temp_pby_oby_prefixes.at(i);
+      }
+    }
   }
   return ret;
 }
@@ -7504,7 +7512,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                     false, /* use hash sort */
                                                     false, /* use hash topn sort */
                                                     ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                                    sort_keys,
+                                                    range_dist_keys,
                                                     range_dist_keys.count(),
                                                     pby_prefix,
                                                     top,
