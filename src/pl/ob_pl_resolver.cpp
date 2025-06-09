@@ -12458,26 +12458,16 @@ int ObPLResolver::resolve_associative_array_construct(const ObQualifiedName &q_n
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
-  ObConstRawExpr *null_expr = NULL;
-  ObObj obj;
-  ObExprResType res_type;
-  CK (OB_NOT_NULL(udf_info.ref_expr_));
-  if (OB_SUCC(ret) &&
-      (udf_info.param_names_.count() > 0 || udf_info.ref_expr_->get_param_exprs().count() > 0)) { // only support empty constructor for associative array
+  const ObAssocArrayType *assoc_array_type = NULL;
+  CK (OB_NOT_NULL(assoc_array_type = static_cast<const ObAssocArrayType*>(user_type)));
+  if (OB_SUCC(ret)
+     && !assoc_array_type->get_index_type().is_pl_integer_type()
+     && udf_info.ref_expr_->get_param_exprs().count() > 0) { //index by varchar does not allow the use of a constructor without specifying an index
     ret = OB_ERR_CALL_WRONG_ARG;
-    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
     LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
   }
-  OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
-  CK (OB_NOT_NULL(null_expr));
-  OX (obj.set_null());
-  OX (null_expr->set_value(obj));
-  OX (res_type.set_type(ObExtendType));
-  OX (res_type.set_extend_type(PL_ASSOCIATIVE_ARRAY_TYPE));
-  OX (res_type.set_udt_id(user_type->get_user_type_id()));
-  OX (null_expr->set_result_type(res_type));
-  OX (null_expr->set_expr_obj_meta(res_type));
-  OX (expr = null_expr);
+  OZ (resolve_collection_construct(q_name, udf_info, user_type, expr));
 #else
   UNUSEDx(q_name, udf_info, user_type, expr);
 #endif
