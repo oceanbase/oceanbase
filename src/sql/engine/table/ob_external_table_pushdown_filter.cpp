@@ -56,7 +56,7 @@ int ObExternalTablePushdownFilter::prepare_filter_col_meta(
   int ret = OB_SUCCESS;
   CK (file_col_index.count() == col_exprs.count());
   CK (col_ids.count() == col_exprs.count());
-  bool filter_enabled_ = true;
+  filter_enabled_ = true;
   for (int64_t i = 0; OB_SUCC(ret) && filter_enabled_ && i < file_col_index.count(); ++i) {
     const int file_col_id = file_col_index.at(i);
     for (int64_t f_idx = 0; OB_SUCC(ret) && f_idx < skipping_filter_nodes_.count(); ++f_idx) {

@@ -346,8 +346,6 @@ private:
     int select_row_ranges(const int64_t stripe_idx);
     int select_row_ranges_by_pushdown_filter(const orc::StripeInformation &stripe,
                                              const int64_t stripe_idx,
-                                             const int64_t row_index_stride,
-                                             const int64_t groups_in_stripe,
                                              const int64_t stripe_first_row_id,
                                              const int64_t stripe_num_rows,
                                              bool &build_whole_stripe_range);

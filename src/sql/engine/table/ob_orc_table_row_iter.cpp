@@ -311,17 +311,13 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("orc stripe info is null", K(ret));
     } else {
-      const int64_t row_index_stride = reader_->getRowIndexStride();
       const int64_t stripe_num_rows = stripe->getNumberOfRows();
-      const int64_t groups_in_stripe = (stripe_num_rows + row_index_stride - 1) / row_index_stride;
       const int64_t first_row_id = state_.next_stripe_first_row_id_;
       state_.next_stripe_first_row_id_ += stripe_num_rows;
       bool build_whole_stripe_range = true;
       if (has_pushdown_filter()) {
         if (OB_FAIL(select_row_ranges_by_pushdown_filter(*stripe,
                                                          stripe_idx,
-                                                         row_index_stride,
-                                                         groups_in_stripe,
                                                          first_row_id,
                                                          stripe_num_rows,
                                                          build_whole_stripe_range))) {
@@ -334,7 +330,7 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
         } else {
           SelectedRowRange whole_stripe_range;
           whole_stripe_range.start_row_group_idx = 0;
-          whole_stripe_range.end_row_group_idx = groups_in_stripe - 1;
+          whole_stripe_range.end_row_group_idx = 0;
           whole_stripe_range.first_row_id = first_row_id;
           whole_stripe_range.num_rows = stripe_num_rows;
           row_ranges_.at(0) = whole_stripe_range;
@@ -355,8 +351,6 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
 int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
     const orc::StripeInformation &stripe,
     const int64_t stripe_idx,
-    const int64_t row_index_stride,
-    const int64_t groups_in_stripe,
     const int64_t stripe_first_row_id,
     const int64_t stripe_num_rows,
     bool &build_whole_stripe_range)
@@ -369,6 +363,7 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
   } else {
     bool is_stripe_filtered = false;
     int64_t groups_filtered = 0;
+    int64_t groups_in_stripe = 0;
     // filter stripe by stripe statistic.
     std::unique_ptr<orc::StripeStatistics> stripe_stat = reader_->getStripeStatistics(stripe_idx);
     if (OB_UNLIKELY(!stripe_stat)) {
@@ -378,80 +373,87 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
       LOG_WARN("fail to apply skipping index filter", K(ret), K(stripe_idx));
     } else if (!is_stripe_filtered) {
       // filter row groups by row index.
-      if (OB_FAIL(ensure_row_range_array(groups_in_stripe))) {
-        LOG_WARN("fail to ensure row range array", K(ret));
+      const int64_t row_index_stride = reader_->getRowIndexStride();
+      if (OB_UNLIKELY(row_index_stride <= 0)) {
+        // row index is disabled, need to build whole stripe range.
+        build_whole_stripe_range = true;
       } else {
-        try {
-          RowIndexStatisticsWrapper row_index_stat_wrapper = RowIndexStatisticsWrapper(*stripe_stat);
-          SelectedRowRange last_row_range;
-          int64_t row_range_idx = 0;
-          int64_t first_row_id = stripe_first_row_id;
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < groups_in_stripe; ++idx) {
-            bool is_filtered = false;
-            row_index_stat_wrapper.set_row_index(idx);
-            if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper,
-                is_filtered))) {
-              LOG_WARN("fail to apply skipping index filter", K(ret), K(idx));
-            } else if (is_filtered) {
-              ++groups_filtered;
-              if (!last_row_range.is_empty()) {
-                // store and reset the last row range
-                row_ranges_.at(row_range_idx++) = last_row_range;
-                last_row_range.reset();
+        groups_in_stripe = (stripe_num_rows + row_index_stride - 1) / row_index_stride;
+        if (OB_FAIL(ensure_row_range_array(groups_in_stripe))) {
+          LOG_WARN("fail to ensure row range array", K(ret));
+        } else {
+          try {
+            RowIndexStatisticsWrapper row_index_stat_wrapper = RowIndexStatisticsWrapper(*stripe_stat);
+            SelectedRowRange last_row_range;
+            int64_t row_range_idx = 0;
+            int64_t first_row_id = stripe_first_row_id;
+            for (int64_t idx = 0; OB_SUCC(ret) && idx < groups_in_stripe; ++idx) {
+              bool is_filtered = false;
+              row_index_stat_wrapper.set_row_index(idx);
+              if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper,
+                  is_filtered))) {
+                LOG_WARN("fail to apply skipping index filter", K(ret), K(idx));
+              } else if (is_filtered) {
+                ++groups_filtered;
+                if (!last_row_range.is_empty()) {
+                  // store and reset the last row range
+                  row_ranges_.at(row_range_idx++) = last_row_range;
+                  last_row_range.reset();
+                }
+              } else if (last_row_range.is_empty()) {
+                // init last_row_range as first range
+                last_row_range.start_row_group_idx = idx;
+                last_row_range.end_row_group_idx = idx;
+                last_row_range.first_row_id = first_row_id;
+                last_row_range.num_rows = row_index_stride;
+              } else {
+                // merge this range to last_row_range
+                last_row_range.end_row_group_idx = idx;
+                last_row_range.num_rows += row_index_stride;
               }
-            } else if (last_row_range.is_empty()) {
-              // init last_row_range as first range
-              last_row_range.start_row_group_idx = idx;
-              last_row_range.end_row_group_idx = idx;
-              last_row_range.first_row_id = first_row_id;
-              last_row_range.num_rows = row_index_stride;
-            } else {
-              // merge this range to last_row_range
-              last_row_range.end_row_group_idx = idx;
-              last_row_range.num_rows += row_index_stride;
+              first_row_id += row_index_stride;
             }
-            first_row_id += row_index_stride;
-          }
-          if (OB_SUCC(ret)) {
-            if (!last_row_range.is_empty()) {
-              const int64_t skipped_rows_count = last_row_range.first_row_id - stripe_first_row_id;
-              const int64_t remain_rows_in_stripe = stripe_num_rows - skipped_rows_count;
-              last_row_range.num_rows = remain_rows_in_stripe;
-              row_ranges_.at(row_range_idx++) = last_row_range;
+            if (OB_SUCC(ret)) {
+              if (!last_row_range.is_empty()) {
+                const int64_t skipped_rows_count = last_row_range.first_row_id - stripe_first_row_id;
+                const int64_t remain_rows_in_stripe = stripe_num_rows - skipped_rows_count;
+                last_row_range.num_rows = remain_rows_in_stripe;
+                row_ranges_.at(row_range_idx++) = last_row_range;
+              }
+              state_.cur_row_range_idx_ = 0;
+              state_.end_row_range_idx_ = row_range_idx - 1;
+              LOG_TRACE("orc iterator state after row group", K_(state));
             }
-            state_.cur_row_range_idx_ = 0;
-            state_.end_row_range_idx_ = row_range_idx - 1;
-            LOG_TRACE("orc iterator state after row group", K_(state));
-          }
-        } catch(const ObErrorCodeException &ob_error) {
-          if (OB_SUCC(ret)) {
-            ret = ob_error.get_error_code();
-            LOG_WARN("fail to read orc file", K(ret));
-          }
-        } catch(const std::exception& e) {
-          if (OB_SUCC(ret)) {
-            // exception when get orc row index statistics, select all row group to read
-            build_whole_stripe_range = true;
-          }
-        } catch(...) {
-          if (OB_SUCC(ret)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error", K(ret));
+          } catch(const ObErrorCodeException &ob_error) {
+            if (OB_SUCC(ret)) {
+              ret = ob_error.get_error_code();
+              LOG_WARN("fail to read orc file", K(ret));
+            }
+          } catch(const std::exception& e) {
+            if (OB_SUCC(ret)) {
+              // exception when get orc row index statistics, select all row group to read
+              build_whole_stripe_range = true;
+            }
+          } catch(...) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            }
           }
         }
       }
-      if (OB_SUCC(ret)) {
-        // update reader metrics
-        if (build_whole_stripe_range) {  // no statistic or read orc exception
-          ++reader_metrics_.selected_stripe_count;
-          reader_metrics_.selected_row_group_count += groups_in_stripe;
-        } else if (is_stripe_filtered) {
-          ++reader_metrics_.skipped_stripe_count;
-        } else {
-          ++reader_metrics_.selected_stripe_count;
-          reader_metrics_.selected_row_group_count += groups_in_stripe - groups_filtered;
-          reader_metrics_.skipped_row_group_count += groups_filtered;
-        }
+    }
+    if (OB_SUCC(ret)) {
+      // update reader metrics
+      if (build_whole_stripe_range) {  // no statistic or read orc exception
+        ++reader_metrics_.selected_stripe_count;
+        reader_metrics_.selected_row_group_count += groups_in_stripe;
+      } else if (is_stripe_filtered) {
+        ++reader_metrics_.skipped_stripe_count;
+      } else {
+        ++reader_metrics_.selected_stripe_count;
+        reader_metrics_.selected_row_group_count += (groups_in_stripe - groups_filtered);
+        reader_metrics_.skipped_row_group_count += groups_filtered;
       }
     }
   }
