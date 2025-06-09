@@ -31,7 +31,7 @@ public:
   virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
-  virtual int construct_iters(const bool is_refresh) override;
+  virtual int construct_iters() override;
   virtual int is_range_valid() const override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
 private:

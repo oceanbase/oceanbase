@@ -46,7 +46,7 @@ public:
   virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
-  virtual int construct_iters(const bool is_refresh = false) override;
+  virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int inner_get_next_rows() override;
   virtual int can_batch_scan(bool &can_batch) override;

@@ -135,7 +135,7 @@ int ObMultipleGetMerge::is_range_valid() const
   return ret;
 }
 
-int ObMultipleGetMerge::construct_iters(const bool is_refresh)
+int ObMultipleGetMerge::construct_iters()
 {
   int ret = OB_SUCCESS;
   ObStoreRowIterator *iter = NULL;
