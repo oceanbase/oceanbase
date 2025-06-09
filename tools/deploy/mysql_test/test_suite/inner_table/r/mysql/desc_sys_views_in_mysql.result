@@ -94,6 +94,7 @@ PLAN_STATUS	varchar(8)	NO		NULL
 ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO		NULL	
 FIRST_GET_PLAN_TIME	bigint(20)	NO		NULL	
 FIRST_EXE_USEC	bigint(20)	NO		NULL	
+FORMAT_SQL_ID	varchar(32)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLAN_CACHE_PLAN_STAT|%') then 2
@@ -1221,6 +1222,7 @@ PLAN_STATUS	varchar(8)	NO
 ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO			
 FIRST_GET_PLAN_TIME	bigint(20)	NO			
 FIRST_EXE_USEC	bigint(20)	NO			
+FORMAT_SQL_ID	varchar(32)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLAN_CACHE_PLAN_STAT|%') then 2

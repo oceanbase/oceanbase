@@ -1229,6 +1229,23 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       cells[i].set_null();
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::FORMAT_SQL_ID: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        ObString format_sql_id;
+        if (OB_FAIL(ob_write_string(*allocator_, plan->stat_.format_sql_id_, format_sql_id))) {
+          SERVER_LOG(WARN, "deep copy format_sql_id failed", K(ret));
+        } else {
+          cells[i].set_varchar(format_sql_id);
+          cells[i].set_collation_type(
+            ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,
