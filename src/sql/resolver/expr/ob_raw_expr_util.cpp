@@ -6817,7 +6817,7 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
       OX (param = const_expr->get_value());
       OX (parse_node.value_ = param.get_int());
       OX (obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]));
-      if (OB_SUCC(ret) && is_prepare && T_QUESTIONMARK == src->get_expr_type()) { //question mark in prepare phase set skip_check
+      if (OB_SUCC(ret) && T_QUESTIONMARK == src->get_expr_type()) {
         skip_check = true;
       }
       if (OB_FAIL(ret)) {
