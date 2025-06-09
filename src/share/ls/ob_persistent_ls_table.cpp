@@ -324,6 +324,7 @@ int ObPersistentLSTable::construct_ls_info(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_NOT_UPDATE_LS_META_TABLE);
 int ObPersistentLSTable::update(
     const ObLSReplica &replica,
     const bool inner_table_only)
@@ -336,7 +337,9 @@ int ObPersistentLSTable::update(
   bool with_snapshot = false;
   ObLSReplica new_replica;
   uint64_t sql_tenant_id = get_private_table_exec_tenant_id(replica.get_tenant_id());
-  if (OB_UNLIKELY(!is_inited()) || OB_ISNULL(sql_proxy_)) {
+  if (OB_UNLIKELY(ERRSIM_NOT_UPDATE_LS_META_TABLE)) {
+    LOG_INFO("errsim here, do nothing");
+  } else if (OB_UNLIKELY(!is_inited()) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPersistentLSTable not init", KR(ret), KP_(sql_proxy));
   } else if (!replica.is_valid()) {
@@ -370,7 +373,9 @@ int ObPersistentLSTable::update(
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_UNLIKELY(ERRSIM_NOT_UPDATE_LS_META_TABLE)) {
+    LOG_INFO("errsim here, do nothing");
+  } else if (OB_SUCC(ret)) {
     int64_t max_proposal_id = palf::INVALID_PROPOSAL_ID;
     // update leader
     if (new_replica.is_strong_leader()) {
