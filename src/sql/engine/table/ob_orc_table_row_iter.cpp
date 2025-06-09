@@ -511,7 +511,7 @@ int ObOrcTableRowIterator::next_file()
                                                    options_.enable_disk_cache_);
           file_size = 0;
           if (OB_FAIL(data_access_driver_.open(file_info, cache_options))) {
-            if (OB_OBJECT_NOT_EXIST == ret) {
+            if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret) {
               ret = OB_SUCCESS;
               file_size = 0;
             } else {

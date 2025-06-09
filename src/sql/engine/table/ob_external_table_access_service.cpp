@@ -104,7 +104,7 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
     LOG_WARN("fail to get file length", KR(ret), K(url_cstring), K_(access_info));
   }
 
-  if (OB_OBJECT_NOT_EXIST == ret || OB_IO_ERROR == ret) {
+  if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret || OB_IO_ERROR == ret) {
     file_size = -1;
     ret = OB_SUCCESS;
   }
