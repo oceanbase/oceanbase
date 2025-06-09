@@ -3410,10 +3410,14 @@ int ObNumber::format_v2(
                 K(max_need_size), K(buf_len), KPC(this), K(scale), K(ret));
       OB_ASSERT(pos - orig_pos <= max_need_size);
     } else if (is_oracle_mode() && need_to_sci && pos - orig_pos > SCI_NUMBER_LENGTH) {
-      ObString num_str(pos - orig_pos, buf + orig_pos);
-      pos = orig_pos;
-      if (OB_FAIL(to_sci_str_(num_str, buf, buf_len, pos))) {
-        LOG_ERROR("fail to conv to sci str", K(buf_len), K(orig_pos));
+      if (pos - orig_pos <= SCI_NUMBER_LENGTH + 3) {
+        pos = orig_pos + SCI_NUMBER_LENGTH;
+      } else {
+        ObString num_str(pos - orig_pos, buf + orig_pos);
+        pos = orig_pos;
+        if (OB_FAIL(to_sci_str_(num_str, buf, buf_len, pos))) {
+          LOG_ERROR("fail to conv to sci str", K(buf_len), K(orig_pos));
+        }
       }
     }
   }
