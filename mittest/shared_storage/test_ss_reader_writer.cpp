@@ -680,6 +680,12 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
 
+  // try overwrite PRIVATE_TABLET_META, expect return OB_FILE_ALREADY_EXIST errno
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
+  ASSERT_EQ(OB_FILE_ALREADY_EXIST, write_object_handle.wait());
+  write_object_handle.reset();
+
   // 2. read and compare the read data with the written data
   read_info_.macro_block_id_ = macro_id;
   read_info_.set_ls_epoch_id(ls_epoch_id);
