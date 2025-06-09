@@ -620,7 +620,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       if (!new_transfer && OB_TMP_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
         diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_START;
         LOG_WARN("failed to unblock tx", K(ret));
-      } else if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
+      } else if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info, true/*need_check_palf_leader*/, task_info.src_ls_id_))) {
         LOG_WARN("failed to unlock src and dest ls member list", K(tmp_ret), K(ret), K(task_info));
       } else {
         process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_START,
@@ -723,7 +723,7 @@ int ObTransferHandler::lock_src_and_dest_ls_member_list_(
   } else if (OB_FAIL(lock_ls_list.push_back(dest_ls_id))) {
     LOG_WARN("failed to push back", K(ret), K(dest_ls_id));
   } else if (OB_FAIL(ObMemberListLockUtils::batch_lock_ls_member_list(tenant_id, task_id,
-      lock_ls_list, member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      lock_ls_list, member_list, status, share::OBCG_STORAGE, src_ls_id, *sql_proxy_))) {
     LOG_WARN("failed to batch lock ls member list", K(ret));
   } else if (OB_FAIL(check_ls_member_list_same_(src_ls_id, dest_ls_id, member_list, is_same))) {
     LOG_WARN("failed to check ls member list same", K(ret), K(src_ls_id), K(dest_ls_id));
@@ -782,7 +782,9 @@ int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx)
 }
 
 int ObTransferHandler::unlock_src_and_dest_ls_member_list_(
-    const share::ObTransferTaskInfo &task_info)
+    const share::ObTransferTaskInfo &task_info,
+    const bool need_check_palf_leader,
+    const share::ObLSID &need_check_palf_leader_ls_id)
 {
   int ret = OB_SUCCESS;
   ObMemberList fake_member_list;
@@ -794,9 +796,9 @@ int ObTransferHandler::unlock_src_and_dest_ls_member_list_(
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unlock src and dest ls member list get invalid argument", K(ret), K(task_info));
-  } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.src_ls_id_, fake_member_list, status))) {
+  } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.src_ls_id_, fake_member_list, status, need_check_palf_leader, need_check_palf_leader_ls_id))) {
     LOG_WARN("failed to inner unlock ls member list", K(ret), K(task_info));
-  } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, fake_member_list, status))) {
+  } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, fake_member_list, status, need_check_palf_leader, need_check_palf_leader_ls_id))) {
     LOG_WARN("failed to inner unlock ls member list", K(ret), K(task_info));
   }
   return ret;
@@ -806,7 +808,9 @@ int ObTransferHandler::inner_unlock_ls_member_list_(
     const share::ObTransferTaskInfo &task_info,
     const share::ObLSID &ls_id,
     const common::ObMemberList &member_list,
-    const ObTransferLockStatus &status)
+    const ObTransferLockStatus &status,
+    const bool need_check_palf_leader,
+    const share::ObLSID &need_check_palf_leader_ls_id)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = task_info.tenant_id_;
@@ -819,7 +823,7 @@ int ObTransferHandler::inner_unlock_ls_member_list_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner lock ls member list get invalid argument", K(ret), K(task_info), K(ls_id), K(member_list), K(status));
   } else if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_list(
-      tenant_id, ls_id, task_id, member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id, member_list, status, share::OBCG_STORAGE, need_check_palf_leader, need_check_palf_leader_ls_id, *sql_proxy_))) {
     LOG_WARN("failed to lock ls member list", K(ret), K(task_info), K(ls_id), K(member_list));
   }
   return ret;
@@ -841,7 +845,7 @@ int ObTransferHandler::inner_lock_ls_member_list_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner lock ls member list get invalid argument", K(ret), K(task_info), K(ls_id), K(member_list), K(status));
   } else if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-      tenant_id, ls_id, task_id, member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id, member_list, status, share::OBCG_STORAGE, ls_id, *sql_proxy_))) {
     LOG_WARN("failed to lock ls member list", K(ret), K(task_info), K(ls_id), K(member_list));
   }
   return ret;
@@ -3615,7 +3619,7 @@ int ObTransferHandler::inner_do_with_abort_status_(
     LOG_WARN("get ls leader get invalid argument", K(ret), K(task_info));
   } else if (OB_FAIL(get_abort_trans_timeout_(stmt_timeout))) {
     LOG_WARN("failed to get abort trans timeout", K(ret), K(task_info));
-  } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
+  } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info, false/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
     diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_ABORT;
     LOG_WARN("failed to unlock src and dest ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(start_trans_(stmt_timeout, group_id, timeout_ctx, trans))) {
@@ -3638,7 +3642,8 @@ int ObTransferHandler::inner_do_with_abort_status_(
       ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
       STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
 #endif
-    } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
+    } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list,
+        status, true/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
       LOG_WARN("failed to unlock ls member list", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
@@ -3674,7 +3679,8 @@ int ObTransferHandler::inner_do_with_abort_status_(
       STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
     }
 #endif
-    if (need_unlock && OB_SUCCESS != (tmp_ret = inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
+    if (need_unlock && OB_SUCCESS != (tmp_ret = inner_unlock_ls_member_list_(
+        task_info, task_info.dest_ls_id_, member_list, status, true/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
       LOG_WARN("failed to unlock dest ls member list", K(tmp_ret), K(task_info));
     }
 
@@ -3747,7 +3753,7 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
         LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
       } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
         LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
-      } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
+      } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info, false/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
         diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_ABORT;
         LOG_WARN("failed to unlock src and dest ls member list", K(ret), K(task_info));
       } else {
