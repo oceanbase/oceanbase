@@ -1945,12 +1945,12 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             break;
           } else if (tablet_ref->tablet_handle_.get_obj()->get_tablet_meta().has_transfer_table()) {
             LOG_INFO("transfer table is not replaced", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-            usleep(100 * 1000); // wait 100ms
+            ob_usleep(100 * 1000); // wait 100ms
           } else if (OB_FAIL(check_tablet_status_(tablet_ref->tablet_handle_, is_normal_tablet))) {
             LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
           } else if (!is_normal_tablet) {
             LOG_INFO("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id));
-            usleep(100 * 1000); // wait 100ms
+            ob_usleep(100 * 1000); // wait 100ms
           } else {
             break;
           }

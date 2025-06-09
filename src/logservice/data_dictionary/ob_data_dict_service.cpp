@@ -391,7 +391,7 @@ int ObDataDictService::do_dump_data_dict_()
         } else {
           LOG_WARN("report_data_dict_persist_info failed", KR(ret),
               K_(tenant_id), K(snapshot_scn), K(start_lsn), K(end_lsn));
-          usleep(100 * _MSEC_);
+          ob_usleep(100 * _MSEC_);
           if (get_timestamp_us() > end_time) {
             ret = OB_TIMEOUT;
             break;

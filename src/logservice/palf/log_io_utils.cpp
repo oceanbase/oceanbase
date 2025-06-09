@@ -115,7 +115,7 @@ int fsync_with_retry(const char *dir_name)
     ObIOFd dir_fd;
     if (OB_FAIL(LOG_IO_ADAPTER.open(dir_name, O_RDONLY, FILE_OPEN_MODE, dir_fd))) {
       CLOG_LOG(WARN, "open failed", K(ret), K(dir_name));
-      usleep(RETRY_INTERVAL);
+      ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(LOG_IO_ADAPTER.fsync(dir_fd))) {
       CLOG_LOG(WARN, "fsync dest dir failed", K(ret), K(dir_fd));
       ob_usleep(RETRY_INTERVAL);
@@ -138,7 +138,7 @@ int fsync_with_retry(const char *path, ObIODevice *io_device)
     ObIOFd io_fd;
     if (OB_FAIL(io_device->open(path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd))) {
       CLOG_LOG(WARN, "open failed", K(ret), K(path));
-      usleep(RETRY_INTERVAL);
+      ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(io_device->fsync(io_fd))) {
       CLOG_LOG(WARN, "fsync dest dir failed", K(ret), K(io_fd));
       ob_usleep(RETRY_INTERVAL);
@@ -184,7 +184,7 @@ int write_until_success(const char *pathname,
     ObIOFd io_fd;
     if (OB_FAIL(LOG_IO_ADAPTER.open(pathname, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd))) {
       CLOG_LOG(WARN, "open file failed", K(pathname));
-      usleep(RETRY_INTERVAL);
+      ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(LOG_IO_ADAPTER.pwrite(io_fd, src_buf, src_buf_len, offset, write_size))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         CLOG_LOG(WARN, "ob_pwrite failed", K(ret), K(offset), K(write_size));
@@ -211,7 +211,7 @@ int read_until_success(const char *pathname, char *dest_buf,
     ObIOFd io_fd;
     if (OB_FAIL(LOG_IO_ADAPTER.open(pathname, LOG_READ_FLAG, FILE_OPEN_MODE, io_fd))) {
       CLOG_LOG(WARN, "open failed", K(ret), K(offset), K(read_size));
-      usleep(RETRY_INTERVAL);
+      ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(LOG_IO_ADAPTER.pread(io_fd, dest_buf_len, offset, dest_buf, read_size))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         CLOG_LOG(WARN, "pread failed", K(ret), K(offset), K(read_size));

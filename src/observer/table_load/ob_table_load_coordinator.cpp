@@ -412,7 +412,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
             if (ret == OB_EAGAIN) {
               retry_count++;
               ret = OB_SUCCESS;
-              usleep(RESOURCE_OP_WAIT_INTERVAL_US);
+              ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
             }
           } else {
             ctx_->param_.need_sort_ = need_sort;

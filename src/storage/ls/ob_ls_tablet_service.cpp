@@ -695,7 +695,7 @@ int ObLSTabletService::refresh_tablet_addr(
     if (OB_SUCC(ret)) {
       break;
     } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      usleep(100 * 1000);
+      ob_usleep(100 * 1000);
       if (REACH_COUNT_INTERVAL(100)) {
         LOG_ERROR("no memory for tablet id set, retry", K(ret), K(tablet_id));
       }
@@ -1704,7 +1704,7 @@ int ObLSTabletService::update_tablet_ha_expected_status(
         } else if (FALSE_IT(time_guard.click("WrSlog"))) {
         } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, new_tablet_handle))) {
           LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(tablet_handle), K(new_tablet_handle));
-          usleep(1000 * 1000);
+          ob_usleep(1000 * 1000);
           ob_abort();
         } else {
           time_guard.click("CASwap");

@@ -141,7 +141,7 @@ int RocksDbStoreService::close()
   if (NULL != m_db_) {
     LOG_INFO("closing rocksdb ...");
     mark_stop_flag();
-    usleep(5 * _SEC_);
+    ob_usleep(5 * _SEC_);
 
     rocksdb::Status status = m_db_->Close();
 

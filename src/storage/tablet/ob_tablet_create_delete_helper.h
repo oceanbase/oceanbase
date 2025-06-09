@@ -204,7 +204,7 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
         if (notify_arg.for_replay_) {
           ret = OB_EAGAIN;
         } else {
-          usleep(100 * 1000);
+          ob_usleep(100 * 1000);
         }
       }
     } while (OB_FAIL(ret) && !notify_arg.for_replay_);
@@ -230,7 +230,7 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
         do {
           if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
             TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg), K(notify_arg));
-            usleep(100 * 1000);
+            ob_usleep(100 * 1000);
           }
         } while (OB_FAIL(ret));
       }

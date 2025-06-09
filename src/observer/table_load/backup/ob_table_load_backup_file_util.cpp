@@ -37,7 +37,7 @@ int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {
@@ -62,7 +62,7 @@ int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {
@@ -89,7 +89,7 @@ int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {
@@ -117,7 +117,7 @@ int ObTableLoadBackupFileUtil::read_part_file(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {

@@ -507,7 +507,7 @@ int ObAdminBackupValidationExecutor::wait_data_backup_validation_()
   } else {
     while (!dag_scheduler->is_empty()) {
       ctx_->print_data_backup_validation_status();
-      usleep(500_ms);
+      ob_usleep(500_ms);
     }
     int64_t end_time = ObTimeUtility::current_time();
     if (ctx_->global_stat_.get_scheduled_tablet_count()
@@ -564,7 +564,7 @@ int ObAdminBackupValidationExecutor::wait_log_archive_validation_()
   } else {
     while (!dag_scheduler->is_empty()) {
       ctx_->print_log_archive_validation_status();
-      usleep(500_ms);
+      ob_usleep(500_ms);
     }
     int64_t end_time = ObTimeUtility::current_time();
     if (ctx_->global_stat_.get_scheduled_piece_count()

@@ -274,7 +274,7 @@ int ObRoleChangeService::push_event_into_queue_(const RoleChangeEvent &event)
       if (palf_reach_time_interval(1 * 1000 * 1000, warn_time)) {
         CLOG_LOG(WARN, "allocate memory failed", K(ret), K(event));
       }
-      usleep(1 * 1000);
+      ob_usleep(1 * 1000);
     } else {
       ret = OB_SUCCESS;
     }

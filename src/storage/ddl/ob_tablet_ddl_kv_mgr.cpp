@@ -202,7 +202,7 @@ int ObTabletDDLKvMgr::ddl_commit(ObTablet &tablet, const SCN &start_scn, const S
         LOG_WARN("update ddl major sstable failed", K(ret));
       }
       if (OB_EAGAIN == ret) {
-        usleep(1000L);
+        ob_usleep(1000L);
       }
     }
 

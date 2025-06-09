@@ -147,7 +147,7 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
       do {
         ret = resize_(new_concurrency);
         if (OB_FAIL(ret)) {
-          usleep(DEFAULT_RETRY_INTERVAL);
+          ob_usleep(DEFAULT_RETRY_INTERVAL);
         }
       } while (OB_FAIL(ret));
       time_guard.click("after create new thread pool");
@@ -371,7 +371,7 @@ void ObLogExternalStorageHandler::construct_async_read_task_(
       CLOG_LOG(TRACE, "construct_async_read_task_ success", KPC(pread_task));
     }
     if (OB_FAIL(ret)) {
-      usleep(DEFAULT_RETRY_INTERVAL);
+      ob_usleep(DEFAULT_RETRY_INTERVAL);
     }
   } while (OB_FAIL(ret));
 }
@@ -389,7 +389,7 @@ void ObLogExternalStorageHandler::push_async_task_into_thread_pool_(
       }
     }
     if (OB_FAIL(ret)) {
-      usleep(DEFAULT_RETRY_INTERVAL);
+      ob_usleep(DEFAULT_RETRY_INTERVAL);
     }
   } while (OB_FAIL(ret));
 }

@@ -47,7 +47,7 @@ int ObLobLocationUtil::get_ls_leader(ObLobAccessParam& param, const uint64_t ten
           } else if (ObTimeUtility::current_time() > param.timeout_) {
             renew_count = max_renew_count;
           } else {
-            usleep(retry_us);
+            ob_usleep(retry_us);
           }
         }
       } else {
@@ -229,7 +229,7 @@ int ObLobLocationUtil::get_ls_leader(ObLobAccessParam& param)
             renew_count = max_renew_count;
             LOG_WARN("renew timeout", K(ret), K(tmp_ret), K(param));
           } else {
-            usleep(retry_us);
+            ob_usleep(retry_us);
           }
         }
       } else {

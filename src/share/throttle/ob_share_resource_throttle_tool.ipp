@@ -241,7 +241,7 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int6
         if (0 < sleep_interval && sleep_interval < UINT32_MAX) {
           sleep_time += sleep_interval;
           left_interval -= sleep_interval;
-          ::usleep((uint32_t)sleep_interval);
+          ob_usleep((uint32_t)sleep_interval);
         }
       }
       PrintThrottleUtil::pirnt_throttle_info(ret,

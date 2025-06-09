@@ -1269,7 +1269,7 @@ void ObMemtableCtx::dec_unsynced_cnt()
   ATOMIC_DEC(&unsynced_cnt_);
   if (OB_UNLIKELY(ATOMIC_LOAD(&unsynced_cnt_) < 0)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "oops!", KPC(this));
-    usleep(5000);
+    ob_usleep(5000);
     ob_abort();
   }
 }

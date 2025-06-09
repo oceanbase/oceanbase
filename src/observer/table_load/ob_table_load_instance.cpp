@@ -312,7 +312,7 @@ int ObTableLoadInstance::end_direct_load(const bool commit)
           switch (status) {
             case ObTableLoadStatusType::FROZEN:
             case ObTableLoadStatusType::MERGING:
-              usleep(WAIT_INTERVAL_US);
+              ob_usleep(WAIT_INTERVAL_US);
               break;
             case ObTableLoadStatusType::MERGED:
               break;
@@ -433,7 +433,7 @@ int ObTableLoadInstance::check_trans_committed(TransCtx &trans_ctx)
     } else {
       switch (trans_status) {
         case ObTableLoadTransStatusType::FROZEN:
-          usleep(WAIT_INTERVAL_US);
+          ob_usleep(WAIT_INTERVAL_US);
           break;
         case ObTableLoadTransStatusType::COMMIT:
           break;

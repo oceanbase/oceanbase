@@ -90,7 +90,7 @@ int ObDirectLoadMemLoader::work()
         //等待内存空出
         while (mem_ctx_->fly_mem_chunk_count_ >= mem_ctx_->table_data_desc_.max_mem_chunk_count_ &&
                !(mem_ctx_->has_error_)) {
-          usleep(500000);
+          ob_usleep(500000);
         }
         if (mem_ctx_->has_error_) {
           ret = OB_INVALID_ARGUMENT;

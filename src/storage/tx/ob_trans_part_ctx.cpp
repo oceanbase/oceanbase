@@ -2188,7 +2188,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     #ifdef ENABLE_DEBUG_LOG
     uint64_t sleep_us = abs(EN_TX_ON_SUCCESS_DELAY);
     if (sleep_us > 0) {
-      usleep(sleep_us);
+      ob_usleep(sleep_us);
       TRANS_LOG(INFO, "ERRSIM: delay tx on_success", K(ret), KPC(log_cb), K(sleep_us),
                 K(EN_TX_ON_SUCCESS_DELAY));
     } else if (sleep_us < 0) {
@@ -2250,7 +2250,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
             // rewrite ret
             ret = OB_SUCCESS;
 
-            usleep(1000*1000);
+            ob_usleep(1000*1000);
             ob_abort();
           }
           // ignore ret and set cur_cb callbacked
@@ -8380,7 +8380,7 @@ int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
                       KPC(this));
             break;
           }
-          usleep(LOCAL_RETRY_INTERVAL_US);
+          ob_usleep(LOCAL_RETRY_INTERVAL_US);
         }
       }
     }

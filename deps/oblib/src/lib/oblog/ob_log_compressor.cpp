@@ -410,9 +410,9 @@ void ObLogCompressor::log_compress_loop_()
                  K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size), K(fast_delete_log_mode));
         cost_time = cost_time >= 0 ? cost_time:0;
         if (!stopped_ && fast_delete_log_mode) {
-          usleep(100000);
+          ob_usleep(100000);
         } else if (!stopped_ && cost_time < loop_interval_) {
-          usleep(loop_interval_ - cost_time);
+          ob_usleep(loop_interval_ - cost_time);
         }
       } // if (!stopped_)
     } // while (!stopped_)

@@ -350,7 +350,7 @@ int SimpleServerHelper::freeze_tx_data(uint64_t tenant_id, ObLSID ls_id)
       } else if (OB_FAIL(tx_data_memtable_mgr->flush(share::SCN::max_scn(),
               checkpoint::INVALID_TRACE_ID))) {
       } else {
-        usleep(10 * 1000 * 1000);
+        ob_usleep(10 * 1000 * 1000);
       }
     }
   }
@@ -375,7 +375,7 @@ int SimpleServerHelper::freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id)
         LOG_WARN("checkpoint obj is null", KR(ret));
       } else if (OB_FAIL(tx_ctx_memtable->flush(share::SCN::max_scn(), 0))) {
       } else {
-        usleep(10 * 1000 * 1000);
+        ob_usleep(10 * 1000 * 1000);
       }
     }
   }

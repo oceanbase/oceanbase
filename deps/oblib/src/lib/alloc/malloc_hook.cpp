@@ -74,7 +74,7 @@ void *ob_malloc_retry(size_t size)
       ptr = ob_malloc(size, attr);
     }
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000);  // 10ms
+      ob_usleep(10000);  // 10ms
     }
   } while (OB_ISNULL(ptr) && 0 != size);
   return ptr;
