@@ -3334,12 +3334,35 @@ int ObSlaveMapUtil::build_mn_channel_per_sqcs(
       for (int64_t i = 0; i < sqc_count && OB_SUCC(ret); ++i) {
         ObDtlChTotalInfo &transmit_ch_info = dfo_ch_total_infos->at(i);
         transmit_ch_info.is_local_shuffle_ = true;
-        if (OB_UNLIKELY(parent.get_sqcs().at(i).get_exec_addr() != child.get_sqcs().at(i).get_exec_addr())) {
+        ObPxSqcMeta *child_sqc = &child.get_sqcs().at(i);
+        ObPxSqcMeta *parent_sqc = nullptr;
+        if (parent.need_access_store() && parent.is_in_slave_mapping()
+            && ObPQDistributeMethod::HASH == child.get_dist_method()
+            && child.is_out_slave_mapping()) {
+          // for slave mapping under union all, the parent dfo may contain scan ops
+          // the sqc addr's sequence for each union branch may be different
+          // we should map the sqc pair of parent and child for slave mapping
+          for (int64_t j = 0; j < sqc_count && OB_SUCC(ret); ++j) {
+            if (child_sqc->get_exec_addr() == parent.get_sqcs().at(j).get_exec_addr()) {
+              parent_sqc = &parent.get_sqcs().at(j);
+              break;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(parent_sqc)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("addr not match", K(ret), K(child.get_dfo_id()), K(parent.get_dfo_id()));
+          }
+        } else if (OB_UNLIKELY(parent.get_sqcs().at(i).get_exec_addr()
+                               != child.get_sqcs().at(i).get_exec_addr())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("addr not match", K(ret));
+          LOG_WARN("addr not match", K(ret), K(child.get_dfo_id()), K(parent.get_dfo_id()));
         } else {
-          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs().at(i)));
-          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs().at(i)));
+          parent_sqc = &parent.get_sqcs().at(i);
+        }
+        if (OB_SUCC(ret)) {
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, *child_sqc));
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, *parent_sqc));
           transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.total_task_cnt_
                                           * transmit_ch_info.receive_exec_server_.total_task_cnt_;
           transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)

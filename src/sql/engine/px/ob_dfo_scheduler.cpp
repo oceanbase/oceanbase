@@ -939,8 +939,34 @@ int ObParallelDfoScheduler::dispatch_receive_channel_info(ObExecContext &ctx,
           LOG_WARN("Unexpected param", KP(ch), K(parent), K(sqc_id), K(ret));
         } else {
           ObDtlChTotalInfo *ch_info = nullptr;
-          if (OB_FAIL(child.get_dfo_ch_info(idx, ch_info))) {
+          if (parent.need_access_store() && parent.is_in_slave_mapping()
+              && child.is_out_slave_mapping()
+              && ObPQDistributeMethod::HASH == child.get_dist_method()) {
+            // for slave mapping under union all, the parent dfo may contain scan ops
+            // the sqc addr's sequence for each union branch may be different
+            // we should map the sqc pair of parent and child for slave mapping
+            bool found = false;
+            const ObAddr &parent_sqc_addr = sqcs.at(idx)->get_exec_addr();
+            for (int64_t k = 0; k < child.get_dfo_ch_total_infos().count() && OB_SUCC(ret); ++k) {
+              ch_info = &child.get_dfo_ch_total_infos().at(k);
+              if (OB_UNLIKELY(ch_info->receive_exec_server_.exec_addrs_.count() != 1)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected exec addrs count", K(*ch_info));
+              } else if (ch_info->receive_exec_server_.exec_addrs_.at(0) == parent_sqc_addr) {
+                found = true;
+                break;
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_UNLIKELY(!found)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("ch_info not found");
+            }
+          } else if (OB_FAIL(child.get_dfo_ch_info(idx, ch_info))) {
             LOG_WARN("failed to get task receive chs", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(receive_data_channel_msg.set_payload(child_dfo_id, *ch_info))) {
             LOG_WARN("fail init msg", K(ret));
           } else if (!receive_data_channel_msg.is_valid()) {
