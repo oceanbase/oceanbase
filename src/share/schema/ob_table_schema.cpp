@@ -6810,19 +6810,60 @@ int ObTableSchema::is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, boo
   return ret;
 }
 
-int ObTableSchema::get_heap_table_pk(ObIArray<uint64_t> &pk_ids) const
+int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
 {
   int ret = OB_SUCCESS;
   pk_ids.reuse();
-  for (ObTableSchema::const_column_iterator iter = column_begin();
-       OB_SUCC(ret) && iter != column_end(); iter++) {
-    const ObColumnSchemaV2 *column = *iter;
-    if (OB_ISNULL(column)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err", K(ret), KPC(this));
-    } else if (column->is_heap_table_primary_key_column()) {
-      if (OB_FAIL(pk_ids.push_back(column->get_column_id()))) {
-        LOG_WARN("failed to push back", K(ret));
+  if (OB_ISNULL(schema_guard)) {
+    int ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(schema_guard));
+  } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk(schema_guard, pk_ids))) {
+    LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
+  } else if (is_index_organized_table() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
+    LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObTableSchema::get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const
+{
+  int ret = OB_SUCCESS;
+  pk_ids.reuse();
+  bool has_pk = false;
+  const ObTableSchema *index_schema = NULL;
+  if (OB_ISNULL(schema_guard)) {
+    int ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(schema_guard));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
+    if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, simple_index_infos_.at(i).table_id_, index_schema))) {
+      LOG_WARN("fail to get index schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index table not exist", K(ret), K(tenant_id_), "table_id", simple_index_infos_.at(i).table_id_);
+    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_schema->get_index_type()) {
+      has_pk = true;
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret) && has_pk) {
+    const ObRowkeyInfo &rowkey_info = index_schema->get_rowkey_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); i++) {
+      const ObRowkeyColumn *rowkey_column = nullptr;
+      const ObColumnSchemaV2 *column = nullptr;
+      if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, rowkey column must not be nullptr", K(ret));
+      } else if (OB_ISNULL(column = index_schema->get_column_schema(rowkey_column->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is nullptr", K(ret), K(rowkey_column->column_id_), K(*index_schema));
+      } else if (column->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID) {
+        // do nothing
+      } else if (column->is_heap_table_primary_key_column() && !column->is_shadow_column()) {
+        if (OB_FAIL(pk_ids.push_back(column->get_column_id()))) {
+          LOG_WARN("fail to push back pk id", K(ret));
+        }
       }
     }
   }

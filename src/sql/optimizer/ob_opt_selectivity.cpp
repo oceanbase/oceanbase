@@ -391,7 +391,7 @@ int OptTableMeta::init(const uint64_t table_id,
   // init pkey ids
   if (OB_SUCC(ret)) {
     if (table_schema->is_heap_organized_table()) {
-      if (OB_FAIL(table_schema->get_heap_table_pk(pk_ids_))) {
+      if (OB_FAIL(table_schema->get_heap_table_pk(schema_guard.get_schema_guard(), pk_ids_))) {
         LOG_WARN("failed to get heap table pk", K(ret));
       }
     } else {
