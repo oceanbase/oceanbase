@@ -202,8 +202,8 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 6: {
-          // collation_db
-          cur_row_.cells_[cell_idx].set_varchar(ObCharset::collation_name(exec_env.get_collation_connection()));
+          // collation_db : valid for mysql mode
+          cur_row_.cells_[cell_idx].set_varchar(ObCharset::collation_name(exec_env.get_collation_database()));
           cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
