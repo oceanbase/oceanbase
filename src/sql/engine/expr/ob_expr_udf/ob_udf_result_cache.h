@@ -31,6 +31,20 @@ namespace oceanbase
 namespace pl
 {
 
+class UDFArgRow : public DatumRow
+{
+public:
+  UDFArgRow() :
+    DatumRow(),
+    default_param_bitmap_()
+  {}
+
+  bool operator==(const UDFArgRow &other) const;
+  int hash(uint64_t &hash_val, uint64_t seed=0) const;
+
+  ObBitSet<> default_param_bitmap_;
+};
+
 struct ObPLUDFResultCacheKey : public ObILibCacheKey
 {
   ObPLUDFResultCacheKey()
@@ -92,7 +106,7 @@ struct ObPLUDFResultCacheCtx : public ObILibCacheCtx, public ObPLCacheBasicCtx
   sql::DependenyTableStore *dependency_tables_;
   uint64_t sys_schema_version_;
   uint64_t tenant_schema_version_;
-  DatumRow argument_params_;
+  UDFArgRow argument_params_;
   ObString name_;
   int64_t execute_time_;
   uint64_t cache_obj_hash_value_;
@@ -231,7 +245,7 @@ public:
 
   common::ObString &get_sql_id() { return sql_id_; }
   int create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
-                            DatumRow &cache_key);
+                            UDFArgRow &cache_key);
   int create_new_result_object_value(ObPLUDFResultCacheValue *&pl_object_value);
   void free_result_object_value(ObPLUDFResultCacheValue *pl_object_value);
   int64_t get_mem_size();
@@ -241,7 +255,7 @@ private:
   bool is_inited_;
   ObPLUDFResultCacheKey key_;  //used for manager key memory
   common::ObString sql_id_;
-  common::hash::ObHashMap<DatumRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode> hashmap_;
+  common::hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode> hashmap_;
 };
 
 } // namespace pl end

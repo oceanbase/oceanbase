@@ -304,13 +304,13 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               loc_,
               is_udt_cons_,
               is_called_in_sql_,
-              dblink_id_,
               is_result_cache_,
               is_deterministic_,
               external_routine_type_,
               external_routine_entry_,
               external_routine_url_,
-              external_routine_resource_);
+              external_routine_resource_,
+              dblink_id_);
   return ret;
 }
 
@@ -329,13 +329,13 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               loc_,
               is_udt_cons_,
               is_called_in_sql_,
-              dblink_id_,
               is_result_cache_,
               is_deterministic_,
               external_routine_type_,
               external_routine_entry_,
               external_routine_url_,
-              external_routine_resource_);
+              external_routine_resource_,
+              dblink_id_);
   return ret;
 }
 
@@ -354,13 +354,13 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               loc_,
               is_udt_cons_,
               is_called_in_sql_,
-              dblink_id_,
               is_result_cache_,
               is_deterministic_,
               external_routine_type_,
               external_routine_entry_,
               external_routine_url_,
-              external_routine_resource_);
+              external_routine_resource_,
+              dblink_id_);
   return len;
 }
 

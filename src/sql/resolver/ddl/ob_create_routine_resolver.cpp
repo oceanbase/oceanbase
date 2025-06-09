@@ -412,6 +412,9 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     }
   } else if (ObObjAccessIdx::is_udt_type(access_idxs)) {
     CK (access_idxs.count() >= 1 && access_idxs.count() <= 2);
+    OX (routine_param.set_param_type(ObExtendType));
+    OX (routine_param.set_udt_type());
+    OX (routine_param.set_type_name(access_idxs.at(access_idxs.count()-1).var_name_));
     if (OB_FAIL(ret)) {
     } else if (2 == access_idxs.count()) {
       if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(1).var_index_)) {
@@ -425,8 +428,6 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
       routine_param.set_type_owner(OB_SYS_DATABASE_ID);
     }
     if (OB_SUCC(ret)) {
-      ObDataType ext_type;
-      ObObjMeta meta_type;
       const int64_t udt_id = access_idxs.at(access_idxs.count() - 1).var_index_;
       const ObUDTTypeInfo* udt_info = nullptr;
       CK (OB_NOT_NULL(params_.schema_checker_));
@@ -435,13 +436,6 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
       CK (OB_NOT_NULL(udt_info));
       OZ (collect_ref_obj_info(udt_id, udt_info->get_schema_version(),
                                ObDependencyTableType::DEPENDENCY_TYPE));
-      OX (meta_type.set_type(ObExtendType));
-      OX (meta_type.set_extend_type(udt_info->get_extend_type()));
-      OX (ext_type.set_meta_type(meta_type));
-      OX (ext_type.set_udt_id(udt_id));
-      OX (routine_param.set_param_type(ext_type));
-      OX (routine_param.set_udt_type());
-      OX (routine_param.set_type_name(access_idxs.at(access_idxs.count()-1).var_name_));
     }
   }
   return ret;

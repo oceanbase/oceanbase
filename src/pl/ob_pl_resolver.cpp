@@ -11289,15 +11289,7 @@ int ObPLResolver::resolve_inner_call(
       } else if (access_idxs.at(idx_cnt - 1).is_procedure()) {
         ObPLCallStmt *call_stmt = NULL;
         const ObIRoutineInfo *iroutine_info = access_idxs.at(idx_cnt - 1).routine_info_;
-        if (OB_NOT_NULL(iroutine_info) &&
-            (iroutine_info->is_modifies_sql_data() ||
-            iroutine_info->is_reads_sql_data() ||
-            iroutine_info->is_wps() ||
-            iroutine_info->is_rps() ||
-            iroutine_info->is_has_sequence() ||
-            iroutine_info->is_external_state())) {
-          func.set_external_state();
-        }
+        func.set_external_state();
         if (OB_ISNULL(iroutine_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null routine pointer", K(ret), K(idx_cnt), K(access_idxs));

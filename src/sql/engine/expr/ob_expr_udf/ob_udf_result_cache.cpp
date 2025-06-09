@@ -21,6 +21,22 @@ namespace oceanbase
 namespace pl
 {
 
+bool UDFArgRow::operator==(const UDFArgRow &other) const
+{
+  bool ret = false;
+  if (default_param_bitmap_ == other.default_param_bitmap_) {
+    ret = DatumRow::operator==(other);
+  }
+  return ret;
+}
+
+int UDFArgRow::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  int ret = OB_SUCCESS;
+  ret = DatumRow::hash(hash_val, seed);
+  return ret;
+}
+
 void ObPLUDFResultCacheKey::reset()
 {
   db_id_ = common::OB_INVALID_ID;
@@ -193,7 +209,7 @@ int ObPLUDFResultCacheSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *ob
 }
 
 int ObPLUDFResultCacheSet::create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
-                                                DatumRow &cache_key)
+                                                UDFArgRow &cache_key)
 {
   int ret = OB_SUCCESS;
 
@@ -203,6 +219,8 @@ int ObPLUDFResultCacheSet::create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
               = static_cast<ObDatum *> (allocator_.alloc(sizeof(ObDatum) * cache_key.cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for row key", K(ret),  K(cache_key.cnt_));
+    } else if (OB_FAIL(cache_key.default_param_bitmap_.assign(rc_ctx.argument_params_.default_param_bitmap_))) {
+      LOG_WARN("fail to assign bitmap", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < cache_key.cnt_; ++i) {
         if (OB_FAIL(cache_key.elems_[i].deep_copy(rc_ctx.argument_params_.elems_[i], allocator_))) {
@@ -258,7 +276,7 @@ void ObPLUDFResultCacheSet::free_result_object_value(ObPLUDFResultCacheValue *pl
 void ObPLUDFResultCacheSet::destroy()
 {
   if (is_inited_) {
-      for (hash::ObHashMap<DatumRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
+      for (hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
             iter != hashmap_.end();
             iter++) {
       if (OB_ISNULL(iter->second)) {
@@ -378,7 +396,7 @@ int ObPLUDFResultCacheSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
      so, if ret is 0, need to create new pl object value. */
   if (OB_SUCC(ret)) {
     ObPLUDFResultCacheValue *pl_object_value = nullptr;
-    DatumRow cache_key;
+    UDFArgRow cache_key;
     if (OB_FAIL(create_new_cache_key(rc_ctx, cache_key))) {
       LOG_WARN("fail to create cache key", K(ret));
     } else if (OB_FAIL(create_new_result_object_value(pl_object_value))) {
@@ -409,7 +427,7 @@ int64_t ObPLUDFResultCacheSet::get_mem_size()
 {
   int64_t value_mem_size = 0;
 
-  for (hash::ObHashMap<DatumRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
+  for (hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
         iter != hashmap_.end();
         iter++) {
     if (OB_ISNULL(iter->second)) {

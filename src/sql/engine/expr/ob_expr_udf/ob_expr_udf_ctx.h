@@ -45,7 +45,7 @@ public:
   ~ObExprUDFDeterministerCache()
   {
     if (cache_.created()) {
-      for (hash::ObHashMap<DatumRow, ObObj, common::hash::NoPthreadDefendMode>::iterator iter = cache_.begin();
+      for (hash::ObHashMap<pl::UDFArgRow, ObObj, common::hash::NoPthreadDefendMode>::iterator iter = cache_.begin();
           iter != cache_.end();
           iter++) {
         if (iter->second.is_pl_extend()) {
@@ -58,8 +58,8 @@ public:
 
   int init();
 
-  int add_result_to_cache(const DatumRow &key, ObObj &result);
-  int get_result_from_cache(const DatumRow &key, ObObj &result, bool &found);
+  int add_result_to_cache(const pl::UDFArgRow &key, ObObj &result);
+  int get_result_from_cache(const pl::UDFArgRow &key, ObObj &result, bool &found);
 
   ObIAllocator &get_allocator() { return allocator_; }
 
@@ -67,7 +67,7 @@ private:
   bool is_inited_;
   int64_t cache_limit_;
   ObIAllocator &allocator_;
-  common::hash::ObHashMap<DatumRow, common::ObObj, common::hash::NoPthreadDefendMode> cache_;
+  common::hash::ObHashMap<pl::UDFArgRow, common::ObObj, common::hash::NoPthreadDefendMode> cache_;
 };
 
 // Its An UDF status cache, this Ctx will cache almost all reusable status for singal UDF.
@@ -162,12 +162,12 @@ private:
   ParamStore* params_;
 
   // for result cache
-  DatumRow row_key_;
+  pl::UDFArgRow row_key_;
   ObString sys_var_str_;
   ObString config_var_str_;
   bool enable_result_cache_;
   bool enable_deterministic_cache_;
-  common::hash::ObHashMap<DatumRow, common::ObObj, common::hash::NoPthreadDefendMode> determinister_result_cache_;
+  common::hash::ObHashMap<pl::UDFArgRow, common::ObObj, common::hash::NoPthreadDefendMode> determinister_result_cache_;
   ObExprUDFDeterministerCache *deterministic_cache_;
   pl::ObPLFunction *current_function_;
   pl::ObPLCompileUnit *current_compile_unit_;

@@ -268,6 +268,11 @@ int ObExprUDFCtx::construct_key()
       LOG_WARN("failed to construct datum from obj", K(ret), K(i));
     } else {
       row_key_.elems_[i] = datum;
+      if (info_->params_type_.at(i).is_null()) {
+        if (OB_FAIL(row_key_.default_param_bitmap_.add_member(i))) {
+          LOG_WARN("fail to add member", K(ret), K(i));
+        }
+      }
     }
   }
   return ret;
@@ -442,10 +447,10 @@ int ObExprUDFDeterministerCache::init()
   return ret;
 }
 
-int ObExprUDFDeterministerCache::add_result_to_cache(const DatumRow &key, ObObj &result)
+int ObExprUDFDeterministerCache::add_result_to_cache(const pl::UDFArgRow &key, ObObj &result)
 {
   int ret = OB_SUCCESS;
-  DatumRow cache_key;
+  pl::UDFArgRow cache_key;
   ObObj value;
   if (!is_inited_) {
     ret = OB_ERR_UNEXPECTED;
@@ -464,6 +469,7 @@ int ObExprUDFDeterministerCache::add_result_to_cache(const DatumRow &key, ObObj 
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for row key", K(ret),  K(cache_key.cnt_));
       }
+      OZ (cache_key.default_param_bitmap_.assign(key.default_param_bitmap_));
       for (int64_t i = 0; OB_SUCC(ret) && i < cache_key.cnt_; ++i) {
         if (OB_FAIL(cache_key.elems_[i].deep_copy(key.elems_[i], allocator_))) {
           LOG_WARN("failed to copy probe row", K(ret));
@@ -492,7 +498,7 @@ int ObExprUDFDeterministerCache::add_result_to_cache(const DatumRow &key, ObObj 
   return ret;
 }
 
-int ObExprUDFDeterministerCache::get_result_from_cache(const DatumRow &key, ObObj &result, bool &found)
+int ObExprUDFDeterministerCache::get_result_from_cache(const pl::UDFArgRow &key, ObObj &result, bool &found)
 {
   int ret = OB_SUCCESS;
   found = false;
@@ -632,7 +638,9 @@ int ObExprUDFCtx::get_result_from_result_cache(ObObj &result, bool &found)
     } else {
       found = true;
       if (result.is_pl_extend() && result.get_meta().get_extend_type()) {
-        CK (OB_NOT_NULL(exec_ctx_->get_pl_ctx()));
+        if (OB_ISNULL(exec_ctx_->get_pl_ctx())) {
+          OZ (exec_ctx_->init_pl_ctx());
+        }
         OZ (exec_ctx_->get_pl_ctx()->add(result));
         if (OB_FAIL(ret)) {
           int tmp_ret = OB_SUCCESS;

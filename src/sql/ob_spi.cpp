@@ -6256,7 +6256,6 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
       OX (result_type.set_meta(dest_type->get_meta_type()));
       OX (result_type.set_accuracy(dest_type->get_accuracy()));
       if (OB_SUCC(ret)) {
-        result = *src;
         if ((ObEnumType == src->get_type() && ObEnumType == result_type.get_type())
             || (ObSetType == src->get_type() && ObSetType == result_type.get_type())) {
           result = *src;

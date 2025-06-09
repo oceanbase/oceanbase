@@ -1622,7 +1622,7 @@ int ObPL::execute(ObExecContext &ctx,
   ObPLConcurrentGuard concurrent_guard;
   ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObPLAllocator1 pl_sym_allocator(PL_MOD_IDX::OB_PL_SYMBOL_TABLE, udf_from_sql ? &allocator : &tmp_alloc);
-  OZ (pl_sym_allocator.init(udf_from_sql ? &allocator : &tmp_alloc));
+  OZ (pl_sym_allocator.init(udf_from_sql ? &allocator : nullptr));
   OZ (concurrent_guard.set_concurrent_num(routine, ctx, package_guard));
   if (OB_SUCC(ret)) {
     ObPLExecState pl(udf_from_sql ? allocator : tmp_alloc,
