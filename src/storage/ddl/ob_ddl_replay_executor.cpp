@@ -1078,7 +1078,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
       LOG_WARN("failed to modify tablet restore status", K(ret), K(dest_tablet_ids), "src_tablet_handle", handle, KPC(log_));
     }
   } else {
-    LOG_INFO("finish replay tablet split finish log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_),
+    FLOG_INFO("finish replay tablet split finish log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_),
         "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
   }
   return ret;
