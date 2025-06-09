@@ -1715,7 +1715,7 @@ int ObIndexBuilder::generate_schema(
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("TIMESTAMP WITH TIME ZONE column can't be primary/unique key", K(arg.index_type_), K(ret));
-        } else if (data_column->get_meta_type().is_blob()) {
+        } else if (data_column->get_meta_type().is_blob() && data_column->is_fulltext_column()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("fulltext index created on blob column is not supported", K(arg.index_type_), K(ret));

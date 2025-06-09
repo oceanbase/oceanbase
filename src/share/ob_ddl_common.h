@@ -1150,10 +1150,10 @@ public:
 
   static bool need_remote_write(const int ret_code);
 
-  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index)
+  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index, const bool is_string_lob)
   {
-    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
-              && CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index;
+    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set()) &&
+            (is_string_lob || (CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index));
   }
 
   static int get_sys_ls_leader_addr(
