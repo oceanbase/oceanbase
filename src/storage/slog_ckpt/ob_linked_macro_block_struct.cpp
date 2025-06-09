@@ -209,7 +209,7 @@ void ObLinkedMacroInfoWriteParam::reset()
   ls_id_.reset();
   tablet_id_.reset();
   tablet_transfer_seq_ = -1;
-  start_macro_seq_  = 0;
+  start_macro_seq_  = -1;
   reorganization_scn_ = -1;
   op_id_ = 0;
   write_callback_ = nullptr;
