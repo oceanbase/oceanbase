@@ -4792,7 +4792,14 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
     int64_t n = OB_INVALID_SIZE;
     int64_t i = OB_INVALID_INDEX;
     int64_t org_elem_cnt = OB_INVALID_SIZE;
-    if (OB_FAIL(spi_calc_expr(ctx, collection_expr, OB_INVALID_INDEX, &result))) {
+    ObIAllocator *allocator = NULL;
+    if (OB_INVALID_ID != package_id) {
+      OZ (spi_get_package_allocator(ctx, package_id, allocator));
+    } else {
+      allocator = ctx->allocator_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(spi_calc_expr(ctx, collection_expr, OB_INVALID_INDEX, &result))) {
       LOG_WARN("failed to calc expr", K(ctx), K(collection_expr), K(result), K(ret));
     } else if (result.get_type() != ObExtendType) {
       ret = OB_ERR_UNEXPECTED;
