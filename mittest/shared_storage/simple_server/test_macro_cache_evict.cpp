@@ -199,6 +199,8 @@ public:
     However, generally, the id values start in sequence from 0, hundreds of them, and will not reach 9999
     */
     macro_cache_write(9999, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
+    macro_cache_write(10000, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
+    macro_cache_write(10001, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type);
   }
 
   void test_evict_scene1(ObSSMacroCacheMgr *macro_cache_mgr, ObTenantDiskSpaceManager *disk_space_mgr,
@@ -216,7 +218,7 @@ public:
     int64_t macro_block_free_size = 0;
     int64_t macro_block_used_size = 0, macro_block_used_size_af_evict = 0;
     int64_t tmp_file_used_size = 0, tmp_file_used_size_af_evict = 0;
-    // At first, write 2M of macro block into the macro cache, which is convenient for observation during subsequent test evict
+    // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
     init_wr_macro_cache(tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
@@ -275,7 +277,7 @@ public:
     int64_t macro_block_used_size = 0, macro_block_used_size_af_evict = 0;
     int64_t hot_tablet_used_size = 0, hot_tablet_used_size_af_evict = 0;
 
-    // At first, write 2M of macro block into the macro cache, which is convenient for observation during subsequent test evict
+    // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
     init_wr_macro_cache(tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;
@@ -439,7 +441,7 @@ public:
     int64_t cur_type_free_size = 0;
     int64_t meta_file_used_size = 0, tmp_file_used_size = 0, macro_block_used_size = 0, hot_tablet_used_size = 0;
     int64_t meta_file_used_size_af_evict = 0, tmp_file_used_size_af_evict = 0, macro_block_used_size_af_evict = 0, hot_tablet_used_size_af_evict = 0;
-    // At first, write 2M of macro block into the macro cache, which is convenient for observation during subsequent test evict
+    // At first, write 6M of macro block into the macro cache, which is convenient for observation during subsequent test evict
     init_wr_macro_cache(tenant_file_mgr, test_type);
     // shut down evict
     macro_cache_mgr->evict_task_.is_inited_ = false;

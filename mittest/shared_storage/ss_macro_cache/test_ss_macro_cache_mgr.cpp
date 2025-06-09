@@ -222,6 +222,13 @@ TEST_F(TestSSMacroCacheMgr, put_or_update_and_batch_update)
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->update_effective_tablet_id(macro_id_arr, cur_tablet_id));
   check_macro_cache_meta(macro_id, cache_info);
   check_macro_cache_meta(macro_id_2, cache_info);
+
+  // 6. erase
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->erase(macro_id));
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->erase(macro_id_2));
+  ObSSMacroCacheMetaHandle meta_handle;
+  ASSERT_EQ(OB_HASH_NOT_EXIST, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
+  ASSERT_EQ(OB_HASH_NOT_EXIST, macro_cache_mgr->meta_map_.get_refactored(macro_id_2, meta_handle));
 }
 
 TEST_F(TestSSMacroCacheMgr, update_effective_tablet_id_by_get)
@@ -362,6 +369,88 @@ TEST_F(TestSSMacroCacheMgr, shift_lru_list)
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->erase(macro_id));
   ObSSMacroCacheMetaHandle meta_handle;
   ASSERT_EQ(OB_HASH_NOT_EXIST, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
+}
+
+TEST_F(TestSSMacroCacheMgr, update_lru_list)
+{
+  int ret = OB_SUCCESS;
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ObTenantDiskSpaceManager *tnt_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, tnt_disk_space_mgr);
+
+  const uint64_t tablet_id = 200006;
+  const uint64_t server_id = 1;
+
+  // MacroBlockId
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id);
+  macro_id.set_third_id(server_id);
+  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_tenant_seq(100); // tenant_seq
+  ASSERT_TRUE(macro_id.is_valid());
+
+  MacroBlockId macro_id_2;
+  macro_id_2.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id_2.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id_2.set_second_id(tablet_id);
+  macro_id_2.set_third_id(server_id);
+  macro_id_2.set_macro_transfer_seq(0); // transfer_seq
+  macro_id_2.set_tenant_seq(101); // tenant_seq
+  ASSERT_TRUE(macro_id_2.is_valid());
+
+  // 1. write to macro cache
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  write_object_handle.reset();
+
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id_2));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  write_object_handle.reset();
+
+  // check macro cache meta
+  uint32_t size = 2 * 1024 * 1024;
+  ObSSMacroCacheInfo cache_info(tablet_id, size, ObSSMacroCacheType::MACRO_BLOCK, true/*is_write_cache*/);
+  check_macro_cache_meta(macro_id, cache_info);
+  check_macro_cache_meta(macro_id_2, cache_info);
+  ObSSMacroCacheMetaHandle meta_handle;
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
+  ASSERT_TRUE(meta_handle.is_valid());
+  ASSERT_TRUE(meta_handle()->get_is_in_fifo_list());
+  meta_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id_2, meta_handle));
+  ASSERT_TRUE(meta_handle.is_valid());
+  ASSERT_TRUE(meta_handle()->get_is_in_fifo_list());
+  meta_handle.reset();
+
+  // 2. get
+  for (int64_t i = 1; i <= ObSSMacroCacheMeta::UPDATE_LRU_LIST_THRESHOLD; ++i) {
+    bool is_hit_cache = false;
+    ObSSFdCacheHandle fd_handle;
+    ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(tablet_id), size, is_hit_cache, fd_handle));
+    ASSERT_TRUE(is_hit_cache);
+    ObSSMacroCacheMetaHandle meta_handle;
+    ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
+    ASSERT_TRUE(meta_handle.is_valid());
+    if (i == ObSSMacroCacheMeta::UPDATE_LRU_LIST_THRESHOLD) {
+      ASSERT_EQ(0, meta_handle()->access_cnt_);
+    } else {
+      ASSERT_EQ(i, meta_handle()->access_cnt_);
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
+  ASSERT_TRUE(meta_handle.is_valid());
+  ASSERT_FALSE(meta_handle()->get_is_in_fifo_list());
+  meta_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id_2, meta_handle));
+  ASSERT_TRUE(meta_handle.is_valid());
+  ASSERT_TRUE(meta_handle()->get_is_in_fifo_list());
+  meta_handle.reset();
 }
 
 } // namespace storage

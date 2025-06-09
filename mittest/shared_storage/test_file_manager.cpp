@@ -1511,7 +1511,7 @@ TEST_F(TestFileManager, test_deleted_file_operator)
   ASSERT_FALSE(is_exist);
   // delete .deleted file, so tmp_file_write_cache_alloc_size reduce
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, tmp_file_cache_stat));
-  ASSERT_EQ(tmp_file_used_size - write_io_size - statbuf.size_, tmp_file_cache_stat.used_);
+  ASSERT_EQ(tmp_file_used_size - write_io_size, tmp_file_cache_stat.used_);
 
   // step 4: test rename not exist file
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->logical_delete_local_file(tmp_file, 0/*ls_epoch_id*/));
