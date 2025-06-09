@@ -1045,7 +1045,7 @@ int ObVecIndexAsyncTask::do_work()
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
-  LOG_INFO("start do_work", K(ret), K(ctx_->task_status_.tablet_id_));
+  LOG_INFO("start do_work", K(ret), K(ctx_->task_status_));
   void *adpt_buff = nullptr;
   DEBUG_SYNC(HANDLE_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {
@@ -1101,9 +1101,8 @@ int ObVecIndexAsyncTask::do_work()
   if (OB_NOT_NULL(ctx_)) {
     common::ObSpinLockGuard ctx_guard(ctx_->lock_);
     ctx_->task_status_.ret_code_ = ret;
-    ctx_->in_thread_pool_ = false;
   }
-  LOG_INFO("end do_work", K(ret), K(ctx_->task_status_.tablet_id_));
+  LOG_INFO("end do_work", K(ret), K(ctx_->task_status_));
   return ret;
 }
 

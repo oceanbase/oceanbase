@@ -39,6 +39,57 @@ int ObVecAsyncTaskExector::init(const uint64_t tenant_id, ObLS *ls)
   return ret;
 }
 
+// alway return success
+int ObVecAsyncTaskExector::clear_old_task_ctx_if_need()
+{
+  int ret = OB_SUCCESS;
+  bool all_task_is_finish = true;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("vector async task not init", KR(ret));
+  } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
+    LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  } else {
+    ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
+    FOREACH_X(iter, task_opt.get_async_task_map(), OB_SUCC(ret) && all_task_is_finish) {
+      ObTabletID tablet_id = iter->first;
+      ObVecIndexAsyncTaskCtx *task_ctx = iter->second;
+      if (OB_ISNULL(task_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret));
+      } else if (!task_ctx->in_thread_pool_) {
+        // current task is finished
+      } else {
+        all_task_is_finish = false; // break if has unfinish task
+      }
+    }
+    if (OB_SUCC(ret) && all_task_is_finish) {
+      // all tasks is finish and task record in map should be removed expectedly.
+      // when map size > 0, is not expected.
+      if (task_opt.get_async_task_map().size() > 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_INFO("unexpected vector async task map", K(ret),
+          K(task_opt.get_async_task_map().size()));
+        // for debug
+        FOREACH_X(iter, task_opt.get_async_task_map(), OB_SUCC(ret)) {
+          ObVecIndexAsyncTaskCtx *task_ctx = iter->second;
+          if (OB_ISNULL(task_ctx)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr", K(ret));
+          } else {
+            LOG_WARN("print finished but is not been removed from map tasks", K(*task_ctx));
+          }
+        }
+      } else {
+        index_ls_mgr->get_async_task_opt().get_allocator()->reset();
+        LOG_DEBUG("reset vector async task ctx memory", K(ret), K(all_task_is_finish));
+      }
+    }
+  }
+  return OB_SUCCESS;
+}
+
 bool ObVecAsyncTaskExector::check_operation_allow()
 {
   int ret = OB_SUCCESS;
@@ -274,6 +325,12 @@ int ObVecAsyncTaskExector::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
             task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
           }
         }
+      }
+      // task need retry or go to end
+      if (OB_SUCC(ret) &&
+         (task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE ||
+          task_ctx->task_status_.status_ == ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH)) {
+        task_ctx->in_thread_pool_ = false; // clear old task flag
       }
     } else {
       // do nothing

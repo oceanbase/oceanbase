@@ -557,6 +557,8 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   if (is_stopped() || !is_leader_) { // skip
   } else if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(tmp_ret));
+  } else if (OB_TMP_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
+    LOG_WARN("fail to clear old task ctx", K(tmp_ret));
   } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
     LOG_WARN("fail to load tenant sync task", K(tmp_ret));
   }

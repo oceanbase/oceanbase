@@ -41,6 +41,7 @@ public:
   int start_task();
   int load_task();
   int check_and_set_thread_pool();
+  int clear_old_task_ctx_if_need();
 
 private:
   int get_index_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr);
