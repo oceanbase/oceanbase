@@ -7599,6 +7599,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
           const ObColumnSchemaV2 *index_col = NULL;
           const ObIndexInfo &index_info = index_table_schema->get_index_info();
           ObSEArray<ObString, 8> key_columns;
+          const ObIndexStatus index_status = index_table_schema->get_index_status();
           // 提取当前index的所有列
           for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
             if (OB_ISNULL(index_col = index_table_schema->get_column_schema(index_info.get_column(i)->column_id_))) {
@@ -7617,7 +7618,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
             // 只允许匹配unique index的全部列
             if (OB_FAIL(check_match_columns(parent_columns, key_columns, is_pk_uk_match))) {
               LOG_WARN("Failed to check_match_columns", K(ret));
-            } else if (is_pk_uk_match) {
+            } else if (is_pk_uk_match  && is_available_index_status(index_status)) {
               is_match = true;
               fk_ref_type = FK_REF_TYPE_UNIQUE_KEY;
             }
@@ -7625,7 +7626,7 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
           } else {
             if (OB_FAIL(check_partial_match_columns(parent_columns, key_columns, tmp_is_match))) {
               LOG_WARN("Failed to check_partial_match_columns", K(ret));
-            } else if (tmp_is_match) {
+            } else if (tmp_is_match && is_available_index_status(index_status)) {
               is_match = true;
               /* unique当且仅当index是unique index而且所有的列都match */
               if (index_table_schema->is_unique_index() && parent_columns.count() == key_columns.count()) {
