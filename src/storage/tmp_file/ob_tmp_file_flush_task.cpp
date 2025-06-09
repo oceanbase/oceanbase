@@ -247,18 +247,15 @@ int ObTmpFileFlushTask::wait()
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(block->insert_pages_into_flushing_list(page_array_))) {
           if (OB_RESOURCE_RELEASED == tmp_ret) {
-            LOG_WARN("fail to insert page into block", KR(tmp_ret), KPC(this));
+            // OB_RESOURCE_RELEASED means the block is deleting
+            // and no need to reinsert pages, we can free flush_task safely
+            LOG_INFO("block is deleting, no need to insert pages for flushing", KR(tmp_ret), KPC(this));
           } else {
             LOG_ERROR("fail to insert page into block", KR(tmp_ret), KPC(this));
           }
         }
-
-        // OB_RESOURCE_RELEASED means block is deleting and no need to reinsert pages
-        // we can free flush task safely
-        if (OB_RESOURCE_RELEASED == tmp_ret || OB_SUCCESS == tmp_ret) {
-          ATOMIC_SET(&ret_code_, ret);
-          ATOMIC_SET(&is_finished_, true);
-        }
+        ATOMIC_SET(&ret_code_, ret);
+        ATOMIC_SET(&is_finished_, true);
       }
     } else {
       ATOMIC_SET(&ret_code_, OB_SUCCESS);

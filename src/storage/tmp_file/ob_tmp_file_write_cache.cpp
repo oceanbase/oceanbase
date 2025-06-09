@@ -1094,13 +1094,7 @@ int ObTmpFileWriteCache::exec_wait_()
           LOG_ERROR("fail to add task to continue waiting", KR(ret));
         }
       } else {
-        // TODO：
-        // step 1: 先简单存储一下报错任务，删租户or定期打印该队列内的task信息方便排查
-        // step 2: 如果是可以处理的IO报错，可以做以下操作：
-        //    2.1 定期加回io_waiting_queue（需要重新发IO）
-        //    2.2 或者删除block is deleting的任务，释放内存
-        // 先不做2，只实现1;
-        add_io_error_task_(task);
+        // add_io_error_task_(task);
         LOG_WARN("fail to exec wait for tmp file flush io", KR(ret), KPC(task));
       }
     }
@@ -1637,7 +1631,7 @@ int ObTmpFileWriteCache::cleanup_list_()
   remove_pending_task_();
 
   for (int32_t retry = 10; io_error_queue_size_ > 0 && retry > 0; --retry) {
-    remove_io_error_task_();
+    remove_io_error_task_(); // TODO：remove later
     usleep(10 * 1000);
   }
 
