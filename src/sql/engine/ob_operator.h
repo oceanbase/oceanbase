@@ -553,7 +553,10 @@ protected:
       if (OB_SUCC(ret)) {
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
           ObExpr *expr = *e;
-          if (expr->enable_rich_format()) {
+          // only non-uniform format need to set to vec_invalid
+          // if expr is a literal const expr, we can't set format_ to vec_invalid
+          // otherwise another thread using the same plan may read unexpected format
+          if (expr->enable_rich_format() && !is_uniform_format(expr->get_format(eval_ctx_))) {
             expr->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
           }
         }
