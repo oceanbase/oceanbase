@@ -300,6 +300,8 @@
   INTERFACE_DEF(INTERFACE_GET_TIME, "GET_TIME", (DbmsUtilityHelper::get_time))
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_DISK_CACHE_OBJ_EXPIRED, "INNER_CHECK_DISK_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_disk_cache_obj_expired))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_PL_CACHE_OBJ_EXPIRED, "INNER_CHECK_PL_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_pl_cache_obj_expired))
   INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
   INTERFACE_DEF(INTERFACE_RECOMPILE, "PL_RECOMPILE", (ObPLRecompileTaskHelper::recompile_pl_objs))
   // end dbms_utility
