@@ -36,6 +36,8 @@ public:
   static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
+
+  void wait_for_replay_ckpt();
 };
 
 void TestSSMicroCacheRestart::SetUpTestCase()
@@ -71,6 +73,67 @@ void TestSSMicroCacheRestart::TearDown()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
+}
+
+void TestSSMicroCacheRestart::wait_for_replay_ckpt()
+{
+  int ret = OB_SUCCESS;
+  int64_t REPLAY_CKPT_TIMEOUT_S = 120;
+  int64_t start_time_s = ObTimeUtility::current_time_s();
+  bool is_cache_enabled = false;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  do {
+    is_cache_enabled = micro_cache->is_enabled_;
+    if (!is_cache_enabled) {
+      LOG_INFO("ss_micro_cache is still disabled");
+      ob_usleep(1000 * 1000);
+    }
+  } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_time_s < REPLAY_CKPT_TIMEOUT_S);
+  ASSERT_EQ(true, is_cache_enabled);
+}
+
+TEST_F(TestSSMicroCacheRestart, test_disable_all_task)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_disable_all_task");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroCacheTaskRunner &task_runner = micro_cache->task_runner_;
+
+  ASSERT_EQ(0, cache_stat.task_stat().phy_ckpt_cnt_);
+  ObSSExecuteBlkCheckpointTask &blk_ckpt_task = task_runner.blk_ckpt_task_;
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = ObSSExecuteBlkCheckpointOp::BLK_INFO_CKPT_INTERVAL_ROUND - 2;
+  ob_usleep(3 * 1000 * 1000L);
+  ASSERT_EQ(1, cache_stat.task_stat().phy_ckpt_cnt_);
+
+  task_runner.disable_task();
+  const int64_t start_time_s = ObTimeUtility::current_time_s();
+  int64_t MAX_RETRY_TIME_S = 120;
+  bool is_closed = false;
+  do {
+    is_closed = task_runner.is_task_closed();
+    if (!is_closed) {
+      ob_usleep(1000 * 1000);
+      LOG_INFO("ss_micro_cache task runner still not closed");
+    }
+  } while (!is_closed && ObTimeUtility::current_time_s() - start_time_s < MAX_RETRY_TIME_S);
+  ASSERT_EQ(true, is_closed);
+
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = ObSSExecuteBlkCheckpointOp::BLK_INFO_CKPT_INTERVAL_ROUND - 2;
+  ob_usleep(3 * 1000 * 1000L);
+  ASSERT_EQ(1, cache_stat.task_stat().phy_ckpt_cnt_);
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = 0;
+
+  task_runner.enable_task();
+  ob_usleep(3 * 1000 * 1000L);
+  ASSERT_EQ(false, task_runner.is_task_closed());
+
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = ObSSExecuteBlkCheckpointOp::BLK_INFO_CKPT_INTERVAL_ROUND - 2;
+  ob_usleep(3 * 1000 * 1000L);
+  ASSERT_EQ(2, cache_stat.task_stat().phy_ckpt_cnt_);
+
+  LOG_INFO("TEST_CASE: finish test_disable_all_task");
 }
 
 TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
@@ -125,6 +188,9 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // 2.1 restart
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  wait_for_replay_ckpt();
+  LOG_INFO("TEST: finish first restart", K(cache_stat));
+
   ASSERT_EQ(cache_file_size, phy_blk_mgr.super_block_.cache_file_size_);
   ASSERT_EQ(0, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
   ASSERT_EQ(0, phy_blk_mgr.super_block_.blk_ckpt_entry_list_.count()); // cuz only exist blk ckpt, will drop it
@@ -196,6 +262,9 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // 3.1 restart
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  wait_for_replay_ckpt();
+  LOG_INFO("TEST: finish second restart", K(cache_stat));
+
   ASSERT_EQ(total_ckpt_micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(total_ckpt_micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
   ASSERT_EQ(cur_data_blk_used_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
@@ -343,6 +412,9 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // 4. FOURTH START
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  wait_for_replay_ckpt();
+  LOG_INFO("TEST: finish third restart", K(cache_stat));
+
   ASSERT_EQ(total_ckpt_micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(total_ckpt_micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
   ASSERT_EQ(cur_data_blk_used_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);

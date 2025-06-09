@@ -469,8 +469,8 @@ TEST_F(TestSSReorganizePhyBlock, test_delete_block_from_sparse_blk_map)
   ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
   ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
   ObSSExecuteBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
-  arc_task.evict_op_.enable_evict_ = false;
-  arc_task.reorganize_op_.enable_reorganize_ = false;
+  arc_task.evict_op_.disable_op();
+  arc_task.reorganize_op_.disable_op();
   blk_ckpt_task.is_inited_ = false;
   ob_usleep(1000 * 1000);
 
@@ -494,14 +494,13 @@ TEST_F(TestSSReorganizePhyBlock, test_delete_block_from_sparse_blk_map)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_batch_sparse_blocks(candidate_phy_blks, 10));
   ASSERT_EQ(0, phy_blk_mgr.sparse_blk_map_.count());
 
-
   // scenario 2
   int64_t new_arc_limit = micro_cnt * micro_size * 0.001;
   arc_info.do_update_arc_limit(new_arc_limit, /* need_update_limit */ false);
-  arc_task.evict_op_.enable_evict_ = true;
+  arc_task.evict_op_.enable_op();
   ob_usleep(1000 * 1000);
   ASSERT_EQ(data_blk_used_cnt, phy_blk_mgr.sparse_blk_map_.count());
-  arc_task.reorganize_op_.enable_reorganize_ = true;
+  arc_task.reorganize_op_.enable_op();
   blk_ckpt_task.interval_us_ = 1000;
   blk_ckpt_task.is_inited_ = true;
   ob_usleep(5 * 1000 * 1000);

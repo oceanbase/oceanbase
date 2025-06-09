@@ -37,7 +37,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
 
-  void restart_micro_cache();
+  int restart_micro_cache();
   int add_batch_micro_block(const int64_t start_idx, const int64_t macro_cnt, const int64_t micro_cnt,
                             ObArray<ObSSMicroBlockMeta *> &micro_meta_arr);
   int alloc_batch_phy_block_to_reuse(const int64_t total_cnt, ObArray<ObSSPhyBlockPersistInfo> &phy_block_arr);
@@ -102,22 +102,37 @@ void TestSSExecuteCheckpointTask::TearDown()
   micro_cache->destroy();
 }
 
-void TestSSExecuteCheckpointTask::restart_micro_cache()
+int TestSSExecuteCheckpointTask::restart_micro_cache()
 {
+  int ret = OB_SUCCESS;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-
   tnt_file_mgr->is_cache_file_exist_ = true;
 
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32)));
-  micro_cache->start();
-  micro_ckpt_task_->is_inited_ = false;
-  blk_ckpt_task_->is_inited_ = false;
-  arc_task_->is_inited_ = false;
-  persist_task_->is_inited_ = false;
+  if (OB_FAIL(micro_cache_->init(MTL_ID(), (1L << 32)))) {
+    LOG_WARN("fail to init micro_cache", KR(ret));
+  } else if (OB_FAIL(micro_cache_->start())) {
+    LOG_WARN("fail to start micro_cache", KR(ret));
+  } else {
+    int64_t REPLAY_CKPT_TIMEOUT_S = 120;
+    int64_t start_time_s = ObTimeUtility::current_time_s();
+    bool is_cache_enabled = false;
+    do {
+      is_cache_enabled = micro_cache_->is_enabled_;
+      if (!is_cache_enabled) {
+        LOG_INFO("ss_micro_cache is still disabled");
+        ob_usleep(1000 * 1000);
+      }
+    } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_time_s < REPLAY_CKPT_TIMEOUT_S);
+    if (!is_cache_enabled) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to replay ckpt async", KR(ret), K(is_cache_enabled));
+    }
+  }
+  return ret;
 }
 
 int TestSSExecuteCheckpointTask::add_batch_micro_block(
@@ -127,7 +142,7 @@ int TestSSExecuteCheckpointTask::add_batch_micro_block(
     ObArray<ObSSMicroBlockMeta *> &micro_meta_arr)
 {
   int ret = OB_SUCCESS;
-  persist_task_->is_inited_ = true;
+  persist_task_->enable_persist_data_op();
   ob_usleep(100 * 1000);
   const int64_t payload_offset =
       ObSSPhyBlockCommonHeader::get_serialize_size() + ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
@@ -160,7 +175,7 @@ int TestSSExecuteCheckpointTask::add_batch_micro_block(
         LOG_WARN("fail to wait for persist task", K(ret));
       }
     }
-    persist_task_->is_inited_ = false;
+    persist_task_->disable_persist_data_op();
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < micro_key_arr.count(); ++i) {
@@ -621,8 +636,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   uint64_t ori_reuse_version_2 = phy_blk_handle.get_ptr()->reuse_version_;
   phy_blk_handle.reset();
 
-  ASSERT_EQ(OB_SUCCESS,
-      phy_blk_mgr->try_free_batch_blocks(blk_ckpt_task.ckpt_op_.reusable_block_idxs_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.free_blk_cnt_));
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.try_free_phy_blocks(false/*is_micro_ckpt*/, true/*succ_ckpt*/));
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_block_handle(evict_blk_idx, phy_blk_handle));
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   ASSERT_EQ(true, phy_blk_handle.ptr_->is_free_);
@@ -705,10 +719,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
 TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
 {
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
-  micro_ckpt_task_->is_inited_ = false;
-  blk_ckpt_task_->is_inited_ = false;
-  arc_task_->is_inited_ = false;
-  persist_task_->is_inited_ = false;
+  micro_cache_->task_runner_.disable_task();
   const int64_t total_blk_cnt = phy_blk_mgr_->blk_cnt_info_.total_blk_cnt_;
   ob_usleep(1000 * 1000);
 
@@ -725,8 +736,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   ASSERT_EQ(OB_SUCCESS, alloc_batch_phy_block_to_reuse(alloc_phy_blk_cnt, phy_block_arr1));
 
   // 2. do ckpt_task first round
-  micro_ckpt_task_->is_inited_ = true;
-  blk_ckpt_task_->is_inited_ = true;
+  micro_cache_->task_runner_.enable_micro_ckpt();
+  micro_cache_->task_runner_.enable_blk_ckpt();
   micro_ckpt_task_->interval_us_ = 3600 * 1000 * 1000L;
   blk_ckpt_task_->interval_us_ = 3600 * 1000 * 1000L;
   ob_usleep(1000 * 1000);
@@ -753,14 +764,15 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   const int64_t blk_exe_time_us = ObTimeUtility::current_time() - start_time_us;
   ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(total_blk_cnt - SS_CACHE_SUPER_BLOCK_CNT, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
-  micro_ckpt_task_->is_inited_ = false;
-  blk_ckpt_task_->is_inited_ = false;
+  micro_cache_->task_runner_.disable_micro_ckpt();
+  micro_cache_->task_runner_.disable_blk_ckpt();
   ObSSMicroCacheSuperBlock super_block1;
   ASSERT_EQ(OB_SUCCESS, super_block1.assign(phy_blk_mgr_->super_block_));
 
   // 3. restart micro cache
   LOG_INFO("TEST: start first restart");
-  restart_micro_cache();
+  ASSERT_EQ(OB_SUCCESS, restart_micro_cache());
+  micro_cache_->task_runner_.disable_task();
   LOG_INFO("TEST: finish first restart");
 
   // 4. check super_block, micro_meta and phy_block_info
@@ -782,8 +794,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   const int64_t used_data_blk_cnt2 = phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_;
 
   // 7. do ckpt_task second round and randomly force to end micro_ckpt_task and restart micro_cache
-  micro_ckpt_task_->is_inited_ = true;
-  blk_ckpt_task_->is_inited_ = true;
+  micro_cache_->task_runner_.enable_micro_ckpt();
+  micro_cache_->task_runner_.enable_blk_ckpt();
   micro_ckpt_task_->interval_us_ = 3600 * 1000 * 1000L;
   blk_ckpt_task_->interval_us_ = 3600 * 1000 * 1000L;
   ob_usleep(1000 * 1000);
@@ -797,7 +809,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
     ObRandom rand;
     const int64_t sleep_us = ObRandom::rand(1, micro_exe_time_us * 2);
     ob_usleep(sleep_us);
-    micro_ckpt_task_->ckpt_op_.is_inited_ = false; // force to end micro_ckpt
+    micro_ckpt_task_->disable_micro_ckpt_op(); // force to end micro_ckpt
   });
   micro_ckpt_task_->ckpt_op_.gen_checkpoint();
   micro_t.join();
@@ -805,7 +817,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   ASSERT_EQ(OB_SUCCESS, super_block3.assign(phy_blk_mgr_->super_block_));
 
   LOG_INFO("TEST: start second restart");
-  restart_micro_cache();
+  ASSERT_EQ(OB_SUCCESS, restart_micro_cache());
+  micro_cache_->task_runner_.disable_task();
   LOG_INFO("TEST: finish second restart");
 
   // 8. check super_block, micro_meta and phy_block_info

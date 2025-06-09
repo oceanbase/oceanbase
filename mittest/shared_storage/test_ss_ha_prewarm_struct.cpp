@@ -75,7 +75,7 @@ void TestSSHAPrewarmStruct::SetUp()
   micro_cache->destroy();
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30)));
   micro_cache->start();
-  micro_cache->task_runner_.release_cache_task_.reorganize_op_.enable_reorganize_ = false;
+  micro_cache->task_runner_.release_cache_task_.reorganize_op_.disable_op();
 }
 
 void TestSSHAPrewarmStruct::TearDown()
