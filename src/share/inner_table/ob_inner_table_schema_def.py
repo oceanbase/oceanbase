@@ -16717,6 +16717,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12551: __all_virtual_logservice_cluster_info
 # 12552: __all_virtual_ss_gc_status
 # 12553: __all_virtual_ss_gc_detect_info
+# 12554: __ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT
 
 def_table_schema(
   owner = 'bohou.ws',
@@ -17334,6 +17335,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15520', all_def_keyword
 # 15521: __all_virtual_tenant_vector_mem_info
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15522', all_def_keywords['__all_virtual_ss_existing_tablet_meta']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keywords['__all_virtual_ss_existing_sstable_mgr']))
+# 15524: ALL_VIRTUAL_UNIT_SYS_AGENT
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
