@@ -431,7 +431,7 @@ public:
     inited_ = false;
     polling_mgr_.reset();
   }
-  int pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array);
+  int pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array);
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
   static bool can_retry(const ObAutoSplitTask &task, const int ret);
   int gc_deleted_tenant_caches();

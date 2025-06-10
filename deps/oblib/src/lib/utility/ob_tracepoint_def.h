@@ -359,6 +359,8 @@ GLOBAL_ERRSIM_POINT_DEF(523, EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP, "");
 GLOBAL_ERRSIM_POINT_DEF(524, EN_AUTO_SPLIT_TABLET_SIZE, "Used to set auto_split_tablet_size in bytes");
 GLOBAL_ERRSIM_POINT_DEF(525, EN_SKIP_DROP_LOB_AUX_TABLE, "do not drop lob aux table");
 GLOBAL_ERRSIM_POINT_DEF(526, EN_AFTER_MINOR_BUT_BEFORE_MAJOR_SPLIT, "test data-split after the minor split, but before the major");
+GLOBAL_ERRSIM_POINT_DEF(527, EN_WRITE_SPLIT_START_LOG_DELAY_SEC, "delay seconds before write split start log");
+GLOBAL_ERRSIM_POINT_DEF(528, EN_AUTO_SPLIT_TASK_CNT_LESS_THAN, "max number of running auto split task allowed in cluster");
 
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(530, EN_VEC_INDEX_DROP_SHARE_TABLE_ERR, "");

@@ -436,44 +436,62 @@ int ObAutoSpTaskSchedEntry::assign(const ObAutoSpTaskSchedEntry &other)
   return ret;
 }
 
-int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array)
+int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array)
 {
   int ret = OB_SUCCESS;
   task_array.reuse();
   ObArray<ObArray<ObAutoSplitTask>> tenant_task_arrays;
   ObSEArray<ObSEArray<ObSplitTask*,10>, 5> tmp_tenant_task_arrays;
   common::ObArenaAllocator allocator(common::ObMemAttr(OB_SERVER_TENANT_ID, "sche_split"));
-  int64_t num_tasks_pop_from_poll_mgr = MAX_SPLIT_TASK_DIRECT_CACHE_SIZE - task_direct_cache_.count();
-  if (polling_mgr_.is_empty() && task_direct_cache_.empty()) {
-    //do nothing
-   } else {
-     if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
-      LOG_WARN("fail to pop tasks from tree", K(ret));
-     }
-     ObArray<ObAutoSplitTask> tmp_task_array;
-     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_task_arrays.count(); ++i) {
-       ObSEArray<ObSplitTask*, 10> &tmp_tenant_task = tmp_tenant_task_arrays.at(i);
-       tmp_task_array.reuse();
-       for (int64_t j = 0; OB_SUCC(ret) && j < tmp_tenant_task.count(); ++j) {
-         ObAutoSplitTask *ptr_to_auto_task = static_cast<ObAutoSplitTask*>(tmp_tenant_task.at(j));
-         if (OB_ISNULL(ptr_to_auto_task)) {
-           ret = OB_NULL_CHECK_ERROR;
-           LOG_WARN("failed to do null check", K(ret), K(ptr_to_auto_task));
-         } else if (OB_FAIL(tmp_task_array.push_back(*ptr_to_auto_task))) {
-           LOG_WARN("failed to push back into tmp_task_array", K(ret));
-         }
-       }
-       if (OB_FAIL(ret)) {
-       } else if (OB_FAIL(tenant_task_arrays.push_back(tmp_task_array))) {
-         LOG_WARN("failed to push bakc into", K(ret));
-       }
-     }
-     if (OB_FAIL(ret)) {
-     } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
-       LOG_WARN("failed to push to direct cache", K(ret));
-     } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
+  if (throttle_by_table) {
+    int64_t num_tasks_pop_from_poll_mgr = MAX_SPLIT_TASK_DIRECT_CACHE_SIZE - task_direct_cache_.count();
+    if (polling_mgr_.is_empty() && task_direct_cache_.empty()) {
+      //do nothing
+    } else {
+      if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
+       LOG_WARN("fail to pop tasks from tree", K(ret));
+      }
+      ObArray<ObAutoSplitTask> tmp_task_array;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_task_arrays.count(); ++i) {
+        ObSEArray<ObSplitTask*, 10> &tmp_tenant_task = tmp_tenant_task_arrays.at(i);
+        tmp_task_array.reuse();
+        for (int64_t j = 0; OB_SUCC(ret) && j < tmp_tenant_task.count(); ++j) {
+          ObAutoSplitTask *ptr_to_auto_task = static_cast<ObAutoSplitTask*>(tmp_tenant_task.at(j));
+          if (OB_ISNULL(ptr_to_auto_task)) {
+            ret = OB_NULL_CHECK_ERROR;
+            LOG_WARN("failed to do null check", K(ret), K(ptr_to_auto_task));
+          } else if (OB_FAIL(tmp_task_array.push_back(*ptr_to_auto_task))) {
+            LOG_WARN("failed to push back into tmp_task_array", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(tenant_task_arrays.push_back(tmp_task_array))) {
+          LOG_WARN("failed to push bakc into", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
+        LOG_WARN("failed to push to direct cache", K(ret));
+      } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
+       LOG_WARN("failed ot pop from direct cache", K(ret));
+      }
+    }
+  } else {
+    if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
       LOG_WARN("failed ot pop from direct cache", K(ret));
-     }
+    } else if (task_array.size() < num_tasks_can_pop) {
+      if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_can_pop - task_array.size(), false, tmp_tenant_task_arrays, allocator))) {
+        LOG_WARN("fail to pop tasks from tree", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_task_arrays.count(); i++) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < tmp_tenant_task_arrays.at(i).count(); j++) {
+            if (OB_FAIL(task_array.push_back(*static_cast<ObAutoSplitTask*>(tmp_tenant_task_arrays.at(i).at(j))))) {
+              LOG_WARN("failed to append tasks from polling mgr", K(ret));
+            }
+          }
+        }
+      }
+    }
   }
   return ret;
 }
