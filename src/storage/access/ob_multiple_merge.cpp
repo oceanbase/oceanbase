@@ -1578,11 +1578,13 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     table_store_iter->reset();
     if (OB_FAIL(prepare_mds_tables(refresh))) {
       LOG_WARN("fail to prepare mds tables", K(ret), K(refresh), K_(get_table_param), KPC_(access_param));
-    } else if (OB_FAIL(prepare_tables_from_iterator(*table_store_iter, &get_table_param_->sample_info_))) {
+    } else if (OB_FAIL(prepare_tables_from_iterator(*table_store_iter, false/*has_split_extra_tables*/, &get_table_param_->sample_info_))) {
       LOG_WARN("failed to prepare tables from iter", K(ret), KPC(table_store_iter));
     }
   } else if (!refresh && get_table_param_->tablet_iter_.table_iter()->is_valid()) {
-    if (OB_FAIL(prepare_tables_from_iterator(*get_table_param_->tablet_iter_.table_iter()))) {
+    if (OB_FAIL(prepare_tables_from_iterator(
+        *get_table_param_->tablet_iter_.table_iter(),
+        nullptr != get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()))) {
       LOG_WARN("prepare tables fail", K(ret), K(get_table_param_->tablet_iter_.table_iter()));
     }
   } else if (FALSE_IT(get_table_param_->tablet_iter_.table_iter()->reset())) {
@@ -1611,7 +1613,10 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_tables_from_iterator(*get_table_param_->tablet_iter_.table_iter(), &get_table_param_->sample_info_))) {
+      if (OB_FAIL(prepare_tables_from_iterator(
+          *get_table_param_->tablet_iter_.table_iter(),
+          nullptr != get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr(),
+          &get_table_param_->sample_info_))) {
         LOG_WARN("failed to prepare tables from iter", K(ret), K(get_table_param_->tablet_iter_.table_iter()));
       }
     }
@@ -1644,7 +1649,7 @@ int ObMultipleMerge::prepare_mds_tables(bool refresh)
   return ret;
 }
 
-int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_iter, const common::SampleInfo *sample_info)
+int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_iter, const bool has_split_extra_tables, const common::SampleInfo *sample_info)
 {
   int ret = OB_SUCCESS;
   table_iter.resume();
@@ -1700,7 +1705,12 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
     ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
-    if (tables_.count() > common::MAX_TABLE_CNT_IN_STORAGE) {
+    if (has_split_extra_tables) {
+      if (tables_.count() > 2*common::MAX_TABLE_CNT_IN_STORAGE) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_WARN("too many tables for split src, retry on split dst", K(ret), K(memtable_cnt), K(tables_.count()), K(table_iter), K(tables_));
+      }
+    } else if (tables_.count() > common::MAX_TABLE_CNT_IN_STORAGE) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table cnt", K(ret), K(memtable_cnt), K(tables_.count()), K(table_iter), K(tables_));
     }
