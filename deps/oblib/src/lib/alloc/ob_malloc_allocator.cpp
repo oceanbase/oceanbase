@@ -875,18 +875,16 @@ void *ObMallocHook::alloc(const int64_t size, bool &from_malloc_hook)
   }
   void *ptr = NULL;
   AObject *obj = NULL;
+  ObMemAttr attr = attr_;
   static thread_local ObMallocSampleLimiter sample_limiter;
   bool sample_allowed = sample_limiter.try_acquire(size);
-  if (OB_LIKELY(!sample_allowed)) {
-    obj = mgr_.alloc_object(size, attr_);
-  } else {
-    ObMemAttr attr = attr_;
+  if (OB_UNLIKELY(sample_allowed)) {
     attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
-    obj = mgr_.alloc_object(size, attr);
   }
+  obj = mgr_.alloc_object(size, attr);
   if (OB_UNLIKELY(NULL == obj)) {
     ta_->sync_wash();
-    obj = mgr_.alloc_object(size, attr_);
+    obj = mgr_.alloc_object(size, attr);
   }
   if (OB_LIKELY(obj)) {
     if (OB_UNLIKELY(sample_allowed)) {
