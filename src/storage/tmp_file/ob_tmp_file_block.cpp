@@ -661,7 +661,6 @@ int ObTmpFileBlock::init_flushing_page_iterator(ObTmpFileBlockFlushingPageIterat
         succ = false;
         if (TC_REACH_COUNT_INTERVAL(1000)) {
           LOG_INFO("skip flush special page when write cache memory is sufficient", K(page));
-          write_cache.print_(); // TODO: remove it when code is stable
         }
       } else if (OB_SUCCESS == (tmp_ret = write_cache.try_exclusive_lock(fd))) {
         // release lock after flushing over. if one file contains multiple
@@ -671,7 +670,7 @@ int ObTmpFileBlock::init_flushing_page_iterator(ObTmpFileBlockFlushingPageIterat
       } else if (OB_EAGAIN == tmp_ret) {
         succ = false;
         write_cache.metrics_.record_skip_incomplete_page(1);
-        LOG_INFO("skip bucket lock for incomplete page", KR(ret), K(page));
+        LOG_DEBUG("skip bucket lock for incomplete page", KR(ret), K(page));
       } else {
         LOG_ERROR("fail to try exclusive lock", KR(ret), K(page), KPC(this));
       }

@@ -171,6 +171,7 @@ void ObTmpFileWriteCache::wait()
 void ObTmpFileWriteCache::destroy()
 {
   if (IS_INIT) {
+    LOG_INFO("write cache destroy begin");
     print_();
     cleanup_list_();
     if (pages_.size() > 0) {
@@ -1592,28 +1593,10 @@ int ObTmpFileWriteCache::remove_pending_task_()
   return ret;
 }
 
-int ObTmpFileWriteCache::remove_io_error_task_()
-{
-  int ret = OB_SUCCESS;
-  for (int32_t i = io_error_queue_size_; i > 0; --i) {
-    ObTmpFileFlushTask *task = nullptr;
-    if (OB_FAIL(pop_io_error_task_(task))) {
-      LOG_WARN("fail to pop io error task", KR(ret), KPC(task));
-    } else {
-      LOG_INFO("flush task encounter io error", KPC(task));
-      ObTmpFileBlockHandle block_handle = task->get_block_handle();
-      if (block_handle.get()->is_deleting()) {
-        LOG_INFO("block is deleting, free unfinished flush task", KPC(task));
-        free_flush_task_(task);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTmpFileWriteCache::cleanup_list_()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("cleanup lists begin", K(swap_queue_size_), K(io_waiting_queue_size_));
   for (int32_t i = 0; i < MAX_FLUSH_TIMER_NUM; ++i) {
     TG_CANCEL_ALL(flush_tg_id_[i]);
   }
@@ -1630,15 +1613,10 @@ int ObTmpFileWriteCache::cleanup_list_()
 
   remove_pending_task_();
 
-  for (int32_t retry = 10; io_error_queue_size_ > 0 && retry > 0; --retry) {
-    remove_io_error_task_(); // TODO：remove later
-    usleep(10 * 1000);
-  }
-
   for (int32_t retry = 10; io_waiting_queue_size_ > 0 && retry > 0; --retry) {
     LOG_WARN("io waiting queue is not empty", K(io_waiting_queue_size_));
     if (OB_FAIL(exec_wait_())) {
-      if (EAGAIN != ret) {
+      if (OB_EAGAIN != ret) {
         LOG_ERROR("exec wait failed", KR(ret));
       }
       ret = OB_SUCCESS;

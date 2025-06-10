@@ -119,7 +119,6 @@ private:
   int add_io_error_task_(ObTmpFileFlushTask *task);
   int pop_io_error_task_(ObTmpFileFlushTask *&task);
   int remove_pending_task_();
-  int remove_io_error_task_();
   OB_INLINE int get_flush_ret_code_() const { return flush_ret_; }
   OB_INLINE void set_flush_ret_code_(const int ret_code) { flush_ret_ = ret_code; }
   int try_to_set_macro_block_idx_(ObTmpFileBlock &block);

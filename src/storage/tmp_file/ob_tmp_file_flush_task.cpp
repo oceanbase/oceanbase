@@ -18,6 +18,7 @@
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/tmp_file/ob_tmp_file_write_cache.h"
 #include "storage/tmp_file/ob_tmp_file_write_cache_page.h"
+#include "share/io/ob_io_manager.h"
 
 namespace oceanbase
 {
@@ -68,8 +69,8 @@ void ObTmpFileFlushTask::reset()
       LOG_ERROR("fail to unlock page", KR(ret), KPC(this));
     }
   } // unlock bucket lock if task is canceled
-  is_finished_ = false;
-  ret_code_ = OB_SUCCESS;
+
+  // do not reset is_send_, is_finished_, ret_code_ and create_ts_ for debugging purpose
   page_idx_ = 0;
   page_cnt_ = 0;
   io_handle_.reset();
@@ -236,13 +237,16 @@ int ObTmpFileFlushTask::wait()
 {
   int ret = OB_SUCCESS;
   ObTmpFileBlock *block = tmp_file_block_handle_.get();
-  if (ATOMIC_LOAD(&is_finished_)) {
-    // do nothing
+  if (OB_ISNULL(block)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tmp file block is null", KR(ret), KPC(this));
+  } else if (ATOMIC_LOAD(&is_finished_)) {
+    LOG_WARN("flush task already finished", KPC(this));
   } else if (!is_send()) {
     ret = OB_EAGAIN;
   } else {
     if (OB_FAIL(io_handle_.wait())) {
-      if (EAGAIN != ret) {
+      if (OB_EAGAIN != ret) {
         LOG_WARN("io error", KR(ret), KPC(this));
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(block->insert_pages_into_flushing_list(page_array_))) {
