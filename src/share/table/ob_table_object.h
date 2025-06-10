@@ -49,7 +49,8 @@ enum ObTableObjType
   ObTableBlobType = 22,
   ObTableMediumBlobType = 23,
   ObTableLongBlobType = 24,
-  ObTableObjTypeMax = 25,
+  ObTableCharType = 25,
+  ObTableObjTypeMax = 26,
 };
 
 /*

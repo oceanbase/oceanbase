@@ -134,6 +134,7 @@ private:
 private:
   static int write_datum(ObTableCtx &ctx,
                          common::ObIAllocator &allocator,
+                         const ObTableColumnInfo &col_info,
                          const sql::ObExpr &expr,
                          sql::ObEvalCtx &eval_ctx,
                          const ObObj &obj);

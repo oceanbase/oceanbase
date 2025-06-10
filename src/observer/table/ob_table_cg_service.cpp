@@ -16,6 +16,7 @@
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
 #include "sql/resolver/dml/ob_delete_resolver.h"  // for resolve partition expr
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "storage/ob_storage_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -1268,14 +1269,19 @@ int ObTableExprCgService::write_autoinc_datum(ObTableCtx &ctx,
 
 int ObTableExprCgService::write_datum(ObTableCtx &ctx,
                                       ObIAllocator &allocator,
+                                      const ObTableColumnInfo &col_info,
                                       const ObExpr &expr,
                                       ObEvalCtx &eval_ctx,
                                       const ObObj &obj)
 {
   int ret = OB_SUCCESS;
-
+  ObObj write_obj = obj;
   ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
-  if (OB_FAIL(datum.from_obj(obj))) {
+  if (expr.obj_meta_.is_fixed_len_char_type() &&
+      is_pad_char_to_full_length(ctx.get_session_info().get_sql_mode()) &&
+      OB_FAIL(storage::pad_column(col_info.type_.get_accuracy(), allocator, write_obj))) {
+    LOG_WARN("fail to pad column", K(ret));
+  } else if (OB_FAIL(datum.from_obj(write_obj))) {
     LOG_WARN("fail to convert object from datum", K(ret), K(obj));
   } else if (OB_FAIL(adjust_date_datum(expr, obj, datum))) {
     LOG_WARN("fail to adust date datum", K(ret), K(obj), K_(expr.datum_meta));
@@ -1410,7 +1416,7 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
           } else if (OB_ISNULL(expr)) {
             ret = OB_ERR_UNDEFINED;
             LOG_WARN("expr is null", K(ret));
-          } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(pos)))) {
+          } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, rowkey.at(pos)))) {
             LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(rowkey.at(pos)), K(*expr), K(pos));
           }
         }
@@ -1530,7 +1536,7 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
               LOG_WARN("fail to eval current timestamp expr", K(ret));
             }
           } else {
-            if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+            if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, *obj))) {
               LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
             }
           }
@@ -1570,13 +1576,14 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
         LOG_WARN("index out of range", K(ret), K(assign), K(delta_row));
       } else {
         const ObExpr *expr = delta_row.at(idx);
+        ObObj assign_obj = assign.assign_value_;
         if (OB_ISNULL(expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("expr is null", K(ret));
         } else if (!assign.is_assigned_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("not found delta value", K(ret), K(assign));
-        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, assign.assign_value_))) {
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *assign.column_info_, *expr, eval_ctx, assign.assign_value_))) {
           LOG_WARN("fail to write datum", K(ret), K(assign.assign_value_), K(*expr));
         } else {
           idx++;
@@ -1629,7 +1636,7 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
           }
         }
       } else { // found
-        if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, assign.assign_value_))) {
+        if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *assign.column_info_, *expr, eval_ctx, assign.assign_value_))) {
           LOG_WARN("fail to write datum", K(ret), K(assign.assign_value_), K(*expr));
         }
       }
