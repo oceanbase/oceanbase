@@ -579,17 +579,27 @@ int ObPXServerAddrUtil::find_dml_ops(common::ObIArray<const ObTableModifySpec *>
 {
   return find_dml_ops_inner(insert_ops, op);
 }
+
+bool ObPXServerAddrUtil::check_build_dfo_with_dml(const ObOpSpec &op)
+{
+  bool b_ret = false;
+  if (static_cast<const ObTableModifySpec &>(op).use_dist_das() && PHY_MERGE != op.get_type()
+      && PHY_INSERT_ON_DUP != op.get_type()) {
+    // px no need schedule das except merge
+  } else if (PHY_LOCK == op.get_type()) {
+    // no need lock op
+  } else {
+    b_ret = true;
+  }
+  return b_ret;
+}
+
 int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op)
 {
   int ret = OB_SUCCESS;
   if (IS_DML(op.get_type())) {
-    if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
-        PHY_MERGE != op.get_type() &&
-        PHY_INSERT_ON_DUP != op.get_type()) {
-      // px no need schedule das except merge
-    } else if (PHY_LOCK == op.get_type()) {
-      // no need lock op
+    if (!check_build_dfo_with_dml(op)) {
     } else if (OB_FAIL(insert_ops.push_back(static_cast<const ObTableModifySpec *>(&op)))) {
       LOG_WARN("fail to push back table insert op", K(ret));
     }
@@ -1109,15 +1119,46 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
  *
  */
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-    const ObIArray<ObTableLocation> *table_locations,
-    ObExecContext &exec_ctx,
     ObDfo &parent)
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) &&
-                      nullptr == reference_child &&
-                      i < parent.get_child_count(); ++i) {
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+    LOG_WARN("failed to alloc by child distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::alloc_distribution_of_reference_child(
+                                          const ObIArray<ObTableLocation> *table_locations,
+                                          ObExecContext &exec_ctx,
+                                          ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  ObDfo *reference_child = nullptr;
+  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+    LOG_WARN("find reference child failed", K(ret));
+  } else if (OB_ISNULL(reference_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null child", K(ret));
+  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
+    LOG_WARN("failed to alloc by data distribution", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_child)
+{
+  int ret = OB_SUCCESS;
+  reference_child = nullptr;
+  for (int64_t i = 0;
+       OB_SUCC(ret) && nullptr == reference_child && i < parent.get_child_count();
+       ++i) {
     ObDfo *candi_child = nullptr;
     if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
       LOG_WARN("failed to get dfo", K(ret));
@@ -1128,15 +1169,6 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
                candi_child->is_out_slave_mapping()) {
       reference_child = candi_child;
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(reference_child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null child", K(ret));
-  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
-    LOG_WARN("failed to alloc by data", K(ret));
-  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
-    LOG_WARN("failed to alloc by child distribution", K(ret));
   }
   return ret;
 }
@@ -3273,23 +3305,6 @@ int ObSlaveMapUtil::build_mn_channel(
   return ret;
 }
 
-int ObSlaveMapUtil::build_bf_mn_channel(
-  ObDtlChTotalInfo &transmit_ch_info,
-  ObDfo &child,
-  ObDfo &parent,
-  const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs()));
-  OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs()));
-  transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.exec_addrs_.count()
-                                  * transmit_ch_info.receive_exec_server_.exec_addrs_.count();
-  transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)
-                                     - transmit_ch_info.channel_count_ + 1;
-  transmit_ch_info.tenant_id_ = tenant_id;
-  return ret;
-}
-
 int ObSlaveMapUtil::build_mn_channel_per_sqcs(
   ObPxChTotalInfos *dfo_ch_total_infos,
   ObDfo &child,
@@ -3311,12 +3326,35 @@ int ObSlaveMapUtil::build_mn_channel_per_sqcs(
       for (int64_t i = 0; i < sqc_count && OB_SUCC(ret); ++i) {
         ObDtlChTotalInfo &transmit_ch_info = dfo_ch_total_infos->at(i);
         transmit_ch_info.is_local_shuffle_ = true;
-        if (OB_UNLIKELY(parent.get_sqcs().at(i).get_exec_addr() != child.get_sqcs().at(i).get_exec_addr())) {
+        ObPxSqcMeta *child_sqc = &child.get_sqcs().at(i);
+        ObPxSqcMeta *parent_sqc = nullptr;
+        if (parent.need_access_store() && parent.is_in_slave_mapping()
+            && ObPQDistributeMethod::HASH == child.get_dist_method()
+            && child.is_out_slave_mapping()) {
+          // for slave mapping under union all, the parent dfo may contain scan ops
+          // the sqc addr's sequence for each union branch may be different
+          // we should map the sqc pair of parent and child for slave mapping
+          for (int64_t j = 0; j < sqc_count && OB_SUCC(ret); ++j) {
+            if (child_sqc->get_exec_addr() == parent.get_sqcs().at(j).get_exec_addr()) {
+              parent_sqc = &parent.get_sqcs().at(j);
+              break;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(parent_sqc)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("addr not match", K(ret), K(child.get_dfo_id()), K(parent.get_dfo_id()));
+          }
+        } else if (OB_UNLIKELY(parent.get_sqcs().at(i).get_exec_addr()
+                               != child.get_sqcs().at(i).get_exec_addr())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("addr not match", K(ret));
+          LOG_WARN("addr not match", K(ret), K(child.get_dfo_id()), K(parent.get_dfo_id()));
         } else {
-          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs().at(i)));
-          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs().at(i)));
+          parent_sqc = &parent.get_sqcs().at(i);
+        }
+        if (OB_SUCC(ret)) {
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, *child_sqc));
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, *parent_sqc));
           transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.total_task_cnt_
                                           * transmit_ch_info.receive_exec_server_.total_task_cnt_;
           transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)
@@ -3530,21 +3568,8 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
     common::ObSEArray<ObPxSqcMeta *, 8> sqcs;
     ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
     ObPxPartChMapArray &map = child.get_part_ch_map();
-    for (int64_t i = 0; OB_SUCC(ret) &&
-                        nullptr == reference_child &&
-                        i < parent.get_child_count(); ++i) {
-      ObDfo *candi_child = nullptr;
-      if (OB_FAIL(parent.get_child_dfo(i, candi_child))) {
-        LOG_WARN("failed to get dfo", K(ret));
-      } else if (OB_ISNULL(candi_child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null child", K(ret));
-      } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
-                 candi_child->is_out_slave_mapping()) {
-        reference_child = candi_child;
-      }
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ObPXServerAddrUtil::find_reference_child(parent, reference_child))) {
+      LOG_WARN("find reference child", K(ret));
     } else if (OB_ISNULL(reference_child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child", K(ret));
@@ -3789,12 +3814,8 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
   return ret;
 }
 
-// 这里需要2点，一点是构建channel map，一点是构建partition map，即PK场景
-int ObSlaveMapUtil::build_mn_ch_map(
-  ObExecContext &ctx,
-  ObDfo &child,
-  ObDfo &parent,
-  uint64_t tenant_id)
+int ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo &parent,
+                                                  uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   SlaveMappingType slave_type = parent.get_in_slave_mapping_type();
@@ -3803,64 +3824,67 @@ int ObSlaveMapUtil::build_mn_ch_map(
     if (OB_FAIL(build_pwj_slave_map_mn_group(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partition wise join slave mapping", K(ret));
     break;
   }
-  case SlaveMappingType::SM_PPWJ_BCAST_NONE : {
-    if (OB_FAIL(build_ppwj_bcast_slave_mn_map(parent, child, tenant_id))) {
-      LOG_WARN("fail to build pwj slave map", K(ret));
-    }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
-    break;
-  }
+  case SlaveMappingType::SM_PPWJ_BCAST_NONE :
   case SlaveMappingType::SM_PPWJ_NONE_BCAST : {
     if (OB_FAIL(build_ppwj_bcast_slave_mn_map(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
     break;
   }
   case SlaveMappingType::SM_PPWJ_HASH_HASH : {
     if (OB_FAIL(build_ppwj_slave_mn_map(parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
-    LOG_DEBUG("partial partition wise join slave mapping", K(ret));
     break;
   }
   case SlaveMappingType::SM_NONE : {
-    LOG_DEBUG("none slave mapping", K(ret));
-    if (OB_SUCC(ret)
-        && ObPQDistributeMethod::Type::PARTITION == child.get_dist_method()) {
-      if (OB_FAIL(build_ppwj_ch_mn_map(ctx, parent, child, tenant_id))) {
-        LOG_WARN("failed to build partial partition wise join channel map", K(ret));
-      } else {
-        LOG_DEBUG("partial partition wise join build ch map successfully");
-      }
-    }
-    if (OB_SUCC(ret)
-         && (ObPQDistributeMethod::Type::PARTITION_HASH == child.get_dist_method()
-           || ObPQDistributeMethod::Type::PARTITION_RANGE == child.get_dist_method())) {
-      // pdml中，pkey的方式可以发送到parent dfo中对应SQC中的任意woker中
-      if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
-        LOG_WARN("failed to build pkey random channel map", K(ret));
-      } else {
-        LOG_DEBUG("partition random build ch map successfully");
-      }
-    }
-    // PDML情况下的分区表，对应的分区内并行的channel build
-    if (OB_SUCC(ret) &&
-        ObPQDistributeMethod::Type::PARTITION_RANDOM == child.get_dist_method()) {
-      // pdml中，pkey的方式可以发送到parent dfo中对应SQC中的任意woker中
-      if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
-        LOG_WARN("failed to build pkey random channel map", K(ret));
-      } else {
-        LOG_DEBUG("partition random build ch map successfully");
-      }
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected slave mapping type", K(child.get_dfo_id()), K(parent.get_dfo_id()));
     break;
   }
   }
-  LOG_DEBUG("debug distribute type", K(slave_type), K(child.get_dist_method()));
+  LOG_DEBUG("debug distribute type", K(child.get_dfo_id()), K(parent.get_dfo_id()), K(slave_type));
+  return ret;
+}
+
+int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo &parent,
+                                         uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObPQDistributeMethod::Type child_dist_method = child.get_dist_method();
+  switch(child_dist_method) {
+  case ObPQDistributeMethod::Type::PARTITION : {
+    // for normal pkey
+    if (OB_FAIL(build_ppwj_ch_mn_map(ctx, parent, child, tenant_id))) {
+      LOG_WARN("failed to build partial partition wise join channel map", K(ret));
+    }
+    break;
+  }
+  case ObPQDistributeMethod::Type::PARTITION_HASH:
+  case ObPQDistributeMethod::Type::PARTITION_RANGE: {
+    if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
+      LOG_WARN("failed to build pkey random channel map", K(ret));
+    }
+    break;
+  }
+  case ObPQDistributeMethod::Type::PARTITION_RANDOM: {
+    // PDML: shuffle to any worker in parent dfo
+    if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
+      LOG_WARN("failed to build pkey random channel map", K(ret));
+    }
+    break;
+  }
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child dist method type", K(child.get_dfo_id()), K(parent.get_dfo_id()),
+             K(child_dist_method));
+    break;
+  }
+  }
+  LOG_DEBUG("debug distribute type", K(child.get_dfo_id()), K(parent.get_dfo_id()),
+            K(child.get_dist_method()));
   return ret;
 }
 
@@ -4751,6 +4775,36 @@ int ObPXServerAddrUtil::get_cluster_server_cnt(const ObIArray<ObAddr> &server_li
             K(ret), K(MTL_ID()));
   } else {
     server_cnt = std::max(server_list.count(), tenant_servers.count());
+  }
+  return ret;
+}
+
+// for slave mapping under union all, the parent dfo may also contain scan ops,
+// thus we should check the sqc addr is match
+int ObPXServerAddrUtil::check_slave_mapping_location_constraint(ObDfo &child, ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(child.get_sqcs_count() != parent.get_sqcs_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc count not match for slave_mapping", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+  } else {
+    common::ObIArray<ObPxSqcMeta> &child_sqcs = child.get_sqcs();
+    common::ObIArray<ObPxSqcMeta> &parent_sqcs = parent.get_sqcs();
+    for (int64_t i = 0; i < child_sqcs.count() && OB_SUCC(ret); ++i) {
+      bool match = false;
+      const ObAddr &child_addr = child_sqcs.at(i).get_exec_addr();
+      for (int64_t j = 0; j < parent_sqcs.count() && OB_SUCC(ret); ++j) {
+        const ObAddr &parent_addr = parent_sqcs.at(j).get_exec_addr();
+        if (child_addr == parent_addr) {
+          match = true;
+          break;
+        }
+      }
+      if (OB_UNLIKELY(!match)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sqc addr not match", K(child.get_dfo_id()), K(parent.get_dfo_id()));
+      }
+    }
   }
   return ret;
 }

@@ -993,6 +993,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/ob_px_worker_stat.cpp
   engine/px/ob_sqc_ctx.cpp
   engine/px/ob_sub_trans_ctrl.cpp
+  engine/px/ob_slice_calc.cpp
   engine/px/datahub/ob_dh_msg.cpp
   engine/px/exchange/ob_px_dist_transmit_op.cpp
   engine/px/exchange/ob_px_fifo_coord_op.cpp
@@ -1090,7 +1091,6 @@ ob_set_subtarget(ob_sql executor
   executor/ob_remote_scheduler.cpp
   executor/ob_remote_task_executor.cpp
   executor/ob_shuffle_service.cpp
-  executor/ob_slice_calc.cpp
   executor/ob_slice_id.cpp
   executor/ob_task.cpp
   executor/ob_task_control.cpp

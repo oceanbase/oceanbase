@@ -26,7 +26,7 @@
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
-#include "sql/executor/ob_slice_calc.h"
+#include "sql/engine/px/ob_slice_calc.h"
 #include "sql/engine/px/ob_px_exchange.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
@@ -170,7 +170,7 @@ protected:
       if (OB_FAIL(ret) || brs_.size_ == 0) {
       } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
         LOG_WARN("failed to set rollup hybrid keys", K(ret));
-      } else if (!slice_calc.support_vectorized_calc()) {
+      } else if (!slice_calc.support_vectorized_calc() && !slice_calc.is_multi_slice_calc_type()) {
         for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
           ObExpr *expr = spec_.output_.at(i);
           if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {

@@ -601,7 +601,6 @@ public:
                        ObNullDistributeMethod::Type null_row_dist_method)
       : ObMultiSliceIdxCalc(alloc, null_row_dist_method), channel_idx_(channel_idx), host_idx_(host_idx)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
 
@@ -649,7 +648,6 @@ public:
                          ObNullDistributeMethod::Type null_row_dist_method)
       : ObMultiSliceIdxCalc(alloc, null_row_dist_method), slice_cnt_(slice_cnt)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
 
@@ -877,7 +875,6 @@ public:
         ObMultiSliceIdxCalc(alloc, null_row_dist_method),
         broadcast_calc_(alloc, slice_cnt, null_row_dist_method)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
   template <bool USE_VEC>
@@ -1038,9 +1035,7 @@ public:
                          task_count,
                          can_fast_calc_hash)
 
-  {
-    support_vectorized_calc_ = false;
-  }
+  {}
   ObSlaveMapPkeyHashIdxCalc(
       ObExecContext &exec_ctx,
       const share::schema::ObTableSchema &table_schema,
@@ -1067,9 +1062,7 @@ public:
                             &dist_exprs,
                             &dist_hash_funcs,
                             can_fast_calc_hash)
-  {
-    support_vectorized_calc_ = false;
-  }
+  {}
   ~ObSlaveMapPkeyHashIdxCalc() = default;
 
   int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
@@ -1121,7 +1114,6 @@ public:
         wf_hybrid_aggr_status_expr_(nullptr),
         wf_hybrid_pby_exprs_cnt_array_(nullptr)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
   template <bool USE_VEC>
@@ -1169,7 +1161,6 @@ public:
       : ObHashSliceIdCalc(alloc, task_cnt, ObNullDistributeMethod::NONE, dist_exprs,
                           hash_funcs, can_fast_calc_hash)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
 
@@ -1211,7 +1202,6 @@ public:
                                         can_fast_calc_hash),
       repartition_exprs_(repartition_exprs)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
 
@@ -1240,7 +1230,6 @@ public:
                                        can_fast_calc_hash),
       repartition_exprs_(repartition_exprs)
   {
-    support_vectorized_calc_ = true;
     is_multi_slice_calc_type_ = true;
   }
 
@@ -1254,7 +1243,7 @@ public:
     UNUSED(exprs);
     UNUSED(eval_ctx);
     UNUSED(slice_idx);
-    return common::OB_NOT_IMPLEMENT;;
+    return common::OB_NOT_IMPLEMENT;
   }
   int get_multi_slice_idx_vector_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                     ObBitVector &skip, const int64_t batch_size,

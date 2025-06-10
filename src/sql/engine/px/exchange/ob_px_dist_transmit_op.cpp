@@ -469,15 +469,15 @@ int ObPxDistTransmitOp::do_sm_broadcast_dist()
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   uint64_t repart_ref_table_id = MY_SPEC.repartition_ref_table_id_;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   if (OB_ISNULL(trans_input = static_cast<ObPxDistTransmitOpInput *>(get_input()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input is null", K(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-      ctx_.get_my_session()->get_effective_tenant_id(), schema_guard))) {
+      tenant_id, schema_guard))) {
     LOG_WARN("faile to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(
-    ctx_.get_my_session()->get_effective_tenant_id(),
-    repart_ref_table_id, table_schema))) {
+      tenant_id, repart_ref_table_id, table_schema))) {
     LOG_WARN("faile to get table schema", K(ret), K(repart_ref_table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;
@@ -495,7 +495,9 @@ int ObPxDistTransmitOp::do_sm_broadcast_dist()
                                           task_channels_.count(),
                                           part_ch_info_,
                                           MY_SPEC.repartition_type_);
-    if (OB_FAIL(send_rows<ObSliceIdxCalc::SM_BROADCAST>(slice_idx_calc))) {
+    if (OB_FAIL(slice_idx_calc.init(tenant_id))) {
+      LOG_WARN("init slice calc failed", K(ret));
+    } else if (OB_FAIL(send_rows<ObSliceIdxCalc::SM_BROADCAST>(slice_idx_calc))) {
       LOG_WARN("row distribution failed", K(ret));
     }
   }

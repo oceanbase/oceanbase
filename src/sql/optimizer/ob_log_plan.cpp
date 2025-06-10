@@ -3608,7 +3608,6 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
                                                       left_exch_info))) {
       LOG_WARN("failed to compute repartition distrubution info", K(ret));
     } else {
-      left_exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
       left_exch_info.dist_method_ = ObPQDistributeMethod::SM_BROADCAST;
       left_exch_info.slave_mapping_type_ = sm_type;
     }
@@ -3622,7 +3621,6 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
                                                       right_exch_info))) {
       LOG_WARN("failed to compute repartition distribution_info", K(ret));
     } else {
-      right_exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
       right_exch_info.dist_method_ = ObPQDistributeMethod::SM_BROADCAST;
       right_exch_info.slave_mapping_type_ = sm_type;
     }
