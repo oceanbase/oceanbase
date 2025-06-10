@@ -3389,7 +3389,7 @@ int ObPLExecState::final(int ret)
         LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler time stack", K(ret), K(lbt()));
       }
 
-      if (is_top_call()) {
+      if (is_top_call() && !is_called_from_sql_) {
         if (OB_FAIL(profiler->flush_data())) {
           LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler data", K(ret), K(lbt()));
         }
