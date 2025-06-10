@@ -57307,6 +57307,7 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE LOCATION',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE ,
        	decode(auth.priv_option, 0, 'NO', 1, 'YES', '') as ADMIN_OPTION
       FROM
