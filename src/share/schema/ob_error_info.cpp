@@ -441,7 +441,10 @@ int ObErrorInfo::handle_error_info(const IObErrorInfo *info,
   ObMySQLTransaction trans;
   if (OB_FAIL(collect_error_info(info, obj_type))) {
     LOG_WARN("collect error info failed", K(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
+  } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    // do nothing
+  }
+  else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
     LOG_WARN("fail start trans", K(ret));
   } else if (OB_FAIL(handle_error_info(trans, info, obj_type))) {
     LOG_WARN("handle error info failed.", K(ret));
