@@ -1010,7 +1010,7 @@ int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
   } else if (!bi->on_disk_) {
     blk = bi->blk_;
     on_disk = false;
-  } else if (load_buffer(reader, buf, bi->offset_, bi->length_, reader.is_async())) {
+  } else if (OB_FAIL(load_buffer(reader, buf, bi->offset_, bi->length_, reader.is_async()))) {
     LOG_WARN("load buffer failed", K(ret), K(bi));
   } else {
     if (reader.is_async()) {
