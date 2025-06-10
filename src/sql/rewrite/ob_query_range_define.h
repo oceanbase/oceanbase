@@ -391,9 +391,14 @@ public:
   virtual bool is_fast_nlj_range() const { return fast_nlj_range_; }
   int get_prefix_info(const ObRangeNode *range_node,
                       bool* equals,
-                      int64_t &equal_prefix_count) const;
+                      bool* extract_ranges,
+                      int64_t &equal_prefix_count,
+                      int64_t &range_prefix_count) const;
   int get_new_equal_idx(const ObRangeNode *range_node,
                         bool* equals,
+                        ObIArray<int64_t> &new_idx) const;
+  int get_new_range_idx(const ObRangeNode *range_node,
+                        bool* extract_ranges,
                         ObIArray<int64_t> &new_idx) const;
 
   ObRangeNode* get_range_head() { return node_head_; }
