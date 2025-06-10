@@ -259,6 +259,7 @@ int ObSharedStorageNetThrotManager::collect_predict_resource(const int64_t &expi
   const int64_t current_time = ObTimeUtility::current_time();
   // RPC2.1: RS asks observer for the required quotas of all storages
   {
+    ObSpinLockGuard guard(lock_);
     obrpc::ObEndpointRegMap::iterator it = endpoint_infos_map_.begin();
     for (; OB_SUCC(ret) && it != endpoint_infos_map_.end(); ++it) {
       ObSSNTEndpointArg arg(it->first, it->second.storage_keys_, it->second.expire_time_);
@@ -307,6 +308,7 @@ int ObSharedStorageNetThrotManager::register_or_update_predict_resource(
     const ObAddr &addr, const obrpc::ObSharedDeviceResourceArray *predict_resources, const int64_t &expire_time)
 {
   int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
   if (OB_ISNULL(predict_resources)) {
     LOG_WARN_RET(OB_INVALID_CONFIG, "SSNT:predict_resources should not be NULL");  // ignore error
   } else {
@@ -393,11 +395,31 @@ int ObSharedStorageNetThrotManager::assign_type_value(
 int ObSharedStorageNetThrotManager::update_quota_plan()
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBucketThrotMap::iterator it = bucket_throt_map_.begin();
   int tmp_ret = OB_SUCCESS;
-  for (; it != bucket_throt_map_.end(); ++it) {
-    if (OB_TMP_FAIL(update_one_storage_quota_plan(it->first, it->second))) {
-      LOG_WARN("SSNT:update quota plan failed", K(ret), K(tmp_ret), K(it->first));
+  ObSEArray<ObTrafficControl::ObStorageKey, 10> arr;
+  {
+    ObSpinLockGuard guard(lock_);
+    obrpc::ObBucketThrotMap::iterator it = bucket_throt_map_.begin();
+    for (; it != bucket_throt_map_.end(); ++it) {
+      if (OB_TMP_FAIL(arr.push_back(it->first))) {
+        LOG_WARN("push back failed", K(ret), K(tmp_ret), K(it->first));
+      }
+    }
+  }
+
+  for (int64_t i = 0; i < arr.count(); i++) {
+    if (OB_TMP_FAIL(register_or_update_storage_key_limit(arr[i]))) {
+      LOG_WARN("register or get storage limit failed", K(arr[i]), K(ret), K(tmp_ret));
+    }
+  }
+
+  {
+    ObSpinLockGuard guard(lock_);
+    obrpc::ObBucketThrotMap::iterator it = bucket_throt_map_.begin();
+    for (; it != bucket_throt_map_.end(); ++it) {
+      if (OB_TMP_FAIL(update_one_storage_quota_plan(it->first, it->second))) {
+        LOG_WARN("SSNT:update quota plan failed", K(ret), K(tmp_ret), K(it->first));
+      }
     }
   }
   return ret;
@@ -620,6 +642,7 @@ int ObSharedStorageNetThrotManager::commit_quota_plan()
   ObArray<int> return_code_array;
   ObSEArray<std::pair<ObAddr, obrpc::ObSharedDeviceResourceArray>, 7> send_rpc_arr;
   {
+    ObSpinLockGuard guard(lock_);
     obrpc::ObEndpointRegMap::iterator iter = endpoint_infos_map_.begin();
     for (; iter != endpoint_infos_map_.end(); ++iter) {  // commit to each observer
       obrpc::ObSharedDeviceResourceArray arg;
@@ -762,9 +785,6 @@ int ObSharedStorageNetThrotManager::get_storage_iops_and_bandwidth_limit(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObStorageKeyLimit limit;
-  if (OB_TMP_FAIL(register_or_update_storage_key_limit(storage_key))) {
-    LOG_WARN("register or get storage limit failed", K(storage_key), K(limit), K(ret), K(tmp_ret));
-  }
   if (OB_FAIL(storage_key_limit_map_.get_refactored(storage_key, limit))) {
     max_iops = 200;
     max_bandwidth = 25 * 1000L * 1000L; // 25MBtyes
