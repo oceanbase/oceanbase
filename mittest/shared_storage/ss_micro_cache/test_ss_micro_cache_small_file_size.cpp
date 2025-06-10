@@ -116,7 +116,7 @@ TEST_F(TestSSMicroCacheSmallFileSize, test_small_file_size)
 
   const int64_t WRITE_BLK_CNT = 300;
   ObArenaAllocator allocator;
-  char *data_buf = static_cast<char*>(allocator.alloc(max_micro_size));
+  char *data_buf = static_cast<char *>(allocator.alloc(max_micro_size));
   ASSERT_NE(nullptr, data_buf);
   MEMSET(data_buf, 'a', max_micro_size);
   ObSSPhyBlockCommonHeader common_header;

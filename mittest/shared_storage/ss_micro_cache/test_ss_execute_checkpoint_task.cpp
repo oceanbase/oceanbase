@@ -1006,6 +1006,35 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   }
 }
 
+TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
+{
+  ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
+  micro_cache_->task_runner_.disable_task();
+  micro_cache_->task_runner_.enable_persist_data();
+  ob_usleep(1000 * 1000);
+
+  // 1. destroy original init_range, build new init_range
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
+  micro_range_mgr.inner_destroy_initial_range();
+  micro_range_mgr.init_range_cnt_ = 2;
+  ASSERT_EQ(OB_SUCCESS, micro_range_mgr.inner_build_initial_range(false));
+
+  // 2. add some micro_block into cache and record their micro_meta
+  ObArray<ObSSMicroBlockMetaInfo> micro_meta_info_arr1;
+  int64_t macro_start_idx = 1;
+  int64_t write_blk_cnt = 20;
+  const int64_t micro_cnt = 200;
+  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(macro_start_idx, write_blk_cnt, micro_cnt, micro_meta_info_arr1));
+  micro_cache_->task_runner_.disable_persist_data();
+
+  // 3. do micro_ckpt op
+  micro_cache_->task_runner_.enable_meta_ckpt();
+  persist_meta_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
+  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());
+}
+
 /* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_phy_blk() will return false */
 TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
 {
@@ -1181,13 +1210,13 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
   const int64_t seg_micro_cnt = ObRandom::rand(300, 500);
   int64_t tmp_cnt = 0;
   for (int64_t i = 0; i < total_micro_cnt; ++i) {
-    bool is_persisted = false;
-    int64_t seg_offset = -1;
-    int64_t seg_len = -1;
     ++tmp_cnt;
-    const bool finish_cur_seg = (tmp_cnt == seg_micro_cnt);
-    ASSERT_EQ(OB_SUCCESS, item_writer.write_item(buf, avg_micro_size, finish_cur_seg, is_persisted, seg_offset, seg_len));
-    if (finish_cur_seg) {
+    ASSERT_EQ(OB_SUCCESS, item_writer.write_item(buf, avg_micro_size));
+    if (tmp_cnt == seg_micro_cnt) {
+      bool is_persisted = false;
+      int64_t seg_offset = -1;
+      int64_t seg_len = -1;
+      ASSERT_EQ(OB_SUCCESS, item_writer.close_segment(is_persisted, seg_offset, seg_len));
       tmp_cnt = 0;
     }
   }

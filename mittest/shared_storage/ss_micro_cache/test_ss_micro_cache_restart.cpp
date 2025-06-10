@@ -76,6 +76,117 @@ void TestSSMicroCacheRestart::TearDown()
   micro_cache->destroy();
 }
 
+TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  const int64_t cache_file_size = micro_cache->cache_file_size_;
+  const int64_t block_size = micro_cache->phy_blk_size_;
+  LOG_INFO("TEST_CASE: start test_restart_micro_cache");
+
+  char micro_cache_file_path[512] = {0};
+  ret = tnt_file_mgr->get_micro_cache_file_path(micro_cache_file_path, sizeof(micro_cache_file_path), tenant_id, MTL_EPOCH_ID());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  tnt_file_mgr->stop();
+  micro_cache->stop();
+  tnt_file_mgr->wait();
+  micro_cache->wait();
+  tnt_file_mgr->destroy();
+  micro_cache->destroy();
+  LOG_INFO("TEST: start 1st restart");
+
+  ret = ObIODeviceLocalFileOp::unlink(micro_cache_file_path);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  LOG_INFO("TEST: finish 1st restart without micro_cache_file");
+
+  int64_t REPLAY_CKPT_TIMEOUT_S = 120;
+  int64_t start_time_s = ObTimeUtility::current_time_s();
+  bool is_cache_enabled = false;
+  do {
+    is_cache_enabled = micro_cache->is_enabled_;
+    if (!is_cache_enabled) {
+      LOG_INFO("ss_micro_cache is still disabled");
+      ob_usleep(1000 * 1000);
+    }
+  } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_time_s < REPLAY_CKPT_TIMEOUT_S);
+  ASSERT_EQ(true, is_cache_enabled);
+
+  bool is_file_exist = false;
+  ret = ObIODeviceLocalFileOp::exist(micro_cache_file_path, is_file_exist);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, is_file_exist);
+
+  const int64_t micro_cnt = 1000;
+  const int64_t micro_size = 8 * 1024;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+  ObSSPhyBlockCommonHeader common_header;
+  ObSSMicroDataBlockHeader data_blk_header;
+  const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+  const int32_t offset = payload_offset;
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ret = micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+  const int64_t micro_ckpt_round = micro_cache->task_runner_.persist_meta_task_.persist_meta_op_.micro_ckpt_ctx_.ckpt_round_;
+  micro_cache->task_runner_.persist_meta_task_.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = micro_ckpt_round - 2;
+  const int64_t blk_ckpt_round = micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.blk_ckpt_ctx_.ckpt_round_;
+  micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  usleep(10 * 1000 * 1000);
+  ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
+  ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().cur_blk_ckpt_item_cnt_);
+
+  tnt_file_mgr->stop();
+  micro_cache->stop();
+  tnt_file_mgr->wait();
+  micro_cache->wait();
+  tnt_file_mgr->destroy();
+  micro_cache->destroy();
+  LOG_INFO("TEST: start 2nd restart");
+
+  ret = ObIODeviceLocalFileOp::unlink(micro_cache_file_path);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  LOG_INFO("TEST: finish 2nd restart without micro_cache_file");
+
+  start_time_s = ObTimeUtility::current_time_s();
+  is_cache_enabled = false;
+  do {
+    is_cache_enabled = micro_cache->is_enabled_;
+    if (!is_cache_enabled) {
+      LOG_INFO("ss_micro_cache is still disabled");
+      ob_usleep(1000 * 1000);
+    }
+  } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_time_s < REPLAY_CKPT_TIMEOUT_S);
+  ASSERT_EQ(true, is_cache_enabled);
+
+  is_file_exist = false;
+  ret = ObIODeviceLocalFileOp::exist(micro_cache_file_path, is_file_exist);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, is_file_exist);
+}
+
 TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 {
   int ret = OB_SUCCESS;
@@ -106,7 +217,9 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ObSSPersistMicroMetaTask &micro_ckpt_task = micro_cache->task_runner_.persist_meta_task_;
   ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
   ObCompressorType compress_type = TestSSCommonUtil::get_random_compress_type();
-  micro_cache->admin_info_.set_micro_meta_compressor_type(compress_type);
+  micro_cache->set_micro_meta_compressor_type(compress_type);
+  ASSERT_EQ(compress_type, micro_cache->admin_info_.get_micro_meta_compressor_type());
+  ASSERT_EQ(compress_type, phy_blk_mgr.super_blk_.admin_info_.get_micro_meta_compressor_type());
   LOG_INFO("TEST: start test_restart_micro_cache", K(compress_type));
 
   int64_t total_micro_cnt = 0;
@@ -146,7 +259,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_EQ(cache_file_size, phy_blk_mgr.super_blk_.cache_file_size_);
   ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
   ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count()); // cuz only exist blk ckpt, will drop it
-  micro_cache->admin_info_.set_micro_meta_compressor_type(compress_type);
+  ASSERT_EQ(compress_type, micro_cache->admin_info_.get_micro_meta_compressor_type());
+  ASSERT_EQ(compress_type, phy_blk_mgr.super_blk_.admin_info_.get_micro_meta_compressor_type());
 
   int64_t REPLAY_CKPT_TIMEOUT_S = 120;
   int64_t start_time_s = ObTimeUtility::current_time_s();

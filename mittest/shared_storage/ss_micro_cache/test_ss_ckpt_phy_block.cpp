@@ -400,16 +400,14 @@ TEST_F(TestSSCkptPhyBlock, test_ckpt_segment)
       ItemInfo item_info;
       const int64_t item_size = ObRandom::rand(50, 100);
       ASSERT_EQ(OB_SUCCESS, item_info.init(item_size));
-      bool finish_cur_seg = (seg_item_cnt - 1 == j);
-      bool is_persisted = false;
-      int64_t seg_offset = -1;
-      int64_t seg_len = 0;
-      ASSERT_EQ(OB_SUCCESS, writer.write_item(item_info.buf_, item_info.buf_len_, finish_cur_seg, is_persisted, seg_offset, seg_len));
-      if (finish_cur_seg) {
-        ASSERT_NE(-1, seg_offset);
-        ASSERT_NE(0, seg_len);
-      }
+      ASSERT_EQ(OB_SUCCESS, writer.write_item(item_info.buf_, item_info.buf_len_));
     }
+    bool is_persisted = false;
+    int64_t seg_offset = -1;
+    int64_t seg_len = 0;
+    ASSERT_EQ(OB_SUCCESS, writer.close_segment(is_persisted, seg_offset, seg_len));
+    ASSERT_NE(-1, seg_offset);
+    ASSERT_NE(0, seg_len);
     ASSERT_EQ(i, writer.segs_cnt_);
   }
   ASSERT_EQ(OB_SUCCESS, writer.close());
