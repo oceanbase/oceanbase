@@ -250,7 +250,7 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant's min data version", KR(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
+  } else {
     ObRootKey root_key;
     if (OB_FAIL(get_and_check_storage_infos_by_zone_(picked_zone, zone_storage_infos))) {
       LOG_WARN("failed to get storage infos", KR(ret), K(picked_zone));
