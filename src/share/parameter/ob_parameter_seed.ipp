@@ -2678,3 +2678,6 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
+         "Enable or disable routine call parameter defend.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
