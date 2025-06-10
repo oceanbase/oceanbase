@@ -1222,10 +1222,18 @@ void ObBackupTaskScheduler::run2()
         }
 
         if (0 == queue_.get_task_cnt()) {
-          set_idle_time(60*1000*1000);
-          idle();
+          set_idle_time(ObBackupBaseService::OB_MAX_IDLE_TIME);
+        } else {
+          // Always include an idle to prevent the CPU from being overwhelmed
+          set_idle_time(ObBackupBaseService::OB_FAST_IDLE_TIME);
         }
+      } else {
+        // If the tenant status is not 'normal', enter sleep mode to avoid unnecessary CPU usage.
+        // This prevents excessive resource consumption while waiting for the tenant to return to normal.
+        set_idle_time(ObBackupBaseService::OB_MIDDLE_IDLE_TIME);
+        // The add_task() function triggers a wake-up signal for this thread.
       }
+      idle();
     }
     LOG_INFO("backup task scheduler stop");
   }
