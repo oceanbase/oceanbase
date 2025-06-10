@@ -17172,7 +17172,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
 }
 
 int ObDDLService::create_hidden_table(
-    const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
+    const obrpc::ObCreateHiddenTableArgV2 &create_hidden_table_arg,
     obrpc::ObCreateHiddenTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -17255,8 +17255,18 @@ int ObDDLService::create_hidden_table(
         }
         if (OB_SUCC(ret)) {
           HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
+            const common::ObIArray<common::ObString> &nls_formats_ = create_hidden_table_arg.get_nls_formats();
+            common::ObString tmp_nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+            if (common::ObNLSFormatEnum::NLS_MAX != nls_formats_.count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("create hidden table arg's nls count is not expected", KR(ret), K(nls_formats_.count()));
+            }
+            // ObPrepareAlterTableArgParam will deep copy nls_format
+            for (int64_t i = 0; OB_SUCC(ret) && i < nls_formats_.count(); i++) {
+              tmp_nls_formats_[i].assign_ptr(nls_formats_.at(i).ptr(), static_cast<int32_t>(nls_formats_.at(i).length()));
+            }
             ObPrepareAlterTableArgParam param;
-            if (OB_FAIL(param.init(create_hidden_table_arg.get_consumer_group_id(),
+            if (FAILEDx(param.init(create_hidden_table_arg.get_consumer_group_id(),
                                    create_hidden_table_arg.get_session_id(),
                                    create_hidden_table_arg.get_sql_mode(),
                                    create_hidden_table_arg.get_ddl_stmt_str(),
@@ -17265,7 +17275,7 @@ int ObDDLService::create_hidden_table(
                                    orig_database_schema->get_database_name_str(),
                                    create_hidden_table_arg.get_tz_info(),
                                    create_hidden_table_arg.get_tz_info_wrap(),
-                                   create_hidden_table_arg.get_nls_formats(),
+                                   tmp_nls_formats_,
                                    create_hidden_table_arg.get_foreign_key_checks()))) {
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(ObSysDDLSchedulerUtil::prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
