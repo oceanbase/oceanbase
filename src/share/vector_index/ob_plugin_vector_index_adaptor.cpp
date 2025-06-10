@@ -2940,8 +2940,6 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   } else if (ctx->flag_ == PVQP_SECOND) {
-    close_snap_data_rb_flag();
-
     ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
     if (OB_ISNULL(query_cond->row_iter_) || OB_ISNULL(query_cond->scan_param_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2960,14 +2958,13 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
         LOG_WARN("invalid row", K(ret), K(row));
       } else if (get_snapshot_key_prefix().empty() ||
                  !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())) {
+        ObVectorIndexAlgorithmType index_type;
         ObString key_prefix;
         if (OB_FAIL(ob_write_string(*allocator_, row->storage_datums_[0].get_string(), key_prefix))) {
           LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
         } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {
           LOG_WARN("failed to rescan", K(ret));
         } else {
-          key_prefix = key_prefix.split_on("_hnsw_");  // hgraph?
-
           ObHNSWDeserializeCallback::CbParam param;
           param.iter_ = query_cond->row_iter_;
           param.allocator_ = &tmp_allocator;
@@ -2975,12 +2972,26 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
           ObIStreamBuf::Callback cb = callback;
           ObVectorIndexSerializer index_seri(tmp_allocator);
           TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-          if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
+          if (!get_snapshot_key_prefix().empty() && key_prefix.prefix_match(get_snapshot_key_prefix()) && !snap_data_->rb_flag_) {
+            // skip deserialize, already been deserialized by other concurrent thread
+          } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
             LOG_WARN("serialize index failed.", K(ret));
-          } else {
+          } else if (OB_FALSE_IT(index_type = get_snap_index_type())) {
+          } else if (index_type == VIAT_HGRAPH) {
+            key_prefix = key_prefix.split_on("_hgraph_");
             set_snapshot_key_prefix(key_prefix);
+          } else if (index_type == VIAT_HNSW || index_type == VIAT_HNSW_SQ || index_type == VIAT_HNSW_BQ) {
+            key_prefix = key_prefix.split_on("_hnsw_");
+            set_snapshot_key_prefix(key_prefix);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid index type", K(ret), K(index_type));
           }
         }
+      }
+
+      if (OB_SUCC(ret)) {
+        close_snap_data_rb_flag();
       }
     }
 
