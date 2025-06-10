@@ -2232,4 +2232,7 @@ DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETE
                      common::ObConfigServerFullSchemaRefreshParallelismChecker,
                      "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
                      "values: REQUEST, OBJECT",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
+         "Enable or disable routine call parameter defend.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

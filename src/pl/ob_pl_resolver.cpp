@@ -10145,6 +10145,8 @@ int ObPLResolver::check_composite_compatible(const ObUserDefinedType *actual_par
   // 2. The target variable is declared with a RECORD type, the source variable is declared with %ROWTYPE,
   //    their fields match in number and order, and corresponding fields have the same data type.
   // 3. For record components of composite variables, the types of the composite variables need not match.
+  LOG_TRACE("check_composite_compatible",
+            KPC(actual_param_type), KPC(formal_param_type), K(is_compatible));
   if (is_json_type_compatible(actual_param_type, formal_param_type)) {
     is_compatible = true;
   } else if (actual_param_type->is_cursor_type() && formal_param_type->is_cursor_type()) {
@@ -10170,7 +10172,7 @@ int ObPLResolver::check_composite_compatible(const ObUserDefinedType *actual_par
     const ObRecordType *actual_r_type = static_cast<const ObRecordType *>(actual_param_type);
     const ObRecordType *formal_r_type = static_cast<const ObRecordType *>(formal_param_type);
     CK (OB_NOT_NULL(actual_r_type) && OB_NOT_NULL(formal_r_type));
-    OZ (actual_r_type->is_compatble(*formal_r_type, is_compatible));
+    OZ (actual_r_type->is_compatble(*formal_r_type, is_compatible), KPC(actual_r_type), KPC(formal_r_type));
   }
   return ret;
 }
