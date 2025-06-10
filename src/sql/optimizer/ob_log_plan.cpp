@@ -768,7 +768,8 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
           LOG_WARN("failed to add startup filter", K(ret));
         }
       }
-    } else if (!qual->is_deterministic()) {
+    } else if (qual->has_flag(CNT_RAND_FUNC) ||
+               qual->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
