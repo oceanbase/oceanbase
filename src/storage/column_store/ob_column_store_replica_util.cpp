@@ -268,7 +268,9 @@ int ObCSReplicaUtil::check_need_wait_for_report(
     LOG_WARN("cs replica status is invalid", K(ret), K(ls), K(tablet));
   } else if (!is_normal_status(cs_replica_status)) {
     need_wait_for_report = true;
-    LOG_INFO("tablet status is not normal, try report later", K(ret), K(cs_replica_status), K(ls), K(tablet));
+    if (REACH_TIME_INTERVAL(10_s)) { // avoid too frequently logging
+      LOG_INFO("tablet status is not normal, try report later", K(ret), K(cs_replica_status), K(ls), K(tablet));
+    }
   }
   return ret;
 }

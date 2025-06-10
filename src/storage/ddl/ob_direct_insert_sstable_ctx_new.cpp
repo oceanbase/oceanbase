@@ -2548,6 +2548,8 @@ int ObTabletFullDirectLoadMgr::update(
   int ret = OB_SUCCESS;
   uint32_t lock_tid = 0;
   bool replay_normal_in_cs_replica = false;
+  ObArenaAllocator tmp_arena("DDLFullUpdate", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStorageSchema *storage_schema_on_tablet = nullptr;
   if (OB_UNLIKELY(!build_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(build_param));
@@ -2555,21 +2557,28 @@ int ObTabletFullDirectLoadMgr::update(
     LOG_WARN("failed to wrlock", K(ret), K(build_param));
   } else if (OB_FAIL(ObTabletDirectLoadMgr::update(lob_tablet_mgr, build_param))) {
     LOG_WARN("init failed", K(ret), K(build_param));
-  } else if (OB_FAIL(pre_process_cs_replica(build_param.common_param_.tablet_id_, replay_normal_in_cs_replica))) {
+  } else if (OB_FAIL(pre_process_cs_replica(build_param.common_param_.tablet_id_, tmp_arena, replay_normal_in_cs_replica, storage_schema_on_tablet))) {
     LOG_WARN("failed to pre process cs replica", K(ret), K(build_param));
   } else {
     table_key_.reset();
     table_key_.tablet_id_ = build_param.common_param_.tablet_id_;
     bool is_column_group_store = false;
-    if (OB_ISNULL(sqc_build_ctx_.storage_schema_)) {
+    /*
+    * sqc_build_ctx_.storage_schema_ is cached BUT NOT BE UPDATED when ls rebuild.
+    * If we rebuild a row store tablet from F-replica, but ddl start log has replayed in current C-replica before,
+    * the sqc_build_ctx_.storage_schema_ will be column store, which is inconsistent with the row storage schema on tablet.
+    * So we need use the storage schema on tablet for cs replica.
+    */
+    ObStorageSchema *storage_schema = OB_ISNULL(storage_schema_on_tablet) ? sqc_build_ctx_.storage_schema_ : storage_schema_on_tablet;
+    if (OB_ISNULL(storage_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null storage schema", K(ret));
-    } else if (OB_FAIL(check_need_replay_column_store(*sqc_build_ctx_.storage_schema_, build_param.common_param_.direct_load_type_, is_column_group_store))) {
+    } else if (OB_FAIL(check_need_replay_column_store(*storage_schema, build_param.common_param_.direct_load_type_, is_column_group_store))) {
       LOG_WARN("fail to get schema is column group store", K(ret));
     } else if (is_column_group_store && !replay_normal_in_cs_replica) {
       table_key_.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE;
       int64_t base_cg_idx = -1;
-      if (OB_FAIL(ObCODDLUtil::get_base_cg_idx(sqc_build_ctx_.storage_schema_, base_cg_idx))) {
+      if (OB_FAIL(ObCODDLUtil::get_base_cg_idx(storage_schema, base_cg_idx))) {
         LOG_WARN("get base cg idx failed", K(ret));
       } else {
         table_key_.column_group_idx_ = static_cast<uint16_t>(base_cg_idx);
@@ -2582,6 +2591,7 @@ int ObTabletFullDirectLoadMgr::update(
   if (0 != lock_tid) {
     unlock(lock_tid);
   }
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema_on_tablet);
   LOG_INFO("init tablet direct load mgr finished", K(ret), K(build_param), KPC(this));
   return ret;
 }
@@ -3301,12 +3311,10 @@ int ObTabletFullDirectLoadMgr::prepare_ddl_merge_param(
 }
 
 int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
-    ObTablet &tablet,
     ObTabletDDLParam &param)
 {
   int ret = OB_SUCCESS;
   uint32_t lock_tid = 0;
-  param.table_key_.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -3324,31 +3332,6 @@ int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
     param.snapshot_version_ = table_key_.get_snapshot_version();
     param.data_format_version_ = data_format_version_;
   }
-
-  /* set table type & base cg id according to the current storage schema
-   * since column store replica may exist
-   */
-  ObArenaAllocator arena;
-  int64_t base_cg_idx = -1;
-  ObStorageSchema *storage_schema = nullptr;
-  if (OB_FAIL(ret)) {
-  } else if (is_data_direct_load(direct_load_type_)) {
-    /* skip */
-  } else if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
-    LOG_WARN("failed to get storage schema", K(ret));
-  } else if (OB_ISNULL(storage_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid storage schema, should not be null", K(ret), K(param));
-  } else if (!storage_schema->is_row_store()) {
-    param.table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
-  } else if (storage_schema->is_row_store()) {
-    param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
-  } else if (OB_FAIL(ObCODDLUtil::get_base_cg_idx(storage_schema, base_cg_idx))) {
-    LOG_WARN("get base cg idx failed", K(ret));
-  } else {
-    param.table_key_.column_group_idx_ = static_cast<uint16_t>(base_cg_idx);
-  }
-  ObTabletObjLoadHelper::free(arena, storage_schema);
   if (0 != lock_tid) {
     unlock(lock_tid);
   }
@@ -3559,10 +3542,13 @@ int ObTabletFullDirectLoadMgr::update_major_sstable()
 
 int ObTabletFullDirectLoadMgr::pre_process_cs_replica(
     const ObTabletID &tablet_id,
-    bool &replay_normal_in_cs_replica)
+    ObArenaAllocator &arena,
+    bool &replay_normal_in_cs_replica,
+    ObStorageSchema *&storage_schema_on_tablet)
 {
   int ret = OB_SUCCESS;
   replay_normal_in_cs_replica = false;
+  storage_schema_on_tablet = nullptr;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLS *ls = nullptr;
@@ -3583,6 +3569,13 @@ int ObTabletFullDirectLoadMgr::pre_process_cs_replica(
     LOG_WARN("tablet handle is invalid or nullptr", K(ret), K(tablet_handle), KP(tablet));
   } else if (OB_FAIL(tablet->pre_process_cs_replica(direct_load_type_, replay_normal_in_cs_replica))) {
     LOG_WARN("failed to pre process cs replica", K(ret), K(ls_id_), K(tablet_id));
+  } else if (OB_ISNULL(sqc_build_ctx_.storage_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid nullptr storage schema", K(ret), K_(ls_id), K(tablet_id), K_(sqc_build_ctx));
+  } else if (sqc_build_ctx_.storage_schema_->is_row_store() == tablet->is_row_store()) {
+    // cache is consistent with tablet, no need to load storage schema
+  } else if (OB_FAIL(tablet->load_storage_schema(arena, storage_schema_on_tablet))) {
+    LOG_WARN("failed to load storage schema", K(ret), K_(ls_id), KPC(tablet));
   }
   return ret;
 }

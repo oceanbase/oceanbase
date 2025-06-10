@@ -35,6 +35,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_DIRECT_LOAD_TASK_PROCESS);
+ERRSIM_POINT_DEF(EN_DDL_MERGE_TASK_FAILED);
 /******************             ObDDLTableMergeDag             *****************/
 ObDDLTableMergeDag::ObDDLTableMergeDag()
   : ObIDag(ObDagType::DAG_TYPE_DDL_KV_MERGE),
@@ -274,6 +275,7 @@ int wait_lob_tablet_major_exist(ObLSHandle &ls_handle, ObTablet &tablet)
   ObTabletBindingMdsUserData ddl_data;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
   ObDDLTableMergeDagParam param;
   bool is_major_sstable_exist = false;
   if (OB_FAIL(tablet.ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
@@ -365,6 +367,8 @@ int ObDDLTableMergeTask::process()
   } else if (is_data_direct_load(merge_param_.direct_load_type_) && EN_DIRECT_LOAD_TASK_PROCESS) {
     ret = OB_EAGAIN;
     FLOG_INFO("ERRSIM EN_DIRECT_LOAD_TASK_PROCESS", KR(ret));
+  } else if (OB_FAIL(EN_DDL_MERGE_TASK_FAILED)) {
+    FLOG_INFO("ERRSIM EN_DDL_MERGE_TASK_FAILED", K(ret));
 #endif
   } else if (OB_FAIL(merge_ddl_kvs(ls_handle, tablet_handle))) {
     LOG_WARN("fail to merge ddl kvs", K(ret));
@@ -463,7 +467,7 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(
         ObTabletDirectLoadMgrKey(merge_param_.tablet_id_, ObDirectLoadType::DIRECT_LOAD_DDL), tablet_mgr_hdl))) {
       LOG_WARN("get tablet direct load mgr failed", K(ret), K(merge_param_));
-    } else if (OB_FAIL(tablet_mgr_hdl.get_full_obj()->prepare_major_merge_param(tablet, ddl_param))) {
+    } else if (OB_FAIL(tablet_mgr_hdl.get_full_obj()->prepare_major_merge_param(ddl_param))) {
       LOG_WARN("preare full direct load sstable param failed", K(ret));
     } else if (merge_param_.is_commit_ && OB_FAIL(wait_lob_tablet_major_exist(ls_handle, tablet))) {
       if (OB_EAGAIN != ret) {
@@ -947,6 +951,12 @@ int ObTabletDDLUtil::create_ddl_sstable(
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
+#ifdef ERRSIM
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(EN_DDL_MERGE_TASK_FAILED)) {
+        LOG_WARN("ERRSIM EN_DDL_MERGE_TASK_FAILED: do not create ddl co sstable", K(ret), K(tablet));
+      }
+#endif
     } else {
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
@@ -2254,6 +2264,7 @@ int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
   ObArray<ObDDLKVHandle> ddl_kvs_handle;
   ObDDLTableMergeTask *merge_task = nullptr;
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObTabletDirectLoadMgrHandle tablet_mgr_hdl;
   if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(param));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
