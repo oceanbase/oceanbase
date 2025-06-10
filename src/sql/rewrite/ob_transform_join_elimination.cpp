@@ -231,10 +231,10 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
   } else if (tmp_valid) {
     is_valid = tmp_valid;
   } else {
-    OPT_TRACE("not loseless join");
+    OPT_TRACE("not lossless join");
   }
   if (OB_SUCC(ret) && !is_valid) {
-    OPT_TRACE(source_table, "can not eliminate", target_table, "with loseless join");
+    OPT_TRACE(source_table, "can not eliminate", target_table, "with lossless join");
   }
   return ret;
 }
@@ -1616,6 +1616,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
   int ret = OB_SUCCESS;
   ObSEArray<SemiInfo*, 2> semi_infos;
   ObSEArray<ObRawExpr*, 16> candi_conds;
+  OPT_TRACE("try eliminate semi join");
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
@@ -1682,6 +1683,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 4> target_col_exprs;
   ObDMLStmt *target_stmt = NULL;
   typedef ObSEArray<ObStmtMapInfo, 8> StmtMapInfoArray;
+  OPT_TRACE("try eliminate semi join self key");
   SMART_VAR(StmtMapInfoArray, stmt_map_infos) {
     if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(semi_info)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1696,6 +1698,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
                                                               stmt_map_info))) {
       LOG_WARN("failed to check transform validity semi self key", K(ret));
     } else if (NULL != left_table) {
+      OPT_TRACE("eliminate right table", right_table, "with left table", left_table);
       if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_semi_infos(), semi_info))) {
         LOG_WARN("failed to remove item", K(ret));
       } else if (OB_FAIL(construct_eliminated_table(stmt, right_table, trans_tables))) {
@@ -1731,6 +1734,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
                                                         trans_tables))) {
       LOG_WARN("failed to eliminate semi right child table", K(ret));
     } else {
+      OPT_TRACE("eliminate right tables", right_tables, "with left tables", left_tables);
       trans_happened = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt_map_infos.count(); ++i) {
         if (OB_FAIL(append(ctx_->equal_param_constraints_,
@@ -2278,7 +2282,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
   } else if (OB_FAIL(check_hint_valid(*stmt, *right_table, is_hint_valid))) {
     LOG_WARN("failed to check hint valid", K(ret));
   } else if (!is_hint_valid) {
-    // do nothing
+    OPT_TRACE("hint reject eliminate", right_table);
   } else if (OB_FAIL(stmt->get_table_item_by_id(semi_info->left_table_ids_ , left_tables))) {
     LOG_WARN("failed to get table items", K(ret));
   } else {
@@ -2312,12 +2316,19 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
           can eliminate right table without checking unique. */
         source_table = left_table;
         OPT_TRACE("is simply equal join condition and right table do not have filter, semi join will be eliminated");
-        LOG_TRACE("succeed to check loseless semi join", K(is_simple_join_condition),
+        LOG_TRACE("succeed to check lossless semi join", K(is_simple_join_condition),
                                                         K(right_tables_have_filter));
       } else if (semi_info->is_anti_join() && !(is_simple_join_condition && is_simple_filter)) {
         /* for anti join, all join conditions should be simple condition
             and all right filter should be simple filter */
         OPT_TRACE("anti join`s join condition is not simply or right table`s filter is not simple");
+      } else if (source_exprs.empty()) {
+        /**
+          * cross semi join with filters can not be elimated
+          * e.g.
+          *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2;
+          */
+        OPT_TRACE("cross semi join with filters can not be elimated");
       } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                                                           ctx_->session_info_, ctx_->schema_checker_,
                                                           left_table, source_exprs, candi_conds,
@@ -2331,7 +2342,10 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
         LOG_WARN("check expr unique in semi right tables failed", K(ret));
       } else {
         source_table = source_unique && target_unique ? left_table : NULL;
-        LOG_TRACE("succeed to check loseless semi join", K(source_unique), K(target_unique));
+        if (NULL != left_table) {
+          OPT_TRACE("lossless semi join can be elimated");
+        }
+        LOG_TRACE("succeed to check lossless semi join", K(source_unique), K(target_unique));
       }
     }
   }
@@ -2361,12 +2375,12 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected semi right table", K(ret), K(*semi_info));
   } else if (!semi_right_table->is_generated_table()) {
-    /*do nothing*/
+    OPT_TRACE("right table is not view");
   } else if (OB_ISNULL(semi_right_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexcepted null", K(ret));
   } else if (!semi_right_table->ref_query_->is_spj()) {
-    /*do nothing*/
+    OPT_TRACE("right view stmt is not spj");
   } else if (OB_FAIL(stmt->get_table_item_by_id(semi_info->left_table_ids_ , all_left_tables))) {
     LOG_WARN("failed to get table items", K(ret));
   } else if (OB_FAIL(get_epxrs_rel_ids_in_child_stmt(stmt, semi_right_table->ref_query_,
@@ -2402,13 +2416,14 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
       } else if (OB_FAIL(check_hint_valid(*stmt, *right_table, is_hint_valid))) {
         LOG_WARN("failed to check hint valid", K(ret));
       } else if (!is_hint_valid) {
-        /* do nothing */
+        OPT_TRACE("hint reject transform", right_table);
       } else if (OB_FAIL(is_table_column_used_in_subquery(*semi_right_table->ref_query_,
                                                           item.table_id_, used))) {
         LOG_WARN("failed to check is table column used in subquery", K(ret));
       } else if (used) {
-        /* do nothing */
+        OPT_TRACE(right_table, "is used in subquery");
       } else {
+        OPT_TRACE("try to eliminate right table", right_table);
         for (int64_t j = 0; OB_SUCC(ret) && !can_be_eliminated
                                          && j < all_left_tables.count(); ++j) {
           source_exprs.reuse();
@@ -2425,7 +2440,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
                                                                             is_contain))) {
             LOG_WARN("check table item containment failed", K(ret));
           } else if (!is_contain) {
-            /*do nothing*/
+            OPT_TRACE("left table", left_table, "do not contain right_table");
           } else if(OB_FAIL(check_semi_join_condition(stmt, semi_right_table->ref_query_,
                                                       semi_info->semi_conditions_, select_relids,
                                                       left_table, right_table, stmt_map_info,
@@ -2438,11 +2453,20 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
             /* if all semi join conditions are simple condition and there is no right table filter,
                 can eliminate right table without checking unique. */
             can_be_eliminated = true;
+            OPT_TRACE("simple join without right table filters can be eliminated");
             LOG_TRACE("succeed to check validity semi self key", K(is_simple_join_condition),
                                                               K(right_tables_have_filter));
           } else if (semi_info->is_anti_join() && !(is_simple_join_condition && is_simple_filter)) {
             /* for anti join, all join conditions should be simple condition
                 and all right filter should be simple filter */
+            OPT_TRACE("anti join with complex filter or join condition can not be elimated");
+          } else if (source_exprs.empty()) {
+            /**
+              * cross semi join with filters can not be elimated
+              * e.g.
+              *   select * from t1 A semi join (select * from t1 B where B.c2 = 1) on 1 = 1 where A.c2 = 2;
+              */
+            OPT_TRACE("cross semi join with filters can not be elimated");
           } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                                                         ctx_->session_info_, ctx_->schema_checker_,
                                                         left_table, source_exprs, candi_conds,
@@ -2456,6 +2480,9 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
             LOG_WARN("check expr unique in semi right tables failed", K(ret));
           } else {
             can_be_eliminated = source_unique && target_unique;
+            if (can_be_eliminated) {
+              OPT_TRACE("unique semi join can be eliminated");
+            }
             LOG_TRACE("succeed to check validity semi self key", K(source_unique),
                                                                  K(target_unique));
           }
