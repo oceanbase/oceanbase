@@ -645,7 +645,7 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
     ObUInt64Type,      /* ObMySQLDateType */
-    ObUNumberType,     /* ObMySQLDateTimeType */
+    ObNumberType,     /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */
   },
 
@@ -996,7 +996,7 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObUDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObUNumberType,       /* ObDecimalIntType  */
+    ObNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
     ObUNumberType,      /* ObMySQLDateType */
     ObUNumberType,      /* ObMySQLDateTimeType */

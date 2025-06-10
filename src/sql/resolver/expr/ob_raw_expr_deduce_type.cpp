@@ -180,6 +180,7 @@ int ObRawExprDeduceType::visit(ObExecParamRawExpr &expr)
   } else {
     expr.set_result_type(expr.get_ref_expr()->get_result_type());
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 
@@ -960,6 +961,7 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
       } /* end if */
     }
   }
+  OZ(deduce_type_idempotency_check(expr));
   return ret;
 }
 

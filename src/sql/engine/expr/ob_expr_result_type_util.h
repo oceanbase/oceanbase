@@ -213,15 +213,15 @@ public:
                                  ObArithResultTypeMap::OP::DIV)
            : get_div_result_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2);
   }
-  OB_INLINE static int get_mod_calc_type(common::ObObjType &calc_type,
+  static int get_mod_calc_type(common::ObObjType &calc_type,
                                            common::ObObjType &calc_ob1_type,
                                            common::ObObjType &calc_ob2_type,
                                            const common::ObObjType type1,
-                                           const common::ObObjType type2)
-  {
-    return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
-                               ObArithResultTypeMap::OP::MOD);
-  }
+                                           const common::ObObjType type2);
+  // {
+  //   return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
+  //                              ObArithResultTypeMap::OP::MOD);
+  // }
   static int get_array_calc_type(ObExecContext *exec_ctx,
                                  const ObExprResType &type1,
                                  const ObExprResType &type2,

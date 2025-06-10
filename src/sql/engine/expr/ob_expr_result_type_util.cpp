@@ -367,6 +367,7 @@ int ObExprResultTypeUtil::get_mod_result_type(ObObjType &result_type,
     }
   } else {
     result_type = MOD_RESULT_TYPE[type1][type2];
+    LOG_DEBUG("mydebug ", K(type1), K(type2), K(result_type), K(lbt()));
     result_ob1_type = result_type;
     result_ob2_type = result_type;
   }
@@ -466,7 +467,7 @@ int ObExprResultTypeUtil::get_arith_result_type(ObObjType &result_type,
   }
   result_ob1_type = result_type;
   result_ob2_type = result_type;
-
+  LOG_DEBUG("mydebug ", K(type1), K(type2), K(result_type));
   return ret;
 }
 
@@ -855,6 +856,37 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
     }
   }
 
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_mod_calc_type(common::ObObjType &calc_type,
+                                           common::ObObjType &calc_ob1_type,
+                                           common::ObObjType &calc_ob2_type,
+                                           const common::ObObjType type1,
+                                           const common::ObObjType type2) 
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()) {
+    const ObArithRule &rule = ARITH_RESULT_TYPE_ORACLE.get_rule(type1, type2, ObArithResultTypeMap::MOD);
+    calc_type = rule.result_type;
+    calc_ob1_type = (rule.param1_calc_type == ObMaxType
+                     ? (ObNullType == type1 ? ObNullType : calc_type)
+                     : rule.param1_calc_type);
+    calc_ob2_type = (rule.param2_calc_type == ObMaxType
+                     ? (ObNullType == type2 ? ObNullType : calc_type)
+                     : rule.param2_calc_type);
+
+    if (OB_UNLIKELY(!ob_is_valid_obj_type(calc_type))) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("unsupported type for add", K(ret), K(type1), K(type2), K(lbt()));
+    }
+    LOG_DEBUG("get_mod_calc_type", K(type1), K(type2), K(calc_type), K(calc_ob1_type),
+              K(calc_ob2_type), K(rule), K(ret));
+  } else {
+    ret = get_mod_result_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2);
+    LOG_DEBUG("get_mod_calc_type", K(type1), K(type2), K(calc_type), K(calc_ob1_type),
+              K(calc_ob2_type), K(ret));
+  }
   return ret;
 }
 

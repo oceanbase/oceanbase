@@ -59,6 +59,7 @@ int ObExprNullif::calc_result_type2(ObExprResType &type,
       LOG_WARN("se deduce type failed", K(ret));
     }
   }
+  LOG_DEBUG("mydebug ", KR(ret), K(type), K(type1), K(type2));
   return ret;
 }
 
@@ -82,6 +83,7 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
     type.set_varchar();
   }
   OZ(calc_cmp_type2(cmp_type, type1, type2, type_ctx));
+  LOG_DEBUG("mydebug se_deduce_type@1", K(type), K(cmp_type), K(type1), K(type2));
   if (OB_SUCC(ret)) {
     if (ob_is_enumset_tc(type1.get_type()) || ob_is_enumset_tc(type2.get_type())) {
       ObObjType calc_type = get_enumset_calc_type(cmp_type.get_calc_type(), -1);
@@ -100,14 +102,18 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             type1.set_calc_collation_level(cmp_type.get_calc_collation_level());
           }
         }
-        if (type1.is_decimal_int()) {
-          type1.set_calc_type(calc_type);
+        // if (type1.is_decimal_int()) {
+        //   type1.set_calc_type(calc_type);
+        // }
+        // set calc type for type2 in need. 
+        // If type1 is uint type, it could be compare with Enum innervalue directly.
+        if (!ob_is_uint_tc(type1.get_type())) {
+          type2.set_calc_type(calc_type);
+          type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
+          type2.set_calc_collation_level(cmp_type.get_calc_collation_level());
         }
-        // set calc type for type2 no matter whether calc_type is varchar or not, and no matter which param is enum.
-        type2.set_calc_type(calc_type);
-        type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
-        type2.set_calc_collation_level(cmp_type.get_calc_collation_level());
       }
+      LOG_DEBUG("mydebug se_deduce_type@2", K(ret), K(cmp_type), K(type1), K(type2));
     }
     if (OB_FAIL(ret)) {
     } else if (ob_is_decimal_int(cmp_type.get_calc_type())) {
@@ -243,6 +249,13 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
       OX(rt_expr.eval_func_ = eval_nullif);
     }
   }
+  if (rt_expr.eval_func_ == eval_nullif) {
+    LOG_DEBUG("mydebug eval_func_ is eval_nullif");
+  } else if (rt_expr.eval_func_ == eval_nullif_enumset) {
+    LOG_DEBUG("mydebug eval_func_ is eval_nullif_enumset");
+  } else {
+    LOG_DEBUG("mydebug eval_func_ is other");
+  }
   return ret;
 }
 
@@ -348,6 +361,7 @@ int ObExprNullif::eval_nullif(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     ObTempExprCtx::TempAllocGuard tmp_alloc_guard(ctx);
     ObDatum datum1;
     ObDatum datum2;
+    LOG_DEBUG("mydebug cmp_func", K(cast_info->cmp_meta_));
     if (OB_FAIL(cast_param(*expr.args_[0], ctx, cast_info->cmp_meta_, cast_info->cm_,
                              tmp_alloc_guard.get_allocator(), datum1))) {
       LOG_WARN("cast param failed", K(ret));

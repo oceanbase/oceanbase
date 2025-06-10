@@ -40,6 +40,7 @@ int ObExprMod::calc_result_type2(ObExprResType &type,
                                  ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  LOG_DEBUG("mydebug ObExprMod::calc_result_type2");
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
   } else if (lib::is_oracle_mode() && type.is_oracle_decimal()) {
     type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
