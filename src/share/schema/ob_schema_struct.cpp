@@ -5734,7 +5734,7 @@ int ObBasePartition::convert_character_for_range_columns_part(
       } else if (OB_ISNULL(part_column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column schema", K(ret));
-      } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
+      } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column(), part_column_schema->is_string_lob())) {
         ObString dst_string;
         if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {
@@ -5772,7 +5772,7 @@ int ObBasePartition::convert_character_for_list_columns_part(
         } else if (OB_ISNULL(part_column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null column schema", K(ret));
-        } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
+        } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column(), part_column_schema->is_string_lob())) {
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {
