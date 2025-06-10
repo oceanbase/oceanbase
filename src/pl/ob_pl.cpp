@@ -774,7 +774,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
 
-  if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode() &&
+  if (OB_SUCC(ret) && OB_NOT_NULL(routine) && is_function_or_trigger && lib::is_mysql_mode() &&
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
     // udf内部有tcl语句时，该标记为true
