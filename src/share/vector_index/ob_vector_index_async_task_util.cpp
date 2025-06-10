@@ -95,6 +95,20 @@ int ObVecIndexAsyncTaskOption::del_task_ctx(ObTabletID &tablet_id)
   return ret;
 }
 
+int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_ctx, bool &is_cancel)
+{
+  int ret = OB_SUCCESS;
+  is_cancel = false;
+  if (OB_NOT_NULL(task_ctx)) {
+    if (task_ctx->sys_task_id_.is_valid()) {
+      if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_ctx->sys_task_id_, is_cancel))) {
+        LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskUtil::in_active_time(
     const uint64_t tenant_id, bool& is_active_time)
 {
@@ -940,6 +954,7 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
 {
   int ret = OB_SUCCESS;
   ObVecIndexAsyncTask *async_task = nullptr;
+  bool is_cancel = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler is not init", KR(ret));
@@ -959,6 +974,9 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_RUNNING;
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) {
+        LOG_WARN("fail to check task is cancel", K(task_ctx));
+      } else if (is_cancel) { // skip
       } else if (OB_FAIL(async_task->do_work())) {
         LOG_WARN("fail to do task", KR(ret), KPC(async_task));
       }
@@ -1116,6 +1134,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   ObAccessService *tsc_service = MTL(ObAccessService *);
   const uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
   uint32_t current_count = 0;
+  int64_t loop_cnt = 0; // check task is cancel
   SMART_VARS_2((storage::ObTableScanParam, vid_id_scan_param),
                (storage::ObTableScanParam, data_scan_param)) {
     if (OB_FAIL(adaptor.get_dim(dim))) {
@@ -1245,6 +1264,8 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
             }
           }
         }
+        DEBUG_SYNC(CANCEL_VEC_TASK_ADD_SNAP_INDEX);
+        CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
       }
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
@@ -1342,6 +1363,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   int64_t timeout = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   bool trans_start = false;
+  int64_t loop_cnt = 0;
   if OB_FAIL(ret) {
   } else {
     HEAP_VARS_2((storage::ObTableScanParam, snap_scan_param), (schema::ObTableParam, snap_table_param, allocator_)) {
@@ -1527,6 +1549,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                 }
                 datum_row.reuse();
               }
+              CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
             } // end for
           }
         }
@@ -1616,6 +1639,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
   ObStorageDatumUtils util;
+  int64_t loop_cnt = 0;
   const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1688,6 +1712,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
         }
         d_row.reuse();
       }
+      CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
     } // end while
   }
   if (ret == OB_ITER_END) {
@@ -1712,6 +1737,7 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   ObSEArray<uint64_t, 4> index_dml_column_ids;
   ObStorageDatumUtils util;
   ObAccessService *oas = MTL(ObAccessService *);
+  int64_t loop_cnt = 0;
   SMART_VARS_2((storage::ObTableScanParam, delta_scan_param),
                (storage::ObTableScanParam, index_scan_param)) {
     if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {
@@ -1764,6 +1790,7 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
         } else if (OB_FAIL(delta_row_iter.add_row(*datum_row, util))) {
           LOG_WARN("failed to add row to iter", K(ret));
         }
+        CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
       }
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
@@ -1780,6 +1807,7 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
         } else if (OB_FAIL(index_row_iter.add_row(*datum_row, util))) {
           LOG_WARN("failed to add row to iter", K(ret));
         }
+        CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
       }
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;

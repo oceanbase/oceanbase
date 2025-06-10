@@ -265,14 +265,12 @@ int ObVecAsyncTaskExector::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
         LOG_WARN("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
         // check task is canceled
-        if (task_ctx->sys_task_id_.is_valid()) {
-          bool is_cancel = false;
-          if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_ctx->sys_task_id_, is_cancel))) {
-            LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
-          } else if (is_cancel) {
-            task_ctx->task_status_.ret_code_ = OB_CANCELED;
-            task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
-          }
+        bool is_cancel = false;
+        if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) {
+          LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
+        } else if (is_cancel) {
+          task_ctx->task_status_.ret_code_ = OB_CANCELED;
+          task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH;
         }
       }
     } else {
