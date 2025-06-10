@@ -2280,6 +2280,10 @@ int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
     LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this));
   } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
+  } else if (minor_tables_.at(0)->get_key().get_tablet_id().is_only_mini_merge_tablet()
+             && (minor_tables_.count() != 1 || !minor_tables_.at(0)->get_start_scn().is_base_scn())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("the property only mini merge tablet violated", K(ret), KPC(this));
   } else {
     const SCN &clog_checkpoint_scn = param.clog_checkpoint_scn_;
     const SCN &last_minor_end_scn = minor_tables_.get_boundary_table(true/*last*/)->get_end_scn();

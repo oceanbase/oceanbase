@@ -940,7 +940,8 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
   } else if (result.scn_range_.start_scn_ > last_table->get_end_scn()) {
     need_check_tablet = true;
   } else if (result.scn_range_.start_scn_ < last_table->get_end_scn()
-      && (GCTX.is_shared_storage_mode() || !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet())) {
+             && ((GCTX.is_shared_storage_mode() && !tablet.get_tablet_id().is_only_mini_merge_tablet())
+                 || !tablet.get_tablet_id().is_special_merge_tablet())) {
     // fix start_scn to make scn_range continuous in migrate phase for issue 42832934
     if (result.scn_range_.end_scn_ <= last_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
