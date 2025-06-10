@@ -262,7 +262,7 @@ public:
   int composite_with(const ObLSInfo &other);
   // other functions
   virtual int add_replica(const ObLSReplica &replica);
-  int update_replica_status();   // TODO: have to make sure actions in this function
+  int update_replica_status();
   // return OB_ENTRY_NOT_EXIST for not found (set %replica to NULL too).
   // TODO: replace OB_ENTRY_NOT_EXIST with a more clear one like OB_LS_ENTRY_NOT_EXIST
   int find(const common::ObAddr &server, const ObLSReplica *&replica) const;
@@ -291,6 +291,21 @@ private:
   int find_idx_(const common::ObAddr &server, int64_t &idx) const;
   int find_idx_(const ObLSReplica &replica, int64_t &idx) const;
 
+  int rectify_in_member_or_learner_list_flag_and_timestamp_(
+      ObLSReplica *&replica,
+      const ObLSReplica::MemberList *member_list,
+      const common::GlobalLearnerList *learner_list,
+      ObMember &learner,
+      bool &in_leader_member_list,
+      bool &in_leader_learner_list);
+  int rectify_replica_type_(
+      ObLSReplica *&replica,
+      const bool in_leader_learner_list);
+  int rectify_replica_status_(
+      ObLSReplica *&replica,
+      const bool in_leader_member_list,
+      const bool in_leader_learner_list,
+      const ObMember &learner);
 private:
   uint64_t tenant_id_;                      //which tenant's log stream
   share::ObLSID ls_id_;                     //identifier for log stream
