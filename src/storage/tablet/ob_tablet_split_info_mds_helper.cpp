@@ -174,7 +174,7 @@ int ObTabletSplitInfoMdsHelper::register_mds(const ObTabletSplitInfoMdsArg &arg,
     LOG_WARN("incalid argument", K(ret), K(arg));
   } else {
     const int64_t size = arg.get_serialize_size();
-    ObArenaAllocator allocator(ObMemAttr(arg.tenant_id_, "DldUpTabMeta"));
+    ObArenaAllocator allocator(ObMemAttr(common::OB_SERVER_TENANT_ID, "DldUpTabMeta"));
     char *buf = nullptr;
     int64_t pos = 0;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
