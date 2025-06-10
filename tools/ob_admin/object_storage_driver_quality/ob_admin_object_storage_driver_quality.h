@@ -81,7 +81,7 @@ constexpr int64_t DEFAULT_LIMIT_RUN_TIME_S          = 10;           // the defau
 constexpr int64_t DEFAULT_LIMIT_MEMORY_MB           = 64;           // the default memory limited in the limited scene
 constexpr double  DEFAULT_LIMIT_CPU                 = 0.2;          // the default cpu limited in the limited scene
 
-constexpr int64_t DEFAULT_QUEUE_SIZE                = 100;          // the default task handler queue size
+constexpr int64_t DEFAULT_QUEUE_SIZE                = 32;          // the default task handler queue size
 constexpr int64_t DEFAULT_PROB_OF_WRITING_OLD_DATA  = 20;
 constexpr int64_t DEFAULT_PROB_OF_PARALLEL          = 10;
 static constexpr double LATENCY_QUANTILES[] = {
