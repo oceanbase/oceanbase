@@ -277,7 +277,17 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_MDS_NODE_STAT_TID ||
          table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID ||
          table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID ||
-         table_id == share::OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID;
+         table_id == share::OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_LS_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_LS_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_TABLET_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_TABLET_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_SSTABLE_MGR_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_SSTABLE_MGR_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
