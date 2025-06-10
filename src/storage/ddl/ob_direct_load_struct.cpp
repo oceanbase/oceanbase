@@ -3520,14 +3520,18 @@ int ObDirectLoadSliceWriter::inner_fill_ivf_vector_index_data(
   } else if (FALSE_IT(vec_idx_slice_store.set_lob_inrow_threshold(lob_inrow_threshold))) {
   } else if (OB_FAIL(inner_fill_vector_index_data(macro_block_slice_store, &vec_idx_slice_store, snapshot_version, storage_schema, start_scn, VIAT_MAX/*index_type*/, insert_monitor))) {
     LOG_WARN("fail to inner fill vector index data", K(ret));
-  } else {
-    ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+  }
+
+  // clean whenever fail or succ
+  int tmp_ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+  if (OB_NOT_NULL(vec_index_service)) {
     ObIvfHelperKey key(vec_idx_slice_store.tablet_id_, vec_idx_slice_store.get_context_id());
-    if (OB_ISNULL(vec_index_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
-    } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
+    if (OB_TMP_FAIL(vec_index_service->erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
       LOG_WARN("failed to erase ivf build helper", K(ret), K(tablet_direct_load_mgr_->get_ls_id()), K(vec_idx_slice_store.tablet_id_));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
     }
   }
   if (nullptr != macro_block_slice_store) {
@@ -4308,6 +4312,41 @@ void ObIvfSliceStore::reset()
   tmp_allocator_.reset();
 }
 
+int ObIvfSliceStore::clean_ivf_build_helper() {
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+  ObIvfHelperKey key(tablet_id_, context_id_);
+  if (OB_ISNULL(vec_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(ls_id_, key))) {
+    LOG_WARN("failed to erase ivf build helper", K(ret), K(ls_id_), K(key));
+  }
+  return ret;
+}
+
+int ObIvfSliceStore::init(ObTabletDirectLoadMgr *tablet_direct_load_mgr,
+                          const ObString vec_idx_param,
+                          const int64_t vec_dim,
+                          const ObIArray<ObColumnSchemaItem> &col_array,
+                          const int64_t context_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_ISNULL(tablet_direct_load_mgr)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null tablet_direct_load_mgr", K(ret));
+  } else if (OB_UNLIKELY(vec_idx_param.empty() || 0 >= vec_dim || col_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
+  } else {
+    ls_id_ = tablet_direct_load_mgr->get_ls_id();
+  }
+  return ret;
+}
+
 ///////////////////////////
 // ObIvfCenterSliceStore //
 ///////////////////////////
@@ -4327,14 +4366,9 @@ int ObIvfCenterSliceStore::init(
     const int64_t context_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(nullptr == tablet_direct_load_mgr || vec_idx_param.empty() || 0 >= vec_dim || col_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
+  if (OB_FAIL(ObIvfSliceStore::init(tablet_direct_load_mgr, vec_idx_param, vec_dim, col_array, context_id))) {
+    LOG_WARN("fail to do ObIvfSliceStore::init", K(ret));
   } else {
-    ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
@@ -4357,12 +4391,12 @@ int ObIvfCenterSliceStore::init(
         if (OB_ISNULL(vec_index_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
-        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
+        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id_,
                                                                              key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {
-          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id), K(tablet_id_));
+          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id_), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
         } else if (OB_FAIL(helper->init_kmeans_ctx(vec_dim_))) {
@@ -4408,6 +4442,16 @@ int ObIvfCenterSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
       LOG_WARN("failed to append sample vector", K(ret));
     } else {
       LOG_DEBUG("[vec index debug] append sample vector", K(tablet_id_), K(vec_str));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_ivf_build_helper())) {
+      LOG_WARN("fail to clean kmeans ctx", K(ret));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
     }
   }
   tmp_allocator_.reuse();
@@ -4566,14 +4610,9 @@ int ObIvfSq8MetaSliceStore::init(
     const int64_t context_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(nullptr == tablet_direct_load_mgr)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null tablet_direct_load_mgr", K(ret));
+  if (OB_FAIL(ObIvfSliceStore::init(tablet_direct_load_mgr, vec_idx_param, vec_dim, col_array, context_id))) {
+    LOG_WARN("fail to do ObIvfSliceStore::init", K(ret));
   } else {
-    ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
@@ -4596,12 +4635,12 @@ int ObIvfSq8MetaSliceStore::init(
         if (OB_ISNULL(vec_index_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
-        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
+        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id_,
                                                                              key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFSQ8_META_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {
-          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id), K(tablet_id_));
+          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id_), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
         } else if (OB_FAIL(helper->init_result_vectors(vec_dim_))) {
@@ -4764,14 +4803,9 @@ int ObIvfPqSliceStore::init(
     const int64_t context_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(nullptr == tablet_direct_load_mgr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
+  if (OB_FAIL(ObIvfSliceStore::init(tablet_direct_load_mgr, vec_idx_param, vec_dim, col_array, context_id))) {
+    LOG_WARN("fail to do ObIvfSliceStore::init", K(ret));
   } else {
-    ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
@@ -4795,12 +4829,12 @@ int ObIvfPqSliceStore::init(
         if (OB_ISNULL(vec_index_service) || OB_ISNULL(GCTX.ddl_sql_proxy_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null ObPluginVectorIndexService or GCTX.ddl_sql_proxy_ ptr", K(ret), K(MTL_ID()), KP(vec_index_service));
-        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id,
+        } else if (OB_FAIL(vec_index_service->acquire_ivf_build_helper_guard(ls_id_,
                                                                              key,
                                                                              ObIndexType::INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL,
                                                                              helper_guard_,
                                                                              vec_idx_param_))) {
-          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id), K(tablet_id_));
+          LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id_), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
         } else if (OB_FAIL(helper->init_ctx(vec_dim_))) {
@@ -4845,6 +4879,13 @@ int ObIvfPqSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
       LOG_WARN("failed to append sample vector", K(ret));
     } else {
       LOG_DEBUG("[vec index debug] append sample vector", K(tablet_id_), K(residual_str));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(clean_ivf_build_helper())) {
+      LOG_WARN("fail to clean kmeans ctx", K(ret));
     }
   }
   tmp_allocator_.reuse();
