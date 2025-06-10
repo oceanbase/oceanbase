@@ -122,7 +122,8 @@ int ObDiagnosticInfos::inc_ref(const ObDiagnosticInfo *di_info)
       LOG_WARN("failed to inc di ref", K(ret));
     } else {
 #ifdef ENABLE_DEBUG_LOG
-      if (!(*di_info == *tmp_di)) {
+      // using cache would change group id.
+      if (!di_info->is_using_cache() && !(*di_info == *tmp_di)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("inc ref wrongly", K(di_info->get_session_id()), K(tmp_di->get_session_id()),
             KPC(di_info), KPC(tmp_di));
