@@ -586,6 +586,7 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
   int ret = OB_SUCCESS;
   bool found = false;
   ObObj tmp_result;
+  observer::ObReqTimeGuard req_timeinfo_guard;
 
   if (OB_FAIL(udf_ctx.get_result_from_cache(tmp_result, found))) {
     LOG_WARN("failed to get result from udf cache", K(ret));

@@ -17,7 +17,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_hashmap.h"
 #include "sql/engine/expr/ob_expr.h"
-#include "src/sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "pl/external_routine/ob_external_resource.h"
 
 namespace oceanbase
