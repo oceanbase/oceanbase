@@ -504,7 +504,9 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
 
     // 防御性代码：检查full partition wise的情况下，每一个op对应的GI task是否被同时消费完毕
     if (OB_FAIL(ret)) {
-      fetch_task_ret_ = ret;
+      if (ret != OB_ITER_END) {
+        fetch_task_ret_ = ret;
+      }
     } else if (OB_FAIL(check_pw_end(end_op_count, op_ids.count(), infos.count()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("incorrect state", K(ret));
