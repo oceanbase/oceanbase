@@ -68,6 +68,13 @@ private:
   int get_next_table_(storage::ObITable *&table);
   int generate_virtual_row_(VirtualSSSSTableRow &row);
   int fill_in_row_(const VirtualSSSSTableRow &row_data, common::ObNewRow *&row);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualSSSSTableRow &row);
+  int get_virtual_row_remote_(VirtualSSSSTableRow &row);
+  int get_virtual_row_remote_(const uint64_t tenant_id,
+                              const share::ObLSID &ls_id,
+                              common::ObTabletID &tablet_id,
+                              share::SCN &transfer_scn,
+                              VirtualSSSSTableRow &row);
 #endif
 private:
   uint64_t tenant_id_;
@@ -80,6 +87,8 @@ private:
   storage::ObTableStoreIterator table_store_iter_;
   VirtualSSSSTableRow ss_sstable_row_;
   ObTabletHandle tablet_hdl_; // for sstablet life
+  ObISQLClient::ReadResult read_result_;
+  common::sqlclient::ObMySQLResult *sql_result_;
 #ifdef OB_BUILD_SHARED_STORAGE
   share::SCN cur_row_scn_; // current tablet's scn
   ObSSMetaIterGuard<ObSSTabletIterator> tablet_iter_guard_; // for tablet_hdl_ life

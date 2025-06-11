@@ -30,7 +30,9 @@ ObAllVirtualSSExistingSSTableMgr::ObAllVirtualSSExistingSSTableMgr()
       ls_id_(),
       tablet_id_(),
       transfer_scn_(),
-      tablet_(nullptr)
+      tablet_(nullptr),
+      read_result_(),
+      sql_result_(nullptr)
 {
 #ifdef OB_BUILD_SHARED_STORAGE
   tablet_iter_ = nullptr;
@@ -54,6 +56,8 @@ void ObAllVirtualSSExistingSSTableMgr::reset()
   tablet_allocator_.reset();
   ObVirtualTableScannerIterator::reset();
   tablet_allocator_.reset();
+  read_result_.reset();
+  sql_result_ = nullptr;
 #ifdef OB_BUILD_SHARED_STORAGE
   cur_row_scn_.reset();
   tablet_iter_guard_.reset();
@@ -336,7 +340,7 @@ int ObAllVirtualSSExistingSSTableMgr::fill_in_row_(const VirtualSSSSTableRow &ro
       cur_row_.cells_[i].set_int(transfer_scn_.get_val_for_inner_table_field());
       break;
     case META_VERSION:
-      cur_row_.cells_[i].set_int(row_data.version_.get_val_for_inner_table_field());
+      cur_row_.cells_[i].set_int(row_data.version_);
       break;
     case TABLE_TYPE:
       cur_row_.cells_[i].set_int(row_data.table_type_);
@@ -401,82 +405,178 @@ int ObAllVirtualSSExistingSSTableMgr::fill_in_row_(const VirtualSSSSTableRow &ro
   return ret;
 }
 
+int ObAllVirtualSSExistingSSTableMgr::extract_result_(
+    common::sqlclient::ObMySQLResult &res,
+    VirtualSSSSTableRow &row)
+{
+  int ret = OB_SUCCESS;
+  ObString contain_uncommitted_row;
+  (void)GET_COL_IGNORE_NULL(res.get_int, "meta_version", row.version_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "table_type", row.table_type_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "start_log_scn", row.start_log_scn_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "end_log_scn", row.end_log_scn_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "upper_trans_version", row.upper_trans_version_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "size", row.size_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "data_block_count", row.data_block_count_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "index_block_count", row.index_block_count_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "linked_block_count", row.linked_block_count_);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "contain_uncommitted_row", contain_uncommitted_row);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "nested_offset", row.nested_offset_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "nested_size", row.nested_size_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "cg_idx", row.cg_idx_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "data_checksum", row.data_checksum_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "table_flag", row.table_flag_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "rec_scn", row.rec_scn_);
+  if (OB_FAIL(ret)) {
+  } else {
+    if (contain_uncommitted_row == "YES") {
+      row.contain_uncommitted_row_ = true;
+    } else if (contain_uncommitted_row == "NO"){
+      row.contain_uncommitted_row_ = false;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "contain_uncommitted_row should be YES or NO. ", K(contain_uncommitted_row));
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualSSExistingSSTableMgr::get_virtual_row_remote_(
+    VirtualSSSSTableRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "sql_result_ is null");
+  } else if (OB_FAIL(sql_result_->next())) {
+    if (OB_ITER_END != ret) {
+      SERVER_LOG(WARN, "get next result failed", KR(ret));
+    }
+  } else if (OB_FAIL(extract_result_(*sql_result_, row))) {
+    SERVER_LOG(WARN, "fail to extract result", KR(ret));
+  }
+  return ret;
+}
+
+int ObAllVirtualSSExistingSSTableMgr::get_virtual_row_remote_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    common::ObTabletID &tablet_id,
+    share::SCN &transfer_scn,
+    VirtualSSSSTableRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "operation is not valid", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "lst operator ptr or sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    if (OB_ISNULL(sql_result_)) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt(
+                      "SELECT * FROM %s WHERE tenant_id=%lu and tablet_id=%lu and ls_id=%lu and transfer_scn=%lu",
+                      OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TNAME, tenant_id, tablet_id.id(),
+                      ls_id.id(), transfer_scn.get_val_for_sql()))) {
+        SERVER_LOG(WARN, "failed to assign sql", KR(ret), K(sql), K(tenant_id), K(ls_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(read_result_, tenant_id, sql.ptr()))) {
+        SERVER_LOG(WARN, "execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(sql_result_ = read_result_.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "get mysql result failed", KR(ret), K(sql));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(get_virtual_row_remote_(row))) {
+      SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObAllVirtualSSExistingSSTableMgr::generate_virtual_row_(VirtualSSSSTableRow &row)
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(tenant_id_)
-  {
-    ObITable *table = nullptr;
-    if (OB_FAIL(get_next_table_(table))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "get_next_table failed", K(ret));
-      }
-    } else if (NULL == table) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "table shouldn't NULL here", K(ret), K(table));
-    } else if (!table->is_sstable() && !table->is_co_sstable()) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "should only be sstable", K(ret), KPC(table));
-    } else {
-      int64_t blk_cnt = 0;
-      blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-      const int64_t nested_offset = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_offset() : 0;
-      const int64_t nested_size = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_read_size() : 0;
-      const ObITable::TableKey &table_key = table->get_key();
-      const ObTabletMeta &meta = tablet_->get_tablet_meta();
 
-      row.version_ = cur_row_scn_;
-      row.table_type_ = table_key.table_type_;
-      row.start_log_scn_ = table_key.scn_range_.start_scn_.get_val_for_inner_table_field();
-      row.end_log_scn_ = table_key.scn_range_.end_scn_.get_val_for_inner_table_field();
-      row.upper_trans_version_ = table->get_upper_trans_version() < 0 ? 0 : (uint64_t)table->get_upper_trans_version();
-      if (table->is_sstable()) {
-        row.size_ = static_cast<blocksstable::ObSSTable *>(table)->get_occupy_size();
-      } else {
-        row.size_ = 0;
-      }
-      row.data_block_count_ = static_cast<ObSSTable *>(table)->get_data_macro_block_count();
-      if (table->is_sstable()) {
-        blocksstable::ObSSTable * sstable = static_cast<blocksstable::ObSSTable *>(table);
-        blk_cnt = sstable->get_total_macro_block_count() - sstable->get_data_macro_block_count();
-      }
-      row.index_block_count_ = blk_cnt;
-      blk_cnt = 0;
-      if (table->is_sstable()) {
-        if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-          SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-        } else {
-          blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
+  if (is_sys_tenant(effective_tenant_id_) && effective_tenant_id_ != tenant_id_) {
+    if (OB_FAIL(get_virtual_row_remote_(tenant_id_, ls_id_, tablet_id_, transfer_scn_, row))) {
+      SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret), K_(tenant_id), K_(ls_id));
+    }
+  } else {
+    MTL_SWITCH(tenant_id_)
+    {
+      ObITable *table = nullptr;
+      if (OB_FAIL(get_next_table_(table))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "get_next_table failed", K(ret));
         }
-      }
-      row.linked_block_count_ = blk_cnt;
-      if (table->is_sstable()) {
-        row.contain_uncommitted_row_ = static_cast<blocksstable::ObSSTable *>(table)->contain_uncommitted_row();
+      } else if (NULL == table) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "table shouldn't NULL here", K(ret), K(table));
+      } else if (!table->is_sstable() && !table->is_co_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "should only be sstable", K(ret), KPC(table));
       } else {
-        row.contain_uncommitted_row_ = false;
-      }
+        int64_t blk_cnt = 0;
+        blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+        const int64_t nested_offset = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_offset() : 0;
+        const int64_t nested_size = table->is_sstable() ? static_cast<ObSSTable *>(table)->get_macro_read_size() : 0;
+        const ObITable::TableKey &table_key = table->get_key();
+        const ObTabletMeta &meta = tablet_->get_tablet_meta();
 
-      row.nested_offset_ = nested_offset;
-      row.nested_size_ = nested_size;
-      row.cg_idx_ = table_key.get_column_group_id();
-      int64_t data_checksum = 0;
-      if (table->is_co_sstable() && !static_cast<const ObCOSSTableV2 *>(table)->is_cgs_empty_co_table()) {
-        data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
-      } else if (table->is_sstable()) {
-        data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
-      }
-      row.data_checksum_ = data_checksum;
-      ObTableBackupFlag table_backup_flag;
-      if (table->is_sstable()) {
-        if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-          SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+        row.version_ = cur_row_scn_.get_val_for_sql();
+        row.table_type_ = table_key.table_type_;
+        row.start_log_scn_ = table_key.scn_range_.start_scn_.get_val_for_inner_table_field();
+        row.end_log_scn_ = table_key.scn_range_.end_scn_.get_val_for_inner_table_field();
+        row.upper_trans_version_ = table->get_upper_trans_version() < 0 ? 0 : (uint64_t)table->get_upper_trans_version();
+        if (table->is_sstable()) {
+          row.size_ = static_cast<blocksstable::ObSSTable *>(table)->get_occupy_size();
         } else {
-          table_backup_flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag();
+          row.size_ = 0;
         }
+        row.data_block_count_ = static_cast<ObSSTable *>(table)->get_data_macro_block_count();
+        if (table->is_sstable()) {
+          blocksstable::ObSSTable * sstable = static_cast<blocksstable::ObSSTable *>(table);
+          blk_cnt = sstable->get_total_macro_block_count() - sstable->get_data_macro_block_count();
+        }
+        row.index_block_count_ = blk_cnt;
+        blk_cnt = 0;
+        if (table->is_sstable()) {
+          if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+            SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+          } else {
+            blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
+          }
+        }
+        row.linked_block_count_ = blk_cnt;
+        if (table->is_sstable()) {
+          row.contain_uncommitted_row_ = static_cast<blocksstable::ObSSTable *>(table)->contain_uncommitted_row();
+        } else {
+          row.contain_uncommitted_row_ = false;
+        }
+
+        row.nested_offset_ = nested_offset;
+        row.nested_size_ = nested_size;
+        row.cg_idx_ = table_key.get_column_group_id();
+        int64_t data_checksum = 0;
+        if (table->is_co_sstable() && !static_cast<const ObCOSSTableV2 *>(table)->is_cgs_empty_co_table()) {
+          data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
+        } else if (table->is_sstable()) {
+          data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
+        }
+        row.data_checksum_ = data_checksum;
+        ObTableBackupFlag table_backup_flag;
+        if (table->is_sstable()) {
+          if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+            SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+          } else {
+            table_backup_flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag();
+          }
+        }
+        row.table_flag_ = table_backup_flag.flag_;
+        row.rec_scn_ = table->get_rec_scn().get_val_for_inner_table_field();
+        SERVER_LOG(DEBUG, "generate row succeed", K(row));
       }
-      row.table_flag_ = table_backup_flag.flag_;
-      row.rec_scn_ = table->get_rec_scn().get_val_for_inner_table_field();
-      SERVER_LOG(DEBUG, "generate row succeed", K(row));
     }
   }
 

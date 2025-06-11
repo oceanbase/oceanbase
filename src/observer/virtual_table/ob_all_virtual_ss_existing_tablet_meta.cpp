@@ -240,74 +240,176 @@ int ObAllVirtualSSExistingTabletMeta::fill_in_rows_(const ObArray<VirtualTabletM
   return ret;
 }
 
+int ObAllVirtualSSExistingTabletMeta::extract_result_(
+    common::sqlclient::ObMySQLResult &res,
+    VirtualTabletMetaRow &row)
+{
+  int ret = OB_SUCCESS;
+  int64_t meta_version = 0;
+  int64_t data_tablet_id;
+  int64_t create_scn = 0;
+  int64_t start_scn = 0;
+  int64_t data_checkpoint_scn = 0;
+  int64_t mds_checkpoint_scn = 0;
+  int64_t ddl_checkpoint_scn = 0;
+
+  (void)GET_COL_IGNORE_NULL(res.get_int, "meta_version", meta_version);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "data_tablet_id", data_tablet_id);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "create_scn", create_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "start_scn", start_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "create_schema_version", row.create_schema_version_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "data_checkpoint_scn", data_checkpoint_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "mds_checkpoint_scn", mds_checkpoint_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "ddl_checkpoint_scn", ddl_checkpoint_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "multi_version_start", row.multi_version_start_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "tablet_snapshot_version", row.tablet_snapshot_version_);
+  if (OB_FAIL(ret)) {
+  } else {
+    row.data_tablet_id_ = data_tablet_id;
+    row.version_.convert_for_sql(meta_version);
+    row.create_scn_.convert_for_sql(create_scn);
+    row.start_scn_.convert_for_sql(start_scn);
+    row.data_checkpoint_scn_.convert_for_sql(data_checkpoint_scn);
+    row.mds_checkpoint_scn_.convert_for_sql(mds_checkpoint_scn);
+    row.ddl_checkpoint_scn_.convert_for_sql(ddl_checkpoint_scn);
+  }
+  return ret;
+}
+
+int ObAllVirtualSSExistingTabletMeta::get_virtual_rows_remote_(
+    common::sqlclient::ObMySQLResult &res,
+    ObArray<VirtualTabletMetaRow> &row_datas)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    VirtualTabletMetaRow row;
+    if (OB_FAIL(res.next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "get next result failed", KR(ret));
+      }
+      break;
+    } else if (OB_FAIL(extract_result_(res, row))) {
+      SERVER_LOG(WARN, "failed to extract result", KR(ret));
+    } else if (OB_FAIL(row_datas.push_back(row))) {
+      SERVER_LOG(WARN, "failed to push back row_datas. ", K(row_datas));
+    }
+  } // end while
+  return ret;
+}
+
+int ObAllVirtualSSExistingTabletMeta::get_virtual_rows_remote_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    common::ObTabletID &tablet_id,
+    share::SCN &transfer_scn,
+    ObArray<VirtualTabletMetaRow> &row_datas)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "operation is not valid", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "lst operator ptr or sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt(
+                     "SELECT * FROM %s WHERE tenant_id=%lu and tablet_id=%lu and ls_id=%lu and transfer_scn=%lu",
+                     OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TNAME, tenant_id, tablet_id.id(),
+                     ls_id.id(), transfer_scn.get_val_for_sql()))) {
+        SERVER_LOG(WARN, "failed to assign sql", KR(ret), K(sql), K(tenant_id), K(ls_id));
+       } else if (OB_FAIL(GCTX.sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+        SERVER_LOG(WARN, "execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "get mysql result failed", KR(ret), K(sql));
+      } else if (OB_FAIL(get_virtual_rows_remote_(*result.get_result(), row_datas))) {
+        SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabletMetaRow> &row_datas)
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(tenant_id_)
-  {
-    common::ObArenaAllocator allocator("TabletMetaVT",
-                                       OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
-    ObSSMetaService *meta_service = MTL(ObSSMetaService *);
-    ObSSMetaReadParam param;
-    ObTablet *tablet = nullptr;
-    ObSSMetaIterGuard<ObSSTabletIterator> tablet_iter_guard;
-    ObSSTabletIterator *tablet_iter = nullptr;
-    int64_t index = 0;
-    const SCN start_scn = SCN::min_scn();
-    SCN end_scn;
-    if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
-      SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
+  if (is_sys_tenant(effective_tenant_id_) && effective_tenant_id_ != tenant_id_) {
+    if (OB_FAIL(get_virtual_rows_remote_(tenant_id_, ls_id_, tablet_id_, transfer_scn_, row_datas))) {
+      SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret), K_(tenant_id), K_(ls_id));
     }
-    ObMetaVersionRange range(start_scn, end_scn, true);
-    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
-                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
-                                 ObSSLogMetaType::SSLOG_TABLET_META,
-                                 ls_id_,
-                                 tablet_id_,
-                                 transfer_scn_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!param.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-    } else if (OB_FAIL(meta_service->get_tablet(param, range, tablet_iter_guard))) {
-      if (OB_TABLET_NOT_EXIST == ret) {
-        ret = OB_ITER_END;
-      } else {
-        SERVER_LOG(WARN, "get tablet from meta service failed", KR(ret), K(param));
+  } else {
+    MTL_SWITCH(tenant_id_)
+    {
+      common::ObArenaAllocator allocator("TabletMetaVT",
+                                        OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+      ObSSMetaService *meta_service = MTL(ObSSMetaService *);
+      ObSSMetaReadParam param;
+      ObTablet *tablet = nullptr;
+      ObSSMetaIterGuard<ObSSTabletIterator> tablet_iter_guard;
+      ObSSTabletIterator *tablet_iter = nullptr;
+      const SCN start_scn = SCN::min_scn();
+      SCN end_scn;
+      if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
+        SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
       }
-    } else if (OB_FAIL(tablet_iter_guard.get_iter(tablet_iter))) {
-      SERVER_LOG(WARN, "get tablet_iter from iter_guard failed", KR(ret));
-    } else {
-      for (; OB_SUCC(ret); index++) {
-        ObTabletHandle tablet_handle;
-        share::SCN row_scn;
-        ObSSMetaUpdateMetaInfo update_meta_info; // useless for now.
-        ObAtomicExtraInfo extra_info; // useless for now.
-        if (OB_FAIL(tablet_iter->get_next(allocator, tablet_handle, row_scn, update_meta_info, extra_info))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            SERVER_LOG(WARN, "get next tablet from tablet_iter failed", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-          ret = OB_INVALID_ARGUMENT;
-          SERVER_LOG(WARN, "tablet handle is invalid", KR(ret));
+      ObMetaVersionRange range(start_scn, end_scn, true);
+      param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                  ObSSLogMetaType::SSLOG_TABLET_META,
+                                  ls_id_,
+                                  tablet_id_,
+                                  transfer_scn_);
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(!param.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+      } else if (OB_FAIL(meta_service->get_tablet(param, range, tablet_iter_guard))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          ret = OB_ITER_END;
         } else {
-          const ObTabletMeta &meta = tablet_handle.get_obj()->get_tablet_meta();
-          row_datas.push_back(VirtualTabletMetaRow());
-          row_datas[index].version_ = row_scn;
-          row_datas[index].data_tablet_id_ = meta.data_tablet_id_;
-          row_datas[index].create_scn_ = meta.create_scn_;
-          row_datas[index].start_scn_ = meta.start_scn_;
-          row_datas[index].create_schema_version_ = meta.create_schema_version_;
-          row_datas[index].data_checkpoint_scn_ = meta.clog_checkpoint_scn_;
-          row_datas[index].mds_checkpoint_scn_ = meta.mds_checkpoint_scn_;
-          row_datas[index].ddl_checkpoint_scn_ = meta.ddl_checkpoint_scn_;
-          row_datas[index].multi_version_start_ = meta.multi_version_start_;
-          row_datas[index].tablet_snapshot_version_ = meta.snapshot_version_;
-          SERVER_LOG(DEBUG, "generate row succeed", K(param), K(row_datas[index]));
+          SERVER_LOG(WARN, "get tablet from meta service failed", KR(ret), K(param));
         }
+      } else if (OB_FAIL(tablet_iter_guard.get_iter(tablet_iter))) {
+        SERVER_LOG(WARN, "get tablet_iter from iter_guard failed", KR(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          ObTabletHandle tablet_handle;
+          share::SCN row_scn;
+          ObSSMetaUpdateMetaInfo update_meta_info; // useless for now.
+          ObAtomicExtraInfo extra_info; // useless for now.
+          if (OB_FAIL(tablet_iter->get_next(allocator, tablet_handle, row_scn, update_meta_info, extra_info))) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              SERVER_LOG(WARN, "get next tablet from tablet_iter failed", KR(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+            ret = OB_INVALID_ARGUMENT;
+            SERVER_LOG(WARN, "tablet handle is invalid", KR(ret));
+          } else {
+            const ObTabletMeta &meta = tablet_handle.get_obj()->get_tablet_meta();
+            VirtualTabletMetaRow row;
+            row.version_ = row_scn;
+            row.data_tablet_id_ = meta.data_tablet_id_;
+            row.create_scn_ = meta.create_scn_;
+            row.start_scn_ = meta.start_scn_;
+            row.create_schema_version_ = meta.create_schema_version_;
+            row.data_checkpoint_scn_ = meta.clog_checkpoint_scn_;
+            row.mds_checkpoint_scn_ = meta.mds_checkpoint_scn_;
+            row.ddl_checkpoint_scn_ = meta.ddl_checkpoint_scn_;
+            row.multi_version_start_ = meta.multi_version_start_;
+            row.tablet_snapshot_version_ = meta.snapshot_version_;
+            if (OB_FAIL(row_datas.push_back(row))) {
+              SERVER_LOG(WARN, "failed to push back", K(row_datas), K(row));
+            }
+            SERVER_LOG(DEBUG, "generate row succeed", K(param), K(row));
+          }
 
+        }
       }
     }
   }

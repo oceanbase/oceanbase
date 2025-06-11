@@ -17,14 +17,17 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet_table_store_iterator.h"
 #include "common/ob_tablet_id.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_meta_common.h"
+#include "storage/incremental/share/ob_shared_meta_iter_guard.h"
+#include "storage/incremental/ob_shared_meta_service.h"
+#endif
 namespace oceanbase
 {
 namespace observer
 {
-
 struct VirtualSSSSTableRow {
-  share::SCN version_;
+  int64_t version_;
   int64_t table_type_;
   int64_t start_log_scn_;
   int64_t end_log_scn_;
@@ -107,18 +110,29 @@ private:
   int get_next_table_(storage::ObITable *&table);
   int generate_virtual_row_(VirtualSSSSTableRow &row);
   int fill_in_row_(const VirtualSSSSTableRow &row_data, common::ObNewRow *&row);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualSSSSTableRow &row);
+  int get_virtual_row_remote_(VirtualSSSSTableRow &row);
+  int get_virtual_row_remote_(const uint64_t tenant_id,
+                              const share::ObLSID &ls_id,
+                              common::ObTabletID &tablet_id,
+                              VirtualSSSSTableRow &row);
 #endif
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
-  share::SCN transfer_scn_;
-
   common::ObArenaAllocator tablet_allocator_;
   ObTablet *tablet_;
   storage::ObTableStoreIterator table_store_iter_;
   VirtualSSSSTableRow ss_sstable_row_;
   ObTabletHandle tablet_hdl_; // for sstablet life
+  share::SCN cur_reorganization_scn_;
+  ObISQLClient::ReadResult read_result_;
+  common::sqlclient::ObMySQLResult *sql_result_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSMetaIterGuard<ObSSTabletIterator> tablet_iter_guard_; // for tablet_hdl_ life
+  ObSSTabletIterator *tablet_iter_;
+#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSSSSTableMgr);
 };

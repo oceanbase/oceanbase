@@ -53,6 +53,14 @@ private:
   int handle_key_range_(ObNewRange &key_range);
   int generate_virtual_rows_(ObArray<VirtualTabletMetaRow> &row_datas);
   int fill_in_rows_(const ObArray<VirtualTabletMetaRow> &row_datas);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualTabletMetaRow &row);
+  int get_virtual_rows_remote_(common::sqlclient::ObMySQLResult &res,
+                              ObArray<VirtualTabletMetaRow> &row_datas);
+  int get_virtual_rows_remote_(const uint64_t tenant_id,
+                               const share::ObLSID &ls_id,
+                               common::ObTabletID &tablet_id,
+                               share::SCN &transfer_scn,
+                               ObArray<VirtualTabletMetaRow> &row_datas);
 #endif
 private:
   uint64_t tenant_id_;
