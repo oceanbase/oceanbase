@@ -2300,6 +2300,11 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         OX (pl_type.reset());
         OX (pl_type.set_type(pl::PL_REF_CURSOR_TYPE));
         OX (pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR));
+#if OB_BUILD_ORACLE_PL
+        if (OB_SUCC(ret) && OB_NOT_NULL(secondary_namespace->get_type_table())) {
+          OX (pl_type.set_user_type_id(pl::PL_REF_CURSOR_TYPE, secondary_namespace->get_type_table()->get_sys_refcursor_type().get_user_type_id()));
+        }
+#endif
       } else if (columns->at(i).type_.is_user_defined_sql_type()) {
         if (columns->at(i).type_.is_xml_sql_type()) {
           // dynamic cast from sql type to pl type in store_result
