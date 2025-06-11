@@ -3053,9 +3053,6 @@ int ObIORunner::handle(ObIORequest *req)
             K(time_in_queue), K(get_queue_count()), KPC(req));
       }
     }
-    if (TC_REACH_TIME_INTERVAL(1000LL * 1000LL)) {  // 1000ms
-      LOG_INFO("callback runner call handle", K(get_queue_count()), KPC(req));
-    }
     ObTraceIDGuard trace_guard(req->trace_id_);
     { // callback must execute in guard, in case of cancel halfway
       if (OB_ISNULL(req->io_result_)) {

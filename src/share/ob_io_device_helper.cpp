@@ -939,11 +939,14 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
     if (data_disk_size > used_disk_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
+      const char *msg = (GCTX.is_shared_storage_mode()
+          ? "data file size invalid, maybe other files occupy the observer data disk space"
+          : "data file size is too large");
       if (need_report_user_error) {
-        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", msg, K(ret),
             K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
       } else {
-        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", msg, K(ret),
             K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
       }
     }
