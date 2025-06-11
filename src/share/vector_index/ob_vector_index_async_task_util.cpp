@@ -1467,7 +1467,9 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
         param.tx_desc_ = tx_desc;
         ObVectorIndexAlgorithmType index_type = VIAT_MAX;
 
-        if (OB_FAIL(adaptor.check_snap_hnswsq_index())) {
+        if (OB_FAIL(adaptor.set_snapshot_key_prefix(adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
+          LOG_WARN("failed to set snapshot key prefix", K(ret), K(adaptor.get_snap_tablet_id().id()), K(ctx_->task_status_.target_scn_.get_val_for_inner_table_field()));
+        } else if (OB_FAIL(adaptor.check_snap_hnswsq_index())) {
           LOG_WARN("failed to check snap hnswsq index", K(ret));
         } else if (OB_FAIL(adaptor.serialize(&allocator_, param, cb))) {
           LOG_WARN("fail to do vsag serialize", K(ret));

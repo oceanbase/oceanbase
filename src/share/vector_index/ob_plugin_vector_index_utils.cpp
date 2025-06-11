@@ -599,7 +599,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid row", K(ret), K(row));
-    } else if (adapter->get_snapshot_key_prefix().compare(row->storage_datums_[0].get_string()) != 0) {
+    } else if (adapter->get_snapshot_key_prefix().empty() ||
+               !row->storage_datums_[0].get_string().prefix_match(adapter->get_snapshot_key_prefix())) {
       ObString key_prefix;
       if (OB_ISNULL(vector_index_service)) {
         ret = OB_ERR_UNEXPECTED;
@@ -642,15 +643,27 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         // ToDo: concurrency with weakread
         ObVectorIndexSerializer index_seri(tmp_allocator);
         ObVectorIndexMemData *snap_memdata = new_adapter->get_snap_data_();
-        // name rule: TabletID_SCN_hnsw_(sq_)data_partn, we need TabletID_SCN
-        key_prefix = key_prefix.split_on("_hnsw_");
-        if (OB_ISNULL(snap_memdata)) {
+        // name rule: TabletID_SCN_xxx_data_partn, we need TabletID_SCN
+        ObVectorIndexAlgorithmType index_type;
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(snap_memdata)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("snap memdata is null", K(ret));
         } else {
           TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
           if (OB_FAIL(index_seri.deserialize(snap_memdata->index_, param, cb, MTL_ID()))) {
             LOG_WARN("serialize index failed.", K(ret));
+          } else if (OB_FALSE_IT(index_type = new_adapter->get_snap_index_type())) {
+          } else if (index_type == VIAT_HGRAPH) {
+            key_prefix = key_prefix.split_on("_hgraph_");
+          } else if (index_type == VIAT_HNSW || index_type == VIAT_HNSW_SQ || index_type == VIAT_HNSW_BQ) {
+            key_prefix = key_prefix.split_on("_hnsw_");
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid index type", K(ret), K(index_type));
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(new_adapter->set_snapshot_key_prefix(key_prefix))) {
             LOG_WARN("failed to set snapshot key prefix", K(ret), K(key_prefix));
           } else if (OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {

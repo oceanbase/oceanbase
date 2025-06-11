@@ -629,7 +629,8 @@ public:
     ObIAllocator *allocator,
     transaction::ObTxDesc *tx_desc,
     int64_t lob_inrow_threshold,
-    ObVectorIndexAlgorithmType &type);
+    ObVectorIndexAlgorithmType &type,
+    const int64_t snapshot_version);
   virtual int get_next_vector_data_row(
     const int64_t rowkey_cnt,
     const int64_t column_cnt,

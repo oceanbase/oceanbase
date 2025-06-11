@@ -1873,6 +1873,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.query_scn_ = snapshot_scan_param_.snapshot_.core_.version_;
     query_cond.only_complete_data_ = only_complete_data_; // ture when search brute force
     query_cond.is_post_with_filter_ = post_with_filter_;
+    query_cond.scan_param_ = &snapshot_scan_param_;
 
     uint64_t ob_hnsw_ef_search = 0;
     if (OB_FAIL(get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {
