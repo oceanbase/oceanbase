@@ -1007,7 +1007,7 @@ int ObUpgradeForAllVersionProcessor::finish_upgrade_for_add_sys_priv()
     } else if (OB_PRIV_ALL == (all_priv->get_priv_set() & OB_PRIV_ALL)) {
       need_grant = false;
       LOG_INFO("don't need grant", K(ret), K(tenant_id_), K(user_id));
-    } else if (OB_FAIL(grant_all_sql.append("grant all on *.* to sys with grant option"))) {
+    } else if (OB_FAIL(grant_all_sql.append("grant all privileges to sys"))) {
       LOG_WARN("fail to gen oracle grant sql", K(ret), K(tenant_id_));
     } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, grant_all_sql.ptr(), affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K_(tenant_id), K(grant_all_sql));
