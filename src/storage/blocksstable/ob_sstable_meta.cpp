@@ -1527,21 +1527,11 @@ int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
   } else if (table_key.is_major_sstable()) {
     //do nothing
   } else if (filled_tx_scn.is_min() || filled_tx_scn.is_max()) {
-    uint64_t data_version = 0;
-    bool print_error = true;
-    if (OB_SUCCESS != (tmp_ret = GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-      LOG_WARN("get_min_data_version failed", K(tmp_ret), K(MTL_ID()));
-    } else if (data_version < DATA_VERSION_4_4_0_0) {
-      print_error = false;
-    }
-
-    if (print_error && REACH_TIME_INTERVAL( 10 * 1000L * 1000L)) {
-      LOG_DBA_ERROR(OB_ERR_SYS, "msg", "fix filled tx scn value for compact, 4.4 should not reach here",
-          K(table_key), K(filled_tx_scn));
+	if (table_key.is_mds_sstable() || table_key.is_ddl_sstable()) {
+      LOG_WARN("fix filled tx scn value of mds/ddl sstable for compact", K(table_key), K(filled_tx_scn));
     } else {
-      LOG_WARN("fix filled tx scn value for compact, 4.4 should not reach here", K(table_key), K(filled_tx_scn));
+      LOG_ERROR("fix filled tx scn value for compact", K(table_key), K(filled_tx_scn));
     }
-
     filled_tx_scn = table_key.get_end_scn();
   }
   return ret;
