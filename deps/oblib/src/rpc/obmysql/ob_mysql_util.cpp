@@ -1007,13 +1007,16 @@ int ObMySQLUtil::interval_ym_cell_str(char *buf, const int64_t len, ObIntervalYM
   } else {
     /* skip 1 byte to store length */
     int64_t pos_begin = pos++;
-    if (OB_FAIL(ObTimeConverter::encode_interval_ym(buf, len, pos, val, scale))) {
-      LOG_WARN("fail to encode interval year to month", K(ret), K(val), K(scale));
+    if (pos_begin > 0
+        && '\'' == *(buf + pos_begin - 1)) {
+      // here must be serialize element type of pl collection !
+      OZ (ObTimeConverter::interval_ym_to_str(val, scale, buf, len, pos, false));
     } else {
-      // store length as beginning
-      int64_t total_len = pos - pos_begin - 1;
-      ret = ObMySQLUtil::store_length(buf, len, total_len, pos_begin);
+      OZ (ObTimeConverter::encode_interval_ym(buf, len, pos, val, scale));
     }
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
   }
   return ret;
 }
@@ -1033,15 +1036,16 @@ int ObMySQLUtil::interval_ds_cell_str(char *buf, const int64_t len, ObIntervalDS
   } else {
     /* skip 1 byte to store length */
     int64_t pos_begin = pos++;
-    if (OB_FAIL(ObTimeConverter::encode_interval_ds(buf, len, pos, val, scale))) {
-      LOG_WARN("fail to encode interval day to second", K(ret), K(val), K(scale));
+    if (pos_begin > 0
+        && '\'' == *(buf + pos_begin - 1)) {
+      // here must be serialize element type of pl collection !
+      OZ (ObTimeConverter::interval_ds_to_str(val, scale, buf, len, pos, false));
+    } else {
+      OZ (ObTimeConverter::encode_interval_ds(buf, len, pos, val, scale));
     }
-
-    if (OB_SUCC(ret)) {
-      // store length as beginning
-      int64_t total_len = pos - pos_begin - 1;
-      ret = ObMySQLUtil::store_length(buf, len, total_len, pos_begin);
-    }
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
   }
   return ret;
 }
