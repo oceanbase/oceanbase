@@ -97,10 +97,9 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   return ret;
 }
 
-int clear_tx_data()
+void clear_tx_data()
 {
   TX_DATA_ARR.reset();
-  return OB_SUCCESS;
 };
 
 
@@ -155,6 +154,7 @@ void TestDeleteInsertMerge::SetUpTestCase()
 
 void TestDeleteInsertMerge::TearDownTestCase()
 {
+  clear_tx_data();
   ObMultiVersionSSTableTest::TearDownTestCase();
   // reset sequence no
   ObClockGenerator::destroy();
@@ -248,8 +248,10 @@ void TestDeleteInsertMerge::prepare_merge_context(const ObMergeType &merge_type,
                                                   ObTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.static_param_.for_unittest_ = true;
+  merge_context.merge_dag_ = &merge_dag_;
   merge_context.static_param_.is_delete_insert_merge_ = true;
-  merge_context.static_param_.data_version_ = DATA_VERSION_4_2_0_0;
+  merge_context.static_param_.data_version_ = DATA_VERSION_4_3_5_2;
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
@@ -259,8 +261,6 @@ void TestDeleteInsertMerge::prepare_merge_context(const ObMergeType &merge_type,
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
-  merge_context.merge_dag_ = &merge_dag_;
-  merge_context.static_param_.for_unittest_ = true;
 }
 
 void TestDeleteInsertMerge::build_sstable(
@@ -533,7 +533,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_update_one_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -673,7 +673,7 @@ TEST_F(TestDeleteInsertMerge, test_delete_insert_one_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -815,7 +815,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_one_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -950,7 +950,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_delete_one_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1047,7 +1047,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_dml_in_one_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   merger.reset();
@@ -1156,7 +1156,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_macro)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   merger.reset();
@@ -1268,7 +1268,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1381,7 +1381,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable2)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1492,7 +1492,7 @@ TEST_F(TestDeleteInsertMerge, test_delete_accross_multi_sstable)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1603,7 +1603,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1718,7 +1718,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check2
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true, false);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1826,7 +1826,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_last_
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1937,7 +1937,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_shado
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();

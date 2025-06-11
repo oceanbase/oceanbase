@@ -100,10 +100,9 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   return ret;
 }
 
-int clear_tx_data()
+void clear_tx_data()
 {
   TX_DATA_ARR.reset();
-  return OB_SUCCESS;
 };
 
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
@@ -200,6 +199,7 @@ void TestDeleteInsertRowScan::SetUpTestCase()
 
 void TestDeleteInsertRowScan::TearDownTestCase()
 {
+  clear_tx_data();
   ObMultiVersionSSTableTest::TearDownTestCase();
   ls_tx_ctx_mgr_.reset();
   ls_tx_ctx_mgr_.ls_tx_ctx_map_.reset();
