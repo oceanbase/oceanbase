@@ -556,6 +556,83 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
   ASSERT_EQ(macro_cnt, tablet_cache_map.size());
 }
 
+TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
+{
+  LOG_INFO("TEST_CASE: start test_micro_meta_manager_scan");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroRangeManager &range_manager = micro_cache->micro_range_mgr_;
+
+  ObSEArray<ObLSHandle, 16> ls_handles;
+  ObSSMicroCacheUtil::get_ls_handles(ls_handles);
+
+  int64_t macro_cnt = 100;
+  int64_t micro_cnt = 100;
+  const int64_t micro_size = 1024;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+  const int64_t payload_offset = sizeof(ObSSPhyBlockCommonHeader) + sizeof(ObSSMicroDataBlockHeader);
+
+  for(int64_t i = 0; i < macro_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+    for(int64_t j = 0; j < micro_cnt; ++j) {
+      const int64_t offset = j * micro_size + payload_offset;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), false));
+      if(j % 10 == 0) {
+        micro_meta_handle.get_ptr()->mark_deleted();
+      }
+    }
+  }
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
+
+  ObSSMCTabletInfoMap tablet_cache_map;
+  int64_t bucket_num = ObSSPersistMicroMetaOp::DEFAULT_BUCKET_NUM;
+  ASSERT_EQ(OB_SUCCESS, tablet_cache_map.create(bucket_num, ObMemAttr(name::tenant_id, "SSTabletInfoMap")));
+  ASSERT_EQ(0, tablet_cache_map.size());
+
+  int64_t start_range_idx = 0;
+  int64_t end_range_idx = -1;
+  do {
+    bool is_empty_range = true;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx, end_range_idx, is_empty_range));
+    ASSERT_GE(end_range_idx, start_range_idx);
+    start_range_idx = end_range_idx + 1;
+  } while(start_range_idx < cache_stat.range_stat().init_range_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 10, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(macro_cnt, tablet_cache_map.size());
+
+  for(int64_t i = 0; i < macro_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+    for(int64_t j = 0; j < micro_cnt; j+=10) {
+      const int64_t offset = j * micro_size + payload_offset;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), false));
+    }
+  }
+
+  int64_t total_meta_cnt = 0;
+  ObSSMicroInitRangeInfo **init_range_arr = range_manager.get_init_range_arr();
+  for(int64_t i = 0; i < cache_stat.range_stat().init_range_cnt_; ++i) {
+    // calculate the sum of meta range in each init range
+    if(init_range_arr[i]->has_sub_ranges()) {
+      ObSSMicroSubRangeInfo *cur_sub_range = init_range_arr[i]->get_first_sub_range();
+      while(nullptr != cur_sub_range){
+        total_meta_cnt += cur_sub_range->get_micro_meta_cnt();
+        cur_sub_range = cur_sub_range->next_;
+      }
+    }
+  }
+  ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 10, total_meta_cnt);
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
