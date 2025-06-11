@@ -15,6 +15,7 @@
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/share/ob_shared_ls_meta.h"
@@ -404,48 +405,78 @@ public:
       STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls_id_));
     } else {
       SCN prev_ss_checkpoint_scn(ObScnRange::MAX_SCN);
-      SCN ss_checkpoint_scn(ObScnRange::MAX_SCN);
-      LSN ss_checkpoint_lsn;
-      PalfBaseInfo palf_meta;
-      SCN transfer_scn;
-      ObLSTransferMetaInfo transfer_meta_info;
+      LSN prev_ss_checkpoint_lsn;
+      LSN sn_checkpoint_lsn;
 
-      // NOTICE!!! : must get ss_rec_scn before get max_committed_meta_scn
       ObSSCheckpointExecutor &ss_ckpt_executor = ls->get_ss_checkpoint_executor();
-      if (OB_FAIL(ss_ckpt_executor.get_ss_rec_scn(ss_checkpoint_scn))) {
-        STORAGE_LOG(WARN, "get ss rec scn failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id_, ss_ls_meta))) {
+      sn_checkpoint_lsn = ls->get_clog_base_lsn();
+      if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id_, ss_ls_meta))) {
         STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
       } else if (FALSE_IT(prev_ss_checkpoint_scn = ss_ls_meta.get_ss_checkpoint_scn())) {
-      } else if (prev_ss_checkpoint_scn >= ss_checkpoint_scn) {
-        FLOG_INFO("finish update ss_checkpoint_scn: no need update because pre_ss_checkpoint_scn is larger or equal",
-                  K(ls_id_),
-                  K(prev_ss_checkpoint_scn),
-                  K(ss_checkpoint_scn));
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(ls->get_log_handler()->locate_by_scn_coarsely(ss_checkpoint_scn, ss_checkpoint_lsn))) {
-        STORAGE_LOG(WARN, "locate ss_checkpoint_lsn failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ls->get_palf_base_info(ss_checkpoint_lsn, palf_meta))) {
-        STORAGE_LOG(WARN, "get palf base info failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ls->get_transfer_meta(transfer_scn, transfer_meta_info))) {
-        STORAGE_LOG(WARN, "get transfer meta failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ss_ls_meta.set_ss_checkpoint(ss_checkpoint_scn, ss_checkpoint_lsn))) {
-        STORAGE_LOG(WARN, "set ss checkpoint failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ss_ls_meta.set_palf_meta(palf_meta))) {
-        STORAGE_LOG(WARN, "set palf meta failed", KR(ret), KPC(ls));
-      } else if (OB_FAIL(ss_ls_meta.set_transfer_meta(transfer_scn, transfer_meta_info))) {
-        STORAGE_LOG(WARN, "set transfer meta failed", KR(ret), KPC(ls));
+      } else if (FALSE_IT(prev_ss_checkpoint_lsn = ss_ls_meta.get_ss_base_lsn())) {
+      } else if (sn_checkpoint_lsn < prev_ss_checkpoint_lsn) {
+        FLOG_INFO("SSWriter changed. Current Replica is not catching up the latest clog.",
+                  K(sn_checkpoint_lsn),
+                  K(prev_ss_checkpoint_lsn));
       } else {
-        FLOG_INFO("finish update ss_checkpoint_scn",
-                  K(ls_id_),
-                  K(ss_checkpoint_scn),
-                  K(ss_checkpoint_lsn),
-                  K(palf_meta),
-                  K(transfer_scn),
-                  K(transfer_meta_info));
+        (void)throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, prev_ss_checkpoint_lsn, ls);
+
+        SCN ss_checkpoint_scn(ObScnRange::MAX_SCN);
+        LSN ss_checkpoint_lsn;
+        PalfBaseInfo palf_meta;
+        SCN transfer_scn;
+        ObLSTransferMetaInfo transfer_meta_info;
+        if (OB_FAIL(ss_ckpt_executor.get_ss_rec_scn(ss_checkpoint_scn))) {
+          STORAGE_LOG(WARN, "get ss rec scn failed", KR(ret), KPC(ls));
+        } else if (prev_ss_checkpoint_scn >= ss_checkpoint_scn) {
+          FLOG_INFO("finish update ss_checkpoint_scn: no need update because pre_ss_checkpoint_scn is larger or equal",
+                    K(ls_id_),
+                    K(prev_ss_checkpoint_scn),
+                    K(ss_checkpoint_scn));
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(ls->get_log_handler()->locate_by_scn_coarsely(ss_checkpoint_scn, ss_checkpoint_lsn))) {
+          STORAGE_LOG(WARN, "locate ss_checkpoint_lsn failed", KR(ret), KPC(ls));
+        } else if (OB_FAIL(ls->get_palf_base_info(ss_checkpoint_lsn, palf_meta))) {
+          STORAGE_LOG(WARN, "get palf base info failed", KR(ret), KPC(ls));
+        } else if (OB_FAIL(ls->get_transfer_meta(transfer_scn, transfer_meta_info))) {
+          STORAGE_LOG(WARN, "get transfer meta failed", KR(ret), KPC(ls));
+        } else if (OB_FAIL(ss_ls_meta.set_ss_checkpoint(ss_checkpoint_scn, ss_checkpoint_lsn))) {
+          STORAGE_LOG(WARN, "set ss checkpoint failed", KR(ret), KPC(ls));
+        } else if (OB_FAIL(ss_ls_meta.set_palf_meta(palf_meta))) {
+          STORAGE_LOG(WARN, "set palf meta failed", KR(ret), KPC(ls));
+        } else if (OB_FAIL(ss_ls_meta.set_transfer_meta(transfer_scn, transfer_meta_info))) {
+          STORAGE_LOG(WARN, "set transfer meta failed", KR(ret), KPC(ls));
+        } else {
+          FLOG_INFO("finish update ss_checkpoint_scn",
+                    K(ls_id_),
+                    K(ss_checkpoint_scn),
+                    K(ss_checkpoint_lsn),
+                    K(palf_meta),
+                    K(transfer_scn),
+                    K(transfer_meta_info));
+        }
       }
     }
     return ret;
+  }
+private:
+  void throttle_flush_if_checkpoint_lag_too_large(LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS *ls) {
+    int64_t max_lsn_gap = INT64_MAX;
+    (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
+    const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
+    const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
+    max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
+    if (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) {
+      (void)ls->disable_flush();
+      FLOG_INFO("disabling memtable flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
+                "ls_id", ls->get_ls_id(),
+                K(sn_ckpt_lsn),
+                K(ss_ckpt_lsn),
+                K(max_lsn_gap));
+    } else if (ls->flush_is_disabled()) {
+      (void)ls->enable_flush();
+      FLOG_INFO("enable memtable flush", "ls_id", ls->get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn));
+    }
   }
 
 private:
@@ -560,7 +591,9 @@ public:
   int operator()(ObLS &ls)
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ls.advance_checkpoint_by_flush(
+    if (ls.flush_is_disabled()) {
+      FLOG_INFO("memtable flush is disabled, skip advance checkpoint once", K(ls.get_ls_id()));
+    } else if (OB_FAIL(ls.advance_checkpoint_by_flush(
             SCN::max_scn(), INT64_MAX /*timeout*/, false /*is_tenant_freeze*/, ObFreezeSourceFlag::CLOG_CHECKPOINT))) {
       STORAGE_LOG(WARN, "flush ls to recycle clog failed", KR(ret), K(ls));
     }

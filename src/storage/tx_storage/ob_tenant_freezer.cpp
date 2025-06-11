@@ -1005,7 +1005,7 @@ int ObTenantFreezer::set_tenant_mem_limit(const int64_t lower_limit,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[TenantFreezer] invalid argument", KR(ret), K(lower_limit), K(upper_limit));
   } else {
-    const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
+    const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage();
     const int64_t memstore_limit_percent = get_memstore_limit_percentage_();
     if (memstore_limit_percent > 100 ||
         memstore_limit_percent <= 0 ||
@@ -1338,7 +1338,7 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
     min = MIN(mem_memstore_limit, max_mem_memstore_can_get_now);
   }
 
-  memstore_freeze_trigger = min / 100 * get_freeze_trigger_percentage_();
+  memstore_freeze_trigger = min / 100 * get_freeze_trigger_percentage();
 
   // result
   ctx.max_mem_memstore_can_get_now_ = max_mem_memstore_can_get_now;
@@ -1445,7 +1445,7 @@ bool ObTenantFreezer::tenant_need_major_freeze()
   return bool_ret;
 }
 
-int64_t ObTenantFreezer::get_freeze_trigger_percentage_()
+int64_t ObTenantFreezer::get_freeze_trigger_percentage()
 {
   static const int64_t DEFAULT_FREEZE_TRIGGER_PERCENTAGE = 20;
   int64_t percent = DEFAULT_FREEZE_TRIGGER_PERCENTAGE;
@@ -1552,7 +1552,7 @@ int ObTenantFreezer::rpc_callback()
 int ObTenantFreezer::reload_config()
 {
   int ret = OB_SUCCESS;
-  const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
+  const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage();
   const int64_t memstore_limit_percent = get_memstore_limit_percentage_();
   if (!is_inited_) {
     ret = OB_NOT_INIT;

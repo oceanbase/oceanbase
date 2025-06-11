@@ -401,6 +401,7 @@ ObFreezer::ObFreezer(ObLS *ls)
     is_async_ls_freeze_task_existing_(false),
     throttle_is_skipping_(false),
     tenant_replay_is_pending_(false),
+    flush_is_disabled_(false),
     async_freeze_tablets_() {}
 
 ObFreezer::~ObFreezer()
@@ -427,6 +428,7 @@ void ObFreezer::reset()
   is_async_ls_freeze_task_existing_ = false;
   throttle_is_skipping_ = false;
   tenant_replay_is_pending_ = false;
+  flush_is_disabled_ = false;
 }
 
 int ObFreezer::init(ObLS *ls)
@@ -453,6 +455,7 @@ int ObFreezer::init(ObLS *ls)
     is_async_ls_freeze_task_existing_ = false;
     throttle_is_skipping_ = false;
     tenant_replay_is_pending_ = false;
+    flush_is_disabled_ = false;
 
     is_inited_ = true;
   }

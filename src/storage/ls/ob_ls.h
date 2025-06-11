@@ -922,6 +922,11 @@ public:
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
+  DELEGATE_WITH_RET(ls_freezer_, disable_flush, void);
+  DELEGATE_WITH_RET(ls_freezer_, enable_flush, void);
+  DELEGATE_WITH_RET(ls_freezer_, flush_is_disabled, bool);
+
+
   /**
    * @brief freeze this logstream
    *

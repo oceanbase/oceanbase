@@ -1905,6 +1905,11 @@ int ObMemtable::flush(share::ObLSID ls_id)
   int64_t cur_time = ObTimeUtility::current_time();
   if (get_is_flushed()) {
     ret = OB_NO_NEED_UPDATE;
+  } else if (ls_handle_.get_ls()->flush_is_disabled()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      FLOG_INFO("memtable flush is disabled", K(ls_id));
+    }
   } else {
     ObTabletMergeDagParam param;
     param.ls_id_ = ls_id;
