@@ -27,6 +27,7 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_MIGRATION_INIT_STATUS_FAIL);
 
 /******************ObLSMigrationHandlerStatusHelper*********************/
 bool ObLSMigrationHandlerStatusHelper::is_valid(
@@ -682,12 +683,20 @@ int ObLSMigrationHandler::do_init_status_()
     } else {
       new_status = ObLSMigrationHandlerStatus::PREPARE_LS;
       ObLSMigrationTask task;
-      if (OB_FAIL(check_before_do_task_())) {
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = EN_MIGRATION_INIT_STATUS_FAIL ? : OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(ERROR, "[ERRSIM] fake EN_MIGRATION_INIT_STATUS_FAIL", K(ret));
+        }
+      }
+#endif
+      if (FAILEDx(check_before_do_task_())) {
         LOG_WARN("failed to check before do task", K(ret), KPC(ls_));
-      } else if (OB_FAIL(change_status_(new_status))) { // INIT -> PREPARE_LS
-        LOG_WARN("failed to change status", K(ret), K(new_status), KPC(ls_));
       } else if (OB_FAIL(get_ls_migration_task_(task))) {
         LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+      } else if (OB_FAIL(change_status_(new_status))) { // INIT -> PREPARE_LS
+        LOG_WARN("failed to change status", K(ret), K(new_status), KPC(ls_));
       } else {
         SERVER_EVENT_ADD("storage_ha", "ls_ha_start",
             "tenant_id", ls_->get_tenant_id(),
@@ -701,9 +710,12 @@ int ObLSMigrationHandler::do_init_status_()
       }
     }
   }
-  // need_to_abort = true
-  else if (OB_TMP_FAIL(switch_next_stage(ret))) { // INIT -> COMPLETE_LS
-    LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
+
+  // INIT -> COMPLETE_LS
+  if (OB_FAIL(ret)) {
+    if (OB_TMP_FAIL(switch_next_stage(ret))) {
+      LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
+    }
   }
 
   return ret;
