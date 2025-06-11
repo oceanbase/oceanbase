@@ -821,6 +821,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
                 }
               }
             }
+           int64_t ori_len = str.length();
            if (OB_FAIL(ret)) {
            }  else if (!check_is_ascii(str)
                         && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
@@ -834,7 +835,9 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
             const int64_t str_len_byte = static_cast<int64_t>(datum_for_check.len_);
             bool need_check_length = true;
             if (OB_FAIL(ret)) {
-            } else if (max_accuracy_len > 0 && str.length() < max_accuracy_len) {
+            } else if (ori_len == str.length()
+                       && max_accuracy_len > 0
+                       && str.length() < max_accuracy_len) {
               need_check_length = false;
               results[i].set_datum(datum_for_check);
             } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, has_lob_header_for_check, results[i],
