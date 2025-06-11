@@ -14496,6 +14496,7 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
     pseudo_column_expr->set_data_type(ObIntType);
     pseudo_column_expr->set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
     pseudo_column_expr->set_table_id(table_item->table_id_);
+    pseudo_column_expr->set_table_name(table_item->get_object_name());
     real_ref_expr = pseudo_column_expr;
     OZ(pseudo_column_expr->add_relation_id(get_stmt()->get_table_bit_index(table_item->table_id_)));
     OZ(get_stmt()->get_pseudo_column_like_exprs().push_back(pseudo_column_expr));
