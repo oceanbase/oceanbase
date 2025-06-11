@@ -3427,11 +3427,15 @@ int ObTableLocation::calc_and_partition_ids(
         LOG_WARN("Failed to assign tablet ids", K(ret));
       }
     } else {
+      bool ignore_tablet = (PARTITION_LEVEL_TWO == part_level_ && part_ids == NULL);
       for (int64_t l_idx = 0; OB_SUCC(ret) && l_idx < left_part_ids.count(); ++l_idx) {
         for (int64_t r_idx = 0; OB_SUCC(ret) && r_idx < right_part_ids.count(); ++r_idx) {
           if (right_part_ids.at(r_idx) == left_part_ids.at(l_idx)) {
-            OZ(partition_ids.push_back(left_part_ids.at(l_idx)));
-            OZ(tablet_ids.push_back(left_tablet_ids.at(l_idx)));
+            if (OB_FAIL(partition_ids.push_back(left_part_ids.at(l_idx)))) {
+              LOG_WARN("failed to push back part id");
+            } else if (!ignore_tablet && OB_FAIL(tablet_ids.push_back(left_tablet_ids.at(l_idx)))){
+              LOG_WARN("failed to push back tablet id");
+            }
           }
         }//end of r_idx
       }//end of l_idx
