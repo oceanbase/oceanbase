@@ -6860,7 +6860,7 @@ int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, Ob
     LOG_WARN("invalid argument", K(ret), K(schema_guard));
   } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk(schema_guard, pk_ids))) {
     LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
-  } else if (is_index_organized_table() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
+  } else if (is_index_organized_table() && is_table_with_pk() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
     LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
   }
   return ret;
