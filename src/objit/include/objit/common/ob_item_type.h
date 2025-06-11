@@ -2860,6 +2860,7 @@ typedef enum ObItemType
 
   T_MICRO_BLOCK_FORMAT_VERSION = 4867,
   T_MV_NESTED_REFRESH_CLAUSE = 4868, // placeholder for mview
+  T_ALTER_SUBPARTITION_EXCHANGE = 4869,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
