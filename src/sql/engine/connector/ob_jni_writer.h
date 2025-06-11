@@ -47,7 +47,8 @@ public:
   int do_write_next_brs(void *brs, int batch_size);
   int get_current_block_addr();
   int finish_write();
-  int commit_session();
+  int append_block_id(int64_t block_id);
+  int commit_session(int64_t block_num);
   int do_close();
   intptr_t get_schema_ptr() { return schema_ptr_; }
   intptr_t get_array_ptr() { return array_ptr_; }
@@ -77,6 +78,7 @@ private:
   jmethodID jni_get_array_address_ = nullptr;
   jmethodID jni_get_export_schema_address_ = nullptr;
   jmethodID jni_writer_get_odps_schema_ = nullptr;
+  jmethodID jni_append_block_id_ = nullptr;
   jmethodID jni_commit_session_ = nullptr;
 
   lib::ObMutex lock_;

@@ -4588,22 +4588,8 @@ int ObOdpsJniUploaderMgr::init_writer_params_in_px(
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_properties;
-  ObJavaEnv &java_env = ObJavaEnv::getInstance();
   // This entry is first time to setup java env
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (!GCONF.ob_enable_java_env) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("java env is not enabled", K(ret));
-  } else if (!java_env.is_env_inited()) {
-    if (OB_FAIL(java_env.setup_java_env())) {
-      LOG_WARN("failed to setup java env", K(ret));
-    }
-  }
-  // open session
-  if (inited_) {
-    // do nothing
-  } else if (properties.empty()) {
+  if (properties.empty()) {
     // do nohting
   } else if (OB_FAIL(external_properties.load_from_string(properties, write_arena_alloc_))) {
     LOG_WARN("failed to parser external odps format", K(ret));
@@ -4611,23 +4597,41 @@ int ObOdpsJniUploaderMgr::init_writer_params_in_px(
     LOG_WARN("failed to dump odps format", K(ret));
   } else if (sql::ObExternalFileFormat::ODPS_FORMAT != external_properties.format_type_) {
     // do nothing
-  } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,
-                 external_properties.odps_format_,
-                 external_partition,
-                 is_overwrite,
-                 odps_params_map_))) {
-    LOG_WARN("failed to init writer params", K(ret));
-  } else if (OB_FAIL(get_writer_sid(write_arena_alloc_, odps_params_map_, sid_))) {
-    LOG_WARN("failed to session id of the writer");
-  } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("session_id"), sid_))) {
-    LOG_WARN("failed to add session id to params", K(ret));
-  }
+  } else {
+    ObJavaEnv &java_env = ObJavaEnv::getInstance();
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!GCONF.ob_enable_java_env) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("java env is not enabled", K(ret));
+    } else if (!java_env.is_env_inited()) {
+      if (OB_FAIL(java_env.setup_java_env())) {
+        LOG_WARN("failed to setup java env", K(ret));
+      }
+    }
+    // open session
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (inited_) {
+      // do nothing
+    } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,
+                  external_properties.odps_format_,
+                  external_partition,
+                  is_overwrite,
+                  odps_params_map_))) {
+      LOG_WARN("failed to init writer params", K(ret));
+    } else if (OB_FAIL(get_writer_sid(write_arena_alloc_, odps_params_map_, sid_))) {
+      LOG_WARN("failed to session id of the writer");
+    } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("session_id"), sid_))) {
+      LOG_WARN("failed to add session id to params", K(ret));
+    }
 
-  if (OB_SUCC(ret)) {
-    inited_ = true;
-    init_parallel_ = parallel;
-    ATOMIC_STORE(&ref_, parallel);
-    LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
+    if (OB_SUCC(ret)) {
+      inited_ = true;
+      init_parallel_ = parallel;
+      ATOMIC_STORE(&ref_, parallel);
+      LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
+    }
   }
   //  成功后上层出去之后由ObSelectIntoOp::destroy析构
   // 如果不幸没走到op由析构函数兜底
@@ -4676,6 +4680,32 @@ int ObOdpsJniUploaderMgr::get_odps_uploader_in_px(
       odps_uploader.writer_ptr = writer_ptr;
     }
     // 成功和失败后上层出去之后由ObSelectIntoOp::destroy析构
+  }
+  return ret;
+}
+
+int ObOdpsJniUploaderMgr::append_block_id(long block_id) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_holder_ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no session holder ", K(ret));
+  } else {
+    if (OB_FAIL(session_holder_ptr_->append_block_id(block_id))) {
+      LOG_WARN("failed to commit ", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniUploaderMgr::commit_session(int64_t num_block) {
+  int ret= OB_SUCCESS;
+  if (OB_ISNULL(session_holder_ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no session holder ", K(ret));
+  } else {
+    if (OB_FAIL(session_holder_ptr_->commit_session(num_block))) {
+      LOG_WARN("failed to commit ", K(ret));
+    }
   }
   return ret;
 }

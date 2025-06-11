@@ -312,11 +312,15 @@ int ObSelectIntoOp::init_odps_jni_tunnel()
     // do nothing
   } else if (is_in_px) {
     int task_id = input->task_id_;
-    ObOdpsJniUploaderMgr &odps_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
-    if (OB_FAIL(odps_mgr.get_odps_uploader_in_px(task_id, MY_SPEC.select_exprs_, uploader_))) {
+    block_id_ = task_id;
+    ObOdpsJniUploaderMgr &odps_jni_mgr
+      = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
+    if (OB_FAIL(odps_jni_mgr.get_odps_uploader_in_px(task_id, MY_SPEC.select_exprs_, uploader_))) {
       LOG_WARN("failed to get odps writer from global config", K(ret));
     } else if (OB_FAIL(create_odps_schema())) {
       LOG_WARN("failed to create the odps schema", K(ret));
+    } else if (OB_FALSE_IT(odps_jni_mgr.inc_block())) {
+      // do nothing
     }
   } else {
     common::hash::ObHashMap<ObString, ObString> writer_params;
@@ -763,6 +767,7 @@ int ObSelectIntoOp::inner_close()
       ctx_.get_allocator().free(array_helpers_.at(i));
     }
   }
+  array_helpers_.reset();
   return ret;
 }
 
@@ -4342,8 +4347,22 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (OB_FAIL(uploader_.writer_ptr->do_write_next_brs(0, act_cnt))) {
-          LOG_WARN("failed to write data");
+          LOG_WARN("failed to write data", K(ret));
         } else {
+          bool is_in_px = (NULL != ctx_.get_sqc_handler());
+          if (is_in_px) {
+            ObOdpsJniUploaderMgr &odps_jni_mgr
+              = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
+            if (OB_FAIL(odps_jni_mgr.append_block_id(block_id_))) {
+              LOG_WARN("failed to append block id", K(ret));
+            }
+          } else {
+            if (OB_FAIL(uploader_.writer_ptr->append_block_id(block_id_))) {
+              LOG_WARN("failed to append block id", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
           need_commit_ = true;
         }
       }
@@ -6040,15 +6059,16 @@ int ObSelectIntoOp::odps_commit_upload()
 int ObSelectIntoOp::odps_jni_commit_upload()
 {
   int ret = OB_SUCCESS;
-
   bool is_in_px = (NULL != ctx_.get_sqc_handler());
   if (is_in_px) {
-    ObOdpsJniUploaderMgr &odps_upload_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
+    ObOdpsJniUploaderMgr &odps_jni_mgr
+              = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
     if (!need_commit_) {
-      odps_upload_mgr.set_fail();
+      odps_jni_mgr.set_fail();
     }
     {
       __sync_synchronize();
+      int64_t num_block = odps_jni_mgr.block_num();
       if (OB_ISNULL(uploader_.writer_ptr.get())) {
         ret = OB_ODPS_ERROR;
         LOG_WARN("failed to get the writer by sid", K(ret));
@@ -6056,17 +6076,19 @@ int ObSelectIntoOp::odps_jni_commit_upload()
         LOG_WARN("failed to finish write");
       }
       if (OB_FAIL(ret)) {
-        odps_upload_mgr.release_hold_session();
+        odps_jni_mgr.release_hold_session();
       } else {
-        int64_t ref = odps_upload_mgr.dec_ref();
+        int64_t ref = odps_jni_mgr.dec_ref();
         if (0 > ref) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected ref", K(ref), K(ret));
-        } else if (0 == ref && odps_upload_mgr.could_commit()) {
-          uploader_.writer_ptr->commit_session();
+        } else if (0 == ref && odps_jni_mgr.could_commit()) {
+          if (OB_FAIL(odps_jni_mgr.commit_session(0))) {
+            LOG_WARN("failed to commit the parallel write", K(ret));
+          }
         }
         if (0 == ref) {
-          odps_upload_mgr.release_hold_session();
+          odps_jni_mgr.release_hold_session();
         }
       }
     }
@@ -6077,7 +6099,7 @@ int ObSelectIntoOp::odps_jni_commit_upload()
     } else if (OB_FAIL(uploader_.writer_ptr->finish_write())) {
       LOG_WARN("failed to finish write", K(ret));
     } else if (need_commit_) {
-      if (OB_FAIL(uploader_.writer_ptr->commit_session())) {
+      if (OB_FAIL(uploader_.writer_ptr->commit_session(0))) {
         ret = OB_ODPS_ERROR;
         LOG_WARN("commmit failed in odps write");
       }

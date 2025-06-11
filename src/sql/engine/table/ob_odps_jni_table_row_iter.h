@@ -472,6 +472,8 @@ public:
   ObOdpsJniUploaderMgr()
       : inited_(false),
         ref_(0),
+        block_num_(0),
+        init_parallel_(0),
         need_commit_(true),
         write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
@@ -491,6 +493,14 @@ public:
   inline int64_t dec_ref()
   {
     return ATOMIC_SAF(&ref_, 1);
+  }
+  inline int64_t inc_block()
+  {
+    return ATOMIC_FAA(&block_num_, 1);
+  }
+  inline int64_t block_num()
+  {
+    return block_num_;
   }
   inline void set_fail()
   {
@@ -513,11 +523,15 @@ public:
 
   void release_hold_session();
 
+  int commit_session(int64_t num_block);
+  int append_block_id(long block_id);
+
   int reset();
 
 private:
   bool inited_;
   int64_t ref_;
+  int64_t block_num_;
   int64_t init_parallel_;
   bool need_commit_;
   common::ObArenaAllocator write_arena_alloc_;  // construct first and descruct last
