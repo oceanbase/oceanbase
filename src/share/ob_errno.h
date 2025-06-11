@@ -270,6 +270,7 @@ constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IO_TIMEOUT = -4404;
 constexpr int OB_LICENSE_EXPIRED = -4406;
 constexpr int OB_MIGRATE_TX_DATA_NOT_CONTINUES = -4408;
+constexpr int OB_INVALID_ZERO_DATE = -4409;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2368,6 +2369,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LICENSE_EXPIRED__USER_ERROR_MSG "license is expired"
 #define OB_LICENSE_SCOPE_EXCEEDED__USER_ERROR_MSG "current license does not allow this operation: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__USER_ERROR_MSG "migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -5172,6 +5174,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LICENSE_SCOPE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4407, current license does not allow this operation: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4408, migrate tx data not continues"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4408, migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
+#define OB_INVALID_ZERO_DATE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -9301,7 +9305,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2431];
+extern int g_all_ob_errnos[2432];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

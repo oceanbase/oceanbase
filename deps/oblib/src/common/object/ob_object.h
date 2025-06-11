@@ -297,6 +297,8 @@ public:
   OB_INLINE bool is_year() const { return type_ == static_cast<uint8_t>(ObYearType); }
   OB_INLINE bool is_date() const { return type_ == static_cast<uint8_t>(ObDateType); }
   OB_INLINE bool is_mysql_date() const { return type_ == static_cast<uint8_t>(ObMySQLDateType); }
+  OB_INLINE bool is_mysql_date_or_date() const { return is_date() || is_mysql_date(); }
+  OB_INLINE bool is_mysql_datetime_or_datetime() const { return is_datetime() || is_mysql_datetime(); }
   OB_INLINE bool is_time() const { return type_ == static_cast<uint8_t>(ObTimeType); }
   OB_INLINE bool is_timestamp_tz() const { return type_ == static_cast<uint8_t>(ObTimestampTZType); }
   OB_INLINE bool is_timestamp_ltz() const { return type_ == static_cast<uint8_t>(ObTimestampLTZType); }
