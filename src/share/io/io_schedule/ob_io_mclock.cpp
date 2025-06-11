@@ -452,26 +452,26 @@ int ObTenantIOClock::adjust_proportion_clock(const int64_t delta_us)
 int ObTenantIOClock::update_io_clocks(const ObTenantIOConfig &io_config)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(io_config_.deep_copy(io_config))) {
-    LOG_WARN("get io config failed", K(ret), K(io_config));
-  } else {
-    if (group_clocks_.count() < io_config.group_num_) {
-      DRWLock::WRLockGuard guard(group_clocks_lock_);
-      if (OB_FAIL(group_clocks_.reserve(io_config.group_num_))) {
-        LOG_WARN("reserve group config failed", K(ret), K(group_clocks_), K(io_config.group_num_));
+  {
+    DRWLock::WRLockGuard guard(group_clocks_lock_);
+    if (OB_FAIL(io_config_.deep_copy(io_config))) {
+      LOG_WARN("get io config failed", K(ret), K(io_config));
+    } else if (group_clocks_.count() < io_config.group_num_) {
+        if (OB_FAIL(group_clocks_.reserve(io_config.group_num_))) {
+          LOG_WARN("reserve group config failed", K(ret), K(group_clocks_), K(io_config.group_num_));
+        }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t all_group_num = io_config.get_all_group_num();
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_group_num; ++i) {
+      if (OB_FAIL(update_io_clock(i, io_config, all_group_num))) {
+        LOG_WARN("update cur clock failed", K(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {
-      const int64_t all_group_num = io_config.get_all_group_num();
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_group_num; ++i) {
-        if (OB_FAIL(update_io_clock(i, io_config, all_group_num))) {
-          LOG_WARN("update cur clock failed", K(ret), K(i));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        unit_clock_.iops_ = io_config.unit_config_.max_iops_;
-        is_inited_ = true;
-      }
+      unit_clock_.iops_ = io_config.unit_config_.max_iops_;
+      is_inited_ = true;
     }
   }
   return ret;
