@@ -35,7 +35,17 @@ int ObExternalFileWriter::open_file()
       access_type = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
     }
     if (OB_FAIL(adapter.is_exist(url_, access_info_, is_exist))) {
-      LOG_WARN("fail to check file exist", KR(ret), K(url_), KPC(access_info_));
+      // When file object does not exist on hdfs then return OB_HDFS_PATH_NOT_FOUND.
+      if (IntoFileLocation::REMOTE_HDFS == file_location_ &&
+          OB_HDFS_PATH_NOT_FOUND == ret) {
+        ret = OB_SUCCESS;
+        is_exist = false;
+      } else {
+        LOG_WARN("fail to check file exist", KR(ret), K(url_), KPC(access_info_));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (is_exist) {
       ret = OB_FILE_ALREADY_EXIST;
       LOG_WARN("file already exist", KR(ret), K(url_), K(access_info_));
