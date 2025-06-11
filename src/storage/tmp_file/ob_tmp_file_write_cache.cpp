@@ -739,7 +739,6 @@ int ObTmpFileWriteCache::add_free_page_(ObTmpFilePage *page)
     LOG_WARN("invalid argument", KR(ret), KPC(page));
   } else {
     common::TCRWLock::RLockGuard guard(resize_lock_);
-    // LOG_DEBUG("return free page to write cache, current status", KR(ret), KPC(page), K(free_page_list_.size()));
     page->reset();
     PageNode *node = &page->get_list_node();
     if (!shrink_ctx_.in_shrinking_range(node)) {
@@ -1184,7 +1183,6 @@ int64_t ObTmpFileWriteCache::cal_flush_page_cnt_()
 {
   int64_t expect_flush_cnt = 0;
   int64_t max_page_cnt = get_memory_limit() / ObTmpFileGlobal::PAGE_SIZE;
-  int64_t free_page_cnt = free_page_list_.size();
   int64_t used_page_cnt = ATOMIC_LOAD(&used_page_cnt_);
   if (ATOMIC_LOAD(&is_flush_all_)) {
     expect_flush_cnt = max_page_cnt;

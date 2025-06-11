@@ -112,32 +112,26 @@ PageNode* ObTmpFileWriteCacheFreePageList::pop_front()
   } else if (ATOMIC_LOAD(&size_) == 0) {
     // do nothing
   } else {
-    do {
-      int32_t cnt = 0;
-      int32_t idx = ATOMIC_LOAD(&alloc_idx_);
-      while (cnt <= MAX_FREE_LIST_NUM && ATOMIC_LOAD(&list_size_[idx]) == 0) {
-        idx = (idx + 1) % MAX_FREE_LIST_NUM;
-        cnt += 1;
-      }
-      if (cnt > MAX_FREE_LIST_NUM || idx >= MAX_FREE_LIST_NUM) {
-        LOG_DEBUG("can not get free page, list is empty", K(size()));
-        break;
-      }
-
+    int32_t cnt = 0;
+    int32_t idx = ATOMIC_LOAD(&alloc_idx_);
+    while (cnt <= MAX_FREE_LIST_NUM && ATOMIC_LOAD(&list_size_[idx]) == 0) {
+      idx = (idx + 1) % MAX_FREE_LIST_NUM;
+      cnt += 1;
+    }
+    ATOMIC_SET(&alloc_idx_, (idx + 1) % MAX_FREE_LIST_NUM);
+    if (cnt > MAX_FREE_LIST_NUM || idx >= MAX_FREE_LIST_NUM) {
+      LOG_DEBUG("can not get free page, list is empty", K(size()));
+    } else{
       {
         ObBucketWLockGuard bucket_guard(lock_, idx);
-        if (!lists_[idx].is_empty()) {
-          node = lists_[idx].remove_first();
-        }
+        node = lists_[idx].remove_first();
       }
       if (OB_NOT_NULL(node)) {
         ATOMIC_DEC(&list_size_[idx]);
-        ATOMIC_SET(&alloc_idx_, (cnt + 1) % MAX_FREE_LIST_NUM);
         ATOMIC_DEC(&size_);
       }
-    } while (OB_ISNULL(node));
+    }
   }
-
   return node;
 }
 

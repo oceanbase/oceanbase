@@ -225,14 +225,12 @@ void ObTmpFilePage::replace_node(ObTmpFilePage &other)
 
 void ObTmpFilePage::reset()
 {
+  // do not reset array_index_
   set_is_full(false);
   set_loading(false);
   ref_ = 0;
   page_id_.reset();
   page_key_.reset();
-  if (OB_NOT_NULL(buf_)) {
-    memset(buf_, 0, ObTmpFileGlobal::PAGE_SIZE);
-  }
 }
 
 int ObTmpFilePage::assign(const ObTmpFilePage &other)
