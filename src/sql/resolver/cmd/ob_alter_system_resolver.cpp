@@ -3734,7 +3734,11 @@ int ObAddArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
   LOG_WARN("not supported in CE version", KR(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
 #else
-  if (OB_UNLIKELY(T_ADD_ARBITRATION_SERVICE != parse_tree.type_)) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("add arbitration service in log service is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding arbitration service in log service mode is");
+  } else if (OB_UNLIKELY(T_ADD_ARBITRATION_SERVICE != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_ADD_ARBITRATION_SERVICE", "type", get_type_name(parse_tree.type_));
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
