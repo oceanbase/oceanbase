@@ -761,19 +761,21 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn &odps_colum
     if (ob_is_date_or_mysql_date(ob_type)) {
       is_match = true;
     }
-  } else if (odps_column.type_ == OdpsType::ARRAY && ObCollectionSQLType == ob_type) {
-    if (OB_ISNULL(array_helper) || OB_UNLIKELY(odps_column.child_columns_.count() != 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected argument", KP(array_helper), K(odps_column.child_columns_));
-    } else if (OB_FAIL(check_type_static(odps_column.child_columns_.at(0),
-                                               array_helper->element_type_,
-                                               array_helper->element_length_,
-                                               array_helper->element_precision_,
-                                               array_helper->element_scale_,
-                                               array_helper->child_helper_))) {
-      LOG_WARN("failed to chekc type static");
-    } else {
-      is_match = true;
+  } else if (odps_column.type_ == OdpsType::ARRAY) {
+    if (ObCollectionSQLType == ob_type) {
+      if (OB_ISNULL(array_helper) || OB_UNLIKELY(odps_column.child_columns_.count() != 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected argument", KP(array_helper), K(odps_column.child_columns_));
+      } else if (OB_FAIL(check_type_static(odps_column.child_columns_.at(0),
+                                                array_helper->element_type_,
+                                                array_helper->element_length_,
+                                                array_helper->element_precision_,
+                                                array_helper->element_scale_,
+                                                array_helper->child_helper_))) {
+        LOG_WARN("failed to chekc type static");
+      } else {
+        is_match = true;
+      }
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -4206,13 +4208,15 @@ int ObODPSJNITableRowIterator::print_predicate_string(const ObIArray<ObExpr*> &a
       } else if (WHITE_OP_NU == op_type || WHITE_OP_NN == op_type) {
         // always pushdown is [not] null
       } else if (WHITE_OP_IN == op_type) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < datums.count(); ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && can_pushdown && i < datums.count(); ++i) {
           const ObDatum &ref_datum = datums.at(i);
           int64_t pos = 0;
           if (OB_FAIL(white_filter.get_filter_node().get_filter_in_val_meta(i, obj_meta))) {
             LOG_WARN("failed to get filter in val meta");
           } else if (OB_FAIL(ref_datum.to_obj(obj, obj_meta))) {
             LOG_WARN("failed to convert datum to obj");
+          } else if (is_zero_time(obj)) {
+            can_pushdown = false;
           } else if (mirror_column->type_ == OdpsType::DATETIME && OB_FALSE_IT(obj.set_scale(0))) {
           } else if (OB_FAIL(obj.print_sql_literal(buf, length, pos, alloc, print_params))) {
             LOG_WARN("failed to print obj value");
@@ -4231,6 +4235,8 @@ int ObODPSJNITableRowIterator::print_predicate_string(const ObIArray<ObExpr*> &a
         int64_t pos = 0;
         if (OB_FAIL(ref_datum.to_obj(obj, obj_meta))) {
           LOG_WARN("failed to convert datum to obj");
+        } else if (is_zero_time(obj)) {
+          can_pushdown = false;
         } else if (mirror_column->type_ == OdpsType::DATETIME && OB_FALSE_IT(obj.set_scale(0))) {
         } else if (OB_FAIL(obj.print_sql_literal(buf, length, pos, alloc, print_params))) {
           LOG_WARN("failed to print obj value");
@@ -4252,12 +4258,14 @@ int ObODPSJNITableRowIterator::check_type_for_pushdown(const MirrorOdpsJniColumn
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  if (mirror_column.type_ == OdpsType::BOOLEAN) {
-    if (obj_meta.is_integer_type() &&
-        (WHITE_OP_EQ == cmp_type || WHITE_OP_NE == cmp_type)) {
-      is_valid = true;
-    }
-  } else if (mirror_column.type_ == OdpsType::TINYINT ||
+  // odps api can not pushdown BOOLEAN for now
+  // if (mirror_column.type_ == OdpsType::BOOLEAN) {
+  //   if (obj_meta.is_integer_type() &&
+  //       (WHITE_OP_EQ == cmp_type || WHITE_OP_NE == cmp_type)) {
+  //     is_valid = true;
+  //   }
+  // } else
+  if (mirror_column.type_ == OdpsType::TINYINT ||
              mirror_column.type_ == OdpsType::SMALLINT ||
              mirror_column.type_ == OdpsType::INT ||
              mirror_column.type_ == OdpsType::BIGINT) {
@@ -4313,6 +4321,33 @@ int ObODPSJNITableRowIterator::check_type_for_pushdown(const MirrorOdpsJniColumn
     }
   }
   return ret;
+}
+
+bool ObODPSJNITableRowIterator::is_zero_time(const ObObj &obj)
+{
+  bool is_zero = false;
+  if (obj.is_date()) {
+    if (obj.get_date() == ObTimeConverter::ZERO_DATE) {
+      is_zero = true;
+    }
+  } else if (obj.is_mysql_date()) {
+    if (obj.get_mysql_date() == ObTimeConverter::MYSQL_ZERO_DATE) {
+      is_zero = true;
+    }
+  } else if (obj.is_datetime()) {
+    if (obj.get_datetime() == ObTimeConverter::ZERO_DATETIME) {
+      is_zero = true;
+    }
+  } else if (obj.is_mysql_datetime()) {
+    if (obj.get_mysql_datetime() == ObTimeConverter::MYSQL_ZERO_DATETIME) {
+      is_zero = true;
+    }
+  } else if (obj.is_timestamp()) {
+    if (obj.get_timestamp() == ObTimeConverter::ZERO_DATETIME) {
+      is_zero = true;
+    }
+  }
+  return is_zero;
 }
 
 // =================== LONG FUNC END ==================================

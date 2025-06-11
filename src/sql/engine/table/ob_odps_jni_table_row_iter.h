@@ -345,6 +345,7 @@ private:
                               const ObObjMeta &obj_meta,
                               ObWhiteFilterOperatorType cmp_type,
                               bool &is_valid);
+  bool is_zero_time(const ObObj &obj);
 
 private:
   common::ObMemAttr mem_attr_;

@@ -2200,8 +2200,10 @@ int ObSelectIntoOp::recursive_fill_list_record(shared_ptr<apsara::odps::sdk::ODP
           // do nothing
         } else if (OB_ISNULL(buf) && res_len == 0) {
           odps_array->AppendNull();
-        } else {
+        } else if (apsara::odps::sdk::ODPS_VARCHAR == child_odps_type) {
           odps_array->AppendVarcharValue(std::string(buf, res_len));
+        } else {
+          odps_array->AppendStringValue(std::string(buf, res_len));
         }
       }
     }
