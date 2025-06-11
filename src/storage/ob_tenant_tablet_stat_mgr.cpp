@@ -193,13 +193,13 @@ ObTabletStat& ObTabletStat::archive(int64_t factor)
 const ObTableQueuingModeCfg& ObTableQueuingModeCfg::get_basic_config(const QueuingMode mode)
 {
   static const ObTableQueuingModeCfg QUEUING_MODE_CFG[static_cast<int64_t>(QueuingMode::TABLE_MODE_MAX) + 1] = {
-    ObTableQueuingModeCfg(30 * 10000, 1.0), // TABLE_MODE_NORMAL
-    ObTableQueuingModeCfg(20 * 10000, 0.9), // TABLE_MODE_QUEUING
-    ObTableQueuingModeCfg(30 * 10000, 1.0), // TABLE_MODE_PRIMARY_AUX_VP
-    ObTableQueuingModeCfg(10 * 10000, 0.8), // TABLE_MODE_QUEUING_MODERATE
-    ObTableQueuingModeCfg(5  * 10000, 0.6), // TABLE_MODE_QUEUING_SUPER
-    ObTableQueuingModeCfg(1000,       0.5), // TABLE_MODE_QUEUING_EXTREME
-    ObTableQueuingModeCfg(30 * 10000, 1.0), // TABLE_MODE_MAX
+    ObTableQueuingModeCfg(TABLE_MODE_NORMAL,           30 * 10000, 1.0), // TABLE_MODE_NORMAL
+    ObTableQueuingModeCfg(TABLE_MODE_QUEUING,          20 * 10000, 0.9), // TABLE_MODE_QUEUING
+    ObTableQueuingModeCfg(TABLE_MODE_NORMAL,           30 * 10000, 1.0), // TABLE_MODE_PRIMARY_AUX_VP
+    ObTableQueuingModeCfg(TABLE_MODE_QUEUING_MODERATE, 10 * 10000, 0.8), // TABLE_MODE_QUEUING_MODERATE
+    ObTableQueuingModeCfg(TABLE_MODE_QUEUING_SUPER,    5  * 10000, 0.6), // TABLE_MODE_QUEUING_SUPER
+    ObTableQueuingModeCfg(TABLE_MODE_QUEUING_EXTREME,  1000,       0.5), // TABLE_MODE_QUEUING_EXTREME
+    ObTableQueuingModeCfg(TABLE_MODE_NORMAL,           30 * 10000, 1.0), // TABLE_MODE_MAX
   };
   // NOTE: If update ObTableModeFlag, please also update QUEUING_MODE_CFG, otherwise complie/static assert error
   STATIC_ASSERT((static_cast<int64_t>(QueuingMode::TABLE_MODE_MAX) + 1) == ARRAYSIZEOF(QUEUING_MODE_CFG), "table mode cnt mismatch");
@@ -262,7 +262,9 @@ bool ObTabletStatAnalyzer::has_accumnulated_delete() const
   bool bret = false;
   if (is_queuing_table_mode(mode_)) {
     const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode_);
-    bret = total_tablet_stat_.delete_row_cnt_ >= queuing_cfg.total_delete_row_cnt_;
+    const int64_t adaptive_threshold = compaction::ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+    bret = total_tablet_stat_.delete_row_cnt_ >= queuing_cfg.total_delete_row_cnt_
+        || tablet_stat_.update_row_cnt_ + tablet_stat_.delete_row_cnt_ > adaptive_threshold;
   }
   return bret;
 }
@@ -542,6 +544,7 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
     report_cursor_(0),
     pending_cursor_(0),
     report_tg_id_(-1),
+    extreme_tablet_cnt_(0),
     is_inited_(false)
 {
 }
@@ -626,6 +629,7 @@ void ObTenantTabletStatMgr::reset()
     is_inited_ = false;
   }
   bucket_lock_.destroy();
+  extreme_tablet_cnt_ = 0;
   FLOG_INFO("ObTenantTabletStatMgr destroyed!");
 }
 
@@ -979,6 +983,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
   } else {
     ObBucketWLockAllGuard lock_guard(bucket_lock_);
     stream_cnt = stream_map_.size();
+    int64_t cur_extreme_table_cnt = 0;
     if (stream_cnt > 0) {
       ObSEArray<ObTabletID, 64> tablet_ids;
       ObSEArray<uint64_t, 64> table_ids;
@@ -1004,11 +1009,11 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
         iter = stream_map_.begin();
         ObTabletStreamNode *stream_node = nullptr;
         const ObSimpleTableSchemaV2 *table_schema = nullptr;
-        ObTableModeFlag tmp_mode_flag = TABLE_MODE_MAX;
         for (int64_t idx = 0; idx < stream_cnt && iter != stream_map_.end() && OB_SUCC(ret); ++idx, ++iter) {
           const ObTabletStatKey &key = iter->first;
           stream_node = iter->second;
           int64_t table_id = table_ids.at(idx);
+          ObTableModeFlag tmp_mode_flag = TABLE_MODE_MAX;
           if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
             LOG_WARN("failed to fetch table id from inner table, may be recycled or never exists, skip it");
           } else if (OB_UNLIKELY(key.tablet_id_ != tablet_ids.at(idx))) {
@@ -1031,6 +1036,9 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
           } else {
             stream_node->mode_ = tmp_mode_flag;
           }
+          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == tmp_mode_flag) {
+            cur_extreme_table_cnt++;
+          }
           // prevent hunging schema memory too long
           if (OB_SUCC(ret) && (idx+1) % MAX_SCHEMA_GUARD_REFRESH_CNT == 0) {
             schema_guard.reset();
@@ -1041,9 +1049,10 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
         }
       }
     }
+    extreme_tablet_cnt_ = cur_extreme_table_cnt; // replace udpate, prevent merge schedule thread see 0
   }
   cost_time = common::ObTimeUtility::current_time() - cost_time;
-  LOG_TRACE("refresh queuing mode", K(ret), K(tenant_id), K(stream_cnt), K(cost_time));
+  LOG_INFO("refresh queuing mode", K(ret), K(tenant_id), K(stream_cnt), K_(extreme_tablet_cnt), K(cost_time));
 }
 
 int ObTenantTabletStatMgr::get_queuing_mode(
@@ -1088,6 +1097,23 @@ int ObTenantTabletStatMgr::get_queuing_mode(
     LOG_WARN("failed to get table mode", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
+}
+
+bool ObTenantTabletStatMgr::is_extreme_tablet(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
+{
+  bool bret = false;
+  if (extreme_tablet_cnt_ > 0 && !tablet_id.is_special_merge_tablet()) {
+    int tmp_ret = OB_SUCCESS;
+    share::schema::ObTableModeFlag queuing_mode = TABLE_MODE_NORMAL;
+    if (OB_TMP_FAIL(get_queuing_mode(ls_id, tablet_id, queuing_mode))) {
+      LOG_WARN_RET(tmp_ret, "failed to get queuing mode");
+    } else if (TABLE_MODE_QUEUING_EXTREME == queuing_mode) {
+      bret = true;
+    }
+  }
+  return bret;
 }
 
 void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()

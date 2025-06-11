@@ -158,10 +158,6 @@ private:
   int add_sstable_for_merge(ObTabletMergeCtx &ctx);
   int try_set_upper_trans_version(ObTabletMergeCtx &ctx, const ObUpdateTableStoreParam &param);
   void try_schedule_other_compaction(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
-  int try_schedule_adaptive_merge(
-      ObTabletMergeCtx &ctx,
-      ObTabletHandle &tablet_handle,
-      bool &create_dag);
   int try_report_tablet_stat_after_mini(ObTabletMergeCtx &ctx);
   void report_checkpoint_info(ObTabletMergeCtx &ctx);
   void record_tx_data_info(ObTabletMergeCtx &ctx);

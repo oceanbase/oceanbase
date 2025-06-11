@@ -111,13 +111,17 @@ public:
   using QueuingMode = share::schema::ObTableModeFlag;
   ~ObTableQueuingModeCfg() = default;
   static const ObTableQueuingModeCfg& get_basic_config(const QueuingMode mode);
+  bool is_queuing_mode() const { return is_queuing_table_mode(mode_); }
+  TO_STRING_KV(K_(mode), K_(total_delete_row_cnt), K_(queuing_factor));
 private:
-  explicit ObTableQueuingModeCfg(int64_t delete_cnt, double factor)
-    :total_delete_row_cnt_(delete_cnt),
+  explicit ObTableQueuingModeCfg(QueuingMode mode, int64_t delete_cnt, double factor)
+    :mode_(mode),
+     total_delete_row_cnt_(delete_cnt),
      queuing_factor_(factor)
     {}
   DISALLOW_COPY_AND_ASSIGN(ObTableQueuingModeCfg);
 public:
+  QueuingMode mode_;
   int64_t total_delete_row_cnt_;
   double queuing_factor_;
 };
@@ -387,7 +391,9 @@ public:
   int get_queuing_mode(
       const storage::ObTablet &tablet,
       share::schema::ObTableModeFlag &queuing_mode);
+  bool is_extreme_tablet(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
   int64_t get_last_update_time() { return report_stat_task_.last_update_time_; }
+  bool contain_extreme_tablet() const { return extreme_tablet_cnt_ > 0; }
 private:
   class TabletStatUpdater : public common::ObTimerTask
   {
@@ -435,6 +441,7 @@ private:
   uint64_t report_cursor_;
   uint64_t pending_cursor_;
   int report_tg_id_;
+  int64_t extreme_tablet_cnt_;
   bool is_inited_;
 };
 

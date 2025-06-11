@@ -52,7 +52,7 @@ using namespace share;
 
 namespace storage
 {
-
+ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI);
 ObFastFreezeChecker::ObFastFreezeChecker()
   : enable_fast_freeze_(false)
 {
@@ -1442,6 +1442,14 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
           }
         }
 
+        if (MTL(ObTenantTabletStatMgr *)->is_extreme_tablet(ls_id, tablet_id)) {
+          bool unused_create_dag = false; // unused
+          if (OB_TMP_FAIL(ObTenantTabletScheduler::try_schedule_adaptive_merge(ls_handle, tablet_handle,
+                ObAdaptiveMergePolicy::SCHEDULE_META, 0 /*update_cnt*/, 0 /*delete_cnt*/, unused_create_dag))) {
+            LOG_WARN("failed to schedule tablet meta merge", K(tmp_ret), K(ls_id), K(tablet_id));
+          }
+        }
+
         if (OB_SUCC(ret)) {
           need_fast_freeze = false;
           if (!fast_freeze_checker_.need_check()) {
@@ -1954,6 +1962,112 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
     }
   } else {
     ret = OB_LS_LOCATION_LEADER_NOT_EXIST;
+  }
+  return ret;
+}
+
+#ifdef ERRSIM
+void ObTenantTabletScheduler::errsim_after_mini_schedule_adaptive(
+    const ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
+    bool &medium_is_cooling_down,
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &reason)
+{
+  int ret = OB_SUCCESS;
+  // ATTENTION !!!: 2 tracepoint can only hit one at once
+  #define SCHEDULE_META_MEDIUM_ERRSIM(tracepoint, cooling_down)              \
+    do {                                                                     \
+      if (OB_SUCC(ret)) {                                                    \
+        ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;                     \
+        if (OB_FAIL(ret)) {                                                  \
+          ret = OB_SUCCESS;                                                  \
+          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);                          \
+          reason = ObAdaptiveMergePolicy::TOMBSTONE_SCENE;                   \
+          medium_is_cooling_down = cooling_down;                             \
+        }                                                                    \
+      }                                                                      \
+    } while(0);
+  SCHEDULE_META_MEDIUM_ERRSIM(EN_COMPACTION_SCHEDULE_MEDIUM_MERGE_AFTER_MINI, false /*cooling_down*/);
+  SCHEDULE_META_MEDIUM_ERRSIM(EN_COMPACTION_SCHEDULE_META_MERGE, true /*cooling_down*/);
+  #undef SCHEDULE_META_MEDIUM_ERRSIM
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI)) {
+    reason = ObAdaptiveMergePolicy::NONE;
+    LOG_INFO("ERRSIM EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI: disable meta merge after mini", K(ret), K(ls_id), K(tablet_id));
+  }
+
+  bool is_tombstone_scene = ObAdaptiveMergePolicy::NONE != reason;
+  STORAGE_LOG(INFO, "try_schedule_adaptive_merge hit errsim", K(ret), K(is_tombstone_scene), K(medium_is_cooling_down));
+}
+#endif
+
+int ObTenantTabletScheduler::try_schedule_adaptive_merge(
+    ObLSHandle &ls_handle,
+    ObTabletHandle &tablet_handle,
+    const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
+    const int64_t update_row_cnt,
+    const int64_t delete_row_cnt,
+    bool &create_dag)
+{
+  int ret = OB_SUCCESS;
+  create_dag = false;
+  uint64_t compat_version = 0;
+  const ObTablet *tablet = nullptr;
+  bool medium_is_cooling_down = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+  } else if (not_compat_for_queuing_mode(compat_version)) {
+    // do nothing, buffer table opt (including meta major merge) only supported in version [4.2.1.5, 4.2.2) union [4.2.3, 4.3)
+    if (REACH_TENANT_TIME_INTERVAL(2 * 60 * 1000 * 1000L /*120s*/)) {
+      LOG_INFO("compat_version < 4.2.1.5 or 4.2.2 <= compat_version < 4.2.3, no need to schedule adaptive merge after mini", K(compat_version));
+    }
+  } else if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid() || !ObAdaptiveMergePolicy::need_schedule_meta(event))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_handle), K(event));
+  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+  } else if (ObAdaptiveMergePolicy::need_schedule_medium(event) && OB_FAIL(ObAdaptiveMergePolicy::check_medium_cooling_down(*tablet, medium_is_cooling_down))) {
+    LOG_WARN("failed to check medium cooling down", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
+    const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+    ObTableModeFlag mode = ObTableModeFlag::TABLE_MODE_NORMAL;
+    ObAdaptiveMergePolicy::AdaptiveMergeReason reason = ObAdaptiveMergePolicy::NONE;
+
+    if (OB_FAIL(ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
+        *ls_handle.get_ls(),
+        *tablet,
+        event,
+        update_row_cnt,
+        delete_row_cnt,
+        mode,
+        reason))) {
+      LOG_WARN("failed to check adaptive merge reason", K(ret), K(ls_handle), K(tablet_handle));
+#ifdef ERRSIM
+    } else if (ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event
+            && FALSE_IT(errsim_after_mini_schedule_adaptive(ls_id, tablet_id, event, medium_is_cooling_down, reason))) {
+#endif
+    } else if (ObAdaptiveMergePolicy::NONE == reason) {
+    } else if (ObAdaptiveMergePolicy::is_schedule_medium(mode) && ObAdaptiveMergePolicy::need_schedule_medium(event) && !medium_is_cooling_down) {
+      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_medium_merge(ls_handle, tablet_id, create_dag))) {
+        LOG_WARN_RET(tmp_ret, "failed to schedule medium merge for tablet after mini", K(ls_id), K(tablet_id));
+      }
+    } else if (ObAdaptiveMergePolicy::is_schedule_meta(mode)) {
+      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_meta_merge(ls_handle, tablet_handle, create_dag))) {
+        LOG_WARN_RET(tmp_ret, "failed to schedule meta merge for tablet", K(ls_id), K(tablet_id));
+      } else if (create_dag && ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_META == event) {
+         LOG_INFO("[Buffer-Opt] Try to schedule tablet meta merge background", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+
+    if (ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event) {
+      LOG_INFO("[Buffer-Opt] Try to schedule tablet medium/meta after mini", K(ret), K(tmp_ret), K(ls_id), K(tablet_id), "is_tombstone_scene", ObAdaptiveMergePolicy::NONE != reason,
+               "mode", table_mode_flag_to_str(mode), K(medium_is_cooling_down), K(event), K(update_row_cnt), K(delete_row_cnt), K(create_dag));
+    } else if (REACH_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+      LOG_INFO("Try schedule tablet adaptive merge", K(ret), K(tmp_ret), K(ls_id), K(tablet_id), "is_tombstone_scene", ObAdaptiveMergePolicy::NONE != reason, K(event), K(create_dag));
+    }
   }
   return ret;
 }
