@@ -661,11 +661,13 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
                                uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(tenant_id);
   common::ObArenaAllocator allocator;
   const pl::ObUserDefinedType *user_type = NULL;
   const ObUDTTypeInfo *udt_info = NULL;
   const int64_t type_id = field->accuracy_.get_accuracy();
-  if (OB_FAIL(schema_guard->get_udt_info(tenant_id, type_id, udt_info))) {
+  const uint64_t type_tenant_id = pl::get_tenant_id_by_object_id(type_id);
+  if (OB_FAIL(schema_guard->get_udt_info(type_tenant_id, type_id, udt_info))) {
     OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
   } else if (NULL == udt_info) {
     ret = OB_ERR_UNEXPECTED;
