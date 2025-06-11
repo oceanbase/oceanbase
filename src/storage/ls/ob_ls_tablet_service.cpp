@@ -3978,6 +3978,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
   ObTabletPointer *pointer = nullptr;
   ObTimeGuard time_guard("ObLSTabletService::build_ha_tablet_new_table_store", 1_s);
   ObTabletHandle new_tablet_handle;
+  bool is_old_tablet_empty_shell = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3999,6 +4000,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
     if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     } else if (old_tablet_handle.get_obj()->is_empty_shell()) {
+      is_old_tablet_empty_shell = true;
       LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet_handle.get_obj());
     } else if (OB_ISNULL(pointer = old_tablet_handle.get_obj()->get_pointer_handle().get_tablet_pointer())) {
       ret = OB_ERR_UNEXPECTED;
@@ -4053,7 +4055,9 @@ int ObLSTabletService::build_tablet_with_batch_tables(
 #ifdef OB_BUILD_SHARED_STORAGE
   // register upload task after HA tablet is built
   if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(register_all_sstables_upload_(new_tablet_handle))) {
+    if (is_old_tablet_empty_shell) {
+      // do nothing
+    } else if (OB_FAIL(register_all_sstables_upload_(new_tablet_handle))) {
       LOG_WARN("register sstables upload failed", KR(ret), K(tablet_id), K(param));
     }
   }
