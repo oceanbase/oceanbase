@@ -633,6 +633,69 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 10, total_meta_cnt);
 }
 
+TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
+{
+  LOG_INFO("TEST: start test_persist_micro_meta_task");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  const int64_t block_size = micro_cache->phy_blk_size_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhysicalBlockManager *phy_blk_mgr = &micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager *micro_meta_mgr = &micro_cache->get_micro_meta_mgr();
+
+  const int64_t WRITE_BLK_CNT = 50;
+  ObSSPhyBlockCommonHeader common_header;
+  ObSSMicroDataBlockHeader data_blk_header;
+  const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int32_t micro_cnt = 100;
+  const int32_t micro_size = (block_size - payload_offset) / micro_cnt - micro_index_size;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  ASSERT_NE(true, micro_cache->task_runner_.is_task_closed());
+
+  for (int64_t i = 0; i < WRITE_BLK_CNT; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
+    for (int32_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                            macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), false));
+      if(j % 10 == 0) {
+        micro_meta_handle.get_ptr()->mark_deleted();
+      }
+    }
+  }
+
+  ObTenantBase *tenant_base = MTL_CTX();
+  std::thread clear_mic_cache([&]( ) {
+    ob_usleep(78 * 1000L);
+    ObTenantEnv::set_tenant(tenant_base);
+    micro_cache->clear_micro_cache();
+  });
+
+  // persist micro meta
+  ObSSPersistMicroMetaTask* persist_meta_task = &micro_cache->task_runner_.persist_meta_task_;
+  // micro_cache->task_runner_.schedule_persist_meta_task(3600 * 1000 * 1000L);
+  persist_meta_task->cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000L);
+
+  persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  persist_meta_task->is_inited_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.check_state());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_ss_super_block(persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_));
+
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_micro_meta_checkpoint());
+  ASSERT_EQ(0, micro_meta_mgr->micro_meta_map_.count());
+
+  clear_mic_cache.join();
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
