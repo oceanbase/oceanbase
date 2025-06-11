@@ -1164,7 +1164,8 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
           }
         } else if (last_end_lsn > current_end_lsn) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("last end log ts should not smaller than current end log ts", K(ret), K(last_end_lsn), K(current_end_lsn));
+          LOG_WARN("last end log lsn should not smaller than current end log lsn, maybe do flashback",
+              K(ret), K(last_end_lsn), K(current_end_lsn));
         } else {
           last_end_lsn = current_end_lsn;
           last_wait_replay_ts = ObTimeUtility::current_time();
