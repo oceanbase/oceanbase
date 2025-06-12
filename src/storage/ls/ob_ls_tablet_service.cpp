@@ -1568,7 +1568,8 @@ int ObLSTabletService::update_tablet_snapshot_version(
 int ObLSTabletService::update_tablet_restore_status(
     const common::ObTabletID &tablet_id,
     const ObTabletRestoreStatus::STATUS &restore_status,
-    const bool need_reset_transfer_flag)
+    const bool need_reset_transfer_flag,
+    const bool need_to_set_split_data_complete)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -1596,7 +1597,7 @@ int ObLSTabletService::update_tablet_restore_status(
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletHandle new_tablet_handle;
     const bool current_has_transfer_table = tablet->tablet_meta_.has_transfer_table();
-
+    const bool current_split_data_incomplete_status = tablet->tablet_meta_.split_info_.is_data_incomplete();
     if (OB_FAIL(tablet->tablet_meta_.ha_status_.get_restore_status(current_status))) {
       LOG_WARN("failed to get restore status", K(ret), KPC(tablet));
     } else if (OB_FAIL(ObTabletRestoreStatus::check_can_change_status(current_status, restore_status, can_change))) {
@@ -1608,6 +1609,8 @@ int ObLSTabletService::update_tablet_restore_status(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status), KPC(tablet));
     } else if (need_reset_transfer_flag
                && OB_FALSE_IT((void)tablet->tablet_meta_.reset_transfer_table())) {
+    } else if (need_to_set_split_data_complete
+               && OB_FALSE_IT((void)tablet->tablet_meta_.split_info_.set_data_incomplete(false))) {
     } else {
       // TODO(jiahua.cjh) move check valid to tablet init after generate new version tablet.
       const ObTabletPersisterParam param(ls_->get_ls_id(), ls_->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
@@ -1637,6 +1640,7 @@ int ObLSTabletService::update_tablet_restore_status(
         } else if (need_reset_transfer_flag) { //rollback has_transfer_table
           tablet->tablet_meta_.transfer_info_.has_transfer_table_ = current_has_transfer_table;
         }
+        tablet->tablet_meta_.split_info_.set_data_incomplete(current_split_data_incomplete_status);
       }
     }
   }

@@ -1119,9 +1119,10 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
       } else if (ObTabletRestoreStatus::STATUS::FULL != des_restore_status) {
           //do nothing
       } else if (OB_FAIL(ls->get_tablet_svr()->update_tablet_restore_status(t_id,
-          ObTabletRestoreStatus::STATUS::EMPTY, false/* need reset transfer flag */))) {
+          ObTabletRestoreStatus::STATUS::EMPTY, false/* need reset transfer flag */, true/*need_to_set_split_data_complete*/))) {
         LOG_WARN("failed to update tablet restore status", K(ret), KPC(tablet));
       } else {
+        (void) ls->get_ls_restore_handler()->try_record_one_tablet_to_restore(t_id);
         LOG_INFO("modify tablet restore status", K(tablet->get_tablet_id()), "old status", des_restore_status, "new status", ObTabletRestoreStatus::STATUS::EMPTY);
       }
     }

@@ -439,7 +439,8 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
         // UNDEFINED.
         if (OB_FAIL(ls->update_tablet_restore_status(tablet_info.tablet_id_,
                                                      ObTabletRestoreStatus::STATUS::UNDEFINED,
-                                                     true/* need reset transfer flag */))) {
+                                                     true/* need reset transfer flag */,
+                                                     false/*need_to_set_split_data_complete*/))) {
           LOG_WARN("failed to update tablet restore status to UNDEFINED", K(ret), K(tablet_info));
         } else {
           LOG_INFO("update tablet restore status to UNDEFINED", K(tablet_info));
