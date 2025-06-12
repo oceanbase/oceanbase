@@ -3096,24 +3096,30 @@ int ObRawExprResolverImpl::mock_set_type_info(common::ObIAllocator &allocator, O
 {
   int ret = OB_SUCCESS;
   void *mem = NULL;
-  const uint64_t effective_count = 64;
-  const uint64_t element_num = effective_count - static_cast<uint64_t>(__builtin_clzll(element_val));
-  ObString element_str = ObString();
-  for (int64_t i = 0; OB_SUCC(ret) && i < element_num && i < effective_count; ++i) {
-    if (i == element_num - 1) { //last set element
-      element_str = string;
-    } else if (element_val & 1U) { //this bit has set element
-      element_str = string.split_on(',');
-    } else { //this bit does not have set element
-      element_str = ObString(0, NULL);
+  if (element_val == 0) {
+    if (OB_FAIL(type_info.push_back(ObString(0, NULL)))) {
+      LOG_WARN("fail to push back info", K(ret));
     }
-    ObString temp_str;
-    if (OB_FAIL(ob_write_string(allocator, element_str, temp_str))) {
-      LOG_WARN("fail to write string", K(ret), K(string));
-    } else if (OB_FAIL(type_info.push_back(temp_str))) {
-      LOG_WARN("fail to push back info", K(ret), K(temp_str));
+  } else {
+    const int64_t effective_count = 64;
+    const int64_t element_num = effective_count - static_cast<int64_t>(__builtin_clzll(element_val));
+    ObString element_str = ObString();
+    for (int64_t i = 0; OB_SUCC(ret) && i < element_num && i < effective_count; ++i) {
+      if (i == element_num - 1) { //last set element
+        element_str = string;
+      } else if (element_val & 1U) { //this bit has set element
+        element_str = string.split_on(',');
+      } else { //this bit does not have set element
+        element_str = ObString(0, NULL);
+      }
+      ObString temp_str;
+      if (OB_FAIL(ob_write_string(allocator, element_str, temp_str))) {
+        LOG_WARN("fail to write string", K(ret), K(string), K(i));
+      } else if (OB_FAIL(type_info.push_back(temp_str))) {
+        LOG_WARN("fail to push back info", K(ret), K(temp_str), K(i));
+      }
+      OX (element_val >>= 1);
     }
-    OX (element_val >>= 1);
   }
   return ret;
 }
