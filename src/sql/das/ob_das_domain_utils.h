@@ -72,17 +72,51 @@ public:
       doc_word_table_id_(OB_INVALID_ID),
       doc_word_ls_id_(),
       doc_word_tablet_id_(),
-      snapshot_(nullptr),
+      snapshot_(),
       doc_word_schema_version_(),
       doc_word_found_(false)
   {}
   ~ObFTDocWordInfo() = default;
+  ObFTDocWordInfo(const ObFTDocWordInfo &src)
+    : table_id_(src.table_id_),
+      doc_word_table_id_(src.doc_word_table_id_),
+      doc_word_ls_id_(src.doc_word_ls_id_),
+      doc_word_tablet_id_(src.doc_word_tablet_id_),
+      snapshot_(),
+      doc_word_schema_version_(src.doc_word_schema_version_),
+      doc_word_found_(src.doc_word_found_)
+  {
+    snapshot_.valid_ = src.snapshot_.valid_;
+    snapshot_.committed_ = src.snapshot_.committed_;
+    snapshot_.core_ = src.snapshot_.core_;
+    snapshot_.source_ = src.snapshot_.source_;
+    snapshot_.snapshot_lsid_ = src.snapshot_.snapshot_lsid_;
+    snapshot_.snapshot_ls_role_ = src.snapshot_.snapshot_ls_role_;
+    snapshot_.snapshot_acquire_addr_ = src.snapshot_.snapshot_acquire_addr_;
+  }
 
+  ObFTDocWordInfo &operator=(const ObFTDocWordInfo &src)
+  {
+      table_id_ =src.table_id_;
+      doc_word_table_id_ = src.doc_word_table_id_;
+      doc_word_ls_id_ = src.doc_word_ls_id_;
+      doc_word_tablet_id_ = src.doc_word_tablet_id_;
+      doc_word_schema_version_ = src.doc_word_schema_version_;
+      doc_word_found_ = src.doc_word_found_;
+      snapshot_.valid_ = src.snapshot_.valid_;
+      snapshot_.committed_ = src.snapshot_.committed_;
+      snapshot_.core_ = src.snapshot_.core_;
+      snapshot_.source_ = src.snapshot_.source_;
+      snapshot_.snapshot_lsid_ = src.snapshot_.snapshot_lsid_;
+      snapshot_.snapshot_ls_role_ = src.snapshot_.snapshot_ls_role_;
+      snapshot_.snapshot_acquire_addr_ = src.snapshot_.snapshot_acquire_addr_;
+      return *this;
+  }
   TO_STRING_KV(K_(table_id),
                K_(doc_word_table_id),
                K_(doc_word_ls_id),
                K_(doc_word_tablet_id),
-               KPC_(snapshot),
+               K_(snapshot),
                K_(doc_word_schema_version),
                K_(doc_word_found));
 public:
@@ -90,7 +124,7 @@ public:
   uint64_t doc_word_table_id_;
   share::ObLSID doc_word_ls_id_;
   common::ObTabletID doc_word_tablet_id_;
-  const transaction::ObTxReadSnapshot *snapshot_;
+  transaction::ObTxReadSnapshot snapshot_;
   int64_t doc_word_schema_version_;
   bool doc_word_found_;
 };
@@ -141,6 +175,7 @@ public:
 
   static int build_ft_doc_word_infos(
       const share::ObLSID &ls_id,
+      const transaction::ObTxDesc *trans_desc,
       const transaction::ObTxReadSnapshot *snapshot,
       const common::ObIArray<const ObDASBaseCtDef *> &related_ctdef,
       const common::ObIArray<common::ObTabletID> &related_tablet_ids,

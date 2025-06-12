@@ -118,7 +118,7 @@ int ObDASDeleteOp::open_op()
   del_adaptor.related_tablet_ids_ = &related_tablet_ids_;
   del_adaptor.das_allocator_ = &op_alloc_;
   del_adaptor.ft_doc_word_infos_ = &doc_word_infos;
-  if (OB_FAIL(ObDASDomainUtils::build_ft_doc_word_infos(ls_id_, snapshot_, related_ctdefs_, related_tablet_ids_,
+  if (OB_FAIL(ObDASDomainUtils::build_ft_doc_word_infos(ls_id_, trans_desc_, snapshot_, related_ctdefs_, related_tablet_ids_,
           del_ctdef_->is_main_table_in_fts_ddl_, doc_word_infos))) {
     LOG_WARN("fail to build fulltext doc word infos", K(ret), K(ls_id_), KPC(snapshot_), K(related_ctdefs_),
         K(related_tablet_ids_));
