@@ -2467,6 +2467,22 @@ int ObPL::execute(ObExecContext &ctx,
       }
       // if the routine comes from local, guard needn't to manage it.
       if (OB_FAIL(ret)) {
+        if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+          int tmp_ret = ret;
+          const ObTriggerInfo *trg_info = NULL;
+          const ObDatabaseSchema *database_schema = NULL;
+          ret = 0;
+          ObSqlString &err_msg = ctx.get_my_session()->get_pl_exact_err_msg();
+          OZ (err_msg.append_fmt("\nerror during execution of trigger "));
+          OZ (ctx.get_sql_ctx()->schema_guard_->get_trigger_info(MTL_ID(), ObTriggerInfo::get_package_trigger_id(package_id),
+                                                                 trg_info));
+          OZ (ctx.get_sql_ctx()->schema_guard_->get_database_schema(MTL_ID(), trg_info->get_database_id(), database_schema));
+          OZ (err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(), database_schema->get_database_name_str().ptr()));
+          OZ (err_msg.append_fmt("%.*s", trg_info->get_trigger_name().length(), trg_info->get_trigger_name().ptr()));
+          if (OB_SUCC(ret)) {
+            ret = tmp_ret;
+          }
+        }
       } else if (OB_NOT_NULL(local_routine)) {
         routine = local_routine;
       } else {
