@@ -1666,7 +1666,8 @@ public:
   int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
   // returns true when user defined primary key is given
   int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
-  int get_heap_table_pk(ObIArray<uint64_t> &pk_ids) const;
+  int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
