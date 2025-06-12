@@ -1375,7 +1375,7 @@ int ObTabletSplitWriteTask::check_and_cast_high_bound(
         void *buf = nullptr;
         if (col_desc.col_type_.is_timestamp_ltz()) {
           /*need to convert the high bound from timestamp_tz to timestamp_ltz*/
-          if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObOTimestampTinyData)))) {
+          if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObObj)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocat memory for storage datum", K(ret));
           } else {
