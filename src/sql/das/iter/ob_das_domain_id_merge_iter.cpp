@@ -291,10 +291,14 @@ int ObDASDomainIdMergeIter::inner_get_next_row()
     LOG_WARN("unexpected error, data table iter is nullptr", K(ret), KP(data_table_iter_));
   } else if (!need_filter_rowkey_domain_) {
     if (OB_FAIL(concat_row())) {
-      LOG_WARN("fail to concat data table and rowkey domain row", K(ret));
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to concat data table and rowkey domain row", K(ret));
+      }
     }
   } else if (OB_FAIL(sorted_merge_join_row())) {
-    LOG_WARN("fail to sorted merge join data table and rowkey domain row", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to sorted merge join data table and rowkey domain row", K(ret));
+    }
   }
   LOG_TRACE("inner get next row", K(ret));
   return ret;

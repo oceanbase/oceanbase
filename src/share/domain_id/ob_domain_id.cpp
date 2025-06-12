@@ -698,5 +698,67 @@ int ObDomainIdUtils::get_pq_cids_col_id(
   return ret;
 }
 
+int ObDomainIdUtils::resort_domain_info_by_base_cols(
+    sql::ObSqlSchemaGuard &sql_schema_guard,
+    const ObTableSchema &table_schema,
+    const ObIArray<uint64_t> &base_col_ids,
+    ObIArray<int64_t> &domain_types,
+    ObIArray<uint64_t> &domain_tids) {
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 16> tmp_domain_types;
+  ObSEArray<uint64_t, 16> tmp_domain_tids;
+  if (OB_FAIL(tmp_domain_types.prepare_allocate(base_col_ids.count()))) {
+    LOG_WARN("fail to reserve space", K(ret), K(base_col_ids.count()));
+  } else if (OB_FAIL(tmp_domain_tids.prepare_allocate(base_col_ids.count()))) {
+    LOG_WARN("fail to reserve space", K(ret), K(base_col_ids.count()));
+  } else {
+    for (int i = 0; i < base_col_ids.count(); ++i) {
+      tmp_domain_types[i] = -1;
+      tmp_domain_tids[i] = 0;
+    }
+  }
+
+  DomainIdxs col_ids;
+  int64_t idx = OB_INVALID_INDEX;
+  int64_t sort_cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < domain_types.count(); i++) {
+    col_ids.reuse();
+    ObDomainIdUtils::ObDomainIDType type = static_cast<ObDomainIdUtils::ObDomainIDType>(domain_types.at(i));
+    if (OB_FAIL(ObDomainIdUtils::get_domain_id_col_by_tid(type, &table_schema, &sql_schema_guard, domain_tids.at(i), col_ids))) {
+      LOG_WARN("fail to get domain id col id", K(ret), K(type), K(table_schema));
+    } else if (is_contain(col_ids, OB_INVALID_ID) || col_ids.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid domain id col id", K(ret), K(type), K(table_schema));
+    } else if (has_exist_in_array(base_col_ids, col_ids.at(0), &idx)) {
+      tmp_domain_types[idx] = domain_types.at(i);
+      tmp_domain_tids[idx] = domain_tids.at(i);
+      ++sort_cnt;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (sort_cnt != domain_types.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of domain_types should be equal to sort_cnt", K(ret), K(sort_cnt), K(domain_types.count()));
+    }
+
+    int real_pos = 0;
+    for (int i = 0; OB_SUCC(ret) && i < base_col_ids.count(); ++i) {
+      if (tmp_domain_types[i] != -1) {
+        if (real_pos >= domain_types.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pos of domain_types", K(ret), K(i), K(real_pos), K(domain_types.count()));
+        } else {
+          domain_types.at(real_pos) = tmp_domain_types[i];
+          domain_tids.at(real_pos) = tmp_domain_tids[i];
+          ++real_pos;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 }
 }
