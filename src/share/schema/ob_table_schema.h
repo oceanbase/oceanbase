@@ -894,16 +894,19 @@ public:
   inline bool is_queuing_table() const
   { return is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
   // returns true when the primary key in ob contains the hidden column
+  // 返回true: HEAP模式下任意表和index模式的无主键表
   inline bool is_table_with_hidden_pk_column() const
   { return (TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ ||
            (TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ &&
             TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_)); }
   // returns true when ob considers the table does not have the user provided primary key and use the
   // hidden pk as ob's primary key
+  // 返回true: 用户没指定主键（IOT模式）或者cluster by列（HEAP模式）
   inline bool is_table_without_pk() const
   { return TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
   // returns true when ob considers the table has the user provided primary key (order by columns
   // in the heap organized table and primary key columns in the index organized table)
+  // 返回true: 用户明确指定了主键（IOT模式）或者cluster by列（HEAP模式）
   inline bool is_table_with_pk() const
   { return TOM_TABLE_WITH_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
   // returns true when users define the table organization as heap (by tenant config or table option)
@@ -1728,7 +1731,9 @@ public:
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
   int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
   // returns true when user defined primary key is given
+  // 返回true: 用户明确指定了主键列（IOT模式和HEAP模式）；
   int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
+  // 返回用户指定的主键列（IOT模式和HEAP模式）；
   int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
