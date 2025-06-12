@@ -104,6 +104,8 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
   force_schedule_medium_merge = false;
   ObTablet &tablet = *tablet_handle_.get_obj();
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const bool is_create_as_split_dst = tablet.get_tablet_meta().split_info_.get_split_src_tablet_id().is_valid();
+  const int64_t create_schema_version = tablet.get_tablet_meta().create_schema_version_;
   int64_t schedule_snapshot = 0;
   bool schedule_with_newer_info = false;
   const int64_t scheduler_frozen_version = MERGE_SCHEDULER_PTR->get_frozen_version();
@@ -144,6 +146,12 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
       force_schedule_medium_merge = true;
       FLOG_INFO("schema version in freeze info is too small, try to schedule medium compaction instead", K(ret),
                 K(tablet_id), K(last_sstable_schema_version), K(freeze_info));
+      break;
+    } else if (OB_UNLIKELY(is_create_as_split_dst && freeze_info.schema_version_ < create_schema_version)) {
+      medium_info.is_skip_tenant_major_ = true;
+      force_schedule_medium_merge = true;
+      FLOG_INFO("schema version in freeze info is smaller than split dst tablet create schema version, skip", K(ret), K(tablet_id),
+          K(create_schema_version), K(freeze_info));
       break;
     } else if (OB_FAIL(get_table_schema_to_merge(*schema_service,
                                                  tablet,
