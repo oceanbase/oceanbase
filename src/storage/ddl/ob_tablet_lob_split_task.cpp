@@ -1585,7 +1585,7 @@ int ObTabletLobWriteDataTask::create_sstables(
       // build lost mds sstable into tablet.
       ObTableHandleV2 mds_table_handle;
       ObTablesHandleArray mds_sstables_handle;
-      if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
+      if (OB_FAIL(ObTabletSplitUtil::build_mds_sstable(
             build_mds_arena,
             ctx_->ls_handle_,
             ctx_->lob_meta_tablet_handle_,
