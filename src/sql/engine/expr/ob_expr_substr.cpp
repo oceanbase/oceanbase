@@ -464,7 +464,7 @@ int ObExprSubstr::substr(common::ObString &varchar,
       } else {
         if (do_ascii_optimize_check) { // ObCharsetType is CHARSET_UTF8MB4 or CHARSET_GBK
           res_len = min(length, varchar.length() - start);
-          is_ascii = storage::is_ascii_str(varchar.ptr() + start, res_len);
+          is_ascii = storage::is_ascii_str(varchar.ptr(), start + res_len);
         }
         if (is_ascii) {
           varchar.assign_ptr(varchar.ptr() + start, static_cast<int32_t>(res_len));
