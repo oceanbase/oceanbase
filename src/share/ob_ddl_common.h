@@ -245,7 +245,8 @@ enum ObSplitSSTableType
 {
   SPLIT_BOTH = 0, // Major and Minor
   SPLIT_MAJOR = 1,
-  SPLIT_MINOR = 2
+  SPLIT_MINOR = 2,
+  SPLIT_MDS = 3
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {

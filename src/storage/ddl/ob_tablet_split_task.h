@@ -103,10 +103,11 @@ public:
   ~ObTabletSplitCtx();
   int init(const ObTabletSplitParam &param);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_split_ranges), K_(complement_data_ret),
+  TO_STRING_KV(
+    K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_split_ranges), K_(complement_data_ret),
     K_(skipped_split_major_keys), K_(split_point_major_macros), K_(split_point_minor_macros),
     K_(parallel_cnt_of_each_sstable), K_(split_scn), K_(row_inserted),
-    K_(physical_row_count), K_(reorg_scn), K(ls_rebuild_seq_)
+    K_(physical_row_count), K_(split_scn), K_(reorg_scn), K(ls_rebuild_seq_)
 #ifdef OB_BUILD_SHARED_STORAGE
     , K_(is_data_split_executor)
 #endif
@@ -411,8 +412,9 @@ class ObSplitDownloadSSTableTask final : public share::ObITask
 public:
   ObSplitDownloadSSTableTask()
     : ObITask(TASK_TYPE_DDL_SPLIT_DOWNLOAD_SSTABLE),
-      is_inited_(false), source_tablet_id_(), dest_tablets_id_(),
-      can_reuse_macro_block_(false), dest_reorg_scn_()
+      is_inited_(false), ls_rebuild_seq_(-1), ls_id_(),
+      source_tablet_id_(), dest_tablets_id_(), can_reuse_macro_block_(false),
+      dest_reorg_scn_()
     { }
   virtual ~ObSplitDownloadSSTableTask() = default;
   int init(
@@ -425,18 +427,27 @@ public:
   int prewarm(ObLSHandle &ls_handle);
   static int prewarm_for_split(const ObTabletHandle &dest_tablet_handle,
                                ObSSTable &sstable);
-  static int prewarm_split_point_macro_if_need(const int64_t dest_tablet_id,
-                                               const ObSSTable &dest_sstable,
-                                               const ObIArray<ObMacroEndKey> &dest_macro_ranges/*fist and last macro of dest sstable if any*/);
-  static int iterate_macros_update_eff_id(const ObTabletID &dest_tablet_id, ObDualMacroMetaIterator &meta_iter, ObIArray<ObMacroEndKey> &dest_macro_end_keys, ObIAllocator &allocator);
-  static int iterate_micros_update_eff_id(const ObTabletID &dest_tablet_id, ObMicroBlockIndexIterator &micro_iter);
   static int is_split_dest_sstable(const ObSSTable &sstable, bool &is_split_dest_sstable);
   virtual int process() override;
 private:
+  static int prewarm_split_point_macro_if_need(
+      const int64_t dest_tablet_id,
+      const ObSSTable &dest_sstable,
+      const ObIArray<ObMacroEndKey> &dest_macro_ranges/*fist and last macro of dest sstable if any*/);
+  static int iterate_macros_update_eff_id(
+      const ObTabletID &dest_tablet_id,
+      ObDualMacroMetaIterator &meta_iter,
+      ObIArray<ObMacroEndKey> &dest_macro_end_keys,
+      ObIAllocator &allocator);
+  static int iterate_micros_update_eff_id(
+      const ObTabletID &dest_tablet_id,
+      ObMicroBlockIndexIterator &micro_iter);
+private:
   int collect_split_sstables(
-      ObIAllocator &allocator,
+      ObArenaAllocator &allocator,
       const share::ObSplitSSTableType &split_sstable_type,
-      const ObTableStoreIterator &table_store_iterator,
+      const ObTableStoreIterator &ss_table_store_iterator,
+      const ObTabletHandle &local_tablet_handle,
       ObTablesHandleArray &batch_sstables_handle);
   int download_sstables_and_update_local(
       ObLSHandle &new_ls_handle,

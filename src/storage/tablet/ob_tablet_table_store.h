@@ -227,7 +227,8 @@ public:
       common::ObArenaAllocator &allocator,
       ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const share::SCN &split_start_scn);
   const blocksstable::ObMajorChecksumInfo &get_major_ckm_info() const { return major_ckm_info_; }
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
@@ -451,13 +452,16 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const share::SCN &split_start_scn);
   int build_split_minor_tables_(
+      const bool is_shared_storage_mode,
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       const int64_t inc_base_snapshot_version,
-      const ObTabletHAStatus &ha_status);
+      const ObTabletHAStatus &ha_status,
+      const share::SCN &split_start_scn);
 
   int inner_replace_sstables(
       common::ObArenaAllocator &allocator,

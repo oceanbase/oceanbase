@@ -1164,7 +1164,8 @@ int ObTablet::init_for_sstable_replace(
     LOG_WARN("fail to pull memtable", K(ret));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
-  } else if (is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_split_new_table_store(allocator, *this, param, *old_table_store))) {
+  } else if (is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_split_new_table_store(
+      allocator, *this, param, *old_table_store, tablet_meta_.split_info_.get_split_start_scn()))) {
     LOG_WARN("failed to init split tablet table store", K(ret), K(old_tablet));
   } else if (!is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_ha_new_table_store(allocator, *this, param, *old_table_store))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));

@@ -35,6 +35,79 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::compaction;
 
+int ObTabletSplitUtil::check_split_minors_can_be_accepted(
+    const bool is_shared_storage_mode,
+    const share::SCN &split_start_scn,
+    const ObSSTableArray &old_store_minors,
+    const ObIArray<ObITable *> &tables_array,
+    share::ObScnRange &new_input_range,
+    share::ObScnRange &old_store_range)
+{
+  int ret = OB_SUCCESS;
+  new_input_range.reset();
+  old_store_range.reset();
+  const int64_t old_store_minors_cnt = old_store_minors.count();
+  if (OB_UNLIKELY(!split_start_scn.is_valid() || tables_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(split_start_scn), K(tables_array));
+  } else {
+    new_input_range.start_scn_ = tables_array.at(0)->get_start_scn();
+    new_input_range.end_scn_ = tables_array.at(tables_array.count() - 1)->get_end_scn();
+    old_store_range.start_scn_ = old_store_minors_cnt == 0 ? split_start_scn : old_store_minors[0]->get_start_scn();
+    old_store_range.end_scn_ = old_store_minors_cnt == 0 ? split_start_scn : old_store_minors[old_store_minors_cnt - 1]->get_end_scn();
+    if (OB_UNLIKELY(!new_input_range.is_valid() || !old_store_range.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected scn_range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+    } else if (OB_UNLIKELY(split_start_scn < old_store_range.start_scn_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected old_store range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+    } else if (split_start_scn == old_store_range.start_scn_) { // update firstly.
+      if (!is_shared_storage_mode) { // SN.
+        if (OB_LIKELY(new_input_range.start_scn_ <= split_start_scn
+                   && new_input_range.end_scn_ == split_start_scn
+                   && new_input_range.end_scn_ <= old_store_range.end_scn_)) {
+          LOG_TRACE("expected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        }
+      } else { // SS.
+        if (OB_LIKELY(new_input_range.start_scn_ <= split_start_scn
+                   && new_input_range.end_scn_ >= split_start_scn
+                   && new_input_range.end_scn_ <= old_store_range.end_scn_)) {
+          LOG_TRACE("expected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        }
+      }
+    } else { // split_start_scn > old_store_range.start_scn_, update repeatedly.
+      if (!is_shared_storage_mode) { // SN.
+        if (OB_LIKELY(new_input_range.start_scn_ >= old_store_range.start_scn_
+                   && new_input_range.start_scn_ <= split_start_scn
+                   && new_input_range.end_scn_ == split_start_scn
+                   && new_input_range.end_scn_ <= old_store_range.end_scn_)) {
+          LOG_TRACE("expected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        }
+      } else { // SS.
+        if (OB_LIKELY(new_input_range.start_scn_ == old_store_range.start_scn_
+                   && new_input_range.start_scn_ <= split_start_scn
+                   && new_input_range.end_scn_ >= split_start_scn
+                   && new_input_range.end_scn_ <= old_store_range.end_scn_)) {
+          LOG_TRACE("expected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected scn range", K(ret), K(split_start_scn), K(new_input_range), K(old_store_range));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletSplitUtil::get_tablet(
     common::ObArenaAllocator &allocator,
     const ObLSHandle &ls_handle,
@@ -118,42 +191,34 @@ int ObTabletSplitUtil::get_participants(
         } else {
           LOG_INFO("skip table", K(ret), KPC(table));
         }
+      } else if (OB_UNLIKELY(!table->is_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(table));
       } else if (is_contain(skipped_table_keys, table->get_key())) {
         FLOG_INFO("no need to split for the table", "table_key", table->get_key(), K(skipped_table_keys));
       } else if (table->is_minor_sstable()) {
-        if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
-          // Split with major only.
-        } else if (OB_FAIL(participants.push_back(table))) {
-          LOG_WARN("push back failed", K(ret));
-        }
-      } else if (table->is_major_sstable()) {
-        if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type) {
-          // Split with minor only.
-        } else if (OB_FAIL(participants.push_back(table))) {
-          LOG_WARN("push back major failed", K(ret));
-        }
-      } else {
-        if (!table->is_sstable()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret), KPC(table));
-        } else if (table->is_minor_sstable()) {
-          if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
-            // Split with major only.
-          } else if (OB_FAIL(participants.push_back(table))) {
+        if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type
+            || share::ObSplitSSTableType::SPLIT_BOTH == split_sstable_type) {
+          if (OB_FAIL(participants.push_back(table))) {
             LOG_WARN("push back failed", K(ret));
           }
-        } else if (table->is_major_sstable()) {
-          if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type) {
-            // Split with minor only.
-          } else if (OB_FAIL(participants.push_back(table))) {
+        }
+      } else if (table->is_major_sstable()) {
+        if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type
+          || share::ObSplitSSTableType::SPLIT_BOTH == split_sstable_type) {
+          if (OB_FAIL(participants.push_back(table))) {
             LOG_WARN("push back major failed", K(ret));
           }
-        } else if (table->is_mds_sstable()) {
-          // skip
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret), KPC(table));
         }
+      } else if (table->is_mds_sstable()) {
+        if (share::ObSplitSSTableType::SPLIT_MDS == split_sstable_type) {
+          if (OB_FAIL(participants.push_back(table))) {
+            LOG_WARN("push back mds failed", K(ret));
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown table type", K(ret), KPC(table));
       }
     }
   }
@@ -766,7 +831,6 @@ int ObTabletSplitUtil::build_mds_sstable(
   return ret;
 }
 
-
 int ObTabletSplitUtil::check_and_build_mds_sstable_merge_ctx(
     const ObLSHandle &ls_handle,
     const ObTabletHandle &dest_tablet_handle,
@@ -775,15 +839,13 @@ int ObTabletSplitUtil::check_and_build_mds_sstable_merge_ctx(
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_service = nullptr;
-  share::SCN end_scn;
-  share::SCN rec_scn;
+  share::SCN end_scn = reorganization_scn; // split_start_scn.
+  share::SCN rec_scn = reorganization_scn; // split_start_scn.
   if (OB_UNLIKELY(!ls_handle.is_valid()
       || !dest_tablet_handle.is_valid()
       || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(reorganization_scn), K(ls_handle), K(dest_tablet_handle));
-  } else if (OB_FAIL(check_and_determine_mds_rec_and_end_scn(dest_tablet_handle, end_scn, rec_scn))) {
-    LOG_WARN("get mds sstable start scn failed", K(ret), K(dest_tablet_handle));
   } else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(dest_tablet_handle))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(dest_tablet_handle));
   } else {
@@ -813,38 +875,6 @@ int ObTabletSplitUtil::check_and_build_mds_sstable_merge_ctx(
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_handle), K(dest_tablet_handle), K(tablet_merge_ctx));
     }
   }
-  return ret;
-}
-
-int ObTabletSplitUtil::check_and_determine_mds_rec_and_end_scn(
-    const ObTabletHandle &dest_tablet_handle,
-    share::SCN &end_scn,
-    share::SCN &rec_scn)
-{
-  int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
-  ObITable *first_mds_sstable = nullptr;
-  ObTableStoreIterator table_store_iterator;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (OB_UNLIKELY(!dest_tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(dest_tablet_handle));
-  } else if (OB_ISNULL(tablet = dest_tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be nullptr", K(ret), K(dest_tablet_handle));
-  } else if (OB_FAIL(tablet->get_all_sstables(table_store_iterator))) {
-    LOG_WARN("get all sstables failed", K(ret));
-  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fetch table store failed", K(ret), KPC(tablet));
-  } else if (OB_ISNULL(first_mds_sstable =
-      table_store_wrapper.get_member()->get_mds_sstables().get_boundary_table(false/*first*/))) {
-    end_scn = tablet->get_mds_checkpoint_scn();
-    rec_scn = tablet->get_mds_checkpoint_scn();
-  } else {
-    end_scn = first_mds_sstable->get_start_scn();
-    rec_scn = first_mds_sstable->get_rec_scn();
-  }
-
   return ret;
 }
 

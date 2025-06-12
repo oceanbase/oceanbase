@@ -160,7 +160,8 @@ public:
   int init_maps(const ObLobSplitParam& param);
   inline bool is_valid() const { return is_inited_; }
   void destroy();
-  TO_STRING_KV(K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_ret), K_(is_lob_piece),
+  TO_STRING_KV(
+    K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_ret), K_(is_lob_piece),
     K_(ls_handle), K_(main_tablet_id), K_(main_tablet_handle),
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
     K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),

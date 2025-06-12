@@ -52,6 +52,13 @@ static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &typ
 struct ObTabletSplitUtil final
 {
 public:
+  static int check_split_minors_can_be_accepted(
+      const bool is_shared_storage_mode,
+      const share::SCN &split_start_scn,
+      const ObSSTableArray &old_store_minors,
+      const ObIArray<ObITable *> &tables_array,
+      share::ObScnRange &new_input_range,
+      share::ObScnRange &old_store_range);
   static int get_tablet(
       common::ObArenaAllocator &allocator,
       const storage::ObLSHandle &ls_handle,
@@ -145,15 +152,15 @@ public:
       const int64_t lob_major_snapshot/*OB_INVALID_VERSION for non lob tablets*/,
       ObIArray<ObITable::TableKey> &skipped_split_major_keys);
   static int build_update_table_store_param(
-    const share::SCN &reorg_scn,
-    const int64_t ls_rebuild_seq,
-    const int64_t snapshot_version,
-    const int64_t multi_version_start,
-    const ObTabletID &dst_tablet_id,
-    const ObTablesHandleArray &tables_handle,
-    const compaction::ObMergeType &merge_type,
-    const ObIArray<ObITable::TableKey> &skipped_split_major_keys,
-    ObBatchUpdateTableStoreParam &param);
+      const share::SCN &reorg_scn,
+      const int64_t ls_rebuild_seq,
+      const int64_t snapshot_version,
+      const int64_t multi_version_start,
+      const ObTabletID &dst_tablet_id,
+      const ObTablesHandleArray &tables_handle,
+      const compaction::ObMergeType &merge_type,
+      const ObIArray<ObITable::TableKey> &skipped_split_major_keys,
+      ObBatchUpdateTableStoreParam &param);
   static int get_storage_schema_from_mds(
       const ObTabletHandle &tablet_handle,
       ObStorageSchema *&storage_schema,
@@ -177,10 +184,6 @@ private:
       const ObTabletHandle &dest_tablet_handle,
       const share::SCN &reorganization_scn,
       compaction::ObTabletMergeCtx &tablet_merge_ctx);
-  static int check_and_determine_mds_rec_and_end_scn(
-      const ObTabletHandle &dest_tablet_handle,
-      share::SCN &end_scn,
-      share::SCN &rec_scn);
   static int check_tablet_ha_status(
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
