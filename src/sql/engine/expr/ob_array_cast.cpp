@@ -612,7 +612,7 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
 
         fast_float::from_chars_result parse_ret = fast_float::from_chars(ptr, end, res);
         if (OB_UNLIKELY(parse_ret.ec != std::errc())) {
-          if (is_null_string_start(*ptr)) {
+          if (ptr < end && is_null_string_start(*ptr)) {
             if (!is_null_const_string(ptr, end)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
@@ -638,7 +638,7 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
         }
 
         if (OB_FAIL(ret)) {
-        } else if (is_vector_finish(*ptr)) {
+        } else if (ptr < end && is_vector_finish(*ptr)) {
           ++ptr;
           is_end_char = true;
           break;
