@@ -1394,26 +1394,30 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
       } else if (index_table_schema->get_index_type() == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
-        bool has_same_col_id = false;
-        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
-          const ObColumnSchemaV2 *col_schema = nullptr;
-          if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected col schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
-          } else if (!col_schema->is_vec_hnsw_vector_column()) {
-            // only need vec_vector column, here skip other column
-          } else if (OB_FAIL(has_same_cascaded_col_id(data_table_schema, *col_schema, col_id, has_same_col_id))) {
-            LOG_WARN("fail to check same cascaded col id", K(ret), K(col_id));
-          } else if (has_same_col_id) {
-            ObString index_prefix;
-            if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
-              LOG_WARN("failed to get index prefix", K(ret));
-            } else {
-              ObVecTidCandidate candidate(index_table_schema->ObMergeSchema::get_schema_version(),
-                                          simple_index_infos.at(i).table_id_,
-                                          index_prefix);
-              if (OB_FAIL(inc_tid_heap.push(candidate))) {
-                LOG_WARN("failed to push candidate to inc table id heap", K(ret));
+        if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
+          // skip unavaliable index table
+        } else {
+          bool has_same_col_id = false;
+          for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+            const ObColumnSchemaV2 *col_schema = nullptr;
+            if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected col schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
+            } else if (!col_schema->is_vec_hnsw_vector_column()) {
+              // only need vec_vector column, here skip other column
+            } else if (OB_FAIL(has_same_cascaded_col_id(data_table_schema, *col_schema, col_id, has_same_col_id))) {
+              LOG_WARN("fail to check same cascaded col id", K(ret), K(col_id));
+            } else if (has_same_col_id) {
+              ObString index_prefix;
+              if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
+                LOG_WARN("failed to get index prefix", K(ret));
+              } else {
+                ObVecTidCandidate candidate(index_table_schema->ObMergeSchema::get_schema_version(),
+                                            simple_index_infos.at(i).table_id_,
+                                            index_prefix);
+                if (OB_FAIL(inc_tid_heap.push(candidate))) {
+                  LOG_WARN("failed to push candidate to inc table id heap", K(ret));
+                }
               }
             }
           }
@@ -1421,7 +1425,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
       }
     }
 
-    // 2. get latest table id groups
+    // 2. get latest and avaliable table id groups
     for (int64_t idx = 0;
          idx < inc_tid_heap.count() && OB_SUCC(ret) &&  (vbitmap_tid == OB_INVALID_ID || snapshot_tid == OB_INVALID_ID);
          idx++ ) {
@@ -1440,7 +1444,9 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
           LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
         } else if (!(index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_ID_LOCAL
                    || index_table_schema->get_index_type() == INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL)) {
-        // skip 4, 5 index table
+          // skip if index_table_schema is not 4, 5 index table
+        } else if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
+          // skip unavaliable index table
         } else {
           ObString index_prefix;
           if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
@@ -2979,21 +2985,21 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
           } else if (index_schema->is_vec_delta_buffer_type()) {
             if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
               // skip
-            } else {
+            } else if (!delta_buffer_table_is_valid) {
               is_hnsw = true;
               delta_buffer_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
             }
           } else if (index_schema->is_vec_index_id_type()) {
             if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
               // skip
-            } else {
+            } else if (!index_id_table_is_valid) {
               is_hnsw = true;
               index_id_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
             }
           } else if (index_schema->is_vec_index_snapshot_data_type()) {
             if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
               // skip
-            } else {
+            } else if (!snapshot_table_is_valid) {
               is_hnsw = true;
               snapshot_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
             }
