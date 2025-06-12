@@ -13843,5 +13843,158 @@ bool ObDDLResolver::is_column_group_supported() const
   return is_supported;
 }
 
+// assuming part_func_expr_str is utf-8 encoded
+int ObDDLResolver::get_partition_keys_by_part_func_expr(
+    const ObString &part_func_expr_str,
+    const bool is_oracle_mode,
+    ObIAllocator &allocator,
+    ObIArray<ObString> &partkey_strs)
+{
+  int ret = OB_SUCCESS;
+  partkey_strs.reset();
+  const char DELIMITER = ',';
+  const char WHITESPACE = ' ';
+  const char QUOTE = is_oracle_mode ? '"' : '`';
+  const int64_t len = part_func_expr_str.length();
+  ObString wc;
+  int32_t wc_value = 0;
+  int64_t pos = 0;
+
+  char *buf = nullptr;
+  ObString ident_buf;
+  if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate", K(ret), K(len));
+  } else {
+    ident_buf.assign_buffer(buf, len);
+  }
+
+  // consume one ident for each loop
+  while (OB_SUCC(ret) && pos < len) {
+    // consume whitespaces if any
+    if (OB_SUCC(ret) && pos < len) {
+      ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+      while (OB_SUCC(scanner.next_character(wc, wc_value)) && (wc_value == WHITESPACE)) {
+        pos += wc.length();
+      }
+    }
+
+    bool quoted = false;
+    // find one quote if any
+    if (OB_SUCC(ret) && pos < len) {
+      ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+      if (OB_SUCC(scanner.next_character(wc, wc_value)) && (wc_value == QUOTE)) {
+        pos += wc.length();
+        quoted = true;
+      }
+    }
+
+    // consume ident string
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(pos >= len)) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("empty ident", K(ret), K(part_func_expr_str), K(pos));
+    } else {
+      const char *ident_start = ident_buf.ptr() + ident_buf.length();
+      int64_t ident_len = 0;
+      ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+      while (OB_SUCC(ret) && OB_SUCC(scanner.next_character(wc, wc_value))) {
+        if (quoted) {
+          if (wc_value == QUOTE) {
+            const int64_t next_pos = pos + wc.length();
+            if (next_pos < part_func_expr_str.length() && *(part_func_expr_str.ptr() + next_pos) == QUOTE) {
+              // treat `` as `
+              pos = next_pos;
+              if (OB_FAIL(scanner.next_character(wc, wc_value))) {
+                LOG_WARN("failed to next character", K(ret));
+              } else if (OB_UNLIKELY(wc_value != QUOTE)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("not a quote", K(ret), K(wc), K(wc_value));
+              }
+            } else {
+              ret = OB_ITER_END;
+            }
+          }
+        } else if (wc_value == WHITESPACE || wc_value == DELIMITER) {
+          ret = OB_ITER_END;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(!quoted && 0 == ident_len && wc_value == DELIMITER)) {
+          ret = OB_ERR_PARSE_SQL;
+          LOG_WARN("invalid beginning char for unquoted identifier", K(ret), K(wc_value), K(part_func_expr_str), K(pos));
+        } else if (OB_UNLIKELY(wc.length() != ident_buf.write(wc.ptr(), wc.length()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("buffer full", K(ret), K(ident_buf), K(wc));
+        } else {
+          ident_len += wc.length();
+          pos += wc.length();
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(0 == ident_len)) {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("empty ident", K(ret), K(ident_buf), K(part_func_expr_str));
+      } else {
+        ObString ident(ident_len, ident_start);
+        const ObColumnSchemaV2 *column = nullptr;
+        if (is_oracle_mode && !quoted) {
+          ObString upper_ident;
+          if (OB_FAIL(ObCharset::toupper(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, ident, upper_ident, allocator))) {
+            LOG_WARN("failed to upper case", K(ret));
+          } else if (OB_FAIL(partkey_strs.push_back(upper_ident))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        } else if (OB_FAIL(partkey_strs.push_back(ident))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+
+    // consume quote if quoted
+    if (OB_SUCC(ret) && quoted) {
+      if (OB_UNLIKELY(pos >= len)) {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("quote not closed", K(ret), K(part_func_expr_str), K(pos));
+      } else {
+        ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+        if (OB_FAIL(scanner.next_character(wc, wc_value))) {
+          LOG_WARN("failed to next character", K(ret), K(scanner));
+        } else if (OB_UNLIKELY(wc_value != QUOTE)) {
+          ret = OB_ERR_PARSE_SQL;
+          LOG_WARN("quote not closed", K(ret), K(part_func_expr_str), K(pos));
+        } else {
+          pos += wc.length();
+        }
+      }
+    }
+
+    // consume whitespaces if any
+    if (OB_SUCC(ret) && pos < len) {
+      ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+      while (OB_SUCC(scanner.next_character(wc, wc_value)) && (wc_value == WHITESPACE)) {
+        pos += wc.length();
+      }
+    }
+
+    // consume one delimiter if not end
+    if (OB_SUCC(ret) && pos < len) {
+      ObStringScanner scanner(ObString(len - pos, part_func_expr_str.ptr() + pos), CS_TYPE_UTF8MB4_GENERAL_CI);
+      if (OB_FAIL(scanner.next_character(wc, wc_value))) {
+        LOG_WARN("failed to next character", K(ret), K(scanner));
+      } else if (OB_UNLIKELY(wc_value != DELIMITER)) {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("expect delimiter", K(ret), K(part_func_expr_str), K(pos), K(wc_value));
+      } else {
+        pos += wc.length();
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

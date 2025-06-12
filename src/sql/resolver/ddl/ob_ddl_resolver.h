@@ -565,6 +565,11 @@ public:
       const share::schema::ObColumnSchemaV2 &column_schema,
       const int64_t index_keyname_value,
       ParseNode *node);
+  static int get_partition_keys_by_part_func_expr(
+      const ObString &part_func_expr_str,
+      const bool is_oracle_mode,
+      ObIAllocator &allocator,
+      ObIArray<ObString> &partkey_strs);
 protected:
   static int append_vec_hnsw_args(
       const ObPartitionResolveResult &resolve_result,

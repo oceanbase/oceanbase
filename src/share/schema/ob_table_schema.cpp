@@ -8108,64 +8108,25 @@ int ObTableSchema::get_presetting_partition_keys(common::ObIArray<uint64_t> &par
 int ObTableSchema::get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const
 {
   int ret = OB_SUCCESS;
-  static const char DELIMITER = ',';
+  ObArenaAllocator allocator;
+  ObArray<ObString> partkey_strs;
   bool is_oracle_mode = false;
-
   if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret));
+  } else if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(part_func_expr_str, is_oracle_mode, allocator, partkey_strs))) {
+    LOG_WARN("failed to get part keys", K(ret), K(part_func_expr_str), K(is_oracle_mode));
   } else {
-    ObArray<ObString> presetting_partition_keys;
-    const char quote = is_oracle_mode ? '\"' : '`';
-    bool parse_over = false;
-    while (OB_SUCC(ret) && !parse_over) {
-      // attention:
-      // after calling split_on() for splitting string "a,b",
-      // the function will return "a" and set the origin string as "b";
-      // if the string couldn't be split, the function will return empty string
-      ObString partition_key_name = part_func_expr_str.split_on(DELIMITER);
-      if (partition_key_name.empty()) {
-        parse_over = true;
-        partition_key_name = part_func_expr_str;
-      }
-      // trim quote
-      char* start = partition_key_name.ptr();
-      char* end = partition_key_name.ptr() + partition_key_name.length() - 1;
-      int64_t length = partition_key_name.length();
-      if (OB_NOT_NULL(start) && OB_NOT_NULL(end) && length > 0) {
-        if (*start == quote && *end == quote) {
-          length -= 2;
-          start++;
-        } else if (*start != quote && *end != quote) {
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid part func str", KR(ret));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (FALSE_IT(partition_key_name.assign_ptr(start, length))) {
-        } else if (is_oracle_mode && FALSE_IT(str_toupper(partition_key_name.ptr(),
-                                                          partition_key_name.length()))) {
-          // column name in oracle mode is capital
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(presetting_partition_keys.push_back(partition_key_name))) {
-          LOG_WARN("fail to push back", KR(ret), K(partition_key_name));
-        }
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < presetting_partition_keys.count(); i++) {
-      const ObString& partition_key_name = presetting_partition_keys.at(i).trim();
-      const ObColumnSchemaV2 *column = get_column_schema(partition_key_name);
-
+    for (int64_t i = 0; OB_SUCC(ret) && i < partkey_strs.count(); i++) {
+      const ObString &partkey = partkey_strs.at(i);
+      const ObColumnSchemaV2 *column = get_column_schema(partkey);
       if (OB_ISNULL(column)) {
         ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_WARN("fail to get column schema", KR(ret), K(partition_key_name));
+        LOG_WARN("fail to get column schema", KR(ret), K(partkey));
       } else if (OB_FAIL(partition_key_ids.push_back(column->get_column_id()))) {
         LOG_WARN("fail to push back", KR(ret), KPC(column));
       }
     }
   }
-
   return ret;
 }
 
