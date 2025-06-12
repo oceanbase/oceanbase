@@ -1853,7 +1853,7 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
     ObSEArray<RowIdxColumnPair, 6> idx_col_arr;
     for (int64_t i = 0; OB_SUCC(ret) && i < flattened_raw_exprs.get_expr_array().count(); i++) {
       ObRawExpr *raw_expr = flattened_raw_exprs.get_expr_array().at(i);
-      if (T_REF_COLUMN == raw_expr->get_expr_type()) {
+      if (T_REF_COLUMN == raw_expr->get_expr_type() && !raw_expr->has_flag(IS_ATTR_EXPR)) {
         int64_t idx = 0;
         OZ(row_desc.get_idx(raw_expr, idx));
         OZ(idx_col_arr.push_back(RowIdxColumnPair(idx, i)));
