@@ -30,7 +30,6 @@
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
 #endif
-#include "pl/diagnosis/ob_pl_sql_audit_guard.h"
 
 namespace oceanbase
 {
@@ -3713,6 +3712,8 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
                                         int64_t type,
                                         void *params,
                                         int64_t sql_param_count,
+                                        ObPLSqlAuditRecord &audit_record,
+                                        ObQueryRetryCtrl &retry_ctrl,
                                         bool is_server_cursor,
                                         bool for_update,
                                         bool has_hidden_rowid,
@@ -3725,7 +3726,11 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   ObString sql_copy;
   ObString ps_sql_copy;
 
-  OZ (cursor.prepare_spi_result(ctx, spi_result));
+  if (cursor.is_ps_cursor()) {
+    spi_result = cursor.get_cursor_handler();
+  } else {
+    OZ (cursor.prepare_spi_result(ctx, spi_result));
+  }
   CK (OB_NOT_NULL(spi_result));
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
   if (!cursor.is_ps_cursor()) {
@@ -3739,8 +3744,6 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
 
   if (OB_SUCC(ret)) {
 
-    ObPLSqlAuditRecord audit_record(sql::PLSql);
-    ObQueryRetryCtrl retry_ctrl;
     ObSPIExecEnvGuard env_guard(session_info, *spi_result, cursor.is_ps_cursor());
 
     do {
@@ -3748,7 +3751,8 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         ObPLSubPLSqlTimeGuard guard(ctx);
         ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
         ObPLSqlAuditGuard audit_guard(
-          *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
+          *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type),
+          cursor.is_ps_cursor());
         ObSPIRetryCtrlGuard retry_guard(retry_ctrl, *spi_result, session_info, ret);
 
         if (OB_FAIL(ret)) {
@@ -4057,6 +4061,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                && (!for_update || (for_update && skip_locked))
                && !force_unstreaming) {
       FLT_SET_TAG(pl_spi_streaming_cursor, true);
+      ObPLSqlAuditRecord audit_record(sql::PLSql);
+      ObQueryRetryCtrl retry_ctrl;
       OZ (streaming_cursor_open(ctx,
                                 *cursor,
                                 *session_info,
@@ -4065,6 +4071,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                 type,
                                 sql_param_exprs,
                                 sql_param_count,
+                                audit_record,
+                                retry_ctrl,
                                 is_server_cursor,
                                 for_update,
                                 has_hidden_rowid));
@@ -4129,6 +4137,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
 
   if (OB_FAIL(ret)) {
   } else if (!for_update && use_stream) { // streaming branch
+    ObPLSqlAuditRecord audit_record(sql::PLSql);
+    ObQueryRetryCtrl retry_ctrl;
     OZ (streaming_cursor_open(ctx,
                               cursor,
                               *session,
@@ -4137,6 +4147,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                               stmt_type,
                               &exec_params,
                               exec_params.count(),
+                              audit_record,
+                              retry_ctrl,
                               true, /*is_server_cursor*/
                               for_update,
                               hidden_rowid,
@@ -9745,7 +9757,7 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
   ObResultSet *rs = NULL;
   const common::ColumnsFieldIArray *fields = NULL;
   ObSQLSessionInfo *session = NULL;
-  ObPLSubPLSqlTimeGuard guard(ctx);
+  ObSPIResultSet *spi_result = NULL;
 
   if (OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -9753,50 +9765,80 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
   } else if (OB_ISNULL(session = ctx->exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_FAIL(streaming_cursor_open(ctx,
-                                        ps_cursor,
-                                        *session,
-                                        sql_str,
-                                        ps_cursor.get_ps_sql(),
-                                        stmt::T_SELECT, /*stmt_type*/
-                                        &exec_params,
-                                        exec_params.count(),
-                                        true, /*is_server_cursor*/
-                                        false, /*for_update*/
-                                        ps_cursor.has_hidden_rowid(),
-                                        false /*is_dbms_cursor*/))) {
-    LOG_WARN("streaming cursor open failed", K(ret), K(ps_cursor));
-  } else if (OB_ISNULL(ps_cursor.get_cursor_handler())) {
+  } else if (OB_FAIL(ps_cursor.prepare_spi_result(ctx, spi_result))) {
+    LOG_WARN("prepare spi result failed", K(ret));
+  } else if (OB_ISNULL(spi_result) || OB_ISNULL(spi_result->get_memory_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cursor handler is NULL", K(ret));
-  } else if (OB_ISNULL(rs = ps_cursor.get_cursor_handler()->get_result_set())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("result set is NULL", K(ret));
-  } else if (OB_ISNULL(fields = rs->get_field_columns())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fields is NULL", K(ret));
-  } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *fields))){
-    LOG_WARN("prepare cursor store failed", K(ret));
-  } else if (OB_ISNULL(rs->get_physical_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("physical plan is NULL", K(ret));
-  } else if (!ps_cursor.is_async()) {
-    if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
-      LOG_WARN("fill ps cursor failed", K(ret));
-    }
+    LOG_WARN("spi_result is NULL", K(ret), K(spi_result));
   } else {
-    rs->get_physical_plan()->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
-    if (ps_cursor.is_for_update()
-        || rs->get_physical_plan()->contain_pl_udf_or_trigger()
-        || rs->get_physical_plan()->has_link_udf()) {
-      if (ps_cursor.is_async()) {
-        ps_cursor.set_is_async(false);
-        ObPsCursorInfo::reduce_async_cursor_count();
+    ObPLSubPLSqlTimeGuard guard(ctx);
+    ObPLSqlAuditRecord audit_record(sql::PLSql);
+    ObQueryRetryCtrl retry_ctrl;
+    ObPLSPITraceIdGuard trace_id_guard(sql_str, ps_cursor.get_ps_sql(), *session, ret);
+
+    ObPLSqlAuditGuard audit_guard(*(ctx->exec_ctx_), *session, *spi_result, audit_record, ret,
+                                  ps_cursor.get_ps_sql(), retry_ctrl, trace_id_guard, stmt::T_SELECT);
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(streaming_cursor_open(ctx,
+                                             ps_cursor,
+                                             *session,
+                                             sql_str,
+                                             ps_cursor.get_ps_sql(),
+                                             stmt::T_SELECT, /*stmt_type*/
+                                             &exec_params,
+                                             exec_params.count(),
+                                             audit_record,
+                                             retry_ctrl,
+                                             true, /*is_server_cursor*/
+                                             false, /*for_update*/
+                                             ps_cursor.has_hidden_rowid(),
+                                             false /*is_dbms_cursor*/))) {
+      LOG_WARN("streaming cursor open failed", K(ret), K(ps_cursor));
+    } else if (OB_ISNULL(ps_cursor.get_cursor_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cursor handler is NULL", K(ret));
+    } else if (OB_ISNULL(rs = ps_cursor.get_cursor_handler()->get_result_set())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result set is NULL", K(ret));
+    } else if (OB_ISNULL(fields = rs->get_field_columns())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fields is NULL", K(ret));
+    } else if (OB_FAIL(ps_cursor.prepare_cursor_store(*session, *fields))){
+      LOG_WARN("prepare cursor store failed", K(ret));
+    } else if (OB_ISNULL(rs->get_physical_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical plan is NULL", K(ret));
+    } else {
+      rs->get_physical_plan()->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
+      if (ps_cursor.is_for_update()
+          || rs->get_physical_plan()->contain_pl_udf_or_trigger()
+          || rs->get_physical_plan()->has_link_udf()) {
+        if (ps_cursor.is_async()) {
+          ps_cursor.set_is_async(false);
+          ObPsCursorInfo::reduce_async_cursor_count();
+        }
       }
+    }
+    if (OB_SUCC(ret) && !ps_cursor.is_async()) {
       if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
         LOG_WARN("fill ps cursor failed", K(ret));
       }
     }
+  }
+  if (!ps_cursor.is_async() && NULL != spi_result) {
+    if (OB_NOT_NULL(spi_result->get_result_set())) {
+      int close_ret = spi_result->close_result_set();
+      if (OB_SUCCESS != close_ret) {
+        LOG_WARN("close mysql result failed", K(ret), K(close_ret));
+      }
+      ret = (OB_SUCCESS == ret ? close_ret : ret);
+      if (OB_NOT_NULL(session)) {
+        spi_result->destruct_exec_params(*session);
+      }
+    }
+    spi_result->~ObSPIResultSet();
+    ps_cursor.set_spi_cursor(NULL);
   }
   ps_cursor.set_unstreaming();
   return ret;
@@ -9918,7 +9960,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
         ps_cursor.set_store_ret(OB_ITER_END);
       }
     }
-    CLOSE_SPI_RESULT;
+    // CLOSE_SPI_RESULT;
   }
 #undef CHECK_CURSOR_HANDLER
 #undef CLOSE_SPI_RESULT

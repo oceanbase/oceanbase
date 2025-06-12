@@ -24,6 +24,7 @@
 #include "pl/dblink/ob_pl_dblink_info.h"
 #endif
 #include "pl/ob_pl_allocator.h"
+#include "pl/diagnosis/ob_pl_sql_audit_guard.h"
 
 namespace oceanbase
 {
@@ -1311,6 +1312,8 @@ private:
                                    int64_t type,
                                    void *params,
                                    int64_t sql_param_count,
+                                   pl::ObPLSqlAuditRecord &audit_record,
+                                   observer::ObQueryRetryCtrl &retry_ctrl,
                                    bool is_server_cursor,
                                    bool is_for_update,
                                    bool has_hidden_rowid,
