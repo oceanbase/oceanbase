@@ -23,6 +23,7 @@ using namespace share::schema;
 
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_NOT_TRIM_FOR_DEFALUT_CHECKSUM);
 
 /*
  * ObStorageRowkeyColumnSchema
@@ -545,8 +546,8 @@ int ObStorageSchema::init(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_str(input_schema))) {
     STORAGE_LOG(WARN, "failed to generate string", K(ret), K(input_schema));
-  } else if (OB_FAIL(generate_column_array(input_schema))) {
-    STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema));
+  } else if (OB_FAIL(generate_column_array(input_schema, tenant_data_version > DATA_VERSION_4_3_5_2 /*need_trim_default_val*/))) {
+    STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema), K(tenant_data_version));
   } else if (generate_cs_replica_cg_array) {
     if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
       STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
@@ -1659,7 +1660,9 @@ int ObStorageSchema::generate_str(const ObTableSchema &input_schema)
   return ret;
 }
 
-int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
+int ObStorageSchema::generate_column_array(
+    const ObTableSchema &input_schema,
+    const bool need_trim_default_val)
 {
   int ret = OB_SUCCESS;
   // build column schema map
@@ -1701,16 +1704,36 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
         meta_type.set_scale(col->get_accuracy().get_scale());
       }
       col_schema.meta_type_ = meta_type;
-      if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
+      const ObObj &orig_default_val = col->get_orig_default_value();
+      if (OB_FAIL(datum.from_obj_enhance(orig_default_val))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       } else if (is_lob_storage(col->get_data_type()) && !datum.has_lob_header()
               && OB_FAIL(ObLobManager::fill_lob_header(*allocator_, datum))) {
         STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
+      } else if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()
+              && OB_FAIL(trim(orig_default_val.get_collation_type(), datum))) {
+        STORAGE_LOG(WARN, "failed to trim default value", K(ret), K(orig_default_val), K(datum));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
+#ifdef ERRSIM
+        if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()) {
+          const int64_t original_checksum = col_schema.default_checksum_;
+          const int64_t errsim_code = EN_NOT_TRIM_FOR_DEFALUT_CHECKSUM;
+          if (OB_SUCCESS != errsim_code) {
+            blocksstable::ObStorageDatum errsim_datum;
+            if (OB_FAIL(errsim_datum.from_obj_enhance(orig_default_val))) {
+              STORAGE_LOG(WARN, "Failed to transfer obj to errsim_datum", K(ret));
+            } else {
+              col_schema.default_checksum_ = errsim_datum.checksum(0);
+            }
+          }
+          STORAGE_LOG(INFO, "ERRSIM: whether to trim space for default checksum", K(ret), K(errsim_code), K(need_trim_default_val),
+                            K(original_checksum), "current_checksum", col_schema.default_checksum_);
+        }
+#endif
       }
-      if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
+      if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, orig_default_val))) {
+        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(orig_default_val));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
         col_schema.destroy(*allocator_);

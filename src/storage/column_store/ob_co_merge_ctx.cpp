@@ -285,6 +285,7 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
           LOG_ERROR("column checksum error match", K(ret), "row_ckm", row_column_checksums.at(i) , "col_ckm", col_column_checksums.at(i),
             K(i), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
             K(row_column_checksums), K(col_column_checksums), KPC(row_sstable));
+          (void) ObCSReplicaUtil::diagnose_trim_default_value_checksum_error(*row_sstable, *get_schema());
         }
       }
     }
