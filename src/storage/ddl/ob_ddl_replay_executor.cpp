@@ -493,15 +493,23 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
       /* write gc occupy file*/
       if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
         /* skip write gc flag and upload block*/
-      } else if (OB_FAIL(ObSSDDLUtil::write_gc_flag(ls_->get_ls_id(),
+      } else {
+        if (OB_FAIL(ObSSDDLUtil::write_gc_flag(ls_->get_ls_id(),
                                                     tablet_handle,
                                                     redo_info.table_key_,
                                                     redo_info.parallel_cnt_,
                                                     redo_info.cg_cnt_))) {
-        LOG_WARN("failed to write tablet gc flag file", K(ret));
-      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
-      } else if (OB_FAIL(write_ss_block(write_info, macro_handle))) {
-        LOG_WARN("failed to write shared storage block", K(ret));
+          if (OB_TASK_EXPIRED == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to write tablet gc flag file", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+        } else if (OB_FAIL(write_ss_block(write_info, macro_handle))) {
+          LOG_WARN("failed to write shared storage block", K(ret));
+        }
       }
 
       if (OB_FAIL(ret)) {
