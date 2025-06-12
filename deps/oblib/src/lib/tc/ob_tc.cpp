@@ -70,7 +70,8 @@ public:
       if (due_ts_ < ts_lower_limit) {
         due_ts_ = ts_lower_limit;
       }
-      due_ts_ += (get_cost(req) * 1000000000LL)/limit_per_sec_;
+      int64_t inc_ts = get_cost(req) * 1000000000LL/limit_per_sec_;
+      ATOMIC_FAA(&due_ts_, inc_ts);
     }
     return due_ts_;
   }
