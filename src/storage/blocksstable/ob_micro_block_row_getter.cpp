@@ -394,7 +394,7 @@ int ObMicroBlockRowGetter::inner_get_row(
       //put row cache, ignore fail
       ObRowCacheKey row_cache_key(
           MTL_ID(),
-          param_->tablet_id_,
+          sstable_->get_key().get_tablet_id(),
           rowkey,
           read_info_->get_datum_utils(),
           sstable_->get_data_version(),

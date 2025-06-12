@@ -182,7 +182,7 @@ int ObIndexTreePrefetcher::lookup_in_cache(ObSSTableReadHandle &read_handle)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(read_handle));
   } else if (access_ctx_->enable_get_row_cache()) {
-    ObRowCacheKey key(MTL_ID(), iter_param_->tablet_id_, read_handle.get_rowkey(),
+    ObRowCacheKey key(MTL_ID(), sstable_->get_key().get_tablet_id(), read_handle.get_rowkey(),
                       *datum_utils_, data_version_, sstable_->get_key().table_type_);
     if (OB_FAIL(ObStorageCacheSuite::get_instance().get_row_cache().get_row(key, read_handle.row_handle_))) {
       if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
