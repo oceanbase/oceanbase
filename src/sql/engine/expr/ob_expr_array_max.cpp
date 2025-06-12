@@ -128,6 +128,7 @@ int ObExprArrayExtreme::eval_array_extreme(const ObExpr &expr, ObEvalCtx &ctx, O
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObDatum *arr_datum = NULL;
   ObIArrayType *src_arr = NULL;
@@ -143,6 +144,9 @@ int ObExprArrayExtreme::eval_array_extreme(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("calc array extreme value failed", K(ret));
   } else {
     res.from_obj(res_obj);
+    if (res_obj.is_string_type() && OB_FAIL(res.deep_copy(res, res_alloc))) {
+      LOG_WARN("fail to deep copy for res datum", K(ret), K(res_obj), K(res));
+    }
   }
   return ret;
 }
@@ -156,6 +160,7 @@ int ObExprArrayExtreme::eval_array_extreme_batch(const ObExpr &expr, ObEvalCtx &
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
   ObObj res_obj;
@@ -178,6 +183,9 @@ int ObExprArrayExtreme::eval_array_extreme_batch(const ObExpr &expr, ObEvalCtx &
         LOG_WARN("calc array extreme value failed", K(ret));
       } else {
         res_datum.at(j)->from_obj(res_obj);
+        if (res_obj.is_string_type() && OB_FAIL(res_datum.at(j)->deep_copy(*res_datum.at(j), res_alloc))) {
+          LOG_WARN("fail to deep copy for res datum", K(ret), K(res_obj), KPC(res_datum.at(j)));
+        }
       }
     } // end for
   }
@@ -191,6 +199,7 @@ int ObExprArrayExtreme::eval_array_extreme_vector(const ObExpr &expr, ObEvalCtx 
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObExprStrResAlloc res_alloc(expr, ctx);
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *src_arr = NULL;
 
@@ -225,7 +234,7 @@ int ObExprArrayExtreme::eval_array_extreme_vector(const ObExpr &expr, ObEvalCtx 
         res_vec->set_null(idx);
       } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
         LOG_WARN("calc array extreme value failed", K(ret));
-      } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, res_obj))) {
+      } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, res_obj, res_alloc))) {
         LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(res_obj));
       }
     } // end for

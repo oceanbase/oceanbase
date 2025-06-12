@@ -1504,7 +1504,7 @@ int ObArrayExprUtils::get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &ele
   return ret;
 }
 
-int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj)
+int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (ob_is_null(obj.get_type())) {
@@ -1518,7 +1518,15 @@ int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj)
   } else if (ob_is_double_tc(obj.get_type())) {
     vec->set_double(idx, obj.get_double());
   } else if (ObVarcharType == obj.get_type()) {
-    vec->set_string(idx, obj.get_string());
+    ObString obj_str = obj.get_varchar();
+    char *res_buf = (char *)allocator.alloc(obj_str.length());
+    if (OB_ISNULL(res_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("result buffer allocation failed", K(ret), K(obj_str.length()));
+    } else {
+      MEMCPY(res_buf, obj_str.ptr(), obj_str.length());
+      vec->set_string(idx, res_buf, obj_str.length());
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected object type", K(ret), K(obj.get_type()));
