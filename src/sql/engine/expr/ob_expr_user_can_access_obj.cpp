@@ -308,8 +308,7 @@ int ObExprUserCanAccessObj::eval_user_can_access_obj(const ObExpr &expr,
         || OB_FAIL(expr.args_[2]->eval(ctx, obj_database))) {
       LOG_WARN("eval arg failed", K(ret));
     } else if (OB_UNLIKELY(obj_type->is_null() || obj_id->is_null() || obj_database->is_null())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("expr param is null", K(ret));
+      res_datum.set_null();
     } else {
       uint64_t database_id = obj_database->get_uint64();
 
