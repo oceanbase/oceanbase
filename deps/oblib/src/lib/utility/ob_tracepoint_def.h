@@ -638,4 +638,11 @@ GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch")
 GLOBAL_ERRSIM_POINT_DEF(2601, EN_RPC_SOCKET_ERROR, "inject rpc socket error, making rpc failed");
 GLOBAL_ERRSIM_POINT_DEF(2602, EN_RPC_IO_THREAD_HANG, "make rpc io thread hang for a while");
 
+// HTable Parallel DDL begin 2621 - 2650
+GLOBAL_ERRSIM_POINT_DEF(2621, EN_CREATE_HTABLE_TG_FINISH_ERR, "create htable tablegroup finish error");
+GLOBAL_ERRSIM_POINT_DEF(2622, EN_CREATE_HTABLE_CF_FINISH_ERR, "create htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2623, EN_DISABLE_HTABLE_CF_FINISH_ERR, "disable htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2624, EN_DELETE_HTABLE_CF_FINISH_ERR, "delete htable table finish error");
+// HTable Parallel DDL end
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
