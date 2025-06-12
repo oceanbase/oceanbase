@@ -14132,6 +14132,17 @@ private:
 };
 #endif
 
+// enum placeholder for hbase ddl rpc
+enum class ObHTableDDLType : uint8_t
+{
+  INVALID = 0,
+  CREATE_TABLE = 1,
+  DROP_TABLE = 2,
+  DISABLE_TABLE = 3,
+  ENABLE_TABLE = 4,
+  MAX = 255
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

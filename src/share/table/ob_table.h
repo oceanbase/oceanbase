@@ -73,6 +73,22 @@ enum class ObTableEntityType
 };
 class ObHTableCellEntity;
 
+enum class ObTableRpcMetaType : uint8_t
+{
+  INVALID = 0,
+  TABLE_PARTITION_INFO = 1,     // route refresh
+  HTABLE_REGION_LOCATOR = 2,    // table region locator
+  HTABLE_REGION_METRICS = 3,    // table region metrics
+  HTABLE_CREATE_TABLE = 4,	    // create table
+  HTABLE_DELETE_TABLE = 5,	    // delete table
+  HTABLE_TRUNCATE_TABLE = 6,	  // truncate table
+  HTABLE_EXISTS = 7,		        // check table existence
+  HTABLE_GET_DESC = 8,	        // table descriptor
+  HTABLE_ENABLE_TABLE = 9,      // enable table
+  HTABLE_DISABLE_TABLE = 10,    // disable table
+  HTABLE_META_MAX = 255
+};
+
 class ObTableObject
 {
 public:
