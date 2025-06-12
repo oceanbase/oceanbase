@@ -1560,8 +1560,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
                                     OB_INVALID_ID));
         }
       }
-      if (OB_SUCC(ret) && generator_.get_ast().get_ret_type().is_composite_type()) {
-        //return NULL as UDT means returning a uninitialized UDT object
+      if (OB_SUCC(ret) && (generator_.get_ast().get_ret_type().is_composite_type() || generator_.get_ast().get_ret_type().is_ref_cursor_type())) {
+        //return NULL as UDT/Cursor means returning a uninitialized UDT/Cursor object
         ObLLVMBasicBlock null_branch;
         ObLLVMBasicBlock final_branch;
         ObLLVMValue p_type_value;
@@ -1594,43 +1594,55 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
         ObLLVMValue var_type, type_id, allocator;
         ObPLCGBufferGuard buffer_guard(generator_);
         int64_t init_size = 0;
-        // Step 1: 初始化内存
-        CK (OB_NOT_NULL(s.get_namespace()));
-        OZ (generator_.extract_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
-        OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-        OZ (generator_.get_helper().get_int8(user_type->get_type(), var_type));
-        OZ (args.push_back(var_type));
-        OZ (generator_.get_helper().get_int64(
-            generator_.get_ast().get_ret_type().get_user_type_id(),
-            type_id));
-        OZ (args.push_back(type_id));
-        OZ (generator_.get_helper().get_int64(OB_INVALID_INDEX, var_idx));
-        OZ (args.push_back(var_idx));
-        OZ (user_type->get_size(PL_TYPE_INIT_SIZE, init_size));
-        OZ (generator_.get_helper().get_int32(init_size, init_value));
-        OZ (args.push_back(init_value));
-        OZ (buffer_guard.get_int_buffer(extend_ptr));
-        OZ (args.push_back(extend_ptr));
-        OZ (args.push_back(allocator));
-        OZ (generator_.get_helper().create_call(ObString("spi_alloc_complex_var"),
-                                                generator_.get_spi_service().spi_alloc_complex_var_,
-                                                args,
-                                                ret_err));
-        OZ (generator_.check_success(ret_err, s.get_stmt_id(),
-                                     s.get_block()->in_notfound(),
-                                     s.get_block()->in_warning()));
-        OZ (generator_.get_helper().create_load("load_extend", extend_ptr, extend_value));
-        OZ (generator_.get_helper().create_gep(ObString("extract_obj_pointer"), p_result_obj, 0, p_obj));
-        OZ (generator_.generate_set_extend(p_obj, var_type, init_value, extend_value));
-        OZ (generator_.extract_obobj_from_objparam(p_result_obj, result));
-        OZ (generator_.get_helper().create_store(result, p_result));
-        // Step 2: 初始化类型内容, 如Collection的rowsize,element type等
-        OZ (generator_.get_llvm_type(*user_type, ir_type));
-        OZ (ir_type.get_pointer_to(ir_ptr_type));
-        OZ (generator_.get_helper().create_int_to_ptr(ObString("cast_extend_to_ptr"), extend_value, ir_ptr_type, composite_ptr));
-        OX (composite_ptr.set_t(ir_type));
-        OZ (user_type->ObPLDataType::generate_construct( //must call ObPLDataType's
-            generator_, *s.get_namespace(), composite_ptr, allocator, true, &s));
+        if (OB_FAIL(ret)) {
+        } else if (generator_.get_ast().get_ret_type().is_composite_type()) {
+          // Step 1: 初始化内存
+          CK (OB_NOT_NULL(s.get_namespace()));
+          OZ (generator_.extract_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
+          OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
+          OZ (generator_.get_helper().get_int8(user_type->get_type(), var_type));
+          OZ (args.push_back(var_type));
+          OZ (generator_.get_helper().get_int64(
+              generator_.get_ast().get_ret_type().get_user_type_id(),
+              type_id));
+          OZ (args.push_back(type_id));
+          OZ (generator_.get_helper().get_int64(OB_INVALID_INDEX, var_idx));
+          OZ (args.push_back(var_idx));
+          OZ (user_type->get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (generator_.get_helper().get_int32(init_size, init_value));
+          OZ (args.push_back(init_value));
+          OZ (buffer_guard.get_int_buffer(extend_ptr));
+          OZ (args.push_back(extend_ptr));
+          OZ (args.push_back(allocator));
+          OZ (generator_.get_helper().create_call(ObString("spi_alloc_complex_var"),
+                                                  generator_.get_spi_service().spi_alloc_complex_var_,
+                                                  args,
+                                                  ret_err));
+          OZ (generator_.check_success(ret_err, s.get_stmt_id(),
+                                       s.get_block()->in_notfound(),
+                                       s.get_block()->in_warning()));
+          OZ (generator_.get_helper().create_load("load_extend", extend_ptr, extend_value));
+          OZ (generator_.get_helper().create_gep(ObString("extract_obj_pointer"), p_result_obj, 0, p_obj));
+          OZ (generator_.generate_set_extend(p_obj, var_type, init_value, extend_value));
+          OZ (generator_.extract_obobj_from_objparam(p_result_obj, result));
+          OZ (generator_.get_helper().create_store(result, p_result));
+            // Step 2: 初始化类型内容, 如Collection的rowsize,element type等
+          OZ (generator_.get_llvm_type(*user_type, ir_type));
+          OZ (ir_type.get_pointer_to(ir_ptr_type));
+          OZ (generator_.get_helper().create_int_to_ptr(ObString("cast_extend_to_ptr"), extend_value, ir_ptr_type, composite_ptr));
+          OX (composite_ptr.set_t(ir_type));
+          OZ (user_type->ObPLDataType::generate_construct( //must call ObPLDataType's
+              generator_, *s.get_namespace(), composite_ptr, allocator, true, &s));
+        } else {
+          OZ (generator_.get_helper().get_int8(pl::PL_REF_CURSOR_TYPE, var_type));
+          OZ (generator_.get_helper().get_int32(0, init_value));
+          OZ (generator_.get_helper().get_int64(0, extend_value));
+          OZ (generator_.get_helper().create_gep(ObString("extract_obj_pointer"), p_result_obj, 0, p_obj));
+          OZ (generator_.generate_set_extend(p_obj, var_type, init_value, extend_value));
+          OZ (generator_.extract_obobj_from_objparam(p_result_obj, result));
+          OZ (generator_.get_helper().create_store(result, p_result));
+        }
+
         OZ (generator_.finish_current(final_branch));
         OZ (generator_.set_current(final_branch));
       }
