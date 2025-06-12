@@ -492,6 +492,7 @@ private:
 };
 
 // mysql compatibility, select a,count(a), output first value of a
+// TODO: @wenye remove this class later
 class ObFirstRowAggCell : public ObAggCell
 {
 public:
