@@ -2161,6 +2161,7 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
   ObTablet *tablet = nullptr;
   SCN max_decided_scn;
   ObTabletCreateDeleteMdsUserData user_data;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2185,7 +2186,7 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
   }  else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(tablet_handle_))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle_));
   } else {
-    const SCN real_scn = user_data.start_transfer_commit_scn_.is_valid_and_not_min() ?
+    const SCN real_scn = is_shared_storage && user_data.start_transfer_commit_scn_.is_valid_and_not_min() ?
         user_data.start_transfer_commit_scn_ : backfill_tx_ctx_->backfill_scn_;
     // init tablet merge dag param
     static_param.dag_param_.ls_id_ = ls_id_;
