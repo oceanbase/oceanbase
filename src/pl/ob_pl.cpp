@@ -3136,7 +3136,9 @@ ObPLExecState::~ObPLExecState()
   }
 #endif
    if (phy_plan_ctx_ != NULL) {
-    phy_plan_ctx_->~ObPhysicalPlanCtx();
+    if (!(func_.is_function() && is_called_from_sql_)) {
+      phy_plan_ctx_->~ObPhysicalPlanCtx();
+    }
     phy_plan_ctx_ = NULL;
    }
 }
@@ -3350,7 +3352,7 @@ int ObPLExecState::final(int ret)
   }
 
   //release the out ref cursor formal param when failed
-  for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); i++) {
+  for (int i = 0; OB_SUCCESS != ret && OB_NOT_NULL(phy_plan_ctx_) && i < func_.get_arg_count() && i < get_params().count(); i++) {
     if (func_.get_out_args().has_member(i)
         && get_params().at(i).is_pl_extend()
         && (get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
@@ -3363,7 +3365,7 @@ int ObPLExecState::final(int ret)
   }
 
   // 异常场景下，释放参数列表
-  for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); ++i) {
+  for (int i = 0; OB_SUCCESS != ret && OB_NOT_NULL(phy_plan_ctx_) && i < func_.get_arg_count() && i < get_params().count(); ++i) {
     if (!get_params().at(i).is_pl_extend()) {
       ObUserDefinedType::destruct_objparam(*get_allocator(),
                                             get_params().at(i),
@@ -3378,7 +3380,7 @@ int ObPLExecState::final(int ret)
   // 1. inner call inout 非nocopy参数会深拷一份, 执行异常时需要释放
   // 2. inner call 纯out属性复杂数据类型参数, 会生成一个新的obj, 执行失败时会抛出异常, 不会走到geneate_out_param里面的释放内存逻辑
   // 需要提前释放内存
-  for (int64_t i = 0; OB_SUCCESS != ret && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {
+  for (int64_t i = 0; OB_SUCCESS != ret && OB_NOT_NULL(phy_plan_ctx_) && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {
     if (func_.get_variables().at(i).is_composite_type() &&
         i < get_params().count() && get_params().at(i).is_ext()) {
       if (func_.get_variables().at(i).is_opaque_type()) {
@@ -3406,7 +3408,7 @@ int ObPLExecState::final(int ret)
       }
     }
   }
-  for (int64_t i = func_.get_arg_count(); i < func_.get_variables().count(); ++i) {
+  for (int64_t i = func_.get_arg_count(); OB_NOT_NULL(phy_plan_ctx_) && i < func_.get_variables().count(); ++i) {
     if (func_.get_variables().at(i).is_composite_type()
         && i < get_params().count() && get_params().at(i).is_ext()) {
       if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_objparam(*get_allocator(),
@@ -3536,11 +3538,11 @@ int ObPLExecState::final(int ret)
   }
 
   if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
-  #ifdef OB_BUILD_ORACLE_PL
+#ifdef OB_BUILD_ORACLE_PL
     DISABLE_SQL_MEMLEAK_GUARD;
     ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
-  #endif
+#endif
   }
 
   return OB_SUCCESS;
@@ -4327,6 +4329,8 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
     OX (ctx_.params_ = &(phy_plan_ctx_->get_param_store_for_update()));
   } else {
     // UDF from SQL will replace phy_plan_ctx_ in ObExprUDFEnvGuard
+    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_physical_plan_ctx()));
+    OX (phy_plan_ctx_ = ctx_.exec_ctx_->get_physical_plan_ctx());
   }
   OX (need_reset_physical_plan_ = true);
 
@@ -4335,8 +4339,6 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   }
 
   if (OB_SUCC(ret) /* && 0 == ctx_.exec_ctx_->get_frame_cnt()*/) {
-    // TODO bin.lb: how about the memory?
-    //
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.get_top_expr_allocator()));
   }
   if (udf_from_sql) {

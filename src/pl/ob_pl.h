@@ -770,18 +770,8 @@ public:
   int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }
-  inline const sql::ObPhysicalPlanCtx *get_physical_plan_ctx() const { return phy_plan_ctx_; }
-  inline sql::ObPhysicalPlanCtx *get_physical_plan_ctx() { return phy_plan_ctx_; }
-  inline const ParamStore &get_params() const
-  {
-    return phy_plan_ctx_ != NULL
-      ? phy_plan_ctx_->get_param_store() : ctx_.exec_ctx_->get_physical_plan_ctx()->get_param_store();
-  }
-  inline ParamStore &get_params()
-  {
-    return phy_plan_ctx_ != NULL
-      ? phy_plan_ctx_->get_param_store_for_update() : ctx_.exec_ctx_->get_physical_plan_ctx()->get_param_store_for_update();
-  }
+  inline const ParamStore &get_params() const { return phy_plan_ctx_->get_param_store(); }
+  inline ParamStore &get_params() { return phy_plan_ctx_->get_param_store_for_update(); }
   ObPLFunction &get_function() { return func_; }
   int get_var(int64_t var_idx, ObObjParam& result);
   int set_var(int64_t var_idx, const ObObjParam& value);
