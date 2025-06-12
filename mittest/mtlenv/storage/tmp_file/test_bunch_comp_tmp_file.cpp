@@ -75,6 +75,7 @@ void TestCompressTmpFile::SetUpTestCase()
 
   CHUNK_MGR.set_limit(TENANT_MEMORY);
   ObMallocAllocator::get_instance()->set_tenant_limit(MTL_ID(), TENANT_MEMORY);
+  ObMallocAllocator::get_instance()->set_tenant_max_min(MTL_ID(), TENANT_MEMORY, 0);
 
   // MTL(ObTenantTmpFileManager *)->get_sn_file_manager().write_cache_.default_memory_limit_ = SMALL_WBP_MEM_LIMIT;
   ObSharedNothingTmpFileMetaTree::set_max_array_item_cnt(MAX_DATA_ITEM_ARRAY_COUNT);

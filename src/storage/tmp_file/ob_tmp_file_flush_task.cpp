@@ -196,8 +196,9 @@ int ObTmpFileFlushTask::write()
   }
 
   ObIOInfo io_info;
-  blocksstable::MacroBlockId macro_id = block->get_macro_block_id();
+  blocksstable::MacroBlockId macro_id;
   if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(macro_id = block->get_macro_block_id())) {
   } else if (OB_UNLIKELY(!macro_id.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("macro_id is invalid", KR(ret), K(macro_id), KPC(this));

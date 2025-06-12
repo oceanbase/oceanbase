@@ -116,8 +116,6 @@ private:
   int free_flush_task_(ObTmpFileFlushTask *task);
   int add_flush_task_(ObTmpFileFlushTask *task);
   int pop_flush_task_(ObTmpFileFlushTask *&task);
-  int add_io_error_task_(ObTmpFileFlushTask *task);
-  int pop_io_error_task_(ObTmpFileFlushTask *&task);
   int remove_pending_task_();
   OB_INLINE int get_flush_ret_code_() const { return flush_ret_; }
   OB_INLINE void set_flush_ret_code_(const int ret_code) { flush_ret_ = ret_code; }
@@ -177,10 +175,8 @@ private:
   int flush_tg_id_[MAX_FLUSH_TIMER_NUM];
   int64_t swap_queue_size_;
   int64_t io_waiting_queue_size_;
-  int64_t io_error_queue_size_;
   ObSpLinkQueue swap_queue_;
   ObSpLinkQueue io_waiting_queue_;
-  ObSpLinkQueue io_error_queue_;
   ObTmpFileWriteCacheFreePageList free_page_list_;
   WriteCacheShrinkContext shrink_ctx_;
   ObThreadCond idle_cond_;

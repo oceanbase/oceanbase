@@ -121,6 +121,7 @@ public:
 
     CHUNK_MGR.set_limit(TENANT_MEMORY);
     ObMallocAllocator::get_instance()->set_tenant_limit(MTL_ID(), TENANT_MEMORY);
+    ObMallocAllocator::get_instance()->set_tenant_max_min(MTL_ID(), TENANT_MEMORY, 0);
   }
   static void TearDownTestCase()
   {
