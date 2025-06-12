@@ -528,7 +528,11 @@ int ObTenantMetaChecker::check_tablet_not_exist_in_local_(
   } else if (OB_ISNULL(ls_handle.get_ls()->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet_svr of sys ls is null", KR(ret));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
+          tablet_id,
+          tablet_handle,
+          ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S,
+          ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       not_exist = true;
