@@ -79,6 +79,7 @@ public:
     GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
     OK(MockTenantModuleEnv::get_instance().init());
 
+    ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
     ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
     ASSERT_NE(nullptr, macro_cache_mgr);
     ASSERT_EQ(0, macro_cache_mgr->ckpt_task_.next_version_);
@@ -161,6 +162,15 @@ TEST_F(TestSSMacroCacheCkpt, test_basic_ckpt)
       ASSERT_EQ(2 + init_ckpt_verison_, next_ckpt_version);
       ASSERT_EQ(1, macro_cache_mgr->meta_map_.size());
       ASSERT_NE(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+
+      // 3. errsim macro cache replay ckpt error
+      TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MACRO_CACHE_REPLAY_CKPT_ERR, OB_ERR_UNEXPECTED, 0, 1);
+      OK(clean_macro_cache_mgr());
+      macro_cache_mgr->replay_task_.runTimerTask();
+      ASSERT_EQ(2 + init_ckpt_verison_, macro_cache_mgr->ckpt_task_.next_version_);
+      ASSERT_EQ(1, macro_cache_mgr->meta_map_.size());
+      ASSERT_NE(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+      TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MACRO_CACHE_REPLAY_CKPT_ERR, OB_ERR_UNEXPECTED, 0, 0);
     }
   }
 }

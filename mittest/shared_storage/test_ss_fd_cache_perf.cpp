@@ -17,6 +17,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -108,6 +109,7 @@ void TestSSFdCache::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestSSFdCache::TearDownTestCase()

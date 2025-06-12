@@ -65,6 +65,26 @@ public:
     }
     return ret;
   }
+
+  static int wait_macro_cache_ckpt_replay()
+  {
+    int ret = OB_SUCCESS;
+    ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "ObSSMacroCacheMgr is NULL", KR(ret));
+    } else {
+      const int64_t start_us = ObTimeUtility::current_time_us();
+      while (!macro_cache_mgr->is_ckpt_replayed() && OB_SUCC(ret)) {
+        usleep(10 * 1000L); // sleep 10ms
+        if (OB_UNLIKELY((ObTimeUtility::current_time_us() - start_us) > 20 * 1000L * 1000L)) { // 20s
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "wait too long time", KR(ret));
+        }
+      }
+    }
+    return ret;
+  }
 };
 
 } // namespace storage

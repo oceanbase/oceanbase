@@ -22,6 +22,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "sensitive_test/object_storage/test_object_storage.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -58,6 +59,7 @@ public:
   {
     GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
     OK(MockTenantModuleEnv::get_instance().init());
+    ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 
     ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
     ASSERT_NE(nullptr, macro_cache_mgr);

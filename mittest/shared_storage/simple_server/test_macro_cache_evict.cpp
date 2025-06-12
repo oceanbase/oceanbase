@@ -21,6 +21,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
 #include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
@@ -81,6 +82,11 @@ public:
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       tenant_created_ = true;
+      {
+        share::ObTenantSwitchGuard tguard;
+        OK(tguard.switch_to(run_ctx_.tenant_id_));
+        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+      }
     }
 
     // construct write info
@@ -536,7 +542,7 @@ public:
     ObStorageObjectWriteInfo write_info_;
     char write_buf_[WRITE_IO_SIZE];
 
-private:
+protected:
   bool tenant_created_;
   TestRunCtx run_ctx_;
 };

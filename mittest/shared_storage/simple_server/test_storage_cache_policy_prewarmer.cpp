@@ -22,6 +22,7 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "mittest/shared_storage/test_ss_common_util.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
 #include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
 
@@ -65,6 +66,11 @@ public:
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
+      {
+        share::ObTenantSwitchGuard tguard;
+        OK(tguard.switch_to(run_ctx_.tenant_id_));
+        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+      }
     }
   }
 

@@ -20,6 +20,7 @@
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "sensitive_test/object_storage/test_object_storage.h"
 #include "storage/shared_storage/ob_ss_io_common_op.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -62,6 +63,7 @@ public:
   {
     GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
     OK(MockTenantModuleEnv::get_instance().init());
+    ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
   }
 
   static void TearDownTestCase()

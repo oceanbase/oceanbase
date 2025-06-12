@@ -19,6 +19,7 @@
 #include "storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_file_helper.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -90,6 +91,7 @@ void TestSSMCPrewarmStruct::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestSSMCPrewarmStruct::TearDownTestCase()
