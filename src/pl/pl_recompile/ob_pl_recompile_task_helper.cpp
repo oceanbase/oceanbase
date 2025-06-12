@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "pl/ob_pl.h"
+#include "pl/ob_pl_stmt.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_string.h"
 #include "share/resource_manager/ob_resource_manager.h"
@@ -164,7 +165,7 @@ int ObPLRecompileTaskHelper::construct_select_dep_table_sql(ObSqlString& query_i
   int ret = OB_SUCCESS;
   UNUSED(tenant_id);
   static constexpr char get_dep_objs_info[] =
-    "SELECT * FROM %s where tenant_id = %ld and dep_obj_id > 300000 "
+    "SELECT * FROM %s where tenant_id = %ld and dep_obj_id > 300000 and dep_obj_type in (5, 6, 7, 9, 12)"
     " and ref_obj_id in ( " ;
 
   OZ (query_inner_sql.assign_fmt(get_dep_objs_info,
@@ -207,7 +208,7 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
   SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
     OZ (query_inner_sql.assign_fmt(
             "SELECT * FROM %s WHERE tenant_id = %ld and OBJ_ID > 300000 and schema_version > %ld "
-            " and ERROR_NUMBER in (-5055, -5019, -5543, -5544, -5201, -5733, -5559) ",
+            " and obj_type in (5, 6, 7, 9, 12) and ERROR_NUMBER in (-5055, -5019, -5543, -5544, -5201, -5733, -5559) ",
              OB_ALL_VIRTUAL_ERROR_TNAME, tenant_id, last_max_schema_version));
     OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
@@ -305,7 +306,8 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(
 int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLProxy* sql_proxy,
                                                     uint64_t tenant_id,
                                                     ObIAllocator& allocator,
-                                                    int64_t& max_schema_version)
+                                                    int64_t& max_schema_version,
+                                                    share::schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(sql_proxy));
@@ -328,6 +330,7 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
   int64_t last_max_schema_version = 0;
   int64_t cur_max_schema_version = 0;
   OZ (ddl_drop_obj_map.create(32, "PlRecompileJob"));
+  CK (OB_NOT_NULL(schema_guard));
   if (OB_SUCC(ret)) {
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       // step1 : get last max_schema_version from dummy column
@@ -368,8 +371,20 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
               OZ (ob_write_string(allocator, table_name, table_name_deep_copy));
               OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version)));
             } else if (is_pl_create_ddl_operation(operation_type)) {
-              ObPLRecompileInfo tmp_tuple(table_id);
-              OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
+              if (operation_type == OB_DDL_CREATE_PACKAGE ||
+                  operation_type == OB_DDL_ALTER_PACKAGE ) {
+                const ObPackageInfo *package_info = nullptr;
+                uint64_t tenant_id = get_tenant_id_by_object_id(table_id);
+                OZ (schema_guard->get_package_info(tenant_id, table_id, package_info));
+                // do not collect package header
+                if (OB_NOT_NULL(package_info) && package_info->is_package_body()) {
+                  ObPLRecompileInfo tmp_tuple(table_id);
+                  OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
+                }
+              } else {
+                ObPLRecompileInfo tmp_tuple(table_id);
+                OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
+              }
               OZ (ddl_alter_obj_infos.push_back(table_id));
             } else if (is_sql_create_ddl_operation(operation_type)) {
               OZ (ddl_alter_obj_infos.push_back(table_id));
@@ -679,7 +694,8 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
   if (OB_ISNULL(ctx.exec_ctx_) ||
       OB_ISNULL(ctx.exec_ctx_->get_sql_ctx()) ||
       OB_ISNULL(ctx.exec_ctx_->get_sql_ctx()->session_info_) ||
-      OB_ISNULL(ctx.exec_ctx_->get_sql_proxy())) {
+      OB_ISNULL(ctx.exec_ctx_->get_sql_proxy()) ||
+      OB_ISNULL(ctx.exec_ctx_->get_sql_ctx()->schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[PLRECOMPILE]: Basic info can not be null", K(ret));
   } else {
@@ -702,7 +718,11 @@ int ObPLRecompileTaskHelper::recompile_pl_objs(ObPLExecCtx &ctx, sql::ParamStore
   LOG_INFO("[PLRECOMPILE]: before recompile ", K(ret), K(consumer_group_id), K(enable), K(recompile_start));
   if (enable) {
     int64_t max_schema_version = 0;
-    OZ (collect_delta_recompile_obj_data(sql_proxy, tenant_id, ctx.exec_ctx_->get_allocator(), max_schema_version));
+    OZ (collect_delta_recompile_obj_data(sql_proxy,
+                                          tenant_id,
+                                          ctx.exec_ctx_->get_allocator(),
+                                          max_schema_version,
+                                          ctx.exec_ctx_->get_sql_ctx()->schema_guard_));
     if (OB_SUCC(ret)) {
       ObArray<ObPLRecompileInfo> dep_objs;
       common::hash::ObHashMap<ObString, int64_t> dropped_ref_objs;
@@ -787,9 +807,7 @@ bool ObPLRecompileTaskHelper::is_sql_drop_ddl_operation(ObSchemaOperationType op
 
 bool ObPLRecompileTaskHelper::is_pl_object_type(ObObjectType obj_type)
 {
-  return  obj_type == ObObjectType::PACKAGE ||
-          obj_type == ObObjectType::TYPE ||
-          obj_type == ObObjectType::PACKAGE_BODY ||
+  return  obj_type == ObObjectType::PACKAGE_BODY ||
           obj_type == ObObjectType::TYPE_BODY ||
           obj_type == ObObjectType::TRIGGER ||
           obj_type == ObObjectType::FUNCTION ||
