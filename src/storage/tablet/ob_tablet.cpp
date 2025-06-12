@@ -4214,6 +4214,7 @@ int ObTablet::get_split_src_read_table_if_need(
       ObLSHandle ls_handle;
       ObTabletHandle src_tablet_handle;
       ObTablet *src_tablet = nullptr;
+      ObStorageMetaHandle *meta_handle = nullptr;
       if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
@@ -4226,10 +4227,15 @@ int ObTablet::get_split_src_read_table_if_need(
         LOG_WARN("tablet handle obj is nullptr", K(ret));
       } else if (OB_FAIL(iter.add_split_extra_tablet_handle(src_tablet_handle))) {
         LOG_WARN("fail to set split src tabelt handle", K(ret));
+      } else if (OB_FAIL(iter.table_store_iter_.alloc_split_extra_table_store_handle(meta_handle))) {
+        LOG_WARN("failed to alloc split extra table store handle", K(ret));
+      } else if (OB_ISNULL(meta_handle)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid meta handle", K(ret));
       } else if (OB_FAIL(src_tablet->get_read_tables_(
           snapshot_version,
           iter.table_store_iter_,
-          iter.table_store_iter_.table_store_handle_,
+          *meta_handle,
           ObGetReadTablesMode::NORMAL))) {
         LOG_WARN("failed to get read tables from table store", K(ret), KPC(src_tablet));
       } else {
@@ -4279,11 +4285,17 @@ int ObTablet::get_split_dst_read_table(
       for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); ++i) {
         const ObTabletID &dst_tablet_id = dst_tablet_ids.at(i);
         ObTablet *dst_tablet = nullptr;
+        ObStorageMetaHandle *meta_handle = nullptr;
         if (OB_FAIL(ls_handle.get_ls()->get_tablet(dst_tablet_ids.at(i), dst_tablet_handle, timeout,
             ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
           LOG_WARN("failed to get tablet", K(ret), K(dst_tablet_ids.at(i)), K(tablet_meta_.ls_id_));
         } else if (OB_FAIL(iter.add_split_extra_tablet_handle(dst_tablet_handle))) {
           LOG_WARN("fail to set split src tablet handle", K(ret));
+        } else if (OB_FAIL(iter.table_store_iter_.alloc_split_extra_table_store_handle(meta_handle))) {
+          LOG_WARN("failed to alloc split extra table store handle", K(ret));
+        } else if (OB_ISNULL(meta_handle)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid meta handle", K(ret));
         } else if (OB_FALSE_IT(dst_tablet = dst_tablet_handle.get_obj())) {
         } else if (OB_UNLIKELY(snapshot_version < dst_tablet->get_multi_version_start())) {
           ret = OB_SNAPSHOT_DISCARDED;
@@ -4300,7 +4312,7 @@ int ObTablet::get_split_dst_read_table(
         } else if (OB_FAIL(dst_tablet_handle.get_obj()->get_read_tables_(
             snapshot_version,
             iter.table_store_iter_,
-            iter.table_store_iter_.table_store_handle_,
+            *meta_handle,
             ObGetReadTablesMode::SKIP_MAJOR))) {
           LOG_WARN("failed to get read tables from table store", K(ret), K(dst_tablet_ids.at(i)));
         } else {
