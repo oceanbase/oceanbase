@@ -1420,6 +1420,8 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
+    is_vec_inner_drop_ = false;
+    only_set_status_ = false;
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1430,6 +1432,8 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
+    is_vec_inner_drop_ = false;
+    only_set_status_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1437,6 +1441,8 @@ public:
   bool is_hidden_;
   bool is_in_recyclebin_;
   bool is_inner_;
+  bool is_vec_inner_drop_;
+  bool only_set_status_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

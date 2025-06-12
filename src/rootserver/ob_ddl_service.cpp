@@ -4581,7 +4581,8 @@ int ObDDLService::drop_index_caused_by_drop_column_online(
                   ddl_operator, trans, new_index_schema))) {
                 LOG_WARN("submit drop index arg failed", K(ret));
               } else if (OB_FAIL(index_builder.submit_drop_index_task(trans, origin_table_schema, new_index_schema,
-                  new_index_schema.get_schema_version(), drop_index_arg, allocator, drop_index_task_record))) {
+                                 new_index_schema.get_schema_version(), drop_index_arg, nullptr/*inc_data_tablet_ids*/,
+                                 nullptr/*del_data_tablet_ids*/, allocator, drop_index_task_record))) {
                 LOG_WARN("failed to submit drop index task", K(ret));
               } else if (OB_FAIL(ddl_task_records.push_back(drop_index_task_record))) {
                 LOG_WARN("push back drop index task record failed", K(ret));
@@ -5710,7 +5711,7 @@ int ObDDLService::check_index_on_foreign_key(const ObTableSchema *index_table_sc
   return ret;
 }
 
-int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
+int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                     const ObTableSchema &origin_table_schema,
                                     ObTableSchema &new_table_schema,
                                     ObSchemaGetterGuard &schema_guard,
@@ -5949,36 +5950,10 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
             } else if (drop_index_arg->is_add_to_scheduler_) {
-              ObDDLRes ddl_res;
-              ObDDLTaskRecord task_record;
-              bool has_index_task = false;
-              SMART_VAR(ObTableSchema, new_index_schema) {
-                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
-                    trans, origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id(), index_table_schema->get_table_id(), has_index_task))) {
-                  LOG_WARN("failed to check ddl conflict", K(ret));
-                } else if (has_index_task) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("not support to drop a building or dropping index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
-                } else if (OB_FAIL(rename_dropping_index_name(*index_table_schema,
-                                                        schema_guard,
-                                                        ddl_operator,
-                                                        trans,
-                                                        new_index_schema))) {
-                  LOG_WARN("submit drop index arg failed", K(ret));
-                } else if (OB_FAIL(index_builder.submit_drop_index_task(trans, origin_table_schema, *index_table_schema,
-                    new_index_schema.get_schema_version(), *drop_index_arg, allocator, task_record))) {
-                  LOG_WARN("failed to submit drop index task", K(ret));
-                } else {
-                  ddl_res.task_id_ = task_record.task_id_;
-                  ddl_res.tenant_id_ = new_index_schema.get_tenant_id();
-                  ddl_res.schema_id_ = new_index_schema.get_table_id();
-                  if (OB_FAIL(ddl_tasks.push_back(task_record))) {
-                    LOG_WARN("push back ddl task failed", K(ret));
-                  } else if (OB_FAIL(ddl_res_array.push_back(ddl_res))) {
-                    LOG_WARN("push back ddl res array failed", K(ret));
-                  }
-                }
+              if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_, origin_table_schema,
+                          nullptr /*inc_tablet_ids*/, nullptr /*del_tablet_ids*/, drop_index_arg,
+                          ddl_operator, res, ddl_tasks))) {
+                LOG_WARN("fail to drop index to scheduler", KR(ret), K(drop_index_arg));
               }
             } else {
               if (OB_FAIL(ddl_operator.alter_table_drop_index(
@@ -10861,15 +10836,265 @@ int ObDDLService::get_part_by_part_id(
   return ret;
 }
 
+int ObDDLService::old_update_global_index_schema_(const obrpc::ObAlterTableArg &arg,
+                                                  ObMySQLTransaction &trans,
+                                                  ObDDLOperator &ddl_operator,
+                                                  ObSchemaGetterGuard &schema_guard,
+                                                  const ObTableSchema &orig_table_schema,
+                                                  const ObTableSchema &index_table_schema,
+                                                  ObTableSchema &new_index_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!index_table_schema.is_valid()) || OB_UNLIKELY(!orig_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(index_table_schema), K(orig_table_schema));
+  } else if (!arg.is_update_global_indexes_) {
+    if (OB_FAIL(ddl_operator.update_index_status(
+                             index_table_schema.get_tenant_id(),
+                             index_table_schema.get_data_table_id(),
+                             index_table_schema.get_table_id(),
+                             INDEX_STATUS_UNUSABLE,
+                             orig_table_schema.get_in_offline_ddl_white_list(),
+                             trans,
+                             nullptr /* ddl_stmt_str */))) {
+      LOG_WARN("update_index_status failed", KR(ret), K(index_table_schema.get_data_table_id()));
+    }
+  } else {
+    if (OB_FAIL(drop_directly_and_create_index_schema_(schema_guard, orig_table_schema, new_index_table_schema,
+                                                       nullptr /* ddl_stmt */, &trans))) {
+      LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::make_index_unusable_(common::ObIAllocator &allocator,
+                                       ObMySQLTransaction &trans,
+                                       ObDDLOperator &ddl_operator,
+                                       const ObTableSchema &orig_table_schema,
+                                       const ObTableSchema &index_table_schema,
+                                       ObTableSchema &new_index_table_schema,
+                                       ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                       ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = index_table_schema.get_tenant_id();
+  uint64_t data_table_id = index_table_schema.get_data_table_id();
+  uint64_t index_table_id = index_table_schema.get_table_id();
+  if (OB_UNLIKELY(!index_table_schema.is_valid()) || OB_UNLIKELY(!orig_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(index_table_schema), K(orig_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_index_status(
+                                  tenant_id,
+                                  data_table_id,
+                                  index_table_id,
+                                  INDEX_STATUS_UNAVAILABLE,
+                                  orig_table_schema.get_in_offline_ddl_white_list(),
+                                  trans,
+                                  nullptr /* ddl_stmt_str */))) {
+    LOG_WARN("update_index_status failed", KR(ret), K(tenant_id), K(data_table_id), K(index_table_id));
+  }
+  if (OB_SUCC(ret)) {
+    bool has_index_task = false;
+    obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+    if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+                trans, tenant_id, data_table_id, index_table_id,
+                has_index_task))) {
+      LOG_WARN("fail to check has index task", KR(ret), K(tenant_id),
+                K(data_table_id), K(index_table_id));
+    } else if (has_index_task) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop a building or dropping index", KR(ret));
+    } else if (OB_FAIL(prepare_drop_index_arg_(allocator, new_index_table_schema, true/*only_set_status*/,
+                                              true/*is_add_to_scheduler*/, true/*is_inner*/, drop_index_arg))) {
+      LOG_WARN("fail to prepare drop index arg", KR(ret));
+    } else if (OB_ISNULL(drop_index_arg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("drop index arg is nullptr", KR(ret));
+    } else if (OB_FAIL(submit_drop_index_task_and_fill_ddl_result_(allocator, trans, new_index_table_schema,
+                                                                   orig_table_schema, drop_index_arg, nullptr /*inc_data_tablet_ids*/,
+                                                                   nullptr /*del_data_tablet_ids*/, ddl_tasks, ddl_res_array))) {
+      LOG_WARN("fail to submit drop index task", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_drop_index_arg_(common::ObIAllocator &allocator,
+                                          ObTableSchema &index_table_schema,
+                                          const bool only_set_status,
+                                          const bool is_add_to_scheduler,
+                                          const bool is_inner,
+                                          obrpc::ObDropIndexArg *&drop_index_arg)
+{
+  int ret = OB_SUCCESS;
+  drop_index_arg = nullptr;
+  void *tmp_ptr = nullptr;
+  if (OB_UNLIKELY(!index_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index table schema's origin index name is nullptr", KR(ret), K(index_table_schema));
+  } else if (OB_FAIL(index_table_schema.generate_origin_index_name())) {
+    LOG_WARN("fail to generate origin index name", KR(ret));
+  } else if (nullptr == (tmp_ptr = (ObDropIndexArg*)allocator.alloc(sizeof(ObDropIndexArg)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
+  } else {
+    drop_index_arg = new (tmp_ptr)ObDropIndexArg();
+    drop_index_arg->index_action_type_ = ObIndexArg::DROP_INDEX;
+    drop_index_arg->is_add_to_scheduler_ = is_add_to_scheduler;
+    drop_index_arg->is_inner_ = is_inner;
+    drop_index_arg->tenant_id_ = index_table_schema.get_tenant_id();
+    drop_index_arg->only_set_status_ = only_set_status;
+    if (OB_FAIL(ob_write_string(allocator, index_table_schema.get_origin_index_name_str(),drop_index_arg->index_name_))) {
+      LOG_WARN("fail to write index name", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::submit_drop_index_task_and_fill_ddl_result_(common::ObIAllocator &allocator,
+                                                              ObMySQLTransaction &trans,
+                                                              const ObTableSchema &drop_index_schema,
+                                                              const ObTableSchema &orig_table_schema,
+                                                              const obrpc::ObDropIndexArg *drop_index_arg,
+                                                              const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                                              const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                                                              ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                                              ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  ObIndexBuilder index_builder(*this);
+  ObDDLRes ddl_res;
+  ObDDLTaskRecord task_record;
+  if (OB_ISNULL(drop_index_arg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("drop_index_arg is null",
+             KR(ret), KP(drop_index_arg));
+  } else if (OB_FAIL(index_builder.submit_drop_index_task(trans, orig_table_schema, drop_index_schema,
+                                                          drop_index_schema.get_schema_version(), *drop_index_arg, inc_data_tablet_ids,
+                                                          del_data_tablet_ids, allocator, task_record))) {
+    LOG_WARN("failed to submit drop index task", KR(ret));
+  } else {
+    ddl_res.task_id_ = task_record.task_id_;
+    ddl_res.tenant_id_ = drop_index_schema.get_tenant_id();
+    ddl_res.schema_id_ = drop_index_schema.get_table_id();
+    if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+      LOG_WARN("push back ddl task failed", KR(ret));
+    } else if (OB_FAIL(ddl_res_array.push_back(ddl_res))) {
+      LOG_WARN("push back ddl res array failed", KR(ret));
+    }
+  }
+  return ret;
+}
+int ObDDLService::drop_and_create_index_schema_(obrpc::ObAlterTableArg &arg,
+                                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                                ObMySQLTransaction &trans,
+                                                ObDDLOperator &ddl_operator,
+                                                const ObTableSchema &orig_table_schema,
+                                                const ObTableSchema &index_table_schema,
+                                                ObTableSchema &new_index_table_schema,
+                                                ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                                ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = index_table_schema.get_tenant_id();
+  uint64_t data_table_id = index_table_schema.get_data_table_id();
+  uint64_t index_table_id = index_table_schema.get_table_id();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!orig_table_schema.is_valid() || !index_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(orig_table_schema), K(index_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_index_status(
+                                  tenant_id,
+                                  data_table_id,
+                                  index_table_id,
+                                  INDEX_STATUS_UNAVAILABLE,
+                                  orig_table_schema.get_in_offline_ddl_white_list(),
+                                  trans,
+                                  nullptr /* ddl_stmt_str */))) {
+    LOG_WARN("update_index_status failed", KR(ret), K(tenant_id), K(data_table_id), K(index_table_id));
+  }
+  if (OB_SUCC(ret)) {
+    obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+    bool has_index_task = false;
+    ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
+    if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+                trans, tenant_id, data_table_id, index_table_id, has_index_task))) {
+      LOG_WARN("fail to check has index task", KR(ret), K(orig_table_schema.get_tenant_id()),
+                K(orig_table_schema.get_table_id()), K(index_table_schema.get_table_id()));
+    } else if (has_index_task) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop a building or dropping index", KR(ret));
+    } else if (OB_FAIL(prepare_drop_index_arg_(arg.allocator_, new_index_table_schema, false/*only_set_status*/,
+                                              true/*is_add_to_scheduler*/, true/*is_inner*/, drop_index_arg))) {
+      LOG_WARN("fail to prepare drop index arg", KR(ret));
+    } else if (OB_ISNULL(drop_index_arg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("drop index arg is nullptr", KR(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(drop_index_arg))) {
+      LOG_WARN("push back to index_arg_list failed", KR(ret), KP(drop_index_arg));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t new_table_id = OB_INVALID_ID;
+    ObSchemaService *schema_service = schema_service_->get_schema_service();
+    if (OB_ISNULL(schema_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is null", KR(ret));
+    } else if (OB_FAIL(schema_service->fetch_new_table_id(
+                       new_index_table_schema.get_tenant_id(), new_table_id))) {
+      LOG_WARN("fail to fetch new table id", KR(ret));
+    } else {
+      new_index_table_schema.set_table_id(new_table_id);
+      new_index_table_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
+      if (OB_FAIL(generate_tablet_id(new_index_table_schema))) {
+        LOG_WARN("failed to generate tablet id", KR(ret));
+      } else if (OB_FAIL(create_table_in_trans(new_index_table_schema,
+                         nullptr /* ddl_stmt */, &trans, schema_guard,
+                         false/*need_check_tablet_cnt*/, false/*is_table_empty*/))) {
+        LOG_WARN("create_index_in_trans failed", KR(ret), K(new_index_table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_create_index_arg_(common::ObIAllocator &allocator,
+                                            const ObTableSchema &new_index_table_schema,
+                                            const obrpc::ObIndexArg::IndexActionType index_action_type,
+                                            obrpc::ObCreateIndexArg *&create_index_arg)
+{
+  int ret = OB_SUCCESS;
+  void *tmp_ptr = nullptr;
+  create_index_arg = nullptr;
+  if (nullptr == (tmp_ptr = (ObCreateIndexArg*)allocator.alloc(sizeof(ObCreateIndexArg)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
+  } else {
+    create_index_arg = new (tmp_ptr)ObCreateIndexArg();
+    create_index_arg->index_action_type_ = index_action_type;
+    create_index_arg->index_type_ = new_index_table_schema.get_index_type();
+    if (OB_FAIL(create_index_arg->index_schema_.assign(new_index_table_schema))) {
+      LOG_WARN("fail to assign index schema", KR(ret), K(new_index_table_schema));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::update_global_index(ObAlterTableArg &arg,
                                       const uint64_t tenant_id,
                                       const ObTableSchema &orig_table_schema,
                                       ObDDLOperator &ddl_operator,
-                                      ObMySQLTransaction &trans)
+                                      ObMySQLTransaction &trans,
+                                      const uint64_t tenant_data_version,
+                                      obrpc::ObAlterTableRes &res,
+                                      ObIArray<ObDDLTaskRecord> &ddl_tasks)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSchemaGetterGuard schema_guard;
+  bool is_oracle_mode = false;
   if (obrpc::ObAlterTableArg::DROP_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == arg.alter_part_type_
@@ -10881,9 +11106,13 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
       LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get_index_tid_array failed", K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to get compat mode", KR(ret), K(tenant_id));
     } else {
+      SMART_VAR(ObTableSchema, new_index_table_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-        const ObTableSchema *index_table_schema = NULL;
+        const ObTableSchema *index_table_schema = nullptr;
+        new_index_table_schema.reset();
         if (OB_FAIL(schema_guard.get_table_schema(
                     tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
           LOG_WARN("get_table_schema failed", K(tenant_id),
@@ -10897,46 +11126,49 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop/truncate partition before finishing index build ");
         } else if (!index_table_schema->can_read_index()) {
           // If the index is not available, the partition operation will not do any intervention
-        } else if (index_table_schema->is_global_index_table()) {
-          if (!arg.is_update_global_indexes_) {
-            if (OB_FAIL(ddl_operator.update_index_status(
-                  tenant_id,
-                  index_table_schema->get_data_table_id(),
-                  index_table_schema->get_table_id(),
-                  INDEX_STATUS_UNUSABLE,
-                  orig_table_schema.get_in_offline_ddl_white_list(),
-                  trans,
-                  nullptr /* ddl_stmt_str */))) {
-              LOG_WARN("update_index_status failed", K(index_table_schema->get_data_table_id()));
+        } else if (!index_table_schema->is_global_index_table()) {
+          // do nothing
+        } else if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
+          LOG_WARN("fail to assign schema", KR(ret));
+        } else {
+          if (tenant_data_version < DATA_VERSION_4_2_5_5
+              || is_oracle_mode) {
+            if (OB_FAIL(old_update_global_index_schema_(arg, trans, ddl_operator, schema_guard,
+                                                        orig_table_schema, *index_table_schema,
+                                                        new_index_table_schema))) {
+              LOG_WARN("fail to update global index schema", KR(ret), K(arg));
             }
           } else {
-            ObTableSchema new_table_schema;
-            if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
-              LOG_WARN("fail to assign schema", K(ret));
-            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard, orig_table_schema, new_table_schema,
-                                                      NULL, &trans))) {
-              LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
-            } else {
-              ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
-              void *tmp_ptr = NULL;
-              obrpc::ObCreateIndexArg *create_index_arg = NULL;
-              if (NULL == (tmp_ptr = (ObCreateIndexArg*)arg.allocator_.alloc(sizeof(ObCreateIndexArg)))) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
-              } else {
-                create_index_arg = new (tmp_ptr)ObCreateIndexArg();
-                create_index_arg->index_action_type_ = ObIndexArg::REBUILD_INDEX;
-                create_index_arg->index_type_ = new_table_schema.get_index_type();
-                if (OB_FAIL(create_index_arg->index_schema_.assign(new_table_schema))) {
-                  LOG_WARN("fail to assign index schema", KR(ret), K(new_table_schema));
-                } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
-                  LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
-                }
+            ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+            if (arg.is_update_global_indexes_) {
+              if(OB_FAIL(drop_and_create_index_schema_(arg, schema_guard, trans, ddl_operator, orig_table_schema,
+                                                       *index_table_schema, new_index_table_schema,
+                                                       ddl_tasks, ddl_res_array))) {
+                LOG_WARN("fail to drop and create index schema", KR(ret), K(arg));
               }
+            } else {
+              if (OB_FAIL(make_index_unusable_(arg.allocator_, trans, ddl_operator, orig_table_schema, *index_table_schema,
+                                               new_index_table_schema, ddl_tasks, ddl_res_array))) {
+                LOG_WARN("fail to make index unusable", KR(ret), K(arg));
+              }
+            }
+          }
+          if (OB_FAIL(ret)
+              || !arg.is_update_global_indexes_) {
+            // do nothing
+          } else {
+            ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
+            obrpc::ObCreateIndexArg *create_index_arg = nullptr;
+            if (OB_FAIL(prepare_create_index_arg_(arg.allocator_, new_index_table_schema,
+                                                  ObIndexArg::REBUILD_INDEX, create_index_arg))) {
+              LOG_WARN("fail to prepare create index arg", KR(ret));
+            } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
+              LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
             }
           }
         }
       }
+      }// end smart var
     }
   }
   return ret;
@@ -11926,7 +12158,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                  tenant_id,
                                                  *orig_table_schema,
                                                  ddl_operator,
-                                                 trans))) {
+                                                 trans,
+                                                 tenant_data_version,
+                                                 res,
+                                                 ddl_tasks))) {
             LOG_WARN("update_global_index failed", K(ret));
           } else if (OB_FAIL(generate_tables_array(alter_table_arg.alter_part_type_,
                                                    orig_table_schemas,
@@ -12232,76 +12467,77 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
+          const int64_t new_table_id = new_table_schema.get_table_id();
+          ObArray<ObTabletID> inc_tablet_ids;
+          ObArray<ObTabletID> del_tablet_ids;
+          if (index_arg_list.count() > 0) {
+            if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (OB_FAIL(get_tablets_with_table_id_(inc_table_schemas, new_table_id, inc_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
+              }
+            }
+            if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (FAILEDx(get_tablets_with_table_id_(del_table_schemas, new_table_id, del_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
+              }
+            }
+          }
           for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
             ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
             ObDDLTaskRecord task_record;
             if (OB_ISNULL(index_arg)) {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("index arg should not be null", K(ret));
+              LOG_WARN("index arg should not be null", KR(ret));
             } else if (ObIndexArg::ADD_INDEX == index_arg->index_action_type_
-                      || ObIndexArg::REBUILD_INDEX == index_arg->index_action_type_) {
+                       || ObIndexArg::REBUILD_INDEX == index_arg->index_action_type_) {
               ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
               ObTableSchema &index_schema = create_index_arg->index_schema_;
               if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_) {
                 // do nothing
+              } else if (OB_FAIL(index_builder.submit_build_index_task(
+                                               trans,
+                                               *create_index_arg,
+                                               orig_table_schema,
+                                               &inc_tablet_ids,
+                                               &del_tablet_ids,
+                                               &index_schema,
+                                               alter_table_arg.parallelism_,
+                                               alter_table_arg.allocator_,
+                                               task_record,
+                                               alter_table_arg.consumer_group_id_))) {
+                LOG_WARN("fail to submit build index task", KR(ret), "type", create_index_arg->index_type_);
+              } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+                LOG_WARN("fail to push ddl task", KR(ret), K(task_record));
               } else {
-                ObArray<ObTabletID> inc_tablet_ids;
-                ObArray<ObTabletID> del_tablet_ids;
-                if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-                  for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
-                    ObTableSchema *inc_table_schema = inc_table_schemas[i];
-                    if (inc_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                      if (OB_FAIL(inc_table_schema->get_tablet_ids(inc_tablet_ids))) {
-                        LOG_WARN("failed to get del tablet ids", K(ret));
-                      }
-                      break;
-                    }
-                  }
+                res.task_id_ = task_record.task_id_;
+                ObDDLRes ddl_res;
+                ddl_res.tenant_id_ = tenant_id;
+                ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
+                ddl_res.task_id_ = task_record.task_id_;
+                obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,
+                                              create_index_arg->index_schema_.get_table_id(),
+                                              create_index_arg->index_schema_.get_schema_version());
+                if (OB_FAIL(res.res_arg_array_.push_back(arg))) {
+                  LOG_WARN("push back to res_arg_array failed", K(ret), K(arg));
+                } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
+                  LOG_WARN("failed to push back ddl res array", K(ret));
                 }
-                if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-                  for (int64_t i = 0; OB_SUCC(ret) && i < del_table_schemas.count(); i++) {
-                    ObTableSchema *del_table_schema = del_table_schemas[i];
-                    if (del_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                      if (OB_FAIL(del_table_schema->get_tablet_ids(del_tablet_ids))) {
-                        LOG_WARN("failed to get del tablet ids", K(ret));
-                      }
-                      break;
-                    }
-                  }
-                }
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(index_builder.submit_build_index_task(trans,
-                                                                    *create_index_arg,
-                                                                    orig_table_schema,
-                                                                    &inc_tablet_ids,
-                                                                    &del_tablet_ids,
-                                                                    &index_schema,
-                                                                    alter_table_arg.parallelism_,
-                                                                    alter_table_arg.allocator_,
-                                                                    task_record,
-                                                                    const_alter_table_arg.consumer_group_id_))) {
-                  LOG_WARN("fail to submit build index task", K(ret), "type", create_index_arg->index_type_);
-                } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
-                  LOG_WARN("fail to push ddl task", K(ret), K(task_record));
-                } else {
-                  res.task_id_ = task_record.task_id_;
-                  ObDDLRes ddl_res;
-                  ddl_res.tenant_id_ = tenant_id;
-                  ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
-                  ddl_res.task_id_ = task_record.task_id_;
-                  obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,
-                                                create_index_arg->index_schema_.get_table_id(),
-                                                create_index_arg->index_schema_.get_schema_version());
-                  if (OB_FAIL(res.res_arg_array_.push_back(arg))) {
-                    LOG_WARN("push back to res_arg_array failed", K(ret), K(arg));
-                  } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
-                    LOG_WARN("failed to push back ddl res array", K(ret));
-                  }
-                }
+              }
+            // TODO @wenyu alter table drop index submit drop index task in alter_table_index() now.
+            //             should be unified here
+            } else if (ObIndexArg::DROP_INDEX == index_arg->index_action_type_ && !alter_table_arg.is_alter_indexs_) {
+              ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
+              if (OB_ISNULL(drop_index_arg)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("drop index arg is null", KR(ret));
+              } else if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_ , *orig_table_schema,
+                                                          &inc_tablet_ids, &del_tablet_ids, drop_index_arg,
+                                                          ddl_operator, res, ddl_tasks))) {
+                LOG_WARN("fail to drop index to scheduler", KR(ret), KPC(drop_index_arg));
               }
             }
           }
@@ -23367,7 +23603,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
           LOG_WARN("fail to start trans", K(ret));
         } else if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
           LOG_WARN("fail to assign schema", KR(ret));
-        } else if (OB_FAIL(rebuild_index_in_trans(schema_guard,
+        } else if (OB_FAIL(drop_directly_and_create_index_schema_(schema_guard,
                                                   *table_schema,
                                                   new_table_schema,
                                                   &ddl_stmt_str,
@@ -23424,7 +23660,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
 
 // Rebuild index information is written to the internal table within a transaction
 // If sql_trans is NULL, you need to create a transaction inside the function
-int ObDDLService::rebuild_index_in_trans(
+int ObDDLService::drop_directly_and_create_index_schema_(
     ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &data_table_schema,
     ObTableSchema &index_schema,
@@ -23447,7 +23683,7 @@ int ObDDLService::rebuild_index_in_trans(
       && OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
   } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index_in_trans(data_table_schema, index_schema, trans))) {
-    LOG_WARN("failed to lock for drop index", K(ret));
+    LOG_WARN("failed to lock for drop index", KR(ret));
   } else if (OB_FAIL(drop_table_in_trans(
                               schema_guard, index_schema, true, true,
                               false, ddl_stmt_str, &trans, NULL, NULL))) {
@@ -39533,6 +39769,100 @@ int ObDDLService::submit_drop_lob_task_(ObMySQLTransaction &trans,
                                                   owner_id,
                                                   trans))) {
     LOG_WARN("failed to lock for drop lob", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
+                                           ObSchemaGetterGuard &schema_guard,
+                                           ObArenaAllocator &allocator,
+                                           const ObTableSchema &orig_table_schema,
+                                           const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                           const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                                           obrpc::ObDropIndexArg *drop_index_arg,
+                                           ObDDLOperator &ddl_operator,
+                                           obrpc::ObAlterTableRes &res,
+                                           ObIArray<ObDDLTaskRecord> &ddl_tasks)
+{
+  int ret = OB_SUCCESS;
+  ObDDLRes ddl_res;
+  ObDDLTaskRecord task_record;
+  const ObTableSchema *index_table_schema = nullptr;
+  ObIndexBuilder index_builder(*this);
+  ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+  if (OB_ISNULL(drop_index_arg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("drop index arg is nullptr", KR(ret));
+  } else if (drop_index_arg->index_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index name is empty", KR(ret), K(drop_index_arg->index_name_));
+  } else {
+    const ObString &index_name = drop_index_arg->index_name_;
+    if (OB_FAIL(get_index_schema_by_name(
+                orig_table_schema.get_tenant_id(),
+                orig_table_schema.get_table_id(),
+                orig_table_schema.get_database_id(),
+                index_name,
+                true /*check data_table_id*/,
+                schema_guard,
+                index_table_schema))) {
+      LOG_WARN("get index schema by name failed", KR(ret), K(orig_table_schema.get_tenant_id()), K(orig_table_schema.get_table_id()),
+                                                  K(orig_table_schema.get_database_id()), K(index_name));
+    } else if (OB_ISNULL(index_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index not exist", KR(ret), K(orig_table_schema.get_table_id()), K(drop_index_arg->index_name_));
+    } else {
+      bool has_index_task = false;
+      uint64_t index_table_id = index_table_schema->get_table_id();
+      SMART_VAR(ObTableSchema, new_index_schema) {
+      if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+          trans, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(), index_table_id, has_index_task))) {
+        LOG_WARN("failed to check ddl conflict", KR(ret));
+      } else if (has_index_task) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to drop a building or dropping index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
+      } else if (OB_FAIL(rename_dropping_index_name(*index_table_schema,
+                                                    schema_guard,
+                                                    ddl_operator,
+                                                    trans,
+                                                    new_index_schema))) {
+        LOG_WARN("submit drop index arg failed", KR(ret));
+      } else {
+        drop_index_arg->index_table_id_ = new_index_schema.get_table_id();
+        if (OB_FAIL(submit_drop_index_task_and_fill_ddl_result_(allocator, trans, new_index_schema,
+                                                                orig_table_schema, drop_index_arg,
+                                                                inc_data_tablet_ids, del_data_tablet_ids,
+                                                                ddl_tasks, ddl_res_array))) {
+          LOG_WARN("fail to submit drop index task", KR(ret), KPC(drop_index_arg));
+        }
+      }
+      } // end smart var
+    }
+  }
+  return ret;
+}
+
+template <class TTableSchema>
+int ObDDLService:: get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                              const int table_id,
+                                              ObArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    ObTableSchema *table_schema = table_schemas[i];
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table schema is null ptr", KR(ret));
+    } else if (table_schema->get_table_id() == table_id) {
+      // some table types don't have tablet like external table
+      if (table_schema->has_tablet()
+          && OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("failed to get table tablet ids", KR(ret), KPC(table_schema));
+      }
+      break;
+    }
   }
   return ret;
 }
