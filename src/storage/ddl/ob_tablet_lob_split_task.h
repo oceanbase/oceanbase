@@ -261,7 +261,7 @@ struct ObTabletLobWriteSSTableCtx final
 public:
   ObTabletLobWriteSSTableCtx();
   ~ObTabletLobWriteSSTableCtx();
-  int init(const ObSSTable &org_sstable, const int64_t major_snapshot_version);
+  int init(const ObSSTable &org_sstable, const ObStorageSchema &storage_schema, const int64_t major_snapshot_version);
   int assign(const ObTabletLobWriteSSTableCtx &other);
   int64_t get_version() const { return table_key_.is_major_sstable() ? dst_major_snapshot_version_ : table_key_.get_end_scn().get_val_for_tx(); }
   bool is_valid() const { return table_key_.is_valid() && data_seq_ > -1 && meta_.is_valid() && dst_major_snapshot_version_ >= 0; }
@@ -270,7 +270,7 @@ public:
   ObITable::TableKey table_key_;
   int64_t data_seq_;
   compaction::ObMergeType merge_type_;
-  ObSSTableBasicMeta meta_; // for major split, it's src lob tablet's last major sstable's meta
+  ObSSTableBasicMeta meta_; // for major split, it's src lob tablet's last major sstable's meta with MODIFICATION
   ObArray<int64_t> dst_uncommitted_tx_id_arr_; // first uncommitted row's tx id for each split dst minor sstable
   int64_t dst_major_snapshot_version_;
 private:
