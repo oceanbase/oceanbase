@@ -435,6 +435,8 @@ struct ObMvccRow
                   const transaction::ObTxSnapshot &snapshot,
                   ObMvccWriteResult &res);
 
+  OB_INLINE void mvcc_write_end_(const int ret) const;
+
   // ===================== ObMvccRow Protection Code =====================
   // sanity check during mvcc_write
   int mvcc_sanity_check_(const share::SCN snapshot_version,

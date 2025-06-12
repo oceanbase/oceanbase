@@ -172,6 +172,12 @@ public:
   }
 };
 
+static bool is_mvcc_lock_related_error_(const int ret_code)
+{
+  return OB_TRY_LOCK_ROW_CONFLICT == ret_code ||
+    OB_TRANSACTION_SET_VIOLATION == ret_code ||
+    OB_ERR_SHARED_LOCK_CONFLICT == ret_code;
+}
 
 } // namespace memtable
 } // namespace oceanbase

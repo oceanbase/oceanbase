@@ -802,6 +802,15 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
   return ret;
 }
 
+void ObMvccRow::mvcc_write_end_(const int ret) const
+{
+  if (is_mvcc_lock_related_error_(ret)) {
+    EVENT_INC(MEMSTORE_WRITE_LOCK_FAIL_COUNT);
+  } else if (OB_SUCCESS == ret) {
+    EVENT_INC(MEMSTORE_WRITE_LOCK_SUCC_COUNT);
+  }
+}
+
 int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
                            const concurrent_control::ObWriteFlag write_flag,
                            ObMvccTransNode &writer_node,
@@ -1036,6 +1045,9 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
       (void)mvcc_undo();
     }
   }
+
+  (void)mvcc_write_end_(ret);
+  TRANS_LOG(DEBUG, "mvcc_write end", KPC(this), K(res), K(snapshot), K(node), K(ctx));
 
   return ret;
 }
