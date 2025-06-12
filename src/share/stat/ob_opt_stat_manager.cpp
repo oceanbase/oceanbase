@@ -197,14 +197,17 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      ObIArray<ObOptTableStat> &tstats)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
-    ObOptTableStat::Key key(tenant_id, table_id, part_ids.at(i));
-    ObOptTableStat tstat;
-    if (OB_FAIL(get_table_stat(tenant_id, key, tstat))) {
-      LOG_WARN("failed to get table stat", K(ret));
-    } else if (OB_FAIL(tstats.push_back(tstat))) {
-      LOG_WARN("failed to push back table stat", K(ret));
-    } else {/*do nothing*/}
+  ObSEArray<ObOptTableStatHandle, 4> handles;
+  if (OB_FAIL(get_table_stat(tenant_id, table_id, part_ids, handles))) {
+    LOG_WARN("failed to get table stat", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < handles.count(); ++i) {
+    if (OB_ISNULL(handles.at(i).stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null.", K(ret), K(i), K(part_ids), K(handles.at(i)));
+    } else if (OB_FAIL(tstats.push_back(*handles.at(i).stat_)))
+      LOG_WARN("fail to push back.", K(ret));
   }
   return ret;
 }
@@ -215,20 +218,33 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      ObIArray<ObOptTableStatHandle> &handles)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<const ObOptTableStat::Key *, 64> keys;
+  ObArenaAllocator arena("ObTableColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+  } else if (part_ids.empty()) {
+    // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
       ObOptTableStat::Key key(tenant_id, table_id, part_ids.at(i));
-      ObOptTableStatHandle handle;
-      if (OB_FAIL(stat_service_.get_table_stat(tenant_id, key, handle))) {
-        LOG_WARN("get table stat failed", K(ret));
-      } else if (OB_FAIL(handles.push_back(handle))) {
-        LOG_WARN("failed to push back table stat", K(ret));
-      } else {/*do nothing*/}
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = arena.alloc(sizeof(ObOptTableStat::Key)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("memory is not enough", K(ret), K(ptr));
+      } else {
+        ObOptTableStat::Key *key = new (ptr) ObOptTableStat::Key(tenant_id, table_id, part_ids.at(i));
+        if (OB_FAIL(keys.push_back(key))) {
+          LOG_WARN("push back error", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(stat_service_.batch_get_table_stats(tenant_id, keys, handles))) {
+      LOG_WARN("get table stat failed", K(ret));
     }
   }
+  arena.reuse();
   return ret;
 }
 
@@ -564,15 +580,17 @@ int ObOptStatManager::check_opt_stat_validity(sql::ObExecContext &ctx,
     //do nothing
   } else if (!part_ids.empty()) {
     is_opt_stat_valid = true;
-    for (int64_t i = 0; OB_SUCC(ret) && is_opt_stat_valid && i < part_ids.count(); ++i) {
-      ObOptTableStat::Key key(tenant_id, table_ref_id, part_ids.at(i));
-      ObOptTableStat opt_stat;
-      if (OB_FAIL(get_table_stat(tenant_id, key, opt_stat))) {
-        LOG_WARN("failed to get table stats", K(ret));
-      } else if (opt_stat.get_last_analyzed() > 0) {
-        //do nothing
-      } else {
-        is_opt_stat_valid = false;
+    ObSEArray<ObOptTableStat, 4> stats;
+    if (OB_FAIL(get_table_stat(tenant_id, table_ref_id, part_ids, stats))) {
+      LOG_WARN("failed to get table stats", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && is_opt_stat_valid && i < stats.count(); ++i) {
+        ObOptTableStat &opt_stat = stats.at(i);
+        if (opt_stat.get_last_analyzed() > 0) {
+          // do nothing
+        } else {
+          is_opt_stat_valid = false;
+        }
       }
     }
   }

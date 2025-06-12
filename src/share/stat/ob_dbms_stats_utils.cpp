@@ -1167,11 +1167,11 @@ int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().batch_fetch_table_stats(conn,
-                                                                                            param.tenant_id_,
+      if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().batch_fetch_table_stats(param.tenant_id_,
                                                                                             param.table_id_,
                                                                                             part_ids,
-                                                                                            table_stats))) {
+                                                                                            table_stats,
+                                                                                            conn))) {
         LOG_WARN("failed to batch fetch table stats", K(ret));
       } else if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().fetch_column_stat(param.tenant_id_,
                                                                                              allocator,
