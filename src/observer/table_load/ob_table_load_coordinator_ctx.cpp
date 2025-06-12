@@ -80,8 +80,8 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
       LOG_WARN("fail to init column idxs", KR(ret), K(column_ids));
     }
     // init partition_calc_
-    else if (OB_FAIL(
-               partition_calc_.init(ctx_->param_, ctx_->session_info_, tablet_ids))) {
+    else if (!ctx_->param_.px_mode_
+        && OB_FAIL(partition_calc_.init(ctx_->param_, ctx_->session_info_, tablet_ids))) {
       LOG_WARN("fail to init partition calc", KR(ret));
     }
     // init trans_allocator_
