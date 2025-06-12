@@ -29,6 +29,7 @@ arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target
 async_ps_cursor_max_count
+attach_shared_sstable_thread_score
 audit_log_buffer_size
 audit_log_compression
 audit_log_enable

@@ -2509,7 +2509,10 @@ DEF_INT(inc_sstable_upload_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of upload incremental sstable to shared storage"
         " Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_INT(attach_shared_sstable_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of attach shared sstable to local storage"
+        " Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ob_encoding_granularity, OB_TENANT_PARAMETER, "65536", "[8192, 1048576]",
         "Maximum rows for encoding in one micro block. Range:[8192,1048576]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

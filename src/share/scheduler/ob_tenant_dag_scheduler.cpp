@@ -4111,6 +4111,7 @@ void ObTenantDagScheduler::reload_config()
     } else {
       set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->inc_sstable_upload_thread_score);
     }
+    set_thread_score(ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, tenant_config->attach_shared_sstable_thread_score);
 #endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
   }
