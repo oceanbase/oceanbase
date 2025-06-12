@@ -1070,6 +1070,35 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column()) {
         // do nothing.
+      } else if (!cg_.opt_ctx_->is_online_ddl() && expr->is_column_ref_expr() && (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column() || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column())) {
+        share::schema::ObSchemaGetterGuard *schema_guard = cg_.opt_ctx_->get_schema_guard();
+        const ObTableSchema *table_schema = nullptr;
+        uint64_t rowkey_cid_tid = OB_INVALID_ID;
+        if (OB_ISNULL(schema_guard)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null schema guard", K(ret));
+        } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), static_cast<ObColumnRefRawExpr *>(expr)->get_database_name(), static_cast<ObColumnRefRawExpr *>(expr)->get_table_name(), false, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(table_schema)) {
+          // select from index table do not need to check rowkey cid table.
+          if (OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
+            LOG_WARN("failed to add param expr", K(ret));
+          }
+        } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, *table_schema, static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(), rowkey_cid_tid))) {
+          LOG_WARN("failed to check_rowkey_cid_table_readable", K(ret));
+        } else if (OB_INVALID_ID == rowkey_cid_tid) {
+        } else {
+          const ObIArray<uint64_t> &domain_tids = op.get_rowkey_domain_tids();
+          bool need_add = false;
+          for (int i = 0; i < domain_tids.count() && !need_add; i++) {
+            if (rowkey_cid_tid == domain_tids.at(i)) {
+              need_add = true;
+            }
+          }
+          if (need_add && OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
+            LOG_WARN("failed to add param expr", K(ret));
+          }
+        }
       } else {
         if (OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
           LOG_WARN("failed to add param expr", K(ret));
@@ -1119,7 +1148,7 @@ int ObTscCgService::extract_tsc_access_columns(const ObLogTableScan &op,
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(tsc_exprs, access_exprs, true))) {
     LOG_WARN("extract column exprs failed", K(ret));
   }
-  LOG_TRACE("extract tsc access columns", K(ret), K(tsc_exprs), K(access_exprs));
+  LOG_TRACE("extract tsc access columns", K(ret), K(tsc_exprs), K(access_exprs), K(op.get_output_exprs()));
   return ret;
 }
 
@@ -1228,14 +1257,14 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
         is_domain_id_access_expr = true;
         ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
         if (col_expr->is_vec_pq_cids_column() || col_expr->is_vec_cid_column()) {
-          if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(cg_.opt_ctx_->get_schema_guard(), *table_schema, col_expr->get_column_id(), index_type))) {
+          if (OB_FAIL(ObVectorIndexUtil::get_vector_domain_index_type(cg_.opt_ctx_->get_schema_guard(), *table_schema, col_expr->get_column_id(), index_type))) {
             LOG_WARN("fail to get vector index type", K(ret), KPC(col_expr));
           }
         }
         if (OB_SUCC(ret)) {
           domain_type = ObDomainIdUtils::get_domain_type_by_col_expr(col_expr, index_type);
           if (domain_type == ObDomainIdUtils::MAX) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_SCHEMA_EAGAIN;
             LOG_WARN("fail to get valid domain type by col expr", K(ret), KPC(col_expr));
           }
         }

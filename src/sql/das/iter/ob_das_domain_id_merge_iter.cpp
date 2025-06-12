@@ -864,7 +864,7 @@ int ObDASDomainIdMergeIter::get_domain_id(
         void *buf = allocator.alloc(datum.get_string().length());
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(ret), KP(buf));
+          LOG_WARN("fail to allocate memory", K(ret), KP(buf), K(domain_type), K(ctdef->ref_table_id_), K(datum.get_string().length()));
         } else {
           memcpy(buf, datum.get_string().ptr(), datum.get_string().length());
           ObString tmp_domain_id;

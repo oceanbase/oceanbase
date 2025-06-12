@@ -2808,7 +2808,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       ObRawExpr *ref_expr = NULL;
       bool domain_id_need_column_ref_expr = false;
       if (ObDomainIdUtils::is_domain_id_index_col(col_schema)
-          && OB_FAIL(check_domain_id_need_column_ref_expr(*stmt, domain_id_need_column_ref_expr, col_schema))) {
+          && OB_FAIL(check_domain_id_need_column_ref_expr(*stmt, schema_guard, domain_id_need_column_ref_expr, col_schema))) {
         LOG_WARN("fail to check domain id need column ref expr", K(ret), KPC(col_schema));
       } else if (col_schema->is_generated_column()) {
         column_item.set_default_value(ObObj()); // set null to generated default value
@@ -19394,6 +19394,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   ObVectorIndexParam param;
   ObIndexType index_type = INDEX_TYPE_IS_NOT;
   ObSEArray<ObIndexType, 2> index_type_array;
+  bool index_readable = true;
   if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema) || OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(column_schema), KP(raw_expr));
@@ -19433,31 +19434,37 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
       LOG_WARN("failed to extend param exprs", K(ret));
     }
   }
-  for (int i = 0; OB_SUCC(ret) && i < index_type_array.count(); ++i) {
+  for (int i = 0; OB_SUCC(ret) && i < index_type_array.count() && index_readable; ++i) {
     uint64_t vec_index_tid = OB_INVALID_ID;
-    ObArray<IvfIndexTableInfo> tids;
-    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tids(
+    if (OB_FAIL(ObVectorIndexUtil::get_right_index_tid_in_rebuild(
         schema_checker_->get_schema_guard(),
         *table_schema,
         index_type_array.at(i),
         column_id,
-        tids))) {
+        column_schema,
+        vec_index_tid))) {
       LOG_WARN("fail to get vector index tid", K(ret), KPC(table_schema));
-    } else if (tids.empty()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("can not get vecter index tid", K(ret), K(column_id), K(i), K(index_type_array.at(i)), KPC(table_schema));
-    } else if (tids.count() > 1 && !session_info_->get_ddl_info().is_ddl()) {
-      // tmp disallow dml while doing rebuild
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Executing DML during IVF index reconstruction");
-      LOG_WARN("Executing DML during IVF index reconstruction is not supported", K(ret), K(tids));
-    } else {
-      int64_t last_shcema_version = OB_INVALID_ID;
-      for (int j = 0; j < tids.count(); ++j) {
-        if (last_shcema_version == OB_INVALID_ID || tids.at(j).schema_version_ > last_shcema_version) {
-          vec_index_tid = tids.at(j).table_id_;
+    } else if (OB_INVALID_ID == vec_index_tid) {
+      index_readable = false;
+      uint64_t rowkey_cid_tid = OB_INVALID_ID;
+      if (!column_schema->is_vec_ivf_center_id_column() && !column_schema->is_vec_ivf_pq_center_ids_column()) {
+      } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(
+          schema_checker_->get_schema_guard(),
+          *table_schema,
+          column_schema->get_column_id(),
+          rowkey_cid_tid,
+          true))) {
+        LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table_schema));
+      } else if (OB_INVALID_ID != rowkey_cid_tid) {
+        ObConstRawExpr *calc_table_id_expr = nullptr;
+        if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, ObUInt64Type, vec_index_tid, calc_table_id_expr))) {
+          LOG_WARN("failed to build const table_id expr", K(ret), K(vec_index_tid));
+        } else if (OB_FAIL(expr->add_param_expr(calc_table_id_expr))) {
+          LOG_WARN("fail to replace param expr", K(ret), KP(calc_table_id_expr));
         }
       }
+    } else {
+      const ObTableSchema *index_table_schema = nullptr;
       CopySchemaExpr copier(*params_.expr_factory_);
       ObRawExpr *part_expr = stmt->get_part_expr(table_id, vec_index_tid);
       ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_id, vec_index_tid);
@@ -19466,7 +19473,31 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
       ObRawExpr *copy_part_expr = nullptr;
       ObRawExpr *copy_subpart_expr = nullptr;
       ObConstRawExpr *calc_table_id_expr = nullptr;
-      if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, ObUInt64Type, vec_index_tid, calc_table_id_expr))) {
+      if (OB_FAIL(schema_checker_->get_schema_guard()->get_table_schema(table_schema->get_tenant_id(), vec_index_tid, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(table_schema->get_tenant_id()), "table_id", vec_index_tid);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(vec_index_tid));
+      } else if (!index_table_schema->can_read_index()) {
+        index_readable = false;
+        uint64_t rowkey_cid_tid = OB_INVALID_ID;
+        if (!column_schema->is_vec_ivf_center_id_column() && !column_schema->is_vec_ivf_pq_center_ids_column()) {
+        } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(
+            schema_checker_->get_schema_guard(),
+            *table_schema,
+            column_schema->get_column_id(),
+            rowkey_cid_tid,
+            true))) {
+          LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table_schema));
+        } else if (OB_INVALID_ID != rowkey_cid_tid) {
+          ObConstRawExpr *calc_table_id_expr = nullptr;
+          if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, ObUInt64Type, vec_index_tid, calc_table_id_expr))) {
+            LOG_WARN("failed to build const table_id expr", K(ret), K(vec_index_tid));
+          } else if (OB_FAIL(expr->add_param_expr(calc_table_id_expr))) {
+            LOG_WARN("fail to replace param expr", K(ret), KP(calc_table_id_expr));
+          }
+        }
+      } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*params_.expr_factory_, ObUInt64Type, vec_index_tid, calc_table_id_expr))) {
         LOG_WARN("failed to build const table_id expr", K(ret), K(vec_index_tid));
       } else if (OB_FAIL(copier.copy(part_expr, copy_part_expr))) {
         LOG_WARN("fail to do part expr copy", K(ret));
@@ -19486,7 +19517,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
     }
   }
 
-  if (OB_SUCC(ret) && need_dist_algo_expr) {
+  if (OB_SUCC(ret) && need_dist_algo_expr && index_readable) {
     ObConstRawExpr *calc_dist_algo_expr = nullptr;
     if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(
         *params_.expr_factory_, ObUInt64Type, static_cast<uint64_t>(param.dist_algorithm_), calc_dist_algo_expr))) {
@@ -19496,7 +19527,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
     }
   }
 
-  if (OB_SUCC(ret) && T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == raw_expr->get_expr_type()) {
+  if (OB_SUCC(ret) && T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == raw_expr->get_expr_type() && index_readable) {
     ObConstRawExpr *calc_pq_m_expr = nullptr;
     if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(
         *params_.expr_factory_, ObUInt64Type, static_cast<uint64_t>(param.m_), calc_pq_m_expr))) {
@@ -20105,7 +20136,7 @@ int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
   return ret;
 }
 
-int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &need_column_ref_expr, const ObColumnSchemaV2 *col_schema)
+int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchemaGetterGuard *schema_guard, bool &need_column_ref_expr, const ObColumnSchemaV2 *col_schema)
 {
   int ret = OB_SUCCESS;
   need_column_ref_expr = false;
@@ -20125,6 +20156,21 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &n
             is_fts_doc_word_aux(index_info.index_type_) || is_multivalue_index_aux(index_info.index_type_)) {
           need_column_ref_expr = true;
         }
+      }
+    } else if (col_schema->is_vec_ivf_center_id_column() || col_schema->is_vec_ivf_pq_center_ids_column()) {
+      uint64_t rowkey_cid_tid = OB_INVALID_ID;
+      const share::schema::ObTableSchema *table = nullptr;
+      const ObSimpleTableSchemaV2 *index_schema = nullptr;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), table))) {
+        LOG_WARN("fail to get ddl table schema", K(ret));
+      } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(
+          schema_guard,
+          *table,
+          col_schema->get_column_id(),
+          rowkey_cid_tid))) {
+        LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table));
+      } else if (OB_INVALID_ID != rowkey_cid_tid) {
+        need_column_ref_expr = true;
       }
     } else {
       need_column_ref_expr = true;

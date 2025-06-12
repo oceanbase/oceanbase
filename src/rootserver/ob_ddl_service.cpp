@@ -7443,7 +7443,8 @@ int ObDDLService::generate_aux_index_schema_(
     ObIndexBuilder index_builder(*this);
     const bool global_index_without_column_info = true;
     if (create_index_arg.is_rebuild_index_) {
-      if (OB_FAIL(ObVectorIndexUtil::generate_index_schema_from_exist_table(tenant_id,
+      if (OB_FAIL(ObVectorIndexUtil::generate_index_schema_from_exist_table(trans,
+                                                                            tenant_id,
                                                                             schema_guard,
                                                                             *this,
                                                                             create_index_arg,
