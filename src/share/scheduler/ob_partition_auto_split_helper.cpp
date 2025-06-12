@@ -1838,7 +1838,7 @@ int ObSplitSampler::fill_query_range_bounder(
           LOG_WARN("fail to fill query range bounder", K(ret), K(l_key), K(h_key));
         } else if (OB_ISNULL(l_key.get_obj_ptr()) || OB_ISNULL(h_key.get_obj_ptr())) { // shallow copy
           ret = OB_NULL_CHECK_ERROR;
-          LOG_WARN("check null ptr failed", K(ret), KP(l_key.get_obj_ptr()), KP(h_key.get_obj_ptr()), K(column_ranges));
+          LOG_WARN("check null ptr failed", K(ret), KP(l_key.get_obj_ptr()), KP(h_key.get_obj_ptr()));
         } else {
           l_obj_buf[i] = l_key.get_obj_ptr()[0];
           h_obj_buf[i] = h_key.get_obj_ptr()[0];
