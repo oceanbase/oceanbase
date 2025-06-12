@@ -4122,7 +4122,7 @@ int ObVectorIndexSliceStore::serialize_vector_index(
     // build tx
     oceanbase::transaction::ObTransService *txs = MTL(transaction::ObTransService*);
     oceanbase::transaction::ObTxReadSnapshot snapshot;
-    int64_t timeout = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+    int64_t timeout = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
     if (OB_ISNULL(tx_desc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get tx desc, get nullptr", K(ret));
