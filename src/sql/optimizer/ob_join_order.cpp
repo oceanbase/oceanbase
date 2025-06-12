@@ -9367,7 +9367,7 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
                || DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) {
       parallel = (has_nl_param && !right_path->is_single() && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP1))
                  ? left_path->parallel_ : right_path->parallel_;
-      parallel = (has_nl_param && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_0)) ?
+      parallel = (has_nl_param && !right_path->is_single() && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_0)) ?
                  std::max(left_path->parallel_, right_path->parallel_) : parallel;
       server_cnt = right_path->server_cnt_;
       available_parallel = right_path->available_parallel_;
