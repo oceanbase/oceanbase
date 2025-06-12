@@ -77,7 +77,7 @@ public:
   {
     return is_valid() &&
            table_cnt <= ITER_POOL_MAX_TABLE_CNT_LIMIT &&
-           col_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() <= ITER_POOL_MAX_COL_CNT_LIMIT &&
+           col_cnt + ITER_POOL_MAX_VIRTUAL_COL_CNT <= ITER_POOL_MAX_COL_CNT_LIMIT &&
            iter_type <= ITER_POOL_MAX_CACHED_ITER_TYPE;
   }
   OB_INLINE bool is_valid() const
@@ -116,6 +116,7 @@ private:
   int inner_get(const ObQRIterType type, CachedIteratorNode *&cache_node);
   bool is_washing() const;
   bool is_disabled() const;
+  static const int64_t ITER_POOL_MAX_VIRTUAL_COL_CNT = 5;
   static const int64_t ITER_POOL_TENANT_MIN_MEM_THRESHOLD = 8L << 30; // 8G
   static constexpr double ITER_POOL_MAX_MEM_PERCENT = 0.002;
   static const int64_t ITER_POOL_MAX_TABLE_CNT_LIMIT = 6;
