@@ -2098,7 +2098,8 @@ private:
                                     bool &need_continue);
 
   const char* ddl_type_str(const share::ObDDLType ddl_type);
-  int check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
+  int check_alter_heap_table_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                   const obrpc::ObIndexArg::IndexActionType type,
                                    const ObTableSchema &orig_table_schema,
                                    obrpc::ObIndexArg *index_arg);
 public:
