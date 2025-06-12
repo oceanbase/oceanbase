@@ -28,17 +28,22 @@
 #define SHARED(id, parent, weight) int id = qdisc_create(QDISC_WEIGHTED_QUEUE, parent, #id); qdisc_set_weight(id, weight);
 #define DEF_LIMIT(id, x) int id = tclimit_create(TCLIMIT_BYTES, #id); tclimit_set_limit(id, x);
 #define DEF_COUNT_LIMIT(id, x) int id = tclimit_create(TCLIMIT_COUNT, #id); tclimit_set_limit(id, x);
+#define LIMIT_SET(id, x) qdisc_set_limit(id, x);
 #define LIMIT(id, limiter_id) qdisc_add_limit(id, limiter_id)
 #define RESERVE(id, limiter_id) qdisc_add_reserve(id, limiter_id)
+#define RESERVE_SET(id, x) qdisc_set_reserve(id, x)
 #define SCHED() qsched_set_handler(root, &g_handler); qsched_start(root, n_sched_thread);
 #define FILL(id, ...) FillThread fill_ ## id; fill_##id.init(root, id); fill_ ## id.start();
+#define FILL_SOME_TIME(id, ...) FillThreadSomeTime fill_ ## id; fill_##id.init(root, id); fill_ ## id.start();
+static int64_t GEN_CNT = 10;
 
 class FillThread;
+class FillThreadSomeTime;
 class TestRequest: public TCRequest
 {
 public:
   TestRequest(int qid, int64_t bytes, FillThread* fill, int64_t seq): TCRequest(qid, bytes), fill_(fill), seq_(seq) {}
-  ~TestRequest() {}
+  virtual ~TestRequest() {}
   FillThread* fill_;
   int64_t seq_;
 };
@@ -53,16 +58,16 @@ public:
       alloc_[i].set_limit(1<<21);
     }
   }
-  ~FillThread() {}
-  void init(int root, int grp) {
+  virtual ~FillThread() {}
+  virtual void init(int root, int grp) {
     root_ = root;
     grp_ = grp;
   }
   static void* do_fill_work(FillThread* self) { self->do_fill_loop(); return NULL; }
-  void do_fill_loop() {
+  virtual void do_fill_loop() {
     tc_format_thread_name("fill_%d", grp_);
     while(1) {
-      TestRequest* r = gen_request(100, gen_cnt_);
+      TestRequest* r = gen_request(1000, gen_cnt_);
       if (r) {
         qsched_submit(root_, r, gen_cnt_);
         gen_cnt_++;
@@ -75,11 +80,10 @@ public:
       }
     }
   }
-  int start() {
+  virtual int start() {
     return pthread_create(&pd_, NULL, (void* (*)(void*))do_fill_work, this);
   }
-private:
-  TestRequest* gen_request(int bytes, int64_t idx) {
+  virtual TestRequest* gen_request(int bytes, int64_t idx) {
     TestRequest* r = (typeof(r))alloc_[idx % N_ALLOC].alloc(sizeof(TestRequest));
     if (r) {
       new(r)TestRequest(grp_, bytes, this, idx);
@@ -87,17 +91,59 @@ private:
     return r;
   }
 
-  void free_request(TestRequest* r)
-  {
+  template <typename RequestType>
+  void free_request(RequestType* r) {
     alloc_[r->seq_ % N_ALLOC].free(r);
   }
-private:
+protected:
   pthread_t pd_;
   int root_;
   int grp_;
   int64_t gen_cnt_;
   FifoAlloc alloc_[N_ALLOC];
   int sleep_interval_;
+};
+
+class FillThreadSomeTime : public FillThread {
+public:
+  FillThreadSomeTime() : FillThread() {}
+  virtual ~FillThreadSomeTime() {}
+
+  virtual void do_fill_loop() override{
+    tc_format_thread_name("fill_%d", grp_);
+
+    int64_t next_burst_time = tc_get_ns() + 3 * 1000L * 1000L * 1000L;
+
+    while (true) {
+      int64_t now = tc_get_ns();
+      if (now >= next_burst_time) {
+        int64_t burst_end_time = now + 1000L * 1000L * 1000L;
+        gen_cnt_ = 0;
+
+        while (tc_get_ns() < burst_end_time && gen_cnt_ < GEN_CNT) {
+          TestRequest* r = gen_request(400L * 1000L, gen_cnt_);
+
+          if (r) {
+            qsched_submit(root_, r, gen_cnt_);
+            gen_cnt_++;
+          } else {
+            usleep(1000L);
+          }
+
+          int64_t sleep_us = 100 * 1000L;
+          if (sleep_us > 0) {
+            usleep(sleep_us);
+          }
+        }
+        next_burst_time = now + 3 * 1000L * 1000L * 1000L;
+      } else {
+        int64_t sleep_us = sleep_interval_;
+        if (sleep_us > 0) {
+          usleep(sleep_us);
+        }
+      }
+    }
+  }
 };
 
 class TestHandler: public ITCHandler
@@ -133,7 +179,7 @@ void multi_fill(FillThread* threads, int* array, int n, int root) {
 #define XSTR(x) #x
 int main()
 {
-  int n_sched_thread = cfgi("scheds", "2");
+  int n_sched_thread = cfgi("scheds", "4");
 #include STR(SRC)
   pause();
   return 0;

@@ -9,12 +9,16 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-DEF_LIMIT(L1, 10000000);
 ROOT(root);
-FIFO(g1, root, 1);
-FIFO(g2, root, 2);
-LIMIT(g1, L1);
-LIMIT(g2, L1);
+
+SHARED(t1, root, 1);
+
+FIFO(g1, t1, 1);
+FIFO(g2, t1, 4);
+LIMIT_SET(t1, 100 * 1000L * 1000L);
+
+RESERVE_SET(g1, 80 * 1000L * 1000L);
+
 SCHED();
-FILL(g1);
+FILL_SOME_TIME(g1);
 FILL(g2);
