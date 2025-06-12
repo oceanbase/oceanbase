@@ -2249,7 +2249,9 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       ObVectorIndexSerializer index_seri(tmp_allocator);
 
       TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-      if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
+      if (!snap_data_->rb_flag_) {
+        // skip deserialize, already been deserialized by other concurrent thread and close_snap_data_rb_flag
+      } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
         LOG_WARN("serialize index failed.", K(ret));
       } else {
         close_snap_data_rb_flag();
