@@ -828,6 +828,7 @@ DEF_NAME(id, "id")
     DEF_NAME(alter_schemas, "alter schemas")
     DEF_NAME_PAIR(parallel_ddl, "parallel ddl")
     DEF_NAME(submit_task, "submit task")
+    DEF_NAME(drop_schemas, "drop schemas")
 
     // location cache related
     DEF_NAME_PAIR(renew_loc_by_sql, "renew loc by sql")

@@ -124,11 +124,10 @@ public:
   ObTabletAutoincCacheCleaner(const uint64_t tenant_id) : tenant_id_(tenant_id), tablet_ids_() {}
   ~ObTabletAutoincCacheCleaner() {}
   int add_table(schema::ObSchemaGetterGuard &schema_guard, const schema::ObTableSchema &table_schema);
+  int add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema);
   int add_database(const schema::ObDatabaseSchema &database_schema);
   int commit(const int64_t timeout_us = DEFAULT_TIMEOUT_US);
   TO_STRING_KV(K_(tenant_id), K_(tablet_ids));
-private:
-  int add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletAutoincCacheCleaner);
   uint64_t tenant_id_;

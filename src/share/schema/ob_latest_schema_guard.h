@@ -256,6 +256,18 @@ public:
       common::ObIArray<ObSAuditSchema> &audit_schemas);
 
   // 1. won't cache
+  // 2. return audits which is [audit_type] and owner is [object_id].
+  // @param[in]:
+  // - audit_type
+  // - object_id: owner id
+  // @param[out]:
+  // - audit_schemas
+  int get_audit_schemas_in_owner(
+      const oceanbase::share::schema::ObSAuditType audit_type,
+      const uint64_t object_id,
+      common::ObIArray<ObSAuditSchema> &audit_schemas);
+
+  // 1. won't cache
   //
   // https://docs.oracle.com/cd/E18283_01/server.112/e17118/sql_elements008.htm
   // Within a namespace, no two objects can have the same name.
@@ -299,6 +311,33 @@ public:
       const ObString &index_name,
       const bool is_built_in,
       ObIndexSchemaInfo &index_info);
+
+  // 1. won't cache
+  // 2. this function is used to get obj_privs of specified object
+  // @param[in]:
+  // - obj_id: the obj_id that privs belong to
+  // - obj_type: the type of obj
+  // @param[out]:
+  // - obj_privs: return empty if obj has no privs
+  //
+  int get_obj_privs(const uint64_t obj_id,
+                    const ObObjectType obj_type,
+                    common::ObIArray<ObObjPriv> &obj_privs);
+
+  // 1. won't cache
+  // @param[in]:
+  // - rls_id
+  // @param[out]:
+  // - rls_schema: return NULL if rls not exist
+#ifndef GET_RLS_SCHEMA
+#define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \
+  int get_##SCHEMA##s(const uint64_t rls_id, \
+                      const SCHEMA_TYPE *&rls_schema);
+  GET_RLS_SCHEMA(rls_policy, ObRlsPolicySchema);
+  GET_RLS_SCHEMA(rls_group, ObRlsGroupSchema);
+  GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
+#undef GET_RLS_SCHEMA
+#endif
 
   /* -------------- interfaces without cache end ---------------*/
 
@@ -365,7 +404,22 @@ public:
   // - udt_info: return NULL if udt not exist
   int get_udt_info(
       const uint64_t udt_id,
-      const ObUDTTypeInfo *udt_info);
+      const ObUDTTypeInfo *&udt_info);
+  // 1. will cache trigger schema in guard
+  // @param[in]:
+  // - trigger_id
+  // @param[out]:
+  // - trigger_schema: return NULL if trigger not exist
+  int get_trigger_info(const uint64_t trigger_id,
+                       const ObTriggerInfo *&trigger_info);
+  // 1. will cache sequence schema in guard
+  // @param[in]:
+  // - sequence_id
+  // @param[out]:
+  // - sequence_schema: return NULL if sequence not exist
+  int get_sequence_schema(const uint64_t sequence_id,
+                          const ObSequenceSchema *&sequence_schema);
+
   /* -------------- interfaces with cache end ---------------*/
 private:
   int check_inner_stat_();

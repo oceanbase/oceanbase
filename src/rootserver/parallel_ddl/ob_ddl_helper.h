@@ -85,6 +85,11 @@ public:
              const uint64_t tenant_id,
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode);
+
+  // sort and check if dep objs are consistent
+  static int check_dep_objs_consistent(
+             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r);
 protected:
   virtual int check_inner_stat_();
   virtual int init_() = 0;
@@ -100,7 +105,7 @@ protected:
   virtual int operation_before_commit_() = 0;
   int end_ddl_trans_(const int return_ret);
   virtual int clean_on_fail_commit_() = 0;
-  virtual int construct_and_adjust_result_(int &returen_ret) = 0;
+  virtual int construct_and_adjust_result_(int &return_ret) = 0;
   /*--------------*/
 protected:
   // lock database name
@@ -154,6 +159,9 @@ private:
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode,
              const ObLockOBJType obj_type);
+  static bool dep_compare_func_(const std::pair<uint64_t, share::schema::ObObjectType> &a,
+                                const std::pair<uint64_t, share::schema::ObObjectType> &b)
+  { return a.first > b.first || (a.first == b.first && a.second > b.second); }
 protected:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
