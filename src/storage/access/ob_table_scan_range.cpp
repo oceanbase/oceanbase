@@ -221,7 +221,7 @@ int ObTableScanRange::get_split_partition_rowkeys(
       } else if (is_false) {
       } else if (OB_FAIL(datum_rowkey.from_rowkey(rowkey, *allocator_))) {
         STORAGE_LOG(WARN, "Failed to transfer rowkey to datum rowkey", K(ret));
-      } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_idx()))) {
+      } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_id()))) {
       } else if (OB_FAIL(split_query.check_rowkey_is_included(datum_rowkey, datum_utils, is_included))) {
         STORAGE_LOG(WARN, "Failed to check rowkey is included", K(ret), K(tablet_id), K(datum_rowkey));
       } else if (is_included && OB_FAIL(rowkeys_.push_back(datum_rowkey))) {
