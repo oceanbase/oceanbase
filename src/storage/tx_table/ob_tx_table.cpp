@@ -15,6 +15,10 @@
 #include "ob_tx_table.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_shared_meta_service.h"
+#include "storage/incremental/share/ob_shared_ls_meta.h"
+#endif
 
 namespace oceanbase {
 using namespace share;
@@ -1329,6 +1333,7 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
   int ret = OB_SUCCESS;
   const int64_t SHARED_STORAGE_USE_CACHE_DURATION = 1_hour;
 
+  SCN ss_checkpoint_scn = SCN::invalid_scn();
   SCN tx_data_table_upload_scn = SCN::invalid_scn();
   SCN data_upload_min_end_scn = SCN::invalid_scn();
   int64_t origin_time = ATOMIC_LOAD(&(ss_upload_scn_cache_.update_ts_));
@@ -1347,7 +1352,12 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
     }
     // Tip1: may output min_scn if no uploads exists or max_uploaded_scn if
     // there exists
-    if (FAILEDx(ls_->get_inc_sstable_upload_handler().
+    ObSSLSMeta ss_ls_meta;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id_, ss_ls_meta))) {
+      TRANS_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
+    } else if (FALSE_IT(ss_checkpoint_scn = SCN::scn_dec(ss_ls_meta.get_ss_checkpoint_scn()))) {
+    } else if (OB_FAIL(ls_->get_inc_sstable_upload_handler().
                 get_tablet_upload_pos(LS_TX_DATA_TABLET,
                                       transfer_scn,
                                       tx_data_table_upload_scn))) {
@@ -1361,6 +1371,7 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
     // concurrently change the cache
     } else if (ATOMIC_BCAS(&(ss_upload_scn_cache_.update_ts_),
                            current_time, current_time + 1)) {
+      ss_upload_scn_cache_.ss_checkpoint_scn_cache_.atomic_store(ss_checkpoint_scn);
       ss_upload_scn_cache_.tx_table_upload_max_scn_cache_.atomic_store(tx_data_table_upload_scn);
       ss_upload_scn_cache_.data_upload_min_end_scn_cache_.atomic_store(data_upload_min_end_scn);
       TRANS_LOG(WARN, "ss_upload_scn updated successfully", K(ss_upload_scn_cache_));
@@ -1381,22 +1392,32 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
 
 
   if (OB_SUCC(ret)) {
+    ss_checkpoint_scn = ss_upload_scn_cache_.ss_checkpoint_scn_cache_.atomic_load();
     tx_data_table_upload_scn = ss_upload_scn_cache_.tx_table_upload_max_scn_cache_.atomic_load();
     data_upload_min_end_scn = ss_upload_scn_cache_.data_upload_min_end_scn_cache_.atomic_load();
 
-    // Tip1: we need to obtain the upload location for the tx_data_table to
+    // Tip1: we need to obtain the ss checkpoint location for the ls to ensuare
+    // that all data before the checkpoint has been upload. It is important to
+    // note that this is a correctness requirement. Otherwise the tablet with no
+    // mini and minor will not be calculated
+    if (!ss_checkpoint_scn.is_valid()) {
+      TRANS_LOG(WARN, "ss_checkpoint_scn is invalid", K(ss_upload_scn_cache_));
+    } else if (ss_checkpoint_scn < ss_recycle_scn) {
+      ss_recycle_scn = ss_checkpoint_scn;
+    }
+
+    // Tip2: we need to obtain the upload location for the tx_data_table to
     // ensure that transaction data that hasn't been uploaded is not recycled,
     // thereby maintaining the integrity of transaction data on shared storage.
     // It is important to note that this is not a correctness requirement but
     // rather for facilitating better troubleshooting in the future.
     if (!tx_data_table_upload_scn.is_valid()) {
       // we havenot aleady upload anything in cache
-      ss_recycle_scn.set_min();
     } else if (tx_data_table_upload_scn < ss_recycle_scn) {
       ss_recycle_scn = tx_data_table_upload_scn;
     }
 
-    // Tip2: we need to obtain the smallest end_scn among all tablets that have
+    // Tip3: we need to obtain the smallest end_scn among all tablets that have
     // uploaded its sstables. This ensures that uncommitted data, which has not
     // been backfilled, can certainly be interpreted by the transaction data on
     // shared storage. It is important to note that this is a correctness
@@ -1405,10 +1426,11 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
     // storage can be interpreted properly.
     if (!data_upload_min_end_scn.is_valid()) {
       // we havenot aleady upload anything in cache
-      ss_recycle_scn.set_min();
     } else if (data_upload_min_end_scn < ss_recycle_scn) {
       ss_recycle_scn = data_upload_min_end_scn;
     }
+
+    FLOG_INFO("resolve_shared_storage_upload_info_", K(ss_upload_scn_cache_), K(ss_recycle_scn));
   }
 
   return ret;

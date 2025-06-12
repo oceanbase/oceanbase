@@ -443,6 +443,7 @@ private:
 private:
   struct SSUploadSCNCache
   {
+    share::SCN ss_checkpoint_scn_cache_;
     share::SCN tx_table_upload_max_scn_cache_;
     share::SCN data_upload_min_end_scn_cache_;
     // we use update ts also as an atomic concurrent variable.
@@ -451,12 +452,14 @@ private:
     SSUploadSCNCache() { reset(); }
 
     void reset() {
+      ss_checkpoint_scn_cache_.reset();
       tx_table_upload_max_scn_cache_.reset();
       data_upload_min_end_scn_cache_.reset();
       update_ts_ = 0;
     }
 
-    TO_STRING_KV(K(tx_table_upload_max_scn_cache_),
+    TO_STRING_KV(K(ss_checkpoint_scn_cache_),
+                 K(tx_table_upload_max_scn_cache_),
                  K(data_upload_min_end_scn_cache_),
                  K(update_ts_));
   };
