@@ -39,11 +39,14 @@ int ObDBMSVectorMySql::refresh_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
   int ret = OB_SUCCESS;
   CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
   CK(OB_LIKELY(5 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()),
-      OB_LIKELY(params.at(1).is_varchar()),
-      OB_LIKELY(params.at(2).is_null() || params.at(2).is_varchar()),
-      OB_LIKELY(params.at(3).is_int32()),
-      OB_LIKELY(params.at(4).is_null() || params.at(4).is_varchar()));
+  if (!params.at(0).is_varchar()
+      || !params.at(1).is_varchar()
+      || (!params.at(2).is_null() && !params.at(2).is_varchar())
+      || !(!params.at(3).is_null() && params.at(3).is_int32())
+      || (!params.at(4).is_null() && !params.at(4).is_varchar())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument for refresh index", KR(ret));
+  }
   if (OB_SUCC(ret)) {
       ObVectorRefreshIndexArg refresh_arg;
       ObVectorRefreshIndexExecutor refresh_executor;
@@ -77,14 +80,17 @@ int ObDBMSVectorMySql::rebuild_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
   int ret = OB_SUCCESS;
   CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
   CK(OB_LIKELY(8 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()),
-      OB_LIKELY(params.at(1).is_varchar()),
-      OB_LIKELY(params.at(2).is_null() || params.at(2).is_varchar()),
-      OB_LIKELY(params.at(3).is_float()),
-      OB_LIKELY(params.at(4).is_null() || params.at(4).is_varchar()),
-      OB_LIKELY(params.at(5).is_varchar()),
-      OB_LIKELY(params.at(6).is_null() || params.at(6).is_text()),
-      OB_LIKELY(params.at(7).is_int32()));
+  if (!params.at(0).is_varchar()
+      || !params.at(1).is_varchar()
+      || (!params.at(2).is_null() && !params.at(2).is_varchar())
+      || !(!params.at(3).is_null() && params.at(3).is_float())
+      || (!params.at(4).is_null() && !params.at(4).is_varchar())
+      || !params.at(5).is_varchar()
+      || (!params.at(6).is_null() && !params.at(6).is_text())
+      || !(!params.at(7).is_null() && params.at(7).is_int32())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument for rebuild index", KR(ret));
+  }
   if (OB_SUCC(ret)) {
       ObVectorRebuildIndexArg rebuild_arg;
       ObVectorRefreshIndexExecutor rebuild_executor;
