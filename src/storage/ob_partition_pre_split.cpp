@@ -356,7 +356,7 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
           } else if (index_schema.get_column_count() == 0 &&
               OB_FAIL(ObIndexBuilderUtil::set_index_table_columns(*create_index_arg, *data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret));
-          } else if (OB_FAIL(check_table_can_do_pre_split(index_schema))) {
+          } else if (OB_FAIL(check_table_can_do_pre_split(*data_table_schema, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
           } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to get new index table split range", K(ret), K(tenant_id), K(database_name));
@@ -405,7 +405,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
   } else if (OB_UNLIKELY(db_name.empty() || OB_INVALID_ID == tenant_id || ddl_type > ObDDLType::DDL_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[PRE_SPLIT] invalid argument", K(ret), K(db_name), K(tenant_id), K(ddl_type));
-  } else if (OB_FAIL(check_table_can_do_pre_split(new_table_schema))) {
+  } else if (OB_FAIL(check_table_can_do_pre_split(data_table_schema, new_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(new_table_schema));
   }
   if (OB_FAIL(ret)) {
@@ -547,6 +547,7 @@ int ObPartitionPreSplit::do_pre_split_main_table(
     4. partition key is prefix of rowkey
 */
 int ObPartitionPreSplit::check_table_can_do_pre_split(
+    const ObTableSchema &data_table_schema,
     const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -561,6 +562,10 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   } else if (OB_UNLIKELY(!is_user_table && !is_global_index_table)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support none user table/global index", K(ret), K(is_user_table), K(is_global_index_table));
+  } else if (OB_UNLIKELY(is_global_index_table && !data_table_schema.is_partitioned_table() && !data_table_schema.is_auto_partitioned_table()
+        && !table_schema.is_partitioned_table() && !table_schema.is_auto_partitioned_table())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("[PRE_SPLIT] not support global local storage index", K(ret), K(data_table_schema.is_auto_partitioned_table()), K(data_table_schema.is_partitioned_table()));
   } else if (table_schema.get_part_level() > PARTITION_LEVEL_ONE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support part level > 1 currently", K(ret), K(table_schema.get_part_level()));
