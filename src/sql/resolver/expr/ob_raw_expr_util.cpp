@@ -7704,7 +7704,10 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
           const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
           OZ (schema_checker.get_udt_info(src_tenant_id, src->get_udt_id(), src_info));
           OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
-          CK (OB_NOT_NULL(src_info), OB_NOT_NULL(dest_info));
+          if (OB_SUCC(ret) && (OB_ISNULL(src_info) || OB_ISNULL(dest_info))) { //pl extend type does not support
+            ret = OB_ERR_INVALID_CAST_UDT;
+            LOG_WARN("src or dst info can not cast", K(ret));
+          }
           if (OB_SUCC(ret)) {
             if (src_info->is_collection() && dest_info->is_collection()) {
               CK (OB_NOT_NULL(src_info->get_coll_info()), OB_NOT_NULL(dest_info->get_coll_info()));
