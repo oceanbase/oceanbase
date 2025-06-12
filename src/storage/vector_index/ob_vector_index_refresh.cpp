@@ -612,7 +612,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
       LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (!idx_parameters.empty()
-        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema, domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
+        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
       LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));

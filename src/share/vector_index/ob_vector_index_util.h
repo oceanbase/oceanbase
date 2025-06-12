@@ -200,7 +200,6 @@ class ObVectorIndexUtil final
   };
 public:
   static int construct_rebuild_index_param(
-      const ObTableSchema &data_table_schema,
       const ObString &old_index_params,
       ObString &new_index_params,
       common::ObIAllocator *allocator);
