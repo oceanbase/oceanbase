@@ -591,7 +591,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   is_evolution &= (NULL != stat_.evolution_stat_.records_);
   bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_row_count_)) >= 0;
   if (!is_evolution && stat_.enable_plan_expiration_ && check_if_is_expired_by_error(record.status_)) {
-    set_is_expired(true);
+    set_is_expired(EXPIRED_BY_EXEC_ERROR);
     LOG_INFO("query plan is expired due to execution error", K(record.status_), K(stat_));
   } else if (is_first && !is_evolution) {
     ATOMIC_STORE(&(stat_.sample_times_), 0);
@@ -641,7 +641,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
              && record.get_elapsed_time() > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE
              && check_if_is_expired(record.get_elapsed_time(), stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list)) {
     /* expire plan by range scan row count */
-    set_is_expired(true);
+    set_is_expired(EXPIRED_BY_TABLE_ACCESS_ROW_COUNT);
   } else {
     /* expire plan by local plan row count and dist plan exec time */
     int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
@@ -653,7 +653,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
       if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
-        set_is_expired(true);
+        set_is_expired(EXPIRED_BY_EXEC_TIME);
         if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
           LOG_INFO("plan expired for physical plan avg elapsed_time more than 5ms", K(stat_.plan_id_),
                                       K(stat_.elapsed_time_), K(stat_.execute_times_));
