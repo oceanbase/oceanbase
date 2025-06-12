@@ -76,6 +76,7 @@ int ObPartitionSplitQuery::get_tablet_split_range(
       const ObDatumRowkey &split_end_key = split_info.end_partkey_;
       const ObDatumRowkey &src_start_key = src_range.get_start_key();
       const ObDatumRowkey &src_end_key = src_range.get_end_key();
+      const int64_t rowkey_cnt = tablet.get_rowkey_read_info().get_schema_rowkey_count();
       // ObDatumRowkey
       if (OB_FAIL(split_start_key.compare(split_end_key, datum_utils, compare_ret))) {
         LOG_WARN("fail to split range, compare error.", K(ret), K(split_info));
@@ -117,8 +118,9 @@ int ObPartitionSplitQuery::get_tablet_split_range(
           } else if (compare_ret > 0) {
             // split start key > src start key, set src start key to split start key
             ObDatumRowkey new_key;
-            if (split_start_key.get_datum_cnt() < src_start_key.get_datum_cnt()) {
-              if (OB_FAIL(copy_split_key(split_start_key, src_start_key, new_key, allocator))) {
+            const int64_t fill_cnt = std::max(rowkey_cnt, static_cast<int64_t>(src_start_key.get_datum_cnt()));
+            if (split_start_key.get_datum_cnt() < fill_cnt) {
+              if (OB_FAIL(copy_split_key(split_start_key, fill_cnt, new_key, allocator))) {
                 LOG_WARN("fail to copy split key.", K(ret));
               } else {
                 src_range.set_start_key(new_key);
@@ -136,8 +138,9 @@ int ObPartitionSplitQuery::get_tablet_split_range(
               /* split end key <= src end key, set end key of split end key and right bounder open
                * like: src=[1,5], split=[2,5), result=[2,5) */
               ObDatumRowkey new_key;
-              if (split_end_key.get_datum_cnt() < src_end_key.get_datum_cnt()) {
-                if (OB_FAIL(copy_split_key(split_end_key, src_end_key, new_key, allocator))) {
+              const int64_t fill_cnt = std::max(rowkey_cnt, static_cast<int64_t>(src_end_key.get_datum_cnt()));
+              if (split_end_key.get_datum_cnt() < fill_cnt) {
+                if (OB_FAIL(copy_split_key(split_end_key, fill_cnt, new_key, allocator))) {
                   LOG_WARN("fail to copy split key.", K(ret));
                 } else {
                   src_range.set_end_key(new_key);
@@ -171,14 +174,13 @@ int ObPartitionSplitQuery::get_tablet_split_range(
 
 int ObPartitionSplitQuery::copy_split_key(
     const ObDatumRowkey &split_key,
-    const ObDatumRowkey &src_key,
+    const int64_t src_datum_cnt,
     ObDatumRowkey &new_key,
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   // copy column datum
   ObStorageDatum *datums = nullptr;
-  const int src_datum_cnt = src_key.get_datum_cnt();
   if (OB_ISNULL(datums = (ObStorageDatum*) allocator.alloc(sizeof(ObStorageDatum) * src_datum_cnt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "Failed to alloc memory for datum key", K(ret), K(src_datum_cnt));

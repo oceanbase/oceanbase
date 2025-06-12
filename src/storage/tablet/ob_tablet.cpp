@@ -4285,8 +4285,10 @@ int ObTablet::get_split_dst_read_table(
         } else if (OB_FAIL(iter.add_split_extra_tablet_handle(dst_tablet_handle))) {
           LOG_WARN("fail to set split src tablet handle", K(ret));
         } else if (OB_FALSE_IT(dst_tablet = dst_tablet_handle.get_obj())) {
+        } else if (OB_UNLIKELY(snapshot_version < dst_tablet->get_multi_version_start())) {
+          ret = OB_SNAPSHOT_DISCARDED;
+          LOG_WARN("snapshot not readable in split dst", K(ret), K(tablet_meta_.tablet_id_), K(dst_tablet_id));
         } else if (dst_tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          ObTabletCreateDeleteMdsUserData user_data;
           if (get_last_major_snapshot_version() != dst_tablet->get_last_major_snapshot_version()) {
             ret = OB_SCHEMA_EAGAIN;
             LOG_WARN("dst lastest major not same as src", K(ret), K(tablet_meta_.tablet_id_), K(dst_tablet_id),

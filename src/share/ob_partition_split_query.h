@@ -108,7 +108,7 @@ public:
 private:
   int copy_split_key(
       const blocksstable::ObDatumRowkey &split_key,
-      const blocksstable::ObDatumRowkey &src_key,
+      const int64_t src_datum_cnt,
       blocksstable::ObDatumRowkey &new_key,
       ObIAllocator &allocator);
 
