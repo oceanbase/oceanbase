@@ -957,10 +957,6 @@ void ObBlockManager::mark_and_sweep()
     LOG_WARN("block manager not init", K(ret));
   } else if (!is_mark_sweep_enabled()) {
     LOG_INFO("mark and sweep is disabled, do not mark and sweep this round");
-  } else if (!SERVER_STORAGE_META_SERVICE.is_started()) {
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
-      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
-    }
   } else {
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to init mark info, ", K(ret));
