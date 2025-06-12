@@ -1129,6 +1129,8 @@ private:
   int get_election_leader_without_lock_(ObAddr &addr) const;
   int update_self_region_();
   int force_set_member_list_(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
+  int inc_config_version(int64_t timeout_us) override final;
+
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,

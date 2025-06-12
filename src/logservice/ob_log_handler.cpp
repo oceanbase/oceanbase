@@ -960,6 +960,22 @@ int ObLogHandler::force_set_member_list(const common::ObMemberList &new_member_l
   return ret;
 }
 
+int ObLogHandler::inc_config_version(int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  common::TCWLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not inited", KR(ret));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is in stop state", KR(ret));
+  } else {
+    // direct execute inc_config_version for SS mode
+    PALF_MEMBER_PROXY_WITH_RET(inc_config_version, timeout_us);
+  }
+  return ret;
+}
 
 // @desc: add_member interface
 //        | 1.add_member()

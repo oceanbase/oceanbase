@@ -271,6 +271,7 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - other: bug
   int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
+  int inc_config_version(int64_t timeout_us);
 
   int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                  common::GlobalLearnerList &degraded_list) const;

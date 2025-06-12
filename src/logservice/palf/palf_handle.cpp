@@ -361,6 +361,12 @@ int PalfHandle::force_set_member_list(const common::ObMemberList &new_member_lis
   CHECK_VALID;
   return palf_handle_impl_->force_set_member_list(new_member_list, new_replica_num);
 }
+int PalfHandle::inc_config_version(int64_t timeout_us)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->inc_config_version(timeout_us);
+}
+
 int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                    common::GlobalLearnerList &degraded_list) const
 {
