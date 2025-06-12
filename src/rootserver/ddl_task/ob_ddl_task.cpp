@@ -16,6 +16,7 @@
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ob_common_id_utils.h"
+#include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ddl_task/ob_rebuild_index_task.h"
@@ -1436,7 +1437,7 @@ int ObDDLTask::wait_trans_end(
   }
 
   if (OB_SUCC(ret) && new_status != next_task_status && !wait_trans_ctx.is_inited()) {
-    if (OB_FAIL(wait_trans_ctx.init(tenant_id_, task_id_, object_id_,
+    if (OB_FAIL(wait_trans_ctx.init(tenant_id_, task_id_, task_status_, object_id_,
       ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS, data_table_schema->get_schema_version()))) {
       LOG_WARN("fail to init wait trans ctx", K(ret));
     }
@@ -1725,6 +1726,7 @@ ObDDLWaitTransEndCtx::~ObDDLWaitTransEndCtx()
 int ObDDLWaitTransEndCtx::init(
     const uint64_t tenant_id,
     const int64_t ddl_task_id,
+    const share::ObDDLTaskStatus ddl_task_status,
     const uint64_t table_id,
     const WaitTransType wait_trans_type,
     const int64_t wait_version)
@@ -1759,6 +1761,8 @@ int ObDDLWaitTransEndCtx::init(
       wait_type_ = wait_trans_type;
       wait_version_ = wait_version;
       is_trans_end_ = false;
+      ddl_task_status_ = ddl_task_status;
+      is_write_defensive_done_ = false;
       is_inited_ = true;
     }
   }
@@ -1768,6 +1772,7 @@ int ObDDLWaitTransEndCtx::init(
 int ObDDLWaitTransEndCtx::init(
     const uint64_t tenant_id,
     const int64_t ddl_task_id,
+    const share::ObDDLTaskStatus ddl_task_status,
     const uint64_t table_id,
     const ObIArray<ObTabletID> &tablet_ids,
     const WaitTransType wait_trans_type,
@@ -1795,6 +1800,8 @@ int ObDDLWaitTransEndCtx::init(
     wait_type_ = wait_trans_type;
     wait_version_ = wait_version;
     is_trans_end_ = false;
+    ddl_task_status_ = ddl_task_status;
+    is_write_defensive_done_ = false;
     is_inited_ = true;
   }
   return ret;
@@ -1811,6 +1818,8 @@ void ObDDLWaitTransEndCtx::reset()
   tablet_ids_.reset();
   snapshot_array_.reset();
   ddl_task_id_ = 0;
+  ddl_task_status_ = ObDDLTaskStatus::PREPARE;
+  is_write_defensive_done_ = false;
 }
 
 struct SendItem final
@@ -1986,7 +1995,8 @@ int ObDDLWaitTransEndCtx::check_schema_trans_end(
     const uint64_t tenant_id,
     obrpc::ObSrvRpcProxy *rpc_proxy,
     ObLocationService *location_service,
-    const bool need_wait_trans_end)
+    const bool need_wait_trans_end,
+    const bool need_write_defensive)
 {
   int ret = OB_SUCCESS;
   ret_array.reset();
@@ -1998,7 +2008,14 @@ int ObDDLWaitTransEndCtx::check_schema_trans_end(
     LOG_WARN("invalid argument", K(ret), K(schema_version), K(tablet_ids.count()), K(tenant_id), KP(rpc_proxy), KP(location_service));
   } else if (OB_FAIL(group_tablets_leader_addr(tenant_id, tablet_ids, location_service, send_array))) {
     LOG_WARN("group tablet by leader addr failed", K(ret), K(tenant_id), K(tablet_ids.count()));
-  } else {
+  } else if (need_write_defensive && !is_write_defensive_done_) {
+    if (OB_FAIL(do_write_defensive(tenant_id, ddl_task_id_, ddl_task_status_, tablet_ids, schema_version))) {
+      LOG_WARN("failed to do write defense", K(ret), K(tenant_id), K(ddl_task_id_), K(ddl_task_status_), K(tablet_ids.count()));
+    } else {
+      is_write_defensive_done_ = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
     ObCheckSchemaVersionElapsedProxy proxy(*rpc_proxy, &obrpc::ObSrvRpcProxy::check_schema_version_elapsed);
     obrpc::ObCheckSchemaVersionElapsedArg arg;
     obrpc::ObCheckSchemaVersionElapsedResult *res = nullptr;
@@ -2010,6 +2027,46 @@ int ObDDLWaitTransEndCtx::check_schema_trans_end(
       LOG_WARN("check trans end failed", K(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, ddl_task_id_, CHECK_TRANS_END_FAILED))) {
       LOG_WARN("ddl sim failure: check trans end failed", K(ret), K(tenant_id_), K(ddl_task_id_));
+    }
+  }
+  return ret;
+}
+
+int ObDDLWaitTransEndCtx::do_write_defensive(
+    const uint64_t tenant_id,
+    const int64_t ddl_task_id,
+    const ObDDLTaskStatus ddl_task_status,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  ObMySQLTransaction trans;
+  int64_t timeout_us = 0;
+  int64_t cur_task_status = 0;
+  int64_t execution_id = 0;
+  int64_t ret_code = OB_SUCCESS;
+  int64_t snapshot_version = OB_INVALID_VERSION;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_ids.count(), timeout_us))) {
+    LOG_WARN("failed to get ddl rpc timeout", K(ret), K(tablet_ids.count()));
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, ddl_task_id, cur_task_status, execution_id, ret_code))) {
+    LOG_WARN("failed to select for update task record", K(ret), K(tenant_id), K(ddl_task_id));
+  } else if (OB_UNLIKELY(ddl_task_status != static_cast<share::ObDDLTaskStatus>(cur_task_status))) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status not match, operation is stale", K(ret), K(tenant_id), K(ddl_task_id), K(ddl_task_status), K(cur_task_status));
+  } else if (OB_FAIL(storage::ObTabletBindingMdsHelper::modify_tablet_binding_for_write_defensive(tenant_id, tablet_ids, schema_version, ObTimeUtility::current_time() + timeout_us, trans))) {
+    LOG_WARN("failed to modify tablet binding for write defensive", K(ret), K(schema_version));
+  }
+  if (trans.is_started()) {
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN_RET(temp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+      ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
   }
   return ret;
@@ -2079,7 +2136,15 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
         case WaitTransType::WAIT_SCHEMA_TRANS: {
           if (OB_FAIL(check_schema_trans_end(
               wait_version_, need_check_tablets, ret_codes, tmp_snapshots, tenant_id_,
-              GCTX.srv_rpc_proxy_, GCTX.location_service_, need_wait_trans_end))) {
+              GCTX.srv_rpc_proxy_, GCTX.location_service_, need_wait_trans_end, true/*need_write_defensive*/))) {
+            LOG_WARN("check schema transactions elapsed failed", K(ret), K(wait_type_), K(wait_version_));
+          }
+          break;
+        }
+        case WaitTransType::WAIT_SCHEMA_TRANS_WITHOUT_WRITE_DEFENSIVE: {
+          if (OB_FAIL(check_schema_trans_end(
+              wait_version_, need_check_tablets, ret_codes, tmp_snapshots, tenant_id_,
+              GCTX.srv_rpc_proxy_, GCTX.location_service_, need_wait_trans_end, false/*need_write_defensive*/))) {
             LOG_WARN("check schema transactions elapsed failed", K(ret), K(wait_type_), K(wait_version_));
           }
           break;

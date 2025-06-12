@@ -1486,7 +1486,7 @@ int ObDDLUtil::obtain_snapshot(
     int64_t new_fetched_snapshot = 0;
     int64_t persisted_snapshot = 0;
     if (!wait_trans_ctx->is_inited()) {
-      if (OB_FAIL(wait_trans_ctx->init(tenant_id, task->get_task_id(), task->get_object_id(), rootserver::ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS, task->get_src_schema_version()))) {
+      if (OB_FAIL(wait_trans_ctx->init(tenant_id, task->get_task_id(), static_cast<ObDDLTaskStatus>(task->get_task_status()), task->get_object_id(), rootserver::ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS, task->get_src_schema_version()))) {
         LOG_WARN("fail to init wait trans ctx", K(ret));
       }
     } else {
