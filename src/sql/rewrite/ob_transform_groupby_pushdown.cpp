@@ -1177,6 +1177,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
   bool contain_inner_table = false;
   bool contain_lateral_table = false;
   bool allow_distinct = false;
+  ObSEArray<ObRawExpr *, 4> group_cols;
   bool is_enabled = ctx_->is_groupby_placement_enabled_;
   is_valid = true;
   if (OB_ISNULL(stmt)) {
@@ -1203,6 +1204,12 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     // select sum(t1_cnt * t2_cnt) from (select c1, count(*) from t1 group by c1),
     //                                  (select c1, count(*) from t2 group by c1);
     //                                  where t1.c1 = t2.c1;
+    is_valid = false;
+    LOG_TRACE("invalid stmt for eager aggregation", K(is_valid));
+    OPT_TRACE("invalid stmt for eager aggregation");
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt->get_group_exprs(), group_cols))) {
+    LOG_WARN("failed to extract group columns", K(ret));
+  } else if (group_cols.empty()) {
     is_valid = false;
     LOG_TRACE("invalid stmt for eager aggregation", K(is_valid));
     OPT_TRACE("invalid stmt for eager aggregation");
@@ -1914,12 +1921,13 @@ int ObTransformGroupByPushdown::merge_params_by_cross_joins(ObSelectStmt *stmt,
       break;
     }
   }
+
   bool hint_force_pushdown = false;
   bool is_hint_valid = false;
   if (OB_SUCC(ret)) {
-    if (has_distinct && !has_cross_join) {
-      is_valid = false;
-      OPT_TRACE("group by pushdown not valid as has distinct");
+    if (!has_cross_join) {
+      is_valid = is_valid && !has_distinct && get_valid_eager_aggr_num(params) > 0;
+      OPT_TRACE("group by pushdown not valid as has distinct or no valid params");
     }
     if (OB_SUCC(ret) && is_valid) {
       if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
@@ -2583,6 +2591,8 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
       if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
           *ctx_->expr_factory_, ctx_->session_info_, T_OP_MUL,
           mul_expr, mul_expr, new_view_exprs.at(i)))) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_, aggr_expr, mul_expr, ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(new_agg_exprs.push_back(mul_expr))) {
         LOG_WARN("failed to push_back to new_agg_exprs", K(ret));
       }
