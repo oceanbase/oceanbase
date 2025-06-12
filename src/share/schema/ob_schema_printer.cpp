@@ -6389,19 +6389,22 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const uint64_t table_id = table_schema.get_table_id();
   bool has_pk = false;
+  const ObTableSchema *index_schema = NULL;
   ObArenaAllocator allocator("PrintHeapTblPk", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
 
   if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
     tenant_id, table_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_id));
   }
-  ObTableSchema::const_column_iterator iter = table_schema.column_begin();
-  for ( ; OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
-    const ObColumnSchemaV2 *column = *iter;
-    if (OB_ISNULL(column)) {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      SHARE_SCHEMA_LOG(WARN, "fail to get column_schema", K(ret));
-    } else if (column->is_heap_table_primary_key_column()) {
+
+  const common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema.get_simple_index_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("fail to get index schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_schema->get_index_type()) {
       has_pk = true;
       break;
     }
@@ -6413,13 +6416,18 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
         SHARE_SCHEMA_LOG(WARN, "fail to print PRIMARY KEY(", K(ret));
       }
     }
-    iter = table_schema.column_begin();
-    for ( ; OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
-      const ObColumnSchemaV2 *column = *iter;
+
+    const ObRowkeyInfo &rowkey_info = index_schema->get_rowkey_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); i++) {
+      const ObRowkeyColumn *rowkey_column = nullptr;
+      const ObColumnSchemaV2 *column = nullptr;
       ObString new_col_name;
-      if (OB_ISNULL(column)) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        SHARE_SCHEMA_LOG(WARN, "fail to get column_schema", K(ret));
+      if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, rowkey column must not be nullptr", K(ret));
+      } else if (OB_ISNULL(column = index_schema->get_column_schema(rowkey_column->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is nullptr", K(ret), K(rowkey_column->column_id_), K(*index_schema));
       } else if (column->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID) {
         // do nothing
       } else if (column->is_heap_table_primary_key_column()) {
