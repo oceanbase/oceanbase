@@ -717,9 +717,9 @@ int ObODPSTableRowIterator::prepare_expr()
         LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] and metadata$partition_list_col[index]");
       } else if (OB_FAIL(target_column_id_list_.push_back(target_idx))) {
         LOG_WARN("failed to keep target_idx", K(ret));
-      // } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
-      //            OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
-      //   LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
+      } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
+                 OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
+        LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
       }
     }
     if (OB_SUCC(ret)) {
