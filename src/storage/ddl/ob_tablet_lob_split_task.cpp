@@ -337,6 +337,7 @@ void ObLobSplitContext::destroy()
   for (int64_t i = 0; i < sub_maps_.count(); i++) {
     if (sub_maps_.at(i) != nullptr) {
       sub_maps_.at(i)->clean_up();
+      sub_maps_.at(i)->~ObExternalSort<ObLobIdItem, ObLobIdItemCompare>();
       allocator_.free(sub_maps_.at(i));
     }
   }
