@@ -224,6 +224,10 @@ public:
         v.client_ret_ = ret; // session terminated
       }
       LOG_WARN("execution was terminated", K(ret), K(v.client_ret_), K(v.err_));
+    } else if (IS_INTERRUPTED_BY_OUTER_QUERY()) {
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = v.err_;
     } else if (THIS_WORKER.is_timeout()) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
@@ -772,7 +776,6 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   ObFastFailRetryPolicy fast_fail;
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
   retry_obj.test(fast_fail).test(retry_long_wait);
-
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
     ObRefreshLocationCacheBlockPolicy block_refresh; // FIXME: why block?
     retry_obj.test(block_refresh);
@@ -1285,6 +1288,9 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
                                                  bool is_part_of_pl_sql)
 {
   int ret = OB_SUCCESS;
+  // ignore interrupted state of current checker when execute inner sql during get retry state.
+  ObInterruptChecker tmp_checker;
+  ObInterruptCheckerGuard checker_guard(tmp_checker);
   client_ret = err;
   retry_type_ = RETRY_TYPE_NONE;
   retry_err_code_ = OB_SUCCESS;
