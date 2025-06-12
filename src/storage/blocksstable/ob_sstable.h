@@ -77,7 +77,6 @@ public:
   void reset();
   int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
   void set_upper_trans_version(const int64_t upper_trans_version);
-  void set_ss_tablet_version(const share::SCN &ss_tablet_version);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION_1; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
@@ -113,7 +112,6 @@ public:
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
   share::SCN rec_scn_;
-  share::SCN ss_tablet_version_;
 };
 
 
@@ -197,8 +195,6 @@ public:
   int set_upper_trans_version(
       common::ObArenaAllocator &allocator,
       const int64_t upper_trans_version);
-  int set_ss_tablet_version(common::ObArenaAllocator &allocator,
-                            const share::SCN &ss_tablet_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -218,10 +214,6 @@ public:
   OB_INLINE share::SCN get_rec_scn() override
   {
     return meta_cache_.rec_scn_;
-  }
-  OB_INLINE share::SCN get_ss_tablet_version()
-  {
-    return meta_cache_.ss_tablet_version_;
   }
   OB_INLINE bool has_padding_meta_cache() const
   {

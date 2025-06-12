@@ -328,20 +328,6 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(v);
           break;
         }
-        case SS_TABLET_VERSION: {
-          share::SCN ss_tablet_version;
-          if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
-               ss_tablet_version = sst_meta_hdl.get_sstable_meta().get_ss_tablet_version();
-            }
-          }
-          uint64_t v = ss_tablet_version.get_val_for_inner_table_field();
-          cur_row_.cells_[i].set_uint64(v);
-          break;
-        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

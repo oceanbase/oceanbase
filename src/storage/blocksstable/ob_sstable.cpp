@@ -64,8 +64,7 @@ ObSSTableMetaCache::ObSSTableMetaCache()
     upper_trans_version_(0),
     filled_tx_scn_(share::SCN::min_scn()),
     contain_uncommitted_row_(false),
-    rec_scn_(),
-    ss_tablet_version_(share::SCN::min_scn())
+    rec_scn_()
 {
 }
 
@@ -85,7 +84,6 @@ void ObSSTableMetaCache::reset()
   filled_tx_scn_.set_min();
   contain_uncommitted_row_ = false;
   rec_scn_.reset();
-  ss_tablet_version_.set_min();
 }
 
 int ObSSTableMetaCache::init(
@@ -116,7 +114,6 @@ int ObSSTableMetaCache::init(
     filled_tx_scn_ = meta->get_filled_tx_scn();
     contain_uncommitted_row_ = meta->contain_uncommitted_row();
     rec_scn_ = meta->get_rec_scn();
-    ss_tablet_version_ = meta->get_ss_tablet_version();
   }
   return ret;
 }
@@ -128,11 +125,6 @@ void ObSSTableMetaCache::set_upper_trans_version(const int64_t upper_trans_versi
   } else {
     upper_trans_version_ = std::max(upper_trans_version, max_merged_trans_version_);
   }
-}
-
-void ObSSTableMetaCache::set_ss_tablet_version(const share::SCN &ss_tablet_version)
-{
-  ss_tablet_version_ = ss_tablet_version;
 }
 
 OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
@@ -152,8 +144,7 @@ OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
       filled_tx_scn_,
       contain_uncommitted_row_,
       data_checksum_,
-      rec_scn_,
-      ss_tablet_version_);
+      rec_scn_);
   return ret;
 }
 
@@ -190,8 +181,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
                 filled_tx_scn_,
                 contain_uncommitted_row_,
                 data_checksum_,
-                rec_scn_,
-                ss_tablet_version_);
+                rec_scn_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected version", K(ret), K(version_));
@@ -216,8 +206,7 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObSSTableMetaCache)
       filled_tx_scn_,
       contain_uncommitted_row_,
       data_checksum_,
-      rec_scn_,
-      ss_tablet_version_);
+      rec_scn_);
   return len;
 }
 
@@ -894,23 +883,6 @@ int ObSSTable::set_upper_trans_version(
 
   LOG_INFO("finish set upper trans version", K(ret), K(key_), K_(meta),
       K(old_val), K(upper_trans_version), K_(meta_cache));
-  return ret;
-}
-
-int ObSSTable::set_ss_tablet_version(common::ObArenaAllocator &allocator,
-                                     const share::SCN &ss_tablet_version)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ss_tablet_version.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ss_tablet_version", KR(ret), K(ss_tablet_version));
-  } else if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
-    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
-  }
-  if (OB_SUCC(ret) && is_loaded()) {
-    (void) meta_->basic_meta_.set_ss_tablet_version(ss_tablet_version);
-    (void) meta_cache_.set_ss_tablet_version(ss_tablet_version);
-  }
   return ret;
 }
 

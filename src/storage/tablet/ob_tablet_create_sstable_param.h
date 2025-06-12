@@ -150,7 +150,6 @@ public:
 
   inline const ObITable::TableKey& table_key() const { return table_key_; }
   inline const share::SCN& rec_scn() const { return rec_scn_; };
-  inline const share::SCN& ss_tablet_version() const { return ss_tablet_version_; }
   inline bool is_ready_for_read() const { return is_ready_for_read_; }
   inline int64_t data_blocks_cnt() const { return data_blocks_cnt_; }
   inline share::SCN filled_tx_scn() const { return filled_tx_scn_; }
@@ -212,8 +211,7 @@ public:
       K_(table_shared_flag),
       K_(uncommitted_tx_id),
       K_(co_base_snapshot_version),
-      K_(rec_scn),
-      K_(ss_tablet_version));
+      K_(rec_scn));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -278,7 +276,6 @@ private:
   int64_t uncommitted_tx_id_;
   int64_t co_base_snapshot_version_;
   share::SCN rec_scn_;
-  share::SCN ss_tablet_version_;
 };
 
 } // namespace storage

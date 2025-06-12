@@ -7479,18 +7479,6 @@ int ObTablet::try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &pa
       set_min_ss_tablet_version_(param.update_tablet_ss_change_version_);
       LOG_INFO("set tablet attach shared tablet meta version", K(param.update_tablet_ss_change_version_));
     }
-  } else if (get_min_ss_tablet_version().is_max()) {
-    // first time attach, set to the attached sstable's
-    if (OB_NOT_NULL(param.sstable_)) {
-      ObSSTableMetaHandle meta_handle;
-      if (OB_FAIL(param.sstable_->get_meta(meta_handle))) {
-        LOG_WARN("get sstable meta fail", K(ret));
-      } else if (meta_handle.get_sstable_meta().is_shared_table()) {
-        const share::SCN version_from_sstable = meta_handle.get_sstable_meta().get_ss_tablet_version();
-        set_min_ss_tablet_version_(version_from_sstable);
-        LOG_INFO("first time attach, set tablet attach shared tablet meta version", K(version_from_sstable));
-      }
-    }
   }
   return ret;
 }

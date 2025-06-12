@@ -80,8 +80,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     table_shared_flag_(),
     uncommitted_tx_id_(0),
     co_base_snapshot_version_(-1),
-    rec_scn_(),
-    ss_tablet_version_(share::SCN::min_scn())
+    rec_scn_()
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -128,8 +127,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && nested_offset_ >= 0
                && nested_size_ >= 0
                && co_base_snapshot_version_ >= 0
-               && rec_scn_.is_valid()
-               && ss_tablet_version_.is_valid())) {
+               && rec_scn_.is_valid())) {
     ret = false;
     LOG_WARN("invalid basic params", KPC(this)); // LOG_KVS arg number overflow
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
@@ -258,7 +256,6 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     filled_tx_scn_.set_min();
     tx_data_recycle_scn_.set_min();
     rec_scn_.set_min();
-    ss_tablet_version_.set_min();
     original_size_ = 0;
     compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     table_backup_flag_.reset();
@@ -369,7 +366,6 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   filled_tx_scn_ = end_scn;
   tx_data_recycle_scn_.set_min();
   rec_scn_ = end_scn; // empty use the end scn.
-  ss_tablet_version_.set_min();
   original_size_ = 0;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   nested_offset_ = 0;
@@ -428,7 +424,6 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const
   tx_data_recycle_scn_.set_min();
   // empty sstable use the end_scn
   rec_scn_ = end_scn;
-  ss_tablet_version_.set_min();
   original_size_ = 0;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   table_backup_flag_.reset();
@@ -469,7 +464,6 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   const blocksstable::ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
   rec_scn_ = basic_meta.rec_scn_;
-  ss_tablet_version_ = basic_meta.ss_tablet_version_;
   tx_data_recycle_scn_ = basic_meta.tx_data_recycle_scn_;
   ddl_scn_ = basic_meta.ddl_scn_;
   table_key_ = table_key;
@@ -553,7 +547,6 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     if (table_key.is_major_sstable()) {
       rec_scn_.set_min();
     }
-    ss_tablet_version_.set_min();
 
     table_mode_ = ctx.get_schema()->get_table_mode_struct();
     index_type_ = ctx.get_schema()->get_index_type();
@@ -738,8 +731,6 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
         rec_scn_.set_min();
       }
 
-      ss_tablet_version_.set_min();
-
       if (OB_FAIL(inner_init_with_merge_res(res))) {
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
       } else if (ddl_param.table_key_.is_co_sstable()) {
@@ -883,7 +874,6 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
     other_block_ids_.reset(); // other blocks contains only index macro blocks now, so empty.
     filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
     rec_scn_ = table_key.get_start_scn();
-    ss_tablet_version_.set_min();
     tx_data_recycle_scn_.set_min();
     table_backup_flag_.reset();
     table_shared_flag_.reset();
@@ -1008,8 +998,6 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
       rec_scn_.set_min();
     }
 
-    ss_tablet_version_.set_min();
-
     if (OB_FAIL(inner_init_with_merge_res(res))) {
       LOG_WARN("fail to inner init with merge res", K(ret), K(res));
     } else if (table_key.is_co_sstable()) {
@@ -1073,7 +1061,6 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
   co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
 
   rec_scn_ = basic_meta.get_rec_scn();
-  ss_tablet_version_.set_min();
   ddl_scn_.set_min();
   nested_size_ = res.nested_size_;
   nested_offset_ = res.nested_offset_;
@@ -1134,7 +1121,6 @@ int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_
     // major sstable's rec scn is min
     rec_scn_.set_min();
   }
-  ss_tablet_version_.set_min();
   latest_row_store_type_ = basic_meta.latest_row_store_type_;
   recycle_version_ = basic_meta.recycle_version_;
   ddl_scn_ = basic_meta.ddl_scn_;
@@ -1193,7 +1179,6 @@ int ObTabletCreateSSTableParam::init_for_ha(
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   rec_scn_ = sstable_param.basic_meta_.rec_scn_;
-  ss_tablet_version_ = sstable_param.basic_meta_.ss_tablet_version_;
   tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   co_base_snapshot_version_ = sstable_param.basic_meta_.co_base_snapshot_version_;
   if (table_key_.is_co_sstable()) {
@@ -1257,7 +1242,6 @@ int ObTabletCreateSSTableParam::init_for_ha(
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   rec_scn_ = sstable_param.basic_meta_.rec_scn_;
-  ss_tablet_version_ = sstable_param.basic_meta_.ss_tablet_version_;
   tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
@@ -1346,7 +1330,6 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   rec_scn_ = sstable_param.basic_meta_.rec_scn_;
-  ss_tablet_version_ = sstable_param.basic_meta_.ss_tablet_version_;
   tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   co_base_snapshot_version_ = sstable_param.basic_meta_.co_base_snapshot_version_;
   if (table_key_.is_co_sstable()) {
@@ -1396,7 +1379,6 @@ int ObTabletCreateSSTableParam::init_for_mds(
   if (table_key.is_major_sstable()) {
     rec_scn_.set_min();
   }
-  ss_tablet_version_.set_min();
 
   table_mode_ = mds_schema.get_table_mode_struct();
   index_type_ = mds_schema.get_index_type();
