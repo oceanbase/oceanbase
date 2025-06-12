@@ -222,6 +222,7 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
   } else if (OB_FAIL(ObTabletSplitUtil::convert_rowkey_to_range(range_allocator_, param.parallel_datum_rowkey_list_, main_table_ranges_))) {
     LOG_WARN("convert to range failed", K(ret), "parall_info", param.parallel_datum_rowkey_list_);
   } else {
+    ls_rebuild_seq_ = ls_handle_.get_ls()->get_rebuild_seq();
     is_inited_ = true;
     LOG_INFO("show main tablet split info", K(param));
   }
@@ -326,6 +327,7 @@ int ObLobSplitContext::init_maps(const ObLobSplitParam& param)
 
 void ObLobSplitContext::destroy()
 {
+  ls_rebuild_seq_ = -1;
   ls_handle_.reset();
   if (total_map_ != nullptr) {
     total_map_->clean_up();
@@ -1571,6 +1573,7 @@ int ObTabletLobWriteDataTask::create_sstables(
     if (batch_sstables_handle.at(i).empty() && !is_major_merge_type(merge_type)) {
       FLOG_INFO("already built, skip to update table store", K(ret), "tablet_id", ctx_->new_lob_tablet_ids_.at(i));
     } else if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+                ctx_->ls_rebuild_seq_,
                 ctx_->ls_handle_,
                 ctx_->lob_meta_tablet_handle_,
                 ctx_->new_lob_tablet_ids_.at(i),
@@ -1596,6 +1599,7 @@ int ObTabletLobWriteDataTask::create_sstables(
       } else if (OB_FAIL(mds_sstables_handle.add_table(mds_table_handle))) {
         LOG_WARN("add table failed", K(ret));
       } else if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+            ctx_->ls_rebuild_seq_,
             ctx_->ls_handle_,
             ctx_->lob_meta_tablet_handle_,
             ctx_->new_lob_tablet_ids_.at(i),

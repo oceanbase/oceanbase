@@ -192,8 +192,8 @@ ObTabletSplitCtx::ObTabletSplitCtx()
     is_inited_(false), complement_data_ret_(OB_SUCCESS), ls_handle_(), tablet_handle_(),
     index_builder_map_(), clipped_schemas_map_(),
     allocator_("SplitCtx", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
-    skipped_split_major_keys_(),
-    row_inserted_(0), physical_row_count_(0)
+    skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -201,6 +201,7 @@ ObTabletSplitCtx::~ObTabletSplitCtx()
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
+  ls_rebuild_seq_ = -1;
   complement_data_ret_ = OB_SUCCESS;
   ls_handle_.reset();
   tablet_handle_.reset();
@@ -251,6 +252,7 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
   }
 
   if (OB_SUCC(ret)) {
+    ls_rebuild_seq_ = ls_handle_.get_ls()->get_rebuild_seq();
     complement_data_ret_ = OB_SUCCESS;
     is_inited_ = true;
   }
@@ -1577,6 +1579,7 @@ int ObTabletSplitMergeTask::create_sstable(
         if (OB_SUCC(ret) && (src_table_cnt > 0 || is_major_merge_type(merge_type))) {
           // empty major result should also need to swap tablet, to update data_split_status and restore status.
           if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+                context_->ls_rebuild_seq_,
                 context_->ls_handle_,
                 context_->tablet_handle_,
                 dest_tablet_id,
@@ -1604,6 +1607,7 @@ int ObTabletSplitMergeTask::create_sstable(
           } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle))) {
             LOG_WARN("add table failed", K(ret));
           } else if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+                context_->ls_rebuild_seq_,
                 context_->ls_handle_,
                 context_->tablet_handle_,
                 dest_tablet_id,
@@ -1701,6 +1705,7 @@ int ObTabletSplitMergeTask::build_create_empty_sstable_param(
 }
 
 int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+    const int64_t ls_rebuild_seq,
     const ObLSHandle &ls_handle,
     const ObTabletHandle &src_tablet_handle,
     const ObTabletID &dst_tablet_id,
@@ -1713,12 +1718,22 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
   ObBatchUpdateTableStoreParam param;
   param.reset();
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> batch_tables;
-  if (OB_UNLIKELY(!ls_handle.is_valid()
+#ifdef ERRSIM
+  if (is_major_merge_type(merge_type)) {
+    ret = OB_E(EventTable::EN_AFTER_MINOR_BUT_BEFORE_MAJOR_SPLIT) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim error code for split", K(ret));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(ls_rebuild_seq == -1
+      || !ls_handle.is_valid()
       || !src_tablet_handle.is_valid()
       || !dst_tablet_id.is_valid()
       || !is_valid_merge_type(merge_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ls_handle), K(src_tablet_handle),
+    LOG_WARN("invalid arg", K(ret), K(ls_rebuild_seq), K(ls_handle), K(src_tablet_handle),
       K(dst_tablet_id), K(merge_type));
   } else if (OB_FAIL(tables_handle.get_tables(batch_tables))) {
     LOG_WARN("get batch sstables failed", K(ret));
@@ -1756,135 +1771,22 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
   }
 
   if (OB_SUCC(ret) && is_major_merge_type(merge_type)) {
-    // iterate all major and minors, to determine the dest restore status.
-    if (OB_FAIL(check_and_determine_restore_status(ls_handle, dst_tablet_id, param.tables_handle_, param.restore_status_))) {
-      LOG_WARN("check and determine restore status failed", K(ret), K(dst_tablet_id));
-    } else if (OB_FAIL(param.tablet_split_param_.skip_split_keys_.assign(skipped_split_major_keys))) {
+    if (OB_FAIL(param.tablet_split_param_.skip_split_keys_.assign(skipped_split_major_keys))) {
       LOG_WARN("assign failed", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-    ObLSHandle new_ls_handle;
     const share::ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
     param.tablet_split_param_.snapshot_version_         = src_tablet_handle.get_obj()->get_tablet_meta().snapshot_version_;
     param.tablet_split_param_.multi_version_start_      = src_tablet_handle.get_obj()->get_multi_version_start();
     param.tablet_split_param_.merge_type_               = merge_type;
-    param.rebuild_seq_                                  = ls_handle.get_ls()->get_rebuild_seq(); // old rebuild seq.
+    param.rebuild_seq_                                  = ls_rebuild_seq; // old rebuild seq.
     param.release_mds_scn_.set_min();
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, new_ls_handle, ObLSGetMod::DDL_MOD))) {
-      LOG_WARN("failed to get log stream", K(ret), K(param));
-    } else if (OB_FAIL(new_ls_handle.get_ls()->build_tablet_with_batch_tables(dst_tablet_id, param))) {
+    if (OB_FAIL(ls_handle.get_ls()->build_tablet_with_batch_tables(dst_tablet_id, param))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(dst_tablet_id), K(param));
     }
     FLOG_INFO("update batch sstables", K(ret), K(dst_tablet_id), K(batch_tables), K(param));
-  }
-  return ret;
-}
-
-int ObTabletSplitMergeTask::check_and_determine_restore_status(
-    const ObLSHandle &ls_handle,
-    const ObTabletID &dst_tablet_id,
-    const ObTablesHandleArray &major_handles_array,
-    ObTabletRestoreStatus::STATUS &restore_status)
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  ObTablet *tablet = nullptr;
-  ObTableStoreIterator table_store_iterator;
-  ObSEArray<ObITable::TableKey, 1> empty_skipped_keys;
-
-  restore_status = ObTabletRestoreStatus::FULL;
-  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> old_major_tables_array;
-  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> new_major_tables_array;
-  if (OB_UNLIKELY(!ls_handle.is_valid() || !dst_tablet_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ls_handle), K(dst_tablet_id));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-        dst_tablet_id, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-    LOG_WARN("get tablet handle failed", K(ret), K(dst_tablet_id));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(tablet->get_all_sstables(table_store_iterator))) {
-    LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_participants(ObSplitSSTableType::SPLIT_MAJOR, table_store_iterator, false/*is_table_restore*/,
-      empty_skipped_keys, old_major_tables_array))) {
-    LOG_WARN("get participant sstables failed", K(ret), K(dst_tablet_id));
-  } else if (OB_FAIL(major_handles_array.get_tables(new_major_tables_array))) {
-    LOG_WARN("get batch sstables failed", K(ret));
-  } else {
-    // 1. to check if there is any remote macro block in major tables.
-    for (int64_t i = 0; OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status) && i < new_major_tables_array.count(); i++) {
-      ObITable *table = new_major_tables_array.at(i);
-      ObSSTableMetaHandle sstable_meta_handle;
-      if (OB_UNLIKELY(nullptr == table || !table->is_major_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null table", K(ret), K(dst_tablet_id), KPC(table), K(major_handles_array));
-      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sstable_meta_handle))) {
-        LOG_WARN("get sstable meta failed", K(ret));
-      } else if (table->is_meta_major_sstable()) {
-        // a. always replace meta major with the newest one.
-        restore_status = sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup() ?
-                  ObTabletRestoreStatus::REMOTE : ObTabletRestoreStatus::FULL;
-      } else if (!sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-        // b. keep full, always replaces majors with backup with majors without backup.
-      } else {
-        // c. use the old major's restore status to decide the final restore status if there is an old major, else use status restore.
-        ObSSTableMetaHandle old_sstable_meta_handle;
-        restore_status = ObTabletRestoreStatus::REMOTE;
-        for (int64_t j = 0; OB_SUCC(ret) && !old_sstable_meta_handle.is_valid() && j < old_major_tables_array.count(); j++) {
-          const ObITable *old_sstable = old_major_tables_array.at(i);
-          if (OB_ISNULL(old_sstable)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected err", K(ret), KPC(old_sstable));
-          } else if (old_sstable->get_key() == table->get_key()) {
-            if (OB_FAIL(static_cast<const ObSSTable *>(old_sstable)->get_meta(old_sstable_meta_handle))) {
-              LOG_WARN("get sstable meta failed", K(ret), KPC(old_sstable));
-            } else {
-              restore_status = old_sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup() ?
-                  ObTabletRestoreStatus::REMOTE : ObTabletRestoreStatus::FULL;
-            }
-          }
-        }
-      }
-      LOG_TRACE("with backup macro block sstable is found", K(ret), K(dst_tablet_id), KPC(table));
-    }
-  }
-
-  if (OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status)) {
-    // 2. to check if there is any remote macro block in minor tables.
-    ObTabletHandle tablet_handle;
-    ObTableStoreIterator table_iter;
-    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, dst_tablet_id, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-      LOG_WARN("get tablet failed", K(ret), K(dst_tablet_id));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_iter, true/*need_unpack*/))) {
-      LOG_WARN("get all sstables failed", K(ret));
-    } else {
-      while (OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status)) {
-        ObITable *table = nullptr;
-        ObSSTableMetaHandle sstable_meta_handle;
-        if (OB_FAIL(table_iter.get_next(table))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("iterate tables failed", K(ret), K(dst_tablet_id));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        } else if (OB_UNLIKELY(nullptr == table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sstable should not be NULL", K(ret), KPC(table), K(table_iter));
-        } else if (table->is_major_sstable()) {
-          // already checked at the first stage.
-        } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sstable_meta_handle))) {
-          LOG_WARN("get sstable meta failed", K(ret));
-        } else {
-          restore_status = sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup() ?
-            ObTabletRestoreStatus::REMOTE : restore_status;
-          LOG_TRACE("with backup macro block sstable is found", K(ret), K(dst_tablet_id), KPC(table));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -2945,7 +2847,7 @@ int ObTabletSplitUtil::check_medium_compaction_info_list_cnt(
 }
 
 int ObTabletSplitUtil::check_tablet_restore_status(
-    const ObArray<ObTabletID> &dest_tablets_id,
+    const ObIArray<ObTabletID> &dest_tablets_id,
     const ObLSHandle &ls_handle,
     const ObTabletHandle &source_tablet_handle,
     bool &is_tablet_status_need_to_split)
@@ -2967,11 +2869,12 @@ int ObTabletSplitUtil::check_tablet_restore_status(
       || ObTabletRestoreStatus::STATUS::EMPTY == source_restore_status || ObTabletRestoreStatus::STATUS::REMOTE == source_restore_status)) {
     is_tablet_status_need_to_split = false;
     ObTabletHandle t_handle;
-    ObTabletRestoreStatus::STATUS des_restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
-    ObArray<ObTabletRestoreStatus::STATUS> des_tablet_status;
     ObTablet *tablet = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_id.count(); ++i) {
+    ObTabletRestoreStatus::STATUS des_restore_status;
+    ObArray<ObTabletRestoreStatus::STATUS> restore_status_arr; // for log print.
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_id.count() && !is_tablet_status_need_to_split; ++i) {
       t_handle.reset();
+      des_restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
       const ObTabletID &t_id = dest_tablets_id.at(i);
       if (OB_FAIL(ls->get_tablet(t_id, t_handle))) {
         LOG_WARN("failed to get table", K(ret), K(t_id));
@@ -2980,27 +2883,25 @@ int ObTabletSplitUtil::check_tablet_restore_status(
         LOG_WARN("unexpected null ptr of tablet", K(ret), KPC(tablet));
       } else if (OB_FAIL(tablet->get_restore_status(des_restore_status))) {
         LOG_WARN("failed to get restore status of tablet", K(ret), K(tablet));
-      } else if (OB_FAIL(des_tablet_status.push_back(des_restore_status))) {
-        LOG_WARN("failed to push back into des_tablet_status", K(ret), K(i), K(des_tablet_status));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(des_tablet_status.count() != dest_tablets_id.count())) {
-       ret = OB_ERR_UNEXPECTED;
-       LOG_WARN("the count of des_tablet_status doesn't equal to the count of dest_tablets_id",
-           K(ret), K(des_tablet_status.count()), K(dest_tablets_id.count()));
-    } else if (((ObTabletRestoreStatus::STATUS::EMPTY == source_restore_status))
-        || (ObTabletRestoreStatus::STATUS::REMOTE == source_restore_status)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < des_tablet_status.count() && !is_tablet_status_need_to_split; ++i) {
-        ObTabletRestoreStatus::STATUS &des_res_sta = des_tablet_status.at(i);
-        if (ObTabletRestoreStatus::STATUS::FULL == des_res_sta) {
+      } else if (OB_FAIL(restore_status_arr.push_back(des_restore_status))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (ObTabletRestoreStatus::STATUS::EMPTY == source_restore_status || ObTabletRestoreStatus::STATUS::REMOTE == source_restore_status) {
+        if (ObTabletRestoreStatus::STATUS::FULL == des_restore_status) {
           is_tablet_status_need_to_split = true;
+        } else if (ObTabletRestoreStatus::STATUS::REMOTE == des_restore_status) {
+          // There are two scenarios,
+          // 1. backup the source tablet and the dest tablets, and then restore with empty/remote status and data-completed status. (No need data-split)
+          // 2. backup the source tablet only, and then restore replay data-split log to change the dest tablet status from `FULL` to `REMOTE` when data splitting. (Need data-split)
+          if (tablet->get_tablet_meta().split_info_.is_data_incomplete()) {
+            is_tablet_status_need_to_split = true;
+            LOG_INFO("a tablet with REMOTE status but incomplete data, continue data splitting", "tablet_id", t_id);
+          } else { /* do nothing. */ }
         }
       }
     }
     if (OB_SUCC(ret) && !is_tablet_status_need_to_split) {
-      LOG_INFO("tablets' resotre status are unexpected:", "src_tablet_id", source_tablet_handle.get_obj()->get_tablet_id(), K(dest_tablets_id),
-          K(source_restore_status), "dst_tablet_restore_status", des_tablet_status);
+      LOG_INFO("No need to execute data-split with expected completed data", "src_tablet_id", source_tablet_handle.get_obj()->get_tablet_id(), K(dest_tablets_id),
+        K(source_restore_status), K(restore_status_arr));
     }
   }
   return ret;

@@ -258,6 +258,9 @@ public:
       const ObTabletSplitInfo &info,
       const share::SCN &scn,
       ObLobSplitParam &param);
+  static bool is_split_log_retry_ret(const int ret_code) {
+    return OB_EAGAIN == ret_code || OB_SIZE_OVERFLOW == ret_code || OB_NEED_RETRY == ret_code;
+  }
 
 protected:
   // replay to the tablet
@@ -266,6 +269,13 @@ protected:
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return other error codes, failed to replay.
   virtual int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  int check_need_wait_split_finished(
+      const share::ObLSID &ls_id,
+      const ObTabletHandle &handle,
+      const ObIArray<ObTabletID> &dest_tablets_id,
+      bool &need_wait_split_finished);
 
 private:
   const ObTabletSplitStartLog *log_;

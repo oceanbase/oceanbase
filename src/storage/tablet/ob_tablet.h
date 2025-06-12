@@ -899,7 +899,7 @@ private:
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
 
   // DDL.
-  int update_restore_status_for_split_(const ObBatchUpdateTableStoreParam &param);
+  int update_restore_status_for_split_(const ObTabletTableStore &table_store);
 
   // NOTICE:
   // - Because the `calc_tablet_attr()` may has I/O operations, you can bypass it if wantn't to update it.

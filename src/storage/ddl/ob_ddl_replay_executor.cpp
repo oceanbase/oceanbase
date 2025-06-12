@@ -14,6 +14,7 @@
 
 #include "ob_ddl_replay_executor.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/compaction/ob_refresh_tablet_util.h"
@@ -888,39 +889,94 @@ int ObSplitStartReplayExecutor::prepare_param_from_log(
   return ret;
 }
 
+int ObSplitStartReplayExecutor::check_need_wait_split_finished(
+    const share::ObLSID &ls_id,
+    const ObTabletHandle &handle,
+    const ObIArray<ObTabletID> &dest_tablets_id,
+    bool &need_wait_split_finished)
+{
+  int ret = OB_SUCCESS;
+  need_wait_split_finished = false;
+  if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+    ObLSHandle ls_handle;
+    bool is_tablet_status_need_to_split = true;
+    ObTabletRestoreStatus::STATUS restore_status;
+    if (OB_FAIL(handle.get_obj()->get_restore_status(restore_status))) {
+      LOG_WARN("get restore status failed", K(ret), K(handle));
+    } else if (ObTabletRestoreStatus::is_full(restore_status)) {
+      LOG_TRACE("full restore status, ignore to wait", K(ret), K(restore_status));
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+    } else if (OB_FAIL(ObTabletSplitUtil::check_tablet_restore_status(
+        dest_tablets_id, ls_handle, handle, is_tablet_status_need_to_split))) {
+      LOG_WARN("failed to check tablet status", K(ret), K(handle));
+    } else if (is_tablet_status_need_to_split) {
+      need_wait_split_finished = true;
+    }
+  }
+  return ret;
+}
 
 int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
+  bool need_wait_split_finished = false;
+  bool is_data_split_finished = false;
+  const ObIArray<ObTabletID> *dest_tablet_ids = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
   } else if (OB_ISNULL(log_) || OB_UNLIKELY(!log_->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(log_));
+  } else if (OB_ISNULL(dest_tablet_ids = &(log_->basic_info_.dest_tablets_id_))) {
+    ret = OB_NULL_CHECK_ERROR;
+    LOG_WARN("unexpected nullptr of dest_tablet_ids", K(ret), KPC(dest_tablet_ids));
+  } else if (OB_FAIL(check_need_wait_split_finished(
+      ls_->get_ls_id(), handle, *dest_tablet_ids, need_wait_split_finished))) {
+    LOG_WARN("check need wait split finished failed", K(ret));
   } else if (log_->basic_info_.lob_col_idxs_.count() > 0) {
     // lob tablet.
     ObLobSplitParam param;
     if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), handle, log_->basic_info_, scn_, param))) {
       LOG_WARN("prepare lob split param failed", K(ret), KPC(log_));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(param))) {
-      LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_INFO("schedule lob tablet split dag successfully", K(ret), K(param));
+      if (!need_wait_split_finished) {
+        LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
+        ret = OB_SUCCESS;
+      } else if (ObSplitStartReplayExecutor::is_split_log_retry_ret(ret)) {
+        if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          LOG_INFO("schedule wait lob tablet split end", K(ret), K(param));
+        }
+      } else {
+        LOG_WARN("schedule lob tablet split dag failed", K(ret), K(param));
+      }
     }
   } else {
     ObTabletSplitParam param;
     if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), handle, log_->basic_info_, scn_, param))) {
       LOG_WARN("prepare tablet split param failed", K(ret), KPC(log_));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_split_dag(param))) {
-      LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_INFO("schedule tablet split dag successfully", K(ret), K(param));
+      if (!need_wait_split_finished) {
+        LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
+        ret = OB_SUCCESS;
+      } else if (ObSplitStartReplayExecutor::is_split_log_retry_ret(ret)) {
+        if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          LOG_INFO("schedule wait lob tablet split end", K(ret), K(param));
+        }
+      } else {
+        LOG_WARN("schedule lob tablet split dag failed", K(ret), K(param));
+      }
     }
   }
-  LOG_INFO("finish replay tablet split start log", K(ret), K(scn_), KPC(log_));
+  if (OB_SUCC(ret) && need_wait_split_finished) {
+    if (OB_FAIL(ObTabletSplitUtil::check_data_split_finished(ls_->get_ls_id(), *dest_tablet_ids, is_data_split_finished))) {
+      LOG_WARN("check all tablets major exist failed", K(ret), "ls_id", ls_->get_ls_id(), KPC(dest_tablet_ids));
+    } else if (!is_data_split_finished) {
+      ret = OB_EAGAIN;
+    }
+  }
+  LOG_INFO("finish replay tablet split start log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_));
   return ret;
 }
 
@@ -984,7 +1040,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
     LOG_WARN("prepare tablet split param failed", K(ret), K(ls_id), KPC(log_));
   } else {
     if (is_lob_tablet && OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(lob_split_param))) {
-      if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+      if (ObSplitStartReplayExecutor::is_split_log_retry_ret(ret)) {
         if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
           LOG_INFO("schedule wait lob tablet split end", K(ret), K(lob_split_param));
         }
@@ -992,7 +1048,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
         LOG_WARN("schedule lob tablet split dag failed", K(ret), K(lob_split_param));
       }
     } else if (!is_lob_tablet && OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_split_dag(data_split_param))) {
-      if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+      if (ObSplitStartReplayExecutor::is_split_log_retry_ret(ret)) {
         if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
           LOG_INFO("schedule wait data tablet split end", K(ret), K(lob_split_param));
         }
@@ -1016,7 +1072,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
       LOG_WARN("failed to modify tablet restore status", K(ret), K(dest_tablet_ids), "src_tablet_handle", handle, KPC(log_));
     }
   } else {
-    LOG_INFO("finish replay tablet split finish log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_),
+    FLOG_INFO("finish replay tablet split finish log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_),
         "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
   }
   return ret;
