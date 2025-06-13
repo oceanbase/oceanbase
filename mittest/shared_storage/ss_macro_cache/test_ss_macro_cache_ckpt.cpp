@@ -313,46 +313,46 @@ int test_macro_cache_serialize(
     }
 
     bool is_finished = false;
-    bool is_empty = false;
+    int64_t item_cnt = 0;
     int64_t cur_serialized_size = 0;
     while (OB_SUCC(ret) && !is_finished) {
       const int64_t remained_size = fifo_serialize_size + lru_serialize_size - cur_serialized_size;
       int64_t tmp_serialized_size = 0;
       if (OB_FAIL(macro_cache.incremental_serialize(
-          buf, buf_size, marker, is_finished, is_empty))) {
+          buf, buf_size, marker, is_finished, item_cnt))) {
         LOG_WARN("fail to incremental_serialize", KR(ret), K(buf_size), K(fifo_num), K(lru_num),
             K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE));
-      } else if (!is_empty && OB_FAIL(get_serialized_size_in_buf(buf, buf_size, tmp_serialized_size))) {
-        LOG_WARN("fail to get_serialized_size_in_buf", KR(ret), K(buf_size), K(is_empty),
+      } else if ((item_cnt > 0) && OB_FAIL(get_serialized_size_in_buf(buf, buf_size, tmp_serialized_size))) {
+        LOG_WARN("fail to get_serialized_size_in_buf", KR(ret), K(buf_size), K(item_cnt),
             K(fifo_num), K(lru_num), K(is_finished), K(HEADER_FIXED_SERIALIZE_SIZE),
             K(fifo_serialize_size), K(lru_serialize_size));
-      } else if (OB_UNLIKELY(is_empty && !is_finished)) {
+      } else if (OB_UNLIKELY((0 == item_cnt) && !is_finished)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("is empty but not finished", KR(ret), K(buf_size), K(tmp_serialized_size),
             K(fifo_num), K(lru_num), KP(buf), K(cur_serialized_size),
             K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
-            K(is_empty), K(is_finished));
-      } else if (OB_UNLIKELY(is_empty != (0 == remained_size))) {
+            K(item_cnt), K(is_finished));
+      } else if (OB_UNLIKELY((0 == item_cnt) != (0 == remained_size))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("is_empty flag should be equal to (0 == remained_size)", KR(ret), K(buf_size),
             K(fifo_num), K(lru_num), KP(buf),
             K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
             K(tmp_serialized_size), K(cur_serialized_size), K(remained_size),
-            K(is_empty), K(is_finished));
+            K(item_cnt), K(is_finished));
       } else if (OB_UNLIKELY(remained_size < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("remained_size < 0", KR(ret), K(buf_size),
             K(fifo_num), K(lru_num), KP(buf),
             K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
             K(tmp_serialized_size), K(cur_serialized_size), K(remained_size),
-            K(is_empty), K(is_finished));
+            K(item_cnt), K(is_finished));
       } else if (OB_UNLIKELY(cur_serialized_size > fifo_serialize_size && marker.get_is_in_fifo_list())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fifo has been serialized but marker flag invalid", KR(ret), K(buf_size),
             K(fifo_num), K(lru_num), KP(buf),
             K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
             K(tmp_serialized_size), K(cur_serialized_size), K(remained_size),
-            K(is_empty), K(is_finished));
+            K(item_cnt), K(is_finished));
       } else {
         cur_serialized_size += tmp_serialized_size;
       }
@@ -360,19 +360,19 @@ int test_macro_cache_serialize(
     if (FAILEDx(macro_cache.clean_marker())) {
       LOG_INFO("fail to clean marker", K(buf_size), K(fifo_num), K(lru_num), KP(buf),
           K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
-          K(cur_serialized_size), K(is_empty), K(is_finished));
+          K(cur_serialized_size), K(item_cnt), K(is_finished));
     } else if (OB_UNLIKELY(fifo_num != macro_cache.lru_list_.fifo_list_.get_size()
         || lru_num != macro_cache.lru_list_.lru_list_.get_size())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_INFO("fail to check list size", K(buf_size), K(fifo_num), K(lru_num), KP(buf),
           K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
-          K(cur_serialized_size), K(is_empty), K(is_finished),
+          K(cur_serialized_size), K(item_cnt), K(is_finished),
           K(macro_cache.lru_list_.fifo_list_.get_size()), K(macro_cache.lru_list_.lru_list_.get_size()));
     }
 
     LOG_INFO("finish test_macro_cache_serialize", K(buf_size), K(fifo_num), K(lru_num), KP(buf),
         K(fifo_serialize_size), K(lru_serialize_size), K(HEADER_FIXED_SERIALIZE_SIZE),
-        K(cur_serialized_size), K(is_empty), K(is_finished));
+        K(cur_serialized_size), K(item_cnt), K(is_finished));
   }
   return ret;
 }
@@ -391,18 +391,18 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
       ObSSMacroCache macro_cache;
       char test_buf[HEADER_FIXED_SERIALIZE_SIZE];
       bool is_finished = false;
-      bool is_empty = false;
+      int64_t item_cnt = 0;
 
       // NULL buf
       ObSSMacroCacheMeta marker;
       ASSERT_EQ(OB_INVALID_ARGUMENT, macro_cache.incremental_serialize(
-          nullptr, HEADER_FIXED_SERIALIZE_SIZE + 1, marker, is_finished, is_empty));
+          nullptr, HEADER_FIXED_SERIALIZE_SIZE + 1, marker, is_finished, item_cnt));
       // buf size < HEADER_FIXED_SERIALIZE_SIZE
       ASSERT_EQ(OB_INVALID_ARGUMENT, macro_cache.incremental_serialize(
-          test_buf, HEADER_FIXED_SERIALIZE_SIZE - 1, marker, is_finished, is_empty));
+          test_buf, HEADER_FIXED_SERIALIZE_SIZE - 1, marker, is_finished, item_cnt));
       // buf size = HEADER_FIXED_SERIALIZE_SIZE
       ASSERT_EQ(OB_INVALID_ARGUMENT, macro_cache.incremental_serialize(
-          test_buf, HEADER_FIXED_SERIALIZE_SIZE, marker, is_finished, is_empty));
+          test_buf, HEADER_FIXED_SERIALIZE_SIZE, marker, is_finished, item_cnt));
 
       // not ckpt marker
       const uint64_t tablet_id = 200;
@@ -422,7 +422,7 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
       ASSERT_TRUE(meta.is_valid());
       ASSERT_FALSE(meta.is_ckpt_marker());
       ASSERT_EQ(OB_INVALID_ARGUMENT, macro_cache.incremental_serialize(
-          test_buf, HEADER_FIXED_SERIALIZE_SIZE, meta, is_finished, is_empty));
+          test_buf, HEADER_FIXED_SERIALIZE_SIZE, meta, is_finished, item_cnt));
     }
 
     {
@@ -568,13 +568,13 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         const int64_t buf_size = HEADER_FIXED_SERIALIZE_SIZE + fifo_serialize_size / 9;
         char buf[buf_size];
         bool is_finished = false;
-        bool is_empty = false;
+        int64_t item_cnt = 0;
         ObSSMacroCacheMeta marker;
         OK(ObSSMacroCacheMeta::construct_ckpt_marker(marker));
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
 
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num + 1, macro_cache.lru_list_.fifo_list_.get_size());
@@ -583,8 +583,8 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         ObSSMacroCacheMeta *node = marker.get_next();
         ASSERT_NE(nullptr, node);
         OK(macro_cache.remove_from_lru_list(*node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
         // because node was deleted
@@ -592,8 +592,8 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
 
         // add next
         ASSERT_TRUE(macro_cache.lru_list_.fifo_list_.add_before(marker.get_next(), node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num + 1, macro_cache.lru_list_.fifo_list_.get_size());
@@ -602,16 +602,16 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         node = marker.get_prev();
         ASSERT_NE(nullptr, node);
         OK(macro_cache.remove_from_lru_list(*node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
 
         // add prev
         ASSERT_TRUE(macro_cache.lru_list_.fifo_list_.add_before(&marker, node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num + 1, macro_cache.lru_list_.fifo_list_.get_size());
@@ -625,13 +625,13 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         const int64_t buf_size = HEADER_FIXED_SERIALIZE_SIZE + fifo_serialize_size;
         char buf[buf_size];
         bool is_finished = false;
-        bool is_empty = false;
+        int64_t item_cnt = 0;
         ObSSMacroCacheMeta marker;
         OK(ObSSMacroCacheMeta::construct_ckpt_marker(marker));
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
 
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_TRUE(marker.get_is_in_fifo_list());
 
@@ -643,8 +643,8 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         ObSSMacroCacheMeta *node = macro_cache.lru_list_.fifo_list_.remove_last();
         ASSERT_NE(nullptr, node);
         ASSERT_TRUE(macro_cache.lru_list_.fifo_list_.add_before(&marker, node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_FALSE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
@@ -660,14 +660,14 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         const int64_t buf_size = HEADER_FIXED_SERIALIZE_SIZE + fifo_serialize_size + lru_serialize_size;
         char buf[buf_size];
         bool is_finished = false;
-        bool is_empty = false;
+        int64_t item_cnt = 0;
         ObSSMacroCacheMeta marker;
         OK(ObSSMacroCacheMeta::construct_ckpt_marker(marker));
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
         ASSERT_EQ(lru_num, macro_cache.lru_list_.lru_list_.get_size());
 
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_FALSE(is_finished);
         ASSERT_FALSE(marker.get_is_in_fifo_list());
 
@@ -680,8 +680,8 @@ TEST_F(TestSSMacroCacheCkpt, test_serialization)
         ObSSMacroCacheMeta *node = macro_cache.lru_list_.lru_list_.remove_last();
         ASSERT_NE(nullptr, node);
         ASSERT_TRUE(macro_cache.lru_list_.lru_list_.add_before(&marker, node));
-        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, is_empty));
-        ASSERT_FALSE(is_empty);
+        OK(macro_cache.incremental_serialize(buf, buf_size, marker, is_finished, item_cnt));
+        ASSERT_GT(item_cnt, 0);
         ASSERT_TRUE(is_finished);
         ASSERT_FALSE(marker.get_is_in_fifo_list());
         ASSERT_EQ(fifo_num, macro_cache.lru_list_.fifo_list_.get_size());
