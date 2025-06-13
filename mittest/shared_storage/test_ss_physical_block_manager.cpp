@@ -329,6 +329,20 @@ void TestSSPhysicalBlockManager::check_super_block_identical(
   }
 }
 
+TEST_F(TestSSPhysicalBlockManager, free_bitmap_mem_usage)
+{
+  int ret = OB_SUCCESS;
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
+  const int64_t ori_blk_cnt = phy_blk_mgr.blk_cnt_info_.total_blk_cnt_;
+  ObConcurrentFIFOAllocator &allocator = phy_blk_mgr.allocator_;
+  LOG_INFO("check origin info", K(ori_blk_cnt), K(allocator.allocated()));
+  for (int64_t i = 1; i <= 10000; ++i) {
+    const int64_t new_blk_cnt = ori_blk_cnt + i;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.reinit_free_bitmap(new_blk_cnt));
+    LOG_INFO("reinit free bitmap", K(i), K(allocator.allocated()));
+  }
+}
+
 TEST_F(TestSSPhysicalBlockManager, physical_block)
 {
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
@@ -606,8 +620,11 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   int64_t total_block_cnt = ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock) - 1;
   int64_t file_size = BLOCK_SIZE * total_block_cnt;
 
+  ObConcurrentFIFOAllocator allocator;
+  const int64_t max_cache_mem_size = 2 * 1024 * 1024 * 1024L;
+  ASSERT_EQ(OB_SUCCESS, allocator.init(BLOCK_SIZE, ObMemAttr(MTL_ID(), "TestBlkMgr"), max_cache_mem_size));
   ObSSMicroCacheStat cache_stat;
-  ObSSPhysicalBlockManager blk_mgr(cache_stat);
+  ObSSPhysicalBlockManager blk_mgr(cache_stat, allocator);
   ASSERT_EQ(OB_SUCCESS, blk_mgr.init(MTL_ID(), file_size, BLOCK_SIZE));
   SSPhyBlockCntInfo &blk_cnt_info = blk_mgr.blk_cnt_info_;
   int64_t max_data_cnt = blk_cnt_info.cache_limit_blk_cnt();
@@ -723,8 +740,11 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block)
   int ret = OB_SUCCESS;
   const static uint64_t FILE_SIZE = (1L << 32);
   const static uint32_t BLOCK_SIZE = (1 << 21);
+  ObConcurrentFIFOAllocator allocator;
+  const int64_t max_cache_mem_size = 2 * 1024 * 1024 * 1024L;
+  ASSERT_EQ(OB_SUCCESS, allocator.init(BLOCK_SIZE, ObMemAttr(MTL_ID(), "TestBlkMgr"), max_cache_mem_size));
   ObSSMicroCacheStat cache_stat;
-  ObSSPhysicalBlockManager blk_mgr(cache_stat);
+  ObSSPhysicalBlockManager blk_mgr(cache_stat, allocator);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
   ASSERT_EQ(OB_SUCCESS, blk_mgr.init(tenant_id, FILE_SIZE, BLOCK_SIZE));
@@ -775,8 +795,11 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_check_reuse_
   int ret = OB_SUCCESS;
   const static uint64_t FILE_SIZE = (1L << 40);
   const static uint32_t BLOCK_SIZE = (1 << 21);
+  ObConcurrentFIFOAllocator allocator;
+  const int64_t max_cache_mem_size = 2 * 1024 * 1024 * 1024L;
+  ASSERT_EQ(OB_SUCCESS, allocator.init(BLOCK_SIZE, ObMemAttr(MTL_ID(), "TestBlkMgr"), max_cache_mem_size));
   ObSSMicroCacheStat cache_stat;
-  ObSSPhysicalBlockManager blk_mgr(cache_stat);
+  ObSSPhysicalBlockManager blk_mgr(cache_stat, allocator);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
   ASSERT_EQ(OB_SUCCESS, blk_mgr.init(tenant_id, FILE_SIZE, BLOCK_SIZE));

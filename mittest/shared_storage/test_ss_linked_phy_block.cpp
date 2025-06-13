@@ -38,23 +38,24 @@ public:
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     tnt_file_mgr_ = MTL(ObTenantFileManager *);
     ASSERT_NE(nullptr, tnt_file_mgr_);
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_.init(MTL_ID(), BLOCK_SIZE * 4096, BLOCK_SIZE));
+    phy_blk_mgr_ = &(MTL(ObSSMicroCache *)->phy_blk_mgr_);
+    ASSERT_NE(nullptr, phy_blk_mgr_);
   }
   static void TearDownTestCase()
   {
     tnt_file_mgr_ = nullptr;
-    phy_blk_mgr_.destroy();
+    phy_blk_mgr_ = nullptr;
     MockTenantModuleEnv::get_instance().destroy();
   }
 
 private:
   static ObSSMicroCacheStat cache_stat_;
-  static ObSSPhysicalBlockManager phy_blk_mgr_;
+  static ObSSPhysicalBlockManager *phy_blk_mgr_;
   static ObTenantFileManager *tnt_file_mgr_;
   static const int64_t BLOCK_SIZE;
 };
 ObSSMicroCacheStat TestSSLinkedPhyBlock::cache_stat_;
-ObSSPhysicalBlockManager TestSSLinkedPhyBlock::phy_blk_mgr_(cache_stat_);
+ObSSPhysicalBlockManager *TestSSLinkedPhyBlock::phy_blk_mgr_ = nullptr;
 ObTenantFileManager *TestSSLinkedPhyBlock::tnt_file_mgr_ = nullptr;
 const int64_t TestSSLinkedPhyBlock::BLOCK_SIZE = 2 * 1024 * 1024;
 
@@ -251,22 +252,22 @@ TEST_F(TestSSLinkedPhyBlock, test_basic_rw)
   {
     LOG_INFO("=========================================One Small Item=========================================");
     std::vector<int64_t> item_buf_len_arr = {1};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
   {
     LOG_INFO("=========================================Partial Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {1, 2, 4, 8, 16, 8, 4};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
   {
     LOG_INFO("=========================================One Item Fill Single Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {max_item_size};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
   {
     LOG_INFO("=========================================One Item Less Than Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {max_item_size - 1};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
   {
     LOG_INFO("=========================================Exact Block=========================================");
@@ -277,7 +278,7 @@ TEST_F(TestSSLinkedPhyBlock, test_basic_rw)
     const int64_t seg_num = block_buf_len_for_item / total_seg_size;
     const int64_t item_num = seg_num * seg_item_num;
     std::vector<int64_t> item_buf_len_arr(item_num, buf_len);
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
   {
     LOG_INFO("=========================================Multiple Blocks=========================================");
@@ -289,29 +290,29 @@ TEST_F(TestSSLinkedPhyBlock, test_basic_rw)
       item_buf_len_arr.push_back(cur_item_size);
       reamin_size -= cur_item_size;
     }
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr));
   }
 
   LOG_INFO("=========================================TEST ITEM WITH COMPRESS=========================================");
   {
     LOG_INFO("=========================================One Small Item=========================================");
     std::vector<int64_t> item_buf_len_arr = {1};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
   }
   {
     LOG_INFO("=========================================Partial Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {1, 2, 4, 8, 16, 8, 4};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::LZ4_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::LZ4_COMPRESSOR));
   }
   {
     LOG_INFO("=========================================One Item Fill Single Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {max_item_size};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::ZLIB_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::ZLIB_COMPRESSOR));
   }
   {
     LOG_INFO("=========================================One Item Less Than Block=========================================");
     std::vector<int64_t> item_buf_len_arr = {max_item_size - 1};
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::ZSTD_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::ZSTD_COMPRESSOR));
   }
   {
     LOG_INFO("=========================================Exact Block=========================================");
@@ -322,7 +323,7 @@ TEST_F(TestSSLinkedPhyBlock, test_basic_rw)
     const int64_t seg_num = block_buf_len_for_item / total_seg_size;
     const int64_t item_num = seg_num * seg_item_num;
     std::vector<int64_t> item_buf_len_arr(item_num, buf_len);
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
   }
   {
     LOG_INFO("=========================================Multiple Blocks=========================================");
@@ -334,7 +335,7 @@ TEST_F(TestSSLinkedPhyBlock, test_basic_rw)
       item_buf_len_arr.push_back(cur_item_size);
       reamin_size -= cur_item_size;
     }
-    ASSERT_EQ(OB_SUCCESS, check_rw(phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
+    ASSERT_EQ(OB_SUCCESS, check_rw(*phy_blk_mgr_, item_buf_len_arr, ObCompressorType::SNAPPY_COMPRESSOR));
   }
 
   allocator.clear();
@@ -349,7 +350,7 @@ TEST_F(TestSSLinkedPhyBlock, test_ckpt_writer)
   // 1. check 'close()': need write_block() and write_segment()
   ObCompressorType compress_type = ObCompressorType::NONE_COMPRESSOR;
   ObSSLinkedPhyBlockItemWriter writer;
-  ASSERT_EQ(OB_SUCCESS, writer.init(tenant_id, phy_blk_mgr_, blk_type, compress_type));
+  ASSERT_EQ(OB_SUCCESS, writer.init(tenant_id, *phy_blk_mgr_, blk_type, compress_type));
   ItemInfo item_info;
   const int64_t item_size = 2 * 1024;
   ASSERT_EQ(OB_SUCCESS, item_info.init(2 * 1024));
