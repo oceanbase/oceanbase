@@ -2244,7 +2244,6 @@ int ObTableLockService::process_obj_lock_with_prio_(ObTableLockCtx &ctx,
     } else {
       ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE;
     }
-    ctx.task_type_ = ObTableLockTaskType::ADD_LOCK_INTO_QUEUE;
     if (OB_FAIL(process_obj_lock_(ctx, lock_mode, lock_owner, ls_lock_map))) {
       LOG_WARN("process_obj_lock_ failed", K(ret), K(ctx));
     }
