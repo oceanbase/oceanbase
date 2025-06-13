@@ -774,6 +774,24 @@ int ObTransposeResolver::try_add_cast_to_unpivot(UnpivotDef &unpivot_def)
     }
   }
 
+  // record res types for label columns and value columns
+  for (int64_t i = 0; OB_SUCC(ret) && i < res_types.count(); ++i) {
+    int64_t idx = i;
+    if (OB_UNLIKELY(res_types.count() != unpivot_def.label_columns_.count() + unpivot_def.value_columns_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count of res types not equal", K(ret));
+    } else if (i < unpivot_def.label_columns_.count()) {
+      if (OB_FAIL(unpivot_def.label_col_types_.push_back(res_types.at(idx)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else {
+      idx = i - unpivot_def.label_columns_.count();
+      if (OB_FAIL(unpivot_def.value_col_types_.push_back(res_types.at(idx)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
   // add cast
   for (int64_t i = 0; OB_SUCC(ret) && i < unpivot_def.in_pairs_.count(); ++i) {
     ObRawExpr *casted_expr = NULL;
@@ -1107,7 +1125,9 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
   if (OB_ISNULL(cur_resolver_) ||
       OB_ISNULL(expr_factory = cur_resolver_->params_.expr_factory_) ||
       OB_UNLIKELY(!trans_def.is_unpivot()) ||
-      OB_UNLIKELY(trans_def.in_pairs_.count() == 0)) {
+      OB_UNLIKELY(trans_def.in_pairs_.count() == 0) ||
+      OB_UNLIKELY(trans_def.label_columns_.count() != trans_def.label_col_types_.count()) ||
+      OB_UNLIKELY(trans_def.value_columns_.count() != trans_def.value_col_types_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument or context", K(ret));
   } else {
@@ -1148,6 +1168,8 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
         LOG_WARN("unpivot_expr is null", K(ret));
       } else if (OB_FAIL(target_expr->set_expr_name(trans_def.label_columns_.at(i)))) {
         LOG_WARN("failed to set expr name", K(ret));
+      } else if (OB_FALSE_IT(target_expr->set_result_type(trans_def.label_col_types_.at(i)))) {
+        LOG_WARN("failed to set result type", K(ret));
       } else if (OB_FAIL(select_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -1190,6 +1212,8 @@ int ObTransposeResolver::get_exprs_for_unpivot_table(UnpivotDef &trans_def,
         LOG_WARN("unpivot_expr is null", K(ret));
       } else if (OB_FAIL(target_expr->set_expr_name(trans_def.value_columns_.at(i)))) {
         LOG_WARN("failed to set expr name", K(ret));
+      } else if (OB_FALSE_IT(target_expr->set_result_type(trans_def.value_col_types_.at(i)))) {
+        LOG_WARN("failed to set result type", K(ret));
       } else if (OB_FAIL(select_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back", K(ret));
       }
