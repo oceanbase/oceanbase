@@ -8320,8 +8320,7 @@ int ObLSTabletService::update_tablet_ss_change_version(
         : ss_change_version_(ss_change_version) {}
       int modify_tablet_meta(ObTabletMeta &meta) override {
         int ret = OB_SUCCESS;
-        if (!meta.min_ss_tablet_version_.is_max()
-            && meta.min_ss_tablet_version_ > ss_change_version_) {
+        if (meta.min_ss_tablet_version_ > ss_change_version_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("ss tablet version monotonicity violated", K(ret),
                     K(meta.min_ss_tablet_version_), K(ss_change_version_), K(meta));

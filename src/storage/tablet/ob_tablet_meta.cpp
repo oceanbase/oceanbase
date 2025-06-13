@@ -54,7 +54,7 @@ ObTabletMeta::ObTabletMeta()
     max_serialized_medium_scn_(0),
     ddl_commit_scn_(SCN::min_scn()),
     mds_checkpoint_scn_(),
-    min_ss_tablet_version_(SCN::max_scn()),
+    min_ss_tablet_version_(SCN::min_scn()),
     transfer_info_(),
     extra_medium_info_(),
     last_persisted_committed_tablet_status_(),
@@ -149,7 +149,7 @@ int ObTabletMeta::init_for_share_storage(const ObTabletMeta &old_tablet_meta)
       transfer_info_ = old_tablet_meta.transfer_info_;
     }
     last_persisted_committed_tablet_status_.reset();
-    min_ss_tablet_version_.set_max();
+    min_ss_tablet_version_.set_min();
   }
 
   if (OB_SUCC(ret)) {
@@ -269,7 +269,7 @@ int ObTabletMeta::init(
     report_status_.cur_report_version_ = snapshot_version;
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
-    min_ss_tablet_version_.set_max();
+    min_ss_tablet_version_.set_min();
 
     if (has_cs_replica) { // cs replica is visable when doing offline ddl
       if (need_generate_cs_replica_cg_array) {
@@ -731,7 +731,7 @@ void ObTabletMeta::reset()
   space_usage_.reset();
   split_info_.reset();
   has_truncate_info_ = false;
-  min_ss_tablet_version_.set_max();
+  min_ss_tablet_version_.set_min();
   is_inited_ = false;
 }
 
@@ -1264,7 +1264,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     is_storage_schema_cs_replica_(false),
     split_info_(),
     has_truncate_info_(false),
-    min_ss_tablet_version_(SCN::max_scn()),
+    min_ss_tablet_version_(SCN::min_scn()),
     allocator_("MigTblParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID)
 {
 }
@@ -1810,7 +1810,7 @@ void ObMigrationTabletParam::reset()
   is_storage_schema_cs_replica_ = false;
   split_info_.reset();
   has_truncate_info_ = false;
-  min_ss_tablet_version_.set_max();
+  min_ss_tablet_version_.set_min();
   allocator_.reset();
 }
 

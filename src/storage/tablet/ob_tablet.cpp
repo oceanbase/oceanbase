@@ -7176,7 +7176,7 @@ int ObTablet::get_rec_log_scn(SCN &rec_scn, bool &is_frozen_memtable)
   int ret = OB_SUCCESS;
   rec_scn = SCN::max_scn();
   ObTableHandleV2 handle;
-  ObITabletMemtable *mt = NULL;
+  ObIMemtable *mt = NULL;
   ObProtectedMemtableMgrHandle *protected_handle = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -7189,7 +7189,7 @@ int ObTablet::get_rec_log_scn(SCN &rec_scn, bool &is_frozen_memtable)
     } else {
       LOG_WARN("fail to get first memtable", KR(ret), K(handle));
     }
-  } else if (OB_FAIL(handle.get_tablet_memtable(mt))) {
+  } else if (OB_FAIL(handle.get_memtable(mt))) {
     LOG_WARN("fail to get tablet memtable", KR(ret), K(handle));
   } else if (OB_ISNULL(mt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7471,14 +7471,15 @@ int ObTablet::try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &pa
 {
   int ret = OB_SUCCESS;
   if (param.update_tablet_ss_change_version_.is_valid()) {
-    if (!get_min_ss_tablet_version().is_max()
-        && get_min_ss_tablet_version() > param.update_tablet_ss_change_version_) {
+    if (get_min_ss_tablet_version() > param.update_tablet_ss_change_version_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ss tablet change version monotonicity is violated", K(ret),
                 K(tablet_meta_.min_ss_tablet_version_), K(param.update_tablet_ss_change_version_));
     } else {
+      const share::SCN old_version = tablet_meta_.min_ss_tablet_version_;
       set_min_ss_tablet_version_(param.update_tablet_ss_change_version_);
-      LOG_INFO("set tablet attach shared tablet meta version", K(param.update_tablet_ss_change_version_));
+      LOG_INFO("set tablet attach shared tablet meta version",
+               K(old_version), "new_version", param.update_tablet_ss_change_version_);
     }
   }
   return ret;
