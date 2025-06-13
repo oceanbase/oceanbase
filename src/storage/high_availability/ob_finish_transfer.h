@@ -148,7 +148,9 @@ private:
   // @param[in]: lock timeout
   // @param[in]: lock_owner
   int unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int64_t lock_timeout);
+      const common::ObMemberList &member_list, const ObTransferLockStatus &status,
+      const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id,
+      const int64_t lock_timeout);
 
   // lock ls member list
   // @param[in]: tenant_id
