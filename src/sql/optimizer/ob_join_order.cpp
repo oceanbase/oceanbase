@@ -20053,7 +20053,7 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
     const ObString &search_text_string = result.get_string();
     const ObString &parser_name = index_schema->get_parser_name_str();
     const ObString &parser_properties = index_schema->get_parser_property_str();
-    const ObCollationType &cs_type = match_expr->get_search_key()->get_collation_type();
+    const ObObjMeta &key_meta = match_expr->get_search_key()->get_result_meta();
     storage::ObFTParseHelper tokenize_helper;
     common::ObSEArray<ObFTWord, 16> tokens;
     hash::ObHashMap<ObFTWord, int64_t> token_map;
@@ -20066,7 +20066,11 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
     } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
       LOG_WARN("failed to create token map", K(ret));
     } else if (OB_FAIL(tokenize_helper.segment(
-        cs_type, search_text_string.ptr(), search_text_string.length(), doc_length, token_map))) {
+                           key_meta,
+                           search_text_string.ptr(),
+                           search_text_string.length(),
+                           doc_length,
+                           token_map))) {
       LOG_WARN("failed to segment");
     } else {
       for (hash::ObHashMap<ObFTWord, int64_t>::const_iterator iter = token_map.begin();
@@ -20075,13 +20079,14 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
         const ObFTWord &token = iter->first;
         ObString token_string;
         ObConstRawExpr *token_expr = NULL;
-        if (OB_FAIL(ob_write_string(*allocator_, token.get_word(), token_string))) {
+        if (OB_FAIL(ob_write_string(*allocator_, token.get_word().get_string(), token_string))) {
           LOG_WARN("failed to deep copy query token", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*OPT_CTX.get_exec_ctx()->get_expr_factory(),
-                                                                  ObVarcharType,
-                                                                  token_string,
-                                                                  cs_type,
-                                                                  token_expr))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(
+                               *OPT_CTX.get_exec_ctx()->get_expr_factory(),
+                               ObVarcharType,
+                               token_string,
+                               key_meta.get_collation_type(),
+                               token_expr))) {
           LOG_WARN("failed to build const string expr", K(ret));
         } else if (OB_FAIL(query_tokens.push_back(token_expr))) {
           LOG_WARN("failed to append query token", K(ret));

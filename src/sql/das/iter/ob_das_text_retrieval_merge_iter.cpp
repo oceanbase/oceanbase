@@ -11,11 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
+
 #include "ob_das_scan_iter.h"
 #include "ob_das_text_retrieval_merge_iter.h"
+
+#include "ob_das_text_retrieval_eval_node.h"
 #include "ob_das_text_retrieval_iter.h"
 #include "sql/das/ob_das_ir_define.h"
-#include "ob_das_text_retrieval_eval_node.h"
 
 namespace oceanbase
 {
@@ -237,7 +239,8 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
     const ObString &search_text_string = search_text_datum->get_string();
     const ObString &parser_name = ir_ctdef->get_inv_idx_scan_ctdef()->table_param_.get_parser_name();
     const ObString &parser_properties = ir_ctdef->get_inv_idx_scan_ctdef()->table_param_.get_parser_property();
-    const ObCollationType &cs_type = search_text->datum_meta_.cs_type_;
+
+    const ObObjMeta &meta = search_text->obj_meta_;
     int64_t doc_length = 0;
     storage::ObFTParseHelper tokenize_helper;
     common::ObSEArray<ObFTWord, 16> tokens;
@@ -248,7 +251,11 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
     } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
       LOG_WARN("failed to create token map", K(ret));
     } else if (OB_FAIL(tokenize_helper.segment(
-        cs_type, search_text_string.ptr(), search_text_string.length(), doc_length, token_map))) {
+                           meta,
+                           search_text_string.ptr(),
+                           search_text_string.length(),
+                           doc_length,
+                           token_map))) {
       LOG_WARN("failed to segment");
     } else {
       for (hash::ObHashMap<ObFTWord, int64_t>::const_iterator iter = token_map.begin();
@@ -256,7 +263,7 @@ int ObDASTextRetrievalMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_c
           ++iter) {
         const ObFTWord &token = iter->first;
         ObString token_string;
-        if (OB_FAIL(ob_write_string(alloc, token.get_word(), token_string))) {
+        if (OB_FAIL(ob_write_string(alloc, token.get_word().get_string(), token_string))) {
           LOG_WARN("failed to deep copy query token", K(ret));
         } else if (OB_FAIL(query_tokens.push_back(token_string))) {
           LOG_WARN("failed to append query token", K(ret));
