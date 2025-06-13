@@ -1763,12 +1763,12 @@ int ObService::prepare_server_for_adding_server(
 #ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_TDE_SECURITY
-    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 && !GCTX.is_shared_storage_mode()) {
-      // for upgrade compatibility, the root key is always valid in ss, and only valid after 4.4.0.0 in sn.
-      LOG_INFO("no valid root key in sn and cluster version < 4.4.0.0");
     } else if (arg.get_root_key_type() == RootKeyType::INVALID || arg.get_root_key().empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid root key", KR(ret), K(arg));
+      // For upgrade compatibility, the root key is always valid in ss, and only valid after 4.4.0.0 in sn.
+      // but when the old RS adds a new observer, new observer's GET_MIN_CLUSTER_VERSION() is inaccurate.
+      // for example, RS MIN_CLUSTER_VERSION is 4.3.5.1, new observer's MIN_CLUSTER_VERSION is 4.4.0.0,
+      // the validity of the root_key cannot be determined based on the cluster version.
+      LOG_INFO("no valid root key in sn and cluster version < 4.4.0.0");
     } else if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
             arg.get_root_key_type(), arg.get_root_key()))) {
       LOG_WARN("failed to set root key", KR(ret), K(arg));
