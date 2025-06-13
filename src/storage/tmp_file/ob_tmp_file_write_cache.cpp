@@ -871,34 +871,30 @@ int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
 int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBlockFlushIterator &iterator)
 {
   int ret = OB_SUCCESS;
-  ObTmpFileBlockHandle block_handle;
   ObDList<ObTmpFileBlkNode> empty_block_list;
   ObTmpFileBlockFlushingPageIterator page_iterator;
   int64_t actual_flush_cnt = 0;
   while (OB_SUCC(ret)
          && actual_flush_cnt < expect_flush_cnt
          && MAX_FLUSHING_DATA_SIZE >= metrics_.get_flushing_data_size()) {
+    ObTmpFileBlockHandle block_handle;
+    bool need_reinsert = false;
     if (OB_FAIL(iterator.next(block_handle))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next block failed", KR(ret), K(block_handle));
       }
+      break;
     } else if (OB_ISNULL(block_handle.get())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is nullptr", KR(ret));
     } else if (OB_FAIL(try_to_set_macro_block_idx_(*block_handle.get()))) {
       LOG_WARN("fail to set macro block index", KR(ret), K(block_handle));
+      need_reinsert = true;
     }
 
     if (FAILEDx(page_iterator.init(*block_handle.get()))) {
       if (OB_ITER_END == ret) {
-        LOG_INFO("no flushing pages", KR(ret), K(block_handle), K(empty_block_list.get_size()));
-        if (!empty_block_list.add_last(&block_handle.get()->get_flush_blk_node())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("fail to add last", KR(ret), K(block_handle));
-        } else {
-          block_handle.get()->inc_ref_cnt();
-          ret = OB_SUCCESS;
-        }
+        need_reinsert = true;
       } else {
         LOG_WARN("fail to init page iterator", KR(ret), K(block_handle));
       }
@@ -912,11 +908,14 @@ int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBl
           }
           break;
         }
-        while (OB_SUCC(ret)) {
+        for (int32_t i = 0; OB_SUCC(ret); ++i) {
           bool need_free = false;
           ObTmpFileFlushTask *task = nullptr;
           if (OB_FAIL(alloc_flush_task_(task))) {
             LOG_WARN("fail to alloc flush task", KR(ret), KPC(task));
+            // tmp file block may then can not be flushed
+            // if alloc fail at first range and no new writes on this block
+            need_reinsert = i == 0 ? true: false;
           } else if (OB_FAIL(task->init(&flush_allocator_, block_handle))) {
             LOG_WARN("fail to init task", KR(ret), KPC(task));
           } else if (OB_FAIL(collect_pages_(page_iterator, *task, block_handle))) {
@@ -949,6 +948,16 @@ int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBl
       }
     }
     page_iterator.reset();
+
+    if (need_reinsert) {
+      if (!empty_block_list.add_last(&block_handle.get()->get_flush_blk_node())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("fail to add last", KR(ret), K(block_handle));
+      } else {
+        block_handle.get()->inc_ref_cnt();
+      }
+      ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+    }
   }
 
   reinsert_block_for_flushing_(empty_block_list);
