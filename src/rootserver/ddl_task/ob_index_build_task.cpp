@@ -129,14 +129,6 @@ int ObIndexSSTableBuildTask::process()
         LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(is_oracle_mode), K(partition_names));
       }
     }
-    #ifdef ERRSIM
-      if (OB_SUCC(ret)) {
-        ret = OB_E(EventTable::EN_INDEX_BUILD_SSTABLE_FAILED) OB_SUCCESS;
-        if (OB_FAIL(ret)) {
-          SHARE_LOG(WARN, "errsim ddl execute inner sql failed", KR(ret));
-        }
-      }
-    #endif
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                             dest_table_id_,
