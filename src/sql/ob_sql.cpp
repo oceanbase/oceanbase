@@ -3577,15 +3577,14 @@ int ObSql::generate_plan(ParseResult &parse_result,
       }
     }
     END_OPT_TRACE(session_info);
-    if (OB_SUCC(ret) && session_info->is_user_session()) {
+    if (OB_SUCC(ret)) {
       ObSqlPlan sql_plan(result.get_mem_pool());
-      if (!stmt->is_explain_stmt() && !stmt->is_help_stmt()) {
-        if (OB_FAIL(sql_plan.store_sql_plan(logical_plan,
-                                            phy_plan))) {
-          LOG_WARN("failed to store sql plan", K(ret));
-        } else {
-          phy_plan->set_record_plan_info(true);
-        }
+      if (stmt->is_explain_stmt() || stmt->is_help_stmt()) {
+        // do nothing
+      } else if (OB_FAIL(sql_plan.store_sql_plan(logical_plan, phy_plan))) {
+        LOG_WARN("failed to store sql plan", K(ret));
+      } else {
+        phy_plan->set_record_plan_info(true);
       }
     }
 
