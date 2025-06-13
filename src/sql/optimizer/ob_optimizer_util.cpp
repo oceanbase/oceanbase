@@ -2890,7 +2890,7 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
   contain_always_false = false;
   if (ranges.count() > 0) {
     equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    range_prefix_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
       ObNewRange *range = ranges.at(i);
       int64_t temp_equal_prefix_count = 0;
@@ -2912,7 +2912,7 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
         LOG_WARN("failed to check range prefix", K(ret));
       } else {
         equal_prefix_count = std::min(equal_prefix_count, temp_equal_prefix_count);
-        range_prefix_count = std::min(range_prefix_count, temp_range_prefix_count);
+        range_prefix_count = std::max(range_prefix_count, temp_range_prefix_count);
       }
     }
   }
