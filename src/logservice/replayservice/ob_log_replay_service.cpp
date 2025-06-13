@@ -819,7 +819,14 @@ int ObLogReplayService::stat_for_each(const common::ObFunction<int (const ObRepl
     }
     return bret;
   };
-  return replay_status_map_.for_each(stat_func);
+  int ret = OB_SUCCESS;
+  if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = replay_status_map_.for_each(stat_func);
+  }
+  return ret;
 }
 
 int ObLogReplayService::stat_all_ls_replay_process(int64_t &submitted_log_size,
