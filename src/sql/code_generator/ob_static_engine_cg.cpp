@@ -5492,6 +5492,22 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
       OB_LOG(WARN, "fail to fill_aggr_infos", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; i < spec.aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = spec.aggr_infos_.at(i);
+      if (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_WM_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type()
+          || T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_XMLAGG == aggr_info.get_expr_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("this aggr func is not supported in hash group by", K(ret), K(aggr_info));
+      }
+    }
+  }
   LOG_DEBUG("succ to generate_spec", K(spec), K(ret), K(spec.distinct_exprs_));
   return ret;
 }
