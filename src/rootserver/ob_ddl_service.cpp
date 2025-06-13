@@ -35289,8 +35289,8 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, view_schema.get_table_id(), view_schema_in_guard))) {
     LOG_WARN("failed to get simpile table schema", K(ret));
-  } else if (nullptr == view_schema_in_guard
-            || view_schema_in_guard->get_schema_version() > view_schema.get_schema_version()) {
+  } else if (nullptr == view_schema_in_guard) {
+  } else if (view_schema_in_guard->get_schema_version() > view_schema.get_schema_version()) {
     // view is deleted or modified before, ignore this recompile task
     LOG_TRACE("task is ignore", K(view_schema_in_guard->get_schema_version()), K(view_schema.get_schema_version()));
   } else {
