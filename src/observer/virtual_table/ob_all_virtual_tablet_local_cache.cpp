@@ -13,7 +13,9 @@
 #include "ob_all_virtual_tablet_local_cache.h"
 #include "share/ob_server_struct.h"
 #include "share/ash/ob_di_util.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#endif
 using namespace oceanbase::storage;
 
 namespace oceanbase
@@ -78,6 +80,7 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
 #ifdef OB_BUILD_SHARED_STORAGE
   ObStorageCachePolicyService *scp_service = nullptr;
   ObSSMicroCache *micro_cache = nullptr;
+  ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(scp_service = MTL(ObStorageCachePolicyService *))) {
     ret = OB_ERR_UNEXPECTED;
@@ -85,6 +88,9 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
   } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ObSSMicroCache is NULL", KR(ret));
+  } else if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ObSSMacroCacheMgr is NULL", KR(ret));
   } else {
     if (MTL_ID() != tenant_id_) {
       tenant_id_ = MTL_ID();
@@ -102,6 +108,7 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
     common::ObTabletID tablet_id;
     PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
     ObSSMicroCacheTabletInfo tablet_micro_cache_info;
+    ObSSMacroCacheTabletStat tablet_macro_cache_stat;
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(cur_idx_ < 0)) {
       ret = OB_ERR_UNEXPECTED;
@@ -116,9 +123,14 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid tablet_id or policy status", KR(ret),
             K(cur_idx_), K(tablet_id), K(policy_status));
-      } else if (OB_FAIL(micro_cache->get_tablet_cache_info(tablet_id, tablet_micro_cache_info))) {
-        SERVER_LOG(WARN, "fail to get micro cache info", KR(ret),
-            K(cur_idx_), K(tablet_id), K(policy_status));
+      } else {
+        if (OB_FAIL(micro_cache->get_tablet_cache_info(tablet_id, tablet_micro_cache_info))) {
+          SERVER_LOG(WARN, "fail to get micro cache info", KR(ret),
+              K(cur_idx_), K(tablet_id), K(policy_status));
+        } else if (OB_FAIL(macro_cache_mgr->get_tablet_status_from_map(tablet_id.id(), tablet_macro_cache_stat))) {
+          SERVER_LOG(WARN, "fail to get macro cache info", KR(ret),
+              K(cur_idx_), K(tablet_id), K(policy_status));
+        }
       }
     }
 
@@ -163,23 +175,25 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
         break;
       }
       case CACHED_DATA_SIZE: {
-        cells[i].set_int(tablet_micro_cache_info.get_valid_size());
+        cells[i].set_int(tablet_micro_cache_info.get_valid_size() + tablet_macro_cache_stat.cached_size_);
         break;
       }
+      // TODO (baonian.wcx): Increase the value of the micro cache
+      // after the micro cache supports statistics items
       case CACHE_HIT_COUNT: {
-        cells[i].set_int(-1);
+        cells[i].set_int(tablet_macro_cache_stat.cache_hit_cnt_);
         break;
       }
       case CACHE_MISS_COUNT: {
-        cells[i].set_int(-1);
+        cells[i].set_int(tablet_macro_cache_stat.cache_miss_cnt_);
         break;
       }
       case CACHE_HIT_SIZE: {
-        cells[i].set_int(-1);
+        cells[i].set_int(tablet_macro_cache_stat.cache_hit_bytes_);
         break;
       }
       case CACHE_MISS_SIZE: {
-        cells[i].set_int(-1);
+        cells[i].set_int(tablet_macro_cache_stat.cache_miss_bytes_);
         break;
       }
       case INFO: {
