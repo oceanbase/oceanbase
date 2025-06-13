@@ -989,7 +989,7 @@ int ObTabletSplitPrepareTask::process()
       && OB_FAIL(ObSSDataSplitHelper::create_shared_tablet_if_not_exist(
       param_->ls_id_,
       param_->dest_tablets_id_,
-      context_->tablet_handle_.get_obj()->get_reorganization_scn()))) {
+      context_->reorg_scn_))) {
     LOG_WARN("create shared tablet if not exist failed", K(ret));
 #endif
   } else if (OB_FAIL(ObTabletSplitUtil::check_dest_data_completed(
@@ -2272,7 +2272,7 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
     if (FAILEDx(MTL(ObSSMetaService*)->build_tablet_with_batch_tables(
               ls_id,
               dst_tablet_id,
-              local_tablet_handle.get_obj()->get_reorganization_scn()/*transfer_scn*/,
+              dest_reorg_scn,
               update_reason,
               op_id,
               param))) {
@@ -2465,7 +2465,6 @@ int ObSplitDownloadSSTableTask::prewarm(ObLSHandle &ls_handle)
       OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
-  share::SCN transfer_scn = share::SCN::min_scn();
   ObTableStoreIterator table_store_iterator;
   ObITable *table = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_id_.count(); ++i) {

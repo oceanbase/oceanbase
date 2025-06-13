@@ -712,7 +712,7 @@ int ObTabletLobBuildMapTask::process()
         && OB_FAIL(ObSSDataSplitHelper::create_shared_tablet_if_not_exist(
       param_->ls_id_,
       param_->new_lob_tablet_ids_,
-      ctx_->lob_meta_tablet_handle_.get_obj()->get_reorganization_scn()))) {
+      ctx_->reorg_scn_))) {
     LOG_WARN("create shared tablet if not exist failed", K(ret));
 #endif
   } else if (ctx_->is_lob_piece_) {
