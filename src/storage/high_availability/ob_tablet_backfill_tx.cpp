@@ -2186,6 +2186,11 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
   }  else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(tablet_handle_))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle_));
   } else {
+    // Shared storage will use START_TRANSFER_OUT commit_scn to dump mds sstable
+    // Because src tablet will put all mds data into shared-storage.
+    // Shared-nothing will use START_TRANSFER_OUT redo_scn to dump mds sstable
+    // Then put sstable into sstable cache area
+
     const SCN real_scn = is_shared_storage && user_data.start_transfer_commit_scn_.is_valid_and_not_min() ?
         user_data.start_transfer_commit_scn_ : backfill_tx_ctx_->backfill_scn_;
     // init tablet merge dag param

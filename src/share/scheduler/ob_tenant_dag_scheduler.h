@@ -1569,7 +1569,18 @@ int ObTenantDagScheduler::create_and_add_dag(
 
 inline bool is_ha_backfill_dag(const ObDagType::ObDagTypeEnum dag_type)
 {
-  return ObDagType::DAG_TYPE_TABLET_BACKFILL_TX == dag_type;
+  return ObDagType::DAG_TYPE_TABLET_BACKFILL_TX == dag_type
+#ifdef OB_BUILD_SHARED_STORAGE
+      || ObDagType::DAG_TYPE_SS_START_TRANSFER_BACKFILL_TX == dag_type
+      || ObDagType::DAG_TYPE_SS_FINISH_TRANSFER_BACKFILL_TX == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_SCHEDULE == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_UPLOAD == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_TX == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_REPLACE_TABLE == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_REFRESH_TABLE == dag_type
+      || ObDagType::DAG_TYPE_SS_TABLET_UPDATE_INFO == dag_type
+#endif
+      ;
 }
 
 inline int dag_yield()
