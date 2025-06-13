@@ -115,6 +115,7 @@ void *obdal_malloc(std::size_t size, std::size_t align)
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  SET_IGNORE_MEM_VERSION(attr);
   do {
     // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
     ptr = ob_malloc_align(align, size, attr);

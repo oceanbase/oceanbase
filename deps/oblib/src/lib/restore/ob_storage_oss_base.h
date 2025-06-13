@@ -158,7 +158,7 @@ public:
   int get_oss_file_meta(
       const common::ObString &bucket, const common::ObString &object,
       ObStorageObjectMetaBase &meta, const char *&remote_md5);
-  void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret, const int ob_errcode);
+  void handle_oss_error(aos_table_t *req_headers, aos_table_t *resp_headers, aos_status_s *aos_ret, int &ob_errcode);
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
