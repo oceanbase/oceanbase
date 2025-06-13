@@ -978,6 +978,7 @@ public:
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
+  DELEGATE_WITH_RET(tx_table_, get_recycle_scn, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
   DELEGATE_WITH_RET(tx_table_, generate_virtual_tx_data_row, int);
   DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);

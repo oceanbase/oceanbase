@@ -977,11 +977,14 @@ int ObTxTable::get_recycle_scn(SCN &sn_recycle_scn)
   }
 
   if (OB_FAIL(ret)) {
+    sn_recycle_scn.set_min();
   } else {
     sn_recycle_scn = recycle_scn_cache_.val_.atomic_load();
   }
   FLOG_INFO("finish get recycle_scn", K(ret), K(sn_recycle_scn));
-  return ret;
+
+  // always return OB_SUCCESS
+  return OB_SUCCESS;
 }
 
 int ObTxTable::get_recycle_scn_(const int64_t tx_result_retention_s, share::SCN &real_recycle_scn)
@@ -1098,7 +1101,7 @@ bool ObTxTable::can_recycle_tx_data(const share::SCN current_recycle_scn, const 
   }
 
   const int64_t current_time = ObClockGenerator::getClock();
-  if (current_time - last_recycled_ts < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US ||
+  if (current_recycle_scn.is_min() || current_time - last_recycled_ts < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US ||
       current_recycle_scn.convert_to_ts() - last_recycled_scn.convert_to_ts() < MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
     can_recycle = false;
     if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {

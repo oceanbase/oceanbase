@@ -196,6 +196,7 @@ public:
   void reset();
   void offline() { enable_ = false; }
   void online() { enable_ = true; }
+  ObLS *get_ls() { return ls_; }
 
 public:
   /********************** freeze **********************/
