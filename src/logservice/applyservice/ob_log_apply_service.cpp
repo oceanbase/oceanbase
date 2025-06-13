@@ -1442,7 +1442,14 @@ int ObLogApplyService::stat_for_each(const common::ObFunction<int (const ObApply
     }
     return bret;
   };
-  return apply_status_map_.for_each(stat_func);
+  int ret = OB_SUCCESS;
+  if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = apply_status_map_.for_each(stat_func);
+  }
+  return ret;
 }
 
 int ObLogApplyService::diagnose(const share::ObLSID &id,

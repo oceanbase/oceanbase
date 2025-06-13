@@ -977,7 +977,10 @@ int PalfEnvImpl::for_each(const common::ObFunction<int (IPalfHandleImpl *)> &fun
     return bool_ret;
   };
   int ret = OB_SUCCESS;
-  if (OB_FAIL(palf_handle_impl_map_.for_each(func_impl))) {
+  if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(palf_handle_impl_map_.for_each(func_impl))) {
     PALF_LOG(WARN, "iterate palf_handle_impl_map_ failed", K(ret));
   } else {
   }
@@ -1001,7 +1004,10 @@ int PalfEnvImpl::for_each(const common::ObFunction<int (const PalfHandle &)> &fu
     return bool_ret;
   };
   int ret = OB_SUCCESS;
-  if (OB_FAIL(palf_handle_impl_map_.for_each(func_impl))) {
+  if (!func.is_valid()) {
+    // ObFunction will be invalid when allocating memory failed.
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(palf_handle_impl_map_.for_each(func_impl))) {
     PALF_LOG(WARN, "iterate palf_handle_impl_map_ failed", K(ret));
   } else {
   }
