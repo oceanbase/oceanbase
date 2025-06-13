@@ -8228,6 +8228,13 @@ def_table_schema(**all_external_resource)
 
 def_table_schema(**gen_history_table_def(555, all_external_resource))
 
+# 556: __all_sensitive_rule
+# 557: __all_sensitive_rule_history
+# 558: __all_sensitive_column
+# 559: __all_sensitive_column_history
+# 560: __all_sensitive_rule_privilege
+# 561: __all_sensitive_rule_privilege_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16774,6 +16781,13 @@ def_table_schema(
     ('svr_port', 'int')
   ],
 )
+# 12555: __all_virtual_sensitive_rule
+# 12556: __all_virtual_sensitive_rule_history
+# 12557: __all_virtual_sensitive_column
+# 12558: __all_virtual_sensitive_column_history
+# 12559: __all_virtual_sensitive_rule_privilege
+# 12560: __all_virtual_sensitive_rule_privilege_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -42717,6 +42731,13 @@ FROM
 )
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+
+# 21663: DBA_OB_SENSITIVE_RULES
+# 21664: CDB_OB_SENSITIVE_RULES
+# 21665: DBA_OB_SENSITIVE_COLUMNS
+# 21666: CDB_OB_SENSITIVE_COLUMNS
+# 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

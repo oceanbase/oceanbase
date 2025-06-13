@@ -2873,6 +2873,12 @@ DEFINE_ERROR(OB_ERR_LOCATION_ACCESS_DENIED, -11090, -1, "HY000", "Location acces
 DEFINE_ERROR_EXT(OB_LOCATION_OBJ_EXIST, -11091, -1, "HY000", "Can't create location;location exists", "Can't create location '%.*s'; location exists");
 DEFINE_ERROR_EXT(OB_LOCATION_OBJ_NOT_EXIST, -11092, -1, "HY000", "location not exists", "location '%.*s' doesn\'t exist");
 DEFINE_ERROR_DEP(OB_LOGSERVICE_RPC_ERROR, -11093, -1, "HY000", "OBLogService rpc execute failed");
+DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_EXIST, -11094, -1, "HY000", "Sensitive rule exists", "Sensitive rule '%.*s' exists");
+DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_NOT_EXIST, -11095, -1, "HY000", "Sensitive rule does not exists", "Sensitive rule '%.*s' does not exist");
+DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_EXIST, -11096, -1, "HY000", "Sensitive column exists", "Sensitive column %.*s(%.*s) exists");
+DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_NOT_EXIST, -11097, -1, "HY000", "Sensitive column does not exists", "Sensitive column %.*s(%.*s) does not exist");
+DEFINE_ERROR_EXT(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE, -11098, -1, "HY000", "No privilege to access sensitive field", "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'");
+DEFINE_ERROR_EXT(OB_WRONG_SENSITIVE_RULE_NAME, -11099, -1, "HY000", "Invalid sensitive rule name", "Invalid sensitive rule name '%.*s'");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)
