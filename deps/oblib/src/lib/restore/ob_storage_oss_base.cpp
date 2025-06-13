@@ -1020,6 +1020,7 @@ ObStorageOssMultiPartWriter::ObStorageOssMultiPartWriter()
 
 ObStorageOssMultiPartWriter::~ObStorageOssMultiPartWriter()
 {
+  close();
 }
 
 int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStorageInfo *storage_info)
@@ -1392,6 +1393,7 @@ ObStorageParallelOssMultiPartWriter::ObStorageParallelOssMultiPartWriter()
 
 ObStorageParallelOssMultiPartWriter::~ObStorageParallelOssMultiPartWriter()
 {
+  close();
 }
 
 int ObStorageParallelOssMultiPartWriter::open(const ObString &uri, ObObjectStorageInfo *storage_info)
@@ -1632,6 +1634,7 @@ ObStorageOssReader::ObStorageOssReader():
 
 ObStorageOssReader::~ObStorageOssReader()
 {
+  close();
 }
 
 int ObStorageOssReader::open(const ObString &uri,
@@ -1845,6 +1848,7 @@ ObStorageOssUtil::ObStorageOssUtil() :is_opened_(false), storage_info_(NULL)
 
 ObStorageOssUtil::~ObStorageOssUtil()
 {
+  close();
 }
 
 int ObStorageOssUtil::open(common::ObObjectStorageInfo *storage_info)
@@ -2662,6 +2666,7 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
 
 ObStorageOssAppendWriter::~ObStorageOssAppendWriter()
 {
+  close();
 }
 
 int ObStorageOssAppendWriter::open(

@@ -251,7 +251,7 @@ ObStorageObDalBase::ObStorageObDalBase()
 
 ObStorageObDalBase::~ObStorageObDalBase()
 {
-  reset();
+  ObStorageObDalBase::reset();
 }
 
 void ObStorageObDalBase::reset()
@@ -670,7 +670,9 @@ ObStorageObDalUtil::ObStorageObDalUtil()
 {}
 
 ObStorageObDalUtil::~ObStorageObDalUtil()
-{}
+{
+  close();
+}
 
 int ObStorageObDalUtil::open(common::ObObjectStorageInfo *storage_info)
 {
