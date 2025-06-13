@@ -112,9 +112,11 @@ struct ObSPICursor
   ~ObSPICursor()
   {
     for (int64_t i = 0; i < complex_objs_.count(); ++i) {
-      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i), session_info_));
+      (void)release_complex_obj(complex_objs_.at(i));
     }
   }
+
+  int release_complex_obj(ObObj &complex_obj);
 
   ObRARowStore row_store_;
   ObArray<ObDataType> row_desc_; //ObRowStore里数据自带的Meta可能是T_NULL，所以这里自备一份
@@ -928,6 +930,13 @@ public:
                          int64_t new_query_start_time,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
+  static int cursor_release(ObSQLSessionInfo *session,
+                            pl::ObPLCursorInfo *cursor,
+                            bool is_refcursor,
+                            uint64_t package_id,
+                            uint64_t routine_id,
+                            bool ignore);
+
   static int spi_opaque_assign_null(int64_t opaque_ptr);
 
   static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
@@ -1250,19 +1259,12 @@ private:
                                 int64_t param_count,
                                 bool is_dbms_sql);
 
-  static int cursor_close_impl(pl::ObPLExecCtx *ctx,
+  static int cursor_close_impl(ObSQLSessionInfo *session,
                                    pl::ObPLCursorInfo *cursor,
                                    bool is_refcursor,
                                    uint64_t package_id = OB_INVALID_ID,
                                    uint64_t routine_id = OB_INVALID_ID,
                                    bool ignore = false);
-
-  static int cursor_release(pl::ObPLExecCtx *ctx,
-                            pl::ObPLCursorInfo *cursor,
-                            bool is_refcursor,
-                            uint64_t package_id,
-                            uint64_t routine_id,
-                            bool ignore);
   static int do_cursor_fetch(pl::ObPLExecCtx *ctx,
                                      pl::ObPLCursorInfo *cursor,
                                      bool is_server_cursor,
