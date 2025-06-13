@@ -228,6 +228,12 @@ int ObAllVirtualSSExistingTabletMeta::fill_in_rows_(const ObArray<VirtualTabletM
       case TABLET_SNAPSHOT_VERSION:
         cells[col_i].set_int(row_data.tablet_snapshot_version_);
         break;
+      case SSTABLE_OP_ID:
+        cells[col_i].set_int(row_data.sstable_op_id_);
+        break;
+      case UPDATE_REASON:
+      cells[col_i].set_varchar(get_meta_update_reason_name(row_data.update_reason_));
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         break;
@@ -378,7 +384,7 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
         while (OB_SUCC(ret)) {
           ObTabletHandle tablet_handle;
           share::SCN row_scn;
-          ObSSMetaUpdateMetaInfo update_meta_info; // useless for now.
+          ObSSMetaUpdateMetaInfo update_meta_info;
           ObAtomicExtraInfo extra_info; // useless for now.
           if (OB_FAIL(tablet_iter->get_next(allocator, tablet_handle, row_scn, update_meta_info, extra_info))) {
             if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -393,6 +399,10 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
           } else {
             const ObTabletMeta &meta = tablet_handle.get_obj()->get_tablet_meta();
             VirtualTabletMetaRow row;
+            ObMetaUpdateReason update_reason;
+            share::SCN acquire_scn; // useless for now.
+            int64_t sstable_op_id;
+            update_meta_info.get(update_reason, acquire_scn, sstable_op_id);
             row.version_ = row_scn;
             row.data_tablet_id_ = meta.data_tablet_id_;
             row.create_scn_ = meta.create_scn_;
@@ -403,6 +413,8 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
             row.ddl_checkpoint_scn_ = meta.ddl_checkpoint_scn_;
             row.multi_version_start_ = meta.multi_version_start_;
             row.tablet_snapshot_version_ = meta.snapshot_version_;
+            row.sstable_op_id_ = sstable_op_id;
+            row.update_reason_ = update_reason;
             if (OB_FAIL(row_datas.push_back(row))) {
               SERVER_LOG(WARN, "failed to push back", K(row_datas), K(row));
             }

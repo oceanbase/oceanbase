@@ -16,6 +16,10 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_tablet_id.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_meta_common.h"
+#endif
+
 namespace oceanbase
 {
 namespace observer
@@ -33,18 +37,30 @@ struct VirtualTabletMetaRow {
   share::SCN ddl_checkpoint_scn_;
   int64_t multi_version_start_;
   int64_t tablet_snapshot_version_;
+  int64_t sstable_op_id_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObMetaUpdateReason update_reason_;
+#endif
 
   VirtualTabletMetaRow()
     : reorganization_scn_(), version_(), data_tablet_id_(),
       create_scn_(), start_scn_(), create_schema_version_(0),
       data_checkpoint_scn_(), mds_checkpoint_scn_(), ddl_checkpoint_scn_(),
-      multi_version_start_(0), tablet_snapshot_version_(0) { }
+      multi_version_start_(0), tablet_snapshot_version_(0), sstable_op_id_(0)
+#ifdef OB_BUILD_SHARED_STORAGE
+      , update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON)
+#endif
+      { }
 
   TO_STRING_KV(K(reorganization_scn_), K(version_), K(data_tablet_id_),
                K(create_scn_), K(start_scn_), K(create_schema_version_),
                K(data_checkpoint_scn_), K(mds_checkpoint_scn_),
                K(ddl_checkpoint_scn_), K(multi_version_start_),
-               K(tablet_snapshot_version_));
+               K(tablet_snapshot_version_), K(sstable_op_id_)
+#ifdef OB_BUILD_SHARED_STORAGE
+               , K(update_reason_)
+#endif
+               );
 };
 
 class ObAllVirtualSSTabletMeta : public common::ObVirtualTableScannerIterator

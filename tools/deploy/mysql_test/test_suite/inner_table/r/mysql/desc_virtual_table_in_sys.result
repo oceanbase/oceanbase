@@ -2190,6 +2190,8 @@ mds_checkpoint_scn	bigint(20)	NO		NULL
 ddl_checkpoint_scn	bigint(20)	NO		NULL	
 multi_version_start	bigint(20)	NO		NULL	
 tablet_snapshot_version	bigint(20)	NO		NULL	
+sstable_op_id	bigint(20)	NO		NULL	
+update_reason	varchar(64)	NO		NULL	
 desc oceanbase.__all_virtual_ss_existing_sstable_mgr;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

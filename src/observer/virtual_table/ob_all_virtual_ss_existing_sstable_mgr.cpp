@@ -306,6 +306,10 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_table_(ObITable *&table)
             SERVER_LOG(WARN, "fail to get next tablet", K(ret));
           }
         } else if (OB_FAIL(tablet_->get_all_tables(table_store_iter_, true/*unpack_cg_table*/))) {
+          if (OB_OBJECT_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            continue;
+          }
           SERVER_LOG(WARN, "fail to get all tables", K(ret), KP_(tablet), K_(table_store_iter));
         } else if (0 != table_store_iter_.count()) {
           break;

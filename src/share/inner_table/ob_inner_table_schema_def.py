@@ -11138,6 +11138,8 @@ def_table_schema(
     ('ddl_checkpoint_scn', 'int'),
     ('multi_version_start', 'int'),
     ('tablet_snapshot_version', 'int'),
+    ('sstable_op_id', 'int'),
+    ('update_reason', 'varchar:64'),
   ],
   vtable_route_policy = 'local',
 )
