@@ -495,16 +495,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
             }
             LOG_ERROR("current migration status is final state and unexpected", K(OB_ERR_UNEXPECTED), K(current_migration_status), K(ctx_));
           }
-        } else if (ctx_.is_failed()) {
-          if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
-            if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, new_migration_status))) {
-              LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(new_migration_status));
-            }
-          } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, new_migration_status))) {
-            LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(new_migration_status));
-          }
-        } else {
-          new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+        } else if (OB_FAIL(get_next_migration_status_(ls, current_migration_status, new_migration_status))) {
+          LOG_WARN("failed to get next migration status", K(ret), K(ctx_));
         }
 
         if (OB_FAIL(ret)) {
@@ -533,6 +525,53 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       LOG_ERROR("failed to set result", K(ret), K(ret), K(tmp_ret), K(ctx_));
     }
   }
+  return ret;
+}
+
+int ObLSCompleteMigrationDagNet::get_next_migration_status_(
+    ObLS *ls,
+    const ObMigrationStatus current_migration_status,
+    ObMigrationStatus &next_migration_status)
+{
+  int ret = OB_SUCCESS;
+  if (ctx_.is_failed()) {
+    if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
+      if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, next_migration_status))) {
+        LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(next_migration_status));
+      }
+    } else if (OB_MIGRATION_STATUS_REPLACE_HOLD == current_migration_status) {
+      bool is_valid_member = false;
+      if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(ctx_.arg_.ls_id_,
+                                                                                            false /* with_leader */,
+                                                                                            is_valid_member))) {
+        LOG_WARN("failed check self valid member after inc config version", K(ret), K(ctx_), K(current_migration_status));
+      } else if (is_valid_member) {
+        ctx_.reset_result();
+        next_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+        LOG_INFO("self is valid member after inc config version", K(ctx_), K(current_migration_status));
+      } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, next_migration_status))) {
+        LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(next_migration_status));
+      } else {
+        LOG_INFO("self is not valid member after inc config version", K(ctx_), K(current_migration_status));
+      }
+
+      if (OB_SUCC(ret)) {
+        SERVER_EVENT_ADD("storage_ha", "check_self_is_valid_member_after_inc_config_version",
+                         "tenant_id", ctx_.tenant_id_,
+                         "ls_id", ctx_.arg_.ls_id_.id(),
+                         "current_migration_status", current_migration_status,
+                         "next_migration_status", next_migration_status,
+                         "task_id", ctx_.task_id_,
+                         "ret", ret,
+                         ObMigrationOpType::get_str(ctx_.arg_.type_));
+      }
+    } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, next_migration_status))) {
+      LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(next_migration_status));
+    }
+  } else {
+    next_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+  }
+
   return ret;
 }
 
@@ -1766,19 +1805,61 @@ int ObWaitDataReadyTask::wait_src_ls_match_barrier_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL);
+int ObWaitDataReadyTask::check_self_is_valid_member_(bool &is_valid_member) const
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+    ret = EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("errsim EN_SPECIFIED_LS_CHECK_VALID_MEMBER_FAIL", K(ret),
+        "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+      return ret;
+    }
+  }
+#else
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (ObMigrationOpType::REPLACE_LS_OP == ctx_->arg_.type_) {
+    if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_with_log_service(
+        ctx_->arg_.ls_id_, is_valid_member))) {
+      LOG_WARN("failed to check self is valid member with log service", K(ret), KPC(ctx_));
+    }
+  } else {
+#endif
+    if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+      LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
+    }
+#ifdef OB_BUILD_SHARED_STORAGE
+  }
+#endif
+#endif
+
+  return ret;
+}
+
 int ObWaitDataReadyTask::change_member_list_with_retry_()
 {
   //change to HOLD status do not allow failed
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  static const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
+  const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
   int64_t retry_times = 0;
   bool is_valid_member = false;
+
+#ifdef ERRSIM
+  const int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = 1;
+#else
+  const int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("wait data ready task do not init", K(ret));
   } else {
-    while (retry_times < OB_MAX_RETRY_TIMES) {
+    while (retry_times < CHANGE_MEMBER_LIST_MAX_RETRY_TIMES) {
       if (retry_times >= 1) {
         LOG_WARN("retry change member list", K(retry_times));
       }
@@ -1791,9 +1872,10 @@ int ObWaitDataReadyTask::change_member_list_with_retry_()
 
       if (OB_FAIL(ret)) {
         //overwrite ret
-        if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+        if (OB_FAIL(check_self_is_valid_member_(is_valid_member))) {
           LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
         } else if (is_valid_member) {
+          LOG_INFO("self ls is valid member", "ls_id", ctx_->arg_.ls_id_);
           break;
         } else {
           ret = OB_EAGAIN;
@@ -1815,6 +1897,8 @@ int ObWaitDataReadyTask::change_member_list_with_retry_()
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL);
+ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL);
 int ObWaitDataReadyTask::change_member_list_()
 {
   int ret = OB_SUCCESS;
@@ -1823,6 +1907,19 @@ int ObWaitDataReadyTask::change_member_list_()
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_SET_MEMBER_LIST_FAIL) OB_SUCCESS;
+#endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      ret = EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("errsim EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL", K(ret),
+          "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+        return ret;
+      }
+    }
+  }
 #endif
 
   if (OB_SUCC(ret)) {
@@ -1862,6 +1959,19 @@ int ObWaitDataReadyTask::change_member_list_()
   }
 
   DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      ret = EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("errsim EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL", K(ret),
+          "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id());
+      }
+    }
+  }
+
+#endif
 
   return ret;
 }
@@ -1946,6 +2056,7 @@ int ObWaitDataReadyTask::force_elect_and_wait_become_leader_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   logservice::ObLogHandler *log_handler = nullptr;
+  ObLSMigrationHandler *migration_handler = nullptr;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
 
@@ -1956,42 +2067,40 @@ int ObWaitDataReadyTask::force_elect_and_wait_become_leader_()
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
   } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls handler should not be NULL", K(ret), KPC(ls));
+    LOG_WARN("ls log handler should not be NULL", K(ret), KPC(ls));
+  } else if (OB_ISNULL(migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ls));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
-  } else if (OB_FAIL(log_handler->set_allow_election_without_memlist(true))) {
-    LOG_WARN("failed to initiate new election", K(ret), KPC(ls));
   } else {
+    LOG_INFO("start wait ls become leader", "arg", ctx_->arg_);
+
     const int64_t start_ts = ObTimeUtility::current_time();
-    common::ObRole role;
-    int64_t proposal_id = 0;
-    while (OB_SUCC(ret)) {
-      if (timeout_ctx.is_timeouted()) {
-        if (OB_FAIL(ctx_->set_result(OB_WAIT_ELEC_LEADER_TIMEOUT, false /*allow_retry*/, this->get_dag()->get_type()))) {
-          LOG_WARN("failed to set result", K(ret), KPC(ctx_));
-        } else {
-          ret = OB_WAIT_ELEC_LEADER_TIMEOUT;
-          LOG_WARN("wait elect as leader timeout", K(ret), KPC(ctx_));
-        }
-      } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
-        LOG_WARN("failed to get role", K(ret), KPC(log_handler));
-      } else if (!is_strong_leader(role)) {
-        // wait
-        LOG_INFO("wait elect as leader", K(role), K(proposal_id));
-        ob_usleep(CHECK_CONDITION_INTERVAL);
-      } else {
-        LOG_INFO("wait elect as leader success", "arg", ctx_->arg_, K(role), K(proposal_id));
-        break;
+    int64_t leader_proposal_id = 0;
+
+    if (OB_FAIL(log_handler->set_allow_election_without_memlist(true))) {
+      LOG_WARN("failed to initiate new election", K(ret), KPC(ls));
+    } else if (OB_FAIL(migration_handler->wait_notified_switch_to_leader(timeout_ctx, leader_proposal_id))) {
+      LOG_WARN("failed to wait switch to leader", K(ret), KPC(ctx_));
+    }
+
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ctx_->set_result(ret, false /*allow_retry*/, this->get_dag()->get_type()))) {
+        LOG_WARN("failed to set result", K(ret), KPC(ctx_));
       }
     }
 
     const int64_t cost = ObTimeUtility::current_time() - start_ts;
+    LOG_INFO("end wait switch to leader", K(ret), "arg", ctx_->arg_, K(leader_proposal_id), K(cost));
+
     SERVER_EVENT_ADD("storage_ha", "force_elect_and_wait_become_leader",
                      "tenant_id", ctx_->tenant_id_,
                      "ls_id", ctx_->arg_.ls_id_.id(),
-                     "proposal_id", proposal_id,
+                     "proposal_id", leader_proposal_id,
                      "cost", cost,
                      "task_id", ctx_->task_id_,
                      "ret", ret,
@@ -2219,13 +2328,15 @@ int ObWaitDataReadyTask::update_ls_migration_status_hold_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  const ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
+  ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("wait data ready task do not init", K(ret));
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
     //do nothing
+  } else if (OB_FAIL(ObMigrationOpType::get_ls_hold_status(ctx_->arg_.type_, hold_status))) {
+    LOG_WARN("failed to get ls wait status", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));

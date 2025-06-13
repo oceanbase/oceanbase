@@ -94,7 +94,8 @@ private:
   enum class RetrySubmitRoleChangeEventReason {
     INVALID_TYPE = 0,
     WAIT_REPLAY_DONE_TIMEOUT = 1,
-    MAX_TYPE = 2
+    WAIT_REPLACE_DONE_TIMEOUT = 2,
+    MAX_TYPE = 3
   };
   class RetrySubmitRoleChangeEventCtx {
   public:

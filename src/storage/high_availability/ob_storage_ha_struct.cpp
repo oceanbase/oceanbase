@@ -85,6 +85,21 @@ int ObMigrationOpType::get_ls_wait_status(const TYPE &type, ObMigrationStatus &w
   return ret;
 }
 
+int ObMigrationOpType::get_ls_hold_status(const TYPE &type, ObMigrationStatus &hold_status)
+{
+  int ret = OB_SUCCESS;
+  hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  if (!is_valid(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaid argument", K(ret), K(type));
+  } else if (ObMigrationOpType::REPLACE_LS_OP == type) {
+    hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD;
+  } else {
+    hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
+  }
+  return ret;
+}
+
 int ObMigrationOpType::convert_to_dr_type(
     const TYPE &type,
     obrpc::ObDRTaskType &dr_type)
@@ -214,6 +229,10 @@ int ObMigrationStatusHelper::trans_fail_status(const ObMigrationStatus &cur_stat
       fail_status = OB_MIGRATION_STATUS_NONE;
       break;
     }
+    case OB_MIGRATION_STATUS_REPLACE_HOLD: {
+      fail_status = OB_MIGRATION_STATUS_REPLACE_FAIL;
+      break;
+    }
     case OB_MIGRATION_STATUS_MIGRATE_WAIT : {
       fail_status = OB_MIGRATION_STATUS_MIGRATE_FAIL;
       break;
@@ -279,6 +298,10 @@ int ObMigrationStatusHelper::trans_reboot_status(const ObMigrationStatus &cur_st
     }
     case OB_MIGRATION_STATUS_HOLD: {
       reboot_status = OB_MIGRATION_STATUS_NONE;
+      break;
+    }
+    case OB_MIGRATION_STATUS_REPLACE_HOLD: {
+      reboot_status = OB_MIGRATION_STATUS_REPLACE_HOLD;
       break;
     }
     case OB_MIGRATION_STATUS_MIGRATE_WAIT : {
@@ -515,7 +538,8 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_WAIT != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
+      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD != status) {
     allow_gc = true;
   } else {
     allow_gc = false;
@@ -770,6 +794,14 @@ int ObMigrationStatusHelper::check_can_change_status(
       }
       break;
     }
+    case OB_MIGRATION_STATUS_REPLACE_HOLD: {
+      if (OB_MIGRATION_STATUS_REPLACE_HOLD == change_status
+          || OB_MIGRATION_STATUS_REPLACE_FAIL == change_status
+          || OB_MIGRATION_STATUS_NONE == change_status) {
+        can_change = true;
+      }
+      break;
+    }
     case OB_MIGRATION_STATUS_MIGRATE_WAIT: {
       if (OB_MIGRATION_STATUS_HOLD == change_status
           || OB_MIGRATION_STATUS_MIGRATE_FAIL == change_status) {
@@ -785,7 +817,7 @@ int ObMigrationStatusHelper::check_can_change_status(
       break;
     }
     case OB_MIGRATION_STATUS_REPLACE_WAIT: {
-      if (OB_MIGRATION_STATUS_HOLD == change_status
+      if (OB_MIGRATION_STATUS_REPLACE_HOLD == change_status
           || OB_MIGRATION_STATUS_REPLACE_FAIL == change_status) {
         can_change = true;
       }
@@ -883,6 +915,7 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
       || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
       || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
       || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL == status
       || ObMigrationStatus::OB_MIGRATION_STATUS_GC == status) {
     in_final_state = true;
   } else {
@@ -1092,7 +1125,9 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc_v1_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != dest_ls_status) {
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_WAIT != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD != dest_ls_status) {
     allow_gc = true;
     LOG_INFO("transfer dest ls check transfer status passed", K(ret), K(transfer_ls_id), K(dest_ls_status));
   } else if (OB_FAIL(check_transfer_dest_tablet_for_ls_gc_v1_(dest_ls, tablet_id, transfer_scn, need_wait_dest_ls_replay, allow_gc))) {
@@ -1177,6 +1212,7 @@ bool ObMigrationStatusHelper::check_can_report_readable_scn(
 {
   bool can_report = false;
   if (ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == cur_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == cur_status) {
     can_report = true;
   } else {

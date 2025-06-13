@@ -977,9 +977,12 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
             && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status
-            && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
+            && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_WAIT != status
+            && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status
+            && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD != status) {
         if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
+            || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
           LOG_INFO("dest ls is in migration failed status, no need wait", K(ret), K(status), KPC(dest_ls));
           break;

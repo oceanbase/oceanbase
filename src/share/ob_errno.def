@@ -1974,6 +1974,8 @@ DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot star
 DEFINE_ERROR_EXT_DEP(OB_PARTITION_ALREADY_BALANCED, -7124, -1, "HY000", "partitions are already balanced", "partitions are already balanced, %s");
 DEFINE_ERROR(NEW_MV_MAJOR_VERSION_NOT_MATCH, -7125, -1, "HY000", "new mv major version is not match");
 DEFINE_ERROR(OB_TABLET_REORG_SCN_NOT_MATCH, -7126, -1, "HY000", "compare tablet reorganization scn not match");
+DEFINE_ERROR(OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT, -7127, -1, "HY000", "wait ls replace complete timeout");
+DEFINE_ERROR(OB_LS_REPLACE_FAILED, -7128, -1, "HY000", "ls replace failed");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 负载均衡(Transfer)错误码值域[-7100, -7200)

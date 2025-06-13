@@ -2937,8 +2937,9 @@ int ObLS::inner_check_allow_read_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
   }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-          || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
-              && (restore_status.check_allow_read() || is_sys_ls())) {
+              || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status
+              || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == migration_status)
+                && (restore_status.check_allow_read() || is_sys_ls())) {
     allow_read = true;
   } else {
     allow_read = false;

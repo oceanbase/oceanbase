@@ -35,6 +35,7 @@ public:
   int check_allow_retry(bool &allow_retry);
   void reuse();
   void reset();
+  void reset_result();
   int get_retry_count(int32_t &retry_count);
   int get_first_failed_task_id(share::ObTaskId &task_id);
   TO_STRING_KV(K_(result), K_(retry_count), K_(allow_retry), K_(failed_task_id_list));
@@ -80,6 +81,7 @@ public:
   int get_result(int32_t &result);
   void reuse();
   void reset();
+  void reset_result();
   int check_is_in_retry(bool &is_in_retry);
   int get_retry_count(int32_t &retry_count);
   int get_first_failed_task_id(share::ObTaskId &task_id);
@@ -130,6 +132,24 @@ public:
       ObLSHandle &ls_handle);
   static int check_self_is_valid_member(
       const share::ObLSID &ls_id,
+      bool &is_valid_member);
+  static int check_self_is_valid_member_after_inc_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader,
+      bool &is_valid_member);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int check_self_is_valid_member_with_log_service(
+      const share::ObLSID &ls_id,
+      bool &is_valid_member);
+  static int inc_config_version_with_log_service(
+      const share::ObLSID &ls_id);
+#endif
+
+private:
+  static int inner_check_self_is_valid_member_(
+      const share::ObLSID &ls_id,
+      const common::ObMemberList &member_list,
+      const common::GlobalLearnerList &learner_list,
       bool &is_valid_member);
 };
 

@@ -100,6 +100,10 @@ public:
 private:
   int start_running_for_migration_();
   int update_migration_status_(ObLS *ls);
+  int get_next_migration_status_(
+      ObLS *ls,
+      const ObMigrationStatus current_migration_status,
+      ObMigrationStatus &next_migration_status);
   int report_ls_meta_table_(ObLS *ls);
   int report_result_();
   int trans_rebuild_fail_status_(
@@ -244,6 +248,7 @@ private:
   int wait_src_ls_match_barrier_(
       const share::SCN &transfer_scn,
       const ObLSTransferMetaInfo &transfer_meta_info);
+  int check_self_is_valid_member_(bool &is_valid_member) const;
 #ifdef OB_BUILD_SHARED_STORAGE
   int force_elect_and_wait_become_leader_();
   int change_member_list_with_log_service_();

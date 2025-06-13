@@ -56,6 +56,7 @@ enum ObMigrationStatus
   OB_MIGRATION_STATUS_REPLACE = 14,
   OB_MIGRATION_STATUS_REPLACE_WAIT = 15,
   OB_MIGRATION_STATUS_REPLACE_FAIL = 16,
+  OB_MIGRATION_STATUS_REPLACE_HOLD = 17,
   OB_MIGRATION_STATUS_MAX,
 };
 
@@ -77,6 +78,7 @@ struct ObMigrationOpType
   static TYPE get_type(const char *type_str);
   static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < MAX_LS_OP; }
   static int get_ls_wait_status(const TYPE &type, ObMigrationStatus &wait_status);
+  static int get_ls_hold_status(const TYPE &type, ObMigrationStatus &hold_status);
   static int convert_to_dr_type(const TYPE &type, obrpc::ObDRTaskType &dr_type);
 };
 

@@ -238,6 +238,11 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     is_cancel_(false),
     chosen_src_(),
     is_complete_(false)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , switch_leader_cond_()
+    , switch_leader_cnt_(0)
+    , leader_proposal_id_(0)
+#endif
 {
 }
 
@@ -259,6 +264,10 @@ int ObLSMigrationHandler::init(
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls migration handler init get invalid argument", K(ret), KP(ls));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(switch_leader_cond_.init(ObWaitEventIds::HA_SERVICE_COND_WAIT))) {
+    LOG_WARN("failed to init switch leader thread cond", K(ret));
+#endif
   } else {
     ls_ = ls;
     bandwidth_throttle_ = bandwidth_throttle;
@@ -738,6 +747,36 @@ int ObLSMigrationHandler::do_init_status_()
       if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
           || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
         //do nothing
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == migration_status) {
+        ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+        bool is_valid_member = false;
+        if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(ls_->get_ls_id(),
+                                                                                             false /* with_leader */,
+                                                                                             is_valid_member))) {
+          LOG_WARN("failed check self valid member after inc config version", K(ret), K(migration_status));
+        } else if (is_valid_member) {
+          new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+          LOG_INFO("self is valid member after inc config version", "ls_id", ls_->get_ls_id(),
+            K(migration_status), K(new_migration_status));
+        } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(migration_status, new_migration_status))) {
+          LOG_WARN("failed to trans fail status", K(ret), "ls_id", ls_->get_ls_id(), K(migration_status));
+        } else {
+          LOG_INFO("self is not valid member after inc config version", "ls_id", ls_->get_ls_id(),
+            K(migration_status), K(new_migration_status));
+        }
+
+        if (FAILEDx(ls_->set_migration_status(new_migration_status, ls_->get_rebuild_seq()))) {
+          LOG_WARN("failed to set migration status", K(ret), "ls_id", ls_->get_ls_id(), K(new_migration_status));
+        }
+
+        if (OB_SUCC(ret)) {
+          SERVER_EVENT_ADD("storage_ha", "check_self_is_valid_member_after_inc_config_version",
+                           "tenant_id", MTL_ID(),
+                           "ls_id", ls_->get_ls_id().id(),
+                           "current_migration_status", migration_status,
+                           "new_migration_status", new_migration_status,
+                           "ret", ret);
+        }
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL != migration_status
@@ -1714,6 +1753,110 @@ int ObLSMigrationHandler::check_need_to_abort_(bool &need_to_abort)
 
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLSMigrationHandler::notify_switch_to_leader_and_wait_replace_complete(const int64_t new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSMigrationTask task;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // skip when no migration task exist
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+    }
+  } else if (ObMigrationOpType::REPLACE_LS_OP != task.arg_.type_) {
+    // skip when migration task is not replace ls
+  } else {
+
+    // notify switch to leader
+    {
+      ObThreadCondGuard cond_guard(switch_leader_cond_);
+      leader_proposal_id_ = new_proposal_id;
+      switch_leader_cnt_++;
+      switch_leader_cond_.signal();
+      LOG_INFO("notify switch to leader", "ls_id", ls_->get_ls_id(), K_(leader_proposal_id), K_(switch_leader_cnt));
+    }
+
+    // wait replace complete
+    const int64_t start_ts = ObTimeUtility::current_time();
+    ObTimeoutCtx timeout_ctx;
+    int64_t timeout = 10_min;
+    const ObLSID ls_id = ls_->get_ls_id();
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const uint64_t CHECK_CONDITION_INTERVAL = 200_ms;
+
+    if (tenant_config.is_valid()) {
+      timeout = tenant_config->_ls_migration_wait_completing_timeout;
+    }
+
+    if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+      LOG_WARN("failed to set timeout", K(ret), K(timeout));
+    }
+
+    while(OB_SUCC(ret)) {
+      if (timeout_ctx.is_timeouted()) {
+        ret = OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT;
+        LOG_WARN("wait replace complete timeout", K(ret), K(ls_id), K(timeout));
+      } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
+        LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
+      } else if (OB_MIGRATION_STATUS_REPLACE_FAIL == migration_status) {
+        ret = OB_LS_REPLACE_FAILED;
+        LOG_WARN("ls replace failed, switch to leader is not allowed", K(ret),
+          K(ls_id), K(migration_status));
+      } else if (OB_MIGRATION_STATUS_NONE == migration_status) {
+        LOG_INFO("ls replace complete, switch to leader is allowed", K(ls_id));
+        break;
+      } else {
+        ob_usleep(CHECK_CONDITION_INTERVAL);
+        LOG_INFO("ls replace not complete, need wait", K(ls_id), K(migration_status));
+      }
+    }
+
+    const int64_t cost = ObTimeUtility::current_time() - start_ts;
+    LOG_INFO("notify switch to leader and wait replace complete", K(ret), K(ls_id), K(cost), K_(switch_leader_cnt));
+  }
+
+  return ret;
+}
+
+int ObLSMigrationHandler::wait_notified_switch_to_leader(
+    const ObTimeoutCtx &timeout_ctx,
+    int64_t &leader_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t CHECK_CONDITION_INTERVAL_MS = 200;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  }
+
+  while(OB_SUCC(ret)) {
+    if (timeout_ctx.is_timeouted()) {
+      ret = OB_WAIT_ELEC_LEADER_TIMEOUT;
+      LOG_WARN("wait ls elect leader timeout", K(ret), K(timeout_ctx));
+    } else {
+      ObThreadCondGuard cond_guard(switch_leader_cond_);
+      if (switch_leader_cnt_ > 0) {
+        leader_proposal_id = leader_proposal_id_;
+        switch_leader_cnt_ = 0;
+        LOG_INFO("wait elect as leader success", "ls_id", ls_->get_ls_id(), K_(switch_leader_cnt), K_(leader_proposal_id));
+        break;
+      } else {
+        switch_leader_cond_.wait(CHECK_CONDITION_INTERVAL_MS);
+      }
+    }
+  }
+
+  return ret;
+}
+#endif
 
 }
 }
