@@ -185,7 +185,8 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   real_child_(NULL),
   is_parallel_runtime_filtered_(false),
   is_parallel_rf_qr_extracted_(false),
-  splitter_type_(GIT_UNINITIALIZED)
+  splitter_type_(GIT_UNINITIALIZED),
+  pump_arg_(NULL)
 {
   op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::FILTERED_GRANULE_COUNT;
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_GRANULE_COUNT;
@@ -213,10 +214,13 @@ int ObGranuleIteratorOp::parameters_init()
   } else if (FALSE_IT(pump_ = input->pump_)){
   } else if (OB_FAIL(table_location_keys_.assign(input->table_location_keys_))) {
     LOG_WARN("fail to assgin table location keys", K(ret));
+  } else if (OB_ISNULL(pump_arg_ = pump_->get_granule_pump_arg(spec_.id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get granule pump arg failed", K(ret), K(spec_.id_));
   } else {
     parallelism_ = input->parallelism_;
     worker_id_ = input->worker_id_;
-    pump_version_ = pump_->get_pump_version();
+    pump_version_ = pump_arg_->pump_version_;
   }
   LOG_DEBUG("GI ctx init", K(this), K(parallelism_), K(pump_), K(tsc_op_id_));
   return ret;
@@ -394,12 +398,13 @@ int ObGranuleIteratorOp::rescan()
 {
   int ret = ObOperator::inner_rescan();
   CK(NULL != pump_);
+  CK(NULL != pump_arg_);
   if (OB_FAIL(ret)) {
-  } else if (pump_version_ != pump_->get_pump_version()) {
+  } else if (pump_version_ != pump_arg_->pump_version_) {
     // We can not reused the processed tasks when task regenerated (pump version changed).
     // e.g.: px batch rescan.
     LOG_TRACE("rescan after task changes");
-    pump_version_ = pump_->get_pump_version();
+    pump_version_ = pump_arg_->pump_version_;
     is_rescan_ = false;
     rescan_taskset_ = NULL;
     rescan_tasks_info_.reset();
@@ -1342,7 +1347,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
   if (OB_ISNULL(pump_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is unexpected", K(pump_), K(ret));
-  } else if (OB_ISNULL(args = pump_->get_granule_pump_arg(get_spec().id_))) {
+  } else if (OB_ISNULL(args = pump_arg_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is unexpected", K(ret), K(pump_->get_pump_args()), K(get_spec().id_));
   } else {
@@ -1482,7 +1487,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
   int ret = OB_SUCCESS;
   bool has_extrct = false;
   ObGranulePumpArgs *args = NULL;
-  if (OB_ISNULL(pump_) || OB_ISNULL(args = pump_->get_granule_pump_arg(get_spec().id_))) {
+  if (OB_ISNULL(pump_) || OB_ISNULL(args = pump_arg_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is unexpected", K(pump_), K(ret));
   } else {
