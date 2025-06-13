@@ -1560,7 +1560,7 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
 
   // first push rowkey columns.
   for (int i = 0; OB_SUCC(ret) && i < rowkey_column_count_; i++) {
-    const ObRowkeyColumn rowkey_column = rowkey_cols_[i];
+    const ObRowkeyColumn &rowkey_column = rowkey_cols_[i];
 
     if (OB_UNLIKELY(! rowkey_column.is_valid())) {
       DDLOG(WARN, "rowkey_column is not valid", KR(ret), K(i), K(rowkey_column), KPC(this));
@@ -1578,11 +1578,11 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
 
   // then push non-rowkey columns.
   for (int i = 0; OB_SUCC(ret) &&i < column_count_; i++) {
-    const ObDictColumnMeta column_meta = col_metas_[i];
+    const ObDictColumnMeta &column_meta = col_metas_[i];
 
     if (column_meta.is_rowkey_column()
         || (no_virtual && column_meta.is_virtual_generated_column())) {
-      DDLOG(DEBUG, "skip non-rowkey_column and virtual_generate_column", K(no_virtual), K(column_meta), KPC(this));
+      DDLOG(INFO, "skip non-rowkey_column and virtual_generate_column", K(no_virtual), K(column_meta), KPC(this));
     } else {
       ObColDesc col_desc;
       col_desc.col_id_ = column_meta.get_column_id();
