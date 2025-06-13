@@ -1061,13 +1061,7 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
   int ret = OB_SUCCESS;
   // check if timeout or if transaction status every 10000 rows, which should be within 10ms
-  if (0 == (++scan_cnt_ % 10000)) {
-    if (!access_ctx_->query_flag_.is_daily_merge()) {
-      if (OB_FAIL(THIS_WORKER.check_status())) {
-        STORAGE_LOG(WARN, "query interrupt, ", K(ret));
-      }
-    }
-  }
+  INC_AND_CHECK_INTERRUPT_IN_SCAN(access_ctx_, scan_cnt_);
   if (OB_SUCC(ret)
       && NULL != access_param_->op_filters_
       && !access_param_->op_filters_->empty()) {

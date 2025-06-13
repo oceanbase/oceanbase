@@ -74,7 +74,8 @@ ObTableAccessContext::ObTableAccessContext()
     iter_pool_(nullptr),
     block_row_store_(nullptr),
     io_callback_(nullptr),
-    trans_state_mgr_(nullptr)
+    trans_state_mgr_(nullptr),
+    row_scan_cnt_(nullptr)
 {
   merge_scn_.set_max();
 }
@@ -191,6 +192,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     need_scn_ = scan_param.need_scn_;
     range_array_pos_ = &scan_param.range_array_pos_;
     use_fuse_row_cache_ = false;
+    row_scan_cnt_ = scan_param.row_scan_cnt_;
     if(OB_FAIL(build_lob_locator_helper(scan_param, ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
       // new static engine do not need fill scale
@@ -290,6 +292,7 @@ void ObTableAccessContext::reset()
   range_array_pos_ = nullptr;
   iter_pool_ = nullptr;
   block_row_store_ = nullptr;
+  row_scan_cnt_ = nullptr;
 }
 
 void ObTableAccessContext::reuse()
@@ -316,6 +319,7 @@ void ObTableAccessContext::reuse()
   range_array_pos_ = nullptr;
   iter_pool_ = nullptr;
   block_row_store_ = nullptr;
+  row_scan_cnt_ = nullptr;
 }
 
 } // namespace storage

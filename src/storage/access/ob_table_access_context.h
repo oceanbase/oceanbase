@@ -46,6 +46,18 @@ class ObBlockRowStore;
 #define REALTIME_MONITOR_ADD_READ_ROW_CNT(CTX, COUNT) \
   if (OB_NOT_NULL(CTX)) CTX->add_ssstore_read_row_cnt(COUNT);
 
+#define INC_AND_CHECK_INTERRUPT_IN_SCAN(CTX, LOCAL_CNT)               \
+do {                                                                  \
+  CTX->incr_row_scan_cnt(LOCAL_CNT);                                  \
+  if (OB_UNLIKELY(0 == (CTX->get_row_scan_cnt(LOCAL_CNT) % 10000))) { \
+    if (!access_ctx_->query_flag_.is_daily_merge()) {                 \
+      if (OB_FAIL(THIS_WORKER.check_status())) {                      \
+        STORAGE_LOG(WARN, "query interrupt, ", K(ret));               \
+      }                                                               \
+    }                                                                 \
+  }                                                                   \
+} while (0)
+
 struct ObTableScanStoreStat
 {
   ObTableScanStoreStat() { reset(); }
@@ -198,6 +210,17 @@ struct ObTableAccessContext
       *table_scan_stat_->tsc_monitor_info_->memstore_read_row_cnt_ += count;
     }
   }
+  OB_INLINE void incr_row_scan_cnt(int64_t &local_cnt)
+  {
+    local_cnt++;
+    if (nullptr != row_scan_cnt_) {
+      *row_scan_cnt_ += 1;
+    }
+  }
+  OB_INLINE uint64_t get_row_scan_cnt(const int64_t local_cnt)
+  {
+    return nullptr != row_scan_cnt_ ? *row_scan_cnt_ : local_cnt;
+  }
   TO_STRING_KV(
     K_(is_inited),
     K_(timeout),
@@ -218,7 +241,8 @@ struct ObTableAccessContext
     K_(lob_locator_helper),
     KP_(iter_pool),
     KP_(block_row_store),
-    KP_(io_callback))
+    KP_(io_callback),
+    KP_(row_scan_cnt))
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   int build_lob_locator_helper(ObTableScanParam &scan_param,
@@ -259,6 +283,7 @@ public:
   ObBlockRowStore *block_row_store_;
   common::ObIOCallback *io_callback_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
+  uint64_t *row_scan_cnt_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;
 #endif

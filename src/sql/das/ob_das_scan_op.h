@@ -180,7 +180,8 @@ public:
       scan_op_id_(common::OB_INVALID_ID),
       scan_rows_size_(common::OB_INVALID_ID),
       row_width_(common::OB_INVALID_ID),
-      das_tasks_key_()
+      das_tasks_key_(),
+      row_scan_cnt_(0)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -232,6 +233,9 @@ public:
   int64_t scan_rows_size_;
   int64_t row_width_;   // no use
   ObDASTCBMemProfileKey das_tasks_key_;
+  // row_scan_cnt_ indicates the total rows scanned during a table scan, for multi-partition tables, it sums rows
+  // from all local partitions and retains its value even after rescan.
+  uint64_t row_scan_cnt_;
 
 private:
   union {

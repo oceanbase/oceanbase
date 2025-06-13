@@ -138,7 +138,8 @@ public:
         need_scn_(false),
         need_switch_param_(false),
         is_thread_scope_(true),
-        tx_seq_base_(-1)
+        tx_seq_base_(-1),
+        row_scan_cnt_(NULL)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -161,6 +162,7 @@ public:
   bool is_thread_scope_;
   ObRangeArray ss_key_ranges_;  // used for index skip scan, use as postfix range for ObVTableScanParam::key_ranges_
   int64_t tx_seq_base_;  // used by lob when main table is read_latest
+  uint64_t *row_scan_cnt_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
