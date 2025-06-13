@@ -125,7 +125,15 @@ bool ObSelectStmt::has_distinct_or_concat_agg() const
     const ObAggFunRawExpr *aggr = get_aggr_item(i);
     if (NULL != aggr) {
       has = aggr->is_param_distinct() ||
-            T_FUN_GROUP_CONCAT == aggr->get_expr_type();
+            // Consistent with the has_group_concat_ flag in ObAggregateProcessor.
+            T_FUN_GROUP_CONCAT == aggr->get_expr_type() ||
+            T_FUN_KEEP_WM_CONCAT == aggr->get_expr_type() ||
+            T_FUN_WM_CONCAT == aggr->get_expr_type() ||
+            T_FUN_JSON_ARRAYAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_JSON_ARRAYAGG == aggr->get_expr_type() ||
+            T_FUN_JSON_OBJECTAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_JSON_OBJECTAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_XMLAGG == aggr->get_expr_type();
     }
   }
   return has;
