@@ -542,10 +542,11 @@ int ObTransCallbackMgr::append(ObITransCallback *head,
 void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
   int64_t size = node->get_data_size();
+  int64_t old_row_size = node->get_old_row_data_size();
   if (for_replay_) {
     inc_flushed_log_size(size);
   } else {
-    inc_pending_log_size(size);
+    inc_pending_log_size(size + old_row_size);
   }
 }
 
@@ -553,10 +554,11 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 {
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
+    int64_t old_row_size = node->get_old_row_data_size();
     if (for_replay_) {
       inc_flushed_log_size(-1 * size);
     } else {
-      inc_pending_log_size(-1 * size);
+      inc_pending_log_size(-1 * (size + old_row_size));
     }
   }
 }
@@ -2034,7 +2036,7 @@ int ObMvccRowCallback::rollback_callback()
   }
 
   if (need_submit_log_ && SCN::max_scn() == scn_) {
-    ctx_.inc_pending_log_size(-1 * data_size_);
+    ctx_.inc_pending_log_size(-1 * (data_size_ + get_old_row_data_size()));
   }
 
   return OB_SUCCESS;
