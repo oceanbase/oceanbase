@@ -1728,7 +1728,7 @@ int ObTenantIOManager::calc_io_memory(const uint64_t tenant_id, const int64_t me
     //unlimited，预分配30w个request和result
     request_count_ = 300000;
     result_count_ = 300000;
-    io_memory_limit_ = memory;
+    io_memory_limit_ = memory / 4;
   }
   LOG_INFO("calc tenant io memory success", K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   return ret;
