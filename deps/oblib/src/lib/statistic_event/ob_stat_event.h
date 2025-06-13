@@ -975,10 +975,10 @@ STAT_EVENT_SET_DEF(SS_MACRO_CACHE_SHARED_MACRO_HIT_CNT, "ss_macro_cache shared m
 STAT_EVENT_SET_DEF(SS_MACRO_CACHE_SHARED_MACRO_MISS_CNT, "ss_macro_cache shared macro miss count", ObStatClassIds::CACHE, 245051, false, true, true)
 STAT_EVENT_SET_DEF(SS_MACRO_CACHE_SHARED_MACRO_HIT_BYTES, "ss_macro_cache shared macro hit bytes", ObStatClassIds::CACHE, 245052, false, true, true)
 STAT_EVENT_SET_DEF(SS_MACRO_CACHE_SHARED_MACRO_MISS_BYTES, "ss_macro_cache shared macro miss bytes", ObStatClassIds::CACHE, 245053, false, true, true)
-STAT_EVENT_SET_DEF(SS_MACRO_CACHE_EXTERNEL_TABLE_HIT_CNT, "ss_macro_cache external table hit count", ObStatClassIds::CACHE, 245054, false, true, true)
-STAT_EVENT_SET_DEF(SS_MACRO_CACHE_EXTERNEL_TABLE_MISS_CNT, "ss_macro_cache external table miss count", ObStatClassIds::CACHE, 245055, false, true, true)
-STAT_EVENT_SET_DEF(SS_MACRO_CACHE_EXTERNEL_TABLE_HIT_BYTES, "ss_macro_cache external table hit bytes", ObStatClassIds::CACHE, 245056, false, true, true)
-STAT_EVENT_SET_DEF(SS_MACRO_CACHE_EXTERNEL_TABLE_MISS_BYTES, "ss_macro_cache external table miss bytes", ObStatClassIds::CACHE, 245057, false, true, true)
+STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_HIT_CNT, "external table disk cache hit count", ObStatClassIds::CACHE, 245054, false, true, true)
+STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_MISS_CNT, "external table disk cache miss count", ObStatClassIds::CACHE, 245055, false, true, true)
+STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_HIT_BYTES, "external table disk cache hit bytes", ObStatClassIds::CACHE, 245056, false, true, true)
+STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_MISS_BYTES, "external table disk cache miss bytes", ObStatClassIds::CACHE, 245057, false, true, true)
 
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)

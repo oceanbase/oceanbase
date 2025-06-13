@@ -22334,6 +22334,10 @@ FOR relation_name_or_string
 {
   $$ = $2;
 }
+| /* EMPTY */
+{
+  $$ = NULL;
+}
 ;
 
 opt_scope_type:
