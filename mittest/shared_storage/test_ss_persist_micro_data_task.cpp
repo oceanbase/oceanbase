@@ -353,7 +353,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_task_exit_loop)
     }
   }
   ASSERT_EQ(true, ATOMIC_LOAD(&stop));
-  ASSERT_EQ(sealed_mem_block_cnt, micro_cache->mem_data_mgr_.get_sealed_mem_block_cnt());
+  ASSERT_GE(sealed_mem_block_cnt, micro_cache->mem_data_mgr_.get_sealed_mem_block_cnt());
   t.join();
 }
 

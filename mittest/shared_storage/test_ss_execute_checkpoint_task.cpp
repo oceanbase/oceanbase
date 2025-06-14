@@ -541,6 +541,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ObSEArray<uint64_t, 128> reuse_version_arr;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_block_reuse_version(reuse_version_arr));
   ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.ckpt_op_.gen_micro_meta_checkpoint());
+  ASSERT_LT(0, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.cur_super_block_.tablet_info_list_.count());
+  ASSERT_LT(0, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.cur_super_block_.tablet_info_list_.at(0).get_valid_size());
   ASSERT_EQ(false, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.lack_phy_blk_);
   ASSERT_LT(0, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
   ASSERT_LT(0, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.cur_super_block_.micro_ckpt_time_us_);
