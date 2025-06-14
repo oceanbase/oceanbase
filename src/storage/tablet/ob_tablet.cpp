@@ -6188,19 +6188,7 @@ int ObTablet::get_kept_snapshot_info(
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
 
-  const int64_t last_major_snapshot_version = get_last_major_snapshot_version();
-  bool need_check_medium_info = false;
-  int64_t max_merged_snapshot = 0;
-  if (0 == last_major_snapshot_version) {
-    // do nothing
-  } else if (!GCTX.is_shared_storage_mode() || last_major_snapshot_version >= MERGE_SCHEDULER_PTR->get_inner_table_merged_scn()) {
-    max_merged_snapshot = last_major_snapshot_version;
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else {
-    max_merged_snapshot = MERGE_SCHEDULER_PTR->get_inner_table_merged_scn();
-    need_check_medium_info = true;
-#endif
-  }
+  int64_t max_merged_snapshot = get_last_major_snapshot_version();
 
   int64_t min_medium_snapshot = INT64_MAX;
   if (!is_ls_inner_tablet()) {
@@ -6217,24 +6205,7 @@ int ObTablet::get_kept_snapshot_info(
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(medium_info_reader.init(*this, scan_param))) {
         LOG_WARN("failed to init medium info reader", K(ret));
-      } else if (need_check_medium_info) {
-        ObMediumCompactionInfoKey medium_info_key(max_merged_snapshot);
-        ObMediumCompactionInfo *medium_info = nullptr;
-        if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
-          LOG_WARN("fail to alloc and new", K(ret));
-        } else if (OB_FAIL(medium_info_reader.get_specified_medium_info(allocator, medium_info_key, *medium_info))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-            max_merged_snapshot = last_major_snapshot_version;
-          } else {
-            LOG_WARN("failed to get specified scn info", K(ret), K(max_merged_snapshot));
-          }
-        } else if (ObAdaptiveMergePolicy::DURING_DDL != medium_info->medium_merge_reason_) {
-          max_merged_snapshot = last_major_snapshot_version;
-        }
-      }
-
-      if (FAILEDx(medium_info_reader.get_min_medium_snapshot(max_merged_snapshot, min_medium_snapshot))) {
+      } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(max_merged_snapshot, min_medium_snapshot))) {
         LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet_id));
       }
     }
