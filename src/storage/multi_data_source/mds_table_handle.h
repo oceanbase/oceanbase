@@ -60,9 +60,9 @@ public:
   int get_tablet_status_node(OP &&read_op, const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_latest(OP &&read_op,
-                 MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                  const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_latest_committed(OP &&read_op) const;
@@ -92,9 +92,9 @@ public:
   template <typename Key, typename Value, typename OP>
   int get_latest(const Key &key,
                  OP &&read_op,
-                 MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                  const int64_t read_seq = 0) const;
   template <typename Key, typename Value, typename OP>
   int get_latest_committed(const Key &key,

@@ -338,7 +338,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_create_tx(
       LOG_WARN("tablet creation transaction has not committed",
           K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     } else {
-      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // standby tenant(including restore/invalid role): call interface from, get "potential" commit version, then decide
       // whether allow to read
       const ObTransID tx_id(writer.writer_id_);
       ObTxCommitData::TxDataState tx_data_state;
@@ -416,7 +416,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_in(
       LOG_WARN("read snapshot is no smaller than prepare version, primary tenant should retry",
           K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     } else {
-      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // standby tenant(including restore/invalid role): call interface from, get "potential" commit version, then decide
       // whether allow to read
       const ObTransID tx_id(writer.writer_id_);
       ObTxCommitData::TxDataState tx_data_state;
@@ -498,7 +498,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_deleted_or_transfer_out(
       LOG_INFO("read snapshot is no smaller than prepare version on primary tenant, should retry on target ls",
           K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     } else {
-      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // standby tenant(including restore/invalid role): call interface from, get "potential" commit version, then decide
       // whether allow to read
       const ObTransID tx_id(writer.writer_id_);
       ObTxCommitData::TxDataState tx_data_state;

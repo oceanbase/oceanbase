@@ -219,9 +219,9 @@ int MdsTableHandle::replay(T &&data, MdsCtx &ctx, const share::SCN &scn)
 template <typename T, typename OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int MdsTableHandle::get_latest(OP &&read_op,
-                               MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                               TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                               share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                                const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
@@ -540,9 +540,9 @@ int MdsTableHandle::replay_remove(const Key &key, MdsCtx &ctx, share::SCN &scn)
 template <typename Key, typename Value, typename OP>
 int MdsTableHandle::get_latest(const Key &key,
                                OP &&read_op,
-                               MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                               TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                               share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                                const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
