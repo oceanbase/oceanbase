@@ -1152,7 +1152,7 @@ ObStorageS3Base::ObStorageS3Base()
 
 ObStorageS3Base::~ObStorageS3Base()
 {
-  reset();
+  ObStorageS3Base::reset();
 }
 
 void ObStorageS3Base::reset()
@@ -1432,6 +1432,7 @@ ObStorageS3Reader::ObStorageS3Reader()
 
 ObStorageS3Reader::~ObStorageS3Reader()
 {
+  close();
 }
 
 void ObStorageS3Reader::reset()
@@ -1557,6 +1558,7 @@ ObStorageS3Util::ObStorageS3Util() : is_opened_(false), storage_info_(NULL)
 
 ObStorageS3Util::~ObStorageS3Util()
 {
+  close();
 }
 
 int ObStorageS3Util::open(ObObjectStorageInfo *storage_info)
@@ -2183,6 +2185,7 @@ ObStorageS3AppendWriter::ObStorageS3AppendWriter()
 
 ObStorageS3AppendWriter::~ObStorageS3AppendWriter()
 {
+  close();
 }
 
 int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *storage_info)
@@ -2282,7 +2285,9 @@ ObStorageS3MultiPartWriter::ObStorageS3MultiPartWriter()
 {}
 
 ObStorageS3MultiPartWriter::~ObStorageS3MultiPartWriter()
-{}
+{
+  close();
+}
 
 void ObStorageS3MultiPartWriter::reset()
 {
@@ -2561,7 +2566,9 @@ ObStorageParallelS3MultiPartWriter::ObStorageParallelS3MultiPartWriter()
 {}
 
 ObStorageParallelS3MultiPartWriter::~ObStorageParallelS3MultiPartWriter()
-{}
+{
+  close();
+}
 
 void ObStorageParallelS3MultiPartWriter::reset()
 {

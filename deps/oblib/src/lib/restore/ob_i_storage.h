@@ -261,6 +261,7 @@ public:
 class ObIStorageUtil
 {
 public:
+  virtual ~ObIStorageUtil() {}
   virtual int open(common::ObObjectStorageInfo *storage_info) = 0;
   virtual void close() = 0;
   virtual int is_exist(const common::ObString &uri, bool &exist) = 0;
@@ -287,6 +288,7 @@ public:
 class ObIStorageReader
 {
 public:
+  virtual ~ObIStorageReader() {}
   virtual int open(const common::ObString &uri,
                    common::ObObjectStorageInfo *storage_info, const bool head_meta = true) = 0;
   virtual int pread(char *buf,const int64_t buf_size, const int64_t offset, int64_t &read_size) = 0;
@@ -298,6 +300,7 @@ public:
 class ObIStorageWriter
 {
 public:
+  virtual ~ObIStorageWriter() {}
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
   virtual int write(const char *buf,const int64_t size) = 0;
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) = 0;
@@ -310,6 +313,7 @@ public:
 class ObIStorageMultiPartWriter
 {
 public:
+  virtual ~ObIStorageMultiPartWriter() {}
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
   virtual int write(const char *buf, const int64_t size) = 0;
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) = 0;
@@ -323,6 +327,7 @@ public:
 class ObIStorageParallelMultipartWriter
 {
 public:
+  virtual ~ObIStorageParallelMultipartWriter() {}
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
   virtual int upload_part(const char *buf, const int64_t size, const int64_t part_id) = 0;
   virtual int complete() = 0;

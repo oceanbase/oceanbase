@@ -2342,6 +2342,11 @@ int ObStorageAdaptiveReader::pread(char *buf,
         read_size = cur_read_size;
       }
     }
+
+    if (OB_NOT_NULL(tmp_reader)) {
+      tmp_reader->~ObIStorageReader();
+      // tmp_reader is alloced by allocator, no need actively free
+    }
   } else {
     ret = OB_ERR_SYS;
     OB_LOG(ERROR, "unkown object type", K(ret), K_(meta));
