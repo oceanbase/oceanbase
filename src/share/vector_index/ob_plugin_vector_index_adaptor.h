@@ -686,6 +686,9 @@ public:
   int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
+  int get_inc_index_row_cnt(int64_t &count);
+  int get_snap_index_row_cnt(int64_t &count);
+
   int get_vid_bound(ObVidBound &bound);
 
   bool validate_tablet_ids(const ObVectorIndexAcquireCtx& ctx) {

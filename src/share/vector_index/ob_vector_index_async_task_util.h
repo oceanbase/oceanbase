@@ -254,7 +254,7 @@ private:
       storage::ObTableScanIterator *table_scan_iter,
       storage::ObValueRowIterator &delete_row_iter);
   int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
-
+  bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
 private:
   bool is_inited_;
   int task_type_; // 0. built; 1. opt
@@ -332,6 +332,7 @@ public:
       const int64_t task_id,
       ObVecIndexFieldArray& task_key);
 
+  static int64_t get_processing_task_cnt(ObVecIndexAsyncTaskOption &task_opt);
   static bool check_can_do_work();
 
   static int fetch_new_task_id(const uint64_t tenant_id, int64_t &new_task_id);

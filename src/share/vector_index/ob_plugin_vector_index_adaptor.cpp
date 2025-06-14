@@ -3530,6 +3530,32 @@ int ObPluginVectorIndexAdaptor::get_vid_bound(ObVidBound &bound)
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::get_inc_index_row_cnt(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), count))) {
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+    LOG_WARN("failed to get inc index number.", K(ret));
+  } else {
+    LOG_DEBUG("succ to get inc index row cnt", K(ret), K(count));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::get_snap_index_row_cnt(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), count))) {
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+    LOG_WARN("failed to get snap index number.", K(ret));
+  } else {
+    LOG_DEBUG("succ to get snap index row cnt", K(ret), K(count));
+  }
+  return ret;
+}
+
 void *ObVsagMemContext::Allocate(size_t size)
 {
   void *ret_ptr = nullptr;

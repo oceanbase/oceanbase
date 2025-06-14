@@ -134,6 +134,21 @@ int ObVecIndexAsyncTaskUtil::fetch_new_task_id(const uint64_t tenant_id, int64_t
   return ret;
 }
 
+int64_t ObVecIndexAsyncTaskUtil::get_processing_task_cnt(ObVecIndexAsyncTaskOption &task_opt)
+{
+  int ret = OB_SUCCESS;
+  int64_t processing_task_cnt = 0;
+  FOREACH_X(iter, task_opt.get_async_task_map(), OB_SUCC(ret)) {
+    ObVecIndexAsyncTaskCtx *task_ctx = iter->second;
+    if (OB_NOT_NULL(task_ctx)) {
+      if (task_ctx->in_thread_pool_) {
+        processing_task_cnt++;
+      }
+    }
+  }
+  return processing_task_cnt;
+}
+
 // table 3, 4, 5 refactor the same adapter, here only need to get table 3 table_id
 int ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(
     ObPluginVectorIndexAdaptor *adapter, const ObTabletID &tablet_id, int64_t &table_id)
@@ -1064,10 +1079,11 @@ int ObVecIndexAsyncTask::do_work()
     LOG_WARN("fail to get vector index adapter", KR(ret), KPC(ctx_));
   } else if (adpt_guard.get_adatper()->has_doing_vector_index_task()) {
     ret = OB_EAGAIN;
-    LOG_WARN("there is other vector index task running", K(ret), KP(adpt_guard.get_adatper()));
+    LOG_INFO("there is other vector index task running", K(ret), KP(adpt_guard.get_adatper()));
+  } else if (!check_task_satisfied_memory_limited(*adpt_guard.get_adatper())) {
+    ret = OB_EAGAIN; // will retry
+    LOG_INFO("skip to do async task due to tenant memory limit", KR(ret), KPC(ctx_));
   } else if (FALSE_IT(task_started = true)) {
-  } else if (OB_FAIL(adpt_guard.get_adatper()->check_vsag_mem_used())) {
-    LOG_WARN("fail to check vsag mem used", KR(ret), KPC(ctx_));
   } else {
     adpt_buff = vector_index_service->get_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
     if (OB_ISNULL(adpt_buff)) {
@@ -1104,6 +1120,41 @@ int ObVecIndexAsyncTask::do_work()
   }
   LOG_INFO("end do_work", K(ret), K(ctx_->task_status_));
   return ret;
+}
+
+bool ObVecIndexAsyncTask::check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor)
+{
+  int ret = OB_SUCCESS;
+  bool check_result = true;
+  const int64_t snapshot_table_id = adaptor.get_snapshot_table_id();
+
+  if (tenant_id_ != OB_INVALID_TENANT_ID && snapshot_table_id != OB_INVALID_ID) {
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *index_schema = nullptr;
+
+    int64_t current_incr_count = 0;
+    int64_t current_snapshot_count = 0;
+    int64_t estimate_row_count = 0;
+    // inc
+    // tips: When there are many delete operations in inc data, the estimated final result may deviate significantly from the actual result.
+    if (OB_FAIL(adaptor.get_inc_index_row_cnt(current_incr_count))) {
+      LOG_WARN("fail to get incr index number", K(ret));
+    } else if (OB_FAIL(adaptor.get_snap_index_row_cnt(current_snapshot_count))) {
+      LOG_WARN("fail to get snap index number", K(ret));
+    } else if (OB_FALSE_IT(estimate_row_count = current_incr_count + current_snapshot_count)) {
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, snapshot_table_id, index_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(snapshot_table_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("error unexpected, index table schema is null", K(ret), K(snapshot_table_id));
+    } else if (!ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, tenant_id_, estimate_row_count)) {
+      check_result = false;
+      LOG_INFO("current vsag memory maybe is not satisfy to execute async task", K(ret), K(snapshot_table_id));
+    }
+  }
+  return check_result;
 }
 
 int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adaptor)
