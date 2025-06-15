@@ -477,6 +477,7 @@ TEST_F(TestSSMicroMetaManager, parallel_add_micro_meta)
 
 TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
 {
+  int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_scan_ranges_block_meta");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
@@ -511,9 +512,9 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
 
   // add micro_meta
   ObSSMicroMetaManager::SSMicroMetaMap &micro_map = micro_meta_mgr.micro_meta_map_;
-  const int64_t macro_cnt = 100;
+  const int64_t macro_cnt = 20;
   const int64_t micro_cnt = 100;
-  const int64_t micro_size = 1024;
+  const int64_t micro_size = 16 * 1024;
   ObArenaAllocator allocator;
   char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
   ASSERT_NE(nullptr, data_buf);
@@ -528,13 +529,15 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
     for (int64_t j = 0; j < micro_cnt; ++j) {
       const int64_t offset = j * micro_size + payload_offset;
       ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ret = micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, macro_id.second_id(), ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ASSERT_EQ(OB_SUCCESS, ret);
       if(j % 5 == 0){
         ObSSMicroBlockMetaHandle micro_handle;
         micro_meta_mgr.get_micro_block_meta(micro_key, micro_handle, macro_id.second_id(), false);
         micro_handle.get_ptr()->mark_meta_expired();
       }
     }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_LT(1, cache_stat.range_stat().init_range_cnt_);
@@ -568,9 +571,9 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ObSEArray<ObLSHandle, 16> ls_handles;
   ObSSMicroCacheUtil::get_ls_handles(ls_handles);
 
-  int64_t macro_cnt = 100;
+  int64_t macro_cnt = 30;
   int64_t micro_cnt = 100;
-  const int64_t micro_size = 1024;
+  const int64_t micro_size = 16 * 1024;
   ObArenaAllocator allocator;
   char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
   ASSERT_NE(nullptr, data_buf);
@@ -589,6 +592,7 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
         micro_meta_handle.get_ptr()->mark_deleted();
       }
     }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
 
@@ -666,14 +670,15 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
                             macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
       ObSSMicroBlockMetaHandle micro_meta_handle;
       ASSERT_EQ(OB_SUCCESS, micro_meta_mgr->get_micro_block_meta(micro_key, micro_meta_handle, macro_id.second_id(), false));
-      if(j % 10 == 0) {
+      if (j % 10 == 0) {
         micro_meta_handle.get_ptr()->mark_deleted();
       }
     }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
 
   ObTenantBase *tenant_base = MTL_CTX();
-  std::thread clear_mic_cache([&]( ) {
+  std::thread clear_thread([&]( ) {
     ob_usleep(78 * 1000L);
     ObTenantEnv::set_tenant(tenant_base);
     micro_cache->clear_micro_cache();
@@ -681,7 +686,6 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
 
   // persist micro meta
   ObSSPersistMicroMetaTask* persist_meta_task = &micro_cache->task_runner_.persist_meta_task_;
-  // micro_cache->task_runner_.schedule_persist_meta_task(3600 * 1000 * 1000L);
   persist_meta_task->cur_interval_us_ = 3600 * 1000 * 1000L;
   ob_usleep(1000 * 1000L);
 
@@ -693,7 +697,7 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
   ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_micro_meta_checkpoint());
   ASSERT_EQ(0, micro_meta_mgr->micro_meta_map_.count());
 
-  clear_mic_cache.join();
+  clear_thread.join();
 }
 
 }  // namespace storage

@@ -1066,6 +1066,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
 {
   LOG_INFO("TEST_CASE: start test_reserve_micro_ckpt_blk");
   int ret = OB_SUCCESS;
+  const int64_t start_case_us = ObTimeUtility::current_time();
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr_->blk_cnt_info_;
 
@@ -1077,6 +1078,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
   const int64_t micro_cnt = estimate_micro_cnt / macro_cnt;
   ObArray<ObSSMicroBlockMetaInfo> micro_meta_info_arr;
   ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(1, macro_cnt, micro_cnt, micro_meta_info_arr));
+  LOG_INFO("finish add batch micro_block", K(macro_cnt), K(micro_meta_info_arr.count()));
 
   // 2. mock shared_block is used up
   blk_cnt_info.data_blk_.hold_cnt_ = blk_cnt_info.data_blk_.max_cnt_;
@@ -1086,7 +1088,17 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
   ASSERT_EQ(0, blk_cnt_info.meta_blk_.used_cnt_);
   int64_t micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.exe_round_ = persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_round_ - 1;
-  ob_usleep(25 * 1000 * 1000);
+  const int64_t WAIT_TIMEOUT_S = 300;
+  bool finish_check = false;
+  int64_t check_start_s = ObTimeUtility::current_time_s();
+  do {
+    if (cache_stat.task_stat().micro_ckpt_cnt_ > micro_ckpt_cnt) {
+      finish_check = true;
+    } else {
+      ob_usleep(2 * 1000 * 1000L);
+      LOG_INFO("still waiting micro_ckpt", K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_));
+    }
+  } while (!finish_check && ObTimeUtility::current_time_s() - check_start_s <= WAIT_TIMEOUT_S);
   ASSERT_EQ(micro_ckpt_cnt + 1, cache_stat.task_stat().micro_ckpt_cnt_);
 
   ASSERT_EQ(blk_cnt_info.meta_blk_.hold_cnt_, blk_cnt_info.meta_blk_.used_cnt_);
@@ -1103,10 +1115,21 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
   ASSERT_LT(2 * origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.hold_cnt_);
 
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.exe_round_ = persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_round_ - 1;
-  ob_usleep(10 * 1000 * 1000);
+  finish_check = false;
+  check_start_s = ObTimeUtility::current_time_s();
+  do {
+    if (cache_stat.task_stat().micro_ckpt_cnt_ > micro_ckpt_cnt + 1) {
+      finish_check = true;
+    } else {
+      ob_usleep(2 * 1000 * 1000L);
+      LOG_INFO("2nd: still waiting micro_ckpt", K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_));
+    }
+  } while (!finish_check && ObTimeUtility::current_time_s() - check_start_s <= WAIT_TIMEOUT_S);
+  ASSERT_EQ(micro_ckpt_cnt + 2, cache_stat.task_stat().micro_ckpt_cnt_);
   ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_entry_list_.count());
   ASSERT_LT(origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.used_cnt_);
   ASSERT_LT(origin_meta_blk_usd_cnt, phy_blk_mgr_->super_blk_.micro_ckpt_entry_list_.count());
+  LOG_INFO("TEST_CASE: finish test_reserve_micro_ckpt_blk", "cost_us", ObTimeUtility::current_time() - start_case_us);
 }
 
 TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_arc_limit)

@@ -226,8 +226,19 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   const int64_t cost_ms = (ObTimeUtility::current_time() - start_us) / 1000;
   LOG_INFO("TEST: finish case, check result", K(cost_ms), K(cache_stat), K(arc_info));
 
-  ob_usleep(10 * 1000 * 1000);
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  const int64_t MAX_WAIT_TIMEOUT = 180;
+  int64_t start_check_time = ObTimeUtility::current_time_s();
+  do {
+    ret = TestSSCommonUtil::wait_for_persist_task();
+    if (OB_SUCCESS != ret) {
+      ob_usleep(1000 * 1000);
+      LOG_WARN("still waiting for persist_task", K(cache_stat.mem_blk_stat()));
+    }
+  } while (OB_SUCCESS != ret && ObTimeUtility::current_time_s() - start_check_time <= MAX_WAIT_TIMEOUT);
+  if (OB_FAIL(ret)) {
+    LOG_INFO("TEST: check cache stat", K(cache_stat));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_fg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_fg_used_cnt_);
   ASSERT_GT(cache_stat.mem_blk_stat().mem_blk_bg_max_cnt_, cache_stat.mem_blk_stat().mem_blk_bg_used_cnt_);
   int64_t max_result_val = arc_info.limit_ * 105 / 100;

@@ -44,6 +44,9 @@ public:
   virtual void SetUp();
   virtual void TearDown();
 
+  int mock_create_sub_range(ObConcurrentFIFOAllocator &allocator, ObSSMicroSubRangeInfo *&sub_rng);
+  void mock_free_sub_range(ObConcurrentFIFOAllocator &allocator, ObSSMicroSubRangeInfo *sub_rng);
+
 private:
   static const int32_t BLOCK_SIZE = 2 * 1024 * 1024;
 };
@@ -64,6 +67,104 @@ void TestSSMicroRangeManager::SetUp()
 
 void TestSSMicroRangeManager::TearDown()
 {}
+
+int TestSSMicroRangeManager::mock_create_sub_range(ObConcurrentFIFOAllocator &allocator, ObSSMicroSubRangeInfo *&sub_rng)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = allocator.alloc(sizeof(ObSSMicroSubRangeInfo));
+  if (OB_ISNULL(ptr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", KR(ret), K(allocator.allocated()));
+  } else {
+    sub_rng = new(ptr) ObSSMicroSubRangeInfo();
+  }
+  return ret;
+}
+
+void TestSSMicroRangeManager::mock_free_sub_range(ObConcurrentFIFOAllocator &allocator, ObSSMicroSubRangeInfo *sub_rng)
+{
+  if (nullptr != sub_rng) {
+    sub_rng->~ObSSMicroSubRangeInfo();
+    allocator.free(sub_rng);
+    sub_rng = nullptr;
+  }
+}
+
+TEST_F(TestSSMicroRangeManager, sub_range_mem_usage)
+{
+  LOG_INFO("TEST_CASE: start sub_range_mem_usage");
+  ObSSMicroRangeManager &micro_range_mgr =  MTL(ObSSMicroCache *)->micro_range_mgr_;
+  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache *)->cache_stat_;
+  ObArray<ObSSMicroSubRangeInfo *> prev_sub_ranges;
+  int64_t total_sub_rng_cnt = cache_stat.range_stat().sub_range_cnt_;
+  int64_t total_sub_rng_mem = micro_range_mgr.sub_rng_allocator_.hold();
+  ObArray<int64_t> sub_rng_cnt_arr;
+  const int64_t round_num = 2000;
+  LOG_INFO("start small allocator usage check", K(total_sub_rng_cnt), K(total_sub_rng_mem));
+  for (int64_t i = 0; i < round_num; ++i) {
+    const int64_t prev_sub_rng_cnt = prev_sub_ranges.count();
+    if (prev_sub_rng_cnt > 0) {
+      for (int64_t i = 0; i < prev_sub_rng_cnt; ++i) {
+        ASSERT_NE(nullptr, prev_sub_ranges.at(i));
+        micro_range_mgr.destroy_sub_range(prev_sub_ranges.at(i));
+      }
+    }
+    prev_sub_ranges.reset();
+    const int64_t new_sub_rng_cnt = ObRandom::rand(10000, 20000);
+    ASSERT_LT(0, new_sub_rng_cnt);
+    ASSERT_EQ(OB_SUCCESS, sub_rng_cnt_arr.push_back(new_sub_rng_cnt));
+    for (int64_t i = 0; i < new_sub_rng_cnt; ++i) {
+      ObSSMicroSubRangeInfo *cur_sub_rng = nullptr;
+      ASSERT_EQ(OB_SUCCESS, micro_range_mgr.create_sub_range(cur_sub_rng, false));
+      ASSERT_NE(nullptr, cur_sub_rng);
+      ASSERT_EQ(OB_SUCCESS, prev_sub_ranges.push_back(cur_sub_rng));
+    }
+    const int64_t cur_sub_rng_cnt = cache_stat.range_stat().sub_range_cnt_;
+    const int64_t cur_sub_rng_mem = micro_range_mgr.sub_rng_allocator_.hold();
+    LOG_INFO("check small allocator mem usage", K(i), K(cur_sub_rng_cnt), K(cur_sub_rng_mem));
+  }
+  total_sub_rng_cnt = cache_stat.range_stat().sub_range_cnt_;
+  int64_t mem_diff = micro_range_mgr.sub_rng_allocator_.hold() - total_sub_rng_mem;
+  total_sub_rng_mem = micro_range_mgr.sub_rng_allocator_.hold();
+  LOG_INFO("finish small allocator usage check", K(total_sub_rng_cnt), K(total_sub_rng_mem), K(mem_diff));
+  ASSERT_LT(mem_diff, 2097152);
+  if (prev_sub_ranges.count() > 0) {
+    for (int64_t i = 0; i < prev_sub_ranges.count(); ++i) {
+      ASSERT_NE(nullptr, prev_sub_ranges.at(i));
+      micro_range_mgr.destroy_sub_range(prev_sub_ranges.at(i));
+    }
+  }
+  prev_sub_ranges.reset();
+
+  ObConcurrentFIFOAllocator cf_allocator;
+  const int64_t max_cache_mem_size = 2 * 1024 * 1024 * 1024L;
+  ASSERT_EQ(OB_SUCCESS, cf_allocator.init(BLOCK_SIZE, ObMemAttr(MTL_ID(), "TestBlkMgr"), max_cache_mem_size));
+  total_sub_rng_mem = cf_allocator.allocated();
+  LOG_INFO("start concurrent fifo allocator usage check", K(total_sub_rng_mem));
+  for (int64_t i = 0; i < round_num; ++i) {
+    const int64_t prev_sub_rng_cnt = prev_sub_ranges.count();
+    if (prev_sub_rng_cnt > 0) {
+      for (int64_t i = 0; i < prev_sub_rng_cnt; ++i) {
+        ASSERT_NE(nullptr, prev_sub_ranges.at(i));
+        mock_free_sub_range(cf_allocator, prev_sub_ranges.at(i));
+      }
+    }
+    prev_sub_ranges.reset();
+    const int64_t new_sub_rng_cnt = sub_rng_cnt_arr.at(i);
+    for (int64_t i = 0; i < new_sub_rng_cnt; ++i) {
+      ObSSMicroSubRangeInfo *cur_sub_rng = nullptr;
+      ASSERT_EQ(OB_SUCCESS, mock_create_sub_range(cf_allocator, cur_sub_rng));
+      ASSERT_NE(nullptr, cur_sub_rng);
+      ASSERT_EQ(OB_SUCCESS, prev_sub_ranges.push_back(cur_sub_rng));
+    }
+    const int64_t cur_sub_rng_mem = cf_allocator.allocated();
+    LOG_INFO("check concurrent fifo allocator mem usage", K(i), K(cur_sub_rng_mem));
+  }
+  mem_diff = cf_allocator.allocated() - total_sub_rng_mem;
+  total_sub_rng_mem = cf_allocator.allocated();
+  LOG_INFO("finish concurrent fifo allocator usage check", K(total_sub_rng_mem));
+  ASSERT_LE(total_sub_rng_mem, 2097152);
+}
 
 TEST_F(TestSSMicroRangeManager, basic_test)
 {
