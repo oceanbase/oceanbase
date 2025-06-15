@@ -155,8 +155,8 @@ static int dispatch_fd_to(int fd, uint32_t gid, uint32_t tid)
 {
   int err = 0;
   pn_grp_t* grp = locate_grp(gid);
-  int thread_count = LOAD(&grp->count);
-  if (NULL == grp || thread_count == 0) {
+  int thread_count = 0;
+  if (NULL == grp || (thread_count = LOAD(&grp->count)) == 0) {
     err = -ENOENT;
   } else {
     pn_t* pn = grp->pn_array[tid % thread_count];
@@ -180,8 +180,8 @@ static int dispatch_fd_to(int fd, uint32_t gid)
 {
   int err = 0;
   pn_grp_t* grp = locate_grp(gid);
-  int thread_count = LOAD(&grp->count);
-  if (NULL == grp || thread_count == 0) {
+  int thread_count = 0;
+  if (NULL == grp || (thread_count = LOAD(&grp->count)) == 0) {
     err = -ENOENT;
   } else {
     static uint32_t tid = 0;
