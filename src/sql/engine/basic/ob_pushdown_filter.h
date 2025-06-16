@@ -38,6 +38,7 @@ class ColumnMap;
 }
 namespace storage
 {
+class ObITableReadInfo;
 struct ObTableIterParam;
 struct ObTableAccessContext;
 }
@@ -282,6 +283,15 @@ public:
   }
   virtual int postprocess() { return common::OB_SUCCESS; }
   virtual bool is_semistruct_filter_node() const { return false; }
+  virtual bool is_topn_filter() const { return false; }
+  OB_INLINE bool is_logic_op_node() const
+  {
+    return AND_FILTER == type_ || TRUNCATE_AND_FILTER == type_ ||
+        OR_FILTER == type_ || TRUNCATE_OR_FILTER == type_;
+  }
+  int check_filter_info(const storage::ObITableReadInfo &read_info,
+                        bool &is_safe_filter_with_di);
+
   VIRTUAL_TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));
 public:
   common::ObIAllocator &alloc_;
@@ -449,6 +459,10 @@ public:
     return dynamic_filter_type_;
   }
   inline bool need_continuous_update()
+  {
+    return DynamicFilterType::PD_TOPN_FILTER == dynamic_filter_type_;
+  }
+  virtual bool is_topn_filter() const override
   {
     return DynamicFilterType::PD_TOPN_FILTER == dynamic_filter_type_;
   }

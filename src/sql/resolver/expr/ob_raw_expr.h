@@ -2263,6 +2263,10 @@ public:
            (get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT ||
             get_param_expr(0)->type_ == T_FUN_SYS_JSON_VALUE));
   }
+  bool is_topn_filter() const
+  {
+    return T_OP_PUSHDOWN_TOPN_FILTER == type_;
+  }
   bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
   bool is_multivalue_define_json_expr() const;
   ObRawExpr* get_wrapper_json_extract() { return get_param_expr(0); }

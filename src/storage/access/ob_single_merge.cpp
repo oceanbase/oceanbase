@@ -99,9 +99,8 @@ int ObSingleMerge::calc_scan_range()
   return ret;
 }
 
-int ObSingleMerge::construct_iters(const bool is_refresh)
+int ObSingleMerge::construct_iters()
 {
-  UNUSED(is_refresh);
   int ret = OB_SUCCESS;
   return ret;
 }

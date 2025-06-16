@@ -49,11 +49,16 @@ public:
   virtual bool can_blockscan() const override;
   virtual bool can_batch_scan() const override;
   OB_INLINE bool is_di_base_iter() { return is_di_base_iter_; }
-  int get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
-                       int64_t &curr_scan_index,
-                       blocksstable::ObDatumRowkey &border_rowkey,
-                       common::ObIAllocator &allocator,
-                       bool need_set_border_rowkey);
+  virtual int get_next_rowkey(const bool need_set_border_rowkey,
+                              int64_t &curr_scan_index,
+                              blocksstable::ObDatumRowkey& rowkey,
+                              blocksstable::ObDatumRowkey &border_rowkey,
+                              common::ObIAllocator &allocator) final;
+  OB_INLINE bool is_end_of_scan() const
+  {
+    return prefetcher_.is_prefetch_end_ &&
+        prefetcher_.cur_range_fetch_idx_ >= prefetcher_.cur_range_prefetch_idx_;
+  }
   TO_STRING_KV(K_(is_opened), K_(is_di_base_iter), K_(cur_range_idx),
                KP_(micro_scanner), KP_(micro_data_scanner), KP_(mv_micro_data_scanner), KP_(mv_di_micro_data_scanner),
                KP_(sstable), KP_(iter_param), KP_(access_ctx), K_(prefetcher));

@@ -1267,93 +1267,107 @@ int ObCOSSTableRowScanner::construct_cg_iter_params_for_rowkey(
   return ret;
 }
 
-int ObCOSSTableRowScanner::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
-                                            int64_t &curr_scan_index,
-                                            blocksstable::ObDatumRowkey &border_rowkey,
-                                            common::ObIAllocator &allocator,
-                                            bool need_set_border_rowkey)
+int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
+                                           int64_t &curr_scan_index,
+                                           blocksstable::ObDatumRowkey& rowkey,
+                                           blocksstable::ObDatumRowkey &border_rowkey,
+                                           common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObCSRowId current_row_id;
+  ObCSRowId current_row_id = OB_INVALID_CS_ROW_ID;
   ObICGIterator *scanner = nullptr;
-  const ObDatumRow* row;
-  ObDatumRowkey tmp_rowkey;
+  const ObDatumRow* row = nullptr;
   common::ObSEArray<ObTableIterParam*, 8> iter_params;
+  ObDatumRowkey tmp_rowkey;
   rowkey.reset();
   border_rowkey.reset();
 
   // get next row id
-  if (OB_ISNULL(project_iter_) || OB_ISNULL(iter_param_) || OB_ISNULL(access_ctx_) || OB_ISNULL(table_)) {
+  if (OB_ISNULL(project_iter_) || OB_ISNULL(row_scanner_) || OB_ISNULL(iter_param_) ||
+      OB_ISNULL(access_ctx_) || OB_ISNULL(table_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init params is null", K(*this), KP_(project_iter), KP_(iter_param), KP_(access_ctx), KP_(table));
-  } else if (OB_FAIL(project_iter_->get_current_row_id(current_row_id))) {
-    if (OB_ERR_UNSUPPORTED_TYPE != ret) {
-      LOG_WARN("failed to get current row id", K(project_iter_->get_type()));
+    LOG_WARN("init params is null", KP_(project_iter), KP_(iter_param), KP_(access_ctx), KP_(table), KPC(this));
+  } else if (row_scanner_->is_end_of_scan() && OB_INVALID_CS_ROW_ID == current_) {
+    // iter_end, range_idx_ maybe -1 for empty range
+    curr_scan_index = MAX(range_idx_, 0);
+    if (access_ctx_->query_flag_.is_reverse_scan()) {
+      rowkey.set_min_rowkey();
+    } else {
+      rowkey.set_max_rowkey();
     }
-  } else if (FALSE_IT(current_row_id = max(current_, current_row_id))) {
-  } else if (OB_INVALID_CS_ROW_ID == current_row_id) {
-    // do nothing
   } else {
-    // construct cg(tile)scanner for rowkey
-    if (OB_FAIL(construct_cg_iter_params_for_rowkey(*iter_param_, iter_params))) {
-      LOG_WARN("Failed to construct cg scan params");
-    } else if (iter_params.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter params is empty!");
-    } else if (1 == iter_params.count()) {
-      ObICGIterator* cg_scanner = nullptr;
-      if (OB_FAIL(table_->cg_scan(*iter_params.at(0), *access_ctx_, cg_scanner, true, true, access_ctx_->allocator_))) {
-        LOG_WARN("Failed to init cg canner for single row", K(ret));
-      } else {
-        scanner = cg_scanner;
+    if (OB_FAIL(project_iter_->get_current_row_id(current_row_id))) {
+      if (OB_ERR_UNSUPPORTED_TYPE != ret) {
+        LOG_WARN("failed to get current row id", K(project_iter_->get_type()));
       }
-    } else if (OB_ISNULL(scanner = OB_NEWx(ObCGTileScanner, access_ctx_->allocator_))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Failed to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(scanner)->init(iter_params, true, false, *access_ctx_, table_))) {
-      LOG_WARN("Failed to init cg tile scanner", K(ret), K(iter_params));
+    } else if (OB_INVALID_CS_ROW_ID != current_) {
+      // current_ moved because of skip_deleted_row
+      if (access_ctx_->query_flag_.is_reverse_scan()) {
+        current_row_id = MIN(current_, current_row_id);
+      } else {
+        current_row_id = MAX(current_, current_row_id);
+      }
     }
 
-    // get next row from scanner
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(scanner->locate({current_row_id, 1}))) {
-      LOG_WARN("Failed to locate", K(ret), KPC_(getter_project_iter), K(current_row_id));
-    } else if (OB_FAIL(scanner->get_next_row(row))) {
-      if (OB_ITER_END == ret) {
-        // range_idx_ maybe -1 for empty range
-        curr_scan_index = MAX(range_idx_, 0);
-        if (access_ctx_->query_flag_.is_reverse_scan()) {
-          rowkey.set_min_rowkey();
-        } else {
-          rowkey.set_max_rowkey();
-        }
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Failed to get next row", K(ret), KPC_(getter_project_iter), K(current_row_id));
-      }
-    } else if (row->count_ != iter_param_->read_info_->get_schema_rowkey_count()) {
-      LOG_ERROR("row key count mismatch!", K(row->count_), K(iter_param_->read_info_->get_schema_rowkey_count()));
-    } else if (OB_FAIL(tmp_rowkey.assign(row->storage_datums_, row->count_))) {
-      LOG_WARN("assign rowkey failed", K(ret), K(tmp_rowkey), K(row->count_));
-    } else if (OB_UNLIKELY(!tmp_rowkey.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey));
-    } else if (OB_FAIL(tmp_rowkey.deep_copy(rowkey, allocator))) {
-      LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey));
+    } else if (OB_INVALID_CS_ROW_ID == current_row_id) {
+      ret = OB_ERR_UNSUPPORTED_TYPE;
     } else {
-      curr_scan_index = range_idx_;
+      // construct cg(tile)scanner for rowkey
+      if (OB_FAIL(construct_cg_iter_params_for_rowkey(*iter_param_, iter_params))) {
+        LOG_WARN("Failed to construct cg scan params");
+      } else if (iter_params.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter params is empty!");
+      } else if (1 == iter_params.count()) {
+        ObICGIterator* cg_scanner = nullptr;
+        if (OB_FAIL(table_->cg_scan(*iter_params.at(0), *access_ctx_, cg_scanner, true, true, access_ctx_->allocator_))) {
+          LOG_WARN("Failed to init cg canner for single row", K(ret));
+        } else {
+          scanner = cg_scanner;
+        }
+      } else if (OB_ISNULL(scanner = OB_NEWx(ObCGTileScanner, access_ctx_->allocator_))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc cg tile scanner", K(ret));
+      } else if (OB_FAIL(static_cast<ObCGTileScanner*>(scanner)->init(iter_params, true, false, *access_ctx_, table_))) {
+        LOG_WARN("Failed to init cg tile scanner", K(ret), K(iter_params));
+      }
+
+      // get next row from scanner
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(scanner->locate({current_row_id, 1}))) {
+        LOG_WARN("Failed to locate", K(ret), KPC_(getter_project_iter), K(current_row_id));
+      } else if (OB_FAIL(scanner->get_next_row(row))) {
+        if (OB_ITER_END == ret) {
+          // range_idx_ maybe -1 for empty range
+          curr_scan_index = MAX(range_idx_, 0);
+          if (access_ctx_->query_flag_.is_reverse_scan()) {
+            rowkey.set_min_rowkey();
+          } else {
+            rowkey.set_max_rowkey();
+          }
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("Failed to get next row", K(ret), KPC_(getter_project_iter), K(current_row_id));
+        }
+      } else if (row->count_ != iter_param_->read_info_->get_schema_rowkey_count()) {
+        LOG_ERROR("row key count mismatch!", K(row->count_), K(iter_param_->read_info_->get_schema_rowkey_count()));
+      } else if (OB_FAIL(tmp_rowkey.assign(row->storage_datums_, row->count_))) {
+        LOG_WARN("assign rowkey failed", K(ret), K(row));
+      } else if (OB_UNLIKELY(!tmp_rowkey.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey));
+      } else if (OB_FAIL(tmp_rowkey.deep_copy(rowkey, allocator))) {
+        LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey));
+      } else {
+        curr_scan_index = range_idx_;
+      }
     }
   }
 
   // get di base border rowkey
   if (OB_SUCC(ret) && need_set_border_rowkey) {
-    const blocksstable::ObDatumRowkey &tmp_border_rowkey = row_scanner_->prefetcher_.get_border_rowkey();
-    if (!tmp_border_rowkey.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "border rowkey is invalid", K(ret), K(tmp_border_rowkey));
-    } else if (OB_FAIL(tmp_border_rowkey.deep_copy(border_rowkey, allocator))) {
-      STORAGE_LOG(WARN, "fail to deep copy rowkey", K(ret), K(tmp_border_rowkey));
-    }
+    border_rowkey = row_scanner_->prefetcher_.get_border_rowkey();
   }
 
   if (OB_NOT_NULL(scanner)) {
