@@ -4002,32 +4002,6 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_i
                                      int64_t &prefix_pos)
 {
   int ret = OB_SUCCESS;
-  const int64_t part_cnt = 0;
-  return ObOptimizerUtil::check_need_sort(expected_order_items,
-                                          input_ordering,
-                                          fd_item_set,
-                                          equal_sets,
-                                          const_exprs,
-                                          exec_ref_exprs,
-                                          is_at_most_one_row,
-                                          need_sort,
-                                          prefix_pos,
-                                          part_cnt);
-}
-
-int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_items,
-                                     const ObIArray<OrderItem> &input_ordering,
-                                     const ObFdItemSet &fd_item_set,
-                                     const EqualSets &equal_sets,
-                                     const ObIArray<ObRawExpr *> &const_exprs,
-                                     const ObIArray<ObRawExpr *> &exec_ref_exprs,
-                                     const bool is_at_most_one_row,
-                                     bool &need_sort,
-                                     int64_t &prefix_pos,
-                                     const int64_t part_cnt,
-                                     const bool check_part_only/* default false */)
-{
-  int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 6> expected_order_exprs;
   ObSEArray<ObOrderDirection, 6> expected_order_directions;
   if (OB_FAIL(split_expr_direction(expected_order_items,
@@ -4043,69 +4017,9 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_i
                                      exec_ref_exprs,
                                      is_at_most_one_row,
                                      need_sort,
-                                     prefix_pos,
-                                     part_cnt,
-                                     check_part_only))) {
+                                     prefix_pos))) {
     LOG_WARN("failed to check need sort", K(ret));
   } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_exprs,
-                                     const ObIArray<ObOrderDirection> *expected_order_directions,
-                                     const ObIArray<OrderItem> &input_ordering,
-                                     const ObFdItemSet &fd_item_set,
-                                     const EqualSets &equal_sets,
-                                     const ObIArray<ObRawExpr *> &const_exprs,
-                                     const ObIArray<ObRawExpr *> &exec_ref_exprs,
-                                     const bool is_at_most_one_row,
-                                     bool &need_sort,
-                                     int64_t &prefix_pos,
-                                     const int64_t part_cnt,
-                                     const bool check_part_only/* default false */)
-{
-  int ret = OB_SUCCESS;
-  need_sort = true;
-  if (!check_part_only &&
-      OB_FAIL(ObOptimizerUtil::check_need_sort(expected_order_exprs,
-                                               expected_order_directions,
-                                               input_ordering,
-                                               fd_item_set,
-                                               equal_sets,
-                                               const_exprs,
-                                               exec_ref_exprs,
-                                               is_at_most_one_row,
-                                               need_sort,
-                                               prefix_pos))) {
-    LOG_WARN("failed to check need sort", K(ret));
-  } else if (need_sort && part_cnt > 0) {
-    // partition sort does not support prefix_pos, so if part_cnt is greater than 0, prefix_pos is always 0
-    prefix_pos = 0;
-    if (input_ordering.count() > 1 &&
-        input_ordering.at(0).expr_->get_expr_type() == T_FUN_SYS_HASH &&
-        part_cnt == input_ordering.at(0).expr_->get_param_count()) {
-      int64_t tmp_prefix_pos = 0;
-      common::ObSEArray<OrderItem, 1> ordering;
-      for (int64_t i = 1; OB_SUCC(ret) && i < input_ordering.count(); ++i) {
-        if (OB_FAIL(ordering.push_back(input_ordering.at(i)))) {
-          LOG_WARN("failed to add order item", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(expected_order_exprs,
-                                                          expected_order_directions,
-                                                          ordering,
-                                                          fd_item_set,
-                                                          equal_sets,
-                                                          const_exprs,
-                                                          exec_ref_exprs,
-                                                          is_at_most_one_row,
-                                                          need_sort,
-                                                          tmp_prefix_pos))) {
-        LOG_WARN("failed to check need sort", K(ret));
-      }
-    }
-  }
   return ret;
 }
 

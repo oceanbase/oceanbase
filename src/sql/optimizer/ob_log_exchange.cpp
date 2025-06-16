@@ -423,11 +423,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
       static_cast<ObLogExchange*>(child)->set_in_server_cnt(get_server_cnt());
     }
     if (OB_SUCC(ret) && ObGlobalHint::DEFAULT_PARALLEL > get_parallel()) {
-      // parallel not set when allocate exchange, and not pull to local
-      if (OB_UNLIKELY(child->is_match_all())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected exchange above match all sharding", K(ret));
-      } else if (child->is_single()) {
+      if (child->is_single()) {
         set_parallel(child->get_available_parallel());
         set_available_parallel(child->get_available_parallel());
       } else {

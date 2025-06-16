@@ -957,7 +957,7 @@ public:
                            bool is_fetch_with_ties);
 
   int allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
-                                        ObExchangeInfo &exch_info,
+                                        const ObExchangeInfo &exch_info,
                                         const ObIArray<OrderItem> &sort_keys,
                                         const bool need_sort,
                                         const int64_t prefix_pos,

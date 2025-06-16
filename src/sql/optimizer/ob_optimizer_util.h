@@ -767,18 +767,6 @@ public:
                              const ObIArray<ObRawExpr *> &exec_ref_exprs,
                              const bool is_at_most_one_row,
                              bool &need_sort,
-                             int64_t &prefix_pos,
-                             const int64_t part_cnt,
-                             const bool check_part_only = false);
-
-  static int check_need_sort(const ObIArray<OrderItem> &expected_order_items,
-                             const ObIArray<OrderItem> &input_ordering,
-                             const ObFdItemSet &fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
-                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
-                             const bool is_at_most_one_row,
-                             bool &need_sort,
                              int64_t &prefix_pos);
 
   static int check_need_sort(const ObIArray<ObRawExpr*> &expected_order_exprs,
@@ -791,19 +779,6 @@ public:
                              const bool is_at_most_one_row,
                              bool &need_sort,
                              int64_t &prefix_pos);
-
-  static int check_need_sort(const ObIArray<ObRawExpr*> &expected_order_exprs,
-                             const ObIArray<ObOrderDirection> *expected_order_directions,
-                             const ObIArray<OrderItem> &input_ordering,
-                             const ObFdItemSet &fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
-                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
-                             const bool is_at_most_one_row,
-                             bool &need_sort,
-                             int64_t &prefix_pos,
-                             const int64_t part_cnt,
-                             const bool check_part_only = false);
 
   static int decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
                                                  const EqualSets &stmt_equal_sets,
