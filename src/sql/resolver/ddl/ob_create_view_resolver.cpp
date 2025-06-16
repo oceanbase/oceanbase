@@ -171,14 +171,16 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                                      || 1 != table_id_node->num_child_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to resolve table_id", K(ret));
-    } else if (OB_ISNULL(schema_checker_)
-               || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+    } else if (OB_ISNULL(schema_checker_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+    } else if (OB_FAIL(schema_checker_->get_database_id(session_info_->get_effective_tenant_id(),
                                                      stmt->get_database_name(),
                                                      database_id))) {
-      LOG_WARN("failed to get database id", K(ret));
+      if (OB_ERR_BAD_DATABASE == ret) {
+          LOG_USER_ERROR(OB_ERR_BAD_DATABASE, stmt->get_database_name().length(), stmt->get_database_name().ptr());
+      }
+      SQL_RESV_LOG(WARN, "failed to get database id", K(ret), K(stmt->get_database_name()), K(session_info_->get_effective_tenant_id()));
     } else if (OB_FALSE_IT(table_schema.set_database_id(database_id))) {
       //never reach
     } else if (OB_FAIL(ob_write_string(*allocator_,
@@ -478,7 +480,6 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("fail to check privilege needed", K(ret));
     }
   }
-
   return ret;
 }
 
