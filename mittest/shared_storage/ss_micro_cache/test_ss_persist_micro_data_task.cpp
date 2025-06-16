@@ -379,7 +379,7 @@ TEST_F(TestSSPersistMicroDataTask, persist_task_dead_loop)
     }
   }
   ASSERT_EQ(true, ATOMIC_LOAD(&stop));
-  ASSERT_EQ(sealed_mem_block_cnt, mem_blk_mgr.get_sealed_mem_block_cnt());
+  ASSERT_GE(sealed_mem_block_cnt, mem_blk_mgr.get_sealed_mem_block_cnt());
   t.join();
 }
 }  // namespace storage

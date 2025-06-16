@@ -241,7 +241,7 @@ TEST_F(TestSSMicroMetaBasicOp, get_micro_handle_func)
   ret = ((OB_EAGAIN == ret) ? func5.ret_ : ret);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
-  // 6. set update_arc=true, it will be transfered to T2
+  // 6.1 set update_arc=true, it will be transfered to T2
   bool update_arc = true;
   micro_meta_->reuse_version_ = reuse_version;
   micro_meta_->data_loc_ = data_loc;
@@ -264,6 +264,16 @@ TEST_F(TestSSMicroMetaBasicOp, get_micro_handle_func)
   ASSERT_EQ(true, micro_meta_->is_data_persisted_);
   ASSERT_EQ(false, access_info.is_valid());
   ASSERT_EQ(1, micro_meta_->access_type());
+
+  // 6.2 get micro_meta info
+  ObSSMicroBlockMetaInfo micro_meta_info;
+  SSMicroMapGetMicroInfoFunc get_info_func(micro_meta_info);
+  ret = micro_map.operate(&micro_key, get_info_func);
+  ret = ((OB_EAGAIN == ret) ? get_info_func.ret_ : ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObSSMicroBlockMetaInfo tmp_micro_meta_info;
+  micro_meta_->get_micro_meta_info(tmp_micro_meta_info);
+  ASSERT_EQ(true, micro_meta_info == tmp_micro_meta_info);
 
   // 7. set update_arc=false, it won't transfer seg.
   update_arc = false;
